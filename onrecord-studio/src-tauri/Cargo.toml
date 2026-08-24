@@ -1,0 +1,27 @@
+[package]
+name = "onrecord-studio-lib"
+version = "1.0.0"
+edition = "2021"
+
+[dependencies]
+tauri = { version = "2.0.0", features = [] }
+tauri-plugin-shell = "2.0.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
+chrono = { version = "0.4", features = ["serde"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
+duckdb = { version = "0.10", features = ["bundled"] }
+lopdf = "0.31"
+calamine = "0.24"
+msg-parser = "0.3"
+zip = "1.0"
+regex = "1.10"
+lazy_static = "1.4"
+thiserror = "1.0"
+uuid = { version = "1.8", features = ["v4"] }
+window-vibrancy = "0.5"
+
+[build-dependencies]
+tauri-build = "2.0.0"

@@ -1,0 +1,51 @@
+# ============================================================================
+# ONRECORD STUDIO - GLOBAL GITIGNORE PROFILE
+# Target Ecosystem: Tauri v2 + Rust Backend + React TypeScript Frontend
+# ============================================================================
+
+# 1. OS & Native Desktop Cache Omissions
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+
+# 2. Frontend Dependencies & Compilers Build Caches
+node_modules/
+dist/
+dist-tauri/
+.vite/
+.eslintcache
+*.tsbuildinfo
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# 3. Native macOS Rust Backend Compilation Artifacts
+src-tauri/target/
+src-tauri/Cargo.lock
+
+# 4. Local App Data Caches, SQLite DBs, & Extracted Public Documents
+# Protects investigator database indices and scraped municipal files from being leaked to public repositories.
+*.db
+*.db-wal
+*.db-shm
+.onrecord_studio_cache/
+nextrequest_downloads/
+downloads/
+onrecord-studio/downloads/
+onrecord-studio/nextrequest_downloads/
+
+# 5. IDE Configurations & Environments
+.env
+.env.local
+.env.*.local
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
