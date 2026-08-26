@@ -1,144 +1,2777 @@
-//! Async HTTP client infrastructure for robust municipal API ingestion.
+//! Hardened HTTP discovery and bounded ingestion for public-record portals.
 
-use std::time::Duration;
-use reqwest::{Client, HeaderMap, HeaderValue, StatusCode};
-use serde::de::DeserializeOwned;
-use crate::error::AppError; // Assumes your error.rs maps this cleanly
-use crate::types::NextRequestResponse;
+use crate::error::AppError;
+use crate::integrity::{digest_hex, sha256_hex};
+use crate::types::{
+    NextRequestResponse, PaginationMeta, PortalApiLayout, PortalRegistration, PublicRequest,
+    SourceKind,
+};
+use base64::Engine;
+use chrono::Utc;
+use futures_util::StreamExt;
+use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, CONTENT_LENGTH, LOCATION, RETRY_AFTER};
+use reqwest::{Client, StatusCode, Url};
+use scraper::{Html, Selector};
+use serde_json::Value;
+use sha2::{Digest, Sha256};
+use std::collections::{BTreeSet, HashMap, VecDeque};
+use std::future::Future;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+use tokio::io::AsyncWriteExt;
 
-/// Configuration options for the underlying transport layer.
+const MAX_DISCOVERY_CANDIDATES: usize = 24;
+const MAX_REDIRECTS: usize = 5;
+const MAX_RETRIES: usize = 10;
+const MAX_QUERY_PARAMETER_LENGTH: usize = 64;
+const DEFAULT_JSON_LIMIT_BYTES: usize = 16 * 1024 * 1024;
+const DEFAULT_DOCUMENT_LIMIT_BYTES: usize = 512 * 1024 * 1024;
+const MAX_PUBLIC_LINKS_PER_PAGE: usize = 50_000;
+const JAVASCRIPT_MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
+/// A pinned DNS answer outlives the validation that created it just long enough to cover the
+/// request, then expires so a legitimate address change is seen at the next validation.
+const DNS_PIN_TTL: Duration = Duration::from_secs(120);
+/// Bounds the pin map against a crawl that touches an unbounded number of hostnames.
+const MAX_DNS_PINS: usize = 512;
+/// A hostile or black-holed resolver must not stall a worker indefinitely.
+const DNS_LOOKUP_TIMEOUT: Duration = Duration::from_secs(5);
+
+// TODO(ingestion): Add a browser-backed acquisition path for authenticated, JavaScript-only,
+// CAPTCHA-gated, and session-bound sources that cannot expose a public HTTP representation.
+// PERF(ingestion): Stream large response bodies directly into bounded files
+// instead of retaining the complete payload in `ResponsePayload.bytes`.
+
 #[derive(Debug, Clone)]
 pub struct HttpClientConfig {
-    pub timeout_seconds: u64,
+    pub connect_timeout_seconds: u64,
+    pub request_timeout_seconds: u64,
     pub max_retries: usize,
     pub retry_initial_delay_ms: u64,
+    pub retry_max_delay_ms: u64,
+    pub max_json_response_bytes: usize,
+    pub max_document_bytes: usize,
 }
 
 impl Default for HttpClientConfig {
     fn default() -> Self {
         Self {
-            timeout_seconds: 30,
-            max_retries: 3,
-            retry_initial_delay_ms: 1000,
+            connect_timeout_seconds: 10,
+            request_timeout_seconds: 45,
+            max_retries: 4,
+            retry_initial_delay_ms: 500,
+            retry_max_delay_ms: 15_000,
+            max_json_response_bytes: DEFAULT_JSON_LIMIT_BYTES,
+            max_document_bytes: DEFAULT_DOCUMENT_LIMIT_BYTES,
         }
     }
 }
 
-/// Thread-safe client manager coordinating outbound connections and browser signatures.
 #[derive(Clone)]
 pub struct ApiClient {
     client: Client,
     config: HttpClientConfig,
+    dns: Arc<PinnedDnsResolver>,
+}
+
+struct ResponsePayload {
+    final_url: Url,
+    content_type: Option<String>,
+    bytes: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicResourceLink {
+    pub url: String,
+    pub label: String,
+    pub download_candidate: bool,
+    pub follow_candidate: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PublicResourceKind {
+    HtmlPage,
+    Download,
+}
+
+#[derive(Debug, Clone)]
+pub struct PublicResourceInspection {
+    pub final_url: String,
+    pub content_type: Option<String>,
+    pub title: String,
+    pub kind: PublicResourceKind,
+    pub links: Vec<PublicResourceLink>,
+    pub body: Option<Vec<u8>>,
+    pub embedded_connectors: Vec<PublicEmbeddedConnector>,
+}
+
+#[derive(Debug, Clone)]
+pub enum PublicEmbeddedConnector {
+    WordPressGoogleDrive(WordPressGoogleDriveConnector),
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct WordPressGoogleDriveConnector {
+    pub endpoint: String,
+    pub shortcode_id: String,
+    pub nonce: String,
+    pub folder_id: String,
+    pub account_id: String,
+    pub folder_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct WordPressGoogleDriveItem {
+    pub id: String,
+    pub account_id: String,
+    pub name: String,
+    pub media_type: String,
+    pub is_folder: bool,
+    pub web_view_link: Option<String>,
+    pub web_content_link: Option<String>,
+}
+
+#[derive(Debug)]
+pub struct ArcGisFeaturePage {
+    pub request_url: String,
+    pub bytes: Vec<u8>,
+    pub feature_count: usize,
+    pub exceeded_transfer_limit: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DownloadedPayload {
+    pub path: PathBuf,
+    pub byte_count: u64,
+    pub sha256: String,
+}
+
+struct DiscoveredLayout {
+    requests_pointer: String,
+    metadata_pointer: Option<String>,
 }
 
 impl ApiClient {
-    /// Initializes a connection pool equipped with localized signatures.
     pub fn new(config: HttpClientConfig) -> Result<Self, AppError> {
+        if config.connect_timeout_seconds == 0 || config.request_timeout_seconds == 0 {
+            return Err(AppError::DataParsing(
+                "HTTP timeouts must be greater than zero".to_string(),
+            ));
+        }
+        if config.max_json_response_bytes == 0 || config.max_document_bytes == 0 {
+            return Err(AppError::DataParsing(
+                "HTTP response limits must be greater than zero".to_string(),
+            ));
+        }
+        if config.max_retries > MAX_RETRIES {
+            return Err(AppError::DataParsing(format!(
+                "HTTP retry count must not exceed {MAX_RETRIES}"
+            )));
+        }
+        if config.retry_initial_delay_ms == 0
+            || config.retry_max_delay_ms == 0
+            || config.retry_initial_delay_ms > config.retry_max_delay_ms
+        {
+            return Err(AppError::DataParsing(
+                "HTTP retry delays must be positive and the initial delay must not exceed the maximum delay"
+                    .to_string(),
+            ));
+        }
         let mut headers = HeaderMap::new();
-        
-        // Mimic standard modern macOS Safari traffic to maximize reliability
         headers.insert(
             reqwest::header::USER_AGENT,
-            HeaderValue::from_static(
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
-            ),
+            HeaderValue::from_static("OnRecord-Studio/1.0 public-records-audit-client"),
         );
         headers.insert(
-            reqwest::header::ACCEPT,
-            HeaderValue::from_static("application/json, text/plain, */*"),
+            ACCEPT,
+            HeaderValue::from_static("application/json, text/html;q=0.5, */*;q=0.1"),
         );
-
+        let dns = Arc::new(PinnedDnsResolver::default());
         let client = Client::builder()
             .default_headers(headers)
-            .timeout(Duration::from_secs(config.timeout_seconds))
+            // Every connection resolves through the addresses `validate_remote_url` already
+            // approved; see `PinnedDnsResolver`.
+            .dns_resolver(Arc::clone(&dns))
+            .connect_timeout(Duration::from_secs(config.connect_timeout_seconds))
+            .timeout(Duration::from_secs(config.request_timeout_seconds))
             .pool_idle_timeout(Duration::from_secs(90))
-            .pool_max_idle_per_host(5)
+            .pool_max_idle_per_host(8)
+            // Redirects stay disabled here so every hop passes through `validate_remote_url`
+            // before a socket is opened; enabling reqwest's automatic policy would bypass it.
+            .redirect(reqwest::redirect::Policy::none())
             .build()
-            .map_err(|e| AppError::Network(format!("Failed to build connection pool: {}", e)))?;
-
-        Ok(Self { client, config })
+            .map_err(|error| AppError::Network(format!("Failed to build HTTP client: {error}")))?;
+        Ok(Self {
+            client,
+            config,
+            dns,
+        })
     }
 
-    /// Fetches a paginated slice of NextRequest objects from a target municipal subdomain.
+    pub async fn discover_portal(&self, portal_url: &str) -> Result<PortalRegistration, AppError> {
+        let submitted_url = normalize_submitted_url(portal_url)?;
+        validate_remote_url(&self.dns, &submitted_url).await?;
+        let origin = origin_url(&submitted_url)?;
+        let mut candidates = initial_api_candidates(&submitted_url, &origin)?;
+        let mut visited = BTreeSet::new();
+        let parameter_layouts = [
+            ("page", "per_page"),
+            ("page", "limit"),
+            ("page", "page_size"),
+            ("offset", "limit"),
+        ];
+        let mut attempts = 0_usize;
+        let mut last_error = String::new();
+
+        while let Some(candidate) = candidates.pop_front() {
+            if attempts >= MAX_DISCOVERY_CANDIDATES {
+                break;
+            }
+            let candidate_key = candidate.as_str().to_string();
+            if !visited.insert(candidate_key) {
+                continue;
+            }
+            attempts += 1;
+            validate_remote_url(&self.dns, &candidate).await?;
+
+            for (page_parameter, page_size_parameter) in parameter_layouts {
+                let query = if page_parameter == "offset" {
+                    vec![
+                        ("offset", "0".to_string()),
+                        (page_size_parameter, "1".to_string()),
+                    ]
+                } else {
+                    vec![
+                        (page_parameter, "1".to_string()),
+                        (page_size_parameter, "1".to_string()),
+                    ]
+                };
+                match self
+                    .get_bounded(
+                        candidate.clone(),
+                        &query,
+                        self.config.max_json_response_bytes,
+                    )
+                    .await
+                {
+                    Ok(payload) => {
+                        if let Ok(json) = serde_json::from_slice::<Value>(&payload.bytes) {
+                            if let Some(layout) = detect_json_layout(&json) {
+                                validate_response_records(
+                                    &json,
+                                    &layout.requests_pointer,
+                                    layout.metadata_pointer.as_deref(),
+                                )?;
+                                let record_count =
+                                    response_records(&json, &layout.requests_pointer)
+                                        .map_or(0, |records| records.len());
+                                if record_count > 1 {
+                                    last_error = format!(
+                                        "{} did not honor the '{}' page-size probe",
+                                        payload.final_url, page_size_parameter
+                                    );
+                                    continue;
+                                }
+                                if !has_discovery_evidence(&json, &layout) {
+                                    last_error = format!(
+                                        "{} returned an ambiguous empty JSON collection",
+                                        payload.final_url
+                                    );
+                                    continue;
+                                }
+                                let canonical_url = canonical_url(&submitted_url);
+                                let requests_endpoint = without_query_parameters(
+                                    &payload.final_url,
+                                    &[page_parameter, page_size_parameter],
+                                );
+                                match self
+                                    .pagination_probe_advances(
+                                        &requests_endpoint,
+                                        &layout,
+                                        &json,
+                                        page_parameter,
+                                        page_size_parameter,
+                                    )
+                                    .await
+                                {
+                                    Ok(true) => {}
+                                    Ok(false) => {
+                                        last_error = format!(
+                                            "{} did not advance when probed with '{}'",
+                                            payload.final_url, page_parameter
+                                        );
+                                        continue;
+                                    }
+                                    Err(error) => {
+                                        last_error = error.to_string();
+                                        continue;
+                                    }
+                                }
+                                let requests_endpoint = requests_endpoint.to_string();
+                                return Ok(PortalRegistration {
+                                    portal_key: portal_key(&submitted_url, &requests_endpoint),
+                                    display_name: discover_display_name(&json, &submitted_url),
+                                    canonical_url,
+                                    origin_url: origin.to_string(),
+                                    api_layout: PortalApiLayout {
+                                        requests_endpoint,
+                                        requests_pointer: layout.requests_pointer,
+                                        metadata_pointer: layout.metadata_pointer,
+                                        page_parameter: page_parameter.to_string(),
+                                        page_size_parameter: page_size_parameter.to_string(),
+                                    },
+                                    verified_at: Utc::now().to_rfc3339(),
+                                    source_kind: SourceKind::NextRequest,
+                                });
+                            }
+                        } else if payload
+                            .content_type
+                            .as_deref()
+                            .is_some_and(|value| value.to_ascii_lowercase().contains("html"))
+                        {
+                            for discovered in extract_api_links(&payload.final_url, &payload.bytes)?
+                            {
+                                if candidates.len() + visited.len() < MAX_DISCOVERY_CANDIDATES {
+                                    candidates.push_back(discovered);
+                                }
+                            }
+                            last_error = format!(
+                                "{} returned an HTML discovery page rather than JSON",
+                                payload.final_url
+                            );
+                            break;
+                        }
+                        last_error = format!(
+                            "{} returned no recognizable public-request collection",
+                            payload.final_url
+                        );
+                    }
+                    Err(error) => {
+                        last_error = error.to_string();
+                    }
+                }
+            }
+        }
+
+        Err(AppError::PortalDiscovery(format!(
+            "No compatible NextRequest JSON collection was discovered from '{}'; inspected {attempts} endpoint candidates. Last result: {last_error}",
+            submitted_url
+        )))
+    }
+
+    pub async fn discover_public_source(
+        &self,
+        source_url: &str,
+    ) -> Result<(PortalRegistration, PublicResourceInspection), AppError> {
+        let submitted_url = normalize_submitted_url(source_url)?;
+        validate_remote_url(&self.dns, &submitted_url).await?;
+        let inspection = self.inspect_public_resource(submitted_url.as_str()).await?;
+        let final_url = Url::parse(&inspection.final_url).map_err(|error| {
+            AppError::PortalDiscovery(format!("Discovered source URL is invalid: {error}"))
+        })?;
+        let origin = origin_url(&final_url)?;
+        let source_kind =
+            if inspection.embedded_connectors.iter().any(|connector| {
+                matches!(connector, PublicEmbeddedConnector::WordPressGoogleDrive(_))
+            }) {
+                SourceKind::GoogleDrive
+            } else {
+                classify_source_kind(&final_url, &inspection.kind)
+            };
+        let identity = format!("{}|{}", source_kind.as_str(), inspection.final_url);
+        let digest = sha256_hex(identity.as_bytes());
+        let host = final_url.host_str().unwrap_or("public source");
+        let display_name = if inspection.title.trim().is_empty() {
+            host.to_string()
+        } else {
+            inspection.title.chars().take(160).collect()
+        };
+        let registration = PortalRegistration {
+            portal_key: format!("source-{}", &digest[..24]),
+            display_name,
+            canonical_url: inspection.final_url.clone(),
+            origin_url: origin.to_string(),
+            api_layout: PortalApiLayout {
+                requests_endpoint: inspection.final_url.clone(),
+                requests_pointer: "/resources".to_string(),
+                metadata_pointer: None,
+                page_parameter: "crawl_page".to_string(),
+                page_size_parameter: "crawl_limit".to_string(),
+            },
+            verified_at: Utc::now().to_rfc3339(),
+            source_kind,
+        };
+        Ok((registration, inspection))
+    }
+
+    pub async fn inspect_public_resource(
+        &self,
+        source_url: &str,
+    ) -> Result<PublicResourceInspection, AppError> {
+        self.inspect_public_resource_with_selectors(source_url, None, None)
+            .await
+    }
+
+    pub async fn inspect_public_resource_with_selectors(
+        &self,
+        source_url: &str,
+        link_selector: Option<&str>,
+        download_selector: Option<&str>,
+    ) -> Result<PublicResourceInspection, AppError> {
+        let url = normalize_submitted_url(source_url)?;
+        validate_remote_url(&self.dns, &url).await?;
+        let response = self
+            .response_with_retries(url, self.config.max_document_bytes)
+            .await?;
+        let final_url = response.url().clone();
+        let content_type = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .map(|value| {
+                value
+                    .split(';')
+                    .next()
+                    .unwrap_or(value)
+                    .trim()
+                    .to_ascii_lowercase()
+            });
+        if !is_html_resource(&final_url, content_type.as_deref()) {
+            return Ok(PublicResourceInspection {
+                title: file_name_from_url(&final_url),
+                final_url: final_url.to_string(),
+                content_type,
+                kind: PublicResourceKind::Download,
+                links: Vec::new(),
+                body: None,
+                embedded_connectors: Vec::new(),
+            });
+        }
+        let (_, bytes) = read_response_bytes(
+            response,
+            self.config.max_json_response_bytes,
+            "HTML discovery page",
+        )
+        .await?;
+        let (title, links, embedded_connectors) =
+            extract_public_resource_links(&final_url, &bytes, link_selector, download_selector)?;
+        Ok(PublicResourceInspection {
+            final_url: final_url.to_string(),
+            content_type,
+            title,
+            kind: PublicResourceKind::HtmlPage,
+            links,
+            body: Some(bytes),
+            embedded_connectors,
+        })
+    }
+
+    pub async fn list_wordpress_google_drive_folder(
+        &self,
+        connector: &WordPressGoogleDriveConnector,
+    ) -> Result<Vec<WordPressGoogleDriveItem>, AppError> {
+        let endpoint = Url::parse(&connector.endpoint).map_err(|error| {
+            AppError::DataParsing(format!(
+                "Stored Google Drive connector endpoint is invalid: {error}"
+            ))
+        })?;
+        validate_remote_url(&self.dns, &endpoint).await?;
+        validate_connector_token("shortcode ID", &connector.shortcode_id, 128)?;
+        validate_connector_token("nonce", &connector.nonce, 256)?;
+        validate_connector_token("folder ID", &connector.folder_id, 256)?;
+        validate_connector_token("account ID", &connector.account_id, 256)?;
+        let form = [
+            ("action", "igd_get_files"),
+            ("shortcodeId", connector.shortcode_id.as_str()),
+            ("data[folder][id]", connector.folder_id.as_str()),
+            ("data[folder][accountId]", connector.account_id.as_str()),
+            ("data[folder][name]", connector.folder_name.as_str()),
+            ("data[folder][type]", "application/vnd.google-apps.folder"),
+            ("nonce", connector.nonce.as_str()),
+            ("skipBreadcrumbs", "1"),
+        ];
+        let response = self
+            .execute_with_retries(&endpoint, "Google Drive connector request", || {
+                self.send_wordpress_google_drive_request(endpoint.clone(), &form)
+            })
+            .await?;
+        let (_, bytes) = read_response_bytes(
+            response,
+            self.config.max_json_response_bytes,
+            "Google Drive folder listing",
+        )
+        .await?;
+        decode_wordpress_google_drive_listing(&bytes)
+    }
+
+    pub fn wordpress_google_drive_download_url(
+        connector: &WordPressGoogleDriveConnector,
+        item: &WordPressGoogleDriveItem,
+    ) -> Result<String, AppError> {
+        if let Some(url) = item
+            .web_content_link
+            .as_deref()
+            .filter(|value| !value.is_empty())
+        {
+            let parsed = Url::parse(url).map_err(|error| {
+                AppError::DataParsing(format!("Google Drive download URL is invalid: {error}"))
+            })?;
+            if parsed.scheme() == "https" {
+                return Ok(parsed.to_string());
+            }
+        }
+        let mut endpoint = Url::parse(&connector.endpoint).map_err(|error| {
+            AppError::DataParsing(format!(
+                "Google Drive connector endpoint is invalid: {error}"
+            ))
+        })?;
+        endpoint.query_pairs_mut().extend_pairs([
+            ("action", "igd_download"),
+            ("id", item.id.as_str()),
+            ("accountId", item.account_id.as_str()),
+            ("shortcodeId", connector.shortcode_id.as_str()),
+            ("nonce", connector.nonce.as_str()),
+        ]);
+        Ok(endpoint.to_string())
+    }
+
+    pub async fn fetch_arcgis_feature_page(
+        &self,
+        layer_url: &str,
+        offset: usize,
+        page_size: usize,
+    ) -> Result<ArcGisFeaturePage, AppError> {
+        if !(1..=2_000).contains(&page_size) || offset > 100_000_000 {
+            return Err(AppError::DataParsing(
+                "ArcGIS pagination parameters exceed safe bounds".to_string(),
+            ));
+        }
+        let mut url = Url::parse(layer_url).map_err(|error| {
+            AppError::DataParsing(format!("ArcGIS layer URL is invalid: {error}"))
+        })?;
+        validate_arcgis_layer_url(&url)?;
+        url.set_query(None);
+        url.set_fragment(None);
+        if !url.path().ends_with("/query") {
+            let path = format!("{}/query", url.path().trim_end_matches('/'));
+            url.set_path(&path);
+        }
+        let offset_value = offset.to_string();
+        let page_size_value = page_size.to_string();
+        url.query_pairs_mut().extend_pairs([
+            ("where", "1=1"),
+            ("outFields", "*"),
+            ("returnGeometry", "true"),
+            ("f", "geojson"),
+            ("resultOffset", offset_value.as_str()),
+            ("resultRecordCount", page_size_value.as_str()),
+        ]);
+        validate_remote_url(&self.dns, &url).await?;
+        // This body is buffered whole and then parsed as JSON, so it takes the JSON ceiling. Under
+        // the 512 MB document ceiling a ~500 KB compressed response could expand to 512 MB in
+        // memory and then again into a `serde_json::Value`.
+        let payload = self
+            .get_bounded(url, &[], self.config.max_json_response_bytes)
+            .await?;
+        let value: Value = serde_json::from_slice(&payload.bytes).map_err(|error| {
+            AppError::DataParsing(format!(
+                "ArcGIS layer query '{}' returned invalid GeoJSON: {error}",
+                payload.final_url
+            ))
+        })?;
+        if let Some(error) = value.get("error") {
+            return Err(AppError::DataParsing(format!(
+                "ArcGIS layer query '{}' failed: {}",
+                payload.final_url, error
+            )));
+        }
+        let features = value
+            .get("features")
+            .and_then(Value::as_array)
+            .ok_or_else(|| {
+                AppError::DataParsing(format!(
+                    "ArcGIS layer query '{}' omitted its GeoJSON feature collection",
+                    payload.final_url
+                ))
+            })?;
+        Ok(ArcGisFeaturePage {
+            request_url: payload.final_url.to_string(),
+            bytes: payload.bytes,
+            feature_count: features.len(),
+            exceeded_transfer_limit: value
+                .get("exceededTransferLimit")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+        })
+    }
+
     pub async fn fetch_requests(
         &self,
-        subdomain: &str,
+        portal: &PortalRegistration,
         page: usize,
         per_page: usize,
     ) -> Result<NextRequestResponse, AppError> {
-        let url = format!("https://{}://", subdomain);
-        
-        let query_params = [
-            ("page", page.to_string()),
-            ("per_page", per_page.to_string()),
-        ];
-
-        self.execute_with_retry(
-            self.client.get(&url).query(&query_params)
-        ).await
+        if page == 0 {
+            return Err(AppError::DataParsing(
+                "Request page must be greater than zero".to_string(),
+            ));
+        }
+        if !(1..=100).contains(&per_page) {
+            return Err(AppError::DataParsing(
+                "Request page size must be between 1 and 100".to_string(),
+            ));
+        }
+        let endpoint = Url::parse(&portal.api_layout.requests_endpoint).map_err(|error| {
+            AppError::PortalDiscovery(format!(
+                "Stored endpoint for portal '{}' is invalid: {error}",
+                portal.portal_key
+            ))
+        })?;
+        validate_pagination_parameters(
+            &portal.api_layout.page_parameter,
+            &portal.api_layout.page_size_parameter,
+        )?;
+        validate_remote_url(&self.dns, &endpoint).await?;
+        let page_value = if portal.api_layout.page_parameter == "offset" {
+            page.checked_sub(1)
+                .and_then(|index| index.checked_mul(per_page))
+                .ok_or_else(|| {
+                    AppError::DataParsing(format!(
+                        "Request offset overflowed for page {page} and page size {per_page}"
+                    ))
+                })?
+                .to_string()
+        } else {
+            page.to_string()
+        };
+        let endpoint = with_query_parameters(
+            &endpoint,
+            &[
+                (portal.api_layout.page_parameter.as_str(), page_value),
+                (
+                    portal.api_layout.page_size_parameter.as_str(),
+                    per_page.to_string(),
+                ),
+            ],
+        );
+        let query = Vec::new();
+        let payload = self
+            .get_bounded(endpoint, &query, self.config.max_json_response_bytes)
+            .await?;
+        let json: Value = serde_json::from_slice(&payload.bytes).map_err(|error| {
+            AppError::DataParsing(format!(
+                "Portal '{}' returned invalid JSON from '{}': {error}",
+                portal.portal_key, payload.final_url
+            ))
+        })?;
+        decode_nextrequest_response(
+            &json,
+            &portal.api_layout.requests_pointer,
+            portal.api_layout.metadata_pointer.as_deref(),
+            page,
+            per_page,
+        )
     }
 
-    /// Downloads a public file payload as a raw binary stream, dropping it directly to disk.
-    pub async fn download_document(
+    pub async fn download_document_to_path(
         &self,
-        subdomain: &str,
-        document_id: u64,
-    ) -> Result<bytes::Bytes, AppError> {
-        let url = format!("https://{}://{}/download", subdomain, document_id);
-        
-        let response = self.execute_with_retry(self.client.get(&url)).await?;
+        portal: &PortalRegistration,
+        download_url: &str,
+        destination: &Path,
+    ) -> Result<DownloadedPayload, AppError> {
+        let url = normalize_document_url(&portal.origin_url, download_url)?;
+        validate_remote_url(&self.dns, &url).await?;
+        self.execute_with_retries(&url, "Download", || async {
+            let result = self
+                .stream_response_to_path(url.clone(), destination, self.config.max_document_bytes)
+                .await;
+            if result.is_err() {
+                let _ = tokio::fs::remove_file(destination).await;
+            }
+            result
+        })
+        .await
+    }
+
+    async fn pagination_probe_advances(
+        &self,
+        endpoint: &Url,
+        layout: &DiscoveredLayout,
+        first_page: &Value,
+        page_parameter: &str,
+        page_size_parameter: &str,
+    ) -> Result<bool, AppError> {
+        if !pagination_metadata_reports_more(first_page, layout.metadata_pointer.as_deref()) {
+            return Ok(true);
+        }
+        let first_identifier = response_records(first_page, &layout.requests_pointer)
+            .and_then(|records| records.first())
+            .and_then(|record| record.get("id"))
+            .map(Value::to_string);
+        let page_value = if page_parameter == "offset" { "1" } else { "2" };
+        let query = [
+            (page_parameter, page_value.to_string()),
+            (page_size_parameter, "1".to_string()),
+        ];
+        let payload = self
+            .get_bounded(
+                endpoint.clone(),
+                &query,
+                self.config.max_json_response_bytes,
+            )
+            .await?;
+        let second_page: Value = serde_json::from_slice(&payload.bytes).map_err(|error| {
+            AppError::DataParsing(format!(
+                "Pagination probe from '{}' returned invalid JSON: {error}",
+                payload.final_url
+            ))
+        })?;
+        let second_identifier = response_records(&second_page, &layout.requests_pointer)
+            .and_then(|records| records.first())
+            .and_then(|record| record.get("id"))
+            .map(Value::to_string);
+        Ok(first_identifier.is_some()
+            && second_identifier.is_some()
+            && first_identifier != second_identifier)
+    }
+
+    async fn get_bounded(
+        &self,
+        initial_url: Url,
+        query: &[(&str, String)],
+        maximum_bytes: usize,
+    ) -> Result<ResponsePayload, AppError> {
+        self.execute_with_retries(&initial_url, "Request", || {
+            self.send_get_following_safe_redirects(initial_url.clone(), query, maximum_bytes)
+        })
+        .await
+    }
+
+    async fn response_with_retries(
+        &self,
+        initial_url: Url,
+        maximum_bytes: usize,
+    ) -> Result<reqwest::Response, AppError> {
+        self.execute_with_retries(&initial_url, "Request", || {
+            self.send_response_following_safe_redirects(initial_url.clone(), &[], maximum_bytes)
+        })
+        .await
+    }
+
+    async fn execute_with_retries<T, Operation, OperationFuture>(
+        &self,
+        initial_url: &Url,
+        operation_name: &str,
+        mut operation: Operation,
+    ) -> Result<T, AppError>
+    where
+        Operation: FnMut() -> OperationFuture,
+        OperationFuture: Future<Output = Result<T, RetryDisposition>>,
+    {
+        let maximum_attempts = self.config.max_retries.saturating_add(1);
+        let mut delay_ms = self.config.retry_initial_delay_ms.max(1);
+        let mut last_error = None;
+        for attempt in 0..maximum_attempts {
+            if attempt > 0 {
+                // The backoff can outlast `DNS_PIN_TTL`, which would fail the retry closed in the
+                // resolver rather than retrying. Re-validating also rechecks an address that was
+                // approved minutes ago, which is the right thing to do on its own.
+                validate_remote_url(&self.dns, initial_url).await?;
+            }
+            match operation().await {
+                Ok(value) => return Ok(value),
+                Err(RetryDisposition::Terminal(error)) => return Err(error),
+                Err(RetryDisposition::Retry(error, retry_after)) => {
+                    last_error = Some(error);
+                    if attempt + 1 >= maximum_attempts {
+                        break;
+                    }
+                    let wait = retry_after.unwrap_or_else(|| Duration::from_millis(delay_ms));
+                    tokio::time::sleep(wait.min(Duration::from_secs(60))).await;
+                    delay_ms = delay_ms
+                        .saturating_mul(2)
+                        .min(self.config.retry_max_delay_ms.max(1));
+                }
+            }
+        }
+        Err(last_error.unwrap_or_else(|| {
+            AppError::Network(format!(
+                "{operation_name} to '{initial_url}' exhausted retry attempts"
+            ))
+        }))
+    }
+
+    async fn send_wordpress_google_drive_request(
+        &self,
+        endpoint: Url,
+        form: &[(&str, &str)],
+    ) -> Result<reqwest::Response, RetryDisposition> {
+        let response = self
+            .client
+            .post(endpoint.clone())
+            .form(form)
+            .send()
+            .await
+            .map_err(|error| {
+                RetryDisposition::Retry(
+                    AppError::Network(format!(
+                        "Google Drive connector request to '{endpoint}' failed: {error}"
+                    )),
+                    None,
+                )
+            })?;
+        let status = response.status();
+        if status.is_redirection() {
+            return Err(RetryDisposition::Terminal(AppError::PortalSecurity(
+                format!(
+                    "Google Drive connector endpoint '{endpoint}' attempted an unverified redirect"
+                ),
+            )));
+        }
+        validate_success_status("Google Drive connector endpoint", &endpoint, &response)?;
         Ok(response)
     }
 
-    /// Handles request execution wrapped in an exponential backoff loop.
-    async fn execute_with_retry<T: DeserializeOwned + 'static>(
+    async fn send_get_following_safe_redirects(
         &self,
-        request_builder: reqwest::RequestBuilder,
-    ) -> Result<T, AppError> {
-        let mut attempts = 0;
-        let mut delay = self.config.retry_initial_delay_ms;
-
-        loop {
-            attempts += 1;
-            
-            // Clone the request builder since it is consumed upon sending
-            let req = request_builder.try_clone()
-                .ok_or_else(|| AppError::Internal("Failed to clone request handle".to_string()))?;
-
-            match req.send().await {
-                Ok(response) => {
-                    let status = response.status();
-
-                    if status.is_success() {
-                        // Special handling: check if return type is bytes::Bytes directly
-                        if std::any::TypeId::of::<T>() == std::any::TypeId::of::<bytes::Bytes>() {
-                            let bytes = response.bytes().await
-                                .map_err(|e| AppError::Network(format!("Stream read failure: {}", e)))?;
-                            return unsafe { Ok(std::mem::transmute_copy::<bytes::Bytes, T>(&bytes)) };
-                        }
-
-                        // Otherwise, parse standard JSON objects
-                        let payload = response.json::<T>().await
-                            .map_err(|e| AppError::DataParsing(format!("JSON unpacking failed: {}", e)))?;
-                        return Ok(payload);
-                    }
-
-                    // Handle explicit server rate throttling (HTTP 429) or temporary server errors (HTTP 5xx)
-                    if (status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error()) && attempts < self.config.max_retries {
-                        tokio::time::sleep(Duration::from_millis(delay)).await;
-                        delay *= 2; // Exponential scale back
-                        continue;
-                    }
-
-                    return Err(AppError::Network(format!("Server returned failure status: {}", status)));
+        initial_url: Url,
+        query: &[(&str, String)],
+        maximum_bytes: usize,
+    ) -> Result<ResponsePayload, RetryDisposition> {
+        let response = self
+            .send_response_following_safe_redirects(initial_url, query, maximum_bytes)
+            .await?;
+        let content_type = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_string);
+        let (final_url, bytes) = read_response_bytes(response, maximum_bytes, "Response")
+            .await
+            .map_err(|error| {
+                if error.is_retryable() {
+                    RetryDisposition::Retry(error, None)
+                } else {
+                    RetryDisposition::Terminal(error)
                 }
-                Err(e) if attempts < self.config.max_retries => {
-                    tokio::time::sleep(Duration::from_millis(delay)).await;
-                    delay *= 2;
-                    continue;
+            })?;
+        Ok(ResponsePayload {
+            final_url,
+            content_type,
+            bytes,
+        })
+    }
+
+    async fn send_response_following_safe_redirects(
+        &self,
+        initial_url: Url,
+        query: &[(&str, String)],
+        maximum_bytes: usize,
+    ) -> Result<reqwest::Response, RetryDisposition> {
+        let mut current_url = initial_url;
+        let mut current_query = Some(query);
+        // SECURITY(security): The loop bound is the redirect limit, and validation is the FIRST
+        // statement inside it, so the initial URL and every subsequent hop are validated before a
+        // socket is opened. Hoisting this call out of the loop, or moving it below `send()`, would
+        // reintroduce the standard SSRF hole where a permitted host redirects to a private
+        // address. Any `continue` added below must land back on this line.
+        //
+        // LIMIT(protocol): `join` replaces the query string, so parameters supplied by the caller
+        // apply to the first hop only. A redirect to a path-only Location silently drops
+        // pagination parameters and returns the first page.
+        for redirect_count in 0..=MAX_REDIRECTS {
+            validate_remote_url(&self.dns, &current_url)
+                .await
+                .map_err(RetryDisposition::Terminal)?;
+            let mut request = self.client.get(current_url.clone());
+            if let Some(query_values) = current_query.take() {
+                request = request.query(query_values);
+            }
+            let response = request.send().await.map_err(|error| {
+                RetryDisposition::Retry(
+                    AppError::Network(format!("GET '{}' failed: {error}", current_url)),
+                    None,
+                )
+            })?;
+            let status = response.status();
+            if status.is_redirection() {
+                if redirect_count == MAX_REDIRECTS {
+                    return Err(RetryDisposition::Terminal(AppError::PortalSecurity(
+                        format!("Redirect limit exceeded for '{current_url}'"),
+                    )));
                 }
-                Err(e) => return Err(AppError::Network(format!("Connection exhausted across attempts: {}", e))),
+                let location = response.headers().get(LOCATION).ok_or_else(|| {
+                    RetryDisposition::Terminal(AppError::Network(format!(
+                        "Redirect from '{current_url}' omitted the Location header"
+                    )))
+                })?;
+                let location = location.to_str().map_err(|error| {
+                    RetryDisposition::Terminal(AppError::Network(format!(
+                        "Redirect from '{current_url}' contained an invalid Location header: {error}"
+                    )))
+                })?;
+                current_url = current_url.join(location).map_err(|error| {
+                    RetryDisposition::Terminal(AppError::Network(format!(
+                        "Redirect target '{location}' from '{current_url}' is invalid: {error}"
+                    )))
+                })?;
+                continue;
+            }
+            validate_success_status("GET", &current_url, &response)?;
+            if let Some(content_length) = response
+                .headers()
+                .get(CONTENT_LENGTH)
+                .and_then(|value| value.to_str().ok())
+                .and_then(|value| value.parse::<u64>().ok())
+            {
+                if content_length > maximum_bytes as u64 {
+                    return Err(RetryDisposition::Terminal(AppError::PortalSecurity(
+                        format!(
+                            "Response from '{current_url}' declared {content_length} bytes, exceeding the {maximum_bytes}-byte limit"
+                        ),
+                    )));
+                }
+            }
+            return Ok(response);
+        }
+        Err(RetryDisposition::Terminal(AppError::PortalSecurity(
+            "Redirect processing reached an invalid terminal state".to_string(),
+        )))
+    }
+
+    async fn stream_response_to_path(
+        &self,
+        initial_url: Url,
+        destination: &Path,
+        maximum_bytes: usize,
+    ) -> Result<DownloadedPayload, RetryDisposition> {
+        let response = self
+            .send_response_following_safe_redirects(initial_url, &[], maximum_bytes)
+            .await?;
+        let final_url = response.url().clone();
+        let mut file = tokio::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(destination)
+            .await
+            .map_err(|error| {
+                RetryDisposition::Terminal(AppError::Storage(format!(
+                    "Failed to create streaming download '{}': {error}",
+                    destination.display()
+                )))
+            })?;
+        let mut digest = Sha256::new();
+        let mut byte_count = 0_u64;
+        let mut stream = response.bytes_stream();
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|error| {
+                RetryDisposition::Retry(
+                    AppError::Network(format!(
+                        "Failed while streaming response from '{final_url}': {error}"
+                    )),
+                    None,
+                )
+            })?;
+            byte_count = byte_count.checked_add(chunk.len() as u64).ok_or_else(|| {
+                RetryDisposition::Terminal(AppError::PortalSecurity(
+                    "Document byte count overflowed".to_string(),
+                ))
+            })?;
+            if byte_count > maximum_bytes as u64 {
+                return Err(RetryDisposition::Terminal(AppError::PortalSecurity(
+                    format!("Response from '{final_url}' exceeded the {maximum_bytes}-byte limit"),
+                )));
+            }
+            file.write_all(&chunk).await.map_err(|error| {
+                RetryDisposition::Terminal(AppError::Storage(format!(
+                    "Failed to stream download '{}': {error}",
+                    destination.display()
+                )))
+            })?;
+            digest.update(&chunk);
+        }
+        file.sync_all().await.map_err(|error| {
+            RetryDisposition::Terminal(AppError::Storage(format!(
+                "Failed to sync download '{}': {error}",
+                destination.display()
+            )))
+        })?;
+        drop(file);
+        Ok(DownloadedPayload {
+            path: destination.to_path_buf(),
+            byte_count,
+            sha256: digest_hex(digest.finalize()),
+        })
+    }
+}
+
+enum RetryDisposition {
+    Retry(AppError, Option<Duration>),
+    Terminal(AppError),
+}
+
+fn validate_success_status(
+    operation: &str,
+    url: &Url,
+    response: &reqwest::Response,
+) -> Result<(), RetryDisposition> {
+    let status = response.status();
+    if status == StatusCode::REQUEST_TIMEOUT
+        || status == StatusCode::TOO_MANY_REQUESTS
+        || status.is_server_error()
+    {
+        return Err(RetryDisposition::Retry(
+            AppError::Network(format!("{operation} '{url}' returned HTTP {status}")),
+            parse_retry_after(response.headers()),
+        ));
+    }
+    if !status.is_success() {
+        return Err(RetryDisposition::Terminal(AppError::PortalDiscovery(
+            format!("{operation} '{url}' returned HTTP {status}"),
+        )));
+    }
+    Ok(())
+}
+
+async fn read_response_bytes(
+    response: reqwest::Response,
+    maximum_bytes: usize,
+    label: &str,
+) -> Result<(Url, Vec<u8>), AppError> {
+    let final_url = response.url().clone();
+    let mut stream = response.bytes_stream();
+    let mut bytes = Vec::new();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|error| {
+            AppError::Network(format!(
+                "Failed while reading {label} '{final_url}': {error}"
+            ))
+        })?;
+        if bytes.len().saturating_add(chunk.len()) > maximum_bytes {
+            return Err(AppError::PortalSecurity(format!(
+                "{label} '{final_url}' exceeded the {maximum_bytes}-byte discovery limit"
+            )));
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    Ok((final_url, bytes))
+}
+
+fn validate_connector_token(
+    label: &str,
+    value: &str,
+    maximum_length: usize,
+) -> Result<(), AppError> {
+    if value.is_empty()
+        || value.len() > maximum_length
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b' '))
+    {
+        return Err(AppError::PortalSecurity(format!(
+            "Google Drive connector {label} is malformed"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_arcgis_layer_url(url: &Url) -> Result<(), AppError> {
+    if url.scheme() != "https" {
+        return Err(AppError::PortalSecurity(
+            "ArcGIS layer queries require HTTPS".to_string(),
+        ));
+    }
+    let segments = url
+        .path_segments()
+        .map(|segments| segments.collect::<Vec<_>>())
+        .unwrap_or_default();
+    let valid = segments.windows(2).any(|window| {
+        matches!(window[0], "FeatureServer" | "MapServer")
+            && window[1].bytes().all(|byte| byte.is_ascii_digit())
+            && !window[1].is_empty()
+    });
+    if !valid {
+        return Err(AppError::DataParsing(format!(
+            "ArcGIS layer URL '{}' does not identify a numbered FeatureServer or MapServer layer",
+            url
+        )));
+    }
+    Ok(())
+}
+
+fn decode_wordpress_google_drive_listing(
+    bytes: &[u8],
+) -> Result<Vec<WordPressGoogleDriveItem>, AppError> {
+    let response: Value = serde_json::from_slice(bytes).map_err(|error| {
+        AppError::DataParsing(format!(
+            "Google Drive connector returned invalid JSON: {error}"
+        ))
+    })?;
+    if response.get("success").and_then(Value::as_bool) != Some(true) {
+        return Err(AppError::DataParsing(
+            "Google Drive connector rejected the public folder listing request".to_string(),
+        ));
+    }
+    let files = response
+        .pointer("/data/files")
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            AppError::DataParsing(
+                "Google Drive connector response omitted its file collection".to_string(),
+            )
+        })?;
+    if files.len() > 10_000 {
+        return Err(AppError::PortalCapacity(
+            "Google Drive connector returned more than 10000 entries in one folder".to_string(),
+        ));
+    }
+    files
+        .iter()
+        .map(|file| {
+            let required = |name: &str| {
+                file.get(name)
+                    .and_then(Value::as_str)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_string)
+                    .ok_or_else(|| {
+                        AppError::DataParsing(format!(
+                            "Google Drive connector file omitted '{name}'"
+                        ))
+                    })
+            };
+            let id = required("id")?;
+            let account_id = required("accountId")?;
+            validate_connector_token("file ID", &id, 256)?;
+            validate_connector_token("account ID", &account_id, 256)?;
+            Ok(WordPressGoogleDriveItem {
+                id,
+                account_id,
+                name: required("name")?.chars().take(512).collect(),
+                media_type: required("type")?,
+                is_folder: file
+                    .get("isFolder")
+                    .and_then(Value::as_bool)
+                    .unwrap_or_else(|| {
+                        file.get("type").and_then(Value::as_str)
+                            == Some("application/vnd.google-apps.folder")
+                    }),
+                web_view_link: file
+                    .get("webViewLink")
+                    .and_then(Value::as_str)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_string),
+                web_content_link: file
+                    .get("webContentLink")
+                    .and_then(Value::as_str)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_string),
+            })
+        })
+        .collect()
+}
+
+fn is_html_resource(url: &Url, content_type: Option<&str>) -> bool {
+    if content_type.is_some_and(|value| value == "text/html" || value == "application/xhtml+xml") {
+        return true;
+    }
+    if content_type.is_some_and(|value| {
+        value.starts_with("application/")
+            || value.starts_with("image/")
+            || value.starts_with("audio/")
+            || value.starts_with("video/")
+            || value == "text/csv"
+            || value == "text/plain"
+            || value == "text/xml"
+    }) {
+        return false;
+    }
+    !has_download_extension(url.path())
+}
+
+fn classify_source_kind(url: &Url, resource_kind: &PublicResourceKind) -> SourceKind {
+    let host = url.host_str().unwrap_or_default().to_ascii_lowercase();
+    if matches!(resource_kind, PublicResourceKind::Download) {
+        return SourceKind::DirectFile;
+    }
+    if host.contains("arcgis.com") || host.contains("arcgisonline.com") {
+        SourceKind::ArcGis
+    } else if host.contains("tableau.com") {
+        SourceKind::Tableau
+    } else if host == "drive.google.com" || host == "docs.google.com" {
+        SourceKind::GoogleDrive
+    } else if looks_like_open_data_catalog(url) {
+        SourceKind::OpenDataCatalog
+    } else {
+        SourceKind::WebCrawl
+    }
+}
+
+fn looks_like_open_data_catalog(url: &Url) -> bool {
+    let path = url.path().to_ascii_lowercase();
+    path.contains("/dataset") || path.contains("/datasets") || path.contains("/catalog")
+}
+
+fn extract_public_resource_links(
+    base: &Url,
+    body: &[u8],
+    custom_link_selector: Option<&str>,
+    custom_download_selector: Option<&str>,
+) -> Result<
+    (
+        String,
+        Vec<PublicResourceLink>,
+        Vec<PublicEmbeddedConnector>,
+    ),
+    AppError,
+> {
+    let text = String::from_utf8_lossy(body);
+    let document = Html::parse_document(&text);
+    let title_selector = Selector::parse("title, h1").map_err(|error| {
+        AppError::Internal(format!("Failed to initialize HTML title selector: {error}"))
+    })?;
+    let title = document
+        .select(&title_selector)
+        .find_map(|element| {
+            let value = element.text().collect::<Vec<_>>().join(" ");
+            let value = value.split_whitespace().collect::<Vec<_>>().join(" ");
+            (!value.is_empty()).then(|| value.chars().take(256).collect())
+        })
+        .unwrap_or_else(|| base.host_str().unwrap_or("Public source").to_string());
+    let mut combined_selector =
+        "a[href], link[href], iframe[src], frame[src], embed[src], script[src], object[data]"
+            .to_string();
+    for selector in [custom_link_selector, custom_download_selector]
+        .into_iter()
+        .flatten()
+    {
+        combined_selector.push_str(", ");
+        combined_selector.push_str(selector);
+    }
+    let link_selector = Selector::parse(&combined_selector).map_err(|error| {
+        AppError::DataParsing(format!(
+            "Failed to initialize HTML resource selector '{combined_selector}': {error}"
+        ))
+    })?;
+    let download_selector = custom_download_selector
+        .map(Selector::parse)
+        .transpose()
+        .map_err(|error| {
+            AppError::DataParsing(format!(
+                "Failed to initialize custom download selector: {error}"
+            ))
+        })?;
+    let forced_download_urls = download_selector
+        .as_ref()
+        .map(|selector| {
+            document
+                .select(selector)
+                .filter_map(|element| resolved_public_url(base, &element))
+                .map(|mut url| {
+                    strip_tracking_parameters(&mut url);
+                    url.to_string()
+                })
+                .collect::<BTreeSet<_>>()
+        })
+        .unwrap_or_default();
+    let base_host = base.host_str().unwrap_or_default().to_ascii_lowercase();
+    let mut seen = BTreeSet::new();
+    let mut links = Vec::new();
+    for element in document.select(&link_selector) {
+        let Some(mut url) = resolved_public_url(base, &element) else {
+            continue;
+        };
+        strip_tracking_parameters(&mut url);
+        let canonical = url.to_string();
+        let forced_download = forced_download_urls.contains(&canonical);
+        if !forced_download && should_ignore_crawl_resource(&element, &url) {
+            continue;
+        }
+        if !seen.insert(canonical.clone()) {
+            continue;
+        }
+        let label = element
+            .text()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        let download_candidate = forced_download
+            || element.value().attr("download").is_some()
+            || has_download_extension(url.path())
+            || url.path().to_ascii_lowercase().contains("/download")
+            || url.query().is_some_and(|query| {
+                let query = query.to_ascii_lowercase();
+                query.contains("download=") || query.contains("format=csv")
+            });
+        let target_host = url.host_str().unwrap_or_default().to_ascii_lowercase();
+        let follow_candidate = target_host == base_host || is_supported_platform_host(&target_host);
+        if !download_candidate && !follow_candidate {
+            continue;
+        }
+        links.push(PublicResourceLink {
+            url: canonical,
+            label: if label.is_empty() {
+                file_name_from_url(&url)
+            } else {
+                label.chars().take(256).collect()
+            },
+            download_candidate,
+            follow_candidate,
+        });
+        if links.len() >= MAX_PUBLIC_LINKS_PER_PAGE {
+            break;
+        }
+    }
+    let embedded_connectors = extract_embedded_connectors(base, &document)?;
+    Ok((title, links, embedded_connectors))
+}
+
+fn extract_embedded_connectors(
+    base: &Url,
+    document: &Html,
+) -> Result<Vec<PublicEmbeddedConnector>, AppError> {
+    let selector = Selector::parse("[data-shortcode-data]").map_err(|error| {
+        AppError::Internal(format!(
+            "Failed to initialize embedded connector selector: {error}"
+        ))
+    })?;
+    let endpoint = base.join("/wp-admin/admin-ajax.php").map_err(|error| {
+        AppError::DataParsing(format!(
+            "Failed to construct WordPress connector endpoint: {error}"
+        ))
+    })?;
+    let mut connectors = Vec::new();
+    for element in document.select(&selector).take(32) {
+        let Some(encoded) = element.value().attr("data-shortcode-data") else {
+            continue;
+        };
+        if encoded.is_empty() || encoded.len() > 1_000_000 {
+            continue;
+        }
+        let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(encoded) else {
+            continue;
+        };
+        let Ok(configuration) = serde_json::from_slice::<Value>(&decoded) else {
+            continue;
+        };
+        let Some(shortcode_id) = json_token(configuration.get("id")) else {
+            continue;
+        };
+        let Some(nonce) = configuration
+            .get("nonce")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty() && value.len() <= 256)
+        else {
+            continue;
+        };
+        let account = configuration.get("account");
+        let account_id = account
+            .and_then(|value| json_token(value.get("id")))
+            .unwrap_or_default();
+        let folders = account
+            .and_then(|value| value.get("specific_folders"))
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten();
+        for folder in folders.take(256) {
+            let Some(folder_id) = folder.get("id").and_then(Value::as_str) else {
+                continue;
+            };
+            let resolved_account_id = folder
+                .get("accountId")
+                .and_then(|value| json_token(Some(value)))
+                .filter(|value| !value.is_empty())
+                .unwrap_or_else(|| account_id.clone());
+            if folder_id.is_empty()
+                || folder_id.len() > 256
+                || resolved_account_id.is_empty()
+                || resolved_account_id.len() > 256
+            {
+                continue;
+            }
+            connectors.push(PublicEmbeddedConnector::WordPressGoogleDrive(
+                WordPressGoogleDriveConnector {
+                    endpoint: endpoint.to_string(),
+                    shortcode_id: shortcode_id.clone(),
+                    nonce: nonce.to_string(),
+                    folder_id: folder_id.to_string(),
+                    account_id: resolved_account_id,
+                    folder_name: folder
+                        .get("name")
+                        .and_then(Value::as_str)
+                        .unwrap_or("Public Google Drive")
+                        .chars()
+                        .take(256)
+                        .collect(),
+                },
+            ));
+        }
+    }
+    Ok(connectors)
+}
+
+fn json_token(value: Option<&Value>) -> Option<String> {
+    match value? {
+        Value::String(value) => Some(value.clone()),
+        Value::Number(value) => Some(value.to_string()),
+        _ => None,
+    }
+}
+
+fn resolved_public_url(base: &Url, element: &scraper::ElementRef<'_>) -> Option<Url> {
+    let reference = element
+        .value()
+        .attr("href")
+        .or_else(|| element.value().attr("src"))
+        .or_else(|| element.value().attr("data"))?;
+    if reference.len() > 4_096 {
+        return None;
+    }
+    let reference_lower = reference.to_ascii_lowercase();
+    if reference.starts_with('#')
+        || reference_lower.starts_with("mailto:")
+        || reference_lower.starts_with("tel:")
+        || reference_lower.starts_with("javascript:")
+        || reference_lower.starts_with("data:")
+    {
+        return None;
+    }
+    let mut url = base.join(reference).ok()?;
+    url.set_fragment(None);
+    (url.scheme() == "https").then_some(url)
+}
+
+fn should_ignore_crawl_resource(element: &scraper::ElementRef<'_>, url: &Url) -> bool {
+    if element.value().name() == "script" {
+        return true;
+    }
+    if element.value().name() == "link"
+        && element.value().attr("rel").is_some_and(|value| {
+            value.split_ascii_whitespace().any(|relation| {
+                matches!(
+                    relation.to_ascii_lowercase().as_str(),
+                    "stylesheet"
+                        | "icon"
+                        | "preload"
+                        | "prefetch"
+                        | "modulepreload"
+                        | "dns-prefetch"
+                )
+            })
+        })
+    {
+        return true;
+    }
+    let path = url.path().to_ascii_lowercase();
+    [
+        ".js", ".mjs", ".css", ".map", ".svg", ".ico", ".woff", ".woff2", ".ttf", ".eot", ".otf",
+    ]
+    .iter()
+    .any(|extension| path.ends_with(extension))
+}
+
+fn strip_tracking_parameters(url: &mut Url) {
+    let mut retained = url
+        .query_pairs()
+        .filter(|(name, _)| {
+            let name = name.to_ascii_lowercase();
+            !name.starts_with("utm_")
+                && !matches!(name.as_str(), "fbclid" | "gclid" | "mc_cid" | "mc_eid")
+        })
+        .map(|(name, value)| (name.into_owned(), value.into_owned()))
+        .collect::<Vec<_>>();
+    retained.sort();
+    url.set_query(None);
+    if !retained.is_empty() {
+        url.query_pairs_mut().extend_pairs(retained);
+    }
+}
+
+fn is_supported_platform_host(host: &str) -> bool {
+    host.contains("arcgis.com")
+        || host.contains("arcgisonline.com")
+        || host.contains("tableau.com")
+        || host == "drive.google.com"
+        || host == "docs.google.com"
+}
+
+fn has_download_extension(path: &str) -> bool {
+    let path = path.to_ascii_lowercase();
+    [
+        ".pdf", ".csv", ".tsv", ".json", ".jsonl", ".ndjson", ".geojson", ".xml", ".xlsx", ".xls",
+        ".ods", ".docx", ".doc", ".odt", ".pptx", ".ppt", ".rtf", ".txt", ".md", ".zip", ".tar",
+        ".gz", ".bz2", ".xz", ".zst", ".7z", ".rar", ".sqlite", ".sqlite3", ".db", ".dbf", ".shp",
+        ".parquet", ".avro", ".orc", ".eml", ".msg", ".mbox", ".warc", ".warc.gz", ".png", ".jpg",
+        ".jpeg", ".tif", ".tiff", ".webp",
+    ]
+    .iter()
+    .any(|extension| path.ends_with(extension))
+}
+
+fn file_name_from_url(url: &Url) -> String {
+    url.path_segments()
+        .and_then(|mut segments| segments.next_back())
+        .filter(|value| !value.is_empty())
+        .map(percent_decode_file_name)
+        .unwrap_or_else(|| url.host_str().unwrap_or("download").to_string())
+}
+
+fn percent_decode_file_name(value: &str) -> String {
+    let mut output = String::with_capacity(value.len());
+    let bytes = value.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' && index + 2 < bytes.len() {
+            if let (Some(high), Some(low)) =
+                (hex_nibble(bytes[index + 1]), hex_nibble(bytes[index + 2]))
+            {
+                output.push(char::from((high << 4) | low));
+                index += 3;
+                continue;
+            }
+        }
+        output.push(char::from(bytes[index]));
+        index += 1;
+    }
+    output
+}
+
+fn hex_nibble(value: u8) -> Option<u8> {
+    match value {
+        b'0'..=b'9' => Some(value - b'0'),
+        b'a'..=b'f' => Some(value - b'a' + 10),
+        b'A'..=b'F' => Some(value - b'A' + 10),
+        _ => None,
+    }
+}
+
+fn normalize_submitted_url(value: &str) -> Result<Url, AppError> {
+    let value = value.trim();
+    if value.is_empty() || value.len() > 2_048 {
+        return Err(AppError::PortalDiscovery(
+            "Portal URL must contain between 1 and 2048 characters".to_string(),
+        ));
+    }
+    let candidate = if value.contains("://") {
+        value.to_string()
+    } else {
+        format!("https://{value}")
+    };
+    let mut url = Url::parse(&candidate).map_err(|error| {
+        AppError::PortalDiscovery(format!("Portal URL '{value}' is invalid: {error}"))
+    })?;
+    url.set_fragment(None);
+    Ok(url)
+}
+
+fn normalize_document_url(origin: &str, value: &str) -> Result<Url, AppError> {
+    let value = value.trim();
+    if value.is_empty() || value.len() > 4_096 {
+        return Err(AppError::DataParsing(
+            "Document URL must contain between 1 and 4096 characters".to_string(),
+        ));
+    }
+    if value.starts_with("//") {
+        return Url::parse(&format!("https:{value}")).map_err(|error| {
+            AppError::DataParsing(format!("Document URL '{value}' is invalid: {error}"))
+        });
+    }
+    if let Ok(absolute) = Url::parse(value) {
+        return Ok(absolute);
+    }
+    Url::parse(origin)
+        .and_then(|base| base.join(value))
+        .map_err(|error| {
+            AppError::DataParsing(format!("Document URL '{value}' is invalid: {error}"))
+        })
+}
+
+fn validate_pagination_parameters(page: &str, page_size: &str) -> Result<(), AppError> {
+    for (label, value) in [("page", page), ("page-size", page_size)] {
+        if value.is_empty()
+            || value.len() > MAX_QUERY_PARAMETER_LENGTH
+            || !value
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+        {
+            return Err(AppError::PortalDiscovery(format!(
+                "Stored {label} query parameter '{value}' is invalid"
+            )));
+        }
+    }
+    if page == page_size {
+        return Err(AppError::PortalDiscovery(
+            "Stored page and page-size query parameters must be distinct".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn without_query_parameters(url: &Url, names: &[&str]) -> Url {
+    let retained = url
+        .query_pairs()
+        .filter(|(name, _)| !names.iter().any(|candidate| name == *candidate))
+        .map(|(name, value)| (name.into_owned(), value.into_owned()))
+        .collect::<Vec<_>>();
+    let mut sanitized = url.clone();
+    sanitized.set_query(None);
+    if !retained.is_empty() {
+        sanitized.query_pairs_mut().extend_pairs(retained);
+    }
+    sanitized
+}
+
+fn with_query_parameters(url: &Url, values: &[(&str, String)]) -> Url {
+    let names = values.iter().map(|(name, _)| *name).collect::<Vec<_>>();
+    let mut updated = without_query_parameters(url, &names);
+    updated
+        .query_pairs_mut()
+        .extend_pairs(values.iter().map(|(name, value)| (*name, value.as_str())));
+    updated
+}
+
+async fn validate_remote_url(dns: &PinnedDnsResolver, url: &Url) -> Result<(), AppError> {
+    if url.scheme() != "https" {
+        return Err(AppError::PortalSecurity(format!(
+            "URL '{url}' must use HTTPS"
+        )));
+    }
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err(AppError::PortalSecurity(format!(
+            "URL '{url}' must not contain credentials"
+        )));
+    }
+    let host = url
+        .host_str()
+        .ok_or_else(|| AppError::PortalSecurity(format!("URL '{url}' has no host")))?;
+    let normalized_host = host.trim_end_matches('.').to_ascii_lowercase();
+    if normalized_host == "localhost"
+        || normalized_host.ends_with(".localhost")
+        || normalized_host.ends_with(".local")
+        || normalized_host.ends_with(".internal")
+    {
+        return Err(AppError::PortalSecurity(format!(
+            "URL '{url}' targets a local host"
+        )));
+    }
+    let port = url.port_or_known_default().ok_or_else(|| {
+        AppError::PortalSecurity(format!("URL '{url}' does not resolve to a known port"))
+    })?;
+    let addresses = tokio::time::timeout(DNS_LOOKUP_TIMEOUT, tokio::net::lookup_host((host, port)))
+        .await
+        .map_err(|_| AppError::PortalDiscovery(format!("DNS lookup for '{host}' timed out")))?
+        .map_err(|error| {
+            AppError::PortalDiscovery(format!("DNS lookup for '{host}' failed: {error}"))
+        })?;
+    let resolved = addresses
+        .map(|address| address.ip())
+        .collect::<BTreeSet<_>>();
+    if resolved.is_empty() {
+        return Err(AppError::PortalDiscovery(format!(
+            "DNS lookup for '{host}' returned no addresses"
+        )));
+    }
+    if let Some(address) = resolved.iter().find(|address| !is_public_ip(address)) {
+        return Err(AppError::PortalSecurity(format!(
+            "URL '{url}' resolved to prohibited address {address}"
+        )));
+    }
+    // Hand the approved answer to the connector. Validating here and letting reqwest resolve
+    // again at connect time is what makes DNS rebinding work; see `PinnedDnsResolver`.
+    dns.pin(host, &normalized_host, resolved.into_iter().collect());
+    Ok(())
+}
+
+/// The DNS answers `validate_remote_url` approved, keyed by hostname.
+///
+/// `validate_remote_url` resolves a hostname and rejects any answer containing a non-public
+/// address, but reqwest resolves that hostname a second time when it opens the socket. A
+/// resolver that answers with a public address the first time and `127.0.0.1` the second
+/// redirects an already-approved URL onto the loopback or LAN interface, and nothing in the
+/// validation path ever sees it. Installing this as the client's resolver makes the address
+/// reqwest connects to the address that was validated. Only the address is fixed: the hostname
+/// still drives TLS SNI and the `Host` header, so virtual hosting keeps working.
+///
+/// A name with no pin is refused rather than resolved. Every request this client issues runs
+/// through `validate_remote_url` first, so an unpinned name means some path skipped validation.
+#[derive(Default)]
+struct PinnedDnsResolver {
+    entries: Mutex<HashMap<String, PinnedAddresses>>,
+}
+
+struct PinnedAddresses {
+    addresses: Vec<IpAddr>,
+    pinned_at: Instant,
+}
+
+impl PinnedDnsResolver {
+    fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, PinnedAddresses>> {
+        // A panic while holding this lock would otherwise fail every later request closed.
+        self.entries
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// Pins under both the URL's host and its normalized form, because a trailing-dot host
+    /// reaches the connector spelled the way the URL spelled it.
+    fn pin(&self, host: &str, normalized_host: &str, addresses: Vec<IpAddr>) {
+        let now = Instant::now();
+        let mut entries = self.lock();
+        entries.retain(|_, entry| now.duration_since(entry.pinned_at) < DNS_PIN_TTL);
+        while entries.len() >= MAX_DNS_PINS {
+            let Some(oldest) = entries
+                .iter()
+                .min_by_key(|(_, entry)| entry.pinned_at)
+                .map(|(key, _)| key.clone())
+            else {
+                break;
+            };
+            entries.remove(&oldest);
+        }
+        for key in BTreeSet::from([
+            host.to_ascii_lowercase(),
+            normalized_host.to_ascii_lowercase(),
+        ]) {
+            entries.insert(
+                key,
+                PinnedAddresses {
+                    addresses: addresses.clone(),
+                    pinned_at: now,
+                },
+            );
+        }
+    }
+
+    fn pinned(&self, host: &str) -> Option<Vec<IpAddr>> {
+        let key = host.to_ascii_lowercase();
+        let mut entries = self.lock();
+        let entry = entries.get(&key)?;
+        if Instant::now().duration_since(entry.pinned_at) >= DNS_PIN_TTL {
+            entries.remove(&key);
+            return None;
+        }
+        entries.get(&key).map(|entry| entry.addresses.clone())
+    }
+}
+
+impl reqwest::dns::Resolve for PinnedDnsResolver {
+    fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
+        let host = name.as_str().to_string();
+        let pinned = self.pinned(&host);
+        Box::pin(async move {
+            match pinned {
+                // Port 0 tells reqwest to use the port from the URL.
+                Some(addresses) => Ok(Box::new(
+                    addresses
+                        .into_iter()
+                        .map(|address| SocketAddr::new(address, 0)),
+                ) as reqwest::dns::Addrs),
+                None => Err(format!(
+                    "host '{host}' was not validated before connecting, so it will not be resolved"
+                )
+                .into()),
+            }
+        })
+    }
+}
+
+fn is_public_ip(address: &IpAddr) -> bool {
+    match address {
+        IpAddr::V4(address) => is_public_ipv4(*address),
+        IpAddr::V6(address) => is_public_ipv6(*address),
+    }
+}
+
+fn is_public_ipv4(address: Ipv4Addr) -> bool {
+    let [a, b, _, _] = address.octets();
+    !(address.is_private()
+        || address.is_loopback()
+        || address.is_link_local()
+        || address.is_broadcast()
+        || address.is_unspecified()
+        || address.is_multicast()
+        || a == 0
+        || (a == 100 && (64..=127).contains(&b))
+        || (a == 192 && b == 0)
+        || (a == 192 && b == 0 && address.octets()[2] == 2)
+        || (a == 198 && (b == 18 || b == 19))
+        || (a == 198 && b == 51 && address.octets()[2] == 100)
+        || (a == 203 && b == 0 && address.octets()[2] == 113)
+        || a >= 240)
+}
+
+fn is_public_ipv6(address: Ipv6Addr) -> bool {
+    if let Some(mapped) = address.to_ipv4_mapped() {
+        return is_public_ipv4(mapped);
+    }
+    let segments = address.segments();
+    let embedded_v4 = || {
+        Ipv4Addr::new(
+            (segments[6] >> 8) as u8,
+            segments[6] as u8,
+            (segments[7] >> 8) as u8,
+            segments[7] as u8,
+        )
+    };
+    // These prefixes carry an IPv4 destination inside an IPv6 address, so `::ffff:` is not the
+    // only spelling that reaches 127.0.0.1 or a LAN address. Judge each by the address it
+    // actually reaches.
+    //
+    // LIMIT(security): This arm implements RFC 6052's `64:ff9b::/96` embedding only, where the
+    // IPv4 destination is the last 32 bits. RFC 8215's `64:ff9b:1::/48` matches the same two
+    // leading segments but carries its destination in segments 3 and 4, so for such an address
+    // `embedded_v4()` judges bytes that are not the destination. Reachable only on a host with a
+    // NAT64 gateway configured for that prefix.
+    // TODO(security): Decompose `64:ff9b:1::/48` per RFC 8215 rather than sharing this arm, and
+    // decide explicitly whether Teredo `2001::/32` should be decomposed as well.
+    if segments[0] == 0x0064 && segments[1] == 0xff9b {
+        return is_public_ipv4(embedded_v4());
+    }
+    // 6to4: the IPv4 address sits in the second and third groups.
+    if segments[0] == 0x2002 {
+        return is_public_ipv4(Ipv4Addr::new(
+            (segments[1] >> 8) as u8,
+            segments[1] as u8,
+            (segments[2] >> 8) as u8,
+            segments[2] as u8,
+        ));
+    }
+    // Deprecated IPv4-compatible form `::a.b.c.d`, which `to_ipv4_mapped` does not cover.
+    if segments[..6].iter().all(|segment| *segment == 0) && !address.is_unspecified() {
+        return is_public_ipv4(embedded_v4());
+    }
+    !(address.is_loopback()
+        || address.is_unspecified()
+        || address.is_multicast()
+        || (segments[0] & 0xfe00) == 0xfc00
+        || (segments[0] & 0xffc0) == 0xfe80
+        || (segments[0] == 0x2001 && segments[1] == 0x0db8))
+}
+
+fn initial_api_candidates(submitted: &Url, origin: &Url) -> Result<VecDeque<Url>, AppError> {
+    let mut candidates = VecDeque::new();
+    candidates.push_back(submitted.clone());
+    for path in [
+        // NextRequest, which is the platform behind most United States municipal portals, serves
+        // its request index from `/client/requests` and answers `/api/requests` with a 404. It was
+        // absent from this list, so every `*.nextrequest.com` portal failed discovery outright.
+        // Probed against https://sandiego.nextrequest.com on 2026-08-25: `/client/requests` returns
+        // `{"total_count":43517,"requests":[...]}` while `/requests.json` returns an empty body.
+        "/client/requests",
+        "/requests.json",
+        "/requests",
+        "/api/requests",
+        "/api/v1/requests",
+        "/api/v2/requests",
+        "/public/requests.json",
+    ] {
+        candidates.push_back(origin.join(path).map_err(|error| {
+            AppError::PortalDiscovery(format!("Failed to construct API candidate: {error}"))
+        })?);
+    }
+    let base_path = submitted.path().trim_end_matches('/');
+    if !base_path.is_empty() {
+        for suffix in [".json", "/requests.json", "/api/requests"] {
+            let path = format!("{base_path}{suffix}");
+            candidates.push_back(origin.join(&path).map_err(|error| {
+                AppError::PortalDiscovery(format!("Failed to construct API candidate: {error}"))
+            })?);
+        }
+    }
+    Ok(candidates)
+}
+
+fn extract_api_links(base: &Url, body: &[u8]) -> Result<Vec<Url>, AppError> {
+    let text = String::from_utf8_lossy(body);
+    let document = Html::parse_document(&text);
+    let selector = Selector::parse("a[href], link[href], script[src]").map_err(|error| {
+        AppError::Internal(format!("Failed to initialize HTML link selector: {error}"))
+    })?;
+    let mut links = BTreeSet::new();
+    for element in document.select(&selector) {
+        let Some(value) = element
+            .value()
+            .attr("href")
+            .or_else(|| element.value().attr("src"))
+        else {
+            continue;
+        };
+        let signal = value.to_ascii_lowercase();
+        if !signal.contains("api") && !signal.contains("request") {
+            continue;
+        }
+        if let Ok(mut url) = base.join(value) {
+            url.set_fragment(None);
+            if url.scheme() == "https" {
+                links.insert(url.to_string());
             }
         }
     }
+    links
+        .into_iter()
+        .take(8)
+        .map(|value| {
+            Url::parse(&value).map_err(|error| {
+                AppError::PortalDiscovery(format!("Discovered API URL is invalid: {error}"))
+            })
+        })
+        .collect()
+}
+
+fn detect_json_layout(value: &Value) -> Option<DiscoveredLayout> {
+    if value.is_array() {
+        return Some(DiscoveredLayout {
+            requests_pointer: String::new(),
+            metadata_pointer: None,
+        });
+    }
+    let candidates = [
+        ("/requests", Some("/meta")),
+        ("/requests", Some("/pagination")),
+        ("/data/requests", Some("/data/meta")),
+        ("/data", Some("/meta")),
+        ("/results", Some("/pagination")),
+        ("/records", Some("/meta")),
+        ("/public_requests", Some("/meta")),
+    ];
+    candidates.into_iter().find_map(|(requests, metadata)| {
+        value
+            .pointer(requests)
+            .filter(|candidate| candidate.is_array())
+            .map(|_| DiscoveredLayout {
+                requests_pointer: requests.to_string(),
+                metadata_pointer: metadata
+                    .filter(|pointer| value.pointer(pointer).is_some())
+                    .map(str::to_string),
+            })
+    })
+}
+
+fn validate_response_records(
+    value: &Value,
+    pointer: &str,
+    metadata_pointer: Option<&str>,
+) -> Result<(), AppError> {
+    let records = response_records(value, pointer).ok_or_else(|| {
+        AppError::PortalDiscovery(format!(
+            "Discovered JSON pointer '{}' is missing or is not an array",
+            if pointer.is_empty() { "/" } else { pointer }
+        ))
+    })?;
+    if let Some(first) = records.first() {
+        let object = first.as_object().ok_or_else(|| {
+            AppError::PortalDiscovery("Request collection contains non-object entries".to_string())
+        })?;
+        if !object.contains_key("id")
+            || !(object.contains_key("created_at") || object.contains_key("createdAt"))
+        {
+            return Err(AppError::PortalDiscovery(
+                "Request collection does not expose stable identifiers and creation timestamps"
+                    .to_string(),
+            ));
+        }
+    } else {
+        let metadata = metadata_pointer
+            .and_then(|metadata_pointer| value.pointer(metadata_pointer))
+            .and_then(parse_pagination_meta)
+            .filter(|metadata| metadata.total_count == 0)
+            .ok_or_else(|| {
+                AppError::PortalDiscovery(
+                    "An empty JSON array could not be verified as a public-request collection"
+                        .to_string(),
+                )
+            })?;
+        validate_pagination_meta(&metadata, 0)?;
+    }
+    Ok(())
+}
+
+fn response_records<'a>(value: &'a Value, pointer: &str) -> Option<&'a [Value]> {
+    let records = if pointer.is_empty() {
+        value
+    } else {
+        value.pointer(pointer)?
+    };
+    records.as_array().map(Vec::as_slice)
+}
+
+fn has_discovery_evidence(value: &Value, layout: &DiscoveredLayout) -> bool {
+    response_records(value, &layout.requests_pointer).is_some_and(|records| {
+        !records.is_empty()
+            || layout
+                .requests_pointer
+                .to_ascii_lowercase()
+                .contains("request")
+            || layout
+                .metadata_pointer
+                .as_deref()
+                .and_then(|pointer| value.pointer(pointer))
+                .and_then(parse_pagination_meta)
+                .is_some()
+    })
+}
+
+fn pagination_metadata_reports_more(value: &Value, metadata_pointer: Option<&str>) -> bool {
+    metadata_pointer
+        .and_then(|pointer| value.pointer(pointer))
+        .and_then(parse_pagination_meta)
+        .is_some_and(|meta| {
+            meta.next_page.is_some() || meta.total_pages > meta.current_page || meta.total_count > 1
+        })
+}
+
+fn decode_nextrequest_response(
+    value: &Value,
+    requests_pointer: &str,
+    metadata_pointer: Option<&str>,
+    requested_page: usize,
+    per_page: usize,
+) -> Result<NextRequestResponse, AppError> {
+    validate_response_records(value, requests_pointer, metadata_pointer)?;
+    let records = if requests_pointer.is_empty() {
+        value.clone()
+    } else {
+        value.pointer(requests_pointer).cloned().ok_or_else(|| {
+            AppError::DataParsing("Stored requests pointer is missing".to_string())
+        })?
+    };
+    let requests: Vec<PublicRequest> = serde_json::from_value(records).map_err(|error| {
+        AppError::DataParsing(format!("Failed to decode public request records: {error}"))
+    })?;
+    validate_javascript_safe_request_identifiers(&requests)?;
+    let metadata = metadata_pointer.and_then(|pointer| value.pointer(pointer));
+    let meta = if let Some(metadata) = metadata {
+        let meta = parse_pagination_meta(metadata).ok_or_else(|| {
+            AppError::DataParsing("Portal returned malformed pagination metadata".to_string())
+        })?;
+        validate_pagination_meta(&meta, requests.len())?;
+        Some(meta)
+    } else {
+        let has_possible_next_page = requests.len() == per_page;
+        let estimated_count = requested_page
+            .saturating_sub(1)
+            .saturating_mul(per_page)
+            .saturating_add(requests.len());
+        Some(PaginationMeta {
+            current_page: requested_page,
+            next_page: has_possible_next_page.then_some(requested_page.saturating_add(1)),
+            prev_page: (requested_page > 1).then_some(requested_page - 1),
+            total_pages: if has_possible_next_page {
+                requested_page.saturating_add(1)
+            } else {
+                requested_page
+            },
+            total_count: estimated_count,
+        })
+    };
+    Ok(NextRequestResponse { requests, meta })
+}
+
+fn validate_javascript_safe_request_identifiers(
+    requests: &[PublicRequest],
+) -> Result<(), AppError> {
+    for request in requests {
+        validate_javascript_safe_identifier("request", request.id)?;
+        if let Some(status_id) = request.current_status_id {
+            validate_javascript_safe_identifier("request status", status_id)?;
+        }
+        if let Some(agency) = request.agency.as_ref() {
+            validate_javascript_safe_identifier("agency", agency.id)?;
+        }
+        if let Some(category) = request.category.as_ref() {
+            validate_javascript_safe_identifier("category", category.id)?;
+        }
+        for document in &request.documents {
+            validate_javascript_safe_identifier("document", document.id)?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_javascript_safe_identifier(kind: &str, identifier: u64) -> Result<(), AppError> {
+    if identifier > JAVASCRIPT_MAX_SAFE_INTEGER {
+        return Err(AppError::DataParsing(format!(
+            "Portal returned {kind} identifier {identifier}, which cannot cross the JavaScript bridge without precision loss"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_pagination_meta(meta: &PaginationMeta, records_on_page: usize) -> Result<(), AppError> {
+    let valid_next = meta
+        .next_page
+        .is_none_or(|next| next > meta.current_page && next <= meta.total_pages);
+    let valid_previous = meta
+        .prev_page
+        .is_none_or(|previous| previous > 0 && previous < meta.current_page);
+    if meta.current_page == 0
+        || meta.total_pages < meta.current_page
+        || !valid_next
+        || !valid_previous
+        || meta.total_count < records_on_page
+    {
+        return Err(AppError::DataParsing(format!(
+            "Portal returned inconsistent pagination metadata for page {}",
+            meta.current_page
+        )));
+    }
+    Ok(())
+}
+
+fn parse_pagination_meta(value: &Value) -> Option<PaginationMeta> {
+    if let Ok(meta) = serde_json::from_value::<PaginationMeta>(value.clone()) {
+        return Some(meta);
+    }
+    let current_page = integer_field(value, &["current_page", "currentPage", "page"])?;
+    let next_page = integer_field(value, &["next_page", "nextPage"]);
+    let prev_page = integer_field(value, &["prev_page", "previous_page", "prevPage"]);
+    let total_pages =
+        integer_field(value, &["total_pages", "totalPages", "pages"]).unwrap_or(current_page);
+    let total_count = integer_field(value, &["total_count", "totalCount", "count"]).unwrap_or(0);
+    Some(PaginationMeta {
+        current_page,
+        next_page,
+        prev_page,
+        total_pages,
+        total_count,
+    })
+}
+
+fn integer_field(value: &Value, keys: &[&str]) -> Option<usize> {
+    keys.iter().find_map(|key| {
+        let field = value.get(*key)?;
+        field
+            .as_u64()
+            .and_then(|number| usize::try_from(number).ok())
+            .or_else(|| field.as_str()?.parse::<usize>().ok())
+    })
+}
+
+fn discover_display_name(value: &Value, submitted: &Url) -> String {
+    ["/portal/name", "/agency/name", "/meta/portal_name", "/name"]
+        .into_iter()
+        .find_map(|pointer| value.pointer(pointer).and_then(Value::as_str))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .or_else(|| submitted.host_str().map(str::to_string))
+        .unwrap_or_else(|| "Verified NextRequest Portal".to_string())
+}
+
+fn origin_url(url: &Url) -> Result<Url, AppError> {
+    let mut origin = url.clone();
+    origin.set_path("/");
+    origin.set_query(None);
+    origin.set_fragment(None);
+    Ok(origin)
+}
+
+fn canonical_url(url: &Url) -> String {
+    let mut canonical = url.clone();
+    canonical.set_fragment(None);
+    canonical.to_string()
+}
+
+fn portal_key(url: &Url, endpoint: &str) -> String {
+    let host = url.host_str().unwrap_or("portal").to_ascii_lowercase();
+    let label = host
+        .strip_suffix(".nextrequest.com")
+        .unwrap_or(&host)
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() {
+                character
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .trim_matches('-')
+        .chars()
+        .take(48)
+        .collect::<String>();
+    let identity = format!(
+        "{}://{}:{}|{endpoint}",
+        url.scheme(),
+        host,
+        url.port_or_known_default().unwrap_or(443)
+    );
+    let digest = sha256_hex(identity.as_bytes());
+    format!(
+        "{}-{}",
+        if label.is_empty() { "portal" } else { &label },
+        &digest[..12]
+    )
+}
+
+fn parse_retry_after(headers: &HeaderMap) -> Option<Duration> {
+    let value = headers.get(RETRY_AFTER)?.to_str().ok()?.trim();
+    if let Ok(seconds) = value.parse::<u64>() {
+        return Some(Duration::from_secs(seconds));
+    }
+    let deadline = chrono::DateTime::parse_from_rfc2822(value).ok()?;
+    Some(
+        (deadline.with_timezone(&Utc) - Utc::now())
+            .to_std()
+            .unwrap_or(Duration::ZERO),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    // TODO(test): Add recorded, replayable acceptance fixtures for generic regional open-data,
+    // ArcGIS Hub, Tableau, NextRequest, and agency-reading-room shapes. Keep San Diego fixtures
+    // as one regional example rather than making them a product-level special case.
+    use super::*;
+
+    fn sample_request(id: u64) -> Value {
+        serde_json::json!({
+            "id": id,
+            "rpid": null,
+            "title": "Records request",
+            "description": null,
+            "status": "open",
+            "current_status_id": null,
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T01:00:00Z",
+            "closed_at": null,
+            "due_date": null,
+            "documents": [],
+            "agency": null,
+            "category": null
+        })
+    }
+
+    #[test]
+    fn blocks_non_public_network_ranges() {
+        assert!(!is_public_ipv4(Ipv4Addr::new(127, 0, 0, 1)));
+        assert!(!is_public_ipv4(Ipv4Addr::new(169, 254, 1, 1)));
+        assert!(!is_public_ipv4(Ipv4Addr::new(100, 64, 0, 1)));
+        assert!(is_public_ipv4(Ipv4Addr::new(8, 8, 8, 8)));
+    }
+
+    #[test]
+    fn detects_nested_request_collections() {
+        let value = serde_json::json!({"data": {"requests": []}, "meta": {}});
+        let layout = detect_json_layout(&value).unwrap();
+        assert_eq!(layout.requests_pointer, "/data/requests");
+    }
+
+    #[test]
+    fn requires_semantic_evidence_for_empty_discovery_collections() {
+        let ambiguous = serde_json::json!([]);
+        let ambiguous_layout = detect_json_layout(&ambiguous).unwrap();
+        assert!(!has_discovery_evidence(&ambiguous, &ambiguous_layout));
+
+        let requests = serde_json::json!({"requests": []});
+        let requests_layout = detect_json_layout(&requests).unwrap();
+        assert!(has_discovery_evidence(&requests, &requests_layout));
+
+        let paginated = serde_json::json!({
+            "data": [],
+            "meta": {
+                "current_page": 1,
+                "next_page": null,
+                "prev_page": null,
+                "total_pages": 1,
+                "total_count": 0
+            }
+        });
+        let paginated_layout = detect_json_layout(&paginated).unwrap();
+        assert!(has_discovery_evidence(&paginated, &paginated_layout));
+    }
+
+    #[test]
+    fn probes_page_advancement_only_when_metadata_reports_more_records() {
+        let exhausted = serde_json::json!({
+            "meta": {"page": 1, "pages": 1, "count": 1}
+        });
+        assert!(!pagination_metadata_reports_more(&exhausted, Some("/meta")));
+
+        let additional = serde_json::json!({
+            "meta": {"page": 1, "pages": 2, "count": 2}
+        });
+        assert!(pagination_metadata_reports_more(&additional, Some("/meta")));
+    }
+
+    #[test]
+    fn replaces_probe_pagination_without_losing_endpoint_query_state() {
+        let url = Url::parse(
+            "https://records.example.test/api/requests?tenant=public&page=1&per_page=1&page=2",
+        )
+        .unwrap();
+        let canonical = without_query_parameters(&url, &["page", "per_page"]);
+        assert_eq!(
+            canonical.as_str(),
+            "https://records.example.test/api/requests?tenant=public"
+        );
+
+        let requested = with_query_parameters(
+            &canonical,
+            &[("page", "7".to_string()), ("per_page", "50".to_string())],
+        );
+        let pairs = requested.query_pairs().collect::<Vec<_>>();
+        assert_eq!(pairs.len(), 3);
+        assert_eq!(
+            pairs,
+            vec![
+                ("tenant".into(), "public".into()),
+                ("page".into(), "7".into()),
+                ("per_page".into(), "50".into())
+            ]
+        );
+    }
+
+    #[test]
+    fn rejects_ambiguous_or_unsafe_pagination_parameter_names() {
+        assert!(validate_pagination_parameters("page", "page").is_err());
+        assert!(validate_pagination_parameters("page[]", "limit").is_err());
+        assert!(validate_pagination_parameters("offset", "page-size").is_ok());
+    }
+
+    #[test]
+    fn estimates_total_count_across_fallback_pages() {
+        let value = serde_json::json!([sample_request(1), sample_request(2)]);
+        let decoded = decode_nextrequest_response(&value, "", None, 3, 10).unwrap();
+        let meta = decoded.meta.unwrap();
+        assert_eq!(meta.current_page, 3);
+        assert_eq!(meta.total_pages, 3);
+        assert_eq!(meta.total_count, 22);
+        assert_eq!(meta.prev_page, Some(2));
+        assert_eq!(meta.next_page, None);
+    }
+
+    #[test]
+    fn rejects_inconsistent_pagination_metadata() {
+        let value = serde_json::json!({
+            "requests": [sample_request(1)],
+            "meta": {
+                "current_page": 2,
+                "next_page": 2,
+                "prev_page": 3,
+                "total_pages": 2,
+                "total_count": 0
+            }
+        });
+        let error =
+            decode_nextrequest_response(&value, "/requests", Some("/meta"), 2, 50).unwrap_err();
+        assert!(error.to_string().contains("inconsistent pagination"));
+    }
+
+    #[test]
+    fn rejects_identifiers_that_would_lose_precision_in_the_frontend_bridge() {
+        let value = serde_json::json!([sample_request(JAVASCRIPT_MAX_SAFE_INTEGER + 1)]);
+        let error = decode_nextrequest_response(&value, "", None, 1, 50).unwrap_err();
+        assert!(error.to_string().contains("precision loss"));
+    }
+
+    #[test]
+    fn validates_retry_configuration_bounds() {
+        let excessive_retries = HttpClientConfig {
+            max_retries: MAX_RETRIES + 1,
+            ..HttpClientConfig::default()
+        };
+        assert!(ApiClient::new(excessive_retries).is_err());
+
+        let inverted_delays = HttpClientConfig {
+            retry_initial_delay_ms: 2_000,
+            retry_max_delay_ms: 1_000,
+            ..HttpClientConfig::default()
+        };
+        assert!(ApiClient::new(inverted_delays).is_err());
+    }
+
+    #[test]
+    fn parses_both_retry_after_wire_formats() {
+        let mut headers = HeaderMap::new();
+        headers.insert(RETRY_AFTER, HeaderValue::from_static("17"));
+        assert_eq!(parse_retry_after(&headers), Some(Duration::from_secs(17)));
+
+        headers.insert(
+            RETRY_AFTER,
+            HeaderValue::from_static("Wed, 21 Oct 2015 07:28:00 GMT"),
+        );
+        assert_eq!(parse_retry_after(&headers), Some(Duration::ZERO));
+    }
+
+    #[test]
+    fn discovers_repair_selectors_and_embedded_google_drive_connectors() {
+        let connector_json = serde_json::json!({
+            "id": 4,
+            "nonce": "abc123_nonce",
+            "account": {
+                "id": "account_42",
+                "specific_folders": [{
+                    "id": "folder_99",
+                    "accountId": "account_42",
+                    "name": "Public evidence"
+                }]
+            }
+        });
+        let encoded = base64::engine::general_purpose::STANDARD
+            .encode(serde_json::to_vec(&connector_json).unwrap());
+        let html = format!(
+            r#"<html><head><title>Evidence</title></head><body>
+                <a class="api-export" href="/api/export?id=7">Records API</a>
+                <div data-shortcode-data="{encoded}"></div>
+            </body></html>"#
+        );
+        let base = Url::parse("https://records.example.gov/documents").unwrap();
+        let (title, links, connectors) = extract_public_resource_links(
+            &base,
+            html.as_bytes(),
+            Some("a.api-export"),
+            Some("a.api-export"),
+        )
+        .unwrap();
+
+        assert_eq!(title, "Evidence");
+        assert_eq!(links.len(), 1);
+        assert!(links[0].download_candidate);
+        let PublicEmbeddedConnector::WordPressGoogleDrive(connector) = &connectors[0];
+        assert_eq!(connector.folder_id, "folder_99");
+        assert_eq!(connector.account_id, "account_42");
+        assert_eq!(
+            connector.endpoint,
+            "https://records.example.gov/wp-admin/admin-ajax.php"
+        );
+    }
+
+    #[test]
+    fn validates_google_drive_listing_shape_and_limits() {
+        let response = serde_json::json!({
+            "success": true,
+            "data": {"files": [{
+                "id": "file_1",
+                "accountId": "account_1",
+                "name": "Annual Report.pdf",
+                "type": "application/pdf",
+                "isFolder": false,
+                "webViewLink": "https://drive.google.com/file/d/file_1/view",
+                "webContentLink": "https://drive.usercontent.google.com/download?id=file_1"
+            }]}
+        });
+        let items = decode_wordpress_google_drive_listing(
+            &serde_json::to_vec(&response).expect("fixture should encode"),
+        )
+        .expect("listing should decode");
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].name, "Annual Report.pdf");
+        assert!(!items[0].is_folder);
+    }
+    #[test]
+    fn ipv6_wrappers_do_not_launder_a_private_destination() {
+        // Each of these reaches an IPv4 address that `is_public_ipv4` rejects, spelled so that
+        // `to_ipv4_mapped` returns None and the old prefix checks all pass.
+        for candidate in [
+            "64:ff9b::7f00:1",        // NAT64 well-known prefix, 127.0.0.1
+            "64:ff9b::a00:1",         // NAT64 well-known prefix, 10.0.0.1
+            "2002:c0a8:1::",          // 6to4, 192.168.0.1
+            "::7f00:1",               // deprecated IPv4-compatible, 127.0.0.1
+            "::ffff:169.254.169.254", // link-local metadata service, for contrast
+        ] {
+            let address: Ipv6Addr = candidate.parse().expect("fixture address should parse");
+            assert!(
+                !is_public_ipv6(address),
+                "{candidate} must not be treated as public"
+            );
+        }
+        assert!(is_public_ipv6(
+            "64:ff9b::5db8:d822".parse().expect("fixture should parse")
+        ));
+        assert!(is_public_ipv6(
+            "2606:4700:4700::1111"
+                .parse()
+                .expect("fixture should parse")
+        ));
+    }
+
+    #[tokio::test]
+    async fn validation_pins_the_addresses_it_approved() {
+        let dns = PinnedDnsResolver::default();
+        // An address literal keeps this offline: `lookup_host` parses it without a DNS query.
+        let url = Url::parse("https://93.184.216.34/records").expect("fixture URL should parse");
+        validate_remote_url(&dns, &url)
+            .await
+            .expect("a public address must validate");
+        assert_eq!(
+            dns.pinned("93.184.216.34"),
+            Some(vec![IpAddr::V4(Ipv4Addr::new(93, 184, 216, 34))])
+        );
+        assert_eq!(dns.pinned("records.example.gov"), None);
+    }
+
+    #[tokio::test]
+    async fn a_rejected_url_leaves_no_pin_behind() {
+        let dns = PinnedDnsResolver::default();
+        let url = Url::parse("https://127.0.0.1/records").expect("fixture URL should parse");
+        validate_remote_url(&dns, &url)
+            .await
+            .expect_err("a loopback address must be rejected");
+        assert_eq!(dns.pinned("127.0.0.1"), None);
+    }
+
+    #[tokio::test]
+    async fn the_client_refuses_to_resolve_a_host_that_skipped_validation() {
+        // This is the property that defeats DNS rebinding: the connector cannot consult the
+        // system resolver at all, so it cannot receive a second, different answer. The request
+        // fails before any socket is opened, which is also why this test needs no network.
+        let client = ApiClient::new(HttpClientConfig::default()).expect("client should build");
+        let error = client
+            .client
+            .get("https://records.example.gov/")
+            .send()
+            .await
+            .expect_err("an unvalidated host must not connect");
+        let rendered = format!("{error:?}");
+        assert!(
+            rendered.contains("was not validated before connecting"),
+            "expected the pinned resolver to refuse the name, got: {rendered}"
+        );
+    }
+}
+
+/// Security regression tests for the URL/redirect boundary.
+///
+/// Every case uses an address literal or a name that is never resolved, so the whole module runs
+/// offline. `lookup_host` parses a literal without issuing a DNS query, which is what lets
+/// `validate_remote_url` be exercised directly.
+#[cfg(test)]
+mod url_security_tests {
+    use super::*;
+
+    fn url(value: &str) -> Url {
+        Url::parse(value).expect("fixture URL should parse")
+    }
+
+    async fn rejects(value: &str) -> AppError {
+        let dns = PinnedDnsResolver::default();
+        match validate_remote_url(&dns, &url(value)).await {
+            Ok(()) => panic!("'{value}' must be rejected"),
+            Err(error) => error,
+        }
+    }
+
+    // SECURITY(security): https only. Every other scheme is a different trust model, and `file:`
+    // in particular turns a portal-supplied URL into a local file read.
+    #[tokio::test]
+    async fn only_https_is_accepted() {
+        for value in [
+            "http://93.184.216.34/records",
+            "file:///etc/passwd",
+            "ftp://93.184.216.34/records",
+            "gopher://93.184.216.34/",
+        ] {
+            let error = rejects(value).await;
+            assert!(
+                matches!(error, AppError::PortalSecurity(_)),
+                "'{value}' rejected with the wrong variant: {error:?}",
+            );
+        }
+
+        let dns = PinnedDnsResolver::default();
+        validate_remote_url(&dns, &url("https://93.184.216.34/records"))
+            .await
+            .expect("https to a public address must be accepted");
+    }
+
+    // SECURITY(security): credentials in a URL would be sent to whatever host the URL names, and
+    // a redirect chain could carry them somewhere else entirely.
+    #[tokio::test]
+    async fn credentials_embedded_in_a_url_are_refused() {
+        for value in [
+            "https://user:password@93.184.216.34/records",
+            "https://user@93.184.216.34/records",
+            "https://:password@93.184.216.34/records",
+        ] {
+            let error = rejects(value).await;
+            assert!(
+                matches!(error, AppError::PortalSecurity(_)),
+                "'{value}' rejected with the wrong variant: {error:?}",
+            );
+        }
+    }
+
+    // SECURITY(security): loopback, link-local, and RFC 1918 addresses are the SSRF targets that
+    // matter. These must be refused whichever spelling reaches them.
+    #[tokio::test]
+    async fn private_and_loopback_destinations_are_refused() {
+        for value in [
+            "https://127.0.0.1/",
+            "https://127.0.0.1:8080/",
+            "https://10.0.0.1/",
+            "https://192.168.1.1/",
+            "https://172.16.0.1/",
+            "https://169.254.169.254/latest/meta-data/",
+            "https://100.64.0.1/",
+            "https://0.0.0.0/",
+        ] {
+            let error = rejects(value).await;
+            assert!(
+                matches!(error, AppError::PortalSecurity(_)),
+                "'{value}' rejected with the wrong variant: {error:?}",
+            );
+        }
+    }
+
+    // LIMIT(security): a bracketed IPv6 literal is refused, but by DNS failure rather than by the
+    // address check: `Url::host_str` keeps the brackets, and `lookup_host("[::1]", _)` cannot
+    // parse that. The outcome is fail-closed, and it applies to PUBLIC IPv6 literals too, so this
+    // client cannot address any IPv6 literal URL at all. `is_public_ipv6` still guards names that
+    // resolve to AAAA records, which is where it actually does its work.
+    #[tokio::test]
+    async fn ipv6_literal_urls_are_refused_before_the_address_check() {
+        for value in [
+            "https://[::1]/",
+            "https://[fc00::1]/",
+            "https://[fe80::1]/",
+            "https://[2606:4700:4700::1111]/",
+        ] {
+            let error = rejects(value).await;
+            assert!(
+                matches!(
+                    error,
+                    AppError::PortalDiscovery(_) | AppError::PortalSecurity(_)
+                ),
+                "'{value}' rejected with an unexpected variant: {error:?}",
+            );
+        }
+    }
+
+    // The name-suffix check is defense in depth. `is_public_ip` on the resolved address is the
+    // actual boundary, which is why adding more suffixes here would not make the app safer.
+    #[tokio::test]
+    async fn internal_name_suffixes_are_refused_before_resolution() {
+        for value in [
+            "https://localhost/",
+            "https://LocalHost./",
+            "https://api.localhost/",
+            "https://printer.local/",
+            "https://vault.internal/",
+        ] {
+            let error = rejects(value).await;
+            assert!(
+                matches!(error, AppError::PortalSecurity(_)),
+                "'{value}' rejected with the wrong variant: {error:?}",
+            );
+        }
+    }
+
+    // LIMIT(security): there is no port allowlist. Pinned as current behavior so that adding one
+    // is a deliberate decision rather than an accident, and so that removing one is noticed.
+    #[tokio::test]
+    async fn any_port_on_a_public_address_is_currently_permitted() {
+        let dns = PinnedDnsResolver::default();
+        for value in [
+            "https://93.184.216.34:9200/",
+            "https://93.184.216.34:22/",
+            "https://93.184.216.34:6379/",
+        ] {
+            validate_remote_url(&dns, &url(value))
+                .await
+                .unwrap_or_else(|error| panic!("'{value}' unexpectedly rejected: {error:?}"));
+        }
+    }
+
+    // SECURITY(security): rejection must leave no pin, or a refused host would become reachable
+    // by a later unvalidated call inside the pin TTL.
+    #[tokio::test]
+    async fn every_rejected_url_leaves_the_resolver_untouched() {
+        for (value, host) in [
+            ("http://93.184.216.34/", "93.184.216.34"),
+            ("https://user@93.184.216.34/", "93.184.216.34"),
+            ("https://127.0.0.1/", "127.0.0.1"),
+            ("https://localhost/", "localhost"),
+        ] {
+            let dns = PinnedDnsResolver::default();
+            let _ = validate_remote_url(&dns, &url(value)).await;
+            assert_eq!(dns.pinned(host), None, "'{value}' left a pin behind");
+        }
+    }
+
+    // SECURITY(security): IPv4 ranges that are not globally routable must all be refused. The
+    // documentation and benchmark ranges are included because they are reachable inside some
+    // corporate networks.
+    #[test]
+    fn non_routable_ipv4_ranges_are_not_public() {
+        for octets in [
+            [0, 0, 0, 0],
+            [10, 0, 0, 1],
+            [100, 64, 0, 1],
+            [127, 0, 0, 1],
+            [169, 254, 169, 254],
+            [172, 16, 0, 1],
+            [172, 31, 255, 254],
+            [192, 0, 0, 1],
+            [192, 0, 2, 1],
+            [192, 168, 1, 1],
+            [198, 18, 0, 1],
+            [198, 51, 100, 1],
+            [203, 0, 113, 1],
+            [224, 0, 0, 1],
+            [240, 0, 0, 1],
+            [255, 255, 255, 255],
+        ] {
+            let address = Ipv4Addr::from(octets);
+            assert!(!is_public_ipv4(address), "{address} must not be public");
+        }
+
+        for octets in [
+            [8, 8, 8, 8],
+            [93, 184, 216, 34],
+            [1, 1, 1, 1],
+            [172, 32, 0, 1],
+        ] {
+            let address = Ipv4Addr::from(octets);
+            assert!(is_public_ipv4(address), "{address} should be public");
+        }
+    }
+
+    // SECURITY(security): an IPv6 wrapper must not launder a private IPv4 destination. Each of
+    // these spellings reaches the same place as the bare IPv4 address inside it.
+    #[test]
+    fn ipv6_wrappers_cannot_launder_a_private_destination() {
+        let private: &[&str] = &[
+            "::1",
+            "::",
+            "fc00::1",
+            "fd00::1",
+            "fe80::1",
+            "ff02::1",
+            "::ffff:127.0.0.1",
+            "::ffff:10.0.0.1",
+            "::127.0.0.1",
+            "64:ff9b::127.0.0.1",
+            "64:ff9b::169.254.169.254",
+            "2002:7f00:0001::",
+        ];
+        for value in private {
+            let address: Ipv6Addr = value.parse().expect("fixture address should parse");
+            assert!(!is_public_ipv6(address), "{value} must not be public");
+        }
+
+        for value in ["2606:4700:4700::1111", "2001:4860:4860::8888"] {
+            let address: Ipv6Addr = value.parse().expect("fixture address should parse");
+            assert!(is_public_ipv6(address), "{value} should be public");
+        }
+    }
+
+    // INVARIANT(security): the loop runs `0..=MAX_REDIRECTS` and errors when `redirect_count`
+    // reaches `MAX_REDIRECTS`, so at most MAX_REDIRECTS redirects are followed across at most
+    // MAX_REDIRECTS + 1 requests. This pins the arithmetic; the loop itself needs a live socket.
+    #[test]
+    fn the_redirect_budget_is_bounded_and_small() {
+        assert_eq!(MAX_REDIRECTS, 5);
+        assert_eq!((0..=MAX_REDIRECTS).count(), MAX_REDIRECTS + 1);
+    }
+
+    // TODO(test): The redirect loop itself has no coverage. `send_response_following_safe_redirects`
+    // is a private `&self` method needing a live socket, and the pinned resolver plus the
+    // loopback rejection above make a local test server unreachable by construction. Extracting
+    // the hop-advance step as a pure `fn next_redirect_url(current: &Url, location: &str)` would
+    // make the Location-header handling (missing, non-UTF-8, protocol-relative, scheme-changing,
+    // query-dropping) testable without a network. Not done here: it changes production structure,
+    // which is outside this session's remit.
 }
