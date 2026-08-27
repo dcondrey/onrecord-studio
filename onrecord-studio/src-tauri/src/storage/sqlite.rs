@@ -2301,6 +2301,81 @@ impl DuckDbRepository {
         })
     }
 
+    /// The owning agency's name and department, joined into one searchable label, for the
+    /// request a document belongs to. `None` covers both "the request has no agency on file" and
+    /// "the request row itself is not found" -- either way there is no organization signal to
+    /// evaluate against, and callers must treat that as the predicate contributing nothing rather
+    /// than as a reason to exclude.
+    pub async fn agency_label_for_request(
+        &self,
+        subdomain: &str,
+        request_id: u64,
+    ) -> Result<Option<String>, AppError> {
+        let request_id = i64::try_from(request_id).map_err(|error| {
+            AppError::DataParsing(format!(
+                "Request identifier cannot be represented by SQLite: {error}"
+            ))
+        })?;
+        let subdomain = subdomain.to_string();
+        self.query_connection("Request agency label lookup", move |conn| {
+            let row = conn
+                .query_row(
+                    "SELECT agencies.name, agencies.department_name
+                     FROM requests
+                     LEFT JOIN agencies
+                        ON agencies.id = requests.agency_id
+                       AND agencies.portal_subdomain = requests.portal_subdomain
+                     WHERE requests.id = ?1 AND requests.portal_subdomain = ?2",
+                    params![request_id, subdomain],
+                    |row| {
+                        let name: Option<String> = row.get(0)?;
+                        let department: Option<String> = row.get(1)?;
+                        Ok((name, department))
+                    },
+                )
+                .optional()
+                .map_err(|error| {
+                    AppError::Internal(format!("Failed to look up request agency label: {error}"))
+                })?;
+            Ok(row.and_then(|(name, department)| match (name, department) {
+                (Some(name), Some(department)) if !department.trim().is_empty() => {
+                    Some(format!("{name} {department}"))
+                }
+                (Some(name), _) => Some(name),
+                (None, Some(department)) => Some(department),
+                (None, None) => None,
+            }))
+        })
+        .await
+    }
+
+    /// Discards a document row that guidance refused after extraction, before any extracted text
+    /// was ever committed for it. Scoped to that narrow case: a document with no `documents_fts`
+    /// row and no provenance rows, which is exactly the state a stub row is in between
+    /// `insert_or_update_document` and a successful `finalize_document_extraction`. Callers must
+    /// not use this once extraction has been finalized -- deleting a document that already has
+    /// dependent rows is out of scope here and would need to account for them explicitly.
+    pub async fn delete_unextracted_document(
+        &self,
+        subdomain: &str,
+        document_id: u64,
+    ) -> Result<(), AppError> {
+        let document_id = i64::try_from(document_id).map_err(|error| {
+            AppError::DataParsing(format!(
+                "Document identifier cannot be represented by SQLite: {error}"
+            ))
+        })?;
+        let conn = self.conn.lock().await;
+        conn.execute(
+            "DELETE FROM documents WHERE id = ?1 AND portal_subdomain = ?2",
+            params![document_id, subdomain],
+        )
+        .map_err(|error| {
+            AppError::Internal(format!("Failed to discard refused document: {error}"))
+        })?;
+        Ok(())
+    }
+
     /// Submits manual case verification details and updates investigator flags.
     pub async fn record_manual_case_audit(
         &self,

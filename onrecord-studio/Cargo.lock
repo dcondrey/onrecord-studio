@@ -3934,6 +3934,7 @@ dependencies = [
  "futures-util",
  "lopdf",
  "msg_parser",
+ "regex",
  "reqwest",
  "rusqlite",
  "scraper",

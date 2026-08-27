@@ -153,6 +153,11 @@ pub struct PublicResourceInspection {
     pub links: Vec<PublicResourceLink>,
     pub body: Option<Vec<u8>>,
     pub embedded_connectors: Vec<PublicEmbeddedConnector>,
+    // The server's declared `Content-Length`, read from the response headers before the body is
+    // consumed (or, for a non-HTML resource, before it is discarded unread). `None` when the
+    // header is absent or unparseable, which is a genuine "not known", not zero: a size predicate
+    // must treat it as contributing nothing rather than as a document of size zero.
+    pub content_length: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -614,6 +619,11 @@ impl ApiClient {
                     .trim()
                     .to_ascii_lowercase()
             });
+        let content_length = response
+            .headers()
+            .get(reqwest::header::CONTENT_LENGTH)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.parse::<u64>().ok());
         if !is_html_resource(&final_url, content_type.as_deref()) {
             return Ok(PublicResourceInspection {
                 title: file_name_from_url(&final_url),
@@ -623,6 +633,7 @@ impl ApiClient {
                 links: Vec::new(),
                 body: None,
                 embedded_connectors: Vec::new(),
+                content_length,
             });
         }
         let (_, bytes) = read_response_bytes(
@@ -641,6 +652,7 @@ impl ApiClient {
             links,
             body: Some(bytes),
             embedded_connectors,
+            content_length,
         })
     }
 

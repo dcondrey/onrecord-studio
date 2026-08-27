@@ -37,6 +37,34 @@ pub struct SourceGuidance {
     pub exclude_url_prefixes: Vec<String>,
     pub link_selector: Option<String>,
     pub download_selector: Option<String>,
+    #[serde(default)]
+    pub include_filename_globs: Vec<String>,
+    #[serde(default)]
+    pub exclude_filename_globs: Vec<String>,
+    #[serde(default)]
+    pub include_filename_patterns: Vec<String>,
+    #[serde(default)]
+    pub exclude_filename_patterns: Vec<String>,
+    #[serde(default)]
+    pub include_content_keywords: Vec<String>,
+    #[serde(default)]
+    pub exclude_content_keywords: Vec<String>,
+    #[serde(default)]
+    pub include_content_patterns: Vec<String>,
+    #[serde(default)]
+    pub exclude_content_patterns: Vec<String>,
+    #[serde(default)]
+    pub include_organizations: Vec<String>,
+    #[serde(default)]
+    pub exclude_organizations: Vec<String>,
+    #[serde(default)]
+    pub minimum_file_size_bytes: Option<u64>,
+    #[serde(default)]
+    pub maximum_file_size_bytes: Option<u64>,
+    #[serde(default)]
+    pub document_date_from: Option<String>,
+    #[serde(default)]
+    pub document_date_to: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

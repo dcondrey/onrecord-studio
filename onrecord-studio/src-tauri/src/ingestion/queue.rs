@@ -30,6 +30,7 @@ use crate::types::{
     StoppedHost,
 };
 use chrono::Utc;
+use regex::Regex;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Component, Path, PathBuf};
@@ -444,6 +445,43 @@ struct CrawlState {
     resources_started: AtomicUsize,
     frontier_refill_lock: Mutex<()>,
     arcgis_page_hashes: Mutex<HashSet<String>>,
+    /// Regex patterns from `guidance`, compiled once when the crawl starts. See
+    /// `CompiledGuidancePatterns` for why a pattern that fails to compile is silently dropped
+    /// here rather than aborting the crawl.
+    compiled_guidance: CompiledGuidancePatterns,
+}
+
+/// Regex predicates from `SourceGuidance`, compiled once per crawl instead of once per
+/// evaluation.
+///
+/// `validate_source_guidance` already refuses to save a pattern that fails `Regex::new`, so
+/// reaching this code with an invalid one means the guidance was written some other way (an
+/// older save format, a direct database edit). That must not panic the ingestion pipeline: an
+/// invalid pattern is simply absent from the compiled list, which makes the predicate it belongs
+/// to contribute nothing rather than crash or, worse, silently exclude everything (an `include`
+/// list that compiled to nothing would otherwise admit no document).
+struct CompiledGuidancePatterns {
+    include_filename_patterns: Vec<Regex>,
+    exclude_filename_patterns: Vec<Regex>,
+    include_content_patterns: Vec<Regex>,
+    exclude_content_patterns: Vec<Regex>,
+}
+
+impl CompiledGuidancePatterns {
+    fn compile(guidance: &SourceGuidance) -> Self {
+        let compile_all = |patterns: &[String]| -> Vec<Regex> {
+            patterns
+                .iter()
+                .filter_map(|pattern| Regex::new(pattern).ok())
+                .collect()
+        };
+        Self {
+            include_filename_patterns: compile_all(&guidance.include_filename_patterns),
+            exclude_filename_patterns: compile_all(&guidance.exclude_filename_patterns),
+            include_content_patterns: compile_all(&guidance.include_content_patterns),
+            exclude_content_patterns: compile_all(&guidance.exclude_content_patterns),
+        }
+    }
 }
 
 /// Why the frontier refused a discovered link.
@@ -452,7 +490,7 @@ struct CrawlState {
 /// the rule that fired. Scoping rules added later extend this enum instead of replacing it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum FrontierExclusion {
-    /// The source's saved guidance excludes the URL.
+    /// The source's saved guidance excludes the URL by prefix or hostname.
     Guidance,
     /// The link differs from an already-scheduled crawl node only by its query string. A site
     /// crawl that follows these enumerates a faceted search, which is combinatorial and is what
@@ -470,6 +508,23 @@ enum FrontierExclusion {
     HostStopped { detail: String },
     /// The host's robots.txt excludes the path.
     RobotsExcluded { rule: String },
+    /// The document's derived or API-reported filename fails a `SourceGuidance` filename glob or
+    /// regex include/exclude rule. Evaluated before download.
+    FilenamePattern,
+    /// A known file size falls outside `minimum_file_size_bytes`/`maximum_file_size_bytes`.
+    /// Evaluated before download, and only when a size is actually known pre-download.
+    FileSize,
+    /// The document's reported date falls outside `document_date_from`/`document_date_to`.
+    /// Evaluated before download, and only when a date is actually known pre-download.
+    DocumentDate,
+    /// The extracted text fails a content keyword include/exclude rule. Evaluated after
+    /// extraction, once text is actually available.
+    ContentKeyword,
+    /// The extracted text fails a content regex include/exclude rule. Evaluated after extraction.
+    ContentPattern,
+    /// The owning request's agency fails an organization include/exclude rule. Evaluated after
+    /// extraction, alongside the content rules above.
+    Organization,
 }
 
 impl FrontierExclusion {
@@ -482,6 +537,12 @@ impl FrontierExclusion {
             Self::NavigationChrome => "navigation-chrome",
             Self::HostStopped { .. } => "host-stopped",
             Self::RobotsExcluded { .. } => "robots-excluded",
+            Self::FilenamePattern => "filename-pattern",
+            Self::FileSize => "file-size",
+            Self::DocumentDate => "document-date",
+            Self::ContentKeyword => "content-keyword",
+            Self::ContentPattern => "content-pattern",
+            Self::Organization => "organization",
         }
     }
 }
@@ -879,9 +940,11 @@ impl QueueManager {
             .live_workers
             .store(WORKERS_PER_PORTAL, Ordering::Release);
         let receiver = Arc::new(Mutex::new(receiver));
+        let compiled_guidance = CompiledGuidancePatterns::compile(&guidance);
         let crawl = Arc::new(CrawlState {
             policy: crawl_policy,
             guidance,
+            compiled_guidance,
             visited_urls: Mutex::new(HashSet::new()),
             resource_urls: Mutex::new(HashSet::new()),
             crawl_path_claims: Mutex::new(HashSet::new()),
@@ -1953,8 +2016,13 @@ async fn process_public_resource(
                 }
             }
             for link in inspection.links {
-                if !guidance_allows_url(&context.crawl.guidance, &link.url) {
-                    record_frontier_exclusion(context, &FrontierExclusion::Guidance).await;
+                if let Err(exclusion) = guidance_allows_url(
+                    &context.crawl.guidance,
+                    &context.crawl.compiled_guidance,
+                    &link.url,
+                    None,
+                ) {
+                    record_frontier_exclusion(context, &exclusion).await;
                     continue;
                 }
                 for companion_url in arcgis_item_companion_urls(&link.url) {
@@ -1982,6 +2050,7 @@ async fn process_public_resource(
                             links: Vec::new(),
                             body: None,
                             embedded_connectors: Vec::new(),
+                            content_length: None,
                         },
                         Some(request_id),
                         &inspection.final_url,
@@ -2078,6 +2147,7 @@ async fn process_wordpress_google_drive(
                 links: Vec::new(),
                 body: None,
                 embedded_connectors: Vec::new(),
+                content_length: None,
             },
             Some(request_id),
             &folder_origin,
@@ -2133,8 +2203,13 @@ async fn process_data_catalog_page(
     .await?;
     let mut tasks = Vec::new();
     for download in &page.downloads {
-        if !guidance_allows_url(&context.crawl.guidance, &download.url) {
-            record_frontier_exclusion(context, &FrontierExclusion::Guidance).await;
+        if let Err(exclusion) = guidance_allows_url(
+            &context.crawl.guidance,
+            &context.crawl.compiled_guidance,
+            &download.url,
+            download.byte_count,
+        ) {
+            record_frontier_exclusion(context, &exclusion).await;
             continue;
         }
         let inspection = PublicResourceInspection {
@@ -2145,6 +2220,7 @@ async fn process_data_catalog_page(
             links: Vec::new(),
             body: None,
             embedded_connectors: Vec::new(),
+            content_length: download.byte_count,
         };
         if let Some(task) = prepare_discovered_download(
             context,
@@ -2590,9 +2666,12 @@ async fn admit_crawl_link(
     depth: usize,
 ) -> Result<(), FrontierExclusion> {
     let url = link.url.as_str();
-    if !guidance_allows_url(&context.crawl.guidance, url) {
-        return Err(FrontierExclusion::Guidance);
-    }
+    guidance_allows_url(
+        &context.crawl.guidance,
+        &context.crawl.compiled_guidance,
+        url,
+        None,
+    )?;
     if link.navigation_chrome {
         return Err(FrontierExclusion::NavigationChrome);
     }
@@ -2887,14 +2966,18 @@ async fn process_binary_payload(
             text,
             was_ocr_processed,
         } => {
-            let character_count = finalize_and_index_extracted_document(
+            let Some(character_count) = finalize_and_index_extracted_document(
                 context,
                 request_id,
                 download_finalization,
                 text,
                 was_ocr_processed,
+                &document.created_at,
             )
-            .await?;
+            .await?
+            else {
+                return Ok(());
+            };
             send_progress(
                 context,
                 IngestionProgress::DocumentExtracted {
@@ -2941,14 +3024,19 @@ async fn process_binary_payload(
             format,
             primary_error,
         } => {
-            finalize_and_index_extracted_document(
+            if finalize_and_index_extracted_document(
                 context,
                 request_id,
                 download_finalization,
                 text,
                 false,
+                &document.created_at,
             )
-            .await?;
+            .await?
+            .is_none()
+            {
+                return Ok(());
+            }
             send_progress(
                 context,
                 IngestionProgress::DocumentSalvaged {
@@ -3018,13 +3106,119 @@ async fn index_extracted_document(
         .await
 }
 
+/// Content keyword/regex, organization, and document-date guidance predicates, evaluated once
+/// extracted text (and, via `agency_label_for_request`, the owning agency) are actually available
+/// -- unlike the pre-download predicates in `guidance_allows_url`. `agency_label` is `None` both
+/// when the source has no organization guidance (never fetched) and when the request has no
+/// agency on file; either way the organization predicate contributes nothing.
+fn evaluate_extracted_document_guidance(
+    guidance: &SourceGuidance,
+    compiled: &CompiledGuidancePatterns,
+    text: &str,
+    agency_label: Option<&str>,
+    document_created_at: &str,
+) -> Result<(), FrontierExclusion> {
+    if guidance
+        .exclude_content_keywords
+        .iter()
+        .any(|keyword| text.contains(keyword.as_str()))
+    {
+        return Err(FrontierExclusion::ContentKeyword);
+    }
+    if !guidance.include_content_keywords.is_empty()
+        && !guidance
+            .include_content_keywords
+            .iter()
+            .any(|keyword| text.contains(keyword.as_str()))
+    {
+        return Err(FrontierExclusion::ContentKeyword);
+    }
+    if compiled
+        .exclude_content_patterns
+        .iter()
+        .any(|pattern| pattern.is_match(text))
+    {
+        return Err(FrontierExclusion::ContentPattern);
+    }
+    if !compiled.include_content_patterns.is_empty()
+        && !compiled
+            .include_content_patterns
+            .iter()
+            .any(|pattern| pattern.is_match(text))
+    {
+        return Err(FrontierExclusion::ContentPattern);
+    }
+    if let Some(agency) = agency_label {
+        let agency_lower = agency.to_ascii_lowercase();
+        if guidance
+            .exclude_organizations
+            .iter()
+            .any(|name| agency_lower.contains(&name.to_ascii_lowercase()))
+        {
+            return Err(FrontierExclusion::Organization);
+        }
+        if !guidance.include_organizations.is_empty()
+            && !guidance
+                .include_organizations
+                .iter()
+                .any(|name| agency_lower.contains(&name.to_ascii_lowercase()))
+        {
+            return Err(FrontierExclusion::Organization);
+        }
+    }
+    if guidance.document_date_from.is_some() || guidance.document_date_to.is_some() {
+        // The first 10 bytes of an ISO-8601 timestamp are its calendar date; a value too short to
+        // hold one carries no date to compare, so the predicate contributes nothing rather than
+        // excluding on an absence.
+        if let Some(date) = document_created_at.get(0..10) {
+            let before_start = guidance
+                .document_date_from
+                .as_deref()
+                .is_some_and(|from| date < from);
+            let after_end = guidance
+                .document_date_to
+                .as_deref()
+                .is_some_and(|to| date > to);
+            if before_start || after_end {
+                return Err(FrontierExclusion::DocumentDate);
+            }
+        }
+    }
+    Ok(())
+}
+
 async fn finalize_and_index_extracted_document(
     context: &WorkerContext,
     request_id: u64,
     download: DocumentDownloadFinalization<'_>,
     text: String,
     was_ocr_processed: bool,
-) -> Result<usize, AppError> {
+    document_created_at: &str,
+) -> Result<Option<usize>, AppError> {
+    let guidance = &context.crawl.guidance;
+    let agency_label =
+        if guidance.include_organizations.is_empty() && guidance.exclude_organizations.is_empty() {
+            None
+        } else {
+            context
+                .repository
+                .agency_label_for_request(&context.portal.portal_key, request_id)
+                .await?
+        };
+    if let Err(exclusion) = evaluate_extracted_document_guidance(
+        guidance,
+        &context.crawl.compiled_guidance,
+        &text,
+        agency_label.as_deref(),
+        document_created_at,
+    ) {
+        record_frontier_exclusion(context, &exclusion).await;
+        context
+            .repository
+            .delete_unextracted_document(download.portal_subdomain, download.document_id)
+            .await?;
+        return Ok(None);
+    }
     let extracted_text_sha256 = sha256_hex(text.as_bytes());
     let character_count = text.chars().count();
     context
@@ -3052,7 +3246,7 @@ async fn finalize_and_index_extracted_document(
         text,
     )
     .await?;
-    Ok(character_count)
+    Ok(Some(character_count))
 }
 
 #[derive(Clone)]
@@ -3145,8 +3339,13 @@ async fn expand_structured_document_links(
         .clone()
         .unwrap_or_else(|| format!("local document {}", document.id));
     for candidate in candidates {
-        if !guidance_allows_url(&context.crawl.guidance, &candidate.url) {
-            record_frontier_exclusion(context, &FrontierExclusion::Guidance).await;
+        if let Err(exclusion) = guidance_allows_url(
+            &context.crawl.guidance,
+            &context.crawl.compiled_guidance,
+            &candidate.url,
+            None,
+        ) {
+            record_frontier_exclusion(context, &exclusion).await;
             continue;
         }
         if candidate.download_candidate {
@@ -3158,6 +3357,7 @@ async fn expand_structured_document_links(
                 links: Vec::new(),
                 body: None,
                 embedded_connectors: Vec::new(),
+                content_length: None,
             };
             if let Some(task) = prepare_discovered_download(
                 context,
@@ -4667,16 +4867,116 @@ fn validate_source_guidance(guidance: &SourceGuidance) -> Result<(), AppError> {
             AppError::DataParsing(format!("Source repair selector is invalid: {error}"))
         })?;
     }
+    if guidance.include_filename_globs.len() > 100
+        || guidance.exclude_filename_globs.len() > 100
+        || guidance.include_filename_patterns.len() > 100
+        || guidance.exclude_filename_patterns.len() > 100
+        || guidance.include_content_keywords.len() > 100
+        || guidance.exclude_content_keywords.len() > 100
+        || guidance.include_content_patterns.len() > 100
+        || guidance.exclude_content_patterns.len() > 100
+        || guidance.include_organizations.len() > 100
+        || guidance.exclude_organizations.len() > 100
+    {
+        return Err(AppError::DataParsing(
+            "Source repair guidance contains too many rules".to_string(),
+        ));
+    }
+    for value in guidance
+        .include_filename_globs
+        .iter()
+        .chain(guidance.exclude_filename_globs.iter())
+        .chain(guidance.include_filename_patterns.iter())
+        .chain(guidance.exclude_filename_patterns.iter())
+        .chain(guidance.include_content_keywords.iter())
+        .chain(guidance.exclude_content_keywords.iter())
+        .chain(guidance.include_content_patterns.iter())
+        .chain(guidance.exclude_content_patterns.iter())
+        .chain(guidance.include_organizations.iter())
+        .chain(guidance.exclude_organizations.iter())
+    {
+        if value.trim().is_empty() || value.len() > 1_024 {
+            return Err(AppError::DataParsing(
+                "Source repair scope rules must contain between 1 and 1024 characters".to_string(),
+            ));
+        }
+    }
+    // Regex patterns are compiled here so a bad one is refused at save time with a message that
+    // names the pattern, rather than silently contributing nothing once the crawl is already
+    // running. `CompiledGuidancePatterns::compile` still tolerates an invalid pattern at runtime
+    // (dropping it rather than panicking), which covers guidance saved before this check existed.
+    for pattern in guidance
+        .include_filename_patterns
+        .iter()
+        .chain(guidance.exclude_filename_patterns.iter())
+        .chain(guidance.include_content_patterns.iter())
+        .chain(guidance.exclude_content_patterns.iter())
+    {
+        Regex::new(pattern).map_err(|error| {
+            AppError::DataParsing(format!(
+                "Source repair pattern '{pattern}' is invalid: {error}"
+            ))
+        })?;
+    }
+    if let (Some(minimum), Some(maximum)) = (
+        guidance.minimum_file_size_bytes,
+        guidance.maximum_file_size_bytes,
+    ) {
+        if minimum > maximum {
+            return Err(AppError::DataParsing(
+                "Source repair minimum file size must not exceed the maximum".to_string(),
+            ));
+        }
+    }
     Ok(())
 }
 
-fn guidance_allows_url(guidance: &SourceGuidance, value: &str) -> bool {
+/// A minimal glob matcher: `*` matches any run of characters (including none), every other byte
+/// matches literally. Sufficient for filename rules like `*.pdf` or `budget-*-final.xlsx` without
+/// pulling in a glob crate for a single wildcard character.
+fn glob_matches(pattern: &str, text: &str) -> bool {
+    fn matches(pattern: &[u8], text: &[u8]) -> bool {
+        match pattern.first() {
+            None => text.is_empty(),
+            Some(b'*') => {
+                matches(&pattern[1..], text) || (!text.is_empty() && matches(pattern, &text[1..]))
+            }
+            Some(byte) => text.first() == Some(byte) && matches(&pattern[1..], &text[1..]),
+        }
+    }
+    matches(pattern.as_bytes(), text.as_bytes())
+}
+
+/// The last non-empty path segment of a URL, treated as the filename a `SourceGuidance` filename
+/// rule evaluates against. `None` when the URL has no such segment (a bare host, or a value that
+/// does not parse as a URL at all) -- absence here means the filename predicates contribute
+/// nothing, not that they exclude, per the absence-versus-measurement rule.
+fn filename_from_url(value: &str) -> Option<String> {
+    let path = reqwest::Url::parse(value)
+        .ok()
+        .map(|url| url.path().to_string())
+        .unwrap_or_else(|| value.to_string());
+    path.rsplit('/')
+        .find(|segment| !segment.is_empty())
+        .map(str::to_string)
+}
+
+/// Whether a discovered URL survives the source's saved scoping guidance, naming the specific
+/// rule that refused it. `content_length` is `Some` only at call sites where a size is already
+/// known pre-download (a catalog listing that reports it); elsewhere it is `None` and the size
+/// predicate contributes nothing rather than excluding on an unmeasured value.
+fn guidance_allows_url(
+    guidance: &SourceGuidance,
+    compiled: &CompiledGuidancePatterns,
+    value: &str,
+    content_length: Option<u64>,
+) -> Result<(), FrontierExclusion> {
     if guidance
         .exclude_url_prefixes
         .iter()
         .any(|prefix| value.starts_with(prefix))
     {
-        return false;
+        return Err(FrontierExclusion::Guidance);
     }
     if !guidance.include_url_prefixes.is_empty()
         && !guidance
@@ -4684,20 +4984,63 @@ fn guidance_allows_url(guidance: &SourceGuidance, value: &str) -> bool {
             .iter()
             .any(|prefix| value.starts_with(prefix))
     {
-        return false;
+        return Err(FrontierExclusion::Guidance);
     }
-    if guidance.allowed_hostnames.is_empty() {
-        return true;
+    if !guidance.allowed_hostnames.is_empty() {
+        let host_allowed = reqwest::Url::parse(value)
+            .ok()
+            .and_then(|url| url.host_str().map(str::to_ascii_lowercase))
+            .is_some_and(|host| {
+                guidance.allowed_hostnames.iter().any(|allowed| {
+                    let allowed = allowed.to_ascii_lowercase();
+                    host == allowed || host.ends_with(&format!(".{allowed}"))
+                })
+            });
+        if !host_allowed {
+            return Err(FrontierExclusion::Guidance);
+        }
     }
-    reqwest::Url::parse(value)
-        .ok()
-        .and_then(|url| url.host_str().map(str::to_ascii_lowercase))
-        .is_some_and(|host| {
-            guidance.allowed_hostnames.iter().any(|allowed| {
-                let allowed = allowed.to_ascii_lowercase();
-                host == allowed || host.ends_with(&format!(".{allowed}"))
-            })
-        })
+    if let Some(filename) = filename_from_url(value) {
+        let filename_lower = filename.to_ascii_lowercase();
+        let excluded = guidance
+            .exclude_filename_globs
+            .iter()
+            .any(|pattern| glob_matches(&pattern.to_ascii_lowercase(), &filename_lower))
+            || compiled
+                .exclude_filename_patterns
+                .iter()
+                .any(|pattern| pattern.is_match(&filename));
+        if excluded {
+            return Err(FrontierExclusion::FilenamePattern);
+        }
+        let has_includes = !guidance.include_filename_globs.is_empty()
+            || !compiled.include_filename_patterns.is_empty();
+        if has_includes {
+            let included = guidance
+                .include_filename_globs
+                .iter()
+                .any(|pattern| glob_matches(&pattern.to_ascii_lowercase(), &filename_lower))
+                || compiled
+                    .include_filename_patterns
+                    .iter()
+                    .any(|pattern| pattern.is_match(&filename));
+            if !included {
+                return Err(FrontierExclusion::FilenamePattern);
+            }
+        }
+    }
+    if let Some(length) = content_length {
+        let out_of_range = guidance
+            .minimum_file_size_bytes
+            .is_some_and(|minimum| length < minimum)
+            || guidance
+                .maximum_file_size_bytes
+                .is_some_and(|maximum| length > maximum);
+        if out_of_range {
+            return Err(FrontierExclusion::FileSize);
+        }
+    }
+    Ok(())
 }
 
 /// True while a payload `structured_depth` hops into a JSON chain may still expand the links it
@@ -5077,6 +5420,7 @@ mod tests {
                 resources_started: AtomicUsize::new(0),
                 frontier_refill_lock: Mutex::new(()),
                 arcgis_page_hashes: Mutex::new(HashSet::new()),
+                compiled_guidance: CompiledGuidancePatterns::compile(&SourceGuidance::default()),
             }),
         }
     }
@@ -5675,5 +6019,128 @@ mod tests {
         );
         assert!(overlapping.unwrap() >= SYNTHETIC_DOCUMENT_NAMESPACE);
         assert!(overlapping.unwrap() < (1_u64 << 53));
+    }
+
+    /// A filename rule must name itself in the refusal count, not fall back to the generic
+    /// `Guidance` variant that predates it. Proven against the pre-wiring behavior: before the
+    /// filename glob/regex checks were added, every guidance refusal -- including this one --
+    /// returned `FrontierExclusion::Guidance`, which would make this assertion fail.
+    #[test]
+    fn guidance_allows_url_reports_the_specific_filename_rule_not_the_generic_one() {
+        let guidance = SourceGuidance {
+            exclude_filename_globs: vec!["*.exe".to_string()],
+            ..Default::default()
+        };
+        let compiled = CompiledGuidancePatterns::compile(&guidance);
+        let result = guidance_allows_url(
+            &guidance,
+            &compiled,
+            "https://records.example.test/files/installer.exe",
+            None,
+        );
+        assert_eq!(result, Err(FrontierExclusion::FilenamePattern));
+    }
+
+    /// The size predicate must not fire on an unknown size: excluding on an absent measurement is
+    /// exactly the absence-versus-measurement violation this project forbids elsewhere. A caller
+    /// that has no `content_length` (most discovered links) must see the URL admitted even when a
+    /// size range is configured.
+    #[test]
+    fn guidance_allows_url_does_not_exclude_on_an_unknown_size() {
+        let guidance = SourceGuidance {
+            minimum_file_size_bytes: Some(1_000),
+            maximum_file_size_bytes: Some(2_000),
+            ..Default::default()
+        };
+        let compiled = CompiledGuidancePatterns::compile(&guidance);
+        let result = guidance_allows_url(
+            &guidance,
+            &compiled,
+            "https://records.example.test/files/report.pdf",
+            None,
+        );
+        assert_eq!(result, Ok(()));
+    }
+
+    /// Each post-extraction predicate must report the rule that actually fired rather than a
+    /// shared or wrong variant -- a content-pattern refusal reported as `ContentKeyword` (or vice
+    /// versa) would misname the rule an operator sees in the refusal count. Proven per predicate;
+    /// deleting any one branch's distinct return would collapse two of these to the same variant
+    /// and fail the corresponding assertion.
+    #[test]
+    fn evaluate_extracted_document_guidance_names_the_predicate_that_fired() {
+        let base = SourceGuidance::default();
+        let compiled_base = CompiledGuidancePatterns::compile(&base);
+
+        let keyword_guidance = SourceGuidance {
+            exclude_content_keywords: vec!["classified".to_string()],
+            ..SourceGuidance::default()
+        };
+        assert_eq!(
+            evaluate_extracted_document_guidance(
+                &keyword_guidance,
+                &CompiledGuidancePatterns::compile(&keyword_guidance),
+                "this record is classified pending review",
+                None,
+                "2024-06-01T00:00:00Z",
+            ),
+            Err(FrontierExclusion::ContentKeyword)
+        );
+
+        let pattern_guidance = SourceGuidance {
+            exclude_content_patterns: vec![r"\bSSN\b".to_string()],
+            ..SourceGuidance::default()
+        };
+        assert_eq!(
+            evaluate_extracted_document_guidance(
+                &pattern_guidance,
+                &CompiledGuidancePatterns::compile(&pattern_guidance),
+                "applicant SSN on file",
+                None,
+                "2024-06-01T00:00:00Z",
+            ),
+            Err(FrontierExclusion::ContentPattern)
+        );
+
+        let organization_guidance = SourceGuidance {
+            include_organizations: vec!["Parks".to_string()],
+            ..SourceGuidance::default()
+        };
+        assert_eq!(
+            evaluate_extracted_document_guidance(
+                &organization_guidance,
+                &CompiledGuidancePatterns::compile(&organization_guidance),
+                "unrelated content",
+                Some("Department of Public Works"),
+                "2024-06-01T00:00:00Z",
+            ),
+            Err(FrontierExclusion::Organization)
+        );
+
+        let date_guidance = SourceGuidance {
+            document_date_from: Some("2025-01-01".to_string()),
+            ..SourceGuidance::default()
+        };
+        assert_eq!(
+            evaluate_extracted_document_guidance(
+                &date_guidance,
+                &CompiledGuidancePatterns::compile(&date_guidance),
+                "unrelated content",
+                None,
+                "2024-06-01T00:00:00Z",
+            ),
+            Err(FrontierExclusion::DocumentDate)
+        );
+
+        assert_eq!(
+            evaluate_extracted_document_guidance(
+                &base,
+                &compiled_base,
+                "unrelated content",
+                None,
+                "2024-06-01T00:00:00Z",
+            ),
+            Ok(())
+        );
     }
 }
