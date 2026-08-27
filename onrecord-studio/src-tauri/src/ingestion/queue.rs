@@ -786,12 +786,18 @@ impl QueueManager {
                     portal.portal_key
                 )));
             }
+            // Subscribed before the cap is even read: `set_max_active_portals` sends outside
+            // `provisioning_lock`, so a raise racing this check must be observable by the
+            // subscription rather than possibly landing between the check and the subscribe,
+            // where it would be a silently lost wakeup with no timeout to recover from it. A
+            // raise that lands before this subscribe is at worst a spurious wake below, which
+            // just re-checks and re-parks if the cap is still exceeded.
+            let mut slot_freed = self.slot_freed.subscribe();
             let cap = self.max_active_portals.load(Ordering::Acquire);
             if self.pools.read().await.len() < cap {
                 break guard;
             }
             was_parked = true;
-            let mut slot_freed = self.slot_freed.subscribe();
             drop(guard);
             // `subscribe()` above baselines against the value at this instant, so a
             // `slot_freed` send that happens after it (even before this `await` starts
@@ -5093,6 +5099,15 @@ mod tests {
         manager
             .set_max_active_portals(1)
             .expect("a positive cap must be accepted");
+        let placeholder = second_source("placeholder");
+        _repository
+            .insert_or_update_portal_registration(&placeholder)
+            .await
+            .expect("placeholder source registration must persist");
+        _repository
+            .begin_portal_sync_run("placeholder-run", "placeholder")
+            .await
+            .expect("placeholder sync run must begin");
         manager
             .pools
             .write()
@@ -5116,10 +5131,16 @@ mod tests {
             "a start over the cap must park rather than resolve immediately"
         );
 
-        manager.pools.write().await.remove("placeholder");
-        manager.slot_freed.send_modify(|generation| {
-            *generation = generation.wrapping_add(1);
-        });
+        // Through the real removal path, not a hand-fired signal: a regression where a removal
+        // site forgets to signal `slot_freed` (this happened once during development, on the
+        // natural-completion path) must fail this test, not merely the park mechanism in
+        // isolation.
+        let removal_guard = manager.provisioning_lock.lock().await;
+        manager
+            .stop_source_pool_locked("placeholder")
+            .await
+            .expect("stopping the placeholder pool must succeed");
+        drop(removal_guard);
 
         let promoted = tokio::time::timeout(std::time::Duration::from_secs(5), parked)
             .await
