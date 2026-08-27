@@ -20,7 +20,12 @@ const CORPUS_ALGORITHM_VERSION: &str = "deterministic-corpus-v2";
 /// produced document id 4561106750446765, so every write of it failed with `Conversion Error:
 /// Type UINT64 ... out of range for the destination type INT32` and the document never reached
 /// the index. Same defect, same cause, as the note at the top of `0001_initial_schema.sql`.
-const CORPUS_SCHEMA_VERSION: i64 = 3;
+/// 4: added `corpus_entity_truncations`, one row per document per entity kind recording whether
+/// that kind's extraction hit its per-kind budget and had to stop early. Before this, every kind
+/// shared one `MAXIMUM_ENTITIES_PER_DOCUMENT` pool, so a spreadsheet of dates could fill the whole
+/// budget and leave every other kind at zero with nothing recording that extraction was cut short
+/// rather than genuinely absent (see docs/local-analysis-architecture.md section 2).
+const CORPUS_SCHEMA_VERSION: i64 = 4;
 
 const WRITER_QUEUE_CAPACITY: usize = 64;
 const MAXIMUM_CONCURRENT_ANALYSES: usize = 4;
@@ -28,7 +33,25 @@ const SEGMENT_TARGET_CHARACTERS: usize = 2_048;
 const SEGMENT_OVERLAP_CHARACTERS: usize = 192;
 const MAXIMUM_SEGMENTS_PER_DOCUMENT: usize = 100_000;
 const MAXIMUM_TERMS_PER_DOCUMENT: usize = 96;
-const MAXIMUM_ENTITIES_PER_DOCUMENT: usize = 20_000;
+/// Applied independently to each entity kind (see [`ENTITY_KINDS`]) rather than as one shared pool.
+/// A single 20,000-entity pool let a spreadsheet of dates consume the entire budget and leave every
+/// other kind at zero, silently, on document `6661148630021752`
+/// (docs/local-analysis-architecture.md section 2). 4,000 per kind keeps the worst case
+/// (`ENTITY_KINDS.len()` kinds all saturated) below the old shared ceiling while giving every kind
+/// room to be genuinely present in a large document; a kind that still exhausts this is recorded as
+/// truncated rather than silently starved.
+const MAXIMUM_ENTITIES_PER_KIND: usize = 4_000;
+/// Every `kind` value ever passed to `push_entity`/`push_entity_with_display`. Used to seed the
+/// truncation map so a document's row set always states "not truncated" rather than omitting a kind
+/// that simply had nothing in it.
+const ENTITY_KINDS: [&str; 6] = [
+    "STATUTE",
+    "DATE",
+    "EMAIL_DOMAIN",
+    "URL_HOST",
+    "ACRONYM",
+    "ORGANIZATION",
+];
 const MAXIMUM_TOKEN_CHARACTERS: usize = 96;
 
 // TODO(corpus): Introduce a canonical typed entity/relationship layer for arbitrary tabular,
@@ -67,6 +90,49 @@ struct AnalyzedDocument {
     segments: Vec<AnalyzedSegment>,
     terms: Vec<(String, usize)>,
     entities: Vec<AnalyzedEntity>,
+    /// Per entity-kind: whether that kind's extraction hit [`MAXIMUM_ENTITIES_PER_KIND`] and had to
+    /// stop before the text was fully scanned. Always has one entry per [`ENTITY_KINDS`] value, so a
+    /// reader can tell "this document has no organizations" from "we stopped looking."
+    entity_truncations: HashMap<&'static str, bool>,
+}
+
+/// Tracks, per entity kind, how many entities have been accepted and whether that kind's budget was
+/// exhausted. Enforcing the cap here rather than in every extraction loop keeps the truncation flag
+/// and the push that trips it in one place.
+struct EntityBudget {
+    counts: HashMap<&'static str, usize>,
+    truncated: HashMap<&'static str, bool>,
+}
+
+impl EntityBudget {
+    fn new() -> Self {
+        let mut counts = HashMap::new();
+        let mut truncated = HashMap::new();
+        for kind in ENTITY_KINDS {
+            counts.insert(kind, 0);
+            truncated.insert(kind, false);
+        }
+        Self { counts, truncated }
+    }
+
+    /// Whether `kind` still has room for another entity. Extraction loops use this to stop scanning
+    /// for that kind early rather than continuing to burn CPU once the budget is spent, which is
+    /// also why this is the one place that records truncation: every call site checks this *before*
+    /// pushing another entity and stops as soon as it answers `true`, so `admit` below is never
+    /// actually invoked while full and could not observe the cap being hit itself.
+    fn is_full(&mut self, kind: &'static str) -> bool {
+        let full = self.counts.get(kind).copied().unwrap_or(0) >= MAXIMUM_ENTITIES_PER_KIND;
+        if full {
+            self.truncated.insert(kind, true);
+        }
+        full
+    }
+
+    /// Consumes one slot of `kind`'s budget. Every caller checks `is_full` first and stops rather
+    /// than calling this once it is spent, so the count here never exceeds the cap.
+    fn admit(&mut self, kind: &'static str) {
+        *self.counts.entry(kind).or_insert(0) += 1;
+    }
 }
 
 struct AnalyzedSegment {
@@ -194,6 +260,43 @@ impl CorpusIndex {
             rows.next().map(|row| row.is_some()).map_err(|error| {
                 AppError::Storage(format!("Failed to read corpus document version: {error}"))
             })
+        })
+        .await
+    }
+
+    /// Entity kinds whose extraction hit its per-kind budget for this document, so a caller can
+    /// state "we stopped looking" for those kinds rather than presenting a truncated result as a
+    /// complete one. Empty means every kind's extraction ran to completion (or the document has no
+    /// recorded truncation rows at all, which is the same fact for a document indexed after this
+    /// table existed).
+    pub async fn truncated_entity_kinds(
+        &self,
+        portal_key: String,
+        document_id: u64,
+    ) -> Result<Vec<String>, AppError> {
+        self.read("Corpus entity truncation query", move |connection| {
+            let mut statement = connection
+                .prepare(
+                    "SELECT entity_kind FROM corpus_entity_truncations
+                     WHERE portal_key = ?1 AND document_id = ?2 AND truncated
+                     ORDER BY entity_kind",
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!(
+                        "Failed to prepare entity truncation query: {error}"
+                    ))
+                })?;
+            statement
+                .query_map(params![portal_key, document_id], |row| {
+                    row.get::<_, String>(0)
+                })
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to query entity truncations: {error}"))
+                })?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to read entity truncations: {error}"))
+                })
         })
         .await
     }
@@ -446,7 +549,7 @@ fn analyze_document(input: CorpusDocumentInput) -> Result<AnalyzedDocument, AppE
     let document_simhash = simhash(tokens.iter().map(|token| token.normalized.as_str()));
     let segments = analyze_segments(&input.text, &tokens, character_count)?;
     let terms = top_terms(&tokens);
-    let entities = extract_entities(&input.text, &tokens, &segments);
+    let (entities, entity_truncations) = extract_entities(&input.text, &tokens, &segments);
     Ok(AnalyzedDocument {
         portal_key: input.portal_key,
         request_id: input.request_id,
@@ -458,6 +561,7 @@ fn analyze_document(input: CorpusDocumentInput) -> Result<AnalyzedDocument, AppE
         segments,
         terms,
         entities,
+        entity_truncations,
     })
 }
 
@@ -620,10 +724,11 @@ fn extract_entities(
     text: &str,
     tokens: &[Token],
     segments: &[AnalyzedSegment],
-) -> Vec<AnalyzedEntity> {
+) -> (Vec<AnalyzedEntity>, HashMap<&'static str, bool>) {
     let mut entities = Vec::new();
+    let mut budget = EntityBudget::new();
     for (index, token) in tokens.iter().enumerate() {
-        if entities.len() >= MAXIMUM_ENTITIES_PER_DOCUMENT {
+        if budget.is_full("STATUTE") {
             break;
         }
         if token.normalized == "section" {
@@ -635,6 +740,7 @@ fn extract_entities(
             }) {
                 push_entity(
                     &mut entities,
+                    &mut budget,
                     text,
                     segments,
                     "STATUTE",
@@ -660,6 +766,7 @@ fn extract_entities(
             let last = &tokens[index + 4];
             push_entity(
                 &mut entities,
+                &mut budget,
                 text,
                 segments,
                 "STATUTE",
@@ -672,10 +779,10 @@ fn extract_entities(
             );
         }
     }
-    extract_dates(text, segments, &mut entities);
-    extract_email_domains(text, segments, &mut entities);
-    extract_url_hosts(text, segments, &mut entities);
-    extract_organizations_and_acronyms(text, tokens, segments, &mut entities);
+    extract_dates(text, segments, &mut entities, &mut budget);
+    extract_email_domains(text, segments, &mut entities, &mut budget);
+    extract_url_hosts(text, segments, &mut entities, &mut budget);
+    extract_organizations_and_acronyms(text, tokens, segments, &mut entities, &mut budget);
     entities.sort_by(|left, right| {
         left.character_start
             .cmp(&right.character_start)
@@ -686,12 +793,13 @@ fn extract_entities(
             && left.normalized_value == right.normalized_value
             && left.character_start == right.character_start
     });
-    entities
+    (entities, budget.truncated)
 }
 
 #[allow(clippy::too_many_arguments)]
 fn push_entity(
     entities: &mut Vec<AnalyzedEntity>,
+    budget: &mut EntityBudget,
     text: &str,
     segments: &[AnalyzedSegment],
     kind: &'static str,
@@ -710,6 +818,7 @@ fn push_entity(
         .collect();
     push_entity_with_display(
         entities,
+        budget,
         segments,
         kind,
         normalized_value,
@@ -723,6 +832,7 @@ fn push_entity(
 #[allow(clippy::too_many_arguments)]
 fn push_entity_with_display(
     entities: &mut Vec<AnalyzedEntity>,
+    budget: &mut EntityBudget,
     segments: &[AnalyzedSegment],
     kind: &'static str,
     normalized_value: String,
@@ -731,6 +841,10 @@ fn push_entity_with_display(
     character_end: usize,
     confidence_basis_points: u16,
 ) {
+    if budget.is_full(kind) {
+        return;
+    }
+    budget.admit(kind);
     // Segment coverage is not contiguous (see `analyze_segments`): a segment is bounded by its
     // first and last token, token-free windows are skipped outright, and neighbours share only
     // SEGMENT_OVERLAP_CHARACTERS. An entity can therefore sit inside no segment at all. Falling
@@ -816,11 +930,16 @@ struct MatchedDate {
 /// a two-digit year has had its century inferred. A numeric date whose first field exceeds twelve
 /// is rejected rather than re-read day-first, so day-first records are missed instead of being
 /// silently transposed.
-fn extract_dates(text: &str, segments: &[AnalyzedSegment], entities: &mut Vec<AnalyzedEntity>) {
+fn extract_dates(
+    text: &str,
+    segments: &[AnalyzedSegment],
+    entities: &mut Vec<AnalyzedEntity>,
+    budget: &mut EntityBudget,
+) {
     let bytes = text.as_bytes();
     let mut byte_index = 0_usize;
     let mut character_index = 0_usize;
-    while byte_index < bytes.len() && entities.len() < MAXIMUM_ENTITIES_PER_DOCUMENT {
+    while byte_index < bytes.len() && !budget.is_full("DATE") {
         let at_boundary = byte_index == 0 || !bytes[byte_index - 1].is_ascii_alphanumeric();
         if at_boundary {
             if let Some(matched) = match_date(&text[byte_index..]) {
@@ -832,6 +951,7 @@ fn extract_dates(text: &str, segments: &[AnalyzedSegment], entities: &mut Vec<An
                 if ends_cleanly {
                     push_entity(
                         entities,
+                        budget,
                         text,
                         segments,
                         "DATE",
@@ -1040,11 +1160,12 @@ fn extract_email_domains(
     text: &str,
     segments: &[AnalyzedSegment],
     entities: &mut Vec<AnalyzedEntity>,
+    budget: &mut EntityBudget,
 ) {
     let bytes = text.as_bytes();
     let mut byte_index = 0_usize;
     let mut character_index = 0_usize;
-    while byte_index < bytes.len() && entities.len() < MAXIMUM_ENTITIES_PER_DOCUMENT {
+    while byte_index < bytes.len() && !budget.is_full("EMAIL_DOMAIN") {
         if bytes[byte_index] == b'@' {
             let mut start = byte_index;
             while start > 0 && is_email_local_byte(bytes[start - 1]) {
@@ -1066,6 +1187,7 @@ fn extract_email_domains(
                 let domain_characters = text[byte_index + 1..end].chars().count();
                 push_entity_with_display(
                     entities,
+                    budget,
                     segments,
                     "EMAIL_DOMAIN",
                     domain.clone(),
@@ -1094,11 +1216,16 @@ fn is_email_domain_byte(value: u8) -> bool {
     value.is_ascii_alphanumeric() || matches!(value, b'.' | b'-')
 }
 
-fn extract_url_hosts(text: &str, segments: &[AnalyzedSegment], entities: &mut Vec<AnalyzedEntity>) {
+fn extract_url_hosts(
+    text: &str,
+    segments: &[AnalyzedSegment],
+    entities: &mut Vec<AnalyzedEntity>,
+    budget: &mut EntityBudget,
+) {
     let bytes = text.as_bytes();
     let mut byte_index = 0_usize;
     let mut character_index = 0_usize;
-    while byte_index < bytes.len() && entities.len() < MAXIMUM_ENTITIES_PER_DOCUMENT {
+    while byte_index < bytes.len() && !budget.is_full("URL_HOST") {
         let tail = &bytes[byte_index..];
         if tail.starts_with(b"https://") || tail.starts_with(b"http://") {
             let mut end = byte_index;
@@ -1117,6 +1244,7 @@ fn extract_url_hosts(text: &str, segments: &[AnalyzedSegment], entities: &mut Ve
                     let character_count = candidate.chars().count();
                     push_entity_with_display(
                         entities,
+                        budget,
                         segments,
                         "URL_HOST",
                         host.clone(),
@@ -1146,10 +1274,11 @@ fn extract_organizations_and_acronyms(
     tokens: &[Token],
     segments: &[AnalyzedSegment],
     entities: &mut Vec<AnalyzedEntity>,
+    budget: &mut EntityBudget,
 ) {
     for token in tokens {
-        if entities.len() >= MAXIMUM_ENTITIES_PER_DOCUMENT {
-            return;
+        if budget.is_full("ACRONYM") {
+            break;
         }
         let raw = &text[token.byte_start..token.byte_end];
         let letter_count = raw.chars().filter(|value| value.is_alphabetic()).count();
@@ -1165,6 +1294,7 @@ fn extract_organizations_and_acronyms(
         {
             push_entity(
                 entities,
+                budget,
                 text,
                 segments,
                 "ACRONYM",
@@ -1178,8 +1308,10 @@ fn extract_organizations_and_acronyms(
         }
     }
 
+    // A cap on ACRONYM must not stop ORGANIZATION extraction below: the two used to share one pool,
+    // so a document saturated on one kind returned early and starved the other silently.
     let mut start = 0_usize;
-    while start < tokens.len() && entities.len() < MAXIMUM_ENTITIES_PER_DOCUMENT {
+    while start < tokens.len() && !budget.is_full("ORGANIZATION") {
         if !is_title_token(text, &tokens[start]) {
             start += 1;
             continue;
@@ -1209,6 +1341,7 @@ fn extract_organizations_and_acronyms(
                 .join(" ");
             push_entity(
                 entities,
+                budget,
                 text,
                 segments,
                 "ORGANIZATION",
@@ -1300,6 +1433,7 @@ fn persist_analyzed_document(
         "corpus_segments",
         "corpus_term_postings",
         "corpus_entity_mentions",
+        "corpus_entity_truncations",
         "corpus_lsh_bands",
     ] {
         transaction
@@ -1312,6 +1446,7 @@ fn persist_analyzed_document(
     insert_segments(&transaction, &document)?;
     insert_terms(&transaction, &document)?;
     insert_entities(&transaction, &document)?;
+    insert_entity_truncations(&transaction, &document)?;
     insert_lsh_bands(&transaction, &document)?;
     transaction
         .commit()
@@ -1422,6 +1557,38 @@ fn insert_entities(
             ])
             .map_err(|error| {
                 AppError::Storage(format!("Failed to persist entity mention: {error}"))
+            })?;
+    }
+    Ok(())
+}
+
+fn insert_entity_truncations(
+    transaction: &Transaction<'_>,
+    document: &AnalyzedDocument,
+) -> Result<(), AppError> {
+    let mut statement = transaction
+        .prepare_cached(
+            "INSERT INTO corpus_entity_truncations (portal_key, document_id, entity_kind, truncated)
+             VALUES (?1, ?2, ?3, ?4)",
+        )
+        .map_err(|error| {
+            AppError::Storage(format!("Failed to prepare corpus entity truncations: {error}"))
+        })?;
+    for kind in ENTITY_KINDS {
+        let truncated = document
+            .entity_truncations
+            .get(kind)
+            .copied()
+            .unwrap_or(false);
+        statement
+            .execute(params![
+                document.portal_key,
+                document.document_id,
+                kind,
+                truncated
+            ])
+            .map_err(|error| {
+                AppError::Storage(format!("Failed to persist entity truncation: {error}"))
             })?;
     }
     Ok(())
@@ -2008,6 +2175,20 @@ CREATE TABLE IF NOT EXISTS corpus_entity_mentions (
 CREATE INDEX IF NOT EXISTS idx_corpus_mentions_entity
 ON corpus_entity_mentions(entity_id, portal_key, document_id);
 
+-- One row per document per entity kind that was ever emitted (see ENTITY_KINDS), stating whether
+-- that kind's extraction hit MAXIMUM_ENTITIES_PER_KIND and stopped early. A reader must be able to
+-- tell "this document has no organizations" from "we stopped looking" (docs/local-analysis-
+-- architecture.md section 2), which a missing row cannot express, so every kind gets a row.
+CREATE TABLE IF NOT EXISTS corpus_entity_truncations (
+    portal_key TEXT NOT NULL,
+    document_id BIGINT NOT NULL,
+    entity_kind TEXT NOT NULL,
+    truncated BOOLEAN NOT NULL,
+    PRIMARY KEY (portal_key, document_id, entity_kind),
+    FOREIGN KEY (portal_key, document_id)
+        REFERENCES corpus_documents(portal_key, document_id)
+);
+
 CREATE TABLE IF NOT EXISTS corpus_lsh_bands (
     portal_key TEXT NOT NULL,
     document_id BIGINT NOT NULL,
@@ -2523,8 +2704,10 @@ mod offset_tests {
 
         let resolve = |start: usize, end: usize| {
             let mut entities = Vec::new();
+            let mut budget = EntityBudget::new();
             push_entity_with_display(
                 &mut entities,
+                &mut budget,
                 &segments,
                 "TEST",
                 "value".to_string(),
@@ -2549,8 +2732,10 @@ mod offset_tests {
         assert_eq!(resolve(7_000, 7_100), 2);
         // No segments at all is the only remaining route to 0.
         let mut entities = Vec::new();
+        let mut budget = EntityBudget::new();
         push_entity_with_display(
             &mut entities,
+            &mut budget,
             &[],
             "TEST",
             "value".to_string(),
@@ -2560,5 +2745,49 @@ mod offset_tests {
             1,
         );
         assert_eq!(entities[0].segment_index, 0);
+    }
+
+    // REGRESSION(corpus): a single shared MAXIMUM_ENTITIES_PER_DOCUMENT pool let one kind's
+    // extraction consume the entire budget and leave every other kind at zero, silently. Document
+    // 6661148630021752 (docs/local-analysis-architecture.md section 2) is a real corpus instance:
+    // 20,000 DATE entities and zero of anything else, with nothing recording that extraction had
+    // been cut short rather than the document genuinely containing no organizations. Proven by
+    // reverting `extract_dates`'s per-kind check to the old shared-pool check and confirming this
+    // fails: with a shared pool, the flood of dates below leaves no budget for the organization or
+    // email entity, and `entity_truncations` records nothing at all because it never existed.
+    #[test]
+    fn one_saturated_entity_kind_does_not_starve_or_hide_the_others() {
+        let mut text = String::from("City of San Diego contact@example.com ");
+        for _ in 0..5_000 {
+            text.push_str("1/1/2001 ");
+        }
+        let analyzed = analyze_document(input(5, &text)).expect("analysis should succeed");
+
+        assert_eq!(
+            analyzed.entity_truncations.get("DATE"),
+            Some(&true),
+            "flooding DATE past its per-kind budget must record that kind as truncated"
+        );
+        for kind in ["ORGANIZATION", "EMAIL_DOMAIN"] {
+            assert_eq!(
+                analyzed.entity_truncations.get(kind),
+                Some(&false),
+                "kind {kind} was not saturated and must not be reported as truncated"
+            );
+        }
+        assert!(
+            analyzed
+                .entities
+                .iter()
+                .any(|entity| entity.kind == "ORGANIZATION"),
+            "the flood of DATE entities must not have starved ORGANIZATION extraction"
+        );
+        assert!(
+            analyzed
+                .entities
+                .iter()
+                .any(|entity| entity.kind == "EMAIL_DOMAIN"),
+            "the flood of DATE entities must not have starved EMAIL_DOMAIN extraction"
+        );
     }
 }
