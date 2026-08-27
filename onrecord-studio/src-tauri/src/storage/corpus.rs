@@ -2751,10 +2751,14 @@ mod offset_tests {
     // extraction consume the entire budget and leave every other kind at zero, silently. Document
     // 6661148630021752 (docs/local-analysis-architecture.md section 2) is a real corpus instance:
     // 20,000 DATE entities and zero of anything else, with nothing recording that extraction had
-    // been cut short rather than the document genuinely containing no organizations. Proven by
-    // reverting `extract_dates`'s per-kind check to the old shared-pool check and confirming this
-    // fails: with a shared pool, the flood of dates below leaves no budget for the organization or
-    // email entity, and `entity_truncations` records nothing at all because it never existed.
+    // been cut short rather than the document genuinely containing no organizations.
+    //
+    // This test already caught a real defect once: an earlier version of `EntityBudget` recorded
+    // truncation inside `admit`'s over-budget branch, but every extraction loop checks `is_full`
+    // and stops *before* calling `admit` again, so that branch could never run and the flag was
+    // always `false` no matter how saturated a kind was. This test failed against that version
+    // (`entity_truncations.get("DATE")` read `Some(false)`), which is what moved the truncation
+    // record into `is_full` itself.
     #[test]
     fn one_saturated_entity_kind_does_not_starve_or_hide_the_others() {
         let mut text = String::from("City of San Diego contact@example.com ");
