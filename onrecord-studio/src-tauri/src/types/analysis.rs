@@ -1,5 +1,6 @@
 //! Structures for statistical analysis execution and backend analytics profiles.
 
+use crate::types::VerificationState;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -29,20 +30,35 @@ impl Default for AnalysisConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Boxed)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AgencyPerformanceProfile {
     pub agency_id: u64,
+    pub portal_subdomain: String,
     pub agency_name: String,
     pub total_requests_processed: usize,
     pub total_closed: usize,
-    pub average_closure_days: f64,
+    pub valid_latency_sample_size: usize,
+    pub excluded_invalid_lifetime_count: usize,
+    /// `None` when the agency has closed nothing measurable. Never 0.0 for that case: 0.0 days
+    /// is the fastest possible answer, and an agency that has never closed a request is not fast.
+    pub average_closure_days: Option<f64>,
+    pub global_mean_closure_days: Option<f64>,
+    pub global_stddev_closure_days: Option<f64>,
+    /// `None` when there is no closure sample to place against the population, or the population
+    /// has no spread. Never 0.0 for that case: 0.0 means exactly at the mean.
+    pub performance_z_score: Option<f64>,
+    pub compliance_indicator: VerificationState,
     pub anomaly_count: usize,
+    pub statutory_violation_count: usize,
+    pub statutory_violation_rate: f64,
+    pub suspicious_fast_closure_count: usize,
     pub total_documents_released: usize,
     pub keyword_frequency_map: HashMap<String, usize>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct OutlierCluster {
     pub cluster_id: String,
     pub core_anomaly_type: String,

@@ -1,0 +1,194 @@
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum SourceKind {
+    #[default]
+    NextRequest,
+    WebCrawl,
+    DirectFile,
+    OpenDataCatalog,
+    ArcGis,
+    Tableau,
+    GoogleDrive,
+    LocalFile,
+    PastedContent,
+}
+
+impl SourceKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::NextRequest => "NEXT_REQUEST",
+            Self::WebCrawl => "WEB_CRAWL",
+            Self::DirectFile => "DIRECT_FILE",
+            Self::OpenDataCatalog => "OPEN_DATA_CATALOG",
+            Self::ArcGis => "ARC_GIS",
+            Self::Tableau => "TABLEAU",
+            Self::GoogleDrive => "GOOGLE_DRIVE",
+            Self::LocalFile => "LOCAL_FILE",
+            Self::PastedContent => "PASTED_CONTENT",
+        }
+    }
+
+    pub fn from_stored(value: &str) -> Self {
+        match value {
+            "WEB_CRAWL" => Self::WebCrawl,
+            "DIRECT_FILE" => Self::DirectFile,
+            "OPEN_DATA_CATALOG" => Self::OpenDataCatalog,
+            "ARC_GIS" => Self::ArcGis,
+            "TABLEAU" => Self::Tableau,
+            "GOOGLE_DRIVE" => Self::GoogleDrive,
+            "LOCAL_FILE" => Self::LocalFile,
+            "PASTED_CONTENT" => Self::PastedContent,
+            _ => Self::NextRequest,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PortalApiLayout {
+    pub requests_endpoint: String,
+    pub requests_pointer: String,
+    pub metadata_pointer: Option<String>,
+    pub page_parameter: String,
+    pub page_size_parameter: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PortalRegistration {
+    pub portal_key: String,
+    pub display_name: String,
+    pub canonical_url: String,
+    pub origin_url: String,
+    pub api_layout: PortalApiLayout,
+    pub verified_at: String,
+    #[serde(default)]
+    pub source_kind: SourceKind,
+}
+
+/// Whether a saved source is still being synchronized, and if not, why not.
+///
+/// This is durable on purpose. Stopping a source used to live only in the in-memory pool map, so
+/// the next launch found the source's frontier rows, read them as an interrupted crawl, and
+/// resumed a source the operator had deliberately halted.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum SourceLifecycleState {
+    /// Synchronizes now and resumes on the next launch.
+    #[default]
+    Active,
+    /// Halted by the operator. The frontier is kept so a resume continues rather than restarts.
+    Paused,
+    /// Withdrawn by the operator. Documents already ingested from it are retained; what is
+    /// discarded is the crawl frontier, the connector recipe, and the source's place in the list.
+    Removed,
+}
+
+impl SourceLifecycleState {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Active => "ACTIVE",
+            Self::Paused => "PAUSED",
+            Self::Removed => "REMOVED",
+        }
+    }
+
+    /// Reads a stored marker. An absent or unrecognized marker means the source was never paused
+    /// or removed, which is what `Active` says, so this is a fact about the row and not a default
+    /// standing in for an unrecorded one.
+    pub fn from_stored(value: &str) -> Self {
+        match value {
+            "PAUSED" => Self::Paused,
+            "REMOVED" => Self::Removed,
+            _ => Self::Active,
+        }
+    }
+}
+
+/// A registration paired with its lifecycle state.
+///
+/// The two are carried side by side rather than merged because `PortalRegistration` is compared
+/// for equality to decide whether a portal key still names the same verified endpoint. Folding
+/// mutable runtime state into that identity would let a pause raise an endpoint-changed security
+/// refusal, which would be a false statement about the source.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedSource {
+    pub registration: PortalRegistration,
+    pub lifecycle_state: SourceLifecycleState,
+}
+
+/// What withdrawing a source actually discarded, and what it kept.
+///
+/// The retained document count is returned rather than assumed because "Remove" that silently
+/// keeps hundreds of ingested records is the same false statement as one that silently destroys
+/// them. The caller is expected to say which happened.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceRemoval {
+    pub source_key: String,
+    pub discarded_frontier_tasks: u64,
+    pub retained_documents: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PortalSyncStart {
+    pub portal: PortalRegistration,
+    pub sync_run_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PortalRuntimeSnapshot {
+    pub portal: PortalRegistration,
+    pub sync_run_id: String,
+    pub queued_tasks: usize,
+    pub active_tasks: usize,
+    pub completed_tasks: u64,
+    pub failed_tasks: u64,
+    pub pages_processed: u64,
+    pub requests_processed: u64,
+    pub documents_processed: u64,
+    pub is_running: bool,
+    pub rate_limit_tokens: f64,
+    /// How many discovered links each frontier rule refused. Present so a filtered crawl reports
+    /// what it declined rather than presenting the survivors as the whole of what was there.
+    pub frontier_exclusions: Vec<FrontierExclusionCount>,
+    /// Hosts this run stopped contacting, and why. A stopped host is a bound on coverage, so it
+    /// is reported rather than folded into the failure count.
+    pub stopped_hosts: Vec<StoppedHost>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FrontierExclusionCount {
+    pub rule: String,
+    pub excluded_links: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StoppedHost {
+    pub host: String,
+    pub requests_spent: usize,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RateLimitPolicy {
+    pub burst_capacity: u32,
+    pub refill_tokens_per_second: f64,
+}
+
+impl Default for RateLimitPolicy {
+    fn default() -> Self {
+        Self {
+            burst_capacity: 5,
+            refill_tokens_per_second: 1.0,
+        }
+    }
+}
