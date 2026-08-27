@@ -39,7 +39,10 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{mpsc, watch, Mutex, RwLock, Semaphore};
 use uuid::Uuid;
 
-const MAXIMUM_ACTIVE_PORTALS: usize = 5;
+// The concurrent-portal ceiling is a runtime setting (`QueueManager::max_active_portals`),
+// not a hard limit: a start beyond it parks until a running pool's slot frees rather than
+// being refused. This constant is only the setting's default for a fresh install.
+const DEFAULT_MAXIMUM_ACTIVE_PORTALS: usize = 5;
 const WORKERS_PER_PORTAL: usize = 2;
 const GLOBAL_WORKER_LIMIT: usize = 10;
 const MAXIMUM_CPU_PARSERS: usize = 6;
@@ -562,6 +565,12 @@ struct WorkerContext {
     statistics: Arc<PortalStatistics>,
     pools: Arc<RwLock<HashMap<String, PortalPool>>>,
     provisioning_lock: Arc<Mutex<()>>,
+    // Bumped whenever this pool's slot frees, so a start parked on a full concurrency cap
+    // wakes up and re-checks rather than staying refused forever. Read by `retire_portal_if_idle`
+    // as well as the explicit stop/removal paths, which is why it lives on the context rather
+    // than only on `QueueManager`: a worker retiring its own pool on natural completion has no
+    // other handle back to the manager.
+    slot_freed: watch::Sender<u64>,
     cancellation: watch::Sender<bool>,
     sync_run_id: String,
     crawl: Arc<CrawlState>,
@@ -576,6 +585,12 @@ pub struct QueueManager {
     download_root: PathBuf,
     pools: Arc<RwLock<HashMap<String, PortalPool>>>,
     provisioning_lock: Arc<Mutex<()>>,
+    // Runtime setting: how many portal task pools may run concurrently. Defaults to
+    // `DEFAULT_MAXIMUM_ACTIVE_PORTALS` and is adjustable at runtime via
+    // `max_active_portals`/`set_max_active_portals`. Not persisted across restarts; see the
+    // doc comment on `set_max_active_portals` for why.
+    max_active_portals: AtomicUsize,
+    slot_freed: watch::Sender<u64>,
     global_semaphore: Arc<Semaphore>,
     parser_semaphore: Arc<Semaphore>,
     ocr_semaphore: Arc<Semaphore>,
@@ -626,11 +641,45 @@ impl QueueManager {
             download_root: download_root.to_path_buf(),
             pools: Arc::new(RwLock::new(HashMap::new())),
             provisioning_lock: Arc::new(Mutex::new(())),
+            max_active_portals: AtomicUsize::new(DEFAULT_MAXIMUM_ACTIVE_PORTALS),
+            slot_freed: watch::channel(0u64).0,
             global_semaphore: Arc::new(Semaphore::new(GLOBAL_WORKER_LIMIT)),
             parser_semaphore: Arc::new(Semaphore::new(MAXIMUM_CPU_PARSERS)),
             ocr_semaphore: Arc::new(Semaphore::new(MAXIMUM_CONCURRENT_OCR)),
             parser_memory: Arc::new(Semaphore::new(PARSER_MEMORY_PERMITS as usize)),
         })
+    }
+
+    /// The current concurrent-portal cap. Defaults to `DEFAULT_MAXIMUM_ACTIVE_PORTALS`.
+    pub fn max_active_portals(&self) -> usize {
+        self.max_active_portals.load(Ordering::Acquire)
+    }
+
+    /// Raises or lowers the concurrent-portal cap at runtime.
+    ///
+    /// This is process-lifetime only: the codebase has no settings persistence mechanism
+    /// (no settings table, no `Settings` struct, nothing under `src-tauri/migrations/` for
+    /// user preferences) to survive it across restarts, and building one is out of scope for
+    /// this change. A restart resets the cap to `DEFAULT_MAXIMUM_ACTIVE_PORTALS`.
+    ///
+    /// A start already parked on the old cap is woken immediately, not just on the next pool
+    /// removal, so raising the limit takes effect without waiting for unrelated churn.
+    ///
+    /// This does not change `GLOBAL_WORKER_LIMIT`: total worker concurrency across every pool
+    /// remains capped at that constant regardless of how many pools are allowed to run, so
+    /// raising this setting increases how many sources may be active at once without raising
+    /// how much work happens in parallel across all of them.
+    pub fn set_max_active_portals(&self, value: usize) -> Result<(), AppError> {
+        if value == 0 {
+            return Err(AppError::DataParsing(
+                "Concurrent portal limit must be at least 1".to_string(),
+            ));
+        }
+        self.max_active_portals.store(value, Ordering::Release);
+        self.slot_freed.send_modify(|generation| {
+            *generation = generation.wrapping_add(1);
+        });
+        Ok(())
     }
 
     pub async fn discover_and_start(
@@ -718,23 +767,61 @@ impl QueueManager {
         guidance: SourceGuidance,
     ) -> Result<String, AppError> {
         validate_crawl_policy(&crawl_policy)?;
-        let _provisioning_guard = self.provisioning_lock.lock().await;
-        if let Some(existing) = self.pools.read().await.get(&portal.portal_key) {
-            if existing.portal != portal {
-                return Err(AppError::PortalSecurity(format!(
-                    "Portal key '{}' is already bound to a different verified endpoint",
+        // At capacity, this parks rather than refusing: it releases `provisioning_lock` and
+        // waits for `slot_freed` (bumped whenever a running pool is removed, or the cap is
+        // raised) before re-checking. It must not hold the lock while parked, or the pool
+        // removals it is waiting on could never take the lock to run.
+        let mut was_parked = false;
+        let _provisioning_guard = loop {
+            let guard = self.provisioning_lock.lock().await;
+            if let Some(existing) = self.pools.read().await.get(&portal.portal_key) {
+                if existing.portal != portal {
+                    return Err(AppError::PortalSecurity(format!(
+                        "Portal key '{}' is already bound to a different verified endpoint",
+                        portal.portal_key
+                    )));
+                }
+                return Err(AppError::PortalCapacity(format!(
+                    "Portal '{}' is already synchronizing",
                     portal.portal_key
                 )));
             }
-            return Err(AppError::PortalCapacity(format!(
-                "Portal '{}' is already synchronizing",
-                portal.portal_key
-            )));
-        }
-        if self.pools.read().await.len() >= MAXIMUM_ACTIVE_PORTALS {
-            return Err(AppError::PortalCapacity(format!(
-                "At most {MAXIMUM_ACTIVE_PORTALS} municipal portals may sync concurrently"
-            )));
+            let cap = self.max_active_portals.load(Ordering::Acquire);
+            if self.pools.read().await.len() < cap {
+                break guard;
+            }
+            was_parked = true;
+            let mut slot_freed = self.slot_freed.subscribe();
+            drop(guard);
+            // `subscribe()` above baselines against the value at this instant, so a
+            // `slot_freed` send that happens after it (even before this `await` starts
+            // polling) is guaranteed to be observed here rather than lost.
+            let _ = slot_freed.changed().await;
+        };
+        if was_parked {
+            // The park may have outlived the source: it could have been withdrawn or paused
+            // while queued for a slot. Re-check before provisioning so a promoted start never
+            // resurrects a source the operator removed while it waited. A brand-new source has
+            // no lifecycle row yet (`None`), which is not a reason to refuse it.
+            match self
+                .repository
+                .source_lifecycle_state(&portal.portal_key)
+                .await?
+            {
+                Some(SourceLifecycleState::Removed) => {
+                    return Err(AppError::DataParsing(format!(
+                        "Source '{}' was withdrawn while its start was queued",
+                        portal.portal_key
+                    )));
+                }
+                Some(SourceLifecycleState::Paused) => {
+                    return Err(AppError::DataParsing(format!(
+                        "Source '{}' was paused while its start was queued",
+                        portal.portal_key
+                    )));
+                }
+                Some(SourceLifecycleState::Active) | None => {}
+            }
         }
         self.repository
             .insert_or_update_portal_registration(&portal)
@@ -815,6 +902,7 @@ impl QueueManager {
             statistics: Arc::clone(&statistics),
             pools: Arc::clone(&self.pools),
             provisioning_lock: Arc::clone(&self.provisioning_lock),
+            slot_freed: self.slot_freed.clone(),
             cancellation: cancellation.clone(),
             sync_run_id: sync_run_id.clone(),
             crawl: Arc::clone(&crawl),
@@ -857,6 +945,9 @@ impl QueueManager {
             if let Some(pool) = pool {
                 let _ = abort_workers(pool.worker_handles).await;
             }
+            self.slot_freed.send_modify(|generation| {
+                *generation = generation.wrapping_add(1);
+            });
             statistics.running.store(false, Ordering::Release);
             let _ = cancellation.send(true);
             self.cancel_task_pool_start(&context.sync_run_id, &portal.portal_key)
@@ -1306,6 +1397,9 @@ impl QueueManager {
         let Some(pool) = pool else {
             return Ok(false);
         };
+        self.slot_freed.send_modify(|generation| {
+            *generation = generation.wrapping_add(1);
+        });
         pool.statistics
             .stop_requested
             .store(true, Ordering::Release);
@@ -1605,6 +1699,9 @@ async fn retire_portal_if_idle(context: &WorkerContext) {
     if removed.is_none() {
         return;
     }
+    context.slot_freed.send_modify(|generation| {
+        *generation = generation.wrapping_add(1);
+    });
     context.statistics.running.store(false, Ordering::Release);
     let _ = context.cancellation.send(true);
     let failures = context.statistics.failed_tasks.load(Ordering::Acquire);
@@ -4929,6 +5026,109 @@ mod tests {
                 .await
                 .expect("lifecycle lookup must succeed"),
             Some(SourceLifecycleState::Active)
+        );
+    }
+
+    fn second_source(portal_key: &str) -> PortalRegistration {
+        PortalRegistration {
+            portal_key: portal_key.to_string(),
+            display_name: "Second".to_string(),
+            canonical_url: "https://second.example.test".to_string(),
+            origin_url: "https://second.example.test".to_string(),
+            api_layout: PortalApiLayout {
+                requests_endpoint: "https://second.example.test/client/requests".to_string(),
+                requests_pointer: "/requests".to_string(),
+                metadata_pointer: None,
+                page_parameter: "page".to_string(),
+                page_size_parameter: "per_page".to_string(),
+            },
+            verified_at: "2026-08-26T00:00:00Z".to_string(),
+            source_kind: SourceKind::NextRequest,
+        }
+    }
+
+    fn placeholder_pool(portal_key: &str) -> PortalPool {
+        // No worker handles and no real network activity: this pool exists only to occupy a slot
+        // in `manager.pools` deterministically, so the park/promote test below is not racing a
+        // real worker's `retire_portal_if_idle` self-teardown (which the first version of this
+        // test did, and which flaked under load: the seeded fetch task can fail fast against a
+        // fake host and the pool retires itself before the test observes the parked state).
+        PortalPool {
+            portal: second_source(portal_key),
+            cancellation: watch::channel(false).0,
+            statistics: Arc::new(PortalStatistics::default()),
+            sync_run_id: "placeholder-run".to_string(),
+            worker_handles: Vec::new(),
+            crawl: Arc::new(CrawlState {
+                policy: CrawlPolicy::default(),
+                guidance: SourceGuidance::default(),
+                visited_urls: Mutex::new(HashSet::new()),
+                resource_urls: Mutex::new(HashSet::new()),
+                crawl_path_claims: Mutex::new(HashSet::new()),
+                announced_host_stops: Mutex::new(HashSet::new()),
+                frontier_exclusions: Mutex::new(BTreeMap::new()),
+                pages_started: AtomicUsize::new(0),
+                resources_started: AtomicUsize::new(0),
+                frontier_refill_lock: Mutex::new(()),
+                arcgis_page_hashes: Mutex::new(HashSet::new()),
+            }),
+        }
+    }
+
+    // REGRESSION(queue): registration used to be capped by MAXIMUM_ACTIVE_PORTALS, so a source
+    // beyond the concurrency ceiling was refused outright rather than parked. Proven by reverting
+    // `start_task_pool`'s park loop to an immediate `Err(AppError::PortalCapacity(..))` on a full
+    // pool map and confirming the parked start below returns that error instead of completing once
+    // the occupying pool is removed.
+    #[tokio::test]
+    async fn a_start_beyond_the_concurrency_cap_parks_and_is_promoted_when_a_slot_frees() {
+        let directory = tempdir().expect("temp dir must be created");
+        let (manager, _repository, _first, _telemetry) = manager_with_source(&directory).await;
+        let second = second_source("second-records");
+        _repository
+            .insert_or_update_portal_registration(&second)
+            .await
+            .expect("second source registration must persist");
+
+        manager
+            .set_max_active_portals(1)
+            .expect("a positive cap must be accepted");
+        manager
+            .pools
+            .write()
+            .await
+            .insert("placeholder".to_string(), placeholder_pool("placeholder"));
+
+        let parked_manager = Arc::clone(&manager);
+        let parked_second = second.clone();
+        let parked = tokio::spawn(async move {
+            parked_manager
+                .start_verified_portal(parked_second, 1, 50, RateLimitPolicy::default())
+                .await
+        });
+
+        // Give the parked start a moment to actually reach the park point rather than merely
+        // asserting it eventually succeeds, which would also pass if it never parked at all. The
+        // placeholder pool above never tears itself down, so there is nothing racing this check.
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        assert!(
+            !parked.is_finished(),
+            "a start over the cap must park rather than resolve immediately"
+        );
+
+        manager.pools.write().await.remove("placeholder");
+        manager.slot_freed.send_modify(|generation| {
+            *generation = generation.wrapping_add(1);
+        });
+
+        let promoted = tokio::time::timeout(std::time::Duration::from_secs(5), parked)
+            .await
+            .expect("the parked start must be promoted once the slot frees")
+            .expect("the spawned task must not panic");
+        assert!(
+            promoted.is_ok(),
+            "a start parked on a full cap must succeed once a slot frees, not be refused: {:?}",
+            promoted.err()
         );
     }
 
