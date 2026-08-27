@@ -1,6 +1,11 @@
 //! Hardened HTTP discovery and bounded ingestion for public-record portals.
 
 use crate::error::AppError;
+use crate::ingestion::host_policy::{
+    HostGovernor, HostPermit, HostStopReason, RequestRefusal, RobotsRules,
+    DEFAULT_HOST_CONCURRENCY, DEFAULT_HOST_INTERVAL, DEFAULT_HOST_REQUEST_BUDGET,
+    MAXIMUM_ROBOTS_BYTES,
+};
 use crate::integrity::{digest_hex, sha256_hex};
 use crate::types::{
     NextRequestResponse, PaginationMeta, PortalApiLayout, PortalRegistration, PublicRequest,
@@ -14,7 +19,7 @@ use reqwest::{Client, StatusCode, Url};
 use scraper::{Html, Selector};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::future::Future;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::{Path, PathBuf};
@@ -37,6 +42,11 @@ const DNS_PIN_TTL: Duration = Duration::from_secs(120);
 const MAX_DNS_PINS: usize = 512;
 /// A hostile or black-holed resolver must not stall a worker indefinitely.
 const DNS_LOOKUP_TIMEOUT: Duration = Duration::from_secs(5);
+/// The product token this client presents, and the token `RobotsRules` matches on. Keep the two
+/// in step: a User-Agent that does not contain the token a host writes rules against means the
+/// host cannot address this client specifically.
+const ROBOTS_PRODUCT_TOKEN_DISPLAY: &str = "OnRecordStudio";
+const APPLICATION_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 // TODO(ingestion): Add a browser-backed acquisition path for authenticated, JavaScript-only,
 // CAPTCHA-gated, and session-bound sources that cannot expose a public HTTP representation.
@@ -52,6 +62,12 @@ pub struct HttpClientConfig {
     pub retry_max_delay_ms: u64,
     pub max_json_response_bytes: usize,
     pub max_document_bytes: usize,
+    /// How an agency reaches the operator whose client is making these requests. There is no
+    /// default: fabricating a contact address is worse than declaring none, and the operator's
+    /// own address must never be sent without them choosing to send it.
+    pub contact_address: Option<String>,
+    pub host_concurrency: usize,
+    pub host_request_budget: usize,
 }
 
 impl Default for HttpClientConfig {
@@ -64,8 +80,35 @@ impl Default for HttpClientConfig {
             retry_max_delay_ms: 15_000,
             max_json_response_bytes: DEFAULT_JSON_LIMIT_BYTES,
             max_document_bytes: DEFAULT_DOCUMENT_LIMIT_BYTES,
+            contact_address: None,
+            host_concurrency: DEFAULT_HOST_CONCURRENCY,
+            host_request_budget: DEFAULT_HOST_REQUEST_BUDGET,
         }
     }
+}
+
+/// Identifies the application, its version, and how to reach whoever is running it. A portal
+/// operator who wants to talk to a client instead of blocking it needs all three.
+fn user_agent_value(contact_address: Option<&str>) -> Result<HeaderValue, AppError> {
+    let contact = match contact_address {
+        Some(value) => {
+            let value = value.trim();
+            if value.len() > 128
+                || !(value.starts_with("mailto:") || value.starts_with("https://"))
+                || value.bytes().any(|byte| !(0x20..0x7f).contains(&byte))
+            {
+                return Err(AppError::DataParsing(
+                    "The crawler contact address must be a printable ASCII 'mailto:' or 'https://' value of at most 128 characters".to_string(),
+                ));
+            }
+            format!("+{value}")
+        }
+        None => "no contact address configured".to_string(),
+    };
+    HeaderValue::from_str(&format!(
+        "{ROBOTS_PRODUCT_TOKEN_DISPLAY}/{APPLICATION_VERSION} (public-records archival client; {contact})"
+    ))
+    .map_err(|error| AppError::DataParsing(format!("Failed to build the User-Agent header: {error}")))
 }
 
 #[derive(Clone)]
@@ -73,6 +116,7 @@ pub struct ApiClient {
     client: Client,
     config: HttpClientConfig,
     dns: Arc<PinnedDnsResolver>,
+    governor: Arc<HostGovernor>,
 }
 
 struct ResponsePayload {
@@ -87,6 +131,11 @@ pub struct PublicResourceLink {
     pub label: String,
     pub download_candidate: bool,
     pub follow_candidate: bool,
+    /// The link sits in the page's navigation chrome. Reported rather than dropped: the crawl
+    /// frontier refuses these and counts the refusals, and guided repair still shows the operator
+    /// every link on the page, including one this rule would have eaten on a portal whose index
+    /// lives in a sidebar.
+    pub navigation_chrome: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -181,7 +230,7 @@ impl ApiClient {
         let mut headers = HeaderMap::new();
         headers.insert(
             reqwest::header::USER_AGENT,
-            HeaderValue::from_static("OnRecord-Studio/1.0 public-records-audit-client"),
+            user_agent_value(config.contact_address.as_deref())?,
         );
         headers.insert(
             ACCEPT,
@@ -202,11 +251,132 @@ impl ApiClient {
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|error| AppError::Network(format!("Failed to build HTTP client: {error}")))?;
+        let governor = Arc::new(HostGovernor::new(
+            config.host_concurrency,
+            config.host_request_budget,
+            DEFAULT_HOST_INTERVAL,
+        ));
         Ok(Self {
             client,
             config,
             dns,
+            governor,
         })
+    }
+
+    /// The per-host governor, so callers can consult a host's standing before scheduling work
+    /// against it and report why a host stopped.
+    pub fn host_governor(&self) -> &Arc<HostGovernor> {
+        &self.governor
+    }
+
+    /// Records that the operator directed this application at `url`, which exempts it from
+    /// robots.txt path exclusions. Pacing, concurrency, per-host budgets, and host stops still
+    /// apply. See `HostState::user_directed` for why the exemption is drawn here.
+    pub fn mark_user_directed(&self, url: &str) {
+        if let Ok(url) = Url::parse(url) {
+            self.governor.mark_user_directed(&url);
+        }
+    }
+
+    /// This host's robots.txt rules, fetched at most once per host per process.
+    async fn robots_rules(&self, url: &Url) -> Arc<RobotsRules> {
+        let cell = self.governor.robots_cell(url);
+        Arc::clone(
+            cell.get_or_init(|| async { Arc::new(self.fetch_robots(url).await) })
+                .await,
+        )
+    }
+
+    /// Fetches and parses `/robots.txt`, deliberately bypassing the governor: the file that
+    /// grants the crawl allowance cannot itself require one, and a 403 on robots.txt must not
+    /// trip the host stop that a 403 on a content URL does.
+    ///
+    /// Per RFC 9309 an unavailable (4xx) robots.txt permits everything, while a server that
+    /// answers 5xx withdraws the allowance. A transport failure is neither: nothing was answered,
+    /// so nothing was withdrawn, and the site request that follows will fail on its own. Treating
+    /// a DNS hiccup as a withdrawal would stop the host for the whole run off one cached error.
+    async fn fetch_robots(&self, url: &Url) -> RobotsRules {
+        let Ok(robots_url) = url.join("/robots.txt") else {
+            return RobotsRules::unavailable("the robots.txt URL could not be constructed");
+        };
+        let outcome = self
+            .execute_with_retries(&robots_url, "robots.txt", || async {
+                let mut current = robots_url.clone();
+                for hop in 0..=MAX_REDIRECTS {
+                    validate_remote_url(&self.dns, &current)
+                        .await
+                        .map_err(RetryDisposition::Terminal)?;
+                    let response =
+                        self.client
+                            .get(current.clone())
+                            .send()
+                            .await
+                            .map_err(|error| {
+                                RetryDisposition::Retry(
+                                    AppError::Network(format!("GET '{current}' failed: {error}")),
+                                    None,
+                                )
+                            })?;
+                    let status = response.status();
+                    if status.is_redirection() && hop < MAX_REDIRECTS {
+                        let Some(location) = response
+                            .headers()
+                            .get(LOCATION)
+                            .and_then(|value| value.to_str().ok())
+                            .and_then(|value| current.join(value).ok())
+                        else {
+                            return Ok(RobotsRules::unrestricted());
+                        };
+                        current = location;
+                        continue;
+                    }
+                    if status.is_client_error() {
+                        return Ok(RobotsRules::unrestricted());
+                    }
+                    if !status.is_success() {
+                        return Err(RetryDisposition::Retry(
+                            AppError::PortalSecurity(format!(
+                                "robots.txt at '{current}' returned HTTP {status}"
+                            )),
+                            None,
+                        ));
+                    }
+                    let (_, bytes) =
+                        read_response_bytes(response, MAXIMUM_ROBOTS_BYTES, "robots.txt")
+                            .await
+                            .map_err(RetryDisposition::Terminal)?;
+                    return Ok(RobotsRules::parse(&String::from_utf8_lossy(&bytes)));
+                }
+                Ok(RobotsRules::unrestricted())
+            })
+            .await;
+        outcome.unwrap_or_else(|error| match error {
+            // The server answered, and its answer withheld the allowance.
+            AppError::PortalSecurity(detail) => RobotsRules::unavailable(detail),
+            // Nothing answered. The host is unreachable, not restrictive.
+            _ => RobotsRules::unrestricted(),
+        })
+    }
+
+    /// Clears the request for dispatch and holds one of the host's concurrency slots until the
+    /// returned permit is dropped, which is why every caller keeps it alive across the body read.
+    async fn reserve_host_slot(&self, url: &Url) -> Result<HostPermit, RetryDisposition> {
+        let rules = self.robots_rules(url).await;
+        if let Some(detail) = rules.unavailable_detail() {
+            self.governor.stop_host(
+                url,
+                HostStopReason::RobotsUnavailable {
+                    detail: detail.to_string(),
+                },
+            );
+        }
+        let refuse = |refusal: RequestRefusal| RetryDisposition::Terminal(AppError::from(refusal));
+        self.governor.admits(url, Some(&rules)).map_err(refuse)?;
+        self.governor
+            .reserve(url, Some(&rules))
+            .await
+            .map_err(refuse)
     }
 
     pub async fn discover_portal(&self, portal_url: &str) -> Result<PortalRegistration, AppError> {
@@ -214,6 +384,12 @@ impl ApiClient {
         validate_remote_url(&self.dns, &submitted_url).await?;
         let origin = origin_url(&submitted_url)?;
         let mut candidates = initial_api_candidates(&submitted_url, &origin)?;
+        // Discovery probes the publisher's own documented API endpoints at the operator's
+        // direction; robots.txt path exclusions govern link-following, not this.
+        self.governor.mark_user_directed(&submitted_url);
+        for candidate in &candidates {
+            self.governor.mark_user_directed(candidate);
+        }
         let mut visited = BTreeSet::new();
         let parameter_layouts = [
             ("page", "per_page"),
@@ -366,6 +542,7 @@ impl ApiClient {
     ) -> Result<(PortalRegistration, PublicResourceInspection), AppError> {
         let submitted_url = normalize_submitted_url(source_url)?;
         validate_remote_url(&self.dns, &submitted_url).await?;
+        self.governor.mark_user_directed(&submitted_url);
         let inspection = self.inspect_public_resource(submitted_url.as_str()).await?;
         let final_url = Url::parse(&inspection.final_url).map_err(|error| {
             AppError::PortalDiscovery(format!("Discovered source URL is invalid: {error}"))
@@ -421,7 +598,7 @@ impl ApiClient {
     ) -> Result<PublicResourceInspection, AppError> {
         let url = normalize_submitted_url(source_url)?;
         validate_remote_url(&self.dns, &url).await?;
-        let response = self
+        let (response, _host_permit) = self
             .response_with_retries(url, self.config.max_document_bytes)
             .await?;
         let final_url = response.url().clone();
@@ -656,6 +833,7 @@ impl ApiClient {
             ],
         );
         let query = Vec::new();
+        self.governor.mark_user_directed(&endpoint);
         let payload = self
             .get_bounded(endpoint, &query, self.config.max_json_response_bytes)
             .await?;
@@ -748,11 +926,13 @@ impl ApiClient {
         .await
     }
 
+    /// The permit rides along with the response because the host's concurrency slot is not free
+    /// until the body has been read, not merely until the headers arrive.
     async fn response_with_retries(
         &self,
         initial_url: Url,
         maximum_bytes: usize,
-    ) -> Result<reqwest::Response, AppError> {
+    ) -> Result<(reqwest::Response, HostPermit), AppError> {
         self.execute_with_retries(&initial_url, "Request", || {
             self.send_response_following_safe_redirects(initial_url.clone(), &[], maximum_bytes)
         })
@@ -807,6 +987,7 @@ impl ApiClient {
         endpoint: Url,
         form: &[(&str, &str)],
     ) -> Result<reqwest::Response, RetryDisposition> {
+        let _host_permit = self.reserve_host_slot(&endpoint).await?;
         let response = self
             .client
             .post(endpoint.clone())
@@ -822,6 +1003,11 @@ impl ApiClient {
                 )
             })?;
         let status = response.status();
+        self.governor.record_status(
+            &endpoint,
+            status.as_u16(),
+            parse_retry_after(response.headers()),
+        );
         if status.is_redirection() {
             return Err(RetryDisposition::Terminal(AppError::PortalSecurity(
                 format!(
@@ -839,7 +1025,7 @@ impl ApiClient {
         query: &[(&str, String)],
         maximum_bytes: usize,
     ) -> Result<ResponsePayload, RetryDisposition> {
-        let response = self
+        let (response, _host_permit) = self
             .send_response_following_safe_redirects(initial_url, query, maximum_bytes)
             .await?;
         let content_type = response
@@ -868,7 +1054,7 @@ impl ApiClient {
         initial_url: Url,
         query: &[(&str, String)],
         maximum_bytes: usize,
-    ) -> Result<reqwest::Response, RetryDisposition> {
+    ) -> Result<(reqwest::Response, HostPermit), RetryDisposition> {
         let mut current_url = initial_url;
         let mut current_query = Some(query);
         // SECURITY(security): The loop bound is the redirect limit, and validation is the FIRST
@@ -884,6 +1070,9 @@ impl ApiClient {
             validate_remote_url(&self.dns, &current_url)
                 .await
                 .map_err(RetryDisposition::Terminal)?;
+            // Every hop is governed independently: a redirect can cross hosts, and the host that
+            // answers is the one whose robots.txt, pacing, budget, and stop state apply.
+            let host_permit = self.reserve_host_slot(&current_url).await?;
             let mut request = self.client.get(current_url.clone());
             if let Some(query_values) = current_query.take() {
                 request = request.query(query_values);
@@ -895,6 +1084,13 @@ impl ApiClient {
                 )
             })?;
             let status = response.status();
+            // Recorded before the status is classified so a refusal stops the host even though
+            // the disposition below is terminal for this one URL.
+            self.governor.record_status(
+                &current_url,
+                status.as_u16(),
+                parse_retry_after(response.headers()),
+            );
             if status.is_redirection() {
                 if redirect_count == MAX_REDIRECTS {
                     return Err(RetryDisposition::Terminal(AppError::PortalSecurity(
@@ -916,6 +1112,7 @@ impl ApiClient {
                         "Redirect target '{location}' from '{current_url}' is invalid: {error}"
                     )))
                 })?;
+                drop(host_permit);
                 continue;
             }
             validate_success_status("GET", &current_url, &response)?;
@@ -933,7 +1130,7 @@ impl ApiClient {
                     )));
                 }
             }
-            return Ok(response);
+            return Ok((response, host_permit));
         }
         Err(RetryDisposition::Terminal(AppError::PortalSecurity(
             "Redirect processing reached an invalid terminal state".to_string(),
@@ -946,7 +1143,7 @@ impl ApiClient {
         destination: &Path,
         maximum_bytes: usize,
     ) -> Result<DownloadedPayload, RetryDisposition> {
-        let response = self
+        let (response, _host_permit) = self
             .send_response_following_safe_redirects(initial_url, &[], maximum_bytes)
             .await?;
         let final_url = response.url().clone();
@@ -1003,6 +1200,367 @@ impl ApiClient {
             byte_count,
             sha256: digest_hex(digest.finalize()),
         })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Open-data catalog adapters
+//
+// A catalog portal publishes an index of its own holdings. Reading that index costs the host one
+// request per hundred assets; crawling the HTML that renders it costs a request per page, per
+// facet combination, and per navigation link on every one of them. data.ca.gov answers
+// `/api/3/action/package_search` with all 4,570 of its datasets, which is why platform detection
+// runs before the crawler rather than as a fallback from it.
+// ---------------------------------------------------------------------------
+
+/// Catalog families with a documented index API this client can page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DataCatalogPlatform {
+    Ckan,
+    Socrata,
+}
+
+impl DataCatalogPlatform {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Ckan => "CKAN",
+            Self::Socrata => "Socrata",
+        }
+    }
+}
+
+/// A detected catalog index, resolved to the endpoint that pages it.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct DataCatalogEndpoint {
+    pub platform: DataCatalogPlatform,
+    pub api_url: String,
+    /// The portal's own host. Socrata's catalog API federates across domains by default, and the
+    /// scoping parameters are advisory, so every returned asset is checked against this.
+    pub domain: String,
+    pub asset_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DataCatalogDownload {
+    pub url: String,
+    pub label: String,
+    pub media_type: Option<String>,
+    pub byte_count: Option<u64>,
+}
+
+/// One page of a catalog index.
+///
+/// `assets_without_downloads` and `foreign_domain_assets` are not diagnostics. An index page whose
+/// downloads are reported without them states a coverage this run did not achieve.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DataCatalogPage {
+    pub downloads: Vec<DataCatalogDownload>,
+    pub next_cursor: Option<String>,
+    pub asset_count: usize,
+    pub assets_without_downloads: BTreeMap<String, u64>,
+    pub foreign_domain_assets: u64,
+}
+
+/// Assets requested per index page. Kept well under CKAN's default `ckan.search.rows_max` of
+/// 1,000 and Socrata's `limit` ceiling, because a page holds full metadata for every asset on it.
+const CATALOG_PAGE_SIZE: usize = 100;
+/// A catalog index page is metadata; a body larger than this is not one.
+const CATALOG_PAGE_LIMIT_BYTES: usize = 32 * 1024 * 1024;
+/// Socrata asset types that resolve to a retrievable tabular export. Every other type is counted
+/// rather than guessed at: a `href` asset is a link to somebody else's server, and a `blob` needs
+/// a file identifier the catalog does not carry.
+const SOCRATA_TABULAR_TYPES: &[&str] = &["dataset", "table", "map", "chart", "filter"];
+
+impl ApiClient {
+    /// Identifies the catalog family behind a URL by asking each platform's index endpoint for a
+    /// single record. Returns `None` when no platform answers, which leaves the crawler as the
+    /// fallback for genuinely static HTML.
+    pub async fn detect_data_catalog(&self, source_url: &str) -> Option<DataCatalogEndpoint> {
+        let url = normalize_submitted_url(source_url).ok()?;
+        let origin = origin_url(&url).ok()?;
+        let domain = url.host_str()?.to_ascii_lowercase();
+        if let Some(endpoint) = self.detect_ckan(&origin, &domain).await {
+            return Some(endpoint);
+        }
+        self.detect_socrata(&origin, &domain).await
+    }
+
+    async fn detect_ckan(&self, origin: &Url, domain: &str) -> Option<DataCatalogEndpoint> {
+        let api_url = origin.join("/api/3/action/package_search").ok()?;
+        // The publisher's own documented index, reached because the operator named this portal.
+        // See `ApiClient::mark_user_directed` for why robots path exclusions do not govern it.
+        self.governor.mark_user_directed(&api_url);
+        let payload = self
+            .get_bounded(
+                api_url.clone(),
+                &[("rows", "1".to_string()), ("start", "0".to_string())],
+                self.config.max_json_response_bytes,
+            )
+            .await
+            .ok()?;
+        let value: Value = serde_json::from_slice(&payload.bytes).ok()?;
+        if value.get("success") != Some(&Value::Bool(true)) {
+            return None;
+        }
+        let result = value.get("result")?;
+        result.get("results")?.as_array()?;
+        Some(DataCatalogEndpoint {
+            platform: DataCatalogPlatform::Ckan,
+            api_url: api_url.to_string(),
+            domain: domain.to_string(),
+            asset_count: result.get("count").and_then(Value::as_u64).unwrap_or(0) as usize,
+        })
+    }
+
+    async fn detect_socrata(&self, origin: &Url, domain: &str) -> Option<DataCatalogEndpoint> {
+        let api_url = origin.join("/api/catalog/v1").ok()?;
+        self.governor.mark_user_directed(&api_url);
+        let payload = self
+            .get_bounded(
+                api_url.clone(),
+                &[
+                    ("limit", "1".to_string()),
+                    ("domains", domain.to_string()),
+                    ("search_context", domain.to_string()),
+                ],
+                self.config.max_json_response_bytes,
+            )
+            .await
+            .ok()?;
+        let value: Value = serde_json::from_slice(&payload.bytes).ok()?;
+        value.get("results")?.as_array()?;
+        let asset_count = value
+            .get("resultSetSize")
+            .and_then(Value::as_u64)
+            .unwrap_or(0) as usize;
+        Some(DataCatalogEndpoint {
+            platform: DataCatalogPlatform::Socrata,
+            api_url: api_url.to_string(),
+            domain: domain.to_string(),
+            asset_count,
+        })
+    }
+
+    /// Reads one page of a catalog index. `cursor` is opaque and comes from the previous page's
+    /// `next_cursor`; `None` starts at the beginning.
+    pub async fn fetch_data_catalog_page(
+        &self,
+        endpoint: &DataCatalogEndpoint,
+        cursor: Option<&str>,
+    ) -> Result<DataCatalogPage, AppError> {
+        let api_url = Url::parse(&endpoint.api_url).map_err(|error| {
+            AppError::PortalDiscovery(format!(
+                "Stored {} catalog endpoint is invalid: {error}",
+                endpoint.platform.as_str()
+            ))
+        })?;
+        validate_remote_url(&self.dns, &api_url).await?;
+        self.governor.mark_user_directed(&api_url);
+        let query = match endpoint.platform {
+            DataCatalogPlatform::Ckan => vec![
+                ("rows", CATALOG_PAGE_SIZE.to_string()),
+                (
+                    "start",
+                    cursor
+                        .and_then(|value| value.parse::<usize>().ok())
+                        .unwrap_or(0)
+                        .to_string(),
+                ),
+            ],
+            // Socrata's `offset` paging refuses `offset + limit > 10000` outright, so this uses
+            // the deep-scrolling cursor instead. Paging by offset would silently stop at ten
+            // thousand assets on any portal larger than that and report the first ten thousand as
+            // the whole catalog.
+            DataCatalogPlatform::Socrata => vec![
+                ("limit", CATALOG_PAGE_SIZE.to_string()),
+                ("scroll_id", cursor.unwrap_or_default().to_string()),
+                ("domains", endpoint.domain.clone()),
+                ("search_context", endpoint.domain.clone()),
+            ],
+        };
+        let payload = self
+            .get_bounded(api_url.clone(), &query, CATALOG_PAGE_LIMIT_BYTES)
+            .await?;
+        let value: Value = serde_json::from_slice(&payload.bytes).map_err(|error| {
+            AppError::DataParsing(format!(
+                "{} catalog page from '{}' was not JSON: {error}",
+                endpoint.platform.as_str(),
+                payload.final_url
+            ))
+        })?;
+        match endpoint.platform {
+            DataCatalogPlatform::Ckan => decode_ckan_page(&value, cursor),
+            DataCatalogPlatform::Socrata => decode_socrata_page(&value, &endpoint.domain),
+        }
+    }
+}
+
+fn decode_ckan_page(value: &Value, cursor: Option<&str>) -> Result<DataCatalogPage, AppError> {
+    if value.get("success") != Some(&Value::Bool(true)) {
+        return Err(AppError::DataParsing(
+            "The CKAN catalog reported an unsuccessful search".to_string(),
+        ));
+    }
+    let result = value.get("result").ok_or_else(|| {
+        AppError::DataParsing("The CKAN catalog page omitted its result object".to_string())
+    })?;
+    let packages = result
+        .get("results")
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            AppError::DataParsing("The CKAN catalog page omitted its result list".to_string())
+        })?;
+    let asset_count = result.get("count").and_then(Value::as_u64).unwrap_or(0) as usize;
+    let start = cursor
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(0);
+    let mut page = DataCatalogPage {
+        asset_count,
+        ..DataCatalogPage::default()
+    };
+    for package in packages {
+        let resources = package
+            .get("resources")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        let mut retrievable = 0_usize;
+        for resource in resources {
+            let Some(url) = resource.get("url").and_then(Value::as_str) else {
+                continue;
+            };
+            let Ok(parsed) = Url::parse(url) else {
+                continue;
+            };
+            if parsed.scheme() != "https" {
+                continue;
+            }
+            retrievable += 1;
+            page.downloads.push(DataCatalogDownload {
+                label: resource
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .filter(|value| !value.trim().is_empty())
+                    .map(|value| value.chars().take(256).collect())
+                    .unwrap_or_else(|| file_name_from_url(&parsed)),
+                url: parsed.to_string(),
+                media_type: resource
+                    .get("mimetype")
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+                    .or_else(|| {
+                        resource
+                            .get("format")
+                            .and_then(Value::as_str)
+                            .and_then(catalog_format_media_type)
+                            .map(str::to_string)
+                    }),
+                byte_count: resource.get("size").and_then(Value::as_u64),
+            });
+        }
+        if retrievable == 0 {
+            *page
+                .assets_without_downloads
+                .entry("ckan-package-without-retrievable-resource".to_string())
+                .or_insert(0) += 1;
+        }
+    }
+    let consumed = start.saturating_add(packages.len());
+    page.next_cursor =
+        (!packages.is_empty() && consumed < asset_count).then(|| consumed.to_string());
+    Ok(page)
+}
+
+fn decode_socrata_page(value: &Value, domain: &str) -> Result<DataCatalogPage, AppError> {
+    let results = value
+        .get("results")
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            AppError::DataParsing("The Socrata catalog page omitted its result list".to_string())
+        })?;
+    let mut page = DataCatalogPage {
+        asset_count: value
+            .get("resultSetSize")
+            .and_then(Value::as_u64)
+            .unwrap_or(0) as usize,
+        ..DataCatalogPage::default()
+    };
+    let mut last_identifier = None;
+    for entry in results {
+        let Some(resource) = entry.get("resource") else {
+            continue;
+        };
+        let Some(identifier) = resource.get("id").and_then(Value::as_str) else {
+            continue;
+        };
+        last_identifier = Some(identifier.to_string());
+        // `domains` and `search_context` are advisory. A portal that ignores them answers with
+        // another domain's assets, which is how a scoped catalog read turns back into an
+        // unbounded one; those are refused here rather than downloaded.
+        let asset_domain = entry
+            .get("metadata")
+            .and_then(|metadata| metadata.get("domain"))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        if asset_domain != domain {
+            page.foreign_domain_assets = page.foreign_domain_assets.saturating_add(1);
+            continue;
+        }
+        let asset_type = resource
+            .get("type")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown")
+            .to_ascii_lowercase();
+        if !SOCRATA_TABULAR_TYPES.contains(&asset_type.as_str()) {
+            *page
+                .assets_without_downloads
+                .entry(format!("socrata-{asset_type}-has-no-tabular-export"))
+                .or_insert(0) += 1;
+            continue;
+        }
+        if !identifier
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+        {
+            *page
+                .assets_without_downloads
+                .entry("socrata-unusable-asset-identifier".to_string())
+                .or_insert(0) += 1;
+            continue;
+        }
+        page.downloads.push(DataCatalogDownload {
+            url: format!("https://{domain}/api/views/{identifier}/rows.csv?accessType=DOWNLOAD"),
+            label: resource
+                .get("name")
+                .and_then(Value::as_str)
+                .filter(|value| !value.trim().is_empty())
+                .map(|value| value.chars().take(256).collect())
+                .unwrap_or_else(|| identifier.to_string()),
+            media_type: Some("text/csv".to_string()),
+            byte_count: None,
+        });
+    }
+    page.next_cursor = (!results.is_empty()).then_some(last_identifier).flatten();
+    Ok(page)
+}
+
+/// Catalog `format` strings are free text. Only the unambiguous ones are mapped; an unrecognized
+/// format leaves the media type absent so extraction reads the bytes rather than a guess.
+fn catalog_format_media_type(format: &str) -> Option<&'static str> {
+    match format.trim().to_ascii_uppercase().as_str() {
+        "CSV" => Some("text/csv"),
+        "TSV" => Some("text/tab-separated-values"),
+        "JSON" => Some("application/json"),
+        "GEOJSON" => Some("application/geo+json"),
+        "XML" => Some("application/xml"),
+        "PDF" => Some("application/pdf"),
+        "XLSX" => Some("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+        "XLS" => Some("application/vnd.ms-excel"),
+        "ZIP" => Some("application/zip"),
+        "TXT" => Some("text/plain"),
+        _ => None,
     }
 }
 
@@ -1307,6 +1865,7 @@ fn extract_public_resource_links(
             });
         let target_host = url.host_str().unwrap_or_default().to_ascii_lowercase();
         let follow_candidate = target_host == base_host || is_supported_platform_host(&target_host);
+        let navigation_chrome = is_navigation_chrome(&element);
         if !download_candidate && !follow_candidate {
             continue;
         }
@@ -1319,6 +1878,7 @@ fn extract_public_resource_links(
             },
             download_candidate,
             follow_candidate,
+            navigation_chrome,
         });
         if links.len() >= MAX_PUBLIC_LINKS_PER_PAGE {
             break;
@@ -1470,6 +2030,34 @@ fn should_ignore_crawl_resource(element: &scraper::ElementRef<'_>, url: &Url) ->
     ]
     .iter()
     .any(|extension| path.ends_with(extension))
+}
+
+/// Whether a link sits in a page's navigation chrome rather than its content.
+///
+/// Chrome is the same on every page of a site, so following it re-enqueues the whole shell once
+/// per referring page and buys nothing: `/contact?ref=<referrer>` on data.ca.gov is a distinct
+/// URL for every page that links to it. Faceted sidebars are the same shape and worse, since the
+/// facet set is combinatorial. Both live under `<nav>`, `<aside>`, `<header>`, or `<footer>` on
+/// every catalog checked, so the landmark is the discriminator rather than a path denylist.
+///
+/// This flags a link rather than dropping it. The crawl frontier refuses to follow flagged links
+/// and counts what it refused; a direct download sitting in a footer is still a document.
+fn is_navigation_chrome(element: &scraper::ElementRef<'_>) -> bool {
+    element
+        .ancestors()
+        .filter_map(scraper::ElementRef::wrap)
+        .any(|ancestor| {
+            let value = ancestor.value();
+            matches!(value.name(), "nav" | "aside" | "header" | "footer")
+                || value.attr("role").is_some_and(|role| {
+                    role.split_ascii_whitespace().any(|token| {
+                        matches!(
+                            token.to_ascii_lowercase().as_str(),
+                            "navigation" | "banner" | "contentinfo" | "search"
+                        )
+                    })
+                })
+        })
 }
 
 fn strip_tracking_parameters(url: &mut Url) {
@@ -2394,6 +2982,153 @@ mod tests {
             HeaderValue::from_static("Wed, 21 Oct 2015 07:28:00 GMT"),
         );
         assert_eq!(parse_retry_after(&headers), Some(Duration::ZERO));
+    }
+
+    #[test]
+    fn a_ckan_page_yields_resource_downloads_and_counts_packages_that_have_none() {
+        // Shape taken from https://data.ca.gov/api/3/action/package_search fetched 2026-08-26,
+        // which reported 4,570 packages. The whole catalog is four dozen of these pages; crawling
+        // the HTML that renders it is what produced the faceted queue this replaces.
+        let body = serde_json::json!({
+            "success": true,
+            "result": {
+                "count": 4570,
+                "results": [
+                    {"name": "hazardous-waste", "resources": [
+                        {"url": "https://data.ca.gov/dataset/bd2c/resource/3fb5/download/hazardous-waste-id-numbers.csv",
+                         "name": "Hazardous Waste ID Numbers", "format": "CSV", "size": 136203124, "mimetype": null}
+                    ]},
+                    {"name": "documentation-only", "resources": [
+                        {"url": "http://legacy.example.gov/insecure.csv", "format": "CSV"}
+                    ]},
+                    {"name": "empty-package", "resources": []}
+                ]
+            }
+        });
+        let page = decode_ckan_page(&body, Some("100")).unwrap();
+        assert_eq!(page.asset_count, 4570);
+        assert_eq!(page.downloads.len(), 1);
+        assert_eq!(page.downloads[0].media_type.as_deref(), Some("text/csv"));
+        assert_eq!(page.downloads[0].byte_count, Some(136_203_124));
+        // A package the index could not resolve to a retrievable file is counted, not dropped:
+        // the plain-HTTP resource and the resourceless package are both holes in coverage.
+        assert_eq!(
+            page.assets_without_downloads
+                .get("ckan-package-without-retrievable-resource"),
+            Some(&2)
+        );
+        assert_eq!(page.next_cursor.as_deref(), Some("103"));
+
+        // The last page stops rather than paging past the reported count.
+        let tail = serde_json::json!({
+            "success": true,
+            "result": {"count": 4570, "results": [{"name": "x", "resources": []}]}
+        });
+        assert_eq!(
+            decode_ckan_page(&tail, Some("4569")).unwrap().next_cursor,
+            None
+        );
+    }
+
+    #[test]
+    fn a_socrata_page_refuses_federated_assets_and_scrolls_by_identifier() {
+        // `domains` and `search_context` are advisory: the live catalog at
+        // data.cityofnewyork.us answered an unscoped query with dallasopendata.com rows on
+        // 2026-08-26, which is why the domain is re-checked per asset here.
+        let body = serde_json::json!({
+            "resultSetSize": 3016,
+            "results": [
+                {"metadata": {"domain": "data.cityofnewyork.us"},
+                 "resource": {"id": "8wbx-tsch", "type": "dataset", "name": "For Hire Vehicles (FHV) - Active"}},
+                {"metadata": {"domain": "www.dallasopendata.com"},
+                 "resource": {"id": "9fxf-t2tr", "type": "dataset", "name": "Dallas Police Active Calls"}},
+                {"metadata": {"domain": "data.cityofnewyork.us"},
+                 "resource": {"id": "vx8i-nprf", "type": "href", "name": "Linked elsewhere"}}
+            ]
+        });
+        let page = decode_socrata_page(&body, "data.cityofnewyork.us").unwrap();
+        assert_eq!(page.asset_count, 3016);
+        assert_eq!(
+            page.downloads
+                .iter()
+                .map(|download| download.url.as_str())
+                .collect::<Vec<_>>(),
+            vec!["https://data.cityofnewyork.us/api/views/8wbx-tsch/rows.csv?accessType=DOWNLOAD"]
+        );
+        assert_eq!(page.foreign_domain_assets, 1);
+        assert_eq!(
+            page.assets_without_downloads
+                .get("socrata-href-has-no-tabular-export"),
+            Some(&1)
+        );
+        // The cursor is the last identifier seen, including ones no download came from, so the
+        // scroll advances past them instead of re-reading the same page forever.
+        assert_eq!(page.next_cursor.as_deref(), Some("vx8i-nprf"));
+
+        let exhausted = serde_json::json!({"resultSetSize": 3016, "results": []});
+        assert_eq!(
+            decode_socrata_page(&exhausted, "data.cityofnewyork.us")
+                .unwrap()
+                .next_cursor,
+            None
+        );
+    }
+
+    #[test]
+    fn navigation_chrome_is_not_followed_but_a_download_in_it_is_kept() {
+        // Structure taken from https://data.ca.gov/dataset fetched 2026-08-25: the account bar
+        // links `/contact?ref=<referrer>`, which is a distinct URL on every page of the site, and
+        // the facet sidebar links ten `?tags=` variants of the listing the crawler is already on.
+        let body = br#"<html><body>
+            <div class="account-masthead"><nav class="account"><ul>
+              <li><a href="/contact?ref=https%3A%2F%2Fdata.ca.gov%2Fdataset">Contact</a></li>
+            </ul></nav></div>
+            <aside class="secondary"><div class="filters"><nav><ul>
+              <li><a href="/dataset/?tags=species">species</a></li>
+              <li><a href="/dataset/?tags=wildlife">wildlife</a></li>
+            </ul></nav></aside>
+            <section id="content">
+              <a href="/dataset/fish-hatchery-annual-report">Fish Hatchery Annual Report</a>
+            </section>
+            <footer class="site-footer">
+              <a href="/reports/2026-annual.pdf">2026 Annual Report</a>
+            </footer>
+          </body></html>"#;
+        let base = Url::parse("https://data.ca.gov/dataset").unwrap();
+        let (_, links, _) = extract_public_resource_links(&base, body, None, None).unwrap();
+        let followable = links
+            .iter()
+            .filter(|link| link.follow_candidate && !link.navigation_chrome)
+            .map(|link| link.url.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            followable,
+            vec!["https://data.ca.gov/dataset/fish-hatchery-annual-report"]
+        );
+        // Every chrome link is still reported, so the frontier can count what it refused and
+        // guided repair can still show the operator a link this rule would have eaten.
+        for suppressed in [
+            "https://data.ca.gov/contact?ref=https%3A%2F%2Fdata.ca.gov%2Fdataset",
+            "https://data.ca.gov/dataset/?tags=species",
+            "https://data.ca.gov/dataset/?tags=wildlife",
+        ] {
+            let link = links
+                .iter()
+                .find(|link| link.url == suppressed)
+                .unwrap_or_else(|| panic!("{suppressed} was dropped instead of flagged"));
+            assert!(
+                link.navigation_chrome,
+                "{suppressed} was not flagged as chrome"
+            );
+        }
+        // A direct download inside the footer is still a document; chrome suppresses following,
+        // not the link itself.
+        let footer_download = links
+            .iter()
+            .find(|link| link.url.ends_with("2026-annual.pdf"))
+            .expect("the footer download survived");
+        assert!(footer_download.download_candidate);
+        assert!(footer_download.navigation_chrome);
     }
 
     #[test]
