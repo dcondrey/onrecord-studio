@@ -1,10 +1,391 @@
-//! Local image optical character extraction adapters.
+use std::ffi::OsString;
+use std::io::{self, Read};
+use std::path::{Path, PathBuf};
+use std::process::{Command, ExitStatus, Stdio};
+use std::thread;
+use std::time::{Duration, Instant};
 
-use std::path::Path;
+use uuid::Uuid;
+
 use crate::error::AppError;
 
-/// Processes flattened graphic documents locally.
-pub fn execute_local_ocr_scan<P: AsRef<Path>>(_image_path: P) -> Result<String, AppError> {
-    // Structural hooks connecting to external native libraries (e.g., Tesseract C-API bindings)
-    Ok("NATIVE_OCR_STUB_CONTENT: Extraction layer processing finalized successfully.".to_string())
+const MAX_OCR_INPUT_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_OCR_OUTPUT_BYTES: usize = 128 * 1024 * 1024;
+const MAX_PROCESS_STDERR_BYTES: usize = 256 * 1024;
+const MAX_PDF_OCR_PAGES: usize = 25_000;
+const MAX_RASTER_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+const DEFAULT_OCR_TIMEOUT_SECONDS: u64 = 900;
+const MAX_OCR_TIMEOUT_SECONDS: u64 = 86_400;
+
+// TODO(ocr): Probe configured engines, renderer versions, and language packs at startup and expose
+// their capability state; discovering a missing binary only after a document is queued is too late.
+pub fn execute_local_ocr_scan<P: AsRef<Path>>(document_path: P) -> Result<String, AppError> {
+    let path = document_path.as_ref();
+    validate_input(path)?;
+    let deadline = Instant::now() + ocr_timeout();
+
+    if let Some(engine) = std::env::var_os("ONRECORD_OCR_ENGINE") {
+        let mut command = Command::new(engine);
+        command.arg(path);
+        let output = run_command(&mut command, deadline, "OCR_ENGINE", path)?;
+        return decode_ocr_output(path, output, false);
+    }
+
+    if is_pdf(path)? {
+        return ocr_pdf(path, deadline);
+    }
+
+    ocr_image(path, deadline)
+}
+
+fn is_pdf(path: &Path) -> Result<bool, AppError> {
+    if path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("pdf"))
+    {
+        return Ok(true);
+    }
+    let mut file = std::fs::File::open(path).map_err(|error| {
+        AppError::Internal(format!(
+            "OCR_INPUT_OPEN_FAILED: failed to open '{}': {error}",
+            path.display()
+        ))
+    })?;
+    let mut signature = [0_u8; 5];
+    let read = file.read(&mut signature).map_err(|error| {
+        AppError::Internal(format!(
+            "OCR_INPUT_READ_FAILED: failed to read '{}': {error}",
+            path.display()
+        ))
+    })?;
+    Ok(read == signature.len() && signature == *b"%PDF-")
+}
+
+fn validate_input(path: &Path) -> Result<(), AppError> {
+    let metadata = std::fs::metadata(path).map_err(|error| {
+        AppError::Internal(format!(
+            "OCR_INPUT_INSPECTION_FAILED: failed to inspect '{}': {error}",
+            path.display()
+        ))
+    })?;
+    if !metadata.is_file() {
+        return Err(AppError::DataParsing(format!(
+            "OCR_INPUT_INVALID: '{}' is not a regular file",
+            path.display()
+        )));
+    }
+    if metadata.len() > MAX_OCR_INPUT_BYTES {
+        return Err(AppError::DataParsing(format!(
+            "OCR_INPUT_SIZE_EXCEEDED: '{}' exceeds {MAX_OCR_INPUT_BYTES} bytes",
+            path.display()
+        )));
+    }
+    Ok(())
+}
+
+fn ocr_timeout() -> Duration {
+    let seconds = std::env::var("ONRECORD_OCR_TIMEOUT_SECONDS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|seconds| (1..=MAX_OCR_TIMEOUT_SECONDS).contains(seconds))
+        .unwrap_or(DEFAULT_OCR_TIMEOUT_SECONDS);
+    Duration::from_secs(seconds)
+}
+
+fn ocr_image(path: &Path, deadline: Instant) -> Result<String, AppError> {
+    ocr_image_with_empty_policy(path, deadline, false)
+}
+
+fn ocr_image_with_empty_policy(
+    path: &Path,
+    deadline: Instant,
+    allow_empty: bool,
+) -> Result<String, AppError> {
+    let mut command = Command::new("tesseract");
+    command.arg(path).arg("stdout");
+    let output = run_command(&mut command, deadline, "OCR_ENGINE", path)?;
+    decode_ocr_output(path, output, allow_empty)
+}
+
+fn ocr_pdf(path: &Path, deadline: Instant) -> Result<String, AppError> {
+    let workspace = OcrWorkspace::new()?;
+    let renderer =
+        std::env::var_os("ONRECORD_PDF_RENDERER").unwrap_or_else(|| OsString::from("pdftoppm"));
+    let page_count = pdf_page_count(path, deadline)?;
+    if page_count == 0 {
+        return Err(AppError::DataParsing(format!(
+            "OCR_PAGE_COUNT_INVALID: '{}' contains no pages",
+            path.display()
+        )));
+    }
+    if page_count > MAX_PDF_OCR_PAGES {
+        return Err(AppError::DataParsing(format!(
+            "OCR_PAGE_COUNT_EXCEEDED: '{}' contains {page_count} pages; limit is {MAX_PDF_OCR_PAGES}",
+            path.display(),
+        )));
+    }
+
+    let mut raster_bytes = 0_u64;
+    let mut text = String::new();
+    for page_number in 1..=page_count {
+        let prefix = workspace.path.join(format!("page-{page_number:08}"));
+        let page = prefix.with_extension("png");
+        let mut command = Command::new(&renderer);
+        command
+            .arg("-f")
+            .arg(page_number.to_string())
+            .arg("-l")
+            .arg(page_number.to_string())
+            .arg("-singlefile")
+            .arg("-png")
+            .arg("-r")
+            .arg("300")
+            .arg(path)
+            .arg(&prefix);
+        let output = run_command(&mut command, deadline, "PDF_RENDERER", path)?;
+        ensure_success(path, "PDF_RENDERER", &output)?;
+        let page_size = std::fs::metadata(&page)
+            .map_err(|error| {
+                AppError::Internal(format!(
+                    "OCR_RASTER_INSPECTION_FAILED: failed to inspect '{}': {error}",
+                    page.display()
+                ))
+            })?
+            .len();
+        raster_bytes = raster_bytes.checked_add(page_size).ok_or_else(|| {
+            AppError::DataParsing("OCR_RASTER_SIZE_OVERFLOW: raster size overflow".to_string())
+        })?;
+        if raster_bytes > MAX_RASTER_BYTES {
+            return Err(AppError::DataParsing(format!(
+                "OCR_RASTER_SIZE_EXCEEDED: rendered pages exceed {MAX_RASTER_BYTES} bytes"
+            )));
+        }
+
+        let page_text = ocr_image_with_empty_policy(&page, deadline, true)?;
+        std::fs::remove_file(&page).map_err(|error| {
+            AppError::Internal(format!(
+                "OCR_RASTER_CLEANUP_FAILED: failed to remove '{}': {error}",
+                page.display()
+            ))
+        })?;
+        if page_text.is_empty() {
+            continue;
+        }
+        let separator_bytes = usize::from(!text.is_empty());
+        if text
+            .len()
+            .checked_add(separator_bytes)
+            .and_then(|size| size.checked_add(page_text.len()))
+            .is_none_or(|size| size > MAX_OCR_OUTPUT_BYTES)
+        {
+            return Err(AppError::DataParsing(format!(
+                "OCR_OUTPUT_SIZE_EXCEEDED: extracted text exceeds {MAX_OCR_OUTPUT_BYTES} bytes"
+            )));
+        }
+        if !text.is_empty() {
+            text.push('\n');
+        }
+        text.push_str(&page_text);
+    }
+
+    if text.trim().is_empty() {
+        return Err(AppError::DataParsing(format!(
+            "OCR_OUTPUT_EMPTY: '{}' produced no searchable text",
+            path.display()
+        )));
+    }
+    Ok(text)
+}
+
+fn pdf_page_count(path: &Path, deadline: Instant) -> Result<usize, AppError> {
+    if let Ok(document) = lopdf::Document::load(path) {
+        return Ok(document.get_pages().len());
+    }
+    let inspector =
+        std::env::var_os("ONRECORD_PDF_INFO").unwrap_or_else(|| OsString::from("pdfinfo"));
+    let mut command = Command::new(inspector);
+    command.arg(path);
+    let output = run_command(&mut command, deadline, "PDF_INFO", path)?;
+    ensure_success(path, "PDF_INFO", &output)?;
+    let report = std::str::from_utf8(&output.stdout).map_err(|error| {
+        AppError::DataParsing(format!(
+            "PDF_INFO_OUTPUT_INVALID: '{}' produced invalid UTF-8 metadata: {error}",
+            path.display()
+        ))
+    })?;
+    report
+        .lines()
+        .find_map(|line| {
+            line.split_once(':').and_then(|(name, value)| {
+                name.trim()
+                    .eq_ignore_ascii_case("pages")
+                    .then(|| value.trim().parse::<usize>().ok())
+                    .flatten()
+            })
+        })
+        .ok_or_else(|| {
+            AppError::DataParsing(format!(
+                "PDF_INFO_PAGE_COUNT_MISSING: could not determine page count for '{}'",
+                path.display()
+            ))
+        })
+}
+
+struct ProcessOutput {
+    status: ExitStatus,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+}
+
+fn run_command(
+    command: &mut Command,
+    deadline: Instant,
+    label: &str,
+    source: &Path,
+) -> Result<ProcessOutput, AppError> {
+    if Instant::now() >= deadline {
+        return Err(AppError::DataParsing(format!(
+            "{label}_TIMEOUT: processing deadline expired for '{}'",
+            source.display()
+        )));
+    }
+    let mut child = command
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| {
+            AppError::Internal(format!(
+                "{label}_LAUNCH_FAILED: failed to process '{}': {error}",
+                source.display()
+            ))
+        })?;
+    let stdout = child.stdout.take().ok_or_else(|| {
+        AppError::Internal(format!("{label}_PIPE_FAILED: stdout pipe was unavailable"))
+    })?;
+    let stderr = child.stderr.take().ok_or_else(|| {
+        AppError::Internal(format!("{label}_PIPE_FAILED: stderr pipe was unavailable"))
+    })?;
+    let stdout_reader = thread::spawn(move || read_bounded(stdout, MAX_OCR_OUTPUT_BYTES));
+    let stderr_reader = thread::spawn(move || read_bounded(stderr, MAX_PROCESS_STDERR_BYTES));
+
+    let status = loop {
+        match child.try_wait().map_err(|error| {
+            AppError::Internal(format!("{label}_WAIT_FAILED: process wait failed: {error}"))
+        })? {
+            Some(status) => break status,
+            None if Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = stdout_reader.join();
+                let _ = stderr_reader.join();
+                return Err(AppError::DataParsing(format!(
+                    "{label}_TIMEOUT: processing deadline expired for '{}'",
+                    source.display()
+                )));
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    };
+
+    let stdout = join_reader(stdout_reader, label, "stdout")?;
+    let stderr = join_reader(stderr_reader, label, "stderr")?;
+    Ok(ProcessOutput {
+        status,
+        stdout,
+        stderr,
+    })
+}
+
+fn read_bounded<R: Read>(reader: R, limit: usize) -> Result<Vec<u8>, io::Error> {
+    let mut output = Vec::new();
+    reader
+        .take(u64::try_from(limit).unwrap_or(u64::MAX) + 1)
+        .read_to_end(&mut output)?;
+    Ok(output)
+}
+
+fn join_reader(
+    reader: thread::JoinHandle<Result<Vec<u8>, io::Error>>,
+    label: &str,
+    stream: &str,
+) -> Result<Vec<u8>, AppError> {
+    let output = reader
+        .join()
+        .map_err(|_| AppError::Internal(format!("{label}_PIPE_FAILED: {stream} reader panicked")))?
+        .map_err(|error| {
+            AppError::Internal(format!(
+                "{label}_PIPE_FAILED: failed to read {stream}: {error}"
+            ))
+        })?;
+    let limit = if stream == "stdout" {
+        MAX_OCR_OUTPUT_BYTES
+    } else {
+        MAX_PROCESS_STDERR_BYTES
+    };
+    if output.len() > limit {
+        return Err(AppError::DataParsing(format!(
+            "{label}_OUTPUT_SIZE_EXCEEDED: {stream} exceeded {limit} bytes"
+        )));
+    }
+    Ok(output)
+}
+
+fn ensure_success(path: &Path, label: &str, output: &ProcessOutput) -> Result<(), AppError> {
+    if output.status.success() {
+        return Ok(());
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    Err(AppError::DataParsing(format!(
+        "{label}_FAILED: '{}' exited with status {}: {}",
+        path.display(),
+        output.status,
+        stderr
+    )))
+}
+
+fn decode_ocr_output(
+    path: &Path,
+    output: ProcessOutput,
+    allow_empty: bool,
+) -> Result<String, AppError> {
+    ensure_success(path, "OCR_ENGINE", &output)?;
+    let text = String::from_utf8(output.stdout).map_err(|error| {
+        AppError::DataParsing(format!(
+            "OCR_OUTPUT_INVALID_UTF8: '{}' produced invalid UTF-8: {error}",
+            path.display()
+        ))
+    })?;
+    let text = text.trim().to_string();
+    if text.is_empty() && !allow_empty {
+        return Err(AppError::DataParsing(format!(
+            "OCR_OUTPUT_EMPTY: '{}' produced no searchable text",
+            path.display()
+        )));
+    }
+    Ok(text)
+}
+
+struct OcrWorkspace {
+    path: PathBuf,
+}
+
+impl OcrWorkspace {
+    fn new() -> Result<Self, AppError> {
+        let path = std::env::temp_dir().join(format!("onrecord-ocr-{}", Uuid::new_v4()));
+        std::fs::create_dir(&path).map_err(|error| {
+            AppError::Internal(format!(
+                "OCR_WORKSPACE_CREATE_FAILED: failed to create '{}': {error}",
+                path.display()
+            ))
+        })?;
+        Ok(Self { path })
+    }
+}
+
+impl Drop for OcrWorkspace {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.path);
+    }
 }
