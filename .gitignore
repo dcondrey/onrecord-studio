@@ -1,0 +1,9 @@
+# Repository root. The application's own ignore profile lives in `onrecord-studio/.gitignore`,
+# which only governs that directory and below -- so anything that lands beside it, at the git
+# root, needs a rule here. A root `node_modules/` is the case that actually bites: it is invisible
+# to the profile one level down, and `git add -A` from the root stages the whole tree.
+node_modules/
+.DS_Store
+
+# MCP and tooling scratch
+.playwright-mcp/

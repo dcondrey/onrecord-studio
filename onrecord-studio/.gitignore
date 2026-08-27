@@ -19,13 +19,19 @@ dist-tauri/
 .vite/
 .eslintcache
 *.tsbuildinfo
-package-lock.json
+# package-lock.json is intentionally NOT ignored: this is an application, and a committed
+# lockfile is what makes `npm ci` and `npm audit` reproducible for every contributor.
 yarn.lock
 pnpm-lock.yaml
 
 # 3. Native macOS Rust Backend Compilation Artifacts
 src-tauri/target/
-src-tauri/Cargo.lock
+# Cargo.lock is committed for the same reason as package-lock.json. The previous rule named
+# `src-tauri/Cargo.lock`, which never matched anything: this is a workspace, so the lockfile is
+# written to the repository root instead.
+
+# Tauri-generated ACL schemas, rebuilt on every build.
+src-tauri/gen/schemas/
 
 # 4. Local App Data Caches, SQLite DBs, & Extracted Public Documents
 # Protects investigator database indices and scraped municipal files from being leaked to public repositories.
