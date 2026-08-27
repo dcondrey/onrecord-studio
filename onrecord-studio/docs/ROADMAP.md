@@ -204,8 +204,9 @@ at the line; two carry running proof-of-concept binaries.
       breaks something real. The alternatives are (a) leave permissive and record provenance,
       (b) restrict to the source's registrable domain, which needs a public-suffix list,
       (c) an explicit `follow_cross_host_downloads` policy flag, and a default has to be chosen.
-- [ ] `queue.rs:1157` — cancellation does not stop in-flight extraction. `spawn_blocking` tasks
-      cannot be aborted, so `stop_portal` writes CANCELLED and returns while extraction runs on.
+- [ ] `queue.rs:1561` (`abort_workers`) — cancellation does not stop in-flight extraction.
+      `spawn_blocking` tasks cannot be aborted, so the pause and remove paths write CANCELLED and
+      return while extraction runs on.
       Thread an `AtomicBool` into the tar/zip/OCR loops.
 - [ ] `queue.rs:2952` + `msg.rs:387` — `.msg` nesting bypasses `container_depth`; the
       `skip_msg_attachment_expansion` backstop reads a different filename than format detection does.

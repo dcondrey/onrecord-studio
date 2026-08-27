@@ -1,6 +1,12 @@
 # NextRequest Platform API - Complete Technical Reference Manual
 
-This specification maps the internal endpoint layouts, payload field keys, query strings, and pagination behaviors for CivicPlus NextRequest portal environments.
+This specification maps the endpoint layouts, payload field keys, query strings, and pagination
+behavior for CivicPlus NextRequest portals, and records what this client actually sends.
+
+NextRequest publishes no stable contract, so the client does not hard-code an endpoint: it probes
+candidate pagination parameter layouts (`page`/`per_page`, then `page`/`page_size`) during portal
+discovery and persists whichever the portal accepts as `PortalApiLayout`
+(`ingestion/client.rs`). The endpoint below is the shape discovery looks for, not a constant.
 
 ---
 
@@ -9,7 +15,9 @@ This specification maps the internal endpoint layouts, payload field keys, query
 Retrieves paginated arrays of public records requests and their associated metadata envelopes.
 
 * **HTTP Method:** `GET`
-* **Target Endpoint URL:** `https://<agency-subdomain>://`
+* **Target Endpoint URL:** `https://<agency-subdomain>.nextrequest.com/client/request_archives`
+  (discovered per portal and stored as `PortalApiLayout::requests_endpoint`; the parameter names
+  are discovered alongside it and are not assumed)
 * **Content Transport Type:** `application/json`
 
 ### Query Parameter Specifications
@@ -17,15 +25,16 @@ Retrieves paginated arrays of public records requests and their associated metad
 | Parameter | Data Type | Default Value | Max Value Range | Functional Description |
 | :--- | :--- | :--- | :--- | :--- |
 | `page` | Unsigned Integer | `1` | None | Identifies the targeted paginated slice window to return. |
-| `per_page` | Unsigned Integer | `20` | `50` | Dictates individual bulk record counts per payload segment. Values exceeding `50` are automatically truncated by the server gateway. |
-| `status` | String Option | None | `open`, `closed` | Optional filter to isolate records based on their lifecycle status. |
+| `per_page` | Unsigned Integer | `50` | `100` | Records per page. **This client** defaults to `50` (`commands/ingest.rs`) and rejects anything outside `1..=100` before sending (`ingestion/client.rs`). No client-side truncation exists; an out-of-range value is an error, not a clamp. The parameter may instead be named `page_size` depending on what discovery found. |
+| `status` | String Option | None | `open`, `closed` | Accepted by the portal. **This client never sends it** — only the page and page-size parameters are attached. Status filtering happens locally, after ingestion. |
 
-### Header Requirements
+### Headers this client sends
 ```text
-Host: <agency-subdomain>.nextrequest.com
-Accept: application/json, text/plain, */*
-Connection: keep-alive
+User-Agent: OnRecord-Studio/1.0 public-records-audit-client
+Accept: application/json, text/html;q=0.5, */*;q=0.1
 ```
+The client identifies itself honestly rather than impersonating a browser. Redirects are not
+followed automatically (`redirect::Policy::none()`); each hop is re-validated by the caller.
 
 ### Complete Response Payload Schema (`HTTP 200 OK`)
 ```json
@@ -83,7 +92,9 @@ Connection: keep-alive
 Downloads raw file payloads associated with a target request ID.
 
 * **HTTP Method:** `GET`
-* **Target Endpoint URL:** `https://<agency-subdomain>://<document_id>/download`
+* **Target Endpoint URL:** `https://<agency-subdomain>.nextrequest.com/documents/<document_id>/download`
+  (document URLs are taken from the listing payload rather than constructed; every URL is run
+  through `validate_remote_url` before it is fetched)
 * **Content Transport Type:** `application/octet-stream` (or matches target mime, e.g., `application/pdf`)
 
 ### Path Routing Bounds
