@@ -1,14 +1,15 @@
 import { create } from 'zustand';
-
-// Explicit interfaces matching your native Rust data shapes
-export interface RequestMetricSummary {
-  id: u64;
-  portal: string;
-  title: string;
-  status: string;
-  date: string;
-  documentsCount: number;
-}
+import type {
+  AgencyPerformanceProfile,
+  CrossAgencyCorrelation,
+  LegalAuthoritySummary,
+  LegalComplianceFinding,
+  PortalRegistration,
+  PortalRuntimeSnapshot,
+  RequestSearchResult,
+  SavedSource,
+  SourceLifecycleState,
+} from '../types';
 
 export interface IngestionMetrics {
   pagesProcessed: number;
@@ -17,109 +18,259 @@ export interface IngestionMetrics {
   bytesTransferred: number;
 }
 
+export type WorkspaceView = 'overview' | 'patterns' | 'evidence' | 'activity';
+export type AppTheme = 'light' | 'dark' | 'auto';
+
+export interface SourceRepairNotice {
+  portalKey: string;
+  sourceUrl: string;
+  reason: string;
+}
+
 interface AppState {
-  // 1. Core Structural Workspace States
-  activePortal: string;
+  // TODO(query): Add `queryAst` and `queryMode` once saved searches and the
+  // visual/qualifier/natural-language editors share a single controlled value.
+  workspaceView: WorkspaceView;
+  theme: AppTheme;
+  isSidebarOpen: boolean;
+  isSidebarCollapsed: boolean;
+  portals: SavedSource[];
+  portalRuntimes: PortalRuntimeSnapshot[];
+  activePortalKey: string | null;
+  portalUrlDraft: string;
+  syncingPortalKeys: string[];
+  syncRunIdsByPortal: Record<string, string>;
   isSyncing: boolean;
   syncLogs: string[];
   metrics: IngestionMetrics;
-  
-  // 2. Query, Filter, & Discovery States
+  agencyProfiles: AgencyPerformanceProfile[];
+  crossAgencyCorrelations: CrossAgencyCorrelation[];
+  analyticsUpdatedAt: string | null;
+  /** Set when the last analytics refresh failed, so panels can say so instead of reporting an empty result as a finding. */
+  analyticsError: string | null;
+  legalAuthorities: LegalAuthoritySummary[];
+  activeLegalFindings: LegalComplianceFinding[];
+  legalDataUpdatedAt: string | null;
   searchTerm: string;
   selectedAgencyId: number | null;
   selectedStatus: string | null;
-  filteredResults: u64[]; // Holds target structural IDs returned from Rust FTS5
-  
-  // 3. UI Navigation & Drill-Down Focused States
-  selectedRequestId: u64 | null;
+  selectedPolicyDeviation: string | null;
+  filteredResults: RequestSearchResult[];
+  selectedRequestId: number | null;
+  selectedRequestPortalKey: string | null;
   isExtractionTerminalOpen: boolean;
-
-  // 4. State Modification Actions
-  setActivePortal: (portal: string) => void;
-  setIsSyncing: (syncing: boolean) => void;
+  pendingSourceRepair: SourceRepairNotice | null;
+  setWorkspaceView: (view: WorkspaceView) => void;
+  setTheme: (theme: AppTheme) => void;
+  setSidebarOpen: (open: boolean) => void;
+  toggleSidebarCollapsed: () => void;
+  setPortalUrlDraft: (url: string) => void;
+  upsertPortal: (portal: PortalRegistration) => void;
+  setPortals: (portals: SavedSource[]) => void;
+  setPortalLifecycleState: (portalKey: string, lifecycleState: SourceLifecycleState) => void;
+  removePortal: (portalKey: string) => void;
+  setPortalRuntimes: (runtimes: PortalRuntimeSnapshot[]) => void;
+  setActivePortal: (portalKey: string | null) => void;
+  setPortalSyncState: (portalKey: string, syncing: boolean, syncRunId?: string) => void;
   appendSyncLog: (log: string) => void;
-  incrementMetric: (metricKey: keyof Omit<IngestionMetrics, 'bytesTransferred'>) => void;
+  incrementMetric: (metricKey: 'pagesProcessed' | 'documentsDownloaded' | 'anomaliesFound') => void;
   addBytesTransferred: (bytes: number) => void;
   resetTelemetryMetrics: () => void;
-  
-  setSearchFilters: (term: string, agencyId: number | null, status: string | null) => void;
-  setFilteredResults: (ids: u64[]) => void;
-  setSelectedRequest: (requestId: u64 | null) => void;
+  setAnalyticsData: (
+    profiles: AgencyPerformanceProfile[],
+    correlations: CrossAgencyCorrelation[],
+  ) => void;
+  setAnalyticsError: (message: string | null) => void;
+  setLegalAuthorities: (authorities: LegalAuthoritySummary[]) => void;
+  setActiveLegalFindings: (findings: LegalComplianceFinding[]) => void;
+  setSearchFilters: (
+    term: string,
+    agencyId: number | null,
+    status: string | null,
+    policyDeviation?: string | null,
+  ) => void;
+  setFilteredResults: (results: RequestSearchResult[]) => void;
+  setSelectedRequest: (requestId: number | null, portalKey?: string | null) => void;
   setTerminalVisibility: (visible: boolean) => void;
+  setPendingSourceRepair: (notice: SourceRepairNotice | null) => void;
 }
 
+const emptyMetrics = (): IngestionMetrics => ({
+  pagesProcessed: 0,
+  documentsDownloaded: 0,
+  anomaliesFound: 0,
+  bytesTransferred: 0,
+});
+
 export const useAppStore = create<AppState>((set) => ({
-  // --- INITIAL STATES ---
-  activePortal: 'sandiego',
+  workspaceView: 'overview',
+  theme: getInitialTheme(),
+  isSidebarOpen: false,
+  isSidebarCollapsed: false,
+  portals: [],
+  portalRuntimes: [],
+  activePortalKey: null,
+  portalUrlDraft: '',
+  syncingPortalKeys: [],
+  syncRunIdsByPortal: {},
   isSyncing: false,
   syncLogs: [],
-  metrics: {
-    pagesProcessed: 0,
-    documentsDownloaded: 0,
-    anomaliesFound: 0,
-    bytesTransferred: 0,
-  },
+  metrics: emptyMetrics(),
+  agencyProfiles: [],
+  crossAgencyCorrelations: [],
+  analyticsUpdatedAt: null,
+  analyticsError: null,
+  legalAuthorities: [],
+  activeLegalFindings: [],
+  legalDataUpdatedAt: null,
   searchTerm: '',
   selectedAgencyId: null,
   selectedStatus: null,
+  selectedPolicyDeviation: null,
   filteredResults: [],
   selectedRequestId: null,
+  selectedRequestPortalKey: null,
   isExtractionTerminalOpen: false,
-
-  // --- MUTATOR ACTIONS ---
-  
-  // Switches the target municipality context and safely resets localized analytical view indices
-  setActivePortal: (portal) => set({ 
-    activePortal: portal,
-    selectedRequestId: null,
-    filteredResults: [],
-    searchTerm: '',
-    selectedAgencyId: null,
-    selectedStatus: null
-  }),
-  
-  setIsSyncing: (syncing) => set({ isSyncing: syncing }),
-  
-  appendSyncLog: (log) => set((state) => ({
-    syncLogs: [
-      `[${new Date().toLocaleTimeString()}] ${log}`,
-      ...state.syncLogs.slice(0, 99) // Strictly cap at 100 historical log items to prevent UI execution bloat
-    ]
-  })),
-  
-  incrementMetric: (metricKey) => set((state) => ({
-    metrics: {
-      ...state.metrics,
-      [metricKey]: state.metrics[metricKey] + 1
-    }
-  })),
-  
-  addBytesTransferred: (bytes) => set((state) => ({
-    metrics: {
-      ...state.metrics,
-      bytesTransferred: state.metrics.bytesTransferred + bytes
-    }
-  })),
-  
-  resetTelemetryMetrics: () => set({
-    syncLogs: [],
-    metrics: {
-      pagesProcessed: 0,
-      documentsDownloaded: 0,
-      anomaliesFound: 0,
-      bytesTransferred: 0,
-    }
-  }),
-
-  setSearchFilters: (term, agencyId, status) => set({
-    searchTerm: term,
-    selectedAgencyId: agencyId,
-    selectedStatus: status
-  }),
-
-  setFilteredResults: (ids) => set({ filteredResults: ids }),
-
-  setSelectedRequest: (requestId) => set({ selectedRequestId: requestId }),
-
-  setTerminalVisibility: (visible) => set({ isExtractionTerminalOpen: visible })
+  pendingSourceRepair: null,
+  setWorkspaceView: (workspaceView) => set({ workspaceView, isSidebarOpen: false }),
+  setTheme: (theme) => set({ theme }),
+  setSidebarOpen: (isSidebarOpen) => set({ isSidebarOpen }),
+  toggleSidebarCollapsed: () => set((state) => ({ isSidebarCollapsed: !state.isSidebarCollapsed })),
+  setPortalUrlDraft: (portalUrlDraft) => set({ portalUrlDraft }),
+  // Verifying or provisioning a source is the act that makes it active, on the native side too:
+  // the registration upsert resets `lifecycle_state`. So an upsert here carries ACTIVE rather
+  // than preserving a stale PAUSED that the native write has already cleared.
+  upsertPortal: (portal) =>
+    set((state) => {
+      const portals = state.portals.filter(
+        (entry) => entry.registration.portalKey !== portal.portalKey,
+      );
+      portals.push({ registration: portal, lifecycleState: 'ACTIVE' });
+      portals.sort((left, right) =>
+        left.registration.displayName.localeCompare(right.registration.displayName),
+      );
+      return {
+        portals,
+        activePortalKey: state.activePortalKey ?? portal.portalKey,
+      };
+    }),
+  setPortals: (portals) =>
+    set((state) => ({
+      portals: [...portals].sort((left, right) =>
+        left.registration.displayName.localeCompare(right.registration.displayName),
+      ),
+      activePortalKey:
+        state.activePortalKey &&
+        portals.some((portal) => portal.registration.portalKey === state.activePortalKey)
+          ? state.activePortalKey
+          : portals[0]?.registration.portalKey ?? null,
+    })),
+  setPortalLifecycleState: (portalKey, lifecycleState) =>
+    set((state) => ({
+      portals: state.portals.map((entry) =>
+        entry.registration.portalKey === portalKey ? { ...entry, lifecycleState } : entry,
+      ),
+    })),
+  removePortal: (portalKey) =>
+    set((state) => {
+      const portals = state.portals.filter((entry) => entry.registration.portalKey !== portalKey);
+      return {
+        portals,
+        activePortalKey:
+          state.activePortalKey === portalKey
+            ? portals[0]?.registration.portalKey ?? null
+            : state.activePortalKey,
+      };
+    }),
+  setPortalRuntimes: (portalRuntimes) => set({ portalRuntimes }),
+  setActivePortal: (activePortalKey) =>
+    set({
+      activePortalKey,
+      selectedRequestId: null,
+      selectedRequestPortalKey: null,
+      filteredResults: [],
+      searchTerm: '',
+      selectedAgencyId: null,
+      selectedStatus: null,
+      selectedPolicyDeviation: null,
+      activeLegalFindings: [],
+    }),
+  setPortalSyncState: (portalKey, syncing, syncRunId) =>
+    set((state) => {
+      const currentRunId = state.syncRunIdsByPortal[portalKey];
+      // Drops a stop that names a run which is no longer the active one, so a late `syncStopped`
+      // from run A cannot clear a replacement run B on the same portal.
+      //
+      // LIMIT(protocol): This only fires when the caller supplies `syncRunId`. An unscoped stop
+      // skips the check entirely and clears whatever run is live, and both stop paths in the app
+      // (the Stop button and the runtime poll) currently omit it, so in practice this guard is
+      // unreachable. There is also no guard on the `syncing === true` branch, so a stale start can
+      // overwrite the active run id and strand the portal. Both behaviors are pinned in
+      // src/tests/ingestion.test.ts.
+      // TODO(protocol): Thread the run id through both stop paths, then decide whether an unscoped
+      // stop should be rejected outright rather than treated as "stop whatever is running".
+      if (!syncing && syncRunId && currentRunId && currentRunId !== syncRunId) {
+        return state;
+      }
+      const keys = new Set(state.syncingPortalKeys);
+      const syncRunIdsByPortal = { ...state.syncRunIdsByPortal };
+      if (syncing) keys.add(portalKey);
+      else keys.delete(portalKey);
+      if (syncing && syncRunId) syncRunIdsByPortal[portalKey] = syncRunId;
+      if (!syncing) delete syncRunIdsByPortal[portalKey];
+      const syncingPortalKeys = [...keys].sort();
+      return {
+        syncingPortalKeys,
+        syncRunIdsByPortal,
+        isSyncing: syncingPortalKeys.length > 0,
+      };
+    }),
+  appendSyncLog: (log) =>
+    set((state) => ({
+      syncLogs: [`[${new Date().toLocaleTimeString()}] ${log}`, ...state.syncLogs].slice(0, 250),
+    })),
+  incrementMetric: (metricKey) =>
+    set((state) => ({ metrics: { ...state.metrics, [metricKey]: state.metrics[metricKey] + 1 } })),
+  addBytesTransferred: (bytes) =>
+    set((state) => ({
+      metrics: {
+        ...state.metrics,
+        bytesTransferred: state.metrics.bytesTransferred + Math.max(0, bytes),
+      },
+    })),
+  resetTelemetryMetrics: () => set({ syncLogs: [], metrics: emptyMetrics() }),
+  setAnalyticsData: (agencyProfiles, crossAgencyCorrelations) =>
+    set({
+      agencyProfiles,
+      crossAgencyCorrelations,
+      analyticsUpdatedAt: new Date().toISOString(),
+      analyticsError: null,
+    }),
+  setAnalyticsError: (analyticsError) => set({ analyticsError }),
+  setLegalAuthorities: (legalAuthorities) =>
+    set({
+      legalAuthorities: [...legalAuthorities].sort((left, right) =>
+        left.statuteCitation.localeCompare(right.statuteCitation),
+      ),
+      legalDataUpdatedAt: new Date().toISOString(),
+    }),
+  setActiveLegalFindings: (activeLegalFindings) => set({ activeLegalFindings }),
+  setSearchFilters: (
+    searchTerm,
+    selectedAgencyId,
+    selectedStatus,
+    selectedPolicyDeviation = null,
+  ) =>
+    set({ searchTerm, selectedAgencyId, selectedStatus, selectedPolicyDeviation }),
+  setFilteredResults: (filteredResults) => set({ filteredResults }),
+  setSelectedRequest: (selectedRequestId, selectedRequestPortalKey = null) =>
+    set({ selectedRequestId, selectedRequestPortalKey, activeLegalFindings: [] }),
+  setTerminalVisibility: (isExtractionTerminalOpen) => set({ isExtractionTerminalOpen }),
+  setPendingSourceRepair: (pendingSourceRepair) => set({ pendingSourceRepair }),
 }));
+
+function getInitialTheme(): AppTheme {
+  if (typeof window === 'undefined') return 'light';
+  const savedTheme = window.localStorage.getItem('onrecord-theme');
+  return savedTheme === 'dark' || savedTheme === 'auto' ? savedTheme : 'light';
+}

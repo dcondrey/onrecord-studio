@@ -13,6 +13,8 @@ export type IconName =
   | 'grid'
   | 'menu'
   | 'moon'
+  | 'pause'
+  | 'play'
   | 'search'
   | 'shield'
   | 'sliders'
@@ -20,6 +22,7 @@ export type IconName =
   | 'sync'
   | 'sun'
   | 'system'
+  | 'trash'
   | 'x';
 
 interface IconProps extends SVGProps<SVGSVGElement> {
@@ -40,6 +43,8 @@ export default function Icon({ name, className = 'h-4 w-4', ...props }: IconProp
     grid: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>,
     menu: <><path d="M4 7h16M4 12h16M4 17h16" /></>,
     moon: <path d="M20.2 15.2A8.5 8.5 0 0 1 8.8 3.8 8.5 8.5 0 1 0 20.2 15.2Z" />,
+    pause: <><path d="M9 5v14M15 5v14" /></>,
+    play: <path d="M8 5.5v13l10-6.5z" />,
     search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></>,
     shield: <><path d="M12 3 5 6v5c0 4.6 2.9 8.2 7 10 4.1-1.8 7-5.4 7-10V6z" /><path d="m9 12 2 2 4-4" /></>,
     sliders: <><path d="M4 7h4M12 7h8M4 12h10M18 12h2M4 17h6M14 17h6" /><circle cx="10" cy="7" r="2" /><circle cx="16" cy="12" r="2" /><circle cx="12" cy="17" r="2" /></>,
@@ -47,6 +52,7 @@ export default function Icon({ name, className = 'h-4 w-4', ...props }: IconProp
     sync: <><path d="M20 7h-5V2" /><path d="M19 7a8 8 0 1 0 1 8" /><path d="M4 17h5v5" /></>,
     sun: <><circle cx="12" cy="12" r="3.5" /><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42" /></>,
     system: <><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8M12 17v4" /></>,
+    trash: <><path d="M4 7h16" /><path d="M9 7V4h6v3" /><path d="M6 7v13a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7" /><path d="M10 11v6M14 11v6" /></>,
     x: <path d="m6 6 12 12M18 6 6 18" />,
   };
 

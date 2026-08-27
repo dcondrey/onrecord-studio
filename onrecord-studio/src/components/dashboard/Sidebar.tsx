@@ -140,8 +140,9 @@ export default function Sidebar() {
             {!isCollapsed && <span className="numeric-value rounded-md bg-slate-900 px-1.5 py-0.5 text-[11px] text-slate-600">{portals.length}</span>}
           </button>
 
-          {portals.map((portal) => {
+          {portals.map(({ registration: portal, lifecycleState }) => {
             const runtime = runtimeByPortal.get(portal.portalKey);
+            const paused = lifecycleState === 'PAUSED';
             const syncing = syncingPortalKeys.includes(portal.portalKey);
             const selected = activePortalKey === portal.portalKey;
             // `activeTasks` is how many downloads are in flight right now, which is a concurrency
@@ -172,9 +173,16 @@ export default function Sidebar() {
                 <div className={cn('flex items-center', isCollapsed ? 'justify-center' : 'gap-2.5')}>
                   <span className={cn('relative grid h-7 w-7 shrink-0 place-items-center rounded-lg font-mono text-[9px] font-semibold', selected ? 'bg-indigo-400/10 text-indigo-200' : 'bg-slate-900 text-slate-500')}>
                     {portal.displayName.slice(0, 2).toUpperCase()}
-                    <span className={cn('portal-status-dot absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border-2', syncing ? 'status-pulse bg-emerald-400' : 'bg-slate-600')} />
+                    {/* Paused is its own colour rather than the idle grey. A source the operator
+                        halted and one that has simply finished are different facts, and a shared
+                        dot would say neither. */}
+                    <span
+                      title={paused ? `${portal.displayName} is paused` : undefined}
+                      className={cn('portal-status-dot absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border-2', syncing ? 'status-pulse bg-emerald-400' : paused ? 'bg-amber-400' : 'bg-slate-600')}
+                    />
                   </span>
                   {!isCollapsed && <span className={cn('min-w-0 flex-1 truncate text-[13px] font-medium', selected ? 'text-indigo-100' : 'text-slate-300')}>{portal.displayName}</span>}
+                  {!isCollapsed && paused && <span className="shrink-0 rounded-md bg-amber-400/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-300/90">Paused</span>}
                 </div>
                 {!isCollapsed && runtime && totalTasks > 0 && (
                   <div className="mt-1 pl-9">

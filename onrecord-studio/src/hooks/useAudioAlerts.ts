@@ -1,8 +1,10 @@
 import { useCallback, useRef } from 'react';
-import { useAppStore } from '../store/useAppStore';
 
 export function useAudioAlerts() {
-  const isSyncing = useAppStore((s) => s.isSyncing);
+  // FEATURE(accessibility): Add a user preference for alert sounds, volume,
+  // and reduced-sensory feedback before wiring this hook into more workflows.
+  // TODO(accessibility): Close the AudioContext and cancel delayed arpeggio timers on unmount so
+  // repeated workspace mounts do not retain native audio resources or emit late alerts.
   const audioContextRef = useRef<AudioContext | null>(null);
 
   /**
@@ -12,7 +14,12 @@ export function useAudioAlerts() {
   const synthesizeChime = useCallback((frequency: number, duration: number, type: OscillatorType = 'sine') => {
     try {
       if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const AudioContextConstructor = window.AudioContext ??
+          (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (!AudioContextConstructor) {
+          throw new Error('Web Audio is unavailable');
+        }
+        audioContextRef.current = new AudioContextConstructor();
       }
       
       const ctx = audioContextRef.current;

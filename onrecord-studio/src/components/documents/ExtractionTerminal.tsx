@@ -1,7 +1,9 @@
-import React from 'react';
 import { useAppStore } from '../../store/useAppStore';
 
 export default function ExtractionTerminal() {
+  // BUG(documents): These system lines are currently illustrative rather than
+  // a real event stream; wire this panel to typed ingestion telemetry before
+  // presenting it as an operational terminal.
   const { metrics, isSyncing } = useAppStore();
 
   return (
@@ -10,6 +12,8 @@ export default function ExtractionTerminal() {
         <span className="font-bold text-slate-400 uppercase tracking-wider text-[9px]">Text Core Processor</span>
         {isSyncing && <div className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse" />}
       </div>
+      {/* TODO(documents): Add bounded retention and a clear/export action once
+          this view is backed by the real telemetry buffer. */}
       <div className="p-4 flex-1 overflow-y-auto space-y-1 text-slate-400 select-none">
         <div>[SYSTEM] Initializing Rust core extraction channels...</div>
         <div>[SYSTEM] Local SQLite connection mapping pools online. WAL enabled.</div>

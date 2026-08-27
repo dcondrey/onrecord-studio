@@ -16,7 +16,7 @@ export function Dialog({ isOpen, onClose, title, children, className }: DialogPr
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 select-none">
       {/* Absolute backdrop blur shadow layer */}
       <div 
-        className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity" 
+        className="app-backdrop absolute inset-0 backdrop-blur-sm transition-opacity"
         onClick={onClose} 
       />
       

@@ -1,8 +1,17 @@
-export type VerificationState = 
-  | 'Unaudited' 
-  | 'Compliant' 
-  | 'PolicyViolationDetected' 
-  | 'StatutoryDeadlineExceeded' 
+// TODO(audit): Model audit transitions as a discriminated event union so
+// timeline rendering does not infer semantics from loosely typed strings.
+//
+// Mirrors `VerificationState` in src-tauri/src/types/audit.rs. Hand-maintained, so
+// scripts/check-ipc-contract.mjs fails the build if the two lists drift.
+// 'StatutoryDeadlineExceeded' is a legal conclusion and requires a counted statutory violation.
+// 'LatencyOutlier' is a statistical one about this agency against its peers, and is never on its
+// own a violation.
+export type VerificationState =
+  | 'Unaudited'
+  | 'Compliant'
+  | 'PolicyViolationDetected'
+  | 'StatutoryDeadlineExceeded'
+  | 'LatencyOutlier'
   | 'DataAnomalyFlagged';
 
 export interface CaseAuditRecord {
@@ -21,4 +30,9 @@ export interface StateTransitionLog {
   previousState: string;
   nextState: string;
   timeSpentInPreviousStateSeconds: number;
+  anomalyMarkers: Array<
+    | 'SUSPICIOUSLY_FAST_CLOSURE'
+    | 'CLOSE_BEFORE_CREATION'
+    | 'OBSERVATION_BEFORE_CREATION'
+  >;
 }

@@ -49,6 +49,8 @@ export default function Header() {
   const setPortalSyncState = useAppStore((state) => state.setPortalSyncState);
   const setActivePortal = useAppStore((state) => state.setActivePortal);
   const upsertPortal = useAppStore((state) => state.upsertPortal);
+  const setPortalLifecycleState = useAppStore((state) => state.setPortalLifecycleState);
+  const removePortalFromWorkspace = useAppStore((state) => state.removePortal);
   const appendSyncLog = useAppStore((state) => state.appendSyncLog);
   const setSidebarOpen = useAppStore((state) => state.setSidebarOpen);
   const setTheme = useAppStore((state) => state.setTheme);
@@ -58,6 +60,9 @@ export default function Header() {
   const [isConnectorOpen, setConnectorOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPasteOpen, setPasteOpen] = useState(false);
+  // Holds the source a removal was requested for, not just a boolean, so the confirmation names
+  // the source the operator actually clicked even if the selection moves under it.
+  const [pendingRemoval, setPendingRemoval] = useState<PortalRegistration | null>(null);
   const [pasteTitle, setPasteTitle] = useState('Pasted research material');
   const [pasteContent, setPasteContent] = useState('');
   const [repairPreview, setRepairPreview] = useState<SourceDiscoveryPreview | null>(null);
@@ -86,10 +91,12 @@ export default function Header() {
     }
     return crawlSettings;
   };
-  const activePortal = useMemo(
-    () => portals.find((portal) => portal.portalKey === activePortalKey) ?? null,
+  const activeSource = useMemo(
+    () => portals.find((saved) => saved.registration.portalKey === activePortalKey) ?? null,
     [activePortalKey, portals],
   );
+  const activePortal = activeSource?.registration ?? null;
+  const activeIsPaused = activeSource?.lifecycleState === 'PAUSED';
   const activeIsSyncing = activePortal ? syncingPortalKeys.includes(activePortal.portalKey) : false;
   const syncCapacityReached = syncingPortalKeys.length >= 5;
   const selectedSource = BUILT_IN_SOURCE_OPTIONS.find((source) => source.id === selectedSourceId) ?? BUILT_IN_SOURCE_OPTIONS[0];
@@ -245,13 +252,58 @@ export default function Header() {
     }
   };
 
-  const stopSync = async () => {
-    if (!activePortal) return;
+  // Every handler below captures the source it was invoked for and re-checks it before writing.
+  // These calls outlive a click: pausing San Diego and immediately selecting Oakland would
+  // otherwise let San Diego's result rewrite Oakland's state, and this application states things
+  // about evidence.
+  const pauseSync = async () => {
+    const source = activePortal;
+    if (!source) return;
     setError(null);
     try {
-      await invokeCommand('stop_portal_sync', { portalKey: activePortal.portalKey });
-      setPortalSyncState(activePortal.portalKey, false);
-      appendSyncLog(`${activePortal.displayName}: stop requested; committed records remain available.`);
+      await invokeCommand('pause_source_sync', { sourceKey: source.portalKey });
+      setPortalSyncState(source.portalKey, false);
+      setPortalLifecycleState(source.portalKey, 'PAUSED');
+      appendSyncLog(
+        `${source.displayName}: paused. Queued work is kept, so resuming continues rather than restarting.`,
+      );
+    } catch (reason) {
+      setError(String(reason));
+    }
+  };
+
+  const resumeSync = async () => {
+    const source = activePortal;
+    if (!source) return;
+    setError(null);
+    try {
+      const { syncRunId } = await invokeCommand('resume_source_sync', {
+        sourceKey: source.portalKey,
+      });
+      setPortalLifecycleState(source.portalKey, 'ACTIVE');
+      setPortalSyncState(source.portalKey, true, syncRunId);
+      appendSyncLog(`${source.displayName}: resumed from the queue its pause left behind.`);
+    } catch (reason) {
+      setError(String(reason));
+    }
+  };
+
+  const removeSource = async () => {
+    // The source the confirmation was opened for, not whichever one is selected when it resolves.
+    const source = pendingRemoval;
+    if (!source) return;
+    setError(null);
+    try {
+      const removal = await invokeCommand('remove_source', { sourceKey: source.portalKey });
+      setPortalSyncState(source.portalKey, false);
+      removePortalFromWorkspace(source.portalKey);
+      appendSyncLog(
+        `${source.displayName}: removed. ${removal.retainedDocuments.toLocaleString()} ingested ` +
+          `document${removal.retainedDocuments === 1 ? '' : 's'} kept; ` +
+          `${removal.discardedFrontierTasks.toLocaleString()} queued task` +
+          `${removal.discardedFrontierTasks === 1 ? '' : 's'} discarded.`,
+      );
+      setPendingRemoval(null);
     } catch (reason) {
       setError(String(reason));
     }
@@ -342,8 +394,18 @@ export default function Header() {
         <span>{isDiscovering ? 'Discovering' : activeIsSyncing && !portalUrlDraft.trim() ? 'Syncing' : 'Add'}</span>
       </button>
       {activeIsSyncing && (
-        <button type="button" onClick={() => void stopSync()} title="Stop synchronization" aria-label="Stop synchronization" className="source-tool-button focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-500 transition hover:text-rose-300">
-          <Icon name="x" className="h-3.5 w-3.5" />
+        <button type="button" onClick={() => void pauseSync()} title="Pause synchronization" aria-label="Pause synchronization" className="source-tool-button focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-500 transition hover:text-amber-300">
+          <Icon name="pause" className="h-3.5 w-3.5" />
+        </button>
+      )}
+      {activeIsPaused && !activeIsSyncing && (
+        <button type="button" onClick={() => void resumeSync()} title="Resume synchronization" aria-label="Resume synchronization" className="source-tool-button focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-lg text-amber-300 transition hover:text-emerald-300">
+          <Icon name="play" className="h-3.5 w-3.5" />
+        </button>
+      )}
+      {activePortal && (
+        <button type="button" onClick={() => setPendingRemoval(activePortal)} title="Remove source" aria-label="Remove source" className="source-tool-button focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-500 transition hover:text-rose-300">
+          <Icon name="trash" className="h-3.5 w-3.5" />
         </button>
       )}
     </form>
@@ -438,6 +500,30 @@ export default function Header() {
         </div>
       )}
     </header>
+    {pendingRemoval && (
+      <div className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="remove-source-title">
+        <div className="app-panel w-full max-w-md overflow-hidden shadow-2xl shadow-black/40">
+          <div className="flex items-start justify-between border-b border-slate-800 p-4">
+            <div>
+              <div className="app-eyebrow text-rose-300/70">Sources</div>
+              <h2 id="remove-source-title" className="mt-1 text-sm font-semibold text-slate-100">Remove {pendingRemoval.displayName}?</h2>
+            </div>
+            <button type="button" onClick={() => setPendingRemoval(null)} aria-label="Close removal confirmation" className="rounded-lg p-2 text-slate-600 hover:bg-slate-800 hover:text-slate-300"><Icon name="x" /></button>
+          </div>
+          <div className="space-y-2 p-4 text-[10px] leading-relaxed text-slate-400">
+            {/* Saying which of the two this is, is the point. A "Remove" that silently keeps
+                hundreds of ingested records and one that silently destroys them are both false
+                statements about the evidence if the interface does not distinguish them. */}
+            <p>Stops synchronizing it and takes it off the source list. The queued crawl and the learned connector recipe are discarded.</p>
+            <p className="text-slate-300">Documents already ingested from this source are kept and stay searchable and exportable.</p>
+          </div>
+          <div className="flex items-center justify-end gap-2 border-t border-slate-800 px-4 py-3">
+            <button type="button" onClick={() => setPendingRemoval(null)} className="rounded-lg px-3 py-2 text-[9px] font-semibold text-slate-500 hover:text-slate-300">Cancel</button>
+            <button type="button" onClick={() => void removeSource()} className="focus-ring rounded-lg border border-rose-400/25 bg-rose-500/10 px-4 py-2 text-[9px] font-semibold text-rose-200">Remove and keep documents</button>
+          </div>
+        </div>
+      </div>
+    )}
     {isPasteOpen && (
       <div className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="paste-source-title">
         <form onSubmit={(event) => void importPaste(event)} className="app-panel w-full max-w-2xl overflow-hidden shadow-2xl shadow-black/40">

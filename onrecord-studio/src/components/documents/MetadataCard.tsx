@@ -1,34 +1,48 @@
-// MetadataCard.tsx placeholder file contents mapping asset hashes
-import React from 'react';
-
 interface MetadataCardProps {
-  sha256?: string;
-  contentType?: string;
-  visibility?: string;
+  sha256: string | null;
+  contentType: string | null;
+  visibility: string;
+  downloadStatus: string;
+  fileSize: number | null;
 }
 
-export default function MetadataCard({
-  sha256 = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-  contentType = 'application/pdf',
-  visibility = 'public_access'
-}: MetadataCardProps) {
+export default function MetadataCard({ sha256, contentType, visibility, downloadStatus, fileSize }: MetadataCardProps) {
+  // TODO(integrity): Reuse the shared hash validator from `utils/crypto` so
+  // metadata presentation and backend validation cannot diverge.
+  // FEATURE(integrity): Add a copyable digest format selector and provenance
+  // verification status beside the recorded hash.
+  const digestIsValid = sha256 !== null
+    && sha256.length === 64
+    && Array.from(sha256).every((character) => {
+      const code = character.toLocaleLowerCase().charCodeAt(0);
+      return (code >= 48 && code <= 57) || (code >= 97 && code <= 102);
+    });
+
   return (
-    <div className="p-4 border border-slate-800 bg-slate-900/20 backdrop-blur-md rounded-xl font-mono text-[10px] space-y-2 select-none">
-      <div className="text-slate-500 font-bold uppercase tracking-wider text-[9px]">Data Node Integrity</div>
-      <div className="flex justify-between items-center py-0.5 border-b border-slate-800/40">
-        <span className="text-slate-500">MIME Type:</span>
-        <span className="text-slate-300 font-medium">{contentType}</span>
-      </div>
-      <div className="flex justify-between items-center py-0.5 border-b border-slate-800/40">
-        <span className="text-slate-500">Visibility:</span>
-        <span className="text-emerald-400 font-medium lowercase tracking-wide">{visibility}</span>
-      </div>
-      <div className="space-y-0.5">
-        <span className="text-slate-500 block">SHA-256 Checksum:</span>
-        <span className="text-indigo-400 break-all select-text font-medium text-[9px] bg-slate-950/60 p-1.5 rounded border border-slate-800/50 block">
-          {sha256}
+    <section className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/20 p-4 font-mono text-[10px]" aria-label="Document integrity metadata">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Evidence integrity</div>
+      <MetadataRow label="MIME type" value={contentType ?? 'Not reported'} />
+      <MetadataRow label="Visibility" value={visibility} />
+      <MetadataRow label="Download" value={downloadStatus} />
+      <MetadataRow label="File size" value={formatFileSize(fileSize)} />
+      <div className="space-y-1 border-t border-slate-800/60 pt-2">
+        <span className="block text-slate-500">Recorded SHA-256</span>
+        <span className={`block select-text break-all rounded border p-2 text-[9px] ${digestIsValid ? 'border-emerald-400/20 bg-emerald-500/[0.06] text-emerald-300' : 'border-amber-400/20 bg-amber-500/[0.06] text-amber-300'}`}>
+          {sha256 ?? 'No source-file digest has been recorded'}
         </span>
       </div>
-    </div>
+    </section>
   );
+}
+
+function MetadataRow({ label, value }: { label: string; value: string }) {
+  return <div className="flex items-center justify-between gap-4 border-b border-slate-800/40 py-1"><span className="text-slate-500">{label}</span><span className="truncate text-right font-medium text-slate-300">{value}</span></div>;
+}
+
+function formatFileSize(value: number | null) {
+  if (value === null || !Number.isFinite(value) || value < 0) return 'Not reported';
+  if (value < 1024) return `${value.toLocaleString()} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  if (value < 1024 * 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(value / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }

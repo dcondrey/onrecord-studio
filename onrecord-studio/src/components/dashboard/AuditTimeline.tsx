@@ -1,8 +1,12 @@
-import React from 'react';
 import { useAppStore } from '../../store/useAppStore';
 
 export default function AuditTimeline() {
   const { syncLogs } = useAppStore();
+
+  // BUG(audit): Event matching is currently case-sensitive while ingestion
+  // messages are not normalized; some completed events may never enter this log.
+  // TODO(audit): Parse typed telemetry instead of inferring timeline semantics
+  // from display strings.
 
   // Extract only the operational change notices or warnings from terminal streams
   const timelineEvents = syncLogs

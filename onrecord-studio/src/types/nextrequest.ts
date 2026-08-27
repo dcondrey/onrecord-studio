@@ -1,3 +1,5 @@
+// TODO(source): Keep publisher-specific wire types separate from normalized
+// domain types as additional portal adapters are added.
 export interface PaginationMeta {
   current_page: number;
   next_page: number | null;

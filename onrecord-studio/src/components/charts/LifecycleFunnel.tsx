@@ -1,38 +1,70 @@
-import React from 'react';
+import { useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import AnalyticsUnavailable from './AnalyticsUnavailable';
 
 export default function LifecycleFunnel() {
-  const { metrics } = useAppStore();
-
-  const baseCount = Math.max(10, metrics.pagesProcessed * 50);
-  const stages = [
-    { title: 'Total Ingested Cases', count: baseCount, percentage: 100, color: 'bg-indigo-500' },
-    { title: 'Contains Attachments', count: Math.floor(baseCount * 0.65), percentage: 65, color: 'bg-cyan-500' },
-    { title: 'Text Layer Extracted', count: metrics.documentsDownloaded, percentage: Math.min(100, Math.floor((metrics.documentsDownloaded / (baseCount || 1)) * 100)), color: 'bg-purple-500' },
-    { title: 'Flagged for Manual Audit', count: metrics.anomaliesFound, percentage: Math.min(100, Math.floor((metrics.anomaliesFound / (baseCount || 1)) * 100)), color: 'bg-amber-500' }
-  ];
+  // TODO(analytics): Define how multiple policy predicates combine when a
+  // stage maps to more than one legal or integrity classification.
+  const profiles = useAppStore((state) => state.agencyProfiles);
+  const analyticsError = useAppStore((state) => state.analyticsError);
+  const searchTerm = useAppStore((state) => state.searchTerm);
+  const selectedAgencyId = useAppStore((state) => state.selectedAgencyId);
+  const setSearchFilters = useAppStore((state) => state.setSearchFilters);
+  const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
+  const stages = useMemo(() => {
+    const total = profiles.reduce((sum, profile) => sum + profile.totalRequestsProcessed, 0);
+    const closed = profiles.reduce((sum, profile) => sum + profile.totalClosed, 0);
+    const statutory = profiles.reduce((sum, profile) => sum + profile.statutoryViolationCount, 0);
+    const fast = profiles.reduce((sum, profile) => sum + profile.suspiciousFastClosureCount, 0);
+    return [
+      { label: 'Ingested requests', value: total, policy: null, status: null, color: 'var(--viz-indigo)' },
+      { label: 'Closed requests', value: closed, policy: null, status: 'closed', color: 'var(--viz-cyan)' },
+      { label: 'Statutory exceptions', value: statutory, policy: 'STATUTORY_LATENCY_VIOLATION', status: null, color: 'var(--viz-amber)' },
+      { label: 'Fast-drop closures', value: fast, policy: 'SUSPICIOUSLY_FAST_CLOSURE', status: 'closed', color: 'var(--viz-red)' },
+    ];
+  }, [profiles]);
+  const maximum = Math.max(1, ...stages.map((stage) => stage.value));
+  const hasData = stages.some((stage) => stage.value > 0);
 
   return (
-    <div className="p-4 bg-slate-950/20 rounded-xl space-y-4 select-none h-full">
-      <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-        Operational Lifecycle Funnel
+    <section className="app-panel min-h-[360px] overflow-hidden p-5">
+      <div className="app-eyebrow">Evidence lifecycle</div>
+      <div className="mt-1 text-[10px] text-slate-500">Select a stage to open its matching records.</div>
+      {!hasData && analyticsError ? (
+        <AnalyticsUnavailable className="mt-6" heading="Lifecycle counts unavailable" />
+      ) : (
+      <div className="mt-6 space-y-4">
+        {stages.map((stage, index) => {
+          const width = hasData ? Math.max(4, (stage.value / maximum) * (100 - index * 7)) : 0;
+          return (
+            <button
+              key={stage.label}
+              type="button"
+              className="focus-ring group block w-full rounded-lg text-left"
+              onClick={() => {
+                setSearchFilters(searchTerm, selectedAgencyId, stage.status, stage.policy);
+                setWorkspaceView('evidence');
+              }}
+            >
+              <div className="mb-1 flex items-center justify-between font-mono text-[10px]">
+                <span className="text-slate-400 transition-colors group-hover:text-slate-200">{stage.label}</span>
+                <span className={stage.policy ? 'text-amber-300' : 'text-slate-500'}>{stage.value.toLocaleString()}</span>
+              </div>
+              <div className="h-8 overflow-hidden rounded-lg border border-slate-800/90 bg-slate-950/60 p-1">
+                {hasData && (
+                  <div
+                    className="flex h-full items-center justify-end rounded-md px-2 text-[8px] font-bold shadow-[0_0_18px_rgba(15,23,42,0.2)] transition-[width,filter] duration-500 group-hover:brightness-110"
+                    style={{ width: `${width}%`, color: 'var(--viz-on-color)', background: stage.color }}
+                  >
+                    {((stage.value / maximum) * 100).toFixed(1)}%
+                  </div>
+                )}
+              </div>
+            </button>
+          );
+        })}
       </div>
-      <div className="space-y-2.5 pt-2">
-        {stages.map((stage, i) => (
-          <div key={i} className="space-y-1">
-            <div className="flex justify-between items-center text-[10px] font-mono">
-              <span className="text-slate-400 font-semibold">{stage.title}</span>
-              <span className="text-slate-500">{stage.count} records ({stage.percentage}%)</span>
-            </div>
-            <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800/40">
-              <div 
-                className={`${stage.color} h-full rounded-full transition-all duration-500 ease-out`}
-                style={{ width: `${Math.max(3, stage.percentage)}%` }}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+      )}
+    </section>
   );
 }

@@ -2,3 +2,8 @@ export * from './nextrequest';
 export * from './analysis';
 export * from './audit';
 export * from './c2pa/manifest';
+export * from './investigation';
+export * from './legal';
+export * from './corpus';
+export * from './source';
+export * from './sourceCatalog';

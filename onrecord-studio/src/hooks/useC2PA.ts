@@ -1,50 +1,42 @@
-import { useState, useCallback } from 'react';
-import { useTauri } from './useTauri';
-
-export interface ProvenanceVerificationResult {
-  documentId: number;
-  isSigned: boolean;
-  signerIdentity: string | null;
-  timestamp: string | null;
-  tamperEvidentViolation: boolean;
-}
+import { useCallback, useRef, useState } from 'react';
+import type { DocumentProvenanceVerification } from '../types';
+import { invokeCommand } from '../ipc';
 
 export function useC2PA() {
-  const { executeNativeCommand, isLoading } = useTauri();
-  const [activeManifest, setActiveManifest] = useState<ProvenanceVerificationResult | null>(null);
+  const [activeManifest, setActiveManifest] = useState<DocumentProvenanceVerification | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Identity of the most recent verification asked for. A check started for document A and still
+  // in flight when B is selected resolves under B, and publishing its result would attribute A's
+  // provenance finding to B: a false statement about evidence, not a stale render.
+  const latestRequestRef = useRef('');
 
-  /**
-   * Invokes your Rust core signature layers to run soft-binding checksum checks.
-   */
-  const verifyAssetProvenance = useCallback(async (documentId: number, subdomain: string) => {
-    // Queries database provenance records compiled by your Rust backend storage system
-    const result = await executeNativeCommand<any>('query_audit_records', {
-      searchTerm: `id:${documentId}` // Custom pattern to lookup explicit document node schemas
-    });
-
-    if (result) {
-      // Maps backend storage constraints cleanly into frontend views
-      setActiveManifest({
+  const verifyAssetProvenance = useCallback(async (documentId: number, portalKey: string) => {
+    // FEATURE(provenance): Expose signer identity, assertion history, and
+    // verification timestamps as a first-class evidence panel.
+    const requestedFor = `${documentId}:${portalKey}`;
+    latestRequestRef.current = requestedFor;
+    setIsValidating(true);
+    setError(null);
+    try {
+      const result = await invokeCommand('verify_document_provenance', {
         documentId,
-        isSigned: true,
-        signerIdentity: "MUNICIPAL_RECORD_AUTHORITY_CA",
-        timestamp: new Date().toISOString(),
-        tamperEvidentViolation: false
+        portalKey,
       });
-    } else {
-      setActiveManifest({
-        documentId,
-        isSigned: false,
-        signerIdentity: null,
-        timestamp: null,
-        tamperEvidentViolation: false
-      });
+      // Superseded. `null` here means "this answer was discarded", never "the check failed";
+      // no state is touched, so the newer request's result stands.
+      if (latestRequestRef.current !== requestedFor) return null;
+      setActiveManifest(result);
+      return result;
+    } catch (reason) {
+      if (latestRequestRef.current !== requestedFor) return null;
+      setActiveManifest(null);
+      setError(String(reason));
+      return null;
+    } finally {
+      if (latestRequestRef.current === requestedFor) setIsValidating(false);
     }
-  }, [executeNativeCommand]);
+  }, []);
 
-  return {
-    verifyAssetProvenance,
-    activeManifest,
-    isValidating: isLoading
-  };
+  return { verifyAssetProvenance, activeManifest, isValidating, error };
 }

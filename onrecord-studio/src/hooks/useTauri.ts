@@ -1,8 +1,10 @@
 import { useState, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invokeCommand, type NativeCommandMap, type NativeCommandName } from '../ipc';
 import { useAppStore } from '../store/useAppStore';
 
 export function useTauri() {
+  // TODO(ipc): Add command-specific retry policy and cancellation support here
+  // instead of requiring each screen to recreate bridge error handling.
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const appendSyncLog = useAppStore((s) => s.appendSyncLog);
@@ -10,18 +12,18 @@ export function useTauri() {
   /**
    * Safe wrapper for invoking native asynchronous Rust backend commands.
    */
-  const executeNativeCommand = useCallback(async <T>(
-    commandName: string, 
-    args: Record<string, any> = {}
-  ): Promise<T | null> => {
+  const executeNativeCommand = useCallback(async <Command extends NativeCommandName>(
+    commandName: Command,
+    args: NativeCommandMap[Command]['args'],
+  ): Promise<NativeCommandMap[Command]['result'] | null> => {
     setIsLoading(true);
     setError(null);
     
     try {
-      const result = await invoke<T>(commandName, args);
+      const result = await invokeCommand(commandName, args);
       return result;
-    } catch (err: any) {
-      const errorMessage = err?.message || String(err);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
       setError(errorMessage);
       appendSyncLog(`❌ IPC BRIDGE BREAKDOWN [${commandName}]: ${errorMessage}`);
       return null;

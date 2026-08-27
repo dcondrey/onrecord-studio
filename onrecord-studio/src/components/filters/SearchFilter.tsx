@@ -1,109 +1,140 @@
-import React, { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import AgencySelector from './AgencySelector';
 import { useAppStore } from '../../store/useAppStore';
-import { cn } from '../../utils/cn';
+import { invokeCommand } from '../../ipc';
+import { parseQualifierQuery, serializeQualifierQuery } from '../../query';
 
 export default function SearchFilter() {
-  const { 
-    searchTerm, 
-    selectedAgencyId, 
-    selectedStatus, 
-    setSearchFilters, 
-    setFilteredResults,
-    isSyncing 
-  } = useAppStore();
-
-  const [inputVal, setInputVal] = useState(searchTerm);
+  const activePortalKey = useAppStore((state) => state.activePortalKey);
+  const searchTerm = useAppStore((state) => state.searchTerm);
+  const selectedAgencyId = useAppStore((state) => state.selectedAgencyId);
+  const selectedStatus = useAppStore((state) => state.selectedStatus);
+  const selectedPolicyDeviation = useAppStore((state) => state.selectedPolicyDeviation);
+  const setSearchFilters = useAppStore((state) => state.setSearchFilters);
+  const setFilteredResults = useAppStore((state) => state.setFilteredResults);
+  const resultCount = useAppStore((state) => state.filteredResults.length);
+  const [inputValue, setInputValue] = useState(searchTerm);
   const [isSearching, setIsSearching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const requestSequence = useRef(0);
+  // NOTE(query): `parsedQuery` is currently presentation-only. The legacy IPC
+  // call below intentionally remains unchanged until deferred filters can be
+  // enforced by Rust; see docs/query-language.md before wiring execution.
+  const parsedQuery = useMemo(() => parseQualifierQuery(inputValue), [inputValue]);
 
-  // Synchronize internal layout input if global store state resets or shifts
   useEffect(() => {
-    setInputVal(searchTerm);
+    setInputValue(searchTerm);
   }, [searchTerm]);
 
-  /**
-   * Debounces the search request and executes the Tauri IPC full-text search command.
-   */
   useEffect(() => {
-    if (inputVal.trim() === '') {
-      setFilteredResults([]);
-      return;
-    }
-
-    const delayDebounceFn = setTimeout(async () => {
+    // PERF(query): Replace debounce-only protection with AbortController once
+    // the native command bridge accepts cancellation; requestSequence guards
+    // against stale responses for now.
+    const sequence = ++requestSequence.current;
+    const timer = window.setTimeout(async () => {
+      setIsSearching(true);
+      setError(null);
       try {
-        setIsSearching(true);
-        
-        // Invoke native Rust FTS5 scanning engine across indexed text layers
-        const matchingIds: number[] = await invoke('query_audit_records', {
-          searchTerm: inputVal
+        // BUG(query): parsedQuery is currently presentation-only; deferred qualifiers are not
+        // sent to Rust, so searches can return broader results than the visible qualifier chips imply.
+        const results = await invokeCommand('query_audit_records', {
+          searchTerm: inputValue.trim(),
+          portalKey: activePortalKey,
+          agencyId: selectedAgencyId,
+          status: selectedStatus,
+          policyDeviation: selectedPolicyDeviation,
+          limit: 500,
         });
-        
-        setFilteredResults(matchingIds);
-      } catch (err) {
-        console.error("FTS5 Query execution breakdown:", err);
+        if (sequence === requestSequence.current) setFilteredResults(results);
+      } catch (reason) {
+        if (sequence === requestSequence.current) {
+          setFilteredResults([]);
+          setError(String(reason));
+        }
       } finally {
-        setIsSearching(false);
+        if (sequence === requestSequence.current) setIsSearching(false);
       }
-    }, 350); // 350ms debounce window to limit excessive disk-read stress
+    }, 220);
+    return () => window.clearTimeout(timer);
+  }, [activePortalKey, inputValue, selectedAgencyId, selectedPolicyDeviation, selectedStatus, setFilteredResults]);
 
-    return () => clearTimeout(delayDebounceFn);
-  }, [inputVal, setFilteredResults]);
-
-  const handleClearFilters = () => {
-    setInputVal('');
-    setSearchFilters('', null, null);
-    setFilteredResults([]);
+  const updateTerm = (value: string) => {
+    // FEATURE(query): Add visual filter rows and autocomplete suggestions while
+    // preserving this text field as the canonical qualifier editor.
+    setInputValue(value);
+    setSearchFilters(value, selectedAgencyId, selectedStatus, selectedPolicyDeviation);
   };
 
-  return (
-    <div className="px-6 py-4 border-b border-slate-800/80 bg-slate-900/10 backdrop-blur-md space-y-3 select-none">
-      <div className="flex items-center space-x-3">
-        {/* KEYWORD INPUT WRAPPER */}
-        <div className="relative flex-1">
-          <input
-            type="text"
-            value={inputVal}
-            onChange={(e) => setInputVal(e.target.value)}
-            disabled={isSyncing}
-            placeholder={isSyncing ? "Search deactivated during active crawl..." : 'Search document layers (e.g., "sweep" AND "police")...'}
-            className={cn(
-              "w-full bg-slate-950/60 text-slate-100 text-xs pl-9 pr-4 py-2.5 rounded-lg border border-slate-800 transition-all focus:outline-none focus:border-indigo-500/80 focus:ring-1 focus:ring-indigo-500/30 font-medium placeholder-slate-500 shadow-inner",
-              isSyncing && "opacity-50 cursor-not-allowed placeholder-slate-700"
-            )}
-          />
-          {/* LOUPE ICON & LIVE THREAD STATUS INDICATOR */}
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center">
-            {isSearching ? (
-              <div className="h-3.5 w-3.5 rounded-full border-2 border-indigo-500/20 border-t-indigo-400 animate-spin" />
-            ) : (
-              <svg className="h-3.5 w-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            )}
-          </div>
-        </div>
+  const clear = () => {
+    setInputValue('');
+    setSearchFilters('', null, null, null);
+  };
 
-        {/* RESET CONTROL TRIGGER */}
-        {(inputVal || selectedAgencyId || selectedStatus) && (
-          <button
-            onClick={handleClearFilters}
-            className="px-3 py-2 text-[11px] font-semibold text-slate-400 hover:text-slate-200 border border-slate-800 hover:bg-slate-800/40 rounded-lg transition-all"
+  const hasFilters = Boolean(inputValue || selectedAgencyId || selectedStatus || selectedPolicyDeviation);
+
+  return (
+    <section aria-label="Evidence search" className="shrink-0 px-5 py-3 lg:px-6">
+      <div className="app-panel flex flex-wrap items-center gap-2 p-2">
+        <div className="relative min-w-[240px] flex-1">
+          <label htmlFor="evidence-search" className="sr-only">Search requests and extracted documents</label>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" /><path strokeLinecap="round" d="m20 20-4-4" />
+          </svg>
+          <input
+            id="evidence-search"
+            type="search"
+            value={inputValue}
+            onChange={(event) => updateTerm(event.target.value)}
+            placeholder="Search request metadata and extracted text"
+            className="focus-ring h-10 w-full rounded-xl border border-transparent bg-slate-950/65 pl-9 pr-10 text-[11px] text-slate-100 transition placeholder:text-slate-600 focus:border-indigo-400/50"
+          />
+          {isSearching && <span className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin rounded-full border-2 border-slate-700 border-t-indigo-400" aria-label="Searching" />}
+        </div>
+        <AgencySelector />
+        <label>
+          <span className="sr-only">Request status</span>
+          <select
+            value={selectedStatus ?? ''}
+            onChange={(event) => setSearchFilters(inputValue, selectedAgencyId, event.target.value || null, selectedPolicyDeviation)}
+            className="focus-ring h-10 rounded-xl border border-slate-800 bg-slate-950/65 px-3 text-[10px] text-slate-300 transition focus:border-indigo-400/50"
           >
-            Clear Filters
+            <option value="">All statuses</option>
+            <option value="open">Open</option>
+            <option value="closed">Closed</option>
+            <option value="referred">Referred</option>
+          </select>
+        </label>
+        {hasFilters && (
+          <button type="button" onClick={clear} className="focus-ring h-10 rounded-xl border border-slate-800 px-3 text-[10px] font-medium text-slate-400 transition hover:border-slate-700 hover:text-slate-200">
+            Clear
           </button>
         )}
-      </div>
-
-      {/* METRIC BADGES MATCH COUNTER */}
-      {inputVal && !isSearching && (
-        <div className="flex items-center space-x-2 font-mono text-[10px] text-slate-400">
-          <span>Active Query Status:</span>
-          <span className="text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 rounded">
-            FTS5 Match Success
-          </span>
+        <div className="ml-auto hidden shrink-0 border-l border-slate-800 px-2 text-right sm:block">
+          <div className="font-mono text-[11px] font-semibold text-slate-300">{isSearching ? '—' : resultCount.toLocaleString()}</div>
+          <div className="text-[7px] uppercase tracking-wider text-slate-700">matches</div>
         </div>
-      )}
-    </div>
+      </div>
+      <div className="mt-1.5 flex min-h-4 items-center gap-2 px-2 text-[8px]">
+        {parsedQuery.filters.map((filter, index) => (
+          <span key={`${filter.field}-${filter.value}-${index}`} title={`Recognized qualifier: ${filter.raw ?? serializeQualifierQuery({ version: 1, source: 'qualifier', text: '', filters: [filter], issues: [] })}`} className="rounded-full border border-cyan-500/20 bg-cyan-500/[0.06] px-2 py-0.5 font-semibold text-cyan-300">
+            {filter.negated ? '-' : ''}{filter.field}:{filter.value}
+          </span>
+        ))}
+        {parsedQuery.issues.some((issue) => issue.severity === 'warning' || issue.severity === 'error') && (
+          <span className="text-amber-300" title="Some query tokens need review">Query syntax needs review</span>
+        )}
+        {selectedPolicyDeviation && (
+          <button type="button" onClick={() => setSearchFilters(inputValue, selectedAgencyId, selectedStatus, null)} className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 font-semibold text-amber-300">
+            {formatPolicy(selectedPolicyDeviation)} ×
+          </button>
+        )}
+        {error && <span role="alert" className="truncate text-rose-300">Search unavailable: {error}</span>}
+        {!error && parsedQuery.filters.length === 0 && <span className="text-slate-600">Search remains available while WAL ingestion is active.</span>}
+      </div>
+    </section>
   );
+}
+
+function formatPolicy(value: string) {
+  return value.toLowerCase().split('_').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
 }
