@@ -1,15 +1,14 @@
 {
-  "$schema": "../node_modules/@tauri-apps/cli/schema/capability-schema.json",
+  "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main-window-capability",
   "description": "Explicit security scopes allowing front-to-back IPC interaction loops.",
   "windows": ["main"],
   "permissions": [
     "core:path:default",
+    "core:app:allow-set-app-theme",
     "core:event:default",
     "core:window:default",
     "core:webview:default",
-    "allow-start-subdomain-sync",
-    "allow-query-audit-records",
-    "allow-export-case-dataset"
+    "dialog:allow-open"
   ]
 }

@@ -1,0 +1,201 @@
+{
+  "description_good_status": "Met",
+  "description_good_justification": "Root README.md (/Volumes/A/onrecord-studio/README.md) states the tech stack (Tauri 2 + React 18 + TypeScript over a Rust/DuckDB core) and points to docs/. onrecord-studio/docs/architecture.md section 1 ('Topology') and docs/storage-and-evidence-architecture.md describe it concretely as a desktop evidence/provenance investigation tool (C2PA manifest verification, statutory analysis, DuckDB-backed document store). No public project website exists yet, so this is judged from repo documentation.",
+
+  "interact_status": "Unmet",
+  "interact_justification": "No public site, issue tracker, or download channel exists (git remote -v returns nothing; no GitHub repo found). There is no documented way for an outside user to obtain a build, give feedback, or contribute.",
+
+  "contribution_status": "Unmet",
+  "contribution_justification": "No CONTRIBUTING.md or equivalent exists at either /Volumes/A/onrecord-studio/ or /Volumes/A/onrecord-studio/onrecord-studio/. docs/comment-policy.md documents an internal code-comment convention but not a contribution/PR process for outside contributors.",
+
+  "contribution_requirements_status": "Unmet",
+  "contribution_requirements_justification": "Depends on contribution info existing (see contribution_status); no acceptance-requirements document (coding standard, review checklist for contributors) was found.",
+
+  "floss_license_status": "Unmet",
+  "floss_license_justification": "No LICENSE, LICENSE.md, or LICENSE.txt file exists at the repo root (/Volumes/A/onrecord-studio) or in the project directory (/Volumes/A/onrecord-studio/onrecord-studio); package.json has no 'license' field. Software is not currently released under any FLOSS license.",
+
+  "floss_license_osi_status": "Unmet",
+  "floss_license_osi_justification": "No license is present at all (see floss_license_status), so no OSI-approved license can be in effect.",
+
+  "license_location_status": "Unmet",
+  "license_location_justification": "Checked standard locations (repo root and project root) with `ls -la`; no LICENSE file present in either /Volumes/A/onrecord-studio or /Volumes/A/onrecord-studio/onrecord-studio.",
+
+  "documentation_basics_status": "Met",
+  "documentation_interface_status": "Met",
+  "documentation_basics_justification": "onrecord-studio/README.md, docs/architecture.md, docs/ROADMAP.md, docs/local-analysis-architecture.md and docs/storage-and-evidence-architecture.md document setup, architecture, and behavior. README.md also lists the quality-gate commands (cargo fmt/clippy/test, npx tsc, eslint, vitest, IPC contract check).",
+  "documentation_interface_justification": "onrecord-studio/docs/api_spec.md documents the external NextRequest portal API this app talks to, and onrecord-studio/docs/ipc-contract.md (223 lines) documents the Tauri IPC command/event contract between the Rust backend and the React frontend, cross-checked at build time by onrecord-studio/scripts/check-ipc-contract.mjs.",
+
+  "sites_https_status": "Unmet",
+  "sites_https_justification": "No project website, repository URL, or download URL exists yet (no git remote configured, not published to any host), so HTTPS support cannot apply to anything.",
+
+  "discussion_status": "Unmet",
+  "discussion_justification": "No public issue tracker or mailing list exists; the repo has never been pushed to a public host, so there is no URL-addressable discussion mechanism.",
+
+  "english_status": "Met",
+  "english_justification": "All documentation (README.md, docs/*.md) and code comments observed are in English.",
+
+  "maintained_status": "Met",
+  "maintained_justification": "`git log -1 --format=%cr` in /Volumes/A/onrecord-studio reports the latest commit (99fb0ed) was made 2 hours before this assessment (2026-08-25 22:59:02 -0700), with 7 commits total spanning active feature/fix/docs work.",
+
+  "repo_public_status": "Unmet",
+  "repo_public_justification": "`git remote -v` returns nothing and .git/config has no [remote] section; the repository has not been published anywhere (no matching writerslogic/onrecord-studio or similar found on GitHub). There is no public URL for this repo.",
+
+  "repo_track_status": "Met",
+  "repo_track_justification": "Git (a version-control system) is in use; `git log --oneline -20` shows each commit with author, timestamp, and message, e.g. '99fb0ed fix: report ingestion progress as settled work, not in-flight concurrency' authored by David Condrey.",
+
+  "repo_interim_status": "Met",
+  "repo_interim_justification": "`git log --oneline` shows 7 incremental commits (init, feat, docs x2, fix x3) rather than a single squashed release commit, e.g. 5dd9385 'feat: wire crawl and pacing settings into the source composer' followed by three later docs/fix commits.",
+
+  "repo_distributed_status": "Met",
+  "repo_distributed_justification": "The project uses Git, a distributed version control system (.git present at /Volumes/A/onrecord-studio/.git).",
+
+  "version_unique_status": "Unmet",
+  "version_unique_justification": "No releases have been cut yet: `git tag` returns no output. package.json and Cargo.toml both currently pin version '1.0.0' but no release process assigning a unique identifier per release has been exercised.",
+
+  "version_semver_status": "Met",
+  "version_semver_justification": "onrecord-studio/package.json ('version': '1.0.0') and onrecord-studio/src-tauri/Cargo.toml ('version = \"1.0.0\"') both use SemVer-formatted version strings.",
+
+  "version_tags_status": "Unmet",
+  "version_tags_justification": "`git tag` in /Volumes/A/onrecord-studio produced no output; no releases are identified via VCS tags.",
+
+  "release_notes_status": "Unmet",
+  "release_notes_justification": "No tagged releases exist (`git tag` is empty) and no CHANGELOG.md or release-notes file was found in either repo directory, so no release has human-readable notes yet. The CI bundle job (onrecord-studio/.github/workflows/ci.yml) builds installers but this has not been exercised as a versioned release.",
+
+  "release_notes_vulns_status": "N/A",
+  "release_notes_vulns_justification": "N/A: no releases with release notes exist yet (see release_notes_status).",
+
+  "report_process_status": "Unmet",
+  "report_process_justification": "No public issue tracker or mailing list exists because the repo is not published anywhere; there is no way for outside users to submit bug reports today.",
+
+  "report_tracker_status": "Unmet",
+  "report_tracker_justification": "No issue tracker is configured or referenced anywhere in the repo (no .github/ISSUE_TEMPLATE, no linked tracker); repo is not public.",
+
+  "report_responses_status": "Unmet",
+  "report_responses_justification": "No public bug reports exist to respond to, since the project has no public repo or tracker; the criterion cannot be satisfied.",
+
+  "enhancement_responses_status": "Unmet",
+  "enhancement_responses_justification": "No public enhancement requests exist to respond to, since the project has no public repo or tracker.",
+
+  "report_archive_status": "Unmet",
+  "report_archive_justification": "No publicly available archive of reports/responses exists because nothing has been published publicly.",
+
+  "vulnerability_report_process_status": "Unmet",
+  "vulnerability_report_process_justification": "No SECURITY.md exists in /Volumes/A/onrecord-studio or /Volumes/A/onrecord-studio/onrecord-studio, and there is no public project site to publish a vulnerability-reporting process on.",
+
+  "vulnerability_report_private_status": "Unmet",
+  "vulnerability_report_private_justification": "No SECURITY.md or other document describing a private-reporting contact (email, security advisory form, etc.) was found anywhere in the repo.",
+
+  "vulnerability_report_response_status": "N/A",
+  "vulnerability_report_response_justification": "N/A: no vulnerability reports have been received (no public reporting channel exists yet, see vulnerability_report_process_status).",
+
+  "build_status": "Met",
+  "build_justification": "onrecord-studio/package.json defines a working build pipeline: 'build': 'npm run check:ipc && tsc && vite build'; the Rust side builds via Cargo (src-tauri/Cargo.toml). onrecord-studio/.github/workflows/ci.yml 'bundle' job runs `npx tauri build --ci` on ubuntu/macos/windows and uploads artifacts, confirming the build works end to end.",
+
+  "build_common_tools_status": "Met",
+  "build_common_tools_justification": "Build uses standard ecosystem tooling: npm/vite/tsc for the TypeScript/React frontend and Cargo for the Rust backend, per onrecord-studio/package.json and onrecord-studio/src-tauri/Cargo.toml.",
+
+  "build_floss_tools_status": "Met",
+  "build_floss_tools_justification": "All build tools (npm, vite, tsc, cargo, rustc, tauri-cli) are FLOSS; no proprietary compiler/toolchain is required per onrecord-studio/package.json devDependencies and Cargo.toml.",
+
+  "test_status": "Met",
+  "test_justification": "Automated FLOSS test suites exist: 5 Vitest suites under onrecord-studio/src/tests/ (App.test.tsx, crawlSettings.test.tsx, crypto.test.ts, ingestion.test.ts, provenanceShield.test.tsx, 860 lines total) and 29 `#[test]` functions across onrecord-studio/src-tauri/src plus onrecord-studio/src-tauri/tests/bench_migration.rs. How to run them is documented in onrecord-studio/README.md's 'Quality gate' section (`cargo test ...`, `npx vitest run`) and as npm scripts ('test', 'test:unit') in package.json.",
+
+  "test_invocation_status": "Met",
+  "test_invocation_justification": "Tests run via standard per-language invocations: `npm run test:unit` (vitest run) for TypeScript and `cargo test --workspace --manifest-path src-tauri/Cargo.toml` for Rust, both documented in onrecord-studio/package.json scripts and README.md.",
+
+  "test_most_status": "Unmet",
+  "test_most_justification": "onrecord-studio/package.json includes @vitest/coverage-v8 as a devDependency but onrecord-studio/vitest.config.ts defines no coverage thresholds or enforced coverage gate, and no coverage report was generated to verify branch/functionality coverage, so 'most' coverage cannot be confirmed.",
+
+  "test_continuous_integration_status": "Met",
+  "test_continuous_integration_justification": "onrecord-studio/.github/workflows/ci.yml runs on push to main and on every pull_request; the 'checks' job runs IPC contract/tsc/eslint and the 'rust' job runs `cargo test --workspace` on ubuntu/macos/windows matrix.",
+
+  "test_policy_status": "Met",
+  "test_policy_justification": "onrecord-studio/docs/comment-policy.md states explicitly: 'A SECURITY: comment must have a nearby test. This is the rule with teeth.' Root CLAUDE.md also states 'Every new test for one of these guards must be proven by temporarily removing the guard and showing the failure,' documenting a policy that new/critical functionality gets tests.",
+
+  "tests_are_added_status": "Met",
+  "tests_are_added_justification": "Commit 5dd9385 ('feat: wire crawl and pacing settings into the source composer', `git show --stat 5dd9385`) adds both onrecord-studio/src/utils/crawlPolicy.ts (new functionality) and onrecord-studio/src/tests/crawlSettings.test.tsx (109 lines) in the same commit, showing the policy is followed in recent history.",
+
+  "tests_documented_added_status": "Met",
+  "tests_documented_added_justification": "The testing requirement is documented in onrecord-studio/docs/comment-policy.md ('A SECURITY: comment must have a nearby test') rather than only informally practiced.",
+
+  "warnings_status": "Met",
+  "warnings_justification": "onrecord-studio/.github/workflows/ci.yml sets `RUSTFLAGS: -D warnings` and runs `cargo clippy --workspace --all-targets -- -D warnings`; ESLint is run via `eslint . --max-warnings 0` in package.json's 'lint' script, using onrecord-studio/eslint.config.js (@eslint/js recommended + typescript-eslint recommended).",
+
+  "warnings_fixed_status": "Met",
+  "warnings_fixed_justification": "CI treats warnings as build failures (`-D warnings` for Rust, `--max-warnings 0` for ESLint), so any warning blocks merges to main, per onrecord-studio/.github/workflows/ci.yml.",
+
+  "warnings_strict_status": "Unmet",
+  "warnings_strict_justification": "Rust uses default clippy lints (not `clippy::pedantic`/`clippy::nursery`) and ESLint uses the 'recommended' rule sets (eslint.configs.recommended, typescript-eslint recommended) rather than a strict/type-checked config, per onrecord-studio/eslint.config.js and onrecord-studio/.github/workflows/ci.yml — not the maximally strict setting available.",
+
+  "know_secure_design_status": "Met",
+  "know_secure_design_justification": "onrecord-studio/docs/architecture.md section 5 ('Security model') documents the IPC trust-boundary design explicitly: 'each command body is the trust boundary... Validation belongs there, not in the manifest,' plus the CSP policy (no unsafe-eval, no unsafe-inline scripts) and known-gaps analysis (ingest_local_files path handling). This is direct evidence of secure-design reasoning by the primary developer.",
+
+  "know_common_errors_status": "Met",
+  "know_common_errors_justification": "The codebase has 16 inline `SECURITY(...)` boundary comments (e.g. onrecord-studio/src/utils/crypto.ts parseDidWeb: 'A validation boundary, not a convenience parser... Rejections are pinned in src/tests/crypto.test.ts') addressing untrusted-input handling, plus docs/architecture.md noting 'All parser input is untrusted: documents arrive from arbitrary government portals.' This shows awareness of injection/untrusted-input classes of errors relevant to this software.",
+
+  "crypto_published_status": "Met",
+  "crypto_published_justification": "Crypto usage is limited to published standards: TLS via rustls (reqwest with `default-features=false, features=[\"rustls\",...]` in onrecord-studio/src-tauri/Cargo.toml), SHA-256 via the `sha2` crate, and the published C2PA specification via the `c2pa` crate (0.90.15) with `rust_native_crypto` feature. No custom/home-grown crypto protocol found.",
+
+  "crypto_call_status": "Met",
+  "crypto_call_justification": "Cargo.toml dependencies show calls to dedicated crypto libraries (rustls via reqwest, sha2, c2pa) rather than reimplementation; no hand-rolled cipher/hash code was found under onrecord-studio/src-tauri/src.",
+
+  "crypto_floss_status": "Met",
+  "crypto_floss_justification": "All crypto-related dependencies (rustls, sha2, c2pa with rust_native_crypto) are FLOSS Rust crates, per onrecord-studio/src-tauri/Cargo.toml.",
+
+  "crypto_keylength_status": "Met",
+  "crypto_keylength_justification": "TLS is handled by rustls (reqwest 'rustls' feature in Cargo.toml), which by default only negotiates modern cipher suites/key exchange (e.g. X25519, P-256/P-384, RSA >=2048) meeting current NIST minimums; the app does not itself generate or configure smaller key lengths anywhere in src-tauri/src.",
+
+  "crypto_working_status": "Met",
+  "crypto_working_justification": "rustls does not implement SSLv2/SSLv3, MD4/MD5, single-DES, RC4, or Dual_EC_DRBG, and the app uses `sha2` (SHA-256) rather than MD5 for content hashing (onrecord-studio/src/utils/crypto.ts isSha256Hex/isSha256Base64), so no broken default algorithm is depended on.",
+
+  "crypto_weaknesses_status": "Met",
+  "crypto_weaknesses_justification": "No SHA-1 usage found in crypto code (grep of src/utils/crypto.ts and src-tauri/src shows SHA-256 only); the app has no SSH component, so CBC-in-SSH does not apply.",
+
+  "crypto_pfs_status": "Met",
+  "crypto_pfs_justification": "rustls (used via reqwest's 'rustls' feature) defaults to ECDHE-based key exchange for TLS 1.2 and always uses forward-secret key exchange in TLS 1.3, giving perfect forward secrecy by default.",
+
+  "crypto_password_storage_status": "N/A",
+  "crypto_password_storage_justification": "N/A: the application is a local desktop tool with no user-account/password system; grep for 'password'/'argon2'/'bcrypt'/'pbkdf2' across src and src-tauri/src found only URL-credential parsing/rejection code (e.g. onrecord-studio/src-tauri/src/ingestion/client.rs checks `url.password().is_some()` to reject credentialed URLs), not password storage.",
+
+  "crypto_random_status": "N/A",
+  "crypto_random_justification": "N/A: the application does not itself generate cryptographic keys or nonces; `uuid` (v4) is used for non-cryptographic identifiers and TLS randomness is delegated entirely to rustls internally.",
+
+  "delivery_mitm_status": "Unmet",
+  "delivery_mitm_justification": "No public delivery/download mechanism exists yet: the repo has never been published, and no release artifacts have been distributed, so there is nothing to confirm is served over HTTPS/SSH.",
+
+  "delivery_unsigned_status": "Unmet",
+  "delivery_unsigned_justification": "No release/delivery mechanism exists yet to evaluate (see delivery_mitm_status); this cannot be confirmed as compliant until a real distribution channel exists.",
+
+  "vulnerabilities_fixed_60_days_status": "Met",
+  "vulnerabilities_fixed_60_days_justification": "onrecord-studio/.github/workflows/ci.yml runs an 'audit' job on every push/PR (`npm audit --audit-level=high` and `rustsec/audit-check@v2`), and onrecord-studio/.cargo/audit.toml documents the only ignored advisories as unreachable transitive GTK3/unic-* issues with no available upgrade, re-reviewed per Tauri version bump. No evidence of any unaddressed medium+ vulnerability sitting open.",
+
+  "vulnerabilities_critical_fixed_status": "Met",
+  "vulnerabilities_critical_fixed_justification": "The same CI audit job (onrecord-studio/.github/workflows/ci.yml 'audit') fails the build on any high/critical advisory not explicitly ignored in onrecord-studio/.cargo/audit.toml, giving rapid detection/fix pressure for critical issues.",
+
+  "no_leaked_credentials_status": "Met",
+  "no_leaked_credentials_justification": "Searched for 'api_key'/'secret_key'/'private_key'/PEM private-key headers across src, src-tauri, and .github with grep; the only match was onrecord-studio/src-tauri/src/ingestion/source_catalog.rs's `AccessRequirement::ApiKeyOrAccount` enum variant (a connector-metadata label, not a credential value). No actual key/secret material found.",
+
+  "static_analysis_status": "Met",
+  "static_analysis_justification": "Clippy (a FLOSS static analysis tool for Rust) is run in CI: onrecord-studio/.github/workflows/ci.yml 'rust' job runs `cargo clippy --workspace --all-targets -- -D warnings` on every push/PR before any merge to main.",
+
+  "static_analysis_common_vulnerabilities_status": "Unmet",
+  "static_analysis_common_vulnerabilities_justification": "Only default clippy lints are run; no vulnerability-focused static analyzer (e.g. CodeQL, Semgrep, clippy security lint groups) is configured in onrecord-studio/.github/workflows/ci.yml.",
+
+  "static_analysis_fixed_status": "Met",
+  "static_analysis_fixed_justification": "CI fails the 'rust' job on any clippy finding (`-D warnings`), per onrecord-studio/.github/workflows/ci.yml, so medium+ findings must be fixed before merge.",
+
+  "static_analysis_often_status": "Met",
+  "static_analysis_often_justification": "onrecord-studio/.github/workflows/ci.yml triggers clippy on every push to main and every pull_request, i.e. on every commit reaching CI.",
+
+  "dynamic_analysis_status": "Unmet",
+  "dynamic_analysis_justification": "No dynamic analysis tool (fuzzer, sanitizer run, DAST) is configured anywhere in onrecord-studio/.github/workflows/ci.yml or elsewhere in the repo.",
+
+  "dynamic_analysis_unsafe_status": "N/A",
+  "dynamic_analysis_unsafe_justification": "N/A: `grep -rn \"unsafe \" src-tauri/src` returns zero matches; the Rust backend contains no memory-unsafe (`unsafe`) code, so a memory-safety dynamic tool is not required.",
+
+  "dynamic_analysis_enable_assertions_status": "Unmet",
+  "dynamic_analysis_enable_assertions_justification": "No dynamic-analysis configuration exists at all (see dynamic_analysis_status), so no assertion-enabling config was found.",
+
+  "dynamic_analysis_fixed_status": "N/A",
+  "dynamic_analysis_fixed_justification": "N/A: no dynamic analysis is performed (see dynamic_analysis_status), so there are no dynamic-analysis findings to fix."
+}

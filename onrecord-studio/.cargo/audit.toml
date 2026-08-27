@@ -1,0 +1,30 @@
+# Advisories that reach this project only through Tauri's Linux webview stack (GTK3 bindings and
+# their transitive `unic-*`/`glib` dependencies). None is reachable from application code, none has
+# an upgrade available while Tauri targets GTK3, and none affects the macOS or Windows bundles.
+#
+# Re-review whenever the Tauri major version changes: if these disappear from `cargo tree`, delete
+# the corresponding entries rather than leaving them to mask a future advisory.
+[advisories]
+ignore = [
+    # gtk-rs GTK3 bindings are no longer maintained (tauri -> wry -> gtk).
+    "RUSTSEC-2024-0411", # atk
+    "RUSTSEC-2024-0412", # atk-sys
+    "RUSTSEC-2024-0413", # gdk
+    "RUSTSEC-2024-0414", # gdk-sys
+    "RUSTSEC-2024-0415", # gdkwayland-sys
+    "RUSTSEC-2024-0416", # gdkx11
+    "RUSTSEC-2024-0417", # gdkx11-sys
+    "RUSTSEC-2024-0418", # gtk
+    "RUSTSEC-2024-0419", # gtk-sys
+    "RUSTSEC-2024-0420", # gtk3-macros
+    # glib VariantStrIter unsoundness; not constructed by this application.
+    "RUSTSEC-2024-0429",
+    # proc-macro-error is unmaintained; build-time only.
+    "RUSTSEC-2024-0370",
+    # unic-* crates are unmaintained; pulled in transitively for IDNA handling.
+    "RUSTSEC-2025-0075",
+    "RUSTSEC-2025-0080",
+    "RUSTSEC-2025-0081",
+    "RUSTSEC-2025-0098",
+    "RUSTSEC-2025-0100",
+]

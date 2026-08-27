@@ -1,0 +1,5 @@
+# Release binaries must run on every CPU the minimum system version supports, so no
+# `target-cpu` is set here. `-C target-cpu=native` tunes for the *build* machine's instruction
+# set; a release built on a host with newer vector extensions aborts with SIGILL on older
+# customer hardware, with no diagnostic. Benchmark locally with an explicit RUSTFLAGS override
+# instead of encoding it into every build.

@@ -1,0 +1,126 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # Warnings are errors in CI. Registry dependencies are unaffected (--cap-lints allow).
+  RUSTFLAGS: -D warnings
+
+defaults:
+  run:
+    working-directory: onrecord-studio
+
+jobs:
+  # Fast feedback: everything that does not need the Tauri system libraries.
+  checks:
+    name: Lint, types, and IPC contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: onrecord-studio/package-lock.json
+      - run: npm ci
+      - name: IPC contract
+        run: npm run check:ipc
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: ESLint
+        run: npm run lint
+
+  rust:
+    name: Rust ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: onrecord-studio
+      - name: Install Tauri system dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf libglib2.0-dev
+      - name: Formatting
+        run: cargo fmt --all --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Tests
+        run: cargo test --workspace
+
+  audit:
+    name: Dependency advisories
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: onrecord-studio/package-lock.json
+      - run: npm ci
+      - name: npm advisories
+        run: npm audit --audit-level=high
+      - uses: rustsec/audit-check@v2
+        with:
+          # The GTK3 and unic-* advisories arrive through Tauri's Linux webview stack and have no
+          # available upgrade; they are listed in .cargo/audit.toml so a genuinely new advisory still fails.
+          token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: onrecord-studio
+
+  bundle:
+    name: Bundle ${{ matrix.os }}
+    needs: [checks, rust]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: onrecord-studio/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: onrecord-studio
+      - name: Install Tauri system dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf libglib2.0-dev
+      - run: npm ci
+      - name: Build bundle
+        # Unsigned on CI: signing and notarization require secrets this workflow does not hold.
+        # See docs/release.md for the credentials a release workflow must add.
+        run: npx tauri build --ci
+      - uses: actions/upload-artifact@v4
+        with:
+          name: onrecord-studio-${{ matrix.os }}
+          path: |
+            onrecord-studio/src-tauri/target/release/bundle/**
+          if-no-files-found: error
+          retention-days: 14

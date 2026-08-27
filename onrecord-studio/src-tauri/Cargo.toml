@@ -4,24 +4,47 @@ version = "1.0.0"
 edition = "2021"
 
 [dependencies]
-tauri = { version = "2.0.0", features = [] }
-tauri-plugin-shell = "2.0.0"
+tauri = { version = "2.11.5", features = ["macos-private-api"] }
+tauri-plugin-dialog = "2.7.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tokio = { version = "1.0", features = ["full"] }
-reqwest = { version = "0.12", features = ["json", "stream"] }
+# Keep the async runtime explicit: this binary uses filesystem, networking, timers, channels,
+# blocking workers, and the multithreaded scheduler, but not Tokio's process/signal/test extras.
+tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "io-util", "net"] }
+# Use rustls instead of the platform/OpenSSL default TLS stack so releases are self-contained and
+# reproducible across macOS, Windows, and Linux. Response compression is enabled because public
+# APIs and document indexes commonly return gzip/brotli/deflate/zstd payloads.
+reqwest = { version = "0.13.4", default-features = false, features = ["json", "query", "form", "stream", "rustls", "http2", "gzip", "brotli", "deflate", "zstd"] }
+# C2PA manifest reading and signature validation.
+# `rust_native_crypto` keeps the crypto in Rust instead of linking OpenSSL, matching the rustls
+# choice made for reqwest above: releases stay self-contained and reproducible across platforms.
+# `fetch_remote_manifests` is deliberately NOT enabled. It makes verification follow a URL embedded
+# in the asset being examined, which for an evidence tool means the act of checking a document
+# reaches out to a server the document's author chose. Verification here reads only local bytes.
+c2pa = { version = "0.90.15", default-features = false, features = ["rust_native_crypto", "file_io", "pdf"] }
+futures-util = "0.3"
+scraper = "0.27"
+base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
-rusqlite = { version = "0.31", features = ["bundled"] }
-duckdb = { version = "0.10", features = ["bundled"] }
-lopdf = "0.31"
-calamine = "0.24"
-msg-parser = "0.3"
-zip = "1.0"
-regex = "1.10"
-lazy_static = "1.4"
-thiserror = "1.0"
-uuid = { version = "1.8", features = ["v4"] }
-window-vibrancy = "0.5"
+rusqlite = { version = "0.31", default-features = false, features = ["bundled", "limits"] }
+duckdb = { version = "1.10505.0", features = ["bundled"] }
+lopdf = "0.44"
+calamine = { version = "0.36", features = ["dates"] }
+msg_parser = "0.3"
+zip = { version = "1.1.4", default-features = false, features = ["deflate", "bzip2", "zstd", "lzma"] }
+tar = "0.4"
+flate2 = "1.1"
+bzip2 = "0.6.1"
+xz2 = "0.1.7"
+zstd = "0.13"
+sha2 = "0.11.0"
+thiserror = "2.0.20"
+uuid = { version = "1.25.0", features = ["v4"] }
+window-vibrancy = "0.8.0"
 
 [build-dependencies]
-tauri-build = "2.0.0"
+tauri-build = { version = "2.6.3", features = [] }
+
+[dev-dependencies]
+cfb = "0.14.0"
+tempfile = "3"
