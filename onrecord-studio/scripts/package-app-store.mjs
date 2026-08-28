@@ -53,8 +53,18 @@ for (const prohibited of [
 }
 
 const profile = run('security', ['cms', '-D', '-i', embeddedProfile]);
-assert(profile.includes(teamId), 'The provisioning profile belongs to a different Apple team.');
-assert(profile.includes(identifier), 'The provisioning profile does not authorize this bundle identifier.');
+const profileApplicationIdentifier = profileStringValue(profile, 'com.apple.application-identifier');
+const profileTeamIdentifier = profileStringValue(profile, 'com.apple.developer.team-identifier');
+assert(profileTeamIdentifier === teamId, 'The provisioning profile belongs to a different Apple team.');
+assert(
+  profileApplicationIdentifier === `${teamId}.${identifier}`,
+  `The provisioning profile authorizes ${profileApplicationIdentifier}, not ${teamId}.${identifier}.`,
+);
+const profileExpiration = new Date(profileDateValue(profile, 'ExpirationDate'));
+assert(
+  profileExpiration.getTime() > Date.now(),
+  `The embedded provisioning profile expired on ${profileExpiration.toISOString()}.`,
+);
 
 const links = run('otool', ['-L', executable])
   .split('\n')
@@ -153,6 +163,26 @@ function runCombined(command, arguments_) {
     `${command} failed (${result.status ?? 'no exit status'}): ${(result.stderr || result.stdout).trim()}`,
   );
   return `${result.stdout}\n${result.stderr}`;
+}
+
+function escapeForRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function profileStringValue(plistXml, key) {
+  const match = plistXml.match(
+    new RegExp(`<key>${escapeForRegExp(key)}</key>\\s*<string>([^<]*)</string>`),
+  );
+  assert(match, `The provisioning profile is missing its ${key} entitlement.`);
+  return match[1];
+}
+
+function profileDateValue(plistXml, key) {
+  const match = plistXml.match(
+    new RegExp(`<key>${escapeForRegExp(key)}</key>\\s*<date>([^<]*)</date>`),
+  );
+  assert(match, `The provisioning profile is missing its ${key} field.`);
+  return match[1];
 }
 
 function assert(condition, message) {

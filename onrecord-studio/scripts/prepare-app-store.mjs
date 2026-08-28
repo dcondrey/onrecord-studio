@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import {
   chmodSync,
   copyFileSync,
@@ -63,6 +64,21 @@ const profileMetadata = lstatSync(profilePath);
 assert(profileMetadata.isFile() && !profileMetadata.isSymbolicLink(), 'The provisioning profile must be a regular file.');
 assert(profileMetadata.size > 0 && profileMetadata.size <= 10 * 1024 * 1024, 'The provisioning profile size is invalid.');
 
+const profile = decodeProfile(profilePath);
+assert(
+  profileStringValue(profile, 'com.apple.application-identifier') === `${appIdPrefix}.${identifier}`,
+  `The provisioning profile does not authorize ${appIdPrefix}.${identifier}.`,
+);
+assert(
+  profileStringValue(profile, 'com.apple.developer.team-identifier') === teamId,
+  'The provisioning profile belongs to a different Apple team.',
+);
+const profileExpiration = new Date(profileDateValue(profile, 'ExpirationDate'));
+assert(
+  profileExpiration.getTime() > Date.now(),
+  `The provisioning profile expired on ${profileExpiration.toISOString()}.`,
+);
+
 const entitlements = entitlementsTemplate
   .replaceAll('__TEAM_ID__', teamId)
   .replaceAll('__APP_ID_PREFIX__', appIdPrefix);
@@ -90,6 +106,36 @@ function requiredEnvironment(name, pattern) {
   assert(value, `${name} is required.`);
   if (pattern) assert(pattern.test(value), `${name} has an invalid format.`);
   return value;
+}
+
+function decodeProfile(path) {
+  const result = spawnSync('security', ['cms', '-D', '-i', path], {
+    encoding: 'utf8',
+    maxBuffer: 32 * 1024 * 1024,
+  });
+  if (result.error) throw result.error;
+  assert(result.status === 0, `The provisioning profile could not be decoded: ${result.stderr.trim()}`);
+  return result.stdout;
+}
+
+function escapeForRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function profileStringValue(plistXml, key) {
+  const match = plistXml.match(
+    new RegExp(`<key>${escapeForRegExp(key)}</key>\\s*<string>([^<]*)</string>`),
+  );
+  assert(match, `The provisioning profile is missing its ${key} entitlement.`);
+  return match[1];
+}
+
+function profileDateValue(plistXml, key) {
+  const match = plistXml.match(
+    new RegExp(`<key>${escapeForRegExp(key)}</key>\\s*<date>([^<]*)</date>`),
+  );
+  assert(match, `The provisioning profile is missing its ${key} field.`);
+  return match[1];
 }
 
 function assert(condition, message) {

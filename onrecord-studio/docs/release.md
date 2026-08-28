@@ -116,7 +116,11 @@ npm run prepare:app-store
 ```
 
 The script validates formats, refuses symlinked or empty profiles, XML-escapes the optional export
-code, and writes ignored files with private permissions. It does not log credential values.
+code, and writes ignored files with private permissions. It does not log credential values. It also
+decodes the profile and refuses to materialize one whose `com.apple.application-identifier` is not
+exactly `$APPLE_APP_ID_PREFIX.com.onrecord.studio`, whose team entitlement is not `$APPLE_TEAM_ID`,
+or whose `ExpirationDate` has passed, so a wrong or stale profile fails before the build rather than
+at App Store Connect upload.
 
 ## Build, validate, and package
 
