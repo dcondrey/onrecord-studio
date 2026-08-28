@@ -19,9 +19,8 @@ export default function LegalCompliancePanel({
   record,
   onOpenLibrary,
 }: LegalCompliancePanelProps) {
-  // FEATURE(legal): Add a side-by-side authority citation and evidence excerpt
-  // view for every finding instead of requiring separate navigation.
   const findings = useAppStore((state) => state.activeLegalFindings);
+  const authorities = useAppStore((state) => state.legalAuthorities);
   const setFindings = useAppStore((state) => state.setActiveLegalFindings);
   const searchTerm = useAppStore((state) => state.searchTerm);
   const selectedAgencyId = useAppStore((state) => state.selectedAgencyId);
@@ -37,6 +36,7 @@ export default function LegalCompliancePanel({
   } | null>(null);
   const [reviewerNotes, setReviewerNotes] = useState('');
   const [isReviewing, setIsReviewing] = useState(false);
+  const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null);
   // Loading, evaluating, and reviewing all publish to the same global findings collection. One
   // gate makes the newest of those operations authoritative, including across record changes.
   const findingsGate = useLatestRequestGate();
@@ -54,6 +54,7 @@ export default function LegalCompliancePanel({
     setFindings([]);
     setPendingReview(null);
     setReviewerNotes('');
+    setSelectedFindingId(null);
     void invokeCommand('list_request_legal_findings', {
       requestId: record.requestId,
       portalKey: record.portalKey,
@@ -74,6 +75,8 @@ export default function LegalCompliancePanel({
     () => findings.filter((finding) => ['OPEN', 'CONFIRMED'].includes(finding.reviewStatus)),
     [findings],
   );
+  const selectedFinding = activeFindings.find((finding) => finding.violationId === selectedFindingId) ?? null;
+  const selectedAuthority = selectedFinding ? authorities.find((authority) => authority.statuteId === selectedFinding.matchedStatuteId) ?? null : null;
 
   const evaluate = async () => {
     const request = findingsGate.begin();
@@ -226,6 +229,9 @@ export default function LegalCompliancePanel({
                 </div>
               )}
               <div className="mt-3 flex items-center gap-1.5">
+                <button type="button" onClick={() => setSelectedFindingId(finding.violationId)} className="rounded border border-indigo-400/25 bg-indigo-500/[0.06] px-2 py-1 text-[7px] font-semibold text-indigo-200 transition hover:bg-indigo-500/10">
+                  Compare authority & evidence
+                </button>
                 <button type="button" onClick={() => filterByFinding(finding)} className="rounded border border-slate-700 px-2 py-1 text-[7px] font-semibold text-slate-500 transition hover:border-slate-500 hover:text-slate-300">
                   Filter workbench
                 </button>
@@ -262,6 +268,8 @@ export default function LegalCompliancePanel({
           ))}
         </div>
       )}
+
+      {selectedFinding && <div className="grid gap-px border-t border-slate-800 bg-slate-800 md:grid-cols-2"><section className="bg-slate-950 p-3" aria-label="Authority citation"><div className="text-[8px] font-bold uppercase tracking-wider text-indigo-300/70">Authority citation</div><div className="mt-2 text-[10px] font-semibold text-slate-200">{selectedFinding.statuteCitation}</div><p className="mt-1 text-[9px] text-slate-500">{selectedFinding.authorityTitle}</p><dl className="mt-2 space-y-1 font-mono text-[7px] text-slate-600"><div><dt className="inline">Version </dt><dd className="inline text-slate-400">{selectedFinding.matchedVersionId}</dd></div>{selectedFinding.mandateTitle && <div><dt className="inline">Rule </dt><dd className="inline text-slate-400">{selectedFinding.mandateTitle}</dd></div>}</dl>{selectedAuthority?.canonicalSourceUri && <a href={selectedAuthority.canonicalSourceUri} target="_blank" rel="noreferrer" className="mt-2 block break-all text-[8px] text-cyan-300 underline">Open official source</a>}</section><section className="bg-slate-950 p-3" aria-label="Finding evidence excerpt"><div className="flex items-center justify-between"><div className="text-[8px] font-bold uppercase tracking-wider text-amber-300/70">Case evidence</div><button type="button" onClick={() => setSelectedFindingId(null)} className="text-[8px] text-slate-600 hover:text-slate-300">Close</button></div><p className="mt-2 whitespace-pre-wrap text-[9px] leading-relaxed text-slate-300">{selectedFinding.evidenceSummary}</p><div className="mt-2 font-mono text-[7px] text-slate-600">Supporting documents: {selectedFinding.supportingDocumentIds.length ? selectedFinding.supportingDocumentIds.join(', ') : 'none recorded'}</div>{selectedFinding.missingEvidencePhrases.length > 0 && <div className="mt-2 text-[8px] text-amber-200/70">Missing required evidence: {selectedFinding.missingEvidencePhrases.join('; ')}</div>}</section></div>}
 
       {evaluation && (
         <div

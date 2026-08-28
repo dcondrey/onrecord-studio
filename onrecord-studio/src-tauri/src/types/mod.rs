@@ -29,8 +29,8 @@ pub use investigation::{
 };
 pub use legal::{
     LegalAuthorityImport, LegalAuthorityImportResult, LegalAuthorityKind, LegalAuthoritySummary,
-    LegalComplianceFinding, LegalEvaluationResult, LegalFindingReviewStatus, LegalMandateInput,
-    LegalMandateSeverity,
+    LegalAuthorityVersionDetail, LegalAuthorityVersionSummary, LegalComplianceFinding,
+    LegalEvaluationResult, LegalFindingReviewStatus, LegalMandateInput, LegalMandateSeverity,
 };
 pub use nextrequest::{
     DocumentMetadata, EmailMetadata, EmailParticipantMetadata, NextRequestResponse, PaginationMeta,

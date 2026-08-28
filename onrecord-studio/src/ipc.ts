@@ -16,6 +16,8 @@ import type {
   LegalAuthorityImportResult,
   LegalBriefExportResult,
   LegalAuthoritySummary,
+  LegalAuthorityVersionDetail,
+  LegalAuthorityVersionSummary,
   LegalComplianceFinding,
   LegalEvaluationResult,
   LegalFindingReviewStatus,
@@ -142,6 +144,8 @@ export interface NativeCommandMap {
     result: LegalAuthorityImportResult;
   };
   list_legal_authorities: { args: NoArgs; result: LegalAuthoritySummary[] };
+  list_legal_authority_versions: { args: { statuteId: string }; result: LegalAuthorityVersionSummary[] };
+  get_legal_authority_version: { args: { statuteId: string; versionId: string }; result: LegalAuthorityVersionDetail };
   evaluate_request_legal_compliance: {
     args: { requestId: number; portalKey: string };
     result: LegalEvaluationResult;

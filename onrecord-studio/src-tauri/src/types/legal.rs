@@ -99,6 +99,25 @@ pub struct LegalAuthorityImportResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+pub struct LegalAuthorityVersionSummary {
+    pub version_id: String,
+    pub statute_id: String,
+    pub content_sha256: String,
+    pub effective_from: Option<String>,
+    pub effective_to: Option<String>,
+    pub source_uri: Option<String>,
+    pub imported_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LegalAuthorityVersionDetail {
+    pub version: LegalAuthorityVersionSummary,
+    pub full_text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct LegalComplianceFinding {
     pub violation_id: String,
     pub request_id: u64,

@@ -23,10 +23,11 @@ use crate::types::{
     AuxiliaryEventInput, AuxiliaryImportResult, AuxiliaryStreamKind, CrawlPolicy,
     CrossAgencyCorrelation, DocumentMetadata, DocumentProvenanceVerification, DocumentTextChunk,
     LegalAuthorityImport, LegalAuthorityImportResult, LegalAuthorityKind, LegalAuthoritySummary,
-    LegalBriefExportResult, LegalComplianceFinding, LegalEvaluationResult,
-    LegalFindingReviewStatus, PortalRegistration, PublicRequest, RequestDocumentSummary,
-    RequestSearchResult, SavedSource, SourceGuidance, SourceLifecycleState,
-    StatutoryExtensionReason, StatutoryExtensionRecord, TimelineAnomalyMarker,
+    LegalAuthorityVersionDetail, LegalAuthorityVersionSummary, LegalBriefExportResult,
+    LegalComplianceFinding, LegalEvaluationResult, LegalFindingReviewStatus, PortalRegistration,
+    PublicRequest, RequestDocumentSummary, RequestSearchResult, SavedSource, SourceGuidance,
+    SourceLifecycleState, StatutoryExtensionReason, StatutoryExtensionRecord,
+    TimelineAnomalyMarker,
 };
 
 const MAXIMUM_DOCUMENT_CHUNK_CHARACTERS: usize = 250_000;
@@ -3295,6 +3296,67 @@ impl DuckDbRepository {
         .collect()
     }
 
+    pub async fn list_legal_authority_versions(
+        &self,
+        statute_id: &str,
+    ) -> Result<Vec<LegalAuthorityVersionSummary>, AppError> {
+        let conn = self.conn.lock().await;
+        let mut statement = conn
+            .prepare(
+                "SELECT version_id, statute_id, content_sha256, effective_from, effective_to,
+                        source_uri, imported_at
+                 FROM legal_statute_versions
+                 WHERE statute_id = ?1
+                 ORDER BY imported_at DESC, version_id DESC
+                 LIMIT 500",
+            )
+            .map_err(|error| {
+                AppError::Storage(format!("Failed to prepare legal version listing: {error}"))
+            })?;
+        let rows = statement
+            .query_map(params![statute_id], map_legal_authority_version_summary)
+            .map_err(|error| {
+                AppError::Storage(format!("Failed to query legal versions: {error}"))
+            })?;
+        rows.map(|row| {
+            row.map_err(|error| {
+                AppError::Storage(format!("Failed to decode legal version: {error}"))
+            })
+        })
+        .collect()
+    }
+
+    pub async fn get_legal_authority_version(
+        &self,
+        statute_id: &str,
+        version_id: &str,
+    ) -> Result<LegalAuthorityVersionDetail, AppError> {
+        let conn = self.conn.lock().await;
+        conn.query_row(
+            "SELECT version_id, statute_id, content_sha256, effective_from, effective_to,
+                    source_uri, imported_at, full_text
+             FROM legal_statute_versions
+             WHERE statute_id = ?1 AND version_id = ?2",
+            params![statute_id, version_id],
+            |row| {
+                Ok((
+                    map_legal_authority_version_summary(row)?,
+                    row.get::<_, String>(7)?,
+                ))
+            },
+        )
+        .optional()
+        .map_err(|error| {
+            AppError::Storage(format!("Failed to read legal authority version: {error}"))
+        })?
+        .map(|(version, full_text)| LegalAuthorityVersionDetail { version, full_text })
+        .ok_or_else(|| {
+            AppError::DataParsing(format!(
+                "Legal authority version '{version_id}' was not found for '{statute_id}'"
+            ))
+        })
+    }
+
     pub async fn evaluate_request_legal_compliance(
         &self,
         request_id: u64,
@@ -4415,6 +4477,20 @@ fn map_legal_authority_summary_row(row: &Row<'_>) -> duckdb::Result<RawLegalAuth
         provision_count: row.get(11)?,
         mandate_count: row.get(12)?,
         imported_at: row.get(13)?,
+    })
+}
+
+fn map_legal_authority_version_summary(
+    row: &Row<'_>,
+) -> duckdb::Result<LegalAuthorityVersionSummary> {
+    Ok(LegalAuthorityVersionSummary {
+        version_id: row.get(0)?,
+        statute_id: row.get(1)?,
+        content_sha256: row.get(2)?,
+        effective_from: row.get(3)?,
+        effective_to: row.get(4)?,
+        source_uri: row.get(5)?,
+        imported_at: row.get(6)?,
     })
 }
 
@@ -7320,6 +7396,50 @@ mod tests {
             .await
             .unwrap()
             .is_empty());
+    }
+
+    #[tokio::test]
+    async fn legal_authority_versions_are_listed_and_loaded_without_losing_text() {
+        let repository = DuckDbRepository::new(":memory:").expect("DuckDB core must open");
+        repository
+            .run_migrations(MIGRATION)
+            .await
+            .expect("migration must run");
+        {
+            let connection = repository.conn.lock().await;
+            connection.execute(
+                "INSERT INTO legal_statutes (
+                    statute_id, jurisdiction, statute_citation, title, authority_kind, full_text,
+                    current_version_id, content_sha256, imported_at, updated_at
+                 ) VALUES ('policy-1', 'Test', 'Policy 1', 'Test policy', 'AGENCY_POLICY',
+                    'Second text', 'version-2', ?1, '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')",
+                params!["b".repeat(64)],
+            ).expect("authority must insert");
+            connection.execute(
+                "INSERT INTO legal_statute_versions (
+                    version_id, statute_id, full_text, content_sha256, effective_from, imported_at
+                 ) VALUES ('version-1', 'policy-1', 'First text', ?1, '2026-01-01', '2026-01-01T00:00:00Z'),
+                          ('version-2', 'policy-1', 'Second text', ?2, '2026-02-01', '2026-02-01T00:00:00Z')",
+                params!["a".repeat(64), "b".repeat(64)],
+            ).expect("versions must insert");
+        }
+        let versions = repository
+            .list_legal_authority_versions("policy-1")
+            .await
+            .unwrap();
+        assert_eq!(
+            versions
+                .iter()
+                .map(|version| version.version_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["version-2", "version-1"]
+        );
+        let first = repository
+            .get_legal_authority_version("policy-1", "version-1")
+            .await
+            .unwrap();
+        assert_eq!(first.full_text, "First text");
+        assert_eq!(first.version.effective_from.as_deref(), Some("2026-01-01"));
     }
 
     #[tokio::test]

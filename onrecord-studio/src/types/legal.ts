@@ -64,6 +64,21 @@ export interface LegalAuthorityImportResult {
   insertedNewVersion: boolean;
 }
 
+export interface LegalAuthorityVersionSummary {
+  versionId: string;
+  statuteId: string;
+  contentSha256: string;
+  effectiveFrom: IsoDateString | null;
+  effectiveTo: IsoDateString | null;
+  sourceUri: string | null;
+  importedAt: string;
+}
+
+export interface LegalAuthorityVersionDetail {
+  version: LegalAuthorityVersionSummary;
+  fullText: string;
+}
+
 export interface LegalComplianceFinding {
   violationId: string;
   requestId: number;

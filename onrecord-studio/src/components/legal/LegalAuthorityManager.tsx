@@ -7,6 +7,8 @@ import type {
   LegalAuthorityKind,
   LegalMandateInput,
   LegalMandateSeverity,
+  LegalAuthorityVersionDetail,
+  LegalAuthorityVersionSummary,
 } from '../../types';
 import { cn } from '../../utils/cn';
 
@@ -64,8 +66,6 @@ const emptyMandate = (): MandateEditorState => ({
 });
 
 export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorityManagerProps) {
-  // FEATURE(legal): Add version comparison and effective-date timeline views
-  // for authorities that have been amended over time.
   const authorities = useAppStore((state) => state.legalAuthorities);
   const setAuthorities = useAppStore((state) => state.setLegalAuthorities);
   const [editor, setEditor] = useState<AuthorityEditorState>(emptyAuthority);
@@ -75,6 +75,14 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
   const [isImporting, setIsImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [selectedStatuteId, setSelectedStatuteId] = useState<string | null>(null);
+  const [versions, setVersions] = useState<LegalAuthorityVersionSummary[]>([]);
+  const [leftVersionId, setLeftVersionId] = useState<string | null>(null);
+  const [rightVersionId, setRightVersionId] = useState<string | null>(null);
+  const [leftVersion, setLeftVersion] = useState<LegalAuthorityVersionDetail | null>(null);
+  const [rightVersion, setRightVersion] = useState<LegalAuthorityVersionDetail | null>(null);
+  const [versionError, setVersionError] = useState<string | null>(null);
+  const [versionRevision, setVersionRevision] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -101,6 +109,48 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
       window.removeEventListener('keydown', closeOnEscape);
     };
   }, [isOpen, onClose, setAuthorities]);
+
+  useEffect(() => {
+    if (!isOpen || authorities.length === 0) return;
+    setSelectedStatuteId((current) => current && authorities.some((authority) => authority.statuteId === current) ? current : authorities[0].statuteId);
+  }, [authorities, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !selectedStatuteId) return;
+    let active = true;
+    setVersionError(null);
+    setVersions([]);
+    setLeftVersionId(null);
+    setRightVersionId(null);
+    setLeftVersion(null);
+    setRightVersion(null);
+    void invokeCommand('list_legal_authority_versions', { statuteId: selectedStatuteId }).then((values) => {
+      if (!active) return;
+      setVersions(values);
+      setRightVersionId(values[0]?.versionId ?? null);
+      setLeftVersionId(values[1]?.versionId ?? values[0]?.versionId ?? null);
+    }).catch((reason) => {
+      if (active) setVersionError(String(reason));
+    });
+    return () => { active = false; };
+  }, [isOpen, selectedStatuteId, versionRevision]);
+
+  useEffect(() => {
+    if (!selectedStatuteId || !leftVersionId || !rightVersionId) return;
+    let active = true;
+    setVersionError(null);
+    void Promise.all([
+      invokeCommand('get_legal_authority_version', { statuteId: selectedStatuteId, versionId: leftVersionId }),
+      invokeCommand('get_legal_authority_version', { statuteId: selectedStatuteId, versionId: rightVersionId }),
+    ]).then(([left, right]) => {
+      if (!active) return;
+      setLeftVersion(left);
+      setRightVersion(right);
+    }).catch((reason) => {
+      if (active) setVersionError(String(reason));
+    });
+    return () => { active = false; };
+  }, [leftVersionId, rightVersionId, selectedStatuteId]);
 
   if (!isOpen) return null;
 
@@ -165,6 +215,8 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
       const result = await invokeCommand('import_legal_authority', { input });
       const refreshed = await invokeCommand('list_legal_authorities', {});
       setAuthorities(refreshed);
+      setSelectedStatuteId(result.authority.statuteId);
+      setVersionRevision((value) => value + 1);
       setSuccess(
         result.insertedNewVersion
           ? `${result.authority.statuteCitation} was indexed as a new immutable version.`
@@ -211,7 +263,7 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
             ) : (
               <div className="space-y-2">
                 {authorities.map((authority) => (
-                  <article key={authority.statuteId} className="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+                  <button type="button" key={authority.statuteId} onClick={() => setSelectedStatuteId(authority.statuteId)} className={cn('focus-ring block w-full rounded-lg border bg-slate-950/60 p-3 text-left', selectedStatuteId === authority.statuteId ? 'border-indigo-400/30' : 'border-slate-800')}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="truncate text-[10px] font-semibold text-slate-200">
@@ -235,7 +287,7 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
                     <div className="mt-2 truncate font-mono text-[7px] text-slate-700">
                       SHA-256 {authority.contentSha256}
                     </div>
-                  </article>
+                  </button>
                 ))}
               </div>
             )}
@@ -259,6 +311,8 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
               Close
             </button>
           </div>
+
+          {selectedStatuteId && <AuthorityVersionWorkspace versions={versions} leftVersionId={leftVersionId} rightVersionId={rightVersionId} leftVersion={leftVersion} rightVersion={rightVersion} error={versionError} onLeftChange={setLeftVersionId} onRightChange={setRightVersionId} />}
 
           <form onSubmit={(event) => void submit(event)} className="min-h-0 flex-1 overflow-y-auto p-5">
             <div className="grid grid-cols-2 gap-3">
@@ -372,6 +426,25 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
       </div>
     </div>
   );
+}
+
+function AuthorityVersionWorkspace({ versions, leftVersionId, rightVersionId, leftVersion, rightVersion, error, onLeftChange, onRightChange }: { versions: LegalAuthorityVersionSummary[]; leftVersionId: string | null; rightVersionId: string | null; leftVersion: LegalAuthorityVersionDetail | null; rightVersion: LegalAuthorityVersionDetail | null; error: string | null; onLeftChange: (value: string) => void; onRightChange: (value: string) => void }) {
+  const changes = leftVersion && rightVersion ? compareAuthorityText(leftVersion.fullText, rightVersion.fullText) : null;
+  return <section className="border-b border-slate-800 bg-slate-900/20 px-5 py-3" aria-label="Authority version comparison"><div className="flex items-center justify-between gap-3"><div><div className="text-[9px] font-semibold text-slate-300">Effective-date timeline and immutable text comparison</div><div className="mt-0.5 text-[8px] text-slate-600">{versions.length} content-addressed version{versions.length === 1 ? '' : 's'}, newest first</div></div>{changes && <span className="font-mono text-[8px] text-indigo-300">{changes.changed.toLocaleString()} changed · {changes.added.toLocaleString()} added · {changes.removed.toLocaleString()} removed lines</span>}</div>{error ? <p role="alert" className="mt-2 text-[8px] text-rose-300">{error}</p> : versions.length === 0 ? <p className="mt-2 text-[8px] text-slate-600">No immutable versions are indexed for this authority.</p> : <><div className="mt-2 flex gap-1 overflow-x-auto pb-1">{versions.map((version) => <span key={version.versionId} className="shrink-0 rounded border border-slate-800 bg-slate-950 px-2 py-1 font-mono text-[7px] text-slate-500" title={version.contentSha256}>{version.effectiveFrom ?? 'start unknown'} → {version.effectiveTo ?? 'open ended'} · {formatVersionDate(version.importedAt)}</span>)}</div><div className="mt-2 grid grid-cols-2 gap-2">{([['Earlier / baseline', leftVersionId, onLeftChange, leftVersion], ['Later / comparison', rightVersionId, onRightChange, rightVersion]] as const).map(([label, selected, change, detail]) => <label key={label} className="block text-[8px] text-slate-500">{label}<select value={selected ?? ''} onChange={(event) => change(event.target.value)} className="ml-2 rounded border border-slate-800 bg-slate-950 px-2 py-1 font-mono text-[8px] text-slate-300">{versions.map((version) => <option key={version.versionId} value={version.versionId}>{formatVersionDate(version.importedAt)} · {version.contentSha256.slice(0, 10)}</option>)}</select><textarea readOnly value={detail?.fullText ?? 'Loading version text…'} aria-label={`${label} authority text`} className="mt-1.5 h-28 w-full resize-y rounded border border-slate-800 bg-slate-950 p-2 font-mono text-[8px] leading-relaxed text-slate-400" /></label>)}</div></>}</section>;
+}
+
+function compareAuthorityText(left: string, right: string) {
+  const leftLines = left.split('\n');
+  const rightLines = right.split('\n');
+  const shared = Math.min(leftLines.length, rightLines.length);
+  let changed = 0;
+  for (let index = 0; index < shared; index += 1) if (leftLines[index] !== rightLines[index]) changed += 1;
+  return { changed, added: Math.max(0, rightLines.length - leftLines.length), removed: Math.max(0, leftLines.length - rightLines.length) };
+}
+
+function formatVersionDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
 }
 
 function validateAuthorityEditor(

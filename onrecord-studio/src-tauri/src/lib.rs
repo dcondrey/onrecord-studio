@@ -125,6 +125,8 @@ pub fn run() {
             commands::investigation::register_statutory_extension,
             commands::investigation::import_legal_authority,
             commands::investigation::list_legal_authorities,
+            commands::investigation::list_legal_authority_versions,
+            commands::investigation::get_legal_authority_version,
             commands::investigation::evaluate_request_legal_compliance,
             commands::investigation::list_request_legal_findings,
             commands::investigation::review_legal_finding,

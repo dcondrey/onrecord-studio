@@ -172,6 +172,28 @@ pub async fn list_legal_authorities(
 }
 
 #[tauri::command]
+pub async fn list_legal_authority_versions(
+    statute_id: String,
+    repository: State<'_, DuckDbRepository>,
+) -> Result<Vec<crate::types::LegalAuthorityVersionSummary>, AppError> {
+    let statute_id = required_text(&statute_id, "Authority identifier", 128)?;
+    repository.list_legal_authority_versions(statute_id).await
+}
+
+#[tauri::command]
+pub async fn get_legal_authority_version(
+    statute_id: String,
+    version_id: String,
+    repository: State<'_, DuckDbRepository>,
+) -> Result<crate::types::LegalAuthorityVersionDetail, AppError> {
+    let statute_id = required_text(&statute_id, "Authority identifier", 128)?;
+    let version_id = required_text(&version_id, "Authority version identifier", 256)?;
+    repository
+        .get_legal_authority_version(statute_id, version_id)
+        .await
+}
+
+#[tauri::command]
 pub async fn evaluate_request_legal_compliance(
     request_id: u64,
     portal_key: String,
