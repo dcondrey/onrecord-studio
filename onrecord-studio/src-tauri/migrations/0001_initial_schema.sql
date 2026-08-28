@@ -7,8 +7,8 @@
 
 -- DuckDB does not support SQLite's PRAGMA or cascading foreign-key actions. Referential
 -- integrity is enforced by DuckDB constraints and repository-level delete/update boundaries.
--- TODO(storage-integrity): Add a consistency-check migration/job covering every logical relation
--- whose physical foreign key was removed, including orphan detection and repair reporting.
+-- `verify_logical_relations` audits every intentionally unconstrained relation at startup and
+-- refuses a corrupt core with per-relation orphan counts rather than silently repairing evidence.
 
 CREATE SEQUENCE IF NOT EXISTS source_ingestion_failure_seq;
 CREATE SEQUENCE IF NOT EXISTS ingestion_frontier_seq;
@@ -529,7 +529,8 @@ WHERE statute_id = 'CPRA_7922.535'
 -- ----------------------------------------------------------------------------
 -- 6. SEARCH TEXT PROJECTION
 -- Plain DuckDB table maintained transactionally by the repository. This is not an FTS5 virtual
--- table; add a versioned DuckDB search index before relying on engine-provided ranking/tokenization.
+-- table; the versioned companion token projection provides exact-token lookup without claiming
+-- engine-provided stemming or relevance ranking.
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS documents_fts (
     document_id BIGINT NOT NULL,

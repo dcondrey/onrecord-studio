@@ -29,6 +29,9 @@ export default function PatternExplorer() {
   const [status, setStatus] = useState<CorpusIndexStatus | null>(null);
   const [kindFilter, setKindFilter] = useState<KindFilter>('ALL');
   const [minimumEvidenceCount, setMinimumEvidenceCount] = useState(2);
+  const [minimumConfidence, setMinimumConfidence] = useState(0);
+  const [indexedFrom, setIndexedFrom] = useState('');
+  const [indexedTo, setIndexedTo] = useState('');
   const [selectedPatternId, setSelectedPatternId] = useState<string | null>(null);
   const [excerpt, setExcerpt] = useState<{
     evidence: CorpusEvidenceReference;
@@ -54,6 +57,9 @@ export default function PatternExplorer() {
           query: {
             portalKey: activePortalKey,
             minimumEvidenceCount,
+            minimumConfidenceBasisPoints: minimumConfidence,
+            indexedFrom: toRfc3339(indexedFrom),
+            indexedTo: toRfc3339(indexedTo),
             resultLimit: 250,
           },
         }),
@@ -73,7 +79,7 @@ export default function PatternExplorer() {
     } finally {
       if (refreshGate.isCurrent(request)) setIsLoading(false);
     }
-  }, [activePortalKey, minimumEvidenceCount, refreshGate]);
+  }, [activePortalKey, indexedFrom, indexedTo, minimumConfidence, minimumEvidenceCount, refreshGate]);
 
   useEffect(() => {
     void refresh();
@@ -143,6 +149,28 @@ export default function PatternExplorer() {
                 {[2, 3, 5, 10].map((value) => <option key={value} value={value}>{value}</option>)}
               </select>
             </label>
+            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-[9px] text-slate-500">
+              Confidence
+              <select
+                value={minimumConfidence}
+                onChange={(event) => setMinimumConfidence(Number(event.target.value))}
+                className="bg-transparent font-mono text-slate-200 outline-none"
+              >
+                <option value={0}>Any</option>
+                <option value={7000}>70%+</option>
+                <option value={8000}>80%+</option>
+                <option value={9000}>90%+</option>
+                <option value={9500}>95%+</option>
+              </select>
+            </label>
+            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-[9px] text-slate-500">
+              Indexed after
+              <input type="datetime-local" value={indexedFrom} max={indexedTo || undefined} onChange={(event) => setIndexedFrom(event.target.value)} className="bg-transparent font-mono text-slate-200 outline-none" />
+            </label>
+            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-[9px] text-slate-500">
+              Indexed before
+              <input type="datetime-local" value={indexedTo} min={indexedFrom || undefined} onChange={(event) => setIndexedTo(event.target.value)} className="bg-transparent font-mono text-slate-200 outline-none" />
+            </label>
             <button
               type="button"
               onClick={() => void refresh()}
@@ -159,7 +187,7 @@ export default function PatternExplorer() {
           <IndexMetric label="Documents" value={status?.indexedDocumentCount} />
           <IndexMetric label="Segments" value={status?.indexedSegmentCount} />
           <IndexMetric label="Term postings" value={status?.indexedTermCount} />
-          <IndexMetric label="Writer queue" value={status?.pendingWriteCapacity} suffix=" free" />
+          <IndexMetric label="Writer queue" value={status?.availableWriteCapacity} suffix=" free" />
         </div>
 
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Pattern type">
@@ -289,6 +317,12 @@ export default function PatternExplorer() {
       </div>
     </div>
   );
+}
+
+function toRfc3339(value: string) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 function IndexMetric({ label, value, suffix = '' }: { label: string; value?: number; suffix?: string }) {

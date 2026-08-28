@@ -707,6 +707,7 @@ impl DuckDbRepository {
             AppError::Storage(format!("Failed to finalize migration indexes: {error}"))
         })?;
         backfill_search_token_index(&mut conn)?;
+        verify_logical_relations(&conn)?;
         Ok(())
     }
 
@@ -5421,6 +5422,98 @@ fn backfill_search_token_index(conn: &mut Connection) -> Result<(), AppError> {
     }
 }
 
+/// Audits relations kept logical because DuckDB cannot support the required parent updates with
+/// physical foreign keys. Canonical evidence is never auto-deleted or guessed into a parent; the
+/// operator receives exact relation/count pairs and can restore from the retained source data.
+fn verify_logical_relations(conn: &Connection) -> Result<(), AppError> {
+    const CHECKS: [(&str, &str); 9] = [
+        (
+            "statutory_extensions -> requests",
+            "SELECT COUNT(*) FROM statutory_extensions child
+             LEFT JOIN requests parent ON parent.id = child.request_id
+                AND parent.portal_subdomain = child.portal_subdomain
+             WHERE parent.id IS NULL",
+        ),
+        (
+            "request_keyword_signals -> requests",
+            "SELECT COUNT(*) FROM request_keyword_signals child
+             LEFT JOIN requests parent ON parent.id = child.request_id
+                AND parent.portal_subdomain = child.portal_subdomain
+             WHERE parent.id IS NULL",
+        ),
+        (
+            "documents -> requests",
+            "SELECT COUNT(*) FROM documents child
+             LEFT JOIN requests parent ON parent.id = child.request_id
+                AND parent.portal_subdomain = child.portal_subdomain
+             WHERE parent.id IS NULL",
+        ),
+        (
+            "case_audits -> requests",
+            "SELECT COUNT(*) FROM case_audits child
+             LEFT JOIN requests parent ON parent.id = child.target_request_id
+                AND parent.portal_subdomain = child.target_subdomain
+             WHERE parent.id IS NULL",
+        ),
+        (
+            "document_integrity_flags -> case_audits",
+            "SELECT COUNT(*) FROM document_integrity_flags child
+             LEFT JOIN case_audits parent ON parent.audit_id = child.audit_id
+             WHERE parent.audit_id IS NULL",
+        ),
+        (
+            "documents_fts -> documents",
+            "SELECT COUNT(*) FROM documents_fts child
+             LEFT JOIN documents parent ON parent.id = child.document_id
+                AND parent.portal_subdomain = child.portal_subdomain
+             WHERE parent.id IS NULL",
+        ),
+        (
+            "document_search_tokens -> documents_fts",
+            "SELECT COUNT(*) FROM document_search_tokens child
+             LEFT JOIN documents_fts parent ON parent.document_id = child.document_id
+                AND parent.portal_subdomain = child.portal_subdomain
+             WHERE parent.document_id IS NULL",
+        ),
+        (
+            "document_search_index_state -> documents_fts",
+            "SELECT COUNT(*) FROM document_search_index_state child
+             LEFT JOIN documents_fts parent ON parent.document_id = child.document_id
+                AND parent.portal_subdomain = child.portal_subdomain
+             WHERE parent.document_id IS NULL",
+        ),
+        (
+            "legal_provisions_fts -> legal_provisions",
+            "SELECT COUNT(*) FROM legal_provisions_fts child
+             LEFT JOIN legal_provisions parent ON parent.provision_id = child.provision_id
+                AND parent.version_id = child.version_id
+             WHERE parent.provision_id IS NULL",
+        ),
+    ];
+
+    let mut failures = Vec::new();
+    for (relation, query) in CHECKS {
+        let count = conn
+            .query_row(query, [], |row| row.get::<_, i64>(0))
+            .map_err(|error| {
+                AppError::Storage(format!(
+                    "Failed to audit logical relation '{relation}': {error}"
+                ))
+            })?;
+        if count > 0 {
+            failures.push(format!("{relation}: {count} orphan row(s)"));
+        }
+    }
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(AppError::Storage(format!(
+            "Core consistency audit failed; no evidence was modified: {}",
+            failures.join("; ")
+        )))
+    }
+}
+
 /// Whether a stored digest is a well-formed SHA-256 value.
 ///
 /// Read paths need this as a question rather than an error. A digest that was never valid must be
@@ -6167,9 +6260,9 @@ mod tests {
 
     use super::{
         compute_extracted_text_sha256, cpra_calendar_confidence_basis_points,
-        validate_entropy_metadata, DocumentDownloadFinalization, DocumentExtractionFinalization,
-        DuckDbRepository, IngestionSchedulerCounts, PortalSyncRunFinalization,
-        ProvenanceEvidenceFile, SourceLifecycleState,
+        validate_entropy_metadata, verify_logical_relations, DocumentDownloadFinalization,
+        DocumentExtractionFinalization, DuckDbRepository, IngestionSchedulerCounts,
+        PortalSyncRunFinalization, ProvenanceEvidenceFile, SourceLifecycleState,
     };
 
     const MIGRATION: &str = include_str!("../../migrations/0001_initial_schema.sql");
@@ -8251,6 +8344,40 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM documents_fts", [], |row| row.get(0))
             .expect("FTS count must decode");
         assert_eq!((audit_count, fts_count), (0, 0));
+    }
+
+    #[tokio::test]
+    async fn logical_relation_audit_names_orphans_without_modifying_them() {
+        let repository = repository_with_document().await;
+        let connection = repository.conn.lock().await;
+        connection
+            .execute(
+                "INSERT INTO documents (
+                    id, request_id, portal_subdomain, visibility, created_at, updated_at
+                 ) VALUES (999, 998, ?1, 'public', '2026-08-27T00:00:00Z', '2026-08-27T00:00:00Z')",
+                params![PORTAL_SUBDOMAIN],
+            )
+            .expect("the intentionally unconstrained orphan fixture must insert");
+
+        let error = verify_logical_relations(&connection)
+            .expect_err("the startup consistency audit must refuse an orphan");
+        assert!(
+            error
+                .to_string()
+                .contains("documents -> requests: 1 orphan row"),
+            "the report must identify the broken relation and count: {error}"
+        );
+        let retained: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM documents WHERE id = 999 AND portal_subdomain = ?1",
+                params![PORTAL_SUBDOMAIN],
+                |row| row.get(0),
+            )
+            .expect("the orphan count must decode");
+        assert_eq!(
+            retained, 1,
+            "the audit must never delete canonical evidence"
+        );
     }
 
     #[tokio::test]

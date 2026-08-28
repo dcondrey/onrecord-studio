@@ -138,9 +138,7 @@ pub fn extract_sqlite_text<P: AsRef<Path>>(file_path: P) -> Result<String, AppEr
                         table_name, column
                     ))
                 })?;
-                // PERF(database): Write normalized cell values directly into `output`; allocating
-                // a temporary String per cell amplifies allocator traffic at the million-row cap.
-                append(&mut output, &value_to_text(value), path)?;
+                append_value(&mut output, value, path)?;
             }
             append(&mut output, "\n", path)?;
         }
@@ -193,17 +191,23 @@ fn quote_identifier(identifier: &str) -> String {
     format!("\"{}\"", identifier.replace('"', "\"\""))
 }
 
-fn value_to_text(value: ValueRef<'_>) -> String {
+fn append_value(output: &mut String, value: ValueRef<'_>, path: &Path) -> Result<(), AppError> {
     match value {
-        ValueRef::Null => String::new(),
-        ValueRef::Integer(value) => value.to_string(),
-        ValueRef::Real(value) => value.to_string(),
-        ValueRef::Text(value) => sanitize_field(&String::from_utf8_lossy(value)),
-        ValueRef::Blob(value) => format!(
-            "[BLOB bytes={} sha256={}]",
-            value.len(),
-            digest_hex(Sha256::digest(value))
-        ),
+        ValueRef::Null => Ok(()),
+        ValueRef::Integer(value) => append(output, &value.to_string(), path),
+        ValueRef::Real(value) => append(output, &value.to_string(), path),
+        ValueRef::Text(value) => {
+            let value = String::from_utf8_lossy(value);
+            let normalized = sanitize_field(&value);
+            append(output, &normalized, path)
+        }
+        ValueRef::Blob(value) => {
+            append(output, "[BLOB bytes=", path)?;
+            append(output, &value.len().to_string(), path)?;
+            append(output, " sha256=", path)?;
+            append(output, &digest_hex(Sha256::digest(value)), path)?;
+            append(output, "]", path)
+        }
     }
 }
 

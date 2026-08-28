@@ -8,7 +8,7 @@ use crate::types::{
 };
 use duckdb::{params, Connection, OptionalExt, Transaction};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{mpsc as std_mpsc, Arc};
 use tokio::sync::{mpsc, oneshot, Semaphore};
@@ -25,7 +25,10 @@ const CORPUS_ALGORITHM_VERSION: &str = "deterministic-corpus-v2";
 /// shared one `MAXIMUM_ENTITIES_PER_DOCUMENT` pool, so a spreadsheet of dates could fill the whole
 /// budget and leave every other kind at zero with nothing recording that extraction was cut short
 /// rather than genuinely absent (see docs/local-analysis-architecture.md section 2).
-const CORPUS_SCHEMA_VERSION: i64 = 4;
+/// 5: materialized distinct-document counts for entities avoid rebuilding concatenated document
+/// keys for the common unscoped interactive pattern query. Scoped/time-bounded queries still
+/// calculate within their requested slice.
+const CORPUS_SCHEMA_VERSION: i64 = 5;
 
 const WRITER_QUEUE_CAPACITY: usize = 64;
 const MAXIMUM_CONCURRENT_ANALYSES: usize = 4;
@@ -313,9 +316,7 @@ impl CorpusIndex {
     }
 
     pub async fn status(&self) -> Result<CorpusIndexStatus, AppError> {
-        // `Sender::capacity` is remaining queue capacity, despite the legacy IPC field name.
-        // TODO(corpus): Rename it to `available_write_capacity` in the next versioned IPC change.
-        let pending_write_capacity = self.writer.capacity();
+        let available_write_capacity = self.writer.capacity();
         self.read("Corpus index status", move |connection| {
             let (documents, segments, terms) = connection
                 .query_row(
@@ -339,7 +340,7 @@ impl CorpusIndex {
                 indexed_document_count: nonnegative_usize(documents, "document count")?,
                 indexed_segment_count: nonnegative_usize(segments, "segment count")?,
                 indexed_term_count: nonnegative_usize(terms, "term count")?,
-                pending_write_capacity,
+                available_write_capacity,
                 algorithm_version: CORPUS_ALGORITHM_VERSION.to_string(),
             })
         })
@@ -531,6 +532,11 @@ fn validate_pattern_query(query: &CorpusPatternQuery) -> Result<(), AppError> {
             "Corpus pattern result limit must be between 1 and 1000".to_string(),
         ));
     }
+    if query.minimum_confidence_basis_points > 10_000 {
+        return Err(AppError::DataParsing(
+            "Corpus confidence bound must be between 0 and 10000 basis points".to_string(),
+        ));
+    }
     if query
         .portal_key
         .as_deref()
@@ -538,6 +544,27 @@ fn validate_pattern_query(query: &CorpusPatternQuery) -> Result<(), AppError> {
     {
         return Err(AppError::DataParsing(
             "Corpus portal filter must not be empty".to_string(),
+        ));
+    }
+    let indexed_from = query
+        .indexed_from
+        .as_deref()
+        .map(|value| chrono::DateTime::parse_from_rfc3339(value))
+        .transpose()
+        .map_err(|error| {
+            AppError::DataParsing(format!("Invalid corpus index start time: {error}"))
+        })?;
+    let indexed_to = query
+        .indexed_to
+        .as_deref()
+        .map(|value| chrono::DateTime::parse_from_rfc3339(value))
+        .transpose()
+        .map_err(|error| {
+            AppError::DataParsing(format!("Invalid corpus index end time: {error}"))
+        })?;
+    if matches!((indexed_from, indexed_to), (Some(from), Some(to)) if from > to) {
+        return Err(AppError::DataParsing(
+            "Corpus index start time must not follow the end time".to_string(),
         ));
     }
     Ok(())
@@ -1403,6 +1430,27 @@ fn persist_analyzed_document(
     let transaction = connection.transaction().map_err(|error| {
         AppError::Storage(format!("Failed to open corpus index transaction: {error}"))
     })?;
+    let previous_entity_ids = {
+        let mut statement = transaction
+            .prepare(
+                "SELECT DISTINCT entity_id FROM corpus_entity_mentions
+                 WHERE portal_key = ?1 AND document_id = ?2",
+            )
+            .map_err(|error| {
+                AppError::Storage(format!("Failed to prepare prior entity lookup: {error}"))
+            })?;
+        statement
+            .query_map(params![document.portal_key, document.document_id], |row| {
+                row.get::<_, String>(0)
+            })
+            .map_err(|error| {
+                AppError::Storage(format!("Failed to query prior entity mentions: {error}"))
+            })?
+            .collect::<duckdb::Result<Vec<_>>>()
+            .map_err(|error| {
+                AppError::Storage(format!("Failed to decode prior entity mentions: {error}"))
+            })?
+    };
     transaction
         .execute(
             "INSERT INTO corpus_documents (
@@ -1446,11 +1494,64 @@ fn persist_analyzed_document(
     insert_segments(&transaction, &document)?;
     insert_terms(&transaction, &document)?;
     insert_entities(&transaction, &document)?;
+    refresh_entity_document_counts(&transaction, &document, previous_entity_ids)?;
     insert_entity_truncations(&transaction, &document)?;
     insert_lsh_bands(&transaction, &document)?;
     transaction
         .commit()
         .map_err(|error| AppError::Storage(format!("Failed to commit corpus index: {error}")))
+}
+
+fn refresh_entity_document_counts(
+    transaction: &Transaction<'_>,
+    document: &AnalyzedDocument,
+    previous_entity_ids: Vec<String>,
+) -> Result<(), AppError> {
+    let mut affected = previous_entity_ids.into_iter().collect::<BTreeSet<_>>();
+    affected.extend(
+        document
+            .entities
+            .iter()
+            .map(|entity| stable_id(&format!("{}|{}", entity.kind, entity.normalized_value))),
+    );
+    for entity_id in affected {
+        let document_count = transaction
+            .query_row(
+                "SELECT COUNT(*) FROM (
+                    SELECT portal_key, document_id
+                    FROM corpus_entity_mentions
+                    WHERE entity_id = ?1
+                    GROUP BY portal_key, document_id
+                 ) distinct_documents",
+                params![entity_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .map_err(|error| {
+                AppError::Storage(format!("Failed to count entity documents: {error}"))
+            })?;
+        if document_count == 0 {
+            transaction
+                .execute(
+                    "DELETE FROM corpus_entity_document_counts WHERE entity_id = ?1",
+                    params![entity_id],
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to remove an entity count: {error}"))
+                })?;
+        } else {
+            transaction
+                .execute(
+                    "INSERT INTO corpus_entity_document_counts (entity_id, document_count)
+                     VALUES (?1, ?2)
+                     ON CONFLICT(entity_id) DO UPDATE SET document_count = excluded.document_count",
+                    params![entity_id, document_count],
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to materialize an entity count: {error}"))
+                })?;
+        }
+    }
+    Ok(())
 }
 
 fn insert_segments(
@@ -1642,6 +1743,10 @@ fn load_patterns(
             .then_with(|| right.evidence.len().cmp(&left.evidence.len()))
             .then_with(|| left.pattern_id.cmp(&right.pattern_id))
     });
+    patterns.retain(|pattern| {
+        pattern.confidence_basis_points >= query.minimum_confidence_basis_points
+            && pattern.evidence.len() >= query.minimum_evidence_count
+    });
     patterns.truncate(query.result_limit);
     Ok(patterns)
 }
@@ -1657,6 +1762,8 @@ fn load_exact_duplicate_patterns(
             "SELECT extracted_text_sha256
              FROM corpus_documents
              WHERE (?1 IS NULL OR portal_key = ?1)
+               AND (?4 IS NULL OR indexed_at >= ?4)
+               AND (?5 IS NULL OR indexed_at <= ?5)
              GROUP BY extracted_text_sha256
              HAVING COUNT(*) >= ?2
              ORDER BY COUNT(*) DESC
@@ -1667,7 +1774,13 @@ fn load_exact_duplicate_patterns(
         })?;
     let hashes = statement
         .query_map(
-            params![portal_key, query.minimum_evidence_count, query.result_limit],
+            params![
+                portal_key,
+                query.minimum_evidence_count,
+                query.result_limit,
+                query.indexed_from,
+                query.indexed_to
+            ],
             |row| row.get::<_, String>(0),
         )
         .map_err(|error| AppError::Storage(format!("Failed to query duplicate hashes: {error}")))?
@@ -1678,8 +1791,7 @@ fn load_exact_duplicate_patterns(
             connection,
             "extracted_text_sha256",
             &hash,
-            portal_key,
-            query.result_limit,
+            query,
             "Exact extracted-text SHA-256 match",
         )?;
         patterns.push(CorpusPattern {
@@ -1706,38 +1818,85 @@ fn load_shared_entity_patterns(
     query: &CorpusPatternQuery,
     patterns: &mut Vec<CorpusPattern>,
 ) -> Result<(), AppError> {
-    // PERF(corpus): Materialize document/entity cardinalities for very large corpora instead of
-    // recomputing concatenated DISTINCT keys during every interactive pattern query.
     let remaining = query.result_limit.saturating_sub(patterns.len());
-    let mut statement = connection
-        .prepare(
-            "SELECT entities.entity_id, entities.entity_kind, entities.display_value
-             FROM corpus_entities AS entities
-             INNER JOIN corpus_entity_mentions AS mentions ON mentions.entity_id = entities.entity_id
-             WHERE (?1 IS NULL OR mentions.portal_key = ?1)
-             GROUP BY entities.entity_id, entities.entity_kind, entities.display_value
-             HAVING COUNT(DISTINCT mentions.portal_key || ':' || mentions.document_id) >= ?2
-             ORDER BY COUNT(DISTINCT mentions.portal_key || ':' || mentions.document_id) DESC
-             LIMIT ?3",
-        )
-        .map_err(|error| AppError::Storage(format!("Failed to prepare entity query: {error}")))?;
-    let entities = statement
-        .query_map(
-            params![portal_key, query.minimum_evidence_count, remaining],
-            |row| {
+    let entities = if portal_key.is_none()
+        && query.indexed_from.is_none()
+        && query.indexed_to.is_none()
+    {
+        let mut statement = connection
+            .prepare(
+                "SELECT entities.entity_id, entities.entity_kind, entities.display_value
+                 FROM corpus_entities AS entities
+                 INNER JOIN corpus_entity_document_counts AS counts
+                   ON counts.entity_id = entities.entity_id
+                 WHERE counts.document_count >= ?1
+                 ORDER BY counts.document_count DESC, entities.entity_id
+                 LIMIT ?2",
+            )
+            .map_err(|error| {
+                AppError::Storage(format!(
+                    "Failed to prepare materialized entity query: {error}"
+                ))
+            })?;
+        statement
+            .query_map(params![query.minimum_evidence_count, remaining], |row| {
                 Ok((
                     row.get::<_, String>(0)?,
                     row.get::<_, String>(1)?,
                     row.get::<_, String>(2)?,
                 ))
-            },
-        )
-        .map_err(|error| AppError::Storage(format!("Failed to query shared entities: {error}")))?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| AppError::Storage(format!("Failed to decode shared entity: {error}")))?;
+            })
+            .map_err(|error| {
+                AppError::Storage(format!("Failed to query materialized entities: {error}"))
+            })?
+            .collect::<duckdb::Result<Vec<_>>>()
+            .map_err(|error| {
+                AppError::Storage(format!("Failed to decode materialized entities: {error}"))
+            })?
+    } else {
+        let mut statement = connection
+            .prepare(
+            "SELECT entities.entity_id, entities.entity_kind, entities.display_value
+             FROM corpus_entities AS entities
+             INNER JOIN corpus_entity_mentions AS mentions ON mentions.entity_id = entities.entity_id
+             INNER JOIN corpus_documents AS documents
+               ON documents.portal_key = mentions.portal_key AND documents.document_id = mentions.document_id
+             WHERE (?1 IS NULL OR mentions.portal_key = ?1)
+               AND (?4 IS NULL OR documents.indexed_at >= ?4)
+               AND (?5 IS NULL OR documents.indexed_at <= ?5)
+             GROUP BY entities.entity_id, entities.entity_kind, entities.display_value
+             HAVING COUNT(DISTINCT mentions.portal_key || ':' || mentions.document_id) >= ?2
+             ORDER BY COUNT(DISTINCT mentions.portal_key || ':' || mentions.document_id) DESC
+             LIMIT ?3",
+            )
+            .map_err(|error| AppError::Storage(format!("Failed to prepare entity query: {error}")))?;
+        statement
+            .query_map(
+                params![
+                    portal_key,
+                    query.minimum_evidence_count,
+                    remaining,
+                    query.indexed_from,
+                    query.indexed_to
+                ],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .map_err(|error| {
+                AppError::Storage(format!("Failed to query shared entities: {error}"))
+            })?
+            .collect::<duckdb::Result<Vec<_>>>()
+            .map_err(|error| {
+                AppError::Storage(format!("Failed to decode shared entity: {error}"))
+            })?
+    };
     for (entity_id, entity_kind, display_value) in entities {
-        let evidence =
-            load_entity_evidence(connection, &entity_id, portal_key, query.result_limit)?;
+        let evidence = load_entity_evidence(connection, &entity_id, query)?;
         let kind = if entity_kind == "STATUTE" {
             CorpusPatternKind::SharedStatute
         } else if entity_kind == "DATE" {
@@ -1791,6 +1950,8 @@ fn load_near_duplicate_patterns(
                ON right_doc.portal_key = right_band.portal_key AND right_doc.document_id = right_band.document_id
              WHERE (?1 IS NULL OR (left_doc.portal_key = ?1 AND right_doc.portal_key = ?1))
                AND left_doc.extracted_text_sha256 <> right_doc.extracted_text_sha256
+               AND (?3 IS NULL OR (left_doc.indexed_at >= ?3 AND right_doc.indexed_at >= ?3))
+               AND (?4 IS NULL OR (left_doc.indexed_at <= ?4 AND right_doc.indexed_at <= ?4))
              GROUP BY left_doc.portal_key, left_doc.request_id, left_doc.document_id,
                       left_doc.extracted_text_sha256, left_doc.simhash_hex,
                       right_doc.portal_key, right_doc.request_id, right_doc.document_id,
@@ -1800,24 +1961,32 @@ fn load_near_duplicate_patterns(
         )
         .map_err(|error| AppError::Storage(format!("Failed to prepare near-duplicate query: {error}")))?;
     let rows = statement
-        .query_map(params![portal_key, remaining.saturating_mul(8)], |row| {
-            Ok((
-                PatternDocument {
-                    portal_key: row.get(0)?,
-                    request_id: row.get(1)?,
-                    document_id: row.get(2)?,
-                    content_sha256: row.get(3)?,
-                    simhash: parse_simhash(row.get::<_, String>(4)?)?,
-                },
-                PatternDocument {
-                    portal_key: row.get(5)?,
-                    request_id: row.get(6)?,
-                    document_id: row.get(7)?,
-                    content_sha256: row.get(8)?,
-                    simhash: parse_simhash(row.get::<_, String>(9)?)?,
-                },
-            ))
-        })
+        .query_map(
+            params![
+                portal_key,
+                remaining.saturating_mul(8),
+                query.indexed_from,
+                query.indexed_to
+            ],
+            |row| {
+                Ok((
+                    PatternDocument {
+                        portal_key: row.get(0)?,
+                        request_id: row.get(1)?,
+                        document_id: row.get(2)?,
+                        content_sha256: row.get(3)?,
+                        simhash: parse_simhash(row.get::<_, String>(4)?)?,
+                    },
+                    PatternDocument {
+                        portal_key: row.get(5)?,
+                        request_id: row.get(6)?,
+                        document_id: row.get(7)?,
+                        content_sha256: row.get(8)?,
+                        simhash: parse_simhash(row.get::<_, String>(9)?)?,
+                    },
+                ))
+            },
+        )
         .map_err(|error| AppError::Storage(format!("Failed to query near duplicates: {error}")))?;
     for row in rows {
         let (left, right) = row.map_err(|error| {
@@ -1828,6 +1997,9 @@ fn load_near_duplicate_patterns(
             continue;
         }
         let confidence = 9_500_u16.saturating_sub((distance as u16).saturating_mul(500));
+        if confidence < query.minimum_confidence_basis_points {
+            continue;
+        }
         let identity = format!(
             "near|{}|{}|{}|{}",
             left.portal_key, left.document_id, right.portal_key, right.document_id
@@ -1863,11 +2035,15 @@ fn load_shared_term_patterns(
     let mut statement = connection
         .prepare(
             "SELECT term
-             FROM corpus_term_postings
-             WHERE (?1 IS NULL OR portal_key = ?1)
+             FROM corpus_term_postings AS postings
+             INNER JOIN corpus_documents AS documents
+               ON documents.portal_key = postings.portal_key AND documents.document_id = postings.document_id
+             WHERE (?1 IS NULL OR postings.portal_key = ?1)
+               AND (?4 IS NULL OR documents.indexed_at >= ?4)
+               AND (?5 IS NULL OR documents.indexed_at <= ?5)
              GROUP BY term
-             HAVING COUNT(DISTINCT portal_key || ':' || document_id) >= ?2
-             ORDER BY COUNT(DISTINCT portal_key || ':' || document_id) DESC, SUM(frequency) DESC
+             HAVING COUNT(DISTINCT postings.portal_key || ':' || postings.document_id) >= ?2
+             ORDER BY COUNT(DISTINCT postings.portal_key || ':' || postings.document_id) DESC, SUM(frequency) DESC
              LIMIT ?3",
         )
         .map_err(|error| {
@@ -1875,14 +2051,20 @@ fn load_shared_term_patterns(
         })?;
     let terms = statement
         .query_map(
-            params![portal_key, query.minimum_evidence_count, remaining],
+            params![
+                portal_key,
+                query.minimum_evidence_count,
+                remaining,
+                query.indexed_from,
+                query.indexed_to
+            ],
             |row| row.get::<_, String>(0),
         )
         .map_err(|error| AppError::Storage(format!("Failed to query shared terms: {error}")))?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| AppError::Storage(format!("Failed to decode shared term: {error}")))?;
     for term in terms {
-        let evidence = load_term_evidence(connection, &term, portal_key, query.result_limit)?;
+        let evidence = load_term_evidence(connection, &term, query)?;
         patterns.push(CorpusPattern {
             pattern_id: stable_id(&format!("term|{term}")),
             kind: CorpusPatternKind::SharedTerm,
@@ -1903,8 +2085,7 @@ fn load_documents_for_value(
     connection: &Connection,
     column: &str,
     value: &str,
-    portal_key: Option<&str>,
-    limit: usize,
+    query: &CorpusPatternQuery,
     label: &str,
 ) -> Result<Vec<CorpusEvidenceReference>, AppError> {
     if column != "extracted_text_sha256" {
@@ -1917,6 +2098,8 @@ fn load_documents_for_value(
             "SELECT portal_key, request_id, document_id, extracted_text_sha256
              FROM corpus_documents
              WHERE extracted_text_sha256 = ?1 AND (?2 IS NULL OR portal_key = ?2)
+               AND (?4 IS NULL OR indexed_at >= ?4)
+               AND (?5 IS NULL OR indexed_at <= ?5)
              ORDER BY portal_key, document_id
              LIMIT ?3",
         )
@@ -1924,18 +2107,27 @@ fn load_documents_for_value(
             AppError::Storage(format!("Failed to prepare corpus evidence: {error}"))
         })?;
     let evidence = statement
-        .query_map(params![value, portal_key, limit], |row| {
-            Ok(CorpusEvidenceReference {
-                portal_key: row.get(0)?,
-                request_id: row.get(1)?,
-                document_id: row.get(2)?,
-                segment_index: None,
-                character_start: None,
-                character_end: None,
-                evidence_label: label.to_string(),
-                content_sha256: row.get(3)?,
-            })
-        })
+        .query_map(
+            params![
+                value,
+                query.portal_key,
+                query.result_limit,
+                query.indexed_from,
+                query.indexed_to
+            ],
+            |row| {
+                Ok(CorpusEvidenceReference {
+                    portal_key: row.get(0)?,
+                    request_id: row.get(1)?,
+                    document_id: row.get(2)?,
+                    segment_index: None,
+                    character_start: None,
+                    character_end: None,
+                    evidence_label: label.to_string(),
+                    content_sha256: row.get(3)?,
+                })
+            },
+        )
         .map_err(|error| AppError::Storage(format!("Failed to query corpus evidence: {error}")))?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| AppError::Storage(format!("Failed to decode corpus evidence: {error}")))?;
@@ -1945,8 +2137,7 @@ fn load_documents_for_value(
 fn load_entity_evidence(
     connection: &Connection,
     entity_id: &str,
-    portal_key: Option<&str>,
-    limit: usize,
+    query: &CorpusPatternQuery,
 ) -> Result<Vec<CorpusEvidenceReference>, AppError> {
     let mut statement = connection
         .prepare(
@@ -1958,6 +2149,8 @@ fn load_entity_evidence(
                ON documents.portal_key = mentions.portal_key AND documents.document_id = mentions.document_id
              INNER JOIN corpus_entities AS entities ON entities.entity_id = mentions.entity_id
              WHERE mentions.entity_id = ?1 AND (?2 IS NULL OR mentions.portal_key = ?2)
+               AND (?4 IS NULL OR documents.indexed_at >= ?4)
+               AND (?5 IS NULL OR documents.indexed_at <= ?5)
              GROUP BY mentions.portal_key, documents.request_id, mentions.document_id,
                       mentions.segment_index, mentions.character_start, mentions.character_end,
                       documents.extracted_text_sha256, entities.display_value
@@ -1966,18 +2159,30 @@ fn load_entity_evidence(
         )
         .map_err(|error| AppError::Storage(format!("Failed to prepare entity evidence: {error}")))?;
     let evidence = statement
-        .query_map(params![entity_id, portal_key, limit], |row| {
-            Ok(CorpusEvidenceReference {
-                portal_key: row.get(0)?,
-                request_id: row.get(1)?,
-                document_id: row.get(2)?,
-                segment_index: Some(row.get(3)?),
-                character_start: Some(row.get(4)?),
-                character_end: Some(row.get(5)?),
-                content_sha256: row.get(6)?,
-                evidence_label: format!("Shared normalized entity: {}", row.get::<_, String>(7)?),
-            })
-        })
+        .query_map(
+            params![
+                entity_id,
+                query.portal_key,
+                query.result_limit,
+                query.indexed_from,
+                query.indexed_to
+            ],
+            |row| {
+                Ok(CorpusEvidenceReference {
+                    portal_key: row.get(0)?,
+                    request_id: row.get(1)?,
+                    document_id: row.get(2)?,
+                    segment_index: Some(row.get(3)?),
+                    character_start: Some(row.get(4)?),
+                    character_end: Some(row.get(5)?),
+                    content_sha256: row.get(6)?,
+                    evidence_label: format!(
+                        "Shared normalized entity: {}",
+                        row.get::<_, String>(7)?
+                    ),
+                })
+            },
+        )
         .map_err(|error| AppError::Storage(format!("Failed to query entity evidence: {error}")))?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| AppError::Storage(format!("Failed to decode entity evidence: {error}")))?;
@@ -1987,8 +2192,7 @@ fn load_entity_evidence(
 fn load_term_evidence(
     connection: &Connection,
     term: &str,
-    portal_key: Option<&str>,
-    limit: usize,
+    query: &CorpusPatternQuery,
 ) -> Result<Vec<CorpusEvidenceReference>, AppError> {
     let mut statement = connection
         .prepare(
@@ -1998,24 +2202,35 @@ fn load_term_evidence(
              INNER JOIN corpus_documents AS documents
                ON documents.portal_key = postings.portal_key AND documents.document_id = postings.document_id
              WHERE postings.term = ?1 AND (?2 IS NULL OR postings.portal_key = ?2)
+               AND (?4 IS NULL OR documents.indexed_at >= ?4)
+               AND (?5 IS NULL OR documents.indexed_at <= ?5)
              ORDER BY postings.frequency DESC, postings.portal_key, postings.document_id
              LIMIT ?3",
         )
         .map_err(|error| AppError::Storage(format!("Failed to prepare term evidence: {error}")))?;
     let evidence = statement
-        .query_map(params![term, portal_key, limit], |row| {
-            let frequency = row.get::<_, usize>(4)?;
-            Ok(CorpusEvidenceReference {
-                portal_key: row.get(0)?,
-                request_id: row.get(1)?,
-                document_id: row.get(2)?,
-                segment_index: None,
-                character_start: None,
-                character_end: None,
-                content_sha256: row.get(3)?,
-                evidence_label: format!("Term '{term}' occurs {frequency} times"),
-            })
-        })
+        .query_map(
+            params![
+                term,
+                query.portal_key,
+                query.result_limit,
+                query.indexed_from,
+                query.indexed_to
+            ],
+            |row| {
+                let frequency = row.get::<_, usize>(4)?;
+                Ok(CorpusEvidenceReference {
+                    portal_key: row.get(0)?,
+                    request_id: row.get(1)?,
+                    document_id: row.get(2)?,
+                    segment_index: None,
+                    character_start: None,
+                    character_end: None,
+                    content_sha256: row.get(3)?,
+                    evidence_label: format!("Term '{term}' occurs {frequency} times"),
+                })
+            },
+        )
         .map_err(|error| AppError::Storage(format!("Failed to query term evidence: {error}")))?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| AppError::Storage(format!("Failed to decode term evidence: {error}")))?;
@@ -2169,6 +2384,12 @@ CREATE TABLE IF NOT EXISTS corpus_entity_mentions (
     PRIMARY KEY (portal_key, document_id, entity_id, character_start),
     FOREIGN KEY (portal_key, document_id)
         REFERENCES corpus_documents(portal_key, document_id),
+    FOREIGN KEY (entity_id) REFERENCES corpus_entities(entity_id)
+);
+
+CREATE TABLE IF NOT EXISTS corpus_entity_document_counts (
+    entity_id TEXT PRIMARY KEY,
+    document_count BIGINT NOT NULL CHECK (document_count > 0),
     FOREIGN KEY (entity_id) REFERENCES corpus_entities(entity_id)
 );
 
@@ -2485,6 +2706,26 @@ mod tests {
                     .iter()
                     .all(|evidence| evidence.content_sha256.len() == 64)
         }));
+
+        let high_confidence = index
+            .query_patterns(CorpusPatternQuery {
+                minimum_confidence_basis_points: 9_500,
+                ..CorpusPatternQuery::default()
+            })
+            .await
+            .unwrap();
+        assert!(high_confidence
+            .iter()
+            .all(|pattern| pattern.confidence_basis_points >= 9_500));
+
+        let future_only = index
+            .query_patterns(CorpusPatternQuery {
+                indexed_from: Some("2999-01-01T00:00:00Z".to_string()),
+                ..CorpusPatternQuery::default()
+            })
+            .await
+            .unwrap();
+        assert!(future_only.is_empty());
     }
 }
 

@@ -28,10 +28,13 @@ export interface CorpusPattern {
 }
 
 export interface CorpusPatternQuery {
-  // TODO(corpus): Add explicit time and confidence bounds when the index can
-  // answer those dimensions without post-filtering in the React client.
   portalKey?: string | null;
   minimumEvidenceCount: number;
+  minimumConfidenceBasisPoints?: number;
+  /** Inclusive RFC 3339 lower bound over the time a document entered this derived index. */
+  indexedFrom?: string | null;
+  /** Inclusive RFC 3339 upper bound over the time a document entered this derived index. */
+  indexedTo?: string | null;
   resultLimit: number;
 }
 
@@ -39,10 +42,7 @@ export interface CorpusIndexStatus {
   indexedDocumentCount: number;
   indexedSegmentCount: number;
   indexedTermCount: number;
-  // COMPAT(ipc): The name is inverted relative to the value. This is REMAINING writer-queue
-  // capacity, so a high number means idle and 0 means saturated. Do not render it as a backlog
-  // gauge. The mirror of this comment is on `pending_write_capacity` in
-  // src-tauri/src/types/corpus.rs; both must change together. See docs/ipc-contract.md.
-  pendingWriteCapacity: number;
+  /** Remaining bounded writer-queue slots; zero means new writes must wait. */
+  availableWriteCapacity: number;
   algorithmVersion: string;
 }

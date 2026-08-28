@@ -72,6 +72,7 @@ pub fn mask_pii(text: &str) -> Result<PiiMaskResult, AppError> {
     let selected = select_non_overlapping_candidates(candidates);
     let mut findings = Vec::with_capacity(selected.len());
     let mut copied_until = 0;
+    let mut character_cursor = 0;
 
     for candidate in selected {
         if candidate.start < copied_until
@@ -84,9 +85,11 @@ pub fn mask_pii(text: &str) -> Result<PiiMaskResult, AppError> {
             ));
         }
         let evidence = &text[candidate.start..candidate.end];
-        // PERF(pii): Build byte-to-character offsets in one pass; rescanning the entire prefix for
-        // every finding becomes quadratic when large documents contain many sensitive values.
-        let character_start = text[..candidate.start].chars().count();
+        // Candidates are ordered and non-overlapping, so advancing from the preceding byte avoids
+        // rescanning the prefix for every finding. Across the loop each source character is
+        // visited at most once.
+        character_cursor += text[copied_until..candidate.start].chars().count();
+        let character_start = character_cursor;
         let matched_character_count = evidence.chars().count();
         findings.push(PiiFinding {
             kind: candidate.kind,
@@ -98,6 +101,7 @@ pub fn mask_pii(text: &str) -> Result<PiiMaskResult, AppError> {
             confidence_basis_points: candidate.confidence_basis_points,
             evidence_sha256: sha256_hex(evidence.as_bytes()),
         });
+        character_cursor += matched_character_count;
         copied_until = candidate.end;
     }
     Ok(mask_byte_range(text, findings, 0, text.len()))
