@@ -358,10 +358,10 @@ pub struct UnredactorForensicReport {
     pub calculated_redaction_ratio: f64,
 }
 
-// FEATURE(pdf-audit): Keep this function deterministic and evidence-oriented. Future auxiliary
-// collectors belong in pdf_auxiliary.rs and should append attributed findings rather than expose
-// a second unmasked text channel. The source hash and bounded PII masking are part of the audit
-// contract and must remain in place when new evidence types are added.
+// This geometry-specific report remains deterministic and PII-masked. The companion
+// audit_document_residual_evidence command runs pdf_auxiliary and layout_side_channel and returns
+// their object-, page-, bounds-, and operator-attributed findings through the shared evidence
+// contract instead of exposing a second unmasked text channel.
 pub fn evaluate_vector_redaction_leaks<P: AsRef<Path>>(
     file_path: P,
 ) -> Result<UnredactorForensicReport, AppError> {
@@ -395,8 +395,6 @@ pub fn evaluate_vector_redaction_leaks<P: AsRef<Path>>(
     }
     let mut extracted_hidden_text = String::new();
     let mut bounding_box_clashes_count = 0_usize;
-    // TODO(pdf-audit): Merge typed findings from outlines, forms, structure trees, thumbnails,
-    // embedded files, annotations, and object generations into the shared evidence model.
     let mut isolated_structural_anomalies = collect_structural_signals(&document)?;
     let mut redaction_character_count = 0_usize;
     let mut total_character_count = 0_usize;

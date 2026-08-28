@@ -4032,7 +4032,7 @@ async fn extract_document(
     let primary_result = async {
         match format {
         DocumentFormat::Pdf => {
-            // FEATURE(forensics): Ordinary ingestion remains searchable-text-only. Route the
+            // Ordinary ingestion remains searchable-text-only. Route the
             // immutable residual-redaction audit through the dedicated forensic command so OCR
             // fallback cannot silently replace structural evidence.
             let path = local_path.to_path_buf();

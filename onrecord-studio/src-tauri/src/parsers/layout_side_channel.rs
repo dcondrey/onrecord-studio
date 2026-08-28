@@ -20,10 +20,9 @@ pub fn assess_glyph_position_leak(
     document: &Document,
     options: ForensicAuditOptions,
 ) -> Result<EvidenceBundle, AppError> {
-    // FEATURE(pdf-audit): Compare adjacent glyph/text-run positions, text-state matrices,
-    // TJ adjustments, character spacing, and embedded font metrics around redaction bounds.
-    // TODO(pdf-audit): Model editor-specific padding, line justification, CTM rounding, and
-    // workflow rewrites before reporting a usable interval for the missing span.
+    // Exact text-state matrices, text movement, spacing, scaling, font size, and TJ adjustments
+    // are preserved as measurements. Editor padding, justification, rounding, and rewrite
+    // behavior are intentionally not converted into a missing-character interval here.
     // NOTE(pdf-audit): A leaked width is preserved side-channel evidence, not recovered text.
     let pages = document.get_pages();
     if pages.len() > MAXIMUM_PAGES {
@@ -70,48 +69,126 @@ pub fn assess_glyph_position_leak(
             break;
         }
         for (operation_index, operation) in content.operations.iter().enumerate() {
-            if operation.operator != "TJ" {
+            if operation.operator == "TJ" {
+                let Some(Object::Array(values)) = operation.operands.first() else {
+                    continue;
+                };
+                let adjustments = values
+                    .iter()
+                    .filter_map(object_number)
+                    .filter(|value| value.abs() >= NOTABLE_TJ_ADJUSTMENT)
+                    .collect::<Vec<_>>();
+                if !adjustments.is_empty() {
+                    append_layout_finding(
+                        &mut bundle,
+                        page_number,
+                        page_id,
+                        operation_index,
+                        "PDF_TJ_POSITION_ADJUSTMENT",
+                        adjustments
+                            .iter()
+                            .map(|value| format!("{value:.3}"))
+                            .collect::<Vec<_>>()
+                            .join(","),
+                        "The page content stream preserves notable TJ positioning adjustments. They measure layout spacing and do not identify missing characters.",
+                        options,
+                    )?;
+                }
                 continue;
             }
-            let Some(Object::Array(values)) = operation.operands.first() else {
-                continue;
+            let (kind, explanation) = match operation.operator.as_str() {
+                "Tm" => (
+                    "PDF_TEXT_MATRIX_MEASUREMENT",
+                    "The content stream preserves an exact six-value text matrix. It locates a text run but does not identify omitted characters.",
+                ),
+                "Td" | "TD" => (
+                    "PDF_TEXT_POSITION_DELTA",
+                    "The content stream preserves an exact text-position delta. It is layout evidence, not a reconstruction of missing text.",
+                ),
+                "Tc" => (
+                    "PDF_CHARACTER_SPACING_MEASUREMENT",
+                    "The content stream preserves the character-spacing state used by later text operations.",
+                ),
+                "Tw" => (
+                    "PDF_WORD_SPACING_MEASUREMENT",
+                    "The content stream preserves the word-spacing state used by later text operations.",
+                ),
+                "Tz" => (
+                    "PDF_HORIZONTAL_TEXT_SCALE_MEASUREMENT",
+                    "The content stream preserves the horizontal text scale used by later text operations.",
+                ),
+                "TL" | "Ts" => (
+                    "PDF_TEXT_VERTICAL_STATE_MEASUREMENT",
+                    "The content stream preserves a text leading or rise measurement.",
+                ),
+                "Tf" => (
+                    "PDF_FONT_STATE_MEASUREMENT",
+                    "The content stream preserves the selected font resource name and size; this does not establish the rendered glyph identity by itself.",
+                ),
+                _ => continue,
             };
-            let adjustments = values
+            let measurement = operation
+                .operands
                 .iter()
-                .filter_map(object_number)
-                .filter(|value| value.abs() >= NOTABLE_TJ_ADJUSTMENT)
-                .collect::<Vec<_>>();
-            if adjustments.is_empty() {
-                continue;
-            }
-            if bundle.findings.len() >= MAXIMUM_FINDINGS {
-                bundle.coverage_complete = false;
-                bundle
-                    .warnings
-                    .push("PDF_LAYOUT_FINDING_LIMIT_REACHED".to_string());
-                return Ok(bundle);
-            }
-            let measurement = adjustments
-                .iter()
-                .map(|value| format!("{value:.3}"))
+                .map(format_operand)
                 .collect::<Vec<_>>()
                 .join(",");
-            bundle.findings.push(finding_for_text(
-                EvidenceClass::Preserved,
-                EvidenceConfidence::Exact,
-                "PDF_TJ_POSITION_ADJUSTMENT",
-                EvidenceLocator {
-                    object_reference: Some(format!("{} {} R operation {operation_index}", page_id.0, page_id.1)),
-                    page_number: Some(page_number),
-                    ..EvidenceLocator::default()
-                },
-                &measurement,
-                "The page content stream preserves notable TJ positioning adjustments. They measure layout spacing and do not identify missing characters.",
+            append_layout_finding(
+                &mut bundle,
+                page_number,
+                page_id,
+                operation_index,
+                kind,
+                measurement,
+                explanation,
                 options,
-            )?);
+            )?;
         }
     }
     Ok(bundle)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn append_layout_finding(
+    bundle: &mut EvidenceBundle,
+    page_number: u32,
+    page_id: lopdf::ObjectId,
+    operation_index: usize,
+    kind: &str,
+    measurement: String,
+    explanation: &str,
+    options: ForensicAuditOptions,
+) -> Result<(), AppError> {
+    if bundle.findings.len() >= MAXIMUM_FINDINGS {
+        bundle.coverage_complete = false;
+        if !bundle
+            .warnings
+            .iter()
+            .any(|warning| warning == "PDF_LAYOUT_FINDING_LIMIT_REACHED")
+        {
+            bundle
+                .warnings
+                .push("PDF_LAYOUT_FINDING_LIMIT_REACHED".to_string());
+        }
+        return Ok(());
+    }
+    bundle.findings.push(finding_for_text(
+        EvidenceClass::Preserved,
+        EvidenceConfidence::Exact,
+        kind,
+        EvidenceLocator {
+            object_reference: Some(format!(
+                "{} {} R operation {operation_index}",
+                page_id.0, page_id.1
+            )),
+            page_number: Some(page_number),
+            ..EvidenceLocator::default()
+        },
+        &measurement,
+        explanation,
+        options,
+    )?);
+    Ok(())
 }
 
 fn object_number(object: &Object) -> Option<f64> {
@@ -119,6 +196,16 @@ fn object_number(object: &Object) -> Option<f64> {
         Object::Integer(value) => Some(*value as f64),
         Object::Real(value) => Some((*value).into()),
         _ => None,
+    }
+}
+
+fn format_operand(object: &Object) -> String {
+    match object {
+        Object::Integer(value) => value.to_string(),
+        Object::Real(value) => format!("{value:.4}"),
+        Object::Name(value) => format!("/{}", String::from_utf8_lossy(value)),
+        Object::Reference((number, generation)) => format!("{number} {generation} R"),
+        _ => "non-scalar".to_string(),
     }
 }
 
@@ -133,14 +220,20 @@ mod tests {
         let mut document = Document::with_version("1.7");
         let pages_id = document.new_object_id();
         let content = Content {
-            operations: vec![Operation::new(
-                "TJ",
-                vec![Object::Array(vec![
-                    Object::string_literal("a"),
-                    Object::Integer(250),
-                    Object::string_literal("b"),
-                ])],
-            )],
+            operations: vec![
+                Operation::new(
+                    "Tm",
+                    vec![1.into(), 0.into(), 0.into(), 1.into(), 12.into(), 24.into()],
+                ),
+                Operation::new(
+                    "TJ",
+                    vec![Object::Array(vec![
+                        Object::string_literal("a"),
+                        Object::Integer(250),
+                        Object::string_literal("b"),
+                    ])],
+                ),
+            ],
         };
         let content_id = document.add_object(Stream::new(
             dictionary! {},
@@ -160,6 +253,10 @@ mod tests {
             .findings
             .iter()
             .any(|finding| finding.kind == "PDF_TJ_POSITION_ADJUSTMENT"));
+        assert!(result
+            .findings
+            .iter()
+            .any(|finding| finding.kind == "PDF_TEXT_MATRIX_MEASUREMENT"));
         assert!(result
             .findings
             .iter()
