@@ -34,6 +34,51 @@ pub struct StatutoryExtensionRecord {
     pub notice_source: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum AuxiliaryStreamKind {
+    Municipal311,
+    CodeEnforcement,
+    PoliceDispatch,
+    SanitationOperations,
+    Custom,
+}
+
+impl AuxiliaryStreamKind {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Municipal311 => "MUNICIPAL_311",
+            Self::CodeEnforcement => "CODE_ENFORCEMENT",
+            Self::PoliceDispatch => "POLICE_DISPATCH",
+            Self::SanitationOperations => "SANITATION_OPERATIONS",
+            Self::Custom => "CUSTOM",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AuxiliaryEventInput {
+    pub external_id: String,
+    pub occurred_at: String,
+    pub neighborhood_block: String,
+    pub event_type: String,
+    pub description: String,
+    pub latitude: Option<f64>,
+    pub longitude: Option<f64>,
+    pub source_payload: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AuxiliaryImportResult {
+    pub source_id: String,
+    pub imported_count: usize,
+    pub updated_count: usize,
+    pub rejected_count: usize,
+    pub source_sha256: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CrossAgencyCorrelation {

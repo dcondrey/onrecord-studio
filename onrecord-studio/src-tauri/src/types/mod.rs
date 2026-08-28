@@ -22,9 +22,10 @@ pub use corpus::{
     CorpusPatternQuery,
 };
 pub use investigation::{
-    CrossAgencyCorrelation, DocumentProvenanceVerification, DocumentTextChunk,
-    LegalBriefExportResult, ProvenanceVerificationRecord, RequestDocumentSummary,
-    RequestSearchResult, StatutoryExtensionReason, StatutoryExtensionRecord,
+    AuxiliaryEventInput, AuxiliaryImportResult, AuxiliaryStreamKind, CrossAgencyCorrelation,
+    DocumentProvenanceVerification, DocumentTextChunk, LegalBriefExportResult,
+    ProvenanceVerificationRecord, RequestDocumentSummary, RequestSearchResult,
+    StatutoryExtensionReason, StatutoryExtensionRecord,
 };
 pub use legal::{
     LegalAuthorityImport, LegalAuthorityImportResult, LegalAuthorityKind, LegalAuthoritySummary,

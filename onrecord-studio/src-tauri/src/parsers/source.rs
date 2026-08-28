@@ -42,10 +42,9 @@ pub(crate) fn read_regular_file(
             path.display()
         ))
     })?;
-    // The caller has already confined the path to the managed evidence store. Re-stat the opened
-    // descriptor and verify the exact byte count so external/untrusted inputs cannot substitute a
-    // symlink or change size between inspection and the bounded snapshot read. A same-size rewrite
-    // would require local write access to the managed evidence store, outside this trust boundary.
+    // BUG(evidence): The inspection and open are separate filesystem operations, so a same-size
+    // replacement can win this race. Open with no-follow semantics and compare the opened file's
+    // stable identity to the inspected entry before treating the bytes as a forensic snapshot.
     let file = File::open(path).map_err(|error| {
         AppError::Storage(format!(
             "{format}_READ_FAILED: failed to open '{}': {error}",

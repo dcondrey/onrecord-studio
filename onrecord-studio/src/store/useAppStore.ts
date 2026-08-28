@@ -63,6 +63,7 @@ interface AppState {
   searchError: string | null;
   selectedRequestId: number | null;
   selectedRequestPortalKey: string | null;
+  isExtractionTerminalOpen: boolean;
   pendingSourceRepair: SourceRepairNotice | null;
   setWorkspaceView: (view: WorkspaceView) => void;
   setTheme: (theme: AppTheme) => void;
@@ -100,6 +101,7 @@ interface AppState {
   setFilteredResults: (results: RequestSearchResult[]) => void;
   setSearchError: (message: string | null) => void;
   setSelectedRequest: (requestId: number | null, portalKey?: string | null) => void;
+  setTerminalVisibility: (visible: boolean) => void;
   setPendingSourceRepair: (notice: SourceRepairNotice | null) => void;
 }
 
@@ -141,6 +143,7 @@ export const useAppStore = create<AppState>((set) => ({
   searchError: null,
   selectedRequestId: null,
   selectedRequestPortalKey: null,
+  isExtractionTerminalOpen: false,
   pendingSourceRepair: null,
   setWorkspaceView: (workspaceView) => set({ workspaceView, isSidebarOpen: false }),
   setTheme: (theme) => set({ theme }),
@@ -289,6 +292,7 @@ export const useAppStore = create<AppState>((set) => ({
   setSearchError: (searchError) => set({ searchError }),
   setSelectedRequest: (selectedRequestId, selectedRequestPortalKey = null) =>
     set({ selectedRequestId, selectedRequestPortalKey, activeLegalFindings: [] }),
+  setTerminalVisibility: (isExtractionTerminalOpen) => set({ isExtractionTerminalOpen }),
   setPendingSourceRepair: (pendingSourceRepair) => set({ pendingSourceRepair }),
 }));
 

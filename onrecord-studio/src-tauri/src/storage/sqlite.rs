@@ -20,9 +20,10 @@ use crate::storage::fts::clean_plain_text_for_index;
 use crate::types::c2pa::{ProvenanceConfidence, RecordedDigestSource, SignatureVerificationState};
 use crate::types::ProvenanceVerificationRecord;
 use crate::types::{
-    CrawlPolicy, CrossAgencyCorrelation, DocumentMetadata, DocumentProvenanceVerification,
-    DocumentTextChunk, LegalAuthorityImport, LegalAuthorityImportResult, LegalAuthorityKind,
-    LegalAuthoritySummary, LegalBriefExportResult, LegalComplianceFinding, LegalEvaluationResult,
+    AuxiliaryEventInput, AuxiliaryImportResult, AuxiliaryStreamKind, CrawlPolicy,
+    CrossAgencyCorrelation, DocumentMetadata, DocumentProvenanceVerification, DocumentTextChunk,
+    LegalAuthorityImport, LegalAuthorityImportResult, LegalAuthorityKind, LegalAuthoritySummary,
+    LegalBriefExportResult, LegalComplianceFinding, LegalEvaluationResult,
     LegalFindingReviewStatus, PortalRegistration, PublicRequest, RequestDocumentSummary,
     RequestSearchResult, SavedSource, SourceGuidance, SourceLifecycleState,
     StatutoryExtensionReason, StatutoryExtensionRecord, TimelineAnomalyMarker,
@@ -2493,6 +2494,29 @@ impl DuckDbRepository {
         .await
     }
 
+    pub async fn record_statutory_extension(
+        &self,
+        request_id: u64,
+        portal_key: &str,
+        extension: &StatutoryExtensionRecord,
+    ) -> Result<(), AppError> {
+        chrono::DateTime::parse_from_rfc3339(&extension.notice_at).map_err(|error| {
+            AppError::DataParsing(format!("Invalid extension notice timestamp: {error}"))
+        })?;
+        chrono::DateTime::parse_from_rfc3339(&extension.expected_determination_at).map_err(
+            |error| {
+                AppError::DataParsing(format!("Invalid expected determination timestamp: {error}"))
+            },
+        )?;
+        if extension.notice_source.trim().is_empty() {
+            return Err(AppError::DataParsing(
+                "Statutory extension evidence must identify its notice source".to_string(),
+            ));
+        }
+        let conn = self.conn.lock().await;
+        upsert_statutory_extension(&conn, request_id, portal_key, extension)
+    }
+
     pub async fn refresh_request_timeline_audit(
         &self,
         request_id: u64,
@@ -2546,6 +2570,137 @@ impl DuckDbRepository {
             synchronize_cpra_finding(tx, request_id, portal_key, &statutory)
         })?;
         Ok(flags)
+    }
+
+    pub async fn import_auxiliary_events(
+        &self,
+        portal_key: Option<&str>,
+        source_kind: AuxiliaryStreamKind,
+        display_name: &str,
+        source_uri: Option<&str>,
+        events: &[AuxiliaryEventInput],
+        source_sha256: &str,
+    ) -> Result<AuxiliaryImportResult, AppError> {
+        if display_name.trim().is_empty() || events.is_empty() {
+            return Err(AppError::DataParsing(
+                "Auxiliary imports require a display name and at least one event".to_string(),
+            ));
+        }
+        let identity = format!(
+            "{}|{}|{}|{}",
+            portal_key.unwrap_or("global"),
+            source_kind.as_str(),
+            source_uri.unwrap_or("local-import"),
+            source_sha256
+        );
+        let identity_sha256 = sha256_hex(identity.as_bytes());
+        let source_id = format!("aux-{}", &identity_sha256[..32]);
+        let imported_at = chrono::Utc::now().to_rfc3339();
+        let mut accepted = Vec::with_capacity(events.len());
+        let mut rejected_count = 0_usize;
+        for event in events {
+            if validate_auxiliary_event(event).is_ok() {
+                accepted.push(event);
+            } else {
+                rejected_count += 1;
+            }
+        }
+        if accepted.is_empty() {
+            return Err(AppError::DataParsing(
+                "Every auxiliary event failed structural validation".to_string(),
+            ));
+        }
+
+        let mut conn = self.conn.lock().await;
+        execute_transaction(&mut conn, "auxiliary import", |tx| {
+            tx.execute(
+                "INSERT INTO auxiliary_data_sources (
+                source_id, portal_subdomain, source_kind, display_name, source_uri,
+                source_sha256, imported_at, record_count
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+             ON CONFLICT(source_id) DO UPDATE SET
+                display_name = excluded.display_name,
+                source_uri = excluded.source_uri,
+                imported_at = excluded.imported_at,
+                record_count = excluded.record_count",
+                params![
+                    source_id,
+                    portal_key,
+                    source_kind.as_str(),
+                    display_name.trim(),
+                    source_uri,
+                    source_sha256,
+                    imported_at,
+                    accepted.len(),
+                ],
+            )
+            .map_err(|error| {
+                AppError::Storage(format!("Failed to persist auxiliary source: {error}"))
+            })?;
+
+            let mut imported_count = 0_usize;
+            let mut updated_count = 0_usize;
+            for event in accepted {
+                let existed = tx
+                    .query_row(
+                        "SELECT EXISTS(
+                        SELECT 1 FROM auxiliary_events WHERE source_id = ?1 AND external_id = ?2
+                     )",
+                        params![source_id, event.external_id],
+                        |row| row.get::<_, bool>(0),
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to inspect auxiliary event: {error}"))
+                    })?;
+                let source_payload =
+                    serde_json::to_string(&event.source_payload).map_err(|error| {
+                        AppError::DataParsing(format!(
+                            "Failed to encode auxiliary payload: {error}"
+                        ))
+                    })?;
+                tx.execute(
+                    "INSERT INTO auxiliary_events (
+                    source_id, external_id, occurred_at, neighborhood_block, event_type,
+                    description, latitude, longitude, source_payload_json
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                 ON CONFLICT(source_id, external_id) DO UPDATE SET
+                    occurred_at = excluded.occurred_at,
+                    neighborhood_block = excluded.neighborhood_block,
+                    event_type = excluded.event_type,
+                    description = excluded.description,
+                    latitude = excluded.latitude,
+                    longitude = excluded.longitude,
+                    source_payload_json = excluded.source_payload_json,
+                    imported_at = strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ')",
+                    params![
+                        source_id,
+                        event.external_id,
+                        event.occurred_at,
+                        normalize_neighborhood(&event.neighborhood_block),
+                        event.event_type.trim(),
+                        event.description,
+                        event.latitude,
+                        event.longitude,
+                        source_payload,
+                    ],
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to persist auxiliary event: {error}"))
+                })?;
+                if existed {
+                    updated_count += 1;
+                } else {
+                    imported_count += 1;
+                }
+            }
+            Ok(AuxiliaryImportResult {
+                source_id,
+                imported_count,
+                updated_count,
+                rejected_count,
+                source_sha256: source_sha256.to_string(),
+            })
+        })
     }
 
     pub async fn import_legal_authority(
@@ -5535,6 +5690,37 @@ fn validate_portal_registration(portal: &PortalRegistration) -> Result<(), AppEr
         AppError::DataParsing(format!("Portal verification timestamp is invalid: {error}"))
     })?;
     Ok(())
+}
+
+fn validate_auxiliary_event(event: &AuxiliaryEventInput) -> Result<(), AppError> {
+    if event.external_id.trim().is_empty()
+        || event.external_id.len() > 256
+        || event.event_type.trim().is_empty()
+        || event.neighborhood_block.trim().is_empty()
+    {
+        return Err(AppError::DataParsing(
+            "Auxiliary event identifiers, type, and neighborhood are required".to_string(),
+        ));
+    }
+    chrono::DateTime::parse_from_rfc3339(&event.occurred_at).map_err(|error| {
+        AppError::DataParsing(format!("Auxiliary event timestamp is invalid: {error}"))
+    })?;
+    if event
+        .latitude
+        .is_some_and(|value| !value.is_finite() || !(-90.0..=90.0).contains(&value))
+        || event
+            .longitude
+            .is_some_and(|value| !value.is_finite() || !(-180.0..=180.0).contains(&value))
+    {
+        return Err(AppError::DataParsing(
+            "Auxiliary event coordinates are outside valid bounds".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn normalize_neighborhood(value: &str) -> String {
+    collapse_whitespace(value)
 }
 
 fn parse_extension_reason(value: &str) -> Result<StatutoryExtensionReason, AppError> {

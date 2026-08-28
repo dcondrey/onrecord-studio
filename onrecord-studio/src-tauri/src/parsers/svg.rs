@@ -1,6 +1,7 @@
-//! Bounded SVG text extraction.
+//! SVG text extraction, plus a placeholder for safe metadata and overlay inspection.
 
 use crate::error::AppError;
+use crate::parsers::forensic_evidence::{EvidenceBundle, ForensicAuditOptions};
 use crate::parsers::source::read_regular_file;
 use scraper::{ElementRef, Html};
 use std::path::Path;
@@ -22,7 +23,7 @@ const IGNORED_SVG_ELEMENTS: &[&str] = &["script", "style"];
 /// LIMIT(svg-audit): this establishes text *presence*, not text *visibility*. Characters hidden
 /// under an opaque rectangle, pushed off-canvas by a transform, clipped away, or painted at zero
 /// opacity are extracted exactly like visible ones. Deciding what a reader actually saw is the
-/// This extractor deliberately makes no visibility or redaction-integrity claim.
+/// separate audit tracked in `audit_svg_file` below.
 pub fn extract_svg_text<P: AsRef<Path>>(file_path: P) -> Result<String, AppError> {
     let path = file_path.as_ref();
     let bytes = read_regular_file(path, "SVG", MAX_SVG_SOURCE_BYTES)?;
@@ -71,6 +72,22 @@ pub fn extract_svg_text<P: AsRef<Path>>(file_path: P) -> Result<String, AppError
         )));
     }
     Ok(output)
+}
+
+pub fn audit_svg_file<P: AsRef<Path>>(
+    _path: P,
+    _options: ForensicAuditOptions,
+) -> Result<EvidenceBundle, AppError> {
+    // FEATURE(svg-audit): Parse XML without external entities, scripts, network fetches, or
+    // resource expansion. Collect text/tspan/title/desc/metadata and effective visibility.
+    // TODO(svg-audit): Track transforms, z-order, masks, clips, opacity, paint servers, and
+    // rectangles/paths that geometrically cover text. `extract_svg_text` above already delivers
+    // the collection half; what remains here is the visibility half.
+    Ok(EvidenceBundle {
+        coverage_complete: false,
+        warnings: vec!["SVG_AUDIT_NOT_IMPLEMENTED".to_string()],
+        ..EvidenceBundle::default()
+    })
 }
 
 #[cfg(test)]

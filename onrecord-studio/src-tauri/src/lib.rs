@@ -19,6 +19,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(generate_handler![
+            commands::ingest::start_portal_sync,
             commands::ingest::pause_source_sync,
             commands::ingest::resume_source_sync,
             commands::ingest::remove_source,
@@ -34,11 +35,14 @@ pub fn run() {
             commands::export::export_legal_brief,
             commands::investigation::get_agency_performance_profiles,
             commands::investigation::get_cross_agency_correlations,
+            commands::investigation::import_auxiliary_events,
+            commands::investigation::register_statutory_extension,
             commands::investigation::import_legal_authority,
             commands::investigation::list_legal_authorities,
             commands::investigation::evaluate_request_legal_compliance,
             commands::investigation::list_request_legal_findings,
             commands::investigation::review_legal_finding,
+            commands::investigation::mask_sensitive_text,
             commands::investigation::verify_document_provenance,
             commands::investigation::list_document_provenance_verifications,
             commands::investigation::list_request_documents,

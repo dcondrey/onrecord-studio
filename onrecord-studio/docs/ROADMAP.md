@@ -11,11 +11,12 @@ limit, context compaction, or a change of contributor. Search for `TODO(` and
 
 ### Continuation — 2026-08-27 release-hardening pass
 
-Current Rust verification is green after the changes below: `cargo fmt --all -- --check`,
-`cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test --workspace`
-(226 unit tests passing, 0 failing, plus doctests). The frontend verification is also green:
-`npm run lint`, `npm run test:unit` (70 tests), `npm run build`,
-and `npm run check:ipc` (26 commands, 18 telemetry events, 6 verification states).
+Before the unfinished feature surfaces were restored, the last complete verification run was
+green: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
+and `cargo test --workspace` (226 unit tests passing, 0 failing, plus doctests). Frontend
+verification was also green: `npm run lint`, `npm run test:unit` (70 tests), `npm run build`,
+and `npm run check:ipc` (26 commands, 18 telemetry events, 6 verification states). These counts
+are historical evidence, not a claim about the restored worktree; verification must be rerun.
 
 - [x] Every embedded `.msg` descent now spends the shared container-depth budget. The parser
       exports only immediate attachments, and the durable worker schedules nested messages through
@@ -49,21 +50,17 @@ and `npm run check:ipc` (26 commands, 18 telemetry events, 6 verification states
       itself cannot yet be aborted. The hook has token, explicit-invalidation, and unmount tests;
       existing viewer tests continue to exercise late native responses across document changes.
 - [x] Verification after the guidance and sequencing pass: frontend lint, TypeScript, production
-      build/IPC contract, and 70 unit tests are green; Rust fmt, strict clippy, all 226 unit tests,
-      and doctests are green.
-- [x] Removed eight proven-unreachable frontend files (`AuditTimeline`, `ExtractionTerminal`,
-      `MetadataCard`, three unused hooks, and unused dialog/table primitives) plus the orphaned
-      terminal-visibility store state. Two removed components contained illustrative operational
-      text, so integrating them would have created unsupported evidence claims.
-- [x] Removed all nine unreachable forensic placeholder modules and the unused SVG audit stub.
-      They were not called by ingestion, IPC, tests, or UI and returned literal `NOT_IMPLEMENTED`
-      results. Active SVG text extraction remains bounded and tested; it explicitly makes no
-      visibility or redaction-integrity claim.
-- [x] Retired four registered-but-uncalled native commands. `start_portal_sync` was superseded by
-      `start_data_source`; standalone text masking duplicated mandatory masking in evidence reads;
-      auxiliary-event import and manual statutory-extension mutation had no production caller.
-      Automatic NextRequest statutory-extension ingestion and existing auxiliary storage/schema
-      compatibility remain intact. The supported IPC surface is now 26 commands.
+      build/IPC contract, and 70 unit tests were green; Rust fmt, strict clippy, all 226 unit tests,
+      and doctests were green before the restoration pass began.
+- [ ] Complete and integrate the restored frontend investigation components, hooks, dialog/table
+      primitives, and terminal-visibility state. Illustrative operational text must be backed by
+      actual native state before the UI presents it as evidence.
+- [ ] Complete and integrate the restored forensic analysis modules. Placeholder
+      `NOT_IMPLEMENTED` results must remain visibly unavailable until each analyzer has bounded,
+      deterministic behavior and tests.
+- [ ] Reconcile the four restored native commands with the current IPC contract. Commands that
+      overlap newer paths must delegate to one implementation; commands with unique behavior must
+      receive a verified caller and tests.
 - [x] Qualifier search no longer sends visible qualifier syntax as document text. Status, flag,
       portal, and uniquely resolvable agency qualifiers compile into the existing native fields;
       negated, duplicate, ambiguous, and not-yet-executable filters are visibly marked "not
