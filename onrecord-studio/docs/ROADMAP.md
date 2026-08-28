@@ -13,7 +13,7 @@ limit, context compaction, or a change of contributor. Search for `TODO(` and
 
 Current Rust verification is green after the changes below: `cargo fmt --all -- --check`,
 `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test --workspace`
-(223 unit tests passing, 0 failing, plus doctests). The frontend verification is also green:
+(226 unit tests passing, 0 failing, plus doctests). The frontend verification is also green:
 `npm run lint`, `npm run test:unit` (70 tests), `npm run build`,
 and `npm run check:ipc` (26 commands, 18 telemetry events, 6 verification states).
 
@@ -36,8 +36,8 @@ and `npm run check:ipc` (26 commands, 18 telemetry events, 6 verification states
       Tests cover cleanup, idempotence, committed-object preservation, and symlink refusal.
 - [x] Re-audited two stale lower-severity claims. `Retry-After` is already capped at 120 seconds in
       `src-tauri/src/portal/client.rs`, and robots policy is fetched, cached, and enforced by the
-      crawl host-policy path. Deterministic (unjittered) retry timing and non-persisted scheduler
-      state remain separate lower-priority concerns.
+      crawl host-policy path. Non-persisted scheduler state remains a separate lower-priority
+      concern.
 - [x] Re-audited source-guidance boundaries. The frontend now enforces the backend's 100-rule and
       1,024-character per-rule limits before submission, and malformed NextRequest timestamps are
       treated as absent dates instead of being compared lexically. The valid document-carried date
@@ -49,7 +49,7 @@ and `npm run check:ipc` (26 commands, 18 telemetry events, 6 verification states
       itself cannot yet be aborted. The hook has token, explicit-invalidation, and unmount tests;
       existing viewer tests continue to exercise late native responses across document changes.
 - [x] Verification after the guidance and sequencing pass: frontend lint, TypeScript, production
-      build/IPC contract, and 70 unit tests are green; Rust fmt, strict clippy, all 223 unit tests,
+      build/IPC contract, and 70 unit tests are green; Rust fmt, strict clippy, all 226 unit tests,
       and doctests are green.
 - [x] Removed eight proven-unreachable frontend files (`AuditTimeline`, `ExtractionTerminal`,
       `MetadataCard`, three unused hooks, and unused dialog/table primitives) plus the orphaned
@@ -74,6 +74,13 @@ and `npm run check:ipc` (26 commands, 18 telemetry events, 6 verification states
       runtime snapshots reconcile the entire run map atomically. Initial telemetry-listener
       registration retries with capped exponential delay. Version recovery now has its own
       one-at-a-time memory semaphore.
+- [x] Hardened arbitrary SQLite evidence with `SQLITE_DBCONFIG_DEFENSIVE`, `query_only`,
+      `trusted_schema=OFF`, `cell_size_check=ON`, zero attached databases/worker threads, and the
+      existing value/row/output ceilings. A direct connection-state regression pins every control.
+- [x] Durable retries now add deterministic per-frontier jitter above the exponential floor,
+      preserving the retryability and attempt ceilings while preventing rows that fail together
+      from replaying in lockstep. Crawl/resource identity sets now stop growing at their configured
+      page/resource budgets instead of retaining an unbounded set of discovered strings.
 
 ### Continuation — 2026-08-27 evening
 
@@ -309,11 +316,11 @@ at the line; two carry running proof-of-concept binaries.
       references rather than deleting these paths blindly.
 - [x] Structured JSON parsing and recursive discovery were moved off the async runtime and now
       return only bounded scheduling summaries.
-- [ ] Lower: uncapped in-memory `visited_urls`; deterministic (unjittered) retry timing;
-      non-persisted scheduler counters on restart; and untrusted SQLite opened without
-      `cell_size_check`/defensive mode (`database.rs:38`). `Retry-After` is already capped at 120
-      seconds, robots policy is fetched/cached/enforced, and abandoned uncommitted staging is now
-      reconciled safely at startup.
+- [ ] Lower: scheduler counters are not persisted across restart. `visited_urls`/resource identity
+      sets are bounded by configured page/resource budgets, durable retries are jittered,
+      untrusted SQLite enables defensive/cell-size controls, `Retry-After` is capped at 120 seconds,
+      robots policy is fetched/cached/enforced, and abandoned uncommitted staging is reconciled
+      safely at startup.
 - [ ] `source.rs:45` `BUG(evidence)` — assessed **not a real defect**: the code already re-stats the
       open descriptor and re-verifies the byte count. The residual race needs local write access to
       the evidence store, which is outside the untrusted-input threat model. Remove the marker.

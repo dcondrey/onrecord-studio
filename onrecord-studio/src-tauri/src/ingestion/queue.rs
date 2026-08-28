@@ -999,7 +999,9 @@ impl QueueManager {
         let enqueue_result = async {
             for task in initial_tasks {
                 if let IngestionTask::CrawlPublicResource { url, .. } = &task {
-                    context.crawl.visited_urls.lock().await.insert(url.clone());
+                    if !mark_crawl_url(&context, url).await {
+                        continue;
+                    }
                     claim_crawl_path(&context, url).await;
                 }
                 enqueue_task_resilient(&context, task).await?;
@@ -1590,9 +1592,16 @@ async fn worker_loop(
         let frontier_id = scheduled.frontier_id;
         let frontier_attempt = scheduled.frontier_attempt;
         let mut result = execute_task(&context, scheduled.task).await;
-        let retry_delay = frontier_id
-            .and(result.as_ref().err())
-            .and_then(|error| durable_retry_delay_for_error(error, frontier_attempt));
+        let retry_delay =
+            frontier_id
+                .zip(result.as_ref().err())
+                .and_then(|(frontier_id, error)| {
+                    durable_retry_delay_for_error(
+                        error,
+                        frontier_attempt,
+                        frontier_id.unsigned_abs(),
+                    )
+                });
         if let (Some(frontier_id), Some(delay_seconds)) = (frontier_id, retry_delay) {
             match context
                 .repository
@@ -1728,9 +1737,18 @@ fn durable_retry_delay_seconds(attempt: u64) -> u64 {
         .min(30)
 }
 
-fn durable_retry_delay_for_error(error: &AppError, attempt: u64) -> Option<u64> {
-    (error.is_retryable() && attempt < MAXIMUM_DURABLE_TASK_ATTEMPTS)
-        .then(|| durable_retry_delay_seconds(attempt))
+fn durable_retry_delay_for_error(error: &AppError, attempt: u64, jitter_seed: u64) -> Option<u64> {
+    (error.is_retryable() && attempt < MAXIMUM_DURABLE_TASK_ATTEMPTS).then(|| {
+        let base = durable_retry_delay_seconds(attempt);
+        // Bounded positive jitter keeps the exponential floor while distributing frontier rows
+        // that fail together. The deterministic seed makes a persisted task's schedule explainable
+        // and stable across restart; different frontier identifiers still spread over the window.
+        let mixed = jitter_seed
+            .wrapping_add(attempt.wrapping_mul(0x9e37_79b9_7f4a_7c15))
+            .wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        let jitter_window = (base / 2).saturating_add(1);
+        base.saturating_add(mixed % jitter_window)
+    })
 }
 
 async fn abort_workers(worker_handles: Vec<tokio::task::JoinHandle<()>>) -> Result<(), AppError> {
@@ -2710,21 +2728,20 @@ async fn admit_crawl_link(
 }
 
 async fn mark_crawl_url(context: &WorkerContext, url: &str) -> bool {
-    context
-        .crawl
-        .visited_urls
-        .lock()
-        .await
-        .insert(url.to_string())
+    let mut visited = context.crawl.visited_urls.lock().await;
+    insert_bounded_identity(&mut visited, url, context.crawl.policy.maximum_pages)
 }
 
 async fn mark_resource_url(context: &WorkerContext, url: &str) -> bool {
-    context
-        .crawl
-        .resource_urls
-        .lock()
-        .await
-        .insert(url.to_string())
+    let mut resources = context.crawl.resource_urls.lock().await;
+    insert_bounded_identity(&mut resources, url, context.crawl.policy.maximum_resources)
+}
+
+fn insert_bounded_identity(identities: &mut HashSet<String>, value: &str, limit: usize) -> bool {
+    if identities.contains(value) || identities.len() >= limit {
+        return false;
+    }
+    identities.insert(value.to_string())
 }
 
 async fn reserve_crawl_page(context: &WorkerContext, depth: usize) -> Result<bool, AppError> {
@@ -6158,7 +6175,7 @@ mod tests {
             AppError::Storage("database constraint".to_string()),
             AppError::Internal("blocking worker panicked".to_string()),
         ] {
-            assert_eq!(durable_retry_delay_for_error(&error, 1), None);
+            assert_eq!(durable_retry_delay_for_error(&error, 1, 7), None);
         }
 
         for error in [
@@ -6166,12 +6183,38 @@ mod tests {
             AppError::RateLimiter("temporary throttle".to_string()),
             AppError::PortalCapacity("queue is full".to_string()),
         ] {
-            assert_eq!(durable_retry_delay_for_error(&error, 1), Some(1));
+            assert!(matches!(
+                durable_retry_delay_for_error(&error, 1, 7),
+                Some(1 | 2)
+            ));
             assert_eq!(
-                durable_retry_delay_for_error(&error, MAXIMUM_DURABLE_TASK_ATTEMPTS),
+                durable_retry_delay_for_error(&error, MAXIMUM_DURABLE_TASK_ATTEMPTS, 7,),
                 None
             );
         }
+    }
+
+    #[test]
+    fn durable_retry_jitter_spreads_rows_without_lowering_the_backoff_floor() {
+        let error = AppError::Network("connection reset".to_string());
+        let delays = (1..=32)
+            .filter_map(|seed| durable_retry_delay_for_error(&error, 3, seed))
+            .collect::<HashSet<_>>();
+        assert_eq!(durable_retry_delay_seconds(3), 4);
+        assert_eq!(delays, HashSet::from([4, 5, 6]));
+    }
+
+    #[test]
+    fn crawl_identity_sets_never_grow_past_the_policy_budget() {
+        let mut identities = HashSet::new();
+        assert!(insert_bounded_identity(&mut identities, "first", 2));
+        assert!(!insert_bounded_identity(&mut identities, "first", 2));
+        assert!(insert_bounded_identity(&mut identities, "second", 2));
+        assert!(!insert_bounded_identity(&mut identities, "third", 2));
+        assert_eq!(
+            identities,
+            HashSet::from(["first".to_string(), "second".to_string()])
+        );
     }
 
     // LIMIT(protocol): the two synthetic identifier generators are NOT disjoint. Both set

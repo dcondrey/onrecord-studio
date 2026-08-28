@@ -2,6 +2,7 @@ use std::path::Path;
 
 // NOTE(import-compatibility): rusqlite is intentionally retained only to inspect arbitrary
 // user-supplied SQLite files; it is not used by the application's core database.
+use rusqlite::config::DbConfig;
 use rusqlite::limits::Limit;
 use rusqlite::types::ValueRef;
 use rusqlite::{params, Connection, OpenFlags};
@@ -35,21 +36,7 @@ pub fn extract_sqlite_text<P: AsRef<Path>>(file_path: P) -> Result<String, AppEr
             path.display()
         ))
     })?;
-    connection.set_limit(Limit::SQLITE_LIMIT_LENGTH, MAX_VALUE_BYTES);
-    connection.set_limit(Limit::SQLITE_LIMIT_ATTACHED, 0);
-    connection.set_limit(Limit::SQLITE_LIMIT_WORKER_THREADS, 0);
-    connection
-        .execute_batch(
-            "PRAGMA query_only = ON;
-             PRAGMA trusted_schema = OFF;",
-        )
-        .map_err(|error| {
-            AppError::DataParsing(format!(
-                "SQLITE_HARDENING_FAILED: failed to configure '{}': {error}",
-                path.display()
-            ))
-        })?;
-
+    harden_untrusted_connection(&connection, path)?;
     let mut table_statement = connection
         .prepare(
             "SELECT name, COALESCE(sql, '')
@@ -170,6 +157,38 @@ pub fn extract_sqlite_text<P: AsRef<Path>>(file_path: P) -> Result<String, AppEr
     Ok(output)
 }
 
+fn harden_untrusted_connection(connection: &Connection, path: &Path) -> Result<(), AppError> {
+    connection.set_limit(Limit::SQLITE_LIMIT_LENGTH, MAX_VALUE_BYTES);
+    connection.set_limit(Limit::SQLITE_LIMIT_ATTACHED, 0);
+    connection.set_limit(Limit::SQLITE_LIMIT_WORKER_THREADS, 0);
+    let defensive = connection
+        .set_db_config(DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)
+        .map_err(|error| {
+            AppError::DataParsing(format!(
+                "SQLITE_HARDENING_FAILED: failed to enable defensive mode for '{}': {error}",
+                path.display()
+            ))
+        })?;
+    if !defensive {
+        return Err(AppError::DataParsing(format!(
+            "SQLITE_HARDENING_FAILED: defensive mode did not activate for '{}'",
+            path.display()
+        )));
+    }
+    connection
+        .execute_batch(
+            "PRAGMA query_only = ON;
+             PRAGMA trusted_schema = OFF;
+             PRAGMA cell_size_check = ON;",
+        )
+        .map_err(|error| {
+            AppError::DataParsing(format!(
+                "SQLITE_HARDENING_FAILED: failed to configure '{}': {error}",
+                path.display()
+            ))
+        })
+}
+
 fn quote_identifier(identifier: &str) -> String {
     format!("\"{}\"", identifier.replace('"', "\"\""))
 }
@@ -201,4 +220,36 @@ fn append(output: &mut String, value: &str, path: &Path) -> Result<(), AppError>
     }
     output.push_str(value);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn untrusted_sqlite_connections_enable_every_hardening_control() {
+        let connection = Connection::open_in_memory().expect("fixture connection must open");
+        harden_untrusted_connection(&connection, Path::new("untrusted.sqlite"))
+            .expect("hardening must succeed");
+
+        assert!(connection
+            .db_config(DbConfig::SQLITE_DBCONFIG_DEFENSIVE)
+            .expect("defensive state must be readable"));
+        for pragma in ["query_only", "cell_size_check"] {
+            let enabled: i64 = connection
+                .pragma_query_value(None, pragma, |row| row.get(0))
+                .expect("hardening pragma must be readable");
+            assert_eq!(enabled, 1, "{pragma} must be enabled");
+        }
+        let trusted_schema: i64 = connection
+            .pragma_query_value(None, "trusted_schema", |row| row.get(0))
+            .expect("trusted_schema must be readable");
+        assert_eq!(trusted_schema, 0);
+        assert_eq!(
+            connection.limit(Limit::SQLITE_LIMIT_LENGTH),
+            MAX_VALUE_BYTES
+        );
+        assert_eq!(connection.limit(Limit::SQLITE_LIMIT_ATTACHED), 0);
+        assert_eq!(connection.limit(Limit::SQLITE_LIMIT_WORKER_THREADS), 0);
+    }
 }
