@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { cn } from '../../utils/cn';
 import Icon from '../ui/icons';
@@ -8,10 +8,6 @@ import AuditTimeline from './AuditTimeline';
 type LogFilter = 'all' | 'errors';
 
 export default function ActivityDashboard() {
-  // PERF(activity): Virtualize retained log rows when session telemetry grows
-  // beyond the current 250-entry cap; filtering should remain responsive.
-  // FEATURE(activity): Export the filtered event stream with timestamps and source identifiers as
-  // a case artifact instead of retaining operational context only for the current UI session.
   const runtimes = useAppStore((state) => state.portalRuntimes);
   const syncLogs = useAppStore((state) => state.syncLogs);
   const syncingPortalKeys = useAppStore((state) => state.syncingPortalKeys);
@@ -19,10 +15,30 @@ export default function ActivityDashboard() {
   const resetMetrics = useAppStore((state) => state.resetTelemetryMetrics);
   const [filter, setFilter] = useState<LogFilter>('all');
   const [query, setQuery] = useState('');
+  const [visibleLimit, setVisibleLimit] = useState(75);
   const visibleLogs = useMemo(() => syncLogs.filter((log) => {
     if (filter === 'errors' && !isErrorLog(log)) return false;
     return !query.trim() || log.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
   }), [filter, query, syncLogs]);
+  const renderedLogs = visibleLogs.slice(0, visibleLimit);
+
+  useEffect(() => setVisibleLimit(75), [filter, query]);
+
+  const exportActivity = () => {
+    const artifact = {
+      schemaVersion: 1,
+      exportedAt: new Date().toISOString(),
+      filter: { level: filter, query: query.trim() || null },
+      eventCount: visibleLogs.length,
+      events: visibleLogs.map((message) => ({ message })),
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(artifact, null, 2)], { type: 'application/json' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `onrecord-activity-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -63,6 +79,7 @@ export default function ActivityDashboard() {
                     <button key={value} type="button" onClick={() => setFilter(value)} className={cn('focus-ring rounded-md px-2.5 py-1.5 text-[8px] font-semibold capitalize transition', filter === value ? 'bg-slate-800 text-slate-200' : 'text-slate-600 hover:text-slate-400')}>{value}</button>
                   ))}
                 </div>
+                <button type="button" disabled={visibleLogs.length === 0} onClick={exportActivity} className="focus-ring rounded-lg border border-slate-800 px-2.5 py-1.5 text-[8px] font-semibold text-slate-500 transition hover:text-slate-300 disabled:opacity-40">Export JSON</button>
               </div>
             </div>
             <div className="activity-stream data-grid min-h-0 flex-1 overflow-y-auto p-3 font-mono text-[9px] leading-relaxed">
@@ -74,12 +91,13 @@ export default function ActivityDashboard() {
                     <p className="mt-1 font-sans text-[8px] text-slate-600">Source discovery, parsing, and preservation events will stream here.</p>
                   </div>
                 </div>
-              ) : visibleLogs.map((log, index) => (
+              ) : renderedLogs.map((log, index) => (
                 <div key={`${index}-${log}`} className={cn('group grid grid-cols-[6px_minmax(0,1fr)] gap-3 rounded-lg px-2 py-2 transition hover:bg-slate-900/60', isErrorLog(log) ? 'text-rose-300/80' : 'text-slate-500')}>
                   <span className={cn('mt-1 h-1.5 w-1.5 rounded-full', isErrorLog(log) ? 'bg-rose-400' : log.includes('completed') || log.includes('passed') ? 'bg-emerald-400' : 'bg-cyan-400/50')} />
                   <span className="break-words">{log}</span>
                 </div>
               ))}
+              {visibleLimit < visibleLogs.length && <button type="button" onClick={() => setVisibleLimit((value) => Math.min(visibleLogs.length, value + 75))} className="focus-ring mt-2 w-full rounded-lg border border-slate-800 py-2 text-[8px] font-semibold text-slate-500 hover:text-slate-300">Show 75 older events</button>}
             </div>
             {syncLogs.length > 0 && (
               <div className="flex items-center justify-between border-t border-slate-800/70 px-4 py-3 text-[8px] text-slate-600">

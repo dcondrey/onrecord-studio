@@ -5,13 +5,14 @@ import { isTauri } from '@tauri-apps/api/core';
 import Header from './components/dashboard/Header';
 import MainLayout from './components/dashboard/MainLayout';
 import Sidebar from './components/dashboard/Sidebar';
-import CommandPalette from './components/dashboard/CommandPalette';
+import CommandPalette, { OPEN_COMMAND_PALETTE_EVENT } from './components/dashboard/CommandPalette';
 import { useAppStore } from './store/useAppStore';
 import { invokeCommand } from './ipc';
 import type { IngestionTelemetry } from './types';
 import { shouldReportFailure, type ReportedFailure } from './utils/repeatedFailure';
 import { resolveTheme, THEME_STORAGE_KEY } from './utils/theme';
 import { useAudioAlerts } from './hooks/useAudioAlerts';
+import { workspaceCommandRegistry } from './commands/registry';
 
 const RUNTIME_FAILURE_REMINDER_MILLISECONDS = 60_000;
 
@@ -32,6 +33,7 @@ export default function App() {
   const setAnalyticsData = useAppStore((state) => state.setAnalyticsData);
   const setAnalyticsError = useAppStore((state) => state.setAnalyticsError);
   const setPendingSourceRepair = useAppStore((state) => state.setPendingSourceRepair);
+  const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
   const runtimeRefreshFailure = useRef<ReportedFailure | null>(null);
   const audioAlertsEnabled = useAppStore((state) => state.audioAlertsEnabled);
   const { triggerFailureAlert, triggerSuccessAlert } = useAudioAlerts(audioAlertsEnabled);
@@ -142,14 +144,44 @@ export default function App() {
   }, [appendSyncLog, refreshAnalytics, refreshRuntimes, setOcrCapability, setPortals, setWorkspaceInitialization]);
 
   useEffect(() => {
-    // PERF(app): This polling interval is intentionally conservative for the
-    // current native bridge. Replace it with push-based runtime events when
-    // the backend can guarantee lifecycle notifications after reconnects.
-    const timer = window.setInterval(() => {
-      void refreshRuntimes();
-    }, 1500);
-    return () => window.clearInterval(timer);
+    const reconcile = () => void refreshRuntimes();
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') reconcile();
+    };
+    // Telemetry drives lifecycle state immediately. This slow watchdog reconciles state after a
+    // suspended process or missed bridge event without keeping a 1.5-second polling loop alive.
+    const timer = window.setInterval(reconcile, 30_000);
+    window.addEventListener('focus', reconcile);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', reconcile);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
   }, [refreshRuntimes]);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    let active = true;
+    let unlisten: (() => void) | null = null;
+    void listen<string>('onrecord-native-command', ({ payload }) => {
+      const workspace = workspaceCommandRegistry.find((command) => command.id === payload);
+      if (workspace) {
+        setWorkspaceView(workspace.view);
+      } else if (payload === 'add-source') {
+        document.getElementById('portal-url-desktop')?.focus();
+      } else if (payload === 'command-palette') {
+        window.dispatchEvent(new Event(OPEN_COMMAND_PALETTE_EVENT));
+      }
+    }).then((stop) => {
+      if (active) unlisten = stop;
+      else stop();
+    }).catch((error) => appendSyncLog(`Native menu listener unavailable: ${String(error)}`));
+    return () => {
+      active = false;
+      unlisten?.();
+    };
+  }, [appendSyncLog, setWorkspaceView]);
 
   useEffect(() => {
     let active = true;

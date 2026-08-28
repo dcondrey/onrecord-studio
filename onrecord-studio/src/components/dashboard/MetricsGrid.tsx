@@ -10,6 +10,8 @@ interface MetricCard {
   accent: string;
   bar: string;
   icon: IconName;
+  status: string | null;
+  policy: string | null;
 }
 
 export default function MetricsGrid() {
@@ -18,6 +20,10 @@ export default function MetricsGrid() {
   const correlations = useAppStore((state) => state.crossAgencyCorrelations);
   const analyticsError = useAppStore((state) => state.analyticsError);
   const activePortalKey = useAppStore((state) => state.activePortalKey);
+  const searchTerm = useAppStore((state) => state.searchTerm);
+  const selectedAgencyId = useAppStore((state) => state.selectedAgencyId);
+  const setSearchFilters = useAppStore((state) => state.setSearchFilters);
+  const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
   const values = useMemo(() => {
     const scoped = profiles.filter((profile) => !activePortalKey || profile.portalSubdomain === activePortalKey);
     const requests = scoped.reduce((total, profile) => total + profile.totalRequestsProcessed, 0);
@@ -40,6 +46,8 @@ export default function MetricsGrid() {
       accent: 'text-indigo-300',
       bar: 'bg-indigo-400',
       icon: 'database',
+      status: null,
+      policy: null,
     },
     {
       label: 'Deadline exceptions',
@@ -51,6 +59,8 @@ export default function MetricsGrid() {
       accent: values.statutory > 0 ? 'text-amber-300' : 'text-slate-300',
       bar: 'bg-amber-400',
       icon: 'shield',
+      status: null,
+      policy: 'STATUTORY_LATENCY_VIOLATION',
     },
     {
       label: 'Rapid closures',
@@ -62,6 +72,8 @@ export default function MetricsGrid() {
       accent: values.fastClosures > 0 ? 'text-rose-300' : 'text-slate-300',
       bar: 'bg-rose-400',
       icon: 'activity',
+      status: 'closed',
+      policy: 'SUSPICIOUSLY_FAST_CLOSURE',
     },
     {
       label: 'Cross-agency signals',
@@ -71,16 +83,18 @@ export default function MetricsGrid() {
       accent: values.correlations > 0 ? 'text-cyan-300' : 'text-slate-300',
       bar: 'bg-cyan-400',
       icon: 'sparkles',
+      status: null,
+      policy: 'CROSS_AGENCY_311_CORRELATION',
     },
   ];
-
-  // FEATURE(metrics): Make each instrument cell keyboard-activatable and route
-  // it into the corresponding evidence query with the metric predicate set.
 
   return (
     <section aria-label="Audit metrics" className="instrument-strip app-panel grid grid-cols-1 overflow-hidden sm:grid-cols-2 xl:grid-cols-4">
       {cards.map((card) => (
-        <article key={card.label} className="instrument-cell group relative min-w-0 overflow-hidden p-4">
+        <button key={card.label} type="button" onClick={() => {
+          setSearchFilters(searchTerm, selectedAgencyId, card.status, card.policy);
+          setWorkspaceView('evidence');
+        }} className="instrument-cell focus-ring group relative min-w-0 overflow-hidden p-4 text-left">
           <span className={`instrument-accent absolute left-0 top-5 h-8 w-0.5 rounded-full ${card.bar}`} aria-hidden="true" />
           <div className="relative flex items-center justify-between gap-3">
             <div className="app-eyebrow min-w-0 leading-snug">{card.label}</div>
@@ -96,7 +110,7 @@ export default function MetricsGrid() {
             </div>
             <span className="numeric-value w-10 text-right text-[11px] text-slate-500">{formatPercent(card.ratio)}</span>
           </div>
-        </article>
+        </button>
       ))}
     </section>
   );

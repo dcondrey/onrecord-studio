@@ -12,12 +12,98 @@ pub mod setup;
 pub mod storage;
 pub mod types;
 
-use tauri::generate_handler;
+use tauri::menu::{Menu, MenuBuilder, MenuItem, SubmenuBuilder};
+use tauri::{generate_handler, AppHandle, Emitter, Runtime};
+
+const NATIVE_COMMAND_EVENT: &str = "onrecord-native-command";
+
+fn application_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
+    let application = SubmenuBuilder::new(app, "OnRecord Studio")
+        .about(None)
+        .separator()
+        .quit()
+        .build()?;
+    let edit = SubmenuBuilder::new(app, "Edit")
+        .undo()
+        .redo()
+        .separator()
+        .cut()
+        .copy()
+        .paste()
+        .select_all()
+        .build()?;
+    let overview = MenuItem::with_id(
+        app,
+        "workspace-overview",
+        "Overview",
+        true,
+        Some("CmdOrCtrl+1"),
+    )?;
+    let patterns = MenuItem::with_id(
+        app,
+        "workspace-patterns",
+        "Patterns",
+        true,
+        Some("CmdOrCtrl+2"),
+    )?;
+    let evidence = MenuItem::with_id(
+        app,
+        "workspace-evidence",
+        "Evidence",
+        true,
+        Some("CmdOrCtrl+3"),
+    )?;
+    let activity = MenuItem::with_id(
+        app,
+        "workspace-activity",
+        "Activity",
+        true,
+        Some("CmdOrCtrl+4"),
+    )?;
+    let add_source = MenuItem::with_id(
+        app,
+        "add-source",
+        "Add Data Source…",
+        true,
+        Some("CmdOrCtrl+N"),
+    )?;
+    let command_palette = MenuItem::with_id(
+        app,
+        "command-palette",
+        "Command Palette…",
+        true,
+        Some("CmdOrCtrl+K"),
+    )?;
+    let workspace = SubmenuBuilder::new(app, "Workspace")
+        .items(&[&overview, &patterns, &evidence, &activity])
+        .separator()
+        .item(&add_source)
+        .item(&command_palette)
+        .build()?;
+    let window = SubmenuBuilder::new(app, "Window")
+        .minimize()
+        .maximize()
+        .separator()
+        .close_window()
+        .build()?;
+    MenuBuilder::new(app)
+        .items(&[&application, &edit, &workspace, &window])
+        .build()
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .menu(application_menu)
+        .on_menu_event(|app, event| {
+            let command = event.id().0.as_str();
+            if command.starts_with("workspace-")
+                || matches!(command, "add-source" | "command-palette")
+            {
+                let _ = app.emit(NATIVE_COMMAND_EVENT, command);
+            }
+        })
         .invoke_handler(generate_handler![
             commands::ingest::start_portal_sync,
             commands::ingest::pause_source_sync,

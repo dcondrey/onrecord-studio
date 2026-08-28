@@ -11,17 +11,22 @@ export default function AgencySelector() {
   const selectedStatus = useAppStore((state) => state.selectedStatus);
   const selectedPolicyDeviation = useAppStore((state) => state.selectedPolicyDeviation);
   const setSearchFilters = useAppStore((state) => state.setSearchFilters);
-  // PERF(query): This derives options from all loaded profiles; introduce a
-  // normalized agency index if profile volumes make selector updates costly.
-  const agencies = useMemo(() => {
-    const unique = new Map<number, string>();
+  const agencyIndex = useMemo(() => {
+    const all = new Map<number, string>();
+    const byPortal = new Map<string, Map<number, string>>();
     for (const profile of profiles) {
-      if (!activePortalKey || profile.portalSubdomain === activePortalKey) {
-        unique.set(profile.agencyId, profile.agencyName);
-      }
+      all.set(profile.agencyId, profile.agencyName);
+      const scoped = byPortal.get(profile.portalSubdomain) ?? new Map<number, string>();
+      scoped.set(profile.agencyId, profile.agencyName);
+      byPortal.set(profile.portalSubdomain, scoped);
     }
-    return [...unique.entries()].sort((left, right) => left[1].localeCompare(right[1]));
-  }, [activePortalKey, profiles]);
+    const sorted = (values: Map<number, string>) => [...values.entries()].sort((left, right) => left[1].localeCompare(right[1]));
+    return {
+      all: sorted(all),
+      byPortal: new Map([...byPortal].map(([portalKey, values]) => [portalKey, sorted(values)])),
+    };
+  }, [profiles]);
+  const agencies = activePortalKey ? agencyIndex.byPortal.get(activePortalKey) ?? [] : agencyIndex.all;
 
   return (
     <label className="flex min-w-0 items-center gap-2">

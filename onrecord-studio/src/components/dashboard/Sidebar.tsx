@@ -1,24 +1,11 @@
 import { useEffect } from 'react';
-import { useAppStore, type WorkspaceView } from '../../store/useAppStore';
+import { useAppStore } from '../../store/useAppStore';
 import { cn } from '../../utils/cn';
-import Icon, { type IconName } from '../ui/icons';
+import Icon from '../ui/icons';
 import { OPEN_COMMAND_PALETTE_EVENT } from './CommandPalette';
-
-const workspaceItems: Array<{
-  view: WorkspaceView;
-  label: string;
-  description: string;
-  icon: IconName;
-}> = [
-  { view: 'overview', label: 'Overview', description: 'Signals and performance', icon: 'grid' },
-  { view: 'patterns', label: 'Patterns', description: 'Cross-file connections', icon: 'sparkles' },
-  { view: 'evidence', label: 'Evidence', description: 'Search and case review', icon: 'evidence' },
-  { view: 'activity', label: 'Activity', description: 'Ingestion operations', icon: 'activity' },
-];
+import { workspaceCommandRegistry } from '../../commands/registry';
 
 export default function Sidebar() {
-  // FEATURE(navigation): Mirror these workspace actions into native macOS and
-  // Windows application menus when platform menu commands are introduced.
   const portals = useAppStore((state) => state.portals);
   const workspaceInitializationStatus = useAppStore((state) => state.workspaceInitializationStatus);
   const ocrCapability = useAppStore((state) => state.ocrCapability);
@@ -85,13 +72,13 @@ export default function Sidebar() {
         <nav aria-label="Primary navigation" className="shrink-0 px-2.5 py-3">
           {!isCollapsed && <div className="sidebar-section-label mb-1.5 px-2">Workspace</div>}
           <div className="space-y-0.5">
-            {workspaceItems.map((item, index) => {
+            {workspaceCommandRegistry.map((item) => {
               const selected = workspaceView === item.view;
               return (
                 <button
                   key={item.view}
                   type="button"
-                  title={`${item.label} (${isApplePlatform() ? '⌘' : 'Ctrl'}${index + 1}) — ${item.description}`}
+                  title={`${item.navigationLabel} (${isApplePlatform() ? '⌘' : 'Ctrl'}${item.shortcutIndex}) — ${item.detail}`}
                   onClick={() => setWorkspaceView(item.view)}
                   className={cn(
                     'sidebar-nav-item focus-ring group relative flex w-full items-center overflow-hidden rounded-lg border text-left transition',
@@ -105,9 +92,9 @@ export default function Sidebar() {
                     <Icon name={item.icon} className="h-4 w-4" />
                   </span>
                   {!isCollapsed && (
-                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{item.label}</span>
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{item.navigationLabel}</span>
                   )}
-                  {!isCollapsed && <span className="text-[11px] text-slate-600">{isApplePlatform() ? '⌘' : 'Ctrl'}{index + 1}</span>}
+                  {!isCollapsed && <span className="text-[11px] text-slate-600">{isApplePlatform() ? '⌘' : 'Ctrl'}{item.shortcutIndex}</span>}
                 </button>
               );
             })}

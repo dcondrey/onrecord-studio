@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useAppStore, type AppTheme, type WorkspaceView } from '../../store/useAppStore';
+import { useAppStore } from '../../store/useAppStore';
 import { cn } from '../../utils/cn';
 import Icon, { type IconName } from '../ui/icons';
+import { scoreCommand, themeCommandRegistry, workspaceCommandRegistry } from '../../commands/registry';
 
 export const OPEN_COMMAND_PALETTE_EVENT = 'onrecord:open-command-palette';
 
@@ -15,28 +16,6 @@ interface CommandAction {
   shortcut?: string;
   perform: () => void;
 }
-
-const workspaceCommands: Array<{
-  view: WorkspaceView;
-  label: string;
-  detail: string;
-  icon: IconName;
-}> = [
-  { view: 'overview', label: 'Open overview', detail: 'Signals, risk, and agency performance', icon: 'grid' },
-  { view: 'patterns', label: 'Explore patterns', detail: 'Cross-document connections and recurring language', icon: 'sparkles' },
-  { view: 'evidence', label: 'Review evidence', detail: 'Search requests and inspect source records', icon: 'evidence' },
-  { view: 'activity', label: 'View activity', detail: 'Ingestion queues, throughput, and exceptions', icon: 'activity' },
-];
-
-const themeCommands: Array<{ theme: AppTheme; label: string; detail: string; icon: IconName }> = [
-  { theme: 'auto', label: 'Use system appearance', detail: 'Follow the operating system setting', icon: 'system' },
-  { theme: 'light', label: 'Use light appearance', detail: 'Bright native workspace', icon: 'sun' },
-  { theme: 'dark', label: 'Use dark appearance', detail: 'Low-light investigative workspace', icon: 'moon' },
-];
-
-// TODO(commands): Move command definitions into a typed registry so menus,
-// keyboard shortcuts, command palette search, and future native menu items
-// cannot drift apart.
 
 export default function CommandPalette() {
   const [isOpen, setOpen] = useState(false);
@@ -62,14 +41,14 @@ export default function CommandPalette() {
   };
 
   const actions = useMemo<CommandAction[]>(() => [
-    ...workspaceCommands.map((command, index) => ({
-      id: `workspace-${command.view}`,
+    ...workspaceCommandRegistry.map((command) => ({
+      id: command.id,
       label: command.label,
       detail: command.detail,
       group: 'Navigate' as const,
       icon: command.icon,
-      keywords: `${command.view} workspace screen`,
-      shortcut: `${modifier}${index + 1}`,
+      keywords: command.keywords,
+      shortcut: `${modifier}${command.shortcutIndex}`,
       perform: () => setWorkspaceView(command.view),
     })),
     {
@@ -91,13 +70,13 @@ export default function CommandPalette() {
       shortcut: `${modifier}N`,
       perform: focusSourceComposer,
     },
-    ...themeCommands.map((command) => ({
-      id: `theme-${command.theme}`,
+    ...themeCommandRegistry.map((command) => ({
+      id: command.id,
       label: command.label,
       detail: command.detail,
       group: 'Appearance' as const,
       icon: command.icon,
-      keywords: `${command.theme} theme color mode appearance`,
+      keywords: command.keywords,
       perform: () => setTheme(command.theme),
     })),
   ], [modifier, setTheme, setWorkspaceView, toggleSidebarCollapsed]);
@@ -105,13 +84,11 @@ export default function CommandPalette() {
   const filteredActions = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
     if (!normalized) return actions;
-    // PERF(commands): This linear scan is adequate for the small command set.
-    // Add indexed/fuzzy matching if commands become user- or plugin-extensible.
-    const terms = normalized.split(/\s+/);
-    return actions.filter((action) => {
-      const haystack = `${action.label} ${action.detail} ${action.group} ${action.keywords}`.toLocaleLowerCase();
-      return terms.every((term) => haystack.includes(term));
-    });
+    return actions
+      .map((action) => ({ action, score: scoreCommand(normalized, action.label, `${action.detail} ${action.group}`, action.keywords) }))
+      .filter((entry): entry is { action: CommandAction; score: number } => entry.score !== null)
+      .sort((left, right) => right.score - left.score || left.action.label.localeCompare(right.action.label))
+      .map(({ action }) => action);
   }, [actions, query]);
 
   useEffect(() => {
@@ -141,7 +118,7 @@ export default function CommandPalette() {
       }
       if (!isOpen && modified && /^[1-4]$/.test(event.key)) {
         event.preventDefault();
-        setWorkspaceView(workspaceCommands[Number(event.key) - 1].view);
+        setWorkspaceView(workspaceCommandRegistry[Number(event.key) - 1].view);
         return;
       }
       if (!isOpen && modified && key === 'n') {

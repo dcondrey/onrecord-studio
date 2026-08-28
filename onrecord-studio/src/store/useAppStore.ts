@@ -30,6 +30,13 @@ export interface SourceRepairNotice {
   reason: string;
 }
 
+export interface PatternEvidenceSelection {
+  patternId: string;
+  portalKey: string | null;
+  documentId: number | null;
+  characterStart: number | null;
+}
+
 interface AppState {
   // Search state mirrors the four filters in the supported native query contract; qualifier text
   // is parsed at the search boundary and unsupported syntax never enters this store.
@@ -69,6 +76,7 @@ interface AppState {
   selectedRequestPortalKey: string | null;
   isExtractionTerminalOpen: boolean;
   pendingSourceRepair: SourceRepairNotice | null;
+  patternEvidenceSelection: PatternEvidenceSelection | null;
   setWorkspaceView: (view: WorkspaceView) => void;
   setTheme: (theme: AppTheme) => void;
   setSidebarOpen: (open: boolean) => void;
@@ -109,6 +117,7 @@ interface AppState {
   setSelectedRequest: (requestId: number | null, portalKey?: string | null) => void;
   setTerminalVisibility: (visible: boolean) => void;
   setPendingSourceRepair: (notice: SourceRepairNotice | null) => void;
+  setPatternEvidenceSelection: (selection: PatternEvidenceSelection | null) => void;
 }
 
 const emptyMetrics = (): IngestionMetrics => ({
@@ -153,6 +162,7 @@ export const useAppStore = create<AppState>((set) => ({
   selectedRequestPortalKey: null,
   isExtractionTerminalOpen: false,
   pendingSourceRepair: null,
+  patternEvidenceSelection: null,
   setWorkspaceView: (workspaceView) => set({ workspaceView, isSidebarOpen: false }),
   setTheme: (theme) => set({ theme }),
   setSidebarOpen: (isSidebarOpen) => set({ isSidebarOpen }),
@@ -314,6 +324,7 @@ export const useAppStore = create<AppState>((set) => ({
     set({ selectedRequestId, selectedRequestPortalKey, activeLegalFindings: [] }),
   setTerminalVisibility: (isExtractionTerminalOpen) => set({ isExtractionTerminalOpen }),
   setPendingSourceRepair: (pendingSourceRepair) => set({ pendingSourceRepair }),
+  setPatternEvidenceSelection: (patternEvidenceSelection) => set({ patternEvidenceSelection }),
 }));
 
 function readAudioAlertsPreference() {

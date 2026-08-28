@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
@@ -25,6 +25,8 @@ type KindFilter = CorpusPatternKind | 'ALL';
 
 export default function PatternExplorer() {
   const activePortalKey = useAppStore((state) => state.activePortalKey);
+  const patternEvidenceSelection = useAppStore((state) => state.patternEvidenceSelection);
+  const setPatternEvidenceSelection = useAppStore((state) => state.setPatternEvidenceSelection);
   const [patterns, setPatterns] = useState<CorpusPattern[]>([]);
   const [status, setStatus] = useState<CorpusIndexStatus | null>(null);
   const [kindFilter, setKindFilter] = useState<KindFilter>('ALL');
@@ -32,7 +34,7 @@ export default function PatternExplorer() {
   const [minimumConfidence, setMinimumConfidence] = useState(0);
   const [indexedFrom, setIndexedFrom] = useState('');
   const [indexedTo, setIndexedTo] = useState('');
-  const [selectedPatternId, setSelectedPatternId] = useState<string | null>(null);
+  const [selectedPatternId, setSelectedPatternId] = useState<string | null>(patternEvidenceSelection?.patternId ?? null);
   const [excerpt, setExcerpt] = useState<{
     evidence: CorpusEvidenceReference;
     chunk: DocumentTextChunk;
@@ -42,6 +44,7 @@ export default function PatternExplorer() {
   const [error, setError] = useState<string | null>(null);
   const refreshGate = useLatestRequestGate();
   const evidenceGate = useLatestRequestGate();
+  const restoredEvidenceKey = useRef<string | null>(null);
 
   const refresh = useCallback(async () => {
     // The "Minimum evidence" select is not disabled while a refresh runs, so refreshes are already
@@ -97,10 +100,15 @@ export default function PatternExplorer() {
     ?? filteredPatterns[0]
     ?? null;
 
-  const openEvidence = async (evidence: CorpusEvidenceReference) => {
-    // TODO(patterns): Preserve the selected evidence offset in workspace state
-    // so reopening the pattern view restores the excerpt.
-    const key = `${evidence.portalKey}:${evidence.documentId}`;
+  const openEvidence = useCallback(async (evidence: CorpusEvidenceReference) => {
+    const key = `${evidence.portalKey}:${evidence.documentId}:${evidence.characterStart ?? 'document'}`;
+    restoredEvidenceKey.current = key;
+    setPatternEvidenceSelection({
+      patternId: selectedPattern?.patternId ?? patternEvidenceSelection?.patternId ?? '',
+      portalKey: evidence.portalKey,
+      documentId: evidence.documentId,
+      characterStart: evidence.characterStart,
+    });
     const request = evidenceGate.begin();
     setExcerptLoadingKey(key);
     setError(null);
@@ -120,7 +128,21 @@ export default function PatternExplorer() {
     } finally {
       if (evidenceGate.isCurrent(request)) setExcerptLoadingKey(null);
     }
-  };
+  }, [evidenceGate, patternEvidenceSelection?.patternId, selectedPattern?.patternId, setPatternEvidenceSelection]);
+
+  useEffect(() => {
+    if (!patternEvidenceSelection || selectedPattern?.patternId !== patternEvidenceSelection.patternId) return;
+    if (patternEvidenceSelection.portalKey === null || patternEvidenceSelection.documentId === null) return;
+    const evidence = selectedPattern.evidence.find((candidate) =>
+      candidate.portalKey === patternEvidenceSelection.portalKey
+      && candidate.documentId === patternEvidenceSelection.documentId
+      && candidate.characterStart === patternEvidenceSelection.characterStart
+    );
+    if (!evidence) return;
+    const key = `${evidence.portalKey}:${evidence.documentId}:${evidence.characterStart ?? 'document'}`;
+    if (restoredEvidenceKey.current === key) return;
+    void openEvidence(evidence);
+  }, [openEvidence, patternEvidenceSelection, selectedPattern]);
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -224,6 +246,7 @@ export default function PatternExplorer() {
                   type="button"
                   onClick={() => {
                     setSelectedPatternId(pattern.patternId);
+                    setPatternEvidenceSelection({ patternId: pattern.patternId, portalKey: null, documentId: null, characterStart: null });
                     setExcerpt(null);
                   }}
                   className={cn(
@@ -261,7 +284,7 @@ export default function PatternExplorer() {
                   <div className="mb-2 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-600">Source evidence</div>
                   <div className="space-y-2">
                     {selectedPattern.evidence.map((evidence) => {
-                      const key = `${evidence.portalKey}:${evidence.documentId}`;
+                      const key = `${evidence.portalKey}:${evidence.documentId}:${evidence.characterStart ?? 'document'}`;
                       return (
                         <button
                           key={`${key}:${evidence.characterStart ?? 'document'}`}
