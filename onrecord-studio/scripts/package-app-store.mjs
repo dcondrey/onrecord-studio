@@ -66,9 +66,12 @@ assert(
   `The embedded provisioning profile expired on ${profileExpiration.toISOString()}.`,
 );
 
+// otool prints one unindented header line per architecture, so a universal binary emits several
+// rather than the single one a `.slice(1)` would drop. Every dependency line is indented; keeping
+// only those survives both a single-architecture and a universal build.
 const links = run('otool', ['-L', executable])
   .split('\n')
-  .slice(1)
+  .filter((line) => /^\s/.test(line))
   .map((line) => line.trim().split(/\s+/, 1)[0])
   .filter(Boolean);
 for (const link of links) {
@@ -109,8 +112,23 @@ run('xcrun', [
   '/Applications',
   packagePath,
 ]);
+// A Mac App Store submission is signed by a "3rd Party Mac Developer Installer" certificate, and
+// that chain is deliberately not trusted by macOS for direct installation: pkgutil reports it as
+// "signed by a developer certificate issued by Apple (Development)". Only App Store Connect accepts
+// it. Demanding a macOS-trusted signature here would require a Developer ID Installer certificate,
+// which App Store Connect rejects, so this asserts the submission chain instead. An unsigned or
+// damaged package exits non-zero from pkgutil, which runCombined already fails on.
 const packageSignature = runCombined('pkgutil', ['--check-signature', packagePath]);
-assert(packageSignature.includes('signed by a certificate trusted by macOS'), 'The installer signature is not trusted by macOS.');
+assert(
+  new RegExp(`3rd Party Mac Developer Installer: .*\\(${escapeForRegExp(teamId)}\\)`).test(packageSignature),
+  'The installer was not signed by this team\'s 3rd Party Mac Developer Installer certificate.',
+);
+for (const authority of [
+  'Apple Worldwide Developer Relations Certification Authority',
+  'Apple Root CA',
+]) {
+  assert(packageSignature.includes(authority), `The installer certificate chain is missing ${authority}.`);
+}
 process.stdout.write(`Created and verified signed Mac App Store package: ${packagePath}\n`);
 
 function cargoTargetDirectory() {

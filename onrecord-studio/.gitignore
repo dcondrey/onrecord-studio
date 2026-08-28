@@ -37,6 +37,9 @@ src-tauri/gen/schemas/
 src-tauri/Entitlements.appstore.plist
 src-tauri/Info.appstore.plist
 src-tauri/AppStore.provisionprofile
+# Default output of `npm run package:app-store` (scripts/package-app-store.mjs). A signed
+# installer carries the release account's certificate chain and must never be committed.
+/release/
 
 # 4. Local App Data Caches, SQLite DBs, & Extracted Public Documents
 # Protects investigator database indices and scraped municipal files from being leaked to public repositories.
