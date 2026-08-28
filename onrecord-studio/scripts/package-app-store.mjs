@@ -11,10 +11,14 @@ import process from 'node:process';
 const root = resolve(import.meta.dirname, '..');
 const tauriRoot = join(root, 'src-tauri');
 const identifier = 'com.onrecord.studio';
+// `build:app-store` builds for `universal-apple-darwin`, and cargo nests a cross-target build under
+// the triple. Resolving the untargeted `release/bundle` path instead would silently find a stale
+// single-architecture bundle from an earlier build and validate and sign that one.
+const bundleTarget = 'universal-apple-darwin';
 const appPath = resolve(
   argumentValue('--app')
     ?? process.env.ONRECORD_APP_BUNDLE_PATH
-    ?? join(cargoTargetDirectory(), 'release', 'bundle', 'macos', 'OnRecord Studio.app'),
+    ?? join(cargoTargetDirectory(), bundleTarget, 'release', 'bundle', 'macos', 'OnRecord Studio.app'),
 );
 
 assert(process.platform === 'darwin', 'Mac App Store packages must be produced on macOS.');
@@ -82,6 +86,16 @@ for (const link of links) {
       || link.startsWith('@loader_path/')
       || link.startsWith('@executable_path/'),
     `The app depends on a non-system library outside its bundle: ${link}`,
+  );
+}
+
+// The App Store listing offers the app only to the architectures the executable actually carries,
+// so a bundle that lost an architecture is a silently narrowed release rather than a build error.
+const architectures = run('lipo', ['-archs', executable]).split(/\s+/).filter(Boolean);
+for (const architecture of ['arm64', 'x86_64']) {
+  assert(
+    architectures.includes(architecture),
+    `The app executable is missing the ${architecture} architecture; it carries ${architectures.join(', ')}.`,
   );
 }
 

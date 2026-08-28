@@ -13,7 +13,7 @@
     "test:unit": "vitest run",
     "test:release-performance": "node scripts/validate-release-performance.mjs",
     "prepare:app-store": "node scripts/prepare-app-store.mjs",
-    "build:app-store": "npm run prepare:app-store && tauri build --ci --bundles app --features app-store --config src-tauri/tauri.appstore.conf.json",
+    "build:app-store": "npm run prepare:app-store && tauri build --ci --bundles app --target universal-apple-darwin --features app-store --config src-tauri/tauri.appstore.conf.json",
     "validate:app-store-bundle": "node scripts/package-app-store.mjs --validate-only",
     "package:app-store": "node scripts/package-app-store.mjs",
     "test": "npm run check:ipc && tsc --noEmit && cargo test --workspace --manifest-path src-tauri/Cargo.toml && vitest run",
