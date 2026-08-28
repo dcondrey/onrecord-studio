@@ -31,7 +31,7 @@ pub mod zip;
 
 pub use archive::extract_archive_container;
 pub use capability::{parser_capability, ParserCapability, ParserCostClass};
-pub use database::extract_sqlite_text;
+pub use database::{extract_duckdb_text, extract_sql_dump_text, extract_sqlite_text};
 pub use entropy::{assess_file_entropy, calculate_shannon_entropy, EntropyAssessment};
 pub use excel::extract_spreadsheet_layers;
 pub use forensic_evidence::{

@@ -58,6 +58,8 @@ pub enum DocumentFormat {
     Video,
     Audio,
     Sqlite,
+    DuckDb,
+    SqlDump,
     Database,
     Access,
     Columnar,
@@ -81,6 +83,8 @@ pub enum ExtractionRoute {
     ImageOcr,
     PackageText,
     Sqlite,
+    DuckDb,
+    SqlDump,
     Container(&'static str),
     ToolRequired(&'static str),
     KeyRequired,
@@ -129,8 +133,14 @@ impl DocumentFormat {
                 ExtractionRoute::ToolRequired("media transcription pipeline")
             }
             Self::Sqlite => ExtractionRoute::Sqlite,
-            Self::Database => ExtractionRoute::ToolRequired("database format detector"),
-            Self::Access => ExtractionRoute::ToolRequired("MDB/ACCDB extractor"),
+            Self::DuckDb => ExtractionRoute::DuckDb,
+            Self::SqlDump => ExtractionRoute::SqlDump,
+            Self::Database => {
+                ExtractionRoute::ToolRequired("manual database format identification and export")
+            }
+            Self::Access => {
+                ExtractionRoute::ToolRequired("manual Access export to SQLite, CSV, or SQL")
+            }
             Self::Columnar => ExtractionRoute::ToolRequired("columnar data extractor"),
             Self::MachineLearningModel => {
                 ExtractionRoute::ToolRequired("safe model metadata extractor")
@@ -217,6 +227,9 @@ pub fn detect_document_format(
     }
     if signature.starts_with(b"SQLite format 3\0") {
         return Ok(DocumentFormat::Sqlite);
+    }
+    if signature.get(8..12) == Some(&b"DUCK"[..]) {
+        return Ok(DocumentFormat::DuckDb);
     }
     if signature.starts_with(b"7z\xbc\xaf'\x1c") {
         return Ok(DocumentFormat::SevenZip);
@@ -375,10 +388,10 @@ fn classify_extension(extension: &str) -> DocumentFormat {
     match extension {
         "pdf" => DocumentFormat::Pdf,
         "txt" | "log" | "csv" | "tsv" | "json" | "jsonl" | "ndjson" | "xml" | "yaml" | "yml"
-        | "ini" | "conf" | "config" | "geojson" | "kml" | "html" | "htm" | "xhtml" | "sql"
-        | "css" | "sass" | "markdown" | "md" | "inf" | "reg" | "sh" | "bat" | "cmd" | "ps1"
-        | "patch" | "diff" | "fods" | "sylk" | "slk" | "vcf" | "vcard" | "dxf" | "prj"
-        | "pbtxt" | "prototxt" | "bib" | "ris" | "enw" | "end" | "tex" => DocumentFormat::PlainText,
+        | "ini" | "conf" | "config" | "geojson" | "kml" | "html" | "htm" | "xhtml" | "css"
+        | "sass" | "markdown" | "md" | "inf" | "reg" | "sh" | "bat" | "cmd" | "ps1" | "patch"
+        | "diff" | "fods" | "sylk" | "slk" | "vcf" | "vcard" | "dxf" | "prj" | "pbtxt"
+        | "prototxt" | "bib" | "ris" | "enw" | "end" | "tex" => DocumentFormat::PlainText,
         // SVG is XML, so it rides the PlainText route; `queue.rs` dispatches a PlainText document
         // named `.svg` (or typed `image/svg+xml`) to `parsers::svg::extract_svg_text` rather than
         // to the raw-text reader, which would otherwise index path data as if it were prose.
@@ -420,6 +433,8 @@ fn classify_extension(extension: &str) -> DocumentFormat {
         "mp4" | "mov" | "avi" | "mkv" | "wmv" | "3gp" => DocumentFormat::Video,
         "mp3" | "wav" | "m4a" | "aac" | "wma" => DocumentFormat::Audio,
         "sqlite" | "sqlite3" => DocumentFormat::Sqlite,
+        "duckdb" => DocumentFormat::DuckDb,
+        "sql" => DocumentFormat::SqlDump,
         "db" => DocumentFormat::Database,
         "accdb" | "mdb" => DocumentFormat::Access,
         "parquet" | "avro" | "orc" => DocumentFormat::Columnar,
@@ -492,6 +507,8 @@ fn classify_content_type(content_type: &str) -> DocumentFormat {
             DocumentFormat::OpenDocumentPresentation
         }
         "application/vnd.sqlite3" | "application/x-sqlite3" => DocumentFormat::Sqlite,
+        "application/vnd.duckdb" | "application/x-duckdb" => DocumentFormat::DuckDb,
+        "application/sql" | "text/sql" => DocumentFormat::SqlDump,
         value if value.starts_with("video/") => DocumentFormat::Video,
         value if value.starts_with("audio/") => DocumentFormat::Audio,
         _ => DocumentFormat::Unknown,
@@ -576,6 +593,17 @@ mod tests {
                 None
             ),
             DocumentFormat::Sqlite,
+        );
+        let mut duckdb_header = [0_u8; 16];
+        duckdb_header[8..12].copy_from_slice(b"DUCK");
+        assert_eq!(
+            detect(
+                &duckdb_header,
+                "fixture.bin",
+                Some("payload.sqlite"),
+                Some("application/vnd.sqlite3")
+            ),
+            DocumentFormat::DuckDb,
         );
     }
 
@@ -803,6 +831,36 @@ mod tests {
             DocumentFormat::Xz,
             DocumentFormat::TarXz,
             DocumentFormat::Zstd,
+            DocumentFormat::TarZstd,
+            DocumentFormat::Cab,
+            DocumentFormat::Cpio,
+            DocumentFormat::UnixCompress,
+            DocumentFormat::Rar,
+            DocumentFormat::SevenZip,
+            DocumentFormat::DiskOrPackageImage,
+            DocumentFormat::WordPackage,
+            DocumentFormat::PresentationPackage,
+            DocumentFormat::OpenDocumentText,
+            DocumentFormat::OpenDocumentPresentation,
+            DocumentFormat::IWork,
+            DocumentFormat::Ebook,
+            DocumentFormat::LegacyWord,
+            DocumentFormat::LegacyPresentation,
+            DocumentFormat::Video,
+            DocumentFormat::Audio,
+            DocumentFormat::Sqlite,
+            DocumentFormat::DuckDb,
+            DocumentFormat::SqlDump,
+            DocumentFormat::Database,
+            DocumentFormat::Access,
+            DocumentFormat::Columnar,
+            DocumentFormat::MachineLearningModel,
+            DocumentFormat::Shapefile,
+            DocumentFormat::Dbf,
+            DocumentFormat::Cad,
+            DocumentFormat::ForensicContainer,
+            DocumentFormat::CryptographicEnvelope,
+            DocumentFormat::Encrypted,
         ];
         for format in ALL {
             assert_ne!(

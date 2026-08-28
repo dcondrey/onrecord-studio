@@ -26,7 +26,9 @@ pub struct ParserCapability {
 pub const fn parser_capability(format: DocumentFormat) -> ParserCapability {
     let route = format.extraction_route();
     let (working_set_multiplier, cost_class) = match route {
-        ExtractionRoute::PlainText | ExtractionRoute::RichText => (2, ParserCostClass::Lightweight),
+        ExtractionRoute::PlainText | ExtractionRoute::RichText | ExtractionRoute::SqlDump => {
+            (2, ParserCostClass::Lightweight)
+        }
         ExtractionRoute::ImageOcr => (4, ParserCostClass::OcrBound),
         ExtractionRoute::Container(_) => (3, ParserCostClass::ContainerExpansion),
         ExtractionRoute::ToolRequired(_)

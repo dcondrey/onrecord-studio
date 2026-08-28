@@ -13,10 +13,11 @@ use crate::ingestion::limiter::RateLimiter;
 use crate::integrity::{constant_time_equal, digest_hex, sha256_file_async, sha256_hex};
 use crate::parsers::{
     assess_file_entropy, detect_document_format, execute_local_ocr_scan, extract_archive_container,
-    extract_html_text, extract_msg_layers, extract_office_package, extract_plain_text,
-    extract_rtf_text, extract_salvage_report, extract_spreadsheet_layers, extract_sqlite_text,
-    extract_svg_text, extract_text_layers, extract_zip_container_with_manifest, parser_capability,
-    DocumentFormat, ExtractionRoute, MsgExtractionContext,
+    extract_duckdb_text, extract_html_text, extract_msg_layers, extract_office_package,
+    extract_plain_text, extract_rtf_text, extract_salvage_report, extract_spreadsheet_layers,
+    extract_sql_dump_text, extract_sqlite_text, extract_svg_text, extract_text_layers,
+    extract_zip_container_with_manifest, parser_capability, DocumentFormat, ExtractionRoute,
+    MsgExtractionContext,
 };
 use crate::storage::corpus::{CorpusDocumentInput, CorpusIndex};
 use crate::storage::sqlite::{
@@ -4236,6 +4237,24 @@ async fn extract_document(
                 was_ocr_processed: false,
             })
         }
+        DocumentFormat::DuckDb => {
+            let path = local_path.to_path_buf();
+            let text =
+                spawn_blocking("DuckDB parser", move || extract_duckdb_text(&path)).await??;
+            Ok(ExtractedDocument::Searchable {
+                text,
+                was_ocr_processed: false,
+            })
+        }
+        DocumentFormat::SqlDump => {
+            let path = local_path.to_path_buf();
+            let text =
+                spawn_blocking("SQL dump parser", move || extract_sql_dump_text(&path)).await??;
+            Ok(ExtractedDocument::Searchable {
+                text,
+                was_ocr_processed: false,
+            })
+        }
         DocumentFormat::Zip | DocumentFormat::EmailArchive => {
             expand_container(
                 context,
@@ -4309,6 +4328,8 @@ fn salvage_allowed(format: DocumentFormat) -> bool {
             | DocumentFormat::Spreadsheet
             | DocumentFormat::OutlookMessage
             | DocumentFormat::Sqlite
+            | DocumentFormat::DuckDb
+            | DocumentFormat::SqlDump
     )
 }
 
@@ -4636,6 +4657,9 @@ fn extraction_route_label(route: ExtractionRoute) -> String {
         ExtractionRoute::ToolRequired(name) => format!("specialist tool required: {name}"),
         ExtractionRoute::KeyRequired => "decryption key required".to_string(),
         ExtractionRoute::Unknown => "unrecognized document format".to_string(),
+        ExtractionRoute::DuckDb | ExtractionRoute::SqlDump => {
+            "trusted database extractor unexpectedly deferred".to_string()
+        }
         _ => "native extractor unavailable".to_string(),
     }
 }
