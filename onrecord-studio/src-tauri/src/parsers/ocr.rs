@@ -1,4 +1,4 @@
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
@@ -16,9 +16,192 @@ const MAX_PDF_OCR_PAGES: usize = 25_000;
 const MAX_RASTER_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 const DEFAULT_OCR_TIMEOUT_SECONDS: u64 = 900;
 const MAX_OCR_TIMEOUT_SECONDS: u64 = 86_400;
+const OCR_CAPABILITY_PROBE_TIMEOUT_SECONDS: u64 = 5;
+const MAXIMUM_REPORTED_LANGUAGE_PACKS: usize = 512;
 
-// TODO(ocr): Probe configured engines, renderer versions, and language packs at startup and expose
-// their capability state; discovering a missing binary only after a document is queued is too late.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OcrCapability {
+    pub engine: String,
+    pub engine_available: bool,
+    pub engine_version: Option<String>,
+    pub language_packs: Vec<String>,
+    pub language_probe_complete: bool,
+    pub pdf_renderer: Option<String>,
+    pub pdf_renderer_available: bool,
+    pub pdf_renderer_version: Option<String>,
+    pub image_ocr_available: bool,
+    pub pdf_ocr_available: bool,
+    pub diagnostics: Vec<String>,
+}
+
+pub fn probe_ocr_capability() -> OcrCapability {
+    if let Some(engine) = std::env::var_os("ONRECORD_OCR_ENGINE") {
+        let probe = probe_executable(&engine, &["--version"]);
+        return OcrCapability {
+            engine: engine.to_string_lossy().into_owned(),
+            engine_available: probe.available,
+            engine_version: probe.version,
+            language_packs: Vec::new(),
+            language_probe_complete: false,
+            pdf_renderer: None,
+            pdf_renderer_available: false,
+            pdf_renderer_version: None,
+            image_ocr_available: probe.available,
+            pdf_ocr_available: probe.available,
+            diagnostics: probe.diagnostic.into_iter().collect(),
+        };
+    }
+
+    let engine = OsString::from("tesseract");
+    let engine_probe = probe_executable(&engine, &["--version"]);
+    let language_probe = probe_language_packs(&engine);
+    let renderer =
+        std::env::var_os("ONRECORD_PDF_RENDERER").unwrap_or_else(|| OsString::from("pdftoppm"));
+    let renderer_probe = probe_executable(&renderer, &["-v"]);
+    let mut diagnostics = Vec::new();
+    diagnostics.extend(engine_probe.diagnostic);
+    diagnostics.extend(language_probe.diagnostic);
+    diagnostics.extend(renderer_probe.diagnostic);
+    let english_available = language_probe
+        .languages
+        .iter()
+        .any(|language| language == "eng");
+    if language_probe.complete && !english_available {
+        diagnostics.push(
+            "Tesseract's default 'eng' language pack is not installed; default OCR cannot run"
+                .to_string(),
+        );
+    }
+    let image_ocr_available = engine_probe.available && english_available;
+    let pdf_ocr_available = image_ocr_available && renderer_probe.available;
+    OcrCapability {
+        engine: "tesseract".to_string(),
+        engine_available: engine_probe.available,
+        engine_version: engine_probe.version,
+        language_packs: language_probe.languages,
+        language_probe_complete: language_probe.complete,
+        pdf_renderer: Some(renderer.to_string_lossy().into_owned()),
+        pdf_renderer_available: renderer_probe.available,
+        pdf_renderer_version: renderer_probe.version,
+        image_ocr_available,
+        pdf_ocr_available,
+        diagnostics,
+    }
+}
+
+struct ExecutableProbe {
+    available: bool,
+    version: Option<String>,
+    diagnostic: Option<String>,
+}
+
+struct LanguageProbe {
+    languages: Vec<String>,
+    complete: bool,
+    diagnostic: Option<String>,
+}
+
+fn probe_executable(program: &OsStr, arguments: &[&str]) -> ExecutableProbe {
+    let mut command = Command::new(program);
+    command.args(arguments);
+    match run_command(
+        &mut command,
+        Instant::now() + Duration::from_secs(OCR_CAPABILITY_PROBE_TIMEOUT_SECONDS),
+        "OCR_CAPABILITY_PROBE",
+        Path::new("startup capability probe"),
+    ) {
+        Ok(output) => {
+            let version =
+                first_report_line(&output.stdout).or_else(|| first_report_line(&output.stderr));
+            ExecutableProbe {
+                // Reaching an exit status proves the configured executable launched. A non-zero
+                // version probe remains diagnostic because custom engines may not implement that
+                // optional flag even though they accept the document-path contract.
+                available: true,
+                version,
+                diagnostic: (!output.status.success()).then(|| {
+                    format!(
+                        "'{} {}' exited with {}",
+                        program.to_string_lossy(),
+                        arguments.join(" "),
+                        output.status
+                    )
+                }),
+            }
+        }
+        Err(error) => ExecutableProbe {
+            available: false,
+            version: None,
+            diagnostic: Some(error.to_string()),
+        },
+    }
+}
+
+fn probe_language_packs(engine: &OsStr) -> LanguageProbe {
+    let mut command = Command::new(engine);
+    command.arg("--list-langs");
+    match run_command(
+        &mut command,
+        Instant::now() + Duration::from_secs(OCR_CAPABILITY_PROBE_TIMEOUT_SECONDS),
+        "OCR_LANGUAGE_PROBE",
+        Path::new("startup capability probe"),
+    ) {
+        Ok(output) if output.status.success() => {
+            let report = String::from_utf8_lossy(&output.stdout);
+            let mut languages = report
+                .lines()
+                .map(str::trim)
+                .filter(|line| {
+                    !line.is_empty()
+                        && !line
+                            .to_ascii_lowercase()
+                            .starts_with("list of available languages")
+                })
+                .take(MAXIMUM_REPORTED_LANGUAGE_PACKS + 1)
+                .map(str::to_string)
+                .collect::<Vec<_>>();
+            if languages.len() > MAXIMUM_REPORTED_LANGUAGE_PACKS {
+                languages.truncate(MAXIMUM_REPORTED_LANGUAGE_PACKS);
+                return LanguageProbe {
+                    languages,
+                    complete: false,
+                    diagnostic: Some(format!(
+                        "OCR language-pack reporting exceeded {MAXIMUM_REPORTED_LANGUAGE_PACKS} entries"
+                    )),
+                };
+            }
+            LanguageProbe {
+                languages,
+                complete: true,
+                diagnostic: None,
+            }
+        }
+        Ok(output) => LanguageProbe {
+            languages: Vec::new(),
+            complete: false,
+            diagnostic: Some(format!(
+                "'{} --list-langs' exited with {}",
+                engine.to_string_lossy(),
+                output.status
+            )),
+        },
+        Err(error) => LanguageProbe {
+            languages: Vec::new(),
+            complete: false,
+            diagnostic: Some(error.to_string()),
+        },
+    }
+}
+
+fn first_report_line(bytes: &[u8]) -> Option<String> {
+    String::from_utf8_lossy(bytes)
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(|line| line.chars().take(512).collect())
+}
+
 pub fn execute_local_ocr_scan<P: AsRef<Path>>(document_path: P) -> Result<String, AppError> {
     let path = document_path.as_ref();
     validate_input(path)?;

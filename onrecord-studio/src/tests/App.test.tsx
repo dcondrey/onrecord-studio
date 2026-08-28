@@ -60,6 +60,21 @@ vi.mock('@tauri-apps/api/core', () => ({
     if (command === 'list_saved_portals' && bridge.failSavedPortals) {
       return Promise.reject(new Error('source catalog unavailable'));
     }
+    if (command === 'get_ocr_capability') {
+      return Promise.resolve({
+        engine: 'tesseract',
+        engineAvailable: true,
+        engineVersion: 'tesseract 5.5.1',
+        languagePacks: ['eng'],
+        languageProbeComplete: true,
+        pdfRenderer: 'pdftoppm',
+        pdfRendererAvailable: true,
+        pdfRendererVersion: 'pdftoppm 25.06.0',
+        imageOcrAvailable: true,
+        pdfOcrAvailable: true,
+        diagnostics: [],
+      });
+    }
     return Promise.resolve([]);
   },
 }));
@@ -102,6 +117,7 @@ describe('App', () => {
       portals: [],
       workspaceInitializationStatus: 'loading',
       workspaceInitializationError: null,
+      ocrCapability: null,
     });
     window.matchMedia = vi.fn().mockImplementation((query: string) => ({
       matches: false,
@@ -135,7 +151,9 @@ describe('App', () => {
     await waitFor(() => expect(bridge.invoked).toContain('list_saved_portals'));
     expect(bridge.invoked).toContain('list_portal_runtimes');
     expect(bridge.invoked).toContain('get_agency_performance_profiles');
+    expect(bridge.invoked).toContain('get_ocr_capability');
     await waitFor(() => expect(useAppStore.getState().workspaceInitializationStatus).toBe('ready'));
+    await waitFor(() => expect(useAppStore.getState().ocrCapability?.pdfOcrAvailable).toBe(true));
   });
 
   it('reconnects the telemetry listener after a transient registration failure', async () => {

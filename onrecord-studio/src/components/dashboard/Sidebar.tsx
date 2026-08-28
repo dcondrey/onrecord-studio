@@ -21,6 +21,7 @@ export default function Sidebar() {
   // Windows application menus when platform menu commands are introduced.
   const portals = useAppStore((state) => state.portals);
   const workspaceInitializationStatus = useAppStore((state) => state.workspaceInitializationStatus);
+  const ocrCapability = useAppStore((state) => state.ocrCapability);
   const runtimes = useAppStore((state) => state.portalRuntimes);
   const activePortalKey = useAppStore((state) => state.activePortalKey);
   const syncingPortalKeys = useAppStore((state) => state.syncingPortalKeys);
@@ -252,6 +253,42 @@ export default function Sidebar() {
               <div className="mt-2 flex items-center justify-between px-2 text-[12px] text-slate-600">
                 <span className="flex items-center gap-2"><span className={cn('h-1.5 w-1.5 rounded-full', syncingPortalKeys.length ? 'bg-emerald-400' : 'bg-slate-600')} /> Worker capacity</span>
                 <span className={cn('numeric-value', syncingPortalKeys.length > 0 && 'font-semibold text-emerald-300')}>{syncingPortalKeys.length}/5</span>
+              </div>
+              <div
+                className="mt-1 flex items-center justify-between gap-3 px-2 text-[12px] text-slate-600"
+                title={ocrCapability
+                  ? [
+                      `${ocrCapability.engine}${ocrCapability.engineVersion ? ` ${ocrCapability.engineVersion}` : ''}`,
+                      ocrCapability.pdfRenderer
+                        ? `${ocrCapability.pdfRenderer}${ocrCapability.pdfRendererVersion ? ` ${ocrCapability.pdfRendererVersion}` : ''}`
+                        : null,
+                      ocrCapability.languageProbeComplete
+                        ? `Languages: ${ocrCapability.languagePacks.join(', ') || 'none'}`
+                        : 'Language packs were not reported',
+                      ...ocrCapability.diagnostics,
+                    ].filter(Boolean).join(' — ')
+                  : 'OCR capability probe has not completed'}
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className={cn(
+                    'h-1.5 w-1.5 shrink-0 rounded-full',
+                    ocrCapability?.imageOcrAvailable && ocrCapability.pdfOcrAvailable
+                      ? 'bg-emerald-400'
+                      : ocrCapability
+                        ? 'bg-amber-400'
+                        : 'bg-slate-600',
+                  )} />
+                  Local OCR
+                </span>
+                <span className="truncate text-right text-[11px]">
+                  {!ocrCapability
+                    ? 'Checking'
+                    : ocrCapability.imageOcrAvailable && ocrCapability.pdfOcrAvailable
+                      ? 'Image + PDF'
+                      : ocrCapability.imageOcrAvailable
+                        ? 'Image only'
+                        : 'Unavailable'}
+                </span>
               </div>
             </>
           ) : (

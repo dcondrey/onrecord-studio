@@ -5,6 +5,7 @@ pub mod export;
 pub mod ingest;
 pub mod investigation;
 pub mod query;
+pub mod runtime;
 pub(crate) mod validation;
 
 pub use corpus::{get_corpus_index_status, query_corpus_patterns};
@@ -24,3 +25,4 @@ pub use investigation::{
     verify_document_redaction_integrity,
 };
 pub use query::query_audit_records;
+pub use runtime::get_ocr_capability;

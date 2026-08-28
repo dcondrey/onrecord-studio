@@ -19,6 +19,7 @@ import type {
   LegalComplianceFinding,
   LegalEvaluationResult,
   LegalFindingReviewStatus,
+  OcrCapability,
   PiiMaskResult,
   PortalRuntimeSnapshot,
   PortalSyncStart,
@@ -44,6 +45,7 @@ import type {
 type NoArgs = Record<string, never>;
 
 export interface NativeCommandMap {
+  get_ocr_capability: { args: NoArgs; result: OcrCapability };
   start_portal_sync: {
     args: {
       portalUrl: string;

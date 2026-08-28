@@ -5,6 +5,7 @@ import type {
   CrossAgencyCorrelation,
   LegalAuthoritySummary,
   LegalComplianceFinding,
+  OcrCapability,
   PortalRegistration,
   PortalRuntimeSnapshot,
   RequestSearchResult,
@@ -39,6 +40,7 @@ interface AppState {
   portals: SavedSource[];
   workspaceInitializationStatus: WorkspaceInitializationStatus;
   workspaceInitializationError: string | null;
+  ocrCapability: OcrCapability | null;
   portalRuntimes: PortalRuntimeSnapshot[];
   activePortalKey: string | null;
   portalUrlDraft: string;
@@ -78,6 +80,7 @@ interface AppState {
     status: WorkspaceInitializationStatus,
     error?: string | null,
   ) => void;
+  setOcrCapability: (capability: OcrCapability | null) => void;
   setPortalLifecycleState: (portalKey: string, lifecycleState: SourceLifecycleState) => void;
   removePortal: (portalKey: string) => void;
   setPortalRuntimes: (runtimes: PortalRuntimeSnapshot[]) => void;
@@ -123,6 +126,7 @@ export const useAppStore = create<AppState>((set) => ({
   portals: [],
   workspaceInitializationStatus: 'loading',
   workspaceInitializationError: null,
+  ocrCapability: null,
   portalRuntimes: [],
   activePortalKey: null,
   portalUrlDraft: '',
@@ -191,6 +195,7 @@ export const useAppStore = create<AppState>((set) => ({
     workspaceInitializationStatus,
     workspaceInitializationError = null,
   ) => set({ workspaceInitializationStatus, workspaceInitializationError }),
+  setOcrCapability: (ocrCapability) => set({ ocrCapability }),
   setPortalLifecycleState: (portalKey, lifecycleState) =>
     set((state) => ({
       portals: state.portals.map((entry) =>

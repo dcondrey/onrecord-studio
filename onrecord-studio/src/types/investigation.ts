@@ -35,6 +35,20 @@ export interface SavedSource {
   lastError: string | null;
 }
 
+export interface OcrCapability {
+  engine: string;
+  engineAvailable: boolean;
+  engineVersion: string | null;
+  languagePacks: string[];
+  languageProbeComplete: boolean;
+  pdfRenderer: string | null;
+  pdfRendererAvailable: boolean;
+  pdfRendererVersion: string | null;
+  imageOcrAvailable: boolean;
+  pdfOcrAvailable: boolean;
+  diagnostics: string[];
+}
+
 /// What withdrawing a source discarded, and what it kept. The retained document count is carried
 /// so the interface can say that removing a source does not remove its evidence.
 export interface SourceRemoval {

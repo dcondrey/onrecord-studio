@@ -25,6 +25,7 @@ export default function App() {
   const addBytesTransferred = useAppStore((state) => state.addBytesTransferred);
   const setPortals = useAppStore((state) => state.setPortals);
   const setWorkspaceInitialization = useAppStore((state) => state.setWorkspaceInitialization);
+  const setOcrCapability = useAppStore((state) => state.setOcrCapability);
   const upsertPortal = useAppStore((state) => state.upsertPortal);
   const setPortalRuntimes = useAppStore((state) => state.setPortalRuntimes);
   const setPortalSyncState = useAppStore((state) => state.setPortalSyncState);
@@ -120,10 +121,25 @@ export default function App() {
     // whether an empty saved-source list is genuine.
     void refreshRuntimes();
     void refreshAnalytics();
+    void invokeCommand('get_ocr_capability', {})
+      .then((capability) => {
+        if (!active) return;
+        setOcrCapability(capability);
+        if (!capability.imageOcrAvailable || !capability.pdfOcrAvailable) {
+          appendSyncLog(
+            `OCR capability is limited: ${capability.diagnostics.join('; ') || 'required local tools or language packs are unavailable'}`,
+          );
+        }
+      })
+      .catch((error) => {
+        if (!active) return;
+        setOcrCapability(null);
+        appendSyncLog(`OCR capability probe failed: ${String(error)}`);
+      });
     return () => {
       active = false;
     };
-  }, [appendSyncLog, refreshAnalytics, refreshRuntimes, setPortals, setWorkspaceInitialization]);
+  }, [appendSyncLog, refreshAnalytics, refreshRuntimes, setOcrCapability, setPortals, setWorkspaceInitialization]);
 
   useEffect(() => {
     // PERF(app): This polling interval is intentionally conservative for the

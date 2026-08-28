@@ -52,7 +52,7 @@ pub use legislation::{
     ParsedLegalAuthority, ParsedLegalProvision,
 };
 pub use msg::{extract_msg_layers, ExtractedEmailPayload, MsgExtractionContext};
-pub use ocr::execute_local_ocr_scan;
+pub use ocr::{execute_local_ocr_scan, probe_ocr_capability, OcrCapability};
 pub use office::extract_office_package;
 pub use pdf::{
     character_layer_density, extract_text_layers, requires_ocr_reprocessing,

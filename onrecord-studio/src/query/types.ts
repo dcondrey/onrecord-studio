@@ -6,7 +6,7 @@
  * they are negated, duplicated, or ambiguous, so the UI can label them honestly.
  */
 
-export type QuerySource = 'qualifier';
+export type QuerySource = 'qualifier' | 'natural-language';
 
 export type QueryField = 'agency' | 'portal' | 'status' | 'flag';
 
