@@ -254,7 +254,11 @@ pub async fn review_legal_finding(
 #[tauri::command]
 pub async fn mask_sensitive_text(text: String) -> Result<PiiMaskResult, AppError> {
     validate_text(&text, "Sensitive-text mask input", MAXIMUM_MASK_INPUT_BYTES)?;
-    mask_pii(&text)
+    // Detection is three linear passes plus a SHA-256 per finding, and the input bound is 4 MiB.
+    // Measured on this source in an optimized build: 29 ms for 4 MiB carrying no PII, 283 ms for
+    // 4 MiB that is dense with it. The caller chooses the size, so this cannot run on the runtime
+    // thread. Every other `mask_pii` call site already sits inside a blocking worker.
+    spawn_blocking("PII masking worker", move || mask_pii(&text)).await?
 }
 
 /// Verifies a stored document against the digest recorded for it.
