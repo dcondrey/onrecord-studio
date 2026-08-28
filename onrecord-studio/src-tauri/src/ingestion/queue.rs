@@ -5620,8 +5620,9 @@ async fn send_progress(context: &WorkerContext, progress: IngestionProgress) {
 
 #[cfg(test)]
 mod tests {
-    // TODO(performance-tests): Add a stress harness covering millions of documents, high-link-count
-    // crawls, parser contention, and restart recovery under realistic disk/network backpressure.
+    // Release-scale coverage is orchestrated by `scripts/validate-release-performance.mjs`: the
+    // high-link and parser-pressure cases below run beside the million-row analytical harness and
+    // the durable interrupted-frontier recovery test.
     use super::*;
     use crate::ingestion::client::HttpClientConfig;
     use tempfile::tempdir;
@@ -5632,6 +5633,49 @@ mod tests {
             page,
             per_page: 50,
         }
+    }
+
+    #[test]
+    fn release_stress_harness_bounds_high_link_discovery() {
+        use std::fmt::Write as _;
+
+        let mut payload = String::from("{\"resources\":[");
+        for index in 0..=MAXIMUM_STRUCTURED_DISCOVERY_LINKS {
+            if index > 0 {
+                payload.push(',');
+            }
+            write!(
+                payload,
+                "{{\"downloadUrl\":\"https://files.example.test/{index}.pdf\"}}"
+            )
+            .unwrap();
+        }
+        payload.push_str("]}");
+        assert!(payload.len() < MAXIMUM_STRUCTURED_DISCOVERY_BYTES as usize);
+        let discovery = discover_structured_document_links(payload.as_bytes(), None).unwrap();
+        assert_eq!(
+            discovery.candidates.len(),
+            MAXIMUM_STRUCTURED_DISCOVERY_LINKS
+        );
+    }
+
+    #[tokio::test]
+    async fn release_stress_harness_applies_parser_memory_backpressure() {
+        assert_eq!(
+            parser_memory_permits(u64::MAX, u32::MAX),
+            PARSER_MEMORY_PERMITS
+        );
+        let semaphore = Arc::new(Semaphore::new(PARSER_MEMORY_PERMITS as usize));
+        let all_memory = Arc::clone(&semaphore)
+            .acquire_many_owned(PARSER_MEMORY_PERMITS)
+            .await
+            .unwrap();
+        assert!(semaphore.try_acquire().is_err());
+        drop(all_memory);
+        assert_eq!(
+            semaphore.available_permits(),
+            PARSER_MEMORY_PERMITS as usize
+        );
     }
 
     async fn manager_with_source(

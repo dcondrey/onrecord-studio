@@ -10,6 +10,7 @@
     "build": "npm run check:ipc && tsc && vite build",
     "lint": "eslint . --max-warnings 0",
     "test:unit": "vitest run",
+    "test:release-performance": "node scripts/validate-release-performance.mjs",
     "test": "npm run check:ipc && tsc --noEmit && cargo test --workspace --manifest-path src-tauri/Cargo.toml && vitest run",
     "preview": "vite preview",
     "tauri": "tauri"

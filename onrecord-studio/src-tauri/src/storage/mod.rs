@@ -7,8 +7,9 @@
 //! SQLite appears only at boundaries, never in the core:
 //!
 //! * [`legacy_import`] upgrades a pre-DuckDB core written by an earlier release.
-//! * [`duckdb::DuckDbWorkspace`] and `analysis::anomaly` can `ATTACH` a read-only SQLite file an
-//!   investigator supplies, so it can be analyzed without being imported.
+//! * [`duckdb::DuckDbWorkspace`] and `analysis::anomaly` can take a bounded read-only snapshot of
+//!   a SQLite file an investigator supplies, so it can be analyzed without changing the source or
+//!   downloading a platform-specific DuckDB extension.
 //! * [`fts`] carries a SQLite FTS5 query sanitizer that no core path calls; see its module docs.
 //!
 //! The core search projection, `documents_fts`, is a plain DuckDB table maintained transactionally
@@ -23,6 +24,7 @@ pub mod fts;
 pub mod legacy_import;
 pub mod pii;
 pub mod sqlite;
+pub(crate) mod sqlite_snapshot;
 
 pub use duckdb::DuckDbWorkspace;
 pub use pii::{mask_json_pii, mask_pii, PiiFinding, PiiKind, PiiMaskResult};

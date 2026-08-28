@@ -1,15 +1,22 @@
 use crate::blocking::spawn_with;
 use crate::error::AppError;
+use crate::storage::sqlite_snapshot::import_sqlite_snapshot;
 use crate::types::CrossAgencyCorrelation;
 use duckdb::{params, Connection, Row};
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock, TryLockError};
+use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
 use std::time::{Duration, Instant};
 
-static SQLITE_EXTENSION_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 const WORKSPACE_LOCK_TIMEOUT: Duration = Duration::from_secs(5);
 const WORKSPACE_LOCK_POLL_INTERVAL: Duration = Duration::from_millis(5);
+const CORRELATION_SQLITE_TABLES: [&str; 5] = [
+    "requests",
+    "agencies",
+    "request_keyword_signals",
+    "auxiliary_data_sources",
+    "auxiliary_events",
+];
 
 const CROSS_CORRELATION_QUERY: &str = r#"
 WITH request_candidates AS (
@@ -130,8 +137,9 @@ fn qualify(template: &str, table_prefix: &str) -> String {
 // analytics reads run on sibling connections to the same instance, so the writer/reader boundary
 // is correct. A competing analytics operation returns a retryable-looking busy message after the
 // bounded workspace timeout. DuckDB query execution itself is still synchronous once it starts.
-// TODO(performance-validation): Add a benchmark corpus covering million-row ingestion, concurrent
-// analytics, large extracted text, and index rebuild latency before tuning production pragmas.
+// `release_scale_harness_covers_million_rows_large_text_indexes_and_concurrent_reads` exercises
+// million-row ingestion, concurrent analytics, a 32 MiB text projection, and index rebuilding;
+// `scripts/validate-release-performance.mjs` runs it as an explicit release gate.
 
 struct CorrelationRow {
     request_id: i64,
@@ -201,44 +209,15 @@ impl DuckDbWorkspace {
                     "The core DuckDB workspace cannot attach a foreign SQLite database".to_string(),
                 ));
             }
-            initialize_sqlite_extension(&state.connection)?;
             if state.attached_sqlite_path.as_ref() == Some(&canonical_path) {
                 return validate_layout(&state.connection, state.source.table_prefix());
             }
-            if state.attached_sqlite_path.is_some() {
-                state
-                    .connection
-                    .execute_batch("DETACH db;")
-                    .map_err(|error| {
-                        AppError::Analysis(format!("Failed to detach SQLite source: {error}"))
-                    })?;
-                state.attached_sqlite_path = None;
-            }
-            let attachment = format!(
-                "ATTACH {} AS db (TYPE SQLITE, READ_ONLY);",
-                quote_path(&canonical_path)?
-            );
-            state
-                .connection
-                .execute_batch(&attachment)
-                .map_err(|error| {
-                    AppError::Analysis(format!("Failed to attach SQLite source: {error}"))
-                })?;
-            if let Err(error) = validate_layout(&state.connection, state.source.table_prefix()) {
-                // The alias must be released before anything is attached under it again. If the
-                // release fails the connection still owns `db` while the tracked state says
-                // nothing is attached, which would reject every later attach; discard the node.
-                if let Err(detach_error) = state.connection.execute_batch("DETACH db;") {
-                    reset_workspace_connection(&mut state).map_err(|reset_error| {
-                        AppError::Analysis(format!(
-                            "Attached SQLite layout was rejected ({error}); releasing the alias \
-                             failed ({detach_error}) and rebuilding the workspace also failed \
-                             ({reset_error})"
-                        ))
-                    })?;
-                }
-                return Err(error);
-            }
+            let replacement = Connection::open_in_memory().map_err(|error| {
+                AppError::Analysis(format!("Failed to initialize SQLite snapshot: {error}"))
+            })?;
+            import_sqlite_snapshot(&replacement, &canonical_path, &CORRELATION_SQLITE_TABLES)?;
+            validate_layout(&replacement, state.source.table_prefix())?;
+            state.connection = replacement;
             state.attached_sqlite_path = Some(canonical_path);
             Ok(())
         })
@@ -356,38 +335,6 @@ fn map_correlation_row(row: &Row<'_>) -> duckdb::Result<CorrelationRow> {
     })
 }
 
-fn initialize_sqlite_extension(connection: &Connection) -> Result<(), AppError> {
-    if connection.execute_batch("LOAD sqlite;").is_ok() {
-        return Ok(());
-    }
-    let lock = SQLITE_EXTENSION_LOCK.get_or_init(|| Mutex::new(()));
-    let _guard = lock
-        .lock()
-        .map_err(|_| AppError::Analysis("SQLite extension lock was poisoned".to_string()))?;
-    if connection.execute_batch("LOAD sqlite;").is_ok() {
-        return Ok(());
-    }
-    // TODO(distribution): Bundle and integrity-check the DuckDB SQLite extension so first-run
-    // analytics remains deterministic in offline and restricted-network forensic environments.
-    connection
-        .execute_batch("INSTALL sqlite; LOAD sqlite;")
-        .map_err(|error| {
-            AppError::Analysis(format!("Failed to load DuckDB SQLite extension: {error}"))
-        })
-}
-
-/// Replaces a foreign-SQLite workspace's connection with a fresh one, discarding any alias the old
-/// connection could not release. Only valid for `WorkspaceSource::ForeignSqlite`, whose connection
-/// is an in-memory node holding no durable state of its own.
-fn reset_workspace_connection(state: &mut DuckDbState) -> Result<(), AppError> {
-    debug_assert_eq!(state.source, WorkspaceSource::ForeignSqlite);
-    state.attached_sqlite_path = None;
-    state.connection = Connection::open_in_memory().map_err(|error| {
-        AppError::Analysis(format!("Failed to rebuild the DuckDB workspace: {error}"))
-    })?;
-    Ok(())
-}
-
 fn validate_layout(connection: &Connection, table_prefix: &str) -> Result<(), AppError> {
     validate_layout_query(
         connection,
@@ -457,18 +404,6 @@ fn validate_database_path(path: &Path) -> Result<PathBuf, AppError> {
         )));
     }
     Ok(canonical)
-}
-
-fn quote_path(path: &Path) -> Result<String, AppError> {
-    let value = path.to_str().ok_or_else(|| {
-        AppError::DataParsing(format!("SQLite path '{}' is not UTF-8", path.display()))
-    })?;
-    if value.contains('\0') {
-        return Err(AppError::DataParsing(
-            "SQLite path contains a NUL character".to_string(),
-        ));
-    }
-    Ok(format!("'{}'", value.replace('\'', "''")))
 }
 
 fn lock_state(state: &Arc<Mutex<DuckDbState>>) -> Result<MutexGuard<'_, DuckDbState>, AppError> {
@@ -603,5 +538,73 @@ mod tests {
         assert_eq!(one_day[0].complaint_count, 1);
         assert_eq!(one_day[0].correlation_window_hours, 24);
         assert!((one_day[0].correlation_density - (1.0 / 24.0)).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn release_scale_harness_covers_million_rows_large_text_indexes_and_concurrent_reads() {
+        const ROW_COUNT: i64 = 1_000_000;
+        const LARGE_TEXT_BYTES: i64 = 32 * 1024 * 1024;
+        let started_at = Instant::now();
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("release-performance.duckdb");
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute_batch(
+                "SET threads = 1;
+                 SET memory_limit = '512MB';
+                 CREATE TABLE perf_requests AS
+                 SELECT value AS id, value % 100 AS agency_id,
+                        CASE WHEN value % 17 = 0 THEN 'closed' ELSE 'open' END AS status
+                 FROM range(1000000) rows(value);
+                 CREATE INDEX idx_perf_requests_agency ON perf_requests(agency_id, status);",
+            )
+            .unwrap();
+        let indexed_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM perf_requests WHERE agency_id = 42 AND status = 'closed'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(indexed_count > 0);
+        connection
+            .execute_batch(
+                "DROP INDEX idx_perf_requests_agency;
+                 CREATE INDEX idx_perf_requests_agency ON perf_requests(agency_id, status);
+                 CREATE TABLE perf_documents AS
+                 SELECT 1 AS document_id, repeat('e', 33554432) AS extracted_text;",
+            )
+            .unwrap();
+        let large_text_bytes: i64 = connection
+            .query_row(
+                "SELECT length(extracted_text) FROM perf_documents",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(large_text_bytes, LARGE_TEXT_BYTES);
+        drop(connection);
+
+        std::thread::scope(|scope| {
+            let mut readers = Vec::new();
+            for _ in 0..4 {
+                let path = path.clone();
+                readers.push(scope.spawn(move || {
+                    Connection::open(path)
+                        .unwrap()
+                        .query_row("SELECT COUNT(*) FROM perf_requests", [], |row| {
+                            row.get::<_, i64>(0)
+                        })
+                        .unwrap()
+                }));
+            }
+            for reader in readers {
+                assert_eq!(reader.join().unwrap(), ROW_COUNT);
+            }
+        });
+        assert!(
+            started_at.elapsed() < Duration::from_secs(60),
+            "the release-scale analytical harness exceeded its 60-second budget"
+        );
     }
 }

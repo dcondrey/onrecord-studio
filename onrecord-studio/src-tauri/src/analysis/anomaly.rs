@@ -1,16 +1,17 @@
 use crate::analysis::statute;
 use crate::error::AppError;
+use crate::storage::sqlite_snapshot::import_sqlite_snapshot;
 use crate::types::{AgencyPerformanceProfile, AnalysisConfig, VerificationState};
 use duckdb::{params, Connection};
 use std::collections::{BTreeSet, HashMap};
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+use std::sync::{Arc, Mutex, MutexGuard};
 
-const SQLITE_DATABASE_ALIAS: &str = "db";
 const SECONDS_PER_DAY: f64 = 86_400.0;
 pub const STATUTORY_DEADLINE_Z_SCORE: f64 = 2.0;
-static SQLITE_EXTENSION_INSTALLATION_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+const ANALYTICS_SQLITE_TABLES: [&str; 4] =
+    ["requests", "agencies", "documents", "statutory_extensions"];
 
 const SQLITE_LAYOUT_PROBE_QUERY: &str = r#"
 SELECT COUNT(*)
@@ -331,11 +332,17 @@ impl AnalyticsEngine {
                     "The core analytics node cannot attach a foreign SQLite database".to_string(),
                 ));
             }
-            initialize_sqlite_extension(&state.connection)?;
             if state.attached_sqlite_path.as_ref() == Some(&canonical_path) {
                 return validate_attached_sqlite_layout(&state.connection);
             }
-            replace_sqlite_attachment(&mut state, canonical_path)
+            let replacement = Connection::open_in_memory().map_err(|error| {
+                AppError::Analysis(format!("Failed to initialize SQLite snapshot: {error}"))
+            })?;
+            import_sqlite_snapshot(&replacement, &canonical_path, &ANALYTICS_SQLITE_TABLES)?;
+            validate_attached_sqlite_layout(&replacement)?;
+            state.connection = replacement;
+            state.attached_sqlite_path = Some(canonical_path);
+            Ok(())
         })
         .await
         .map_err(|error| AppError::Analysis(format!("DuckDB attachment worker failed: {error}")))?
@@ -643,97 +650,6 @@ fn convert_raw_profile(
     })
 }
 
-fn initialize_sqlite_extension(connection: &Connection) -> Result<(), AppError> {
-    if connection.execute_batch("LOAD sqlite;").is_ok() {
-        return Ok(());
-    }
-    let lock = SQLITE_EXTENSION_INSTALLATION_LOCK.get_or_init(|| Mutex::new(()));
-    let _guard = lock.lock().map_err(|_| {
-        AppError::Analysis("SQLite extension installation lock was poisoned".to_string())
-    })?;
-    if connection.execute_batch("LOAD sqlite;").is_ok() {
-        return Ok(());
-    }
-    connection
-        .execute_batch("INSTALL sqlite; LOAD sqlite;")
-        .map_err(|error| {
-            AppError::Analysis(format!("Failed to load DuckDB SQLite extension: {error}"))
-        })
-}
-
-fn replace_sqlite_attachment(
-    state: &mut AnalyticsState,
-    new_path: PathBuf,
-) -> Result<(), AppError> {
-    let previous_path = state.attached_sqlite_path.take();
-    if previous_path.is_some() {
-        state
-            .connection
-            .execute_batch(&format!("DETACH {SQLITE_DATABASE_ALIAS};"))
-            .map_err(|error| {
-                AppError::Analysis(format!("Failed to detach prior SQLite source: {error}"))
-            })?;
-    }
-    let attachment_result = attach_database(&state.connection, &new_path)
-        .and_then(|()| validate_attached_sqlite_layout(&state.connection));
-    if let Err(new_error) = attachment_result {
-        // The alias must be released before anything is attached under it again. If the release
-        // fails the connection still owns `db` while the tracked state says nothing is attached,
-        // which would reject every later attach; discard the node and start from a clean one.
-        if let Err(detach_error) = state
-            .connection
-            .execute_batch(&format!("DETACH {SQLITE_DATABASE_ALIAS};"))
-        {
-            reset_analytics_connection(state).map_err(|reset_error| {
-                AppError::Analysis(format!(
-                    "New SQLite source was rejected ({new_error}); releasing the alias failed \
-                     ({detach_error}) and rebuilding the analytics node also failed ({reset_error})"
-                ))
-            })?;
-            return Err(new_error);
-        }
-        if let Some(previous_path) = previous_path {
-            match attach_database(&state.connection, &previous_path)
-                .and_then(|()| validate_attached_sqlite_layout(&state.connection))
-            {
-                Ok(()) => {
-                    state.attached_sqlite_path = Some(previous_path);
-                    return Err(new_error);
-                }
-                Err(restore_error) => {
-                    return Err(AppError::Analysis(format!(
-                        "New SQLite source was rejected ({new_error}); restoring the prior source also failed ({restore_error})"
-                    )));
-                }
-            }
-        }
-        return Err(new_error);
-    }
-    state.attached_sqlite_path = Some(new_path);
-    Ok(())
-}
-
-/// Replaces a foreign-SQLite node's connection with a fresh one, discarding any alias the old
-/// connection could not release. Only valid for `AnalyticsSource::ForeignSqlite`, whose connection
-/// is an in-memory node holding no durable state of its own.
-fn reset_analytics_connection(state: &mut AnalyticsState) -> Result<(), AppError> {
-    debug_assert_eq!(state.source, AnalyticsSource::ForeignSqlite);
-    state.attached_sqlite_path = None;
-    state.connection = Connection::open_in_memory().map_err(|error| {
-        AppError::Analysis(format!("Failed to rebuild the analytics node: {error}"))
-    })?;
-    Ok(())
-}
-
-fn attach_database(connection: &Connection, path: &Path) -> Result<(), AppError> {
-    connection
-        .execute_batch(&format!(
-            "ATTACH {} AS {SQLITE_DATABASE_ALIAS} (TYPE SQLITE, READ_ONLY);",
-            quote_sql_path(path)?
-        ))
-        .map_err(|error| AppError::Analysis(format!("Failed to attach SQLite database: {error}")))
-}
-
 fn validate_attached_sqlite_layout(connection: &Connection) -> Result<(), AppError> {
     connection
         .query_row(
@@ -769,18 +685,6 @@ fn validate_sqlite_path(path: &Path) -> Result<PathBuf, AppError> {
         )));
     }
     Ok(canonical)
-}
-
-fn quote_sql_path(path: &Path) -> Result<String, AppError> {
-    let value = path.to_str().ok_or_else(|| {
-        AppError::DataParsing(format!("SQLite path '{}' is not UTF-8", path.display()))
-    })?;
-    if value.contains('\0') {
-        return Err(AppError::DataParsing(
-            "SQLite path contains a NUL character".to_string(),
-        ));
-    }
-    Ok(format!("'{}'", value.replace('\'', "''")))
 }
 
 fn validate_latency_threshold(value: f64) -> Result<(), AppError> {
@@ -845,6 +749,47 @@ mod tests {
             )
             .unwrap();
         connection
+    }
+
+    #[tokio::test]
+    async fn opens_foreign_sqlite_as_an_offline_bounded_snapshot() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("analytics.sqlite");
+        let sqlite = rusqlite::Connection::open(&path).unwrap();
+        sqlite
+            .execute_batch(
+                "CREATE TABLE requests (
+                    id INTEGER, portal_subdomain TEXT, agency_id INTEGER, title TEXT,
+                    description TEXT, status TEXT, created_at TEXT, updated_at TEXT,
+                    closed_at TEXT, determination_at TEXT, determination_source TEXT
+                 );
+                 CREATE TABLE agencies (id INTEGER, portal_subdomain TEXT, name TEXT);
+                 CREATE TABLE documents (
+                    id INTEGER, request_id INTEGER, portal_subdomain TEXT, visibility TEXT
+                 );
+                 CREATE TABLE statutory_extensions (
+                    request_id INTEGER, portal_subdomain TEXT, notice_at TEXT,
+                    expected_determination_at TEXT, reason TEXT, notice_source TEXT
+                 );",
+            )
+            .unwrap();
+        drop(sqlite);
+
+        let engine = AnalyticsEngine::new().unwrap();
+        engine.attach_sqlite_source_path(&path).await.unwrap();
+        assert_eq!(
+            engine
+                .calculate_agency_outlier_profiles(&AnalysisConfig {
+                    latency_threshold_days: 10.0,
+                    target_policy_keywords: Vec::new(),
+                    created_from: None,
+                    created_to: None,
+                    ..AnalysisConfig::default()
+                })
+                .await
+                .unwrap(),
+            Vec::new()
+        );
     }
 
     #[test]
