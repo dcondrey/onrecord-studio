@@ -1,5 +1,5 @@
-// TODO(telemetry): Generate this discriminated event union from the native
-// protocol schema and fail the build when a Rust event is not handled in App.
+export type { IngestionTelemetry, IngestionTelemetryEvent } from '../generated/ingestionTelemetry';
+
 export interface PortalApiLayout {
   requestsEndpoint: string;
   requestsPointer: string;
@@ -108,37 +108,6 @@ export interface StoppedHost {
   reason: string;
 }
 
-type IngestionTelemetryEvent =
-  | { type: 'portalVerified'; payload: { portal: PortalRegistration } }
-  | { type: 'syncStarted'; payload: { portalKey: string; syncRunId: string } }
-  | { type: 'pageStarted'; payload: { portalKey: string; page: number } }
-  | { type: 'pageCompleted'; payload: { portalKey: string; page: number; recordsFound: number } }
-  | { type: 'documentStarted'; payload: { portalKey: string; documentId: number; fileName: string } }
-  | { type: 'documentExtracted'; payload: { portalKey: string; documentId: number; characterCount: number; wasOcrProcessed: boolean } }
-  | { type: 'documentExpanded'; payload: { portalKey: string; documentId: number; format: string; entryCount: number } }
-  | { type: 'documentDeferred'; payload: { portalKey: string; documentId: number; format: string; reason: string } }
-  | { type: 'documentSalvaged'; payload: { portalKey: string; documentId: number; format: string; primaryError: string } }
-  | { type: 'documentCompleted'; payload: { portalKey: string; documentId: number; bytesSaved: number } }
-  | { type: 'syncStopped'; payload: { portalKey: string; syncRunId: string } }
-  | {
-      type: 'hostStopped';
-      payload: { portalKey: string; host: string; requestsSpent: number; reason: string };
-    }
-  | { type: 'taskFailed'; payload: { portalKey: string; targetId: string; errorMsg: string } }
-  | { type: 'taskRetryScheduled'; payload: { portalKey: string; targetId: string; attempt: number; delaySeconds: number; errorMsg: string } }
-  | { type: 'sourceNeedsGuidance'; payload: { portalKey: string; sourceUrl: string; reason: string } }
-  | { type: 'legacyCoreDatabaseMigrated'; payload: { backupPath: string; copiedTables: number; copiedRows: number; tablesAbsentFromLegacy: string[]; tablesDroppedFromLegacy: string[] } }
-  | { type: 'corpusReconciliationStarted'; payload: Record<string, never> }
-  | { type: 'corpusReconciliationCompleted'; payload: { indexedDocuments: number; skippedDocuments: number; failedDocuments: number; firstError: string | null } };
-
-export type IngestionTelemetry = {
-  // NOTE(telemetry): `sequence` is a string because the bridge transports it
-  // uniformly across runtimes; keep numeric ordering in the consumer only.
-  protocolVersion: 1;
-  sequence: string;
-  emittedAt: string;
-} & IngestionTelemetryEvent;
-
 export type StatutoryExtensionReason =
   | 'SEPARATE_FIELD_FACILITIES'
   | 'VOLUMINOUS_RECORDS'
@@ -244,6 +213,7 @@ export interface DocumentProvenanceVerification {
   signingTimestamp: string | null;
   assertionCount: number;
   invalidAssertionCount: number;
+  claimGraph: import('./c2pa/manifest').ProvenanceClaimGraph;
   /** Digest recorded for the normalized text projection that search and briefs quote. */
   textProjectionSha256: string | null;
   /** `null` means the comparison could not be made, not that it passed. */

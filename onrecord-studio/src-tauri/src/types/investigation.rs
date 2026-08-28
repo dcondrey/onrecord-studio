@@ -98,6 +98,47 @@ pub struct CrossAgencyCorrelation {
     pub correlation_density: f64,
 }
 
+/// A claim in the C2PA manifest store embedded in an evidence asset.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProvenanceClaimNode {
+    pub manifest_label: String,
+    pub is_active: bool,
+    pub title: Option<String>,
+    pub format: Option<String>,
+    pub instance_id: Option<String>,
+    pub claim_generator: Option<String>,
+    pub assertion_labels: Vec<String>,
+}
+
+/// A declared relationship from one C2PA claim to an ingredient asset or ingredient claim.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProvenanceIngredientEdge {
+    pub source_manifest_label: String,
+    pub target_manifest_label: Option<String>,
+    pub relationship: String,
+    pub title: Option<String>,
+    pub format: Option<String>,
+    pub document_id: Option<String>,
+    pub instance_id: Option<String>,
+    pub validation_statuses: Vec<String>,
+}
+
+/// Bounded, source-preserving view of the C2PA claim and ingredient graph.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProvenanceClaimGraph {
+    pub active_manifest_label: Option<String>,
+    pub claims: Vec<ProvenanceClaimNode>,
+    pub ingredients: Vec<ProvenanceIngredientEdge>,
+    pub validation_statuses: Vec<String>,
+    pub certificate_chain_trusted: bool,
+    pub certificate_chain_diagnostics: Vec<String>,
+    /// True when safety bounds prevented the response from carrying the complete SDK graph.
+    pub truncated: bool,
+}
+
 /// Result of comparing a stored document against whatever provenance evidence exists for it.
 ///
 /// Read [`Self::provenance_confidence`] before presenting any of the booleans below. The boolean
@@ -137,6 +178,9 @@ pub struct DocumentProvenanceVerification {
     pub signing_timestamp: Option<String>,
     pub assertion_count: usize,
     pub invalid_assertion_count: usize,
+    /// Claim-to-ingredient relationships and validation diagnostics read directly from the asset.
+    #[serde(default)]
+    pub claim_graph: ProvenanceClaimGraph,
     /// Digest recorded for the normalized text projection when the document was extracted.
     ///
     /// `None` for a document extracted before the digest was recorded, or imported from a legacy

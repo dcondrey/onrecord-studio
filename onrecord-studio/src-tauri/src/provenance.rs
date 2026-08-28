@@ -20,7 +20,10 @@
 //! [`crate::types::c2pa::ProvenanceConfidence::TrustedChainOfCustody`].
 
 use crate::error::AppError;
-use crate::types::{ProvenanceConfidence, SignatureVerificationState};
+use crate::types::{
+    ProvenanceClaimGraph, ProvenanceClaimNode, ProvenanceConfidence, ProvenanceIngredientEdge,
+    SignatureVerificationState,
+};
 use std::path::Path;
 
 /// The strongest statement the C2PA SDK made about an asset's manifest.
@@ -64,6 +67,7 @@ pub struct AssetProvenance {
     pub signing_timestamp: Option<String>,
     pub claim_generator: Option<String>,
     pub assertions: Vec<AssetAssertion>,
+    pub claim_graph: ProvenanceClaimGraph,
     /// Human-readable findings to surface on the verification result.
     pub findings: Vec<String>,
 }
@@ -165,6 +169,11 @@ pub fn read_asset_provenance(path: &Path) -> Result<AssetProvenance, AppError> {
 }
 
 fn from_reader(reader: &c2pa::Reader) -> AssetProvenance {
+    const MAX_CLAIMS: usize = 256;
+    const MAX_INGREDIENTS: usize = 2_048;
+    const MAX_ASSERTIONS: usize = 4_096;
+    const MAX_STATUSES: usize = 1_024;
+
     let validation = match reader.validation_state() {
         c2pa::ValidationState::Invalid => ManifestValidation::Invalid,
         c2pa::ValidationState::Valid => ManifestValidation::Valid,
@@ -194,6 +203,83 @@ fn from_reader(reader: &c2pa::Reader) -> AssetProvenance {
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
+
+    let active_manifest_label = reader.active_label().map(String::from);
+    let mut manifest_entries = reader.manifests().iter().collect::<Vec<_>>();
+    manifest_entries.sort_by(|(left, _), (right, _)| left.cmp(right));
+    let mut truncated = manifest_entries.len() > MAX_CLAIMS;
+    let mut claims = Vec::new();
+    let mut ingredients = Vec::new();
+    let mut assertion_total = 0usize;
+    for (manifest_label, manifest) in manifest_entries.into_iter().take(MAX_CLAIMS) {
+        let remaining_assertions = MAX_ASSERTIONS.saturating_sub(assertion_total);
+        let assertion_labels = manifest
+            .assertions()
+            .iter()
+            .take(remaining_assertions)
+            .map(|assertion| assertion.label_with_instance())
+            .collect::<Vec<_>>();
+        assertion_total += assertion_labels.len();
+        truncated |= assertion_labels.len() < manifest.assertions().len();
+        claims.push(ProvenanceClaimNode {
+            manifest_label: manifest_label.clone(),
+            is_active: active_manifest_label.as_deref() == Some(manifest_label.as_str()),
+            title: manifest.title().map(String::from),
+            format: manifest.format().map(String::from),
+            instance_id: optional_identifier(manifest.instance_id()),
+            claim_generator: manifest.claim_generator().map(String::from),
+            assertion_labels,
+        });
+        for ingredient in manifest.ingredients() {
+            if ingredients.len() == MAX_INGREDIENTS {
+                truncated = true;
+                break;
+            }
+            let validation_statuses = ingredient
+                .validation_status()
+                .unwrap_or_default()
+                .iter()
+                .take(MAX_STATUSES)
+                .map(validation_status_description)
+                .collect();
+            ingredients.push(ProvenanceIngredientEdge {
+                source_manifest_label: manifest_label.clone(),
+                target_manifest_label: ingredient.active_manifest().map(String::from),
+                relationship: ingredient.relationship().as_str().to_string(),
+                title: ingredient.title().map(String::from),
+                format: ingredient.format().map(String::from),
+                document_id: ingredient.document_id().map(String::from),
+                instance_id: optional_identifier(ingredient.instance_id()),
+                validation_statuses,
+            });
+        }
+    }
+    let validation_statuses = reader
+        .validation_status()
+        .unwrap_or_default()
+        .iter()
+        .take(MAX_STATUSES)
+        .map(validation_status_description)
+        .collect::<Vec<_>>();
+    truncated |= reader.validation_status().unwrap_or_default().len() > MAX_STATUSES;
+    let certificate_chain_trusted = validation == ManifestValidation::Trusted;
+    let certificate_chain_diagnostics = if certificate_chain_trusted {
+        vec!["The signing certificate chained to a configured trust anchor".to_string()]
+    } else {
+        vec![
+            "No trust anchors are configured, so the signing certificate identity was not independently authenticated"
+                .to_string(),
+        ]
+    };
+    let claim_graph = ProvenanceClaimGraph {
+        active_manifest_label,
+        claims,
+        ingredients,
+        validation_statuses,
+        certificate_chain_trusted,
+        certificate_chain_diagnostics,
+        truncated,
+    };
 
     let mut findings = Vec::new();
     if validation == ManifestValidation::Invalid {
@@ -228,8 +314,21 @@ fn from_reader(reader: &c2pa::Reader) -> AssetProvenance {
         signing_timestamp: active.and_then(|manifest| manifest.time()),
         claim_generator,
         assertions,
+        claim_graph,
         findings,
     }
+}
+
+fn optional_identifier(value: &str) -> Option<String> {
+    let value = value.trim();
+    (!value.is_empty() && value != "None").then(|| value.to_string())
+}
+
+fn validation_status_description(status: &c2pa::validation_status::ValidationStatus) -> String {
+    status
+        .explanation()
+        .map(|explanation| format!("{}: {explanation}", status.code()))
+        .unwrap_or_else(|| status.code().to_string())
 }
 
 #[cfg(test)]
@@ -301,6 +400,15 @@ mod tests {
             SignatureVerificationState::Valid
         );
         assert!(intact.claims_signature());
+        assert_eq!(intact.claim_graph.claims.len(), 1);
+        assert!(intact.claim_graph.claims[0].is_active);
+        assert!(intact.claim_graph.claims[0]
+            .assertion_labels
+            .iter()
+            .any(|label| label.starts_with("c2pa.actions")));
+        assert!(!intact.claim_graph.certificate_chain_trusted);
+        assert!(!intact.claim_graph.certificate_chain_diagnostics.is_empty());
+        assert!(!intact.claim_graph.truncated);
         // No trust anchor is configured, so the rung stops one below chain of custody.
         assert_eq!(
             classify_confidence(true, true, true, intact.manifest_present, intact.validation),

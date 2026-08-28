@@ -224,6 +224,9 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
         <button type="button" onClick={() => void shareEvidenceLocation()} className="rounded border border-indigo-400/25 bg-indigo-500/10 px-2 py-1 text-indigo-300">Copy evidence link</button>
         {shareStatus && <span role="status" className="text-emerald-300">{shareStatus}</span>}
       </div>
+      {activeManifest && activeManifest.claimGraph.claims.length > 0 && (
+        <ProvenanceGraphPanel graph={activeManifest.claimGraph} />
+      )}
       {showVerificationHistory && <VerificationHistoryPanel records={verificationHistory} isLoading={isLoadingHistory} error={historyError} />}
       {(recoveryProfile || recoveryError) && <RevisionRecoveryPanel profile={recoveryProfile} error={recoveryError} />}
       {(residualAudit || residualAuditError) && <ResidualEvidencePanel bundle={residualAudit} error={residualAuditError} />}
@@ -233,6 +236,52 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
       </div>
       {pageCount > 1 && <div className="flex items-center justify-center gap-3 border-t border-slate-900 px-4 py-2 text-[9px] text-slate-500"><button type="button" disabled={textPage === 0} onClick={() => setTextPage((page) => Math.max(0, page - 1))} className="rounded border border-slate-800 px-2 py-1 disabled:opacity-40">Previous text page</button><span className="font-mono">{textPage + 1}/{pageCount}</span><button type="button" disabled={textPage + 1 >= pageCount} onClick={() => setTextPage((page) => Math.min(pageCount - 1, page + 1))} className="rounded border border-slate-800 px-2 py-1 disabled:opacity-40">Next text page</button></div>}
     </section>
+  );
+}
+
+function ProvenanceGraphPanel({ graph }: { graph: import('../../types').ProvenanceClaimGraph }) {
+  return (
+    <details className="border-b border-slate-800 bg-slate-900/20 px-4 py-2">
+      <summary className="cursor-pointer text-[9px] font-semibold text-slate-300">
+        C2PA claim graph · {graph.claims.length} claim{graph.claims.length === 1 ? '' : 's'} · {graph.ingredients.length} ingredient relationship{graph.ingredients.length === 1 ? '' : 's'}
+      </summary>
+      <div className="mt-2 grid gap-3 border-t border-slate-800 pt-2 lg:grid-cols-2">
+        <div>
+          <div className="text-[9px] font-semibold text-slate-400">Claims</div>
+          <ul className="mt-1 space-y-1 text-[9px] text-slate-500">
+            {graph.claims.map((claim) => (
+              <li key={claim.manifestLabel} className="rounded border border-slate-800 bg-slate-950/60 px-2 py-1.5">
+                <div className="font-mono text-slate-300">{claim.manifestLabel}{claim.isActive ? ' · active' : ''}</div>
+                <div>{claim.title ?? 'Untitled asset'}{claim.format ? ` · ${claim.format}` : ''}{claim.claimGenerator ? ` · ${claim.claimGenerator}` : ''}</div>
+                <div>{claim.assertionLabels.length} signed assertion reference{claim.assertionLabels.length === 1 ? '' : 's'}</div>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <div className="text-[9px] font-semibold text-slate-400">Ingredient relationships</div>
+          {graph.ingredients.length === 0 ? (
+            <p className="mt-1 text-[9px] text-slate-600">The manifest declares no ingredient relationships.</p>
+          ) : (
+            <ul className="mt-1 space-y-1 text-[9px] text-slate-500">
+              {graph.ingredients.map((ingredient, index) => (
+                <li key={`${ingredient.sourceManifestLabel}-${ingredient.targetManifestLabel ?? ingredient.instanceId ?? index}`} className="rounded border border-slate-800 bg-slate-950/60 px-2 py-1.5">
+                  <span className="font-mono text-slate-300">{ingredient.sourceManifestLabel}</span>
+                  {' → '}{ingredient.targetManifestLabel ?? ingredient.title ?? ingredient.instanceId ?? 'unidentified ingredient'}
+                  <span className="ml-1 text-indigo-300">({ingredient.relationship})</span>
+                  {ingredient.validationStatuses.map((status) => <div key={status} className="text-amber-300">{status}</div>)}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+      <ul className="mt-2 space-y-0.5 text-[9px] text-slate-500">
+        {graph.certificateChainDiagnostics.map((diagnostic) => <li key={diagnostic}>{diagnostic}</li>)}
+        {graph.validationStatuses.map((status) => <li key={status} className="text-amber-300">{status}</li>)}
+        {graph.truncated && <li className="text-amber-300">The embedded graph exceeded safety bounds; this view is incomplete.</li>}
+      </ul>
+    </details>
   );
 }
 

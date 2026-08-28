@@ -1,18 +1,12 @@
-// TODO(audit): Model audit transitions as a discriminated event union so
-// timeline rendering does not infer semantics from loosely typed strings.
-//
-// Mirrors `VerificationState` in src-tauri/src/types/audit.rs. Hand-maintained, so
-// scripts/check-ipc-contract.mjs fails the build if the two lists drift.
+import type { TimelineAnomalyMarker } from '../generated/auditContracts';
+
+export type { TimelineAnomalyMarker, VerificationState } from '../generated/auditContracts';
+
+import type { VerificationState } from '../generated/auditContracts';
+
 // 'StatutoryDeadlineExceeded' is a legal conclusion and requires a counted statutory violation.
 // 'LatencyOutlier' is a statistical one about this agency against its peers, and is never on its
 // own a violation.
-export type VerificationState =
-  | 'Unaudited'
-  | 'Compliant'
-  | 'PolicyViolationDetected'
-  | 'StatutoryDeadlineExceeded'
-  | 'LatencyOutlier'
-  | 'DataAnomalyFlagged';
 
 export interface CaseAuditRecord {
   auditId: string; // Client-side generated UUID
@@ -30,9 +24,23 @@ export interface StateTransitionLog {
   previousState: string;
   nextState: string;
   timeSpentInPreviousStateSeconds: number;
-  anomalyMarkers: Array<
-    | 'SUSPICIOUSLY_FAST_CLOSURE'
-    | 'CLOSE_BEFORE_CREATION'
-    | 'OBSERVATION_BEFORE_CREATION'
-  >;
+  anomalyMarkers: TimelineAnomalyMarker[];
+}
+
+export type AuditTransitionEvent =
+  | { type: 'stateTransition'; transition: StateTransitionLog }
+  | {
+      type: 'anomalyDetected';
+      marker: TimelineAnomalyMarker;
+      transition: StateTransitionLog;
+    };
+
+/** Expands one persisted transition into explicit, exhaustively typed timeline events. */
+export function auditTransitionEvents(transition: StateTransitionLog): AuditTransitionEvent[] {
+  return [
+    { type: 'stateTransition', transition },
+    ...transition.anomalyMarkers.map(
+      (marker): AuditTransitionEvent => ({ type: 'anomalyDetected', marker, transition }),
+    ),
+  ];
 }

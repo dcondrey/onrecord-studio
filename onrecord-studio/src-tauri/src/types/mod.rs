@@ -24,6 +24,7 @@ pub use corpus::{
 pub use investigation::{
     AuxiliaryEventInput, AuxiliaryImportResult, AuxiliaryStreamKind, CrossAgencyCorrelation,
     DocumentProvenanceVerification, DocumentTextChunk, LegalBriefExportResult,
+    ProvenanceClaimGraph, ProvenanceClaimNode, ProvenanceIngredientEdge,
     ProvenanceVerificationRecord, RequestDocumentSummary, RequestSearchResult,
     StatutoryExtensionReason, StatutoryExtensionRecord,
 };

@@ -3968,6 +3968,7 @@ impl DuckDbRepository {
             signing_timestamp: asset_provenance.signing_timestamp.clone(),
             assertion_count,
             invalid_assertion_count,
+            claim_graph: asset_provenance.claim_graph.clone(),
             text_projection_sha256: context.recorded_text_projection_sha256.clone(),
             text_projection_matches,
             provenance_confidence,

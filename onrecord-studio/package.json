@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "check:ipc": "node scripts/check-ipc-contract.mjs",
+    "generate:contracts": "node scripts/generate-contracts.mjs",
     "build": "npm run check:ipc && tsc && vite build",
     "lint": "eslint . --max-warnings 0",
     "test:unit": "vitest run",

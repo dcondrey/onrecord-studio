@@ -15,8 +15,8 @@ pub struct CaseAuditRecord {
 
 /// What an audit or profile concluded about a request or an agency.
 ///
-/// The TypeScript counterpart is the hand-maintained union in `src/types/audit.ts`;
-/// `scripts/check-ipc-contract.mjs` fails the build if the two drift.
+/// `scripts/generate-contracts.mjs` derives the TypeScript counterpart from this enum, and
+/// `npm run check:ipc` fails when the checked-in generated contract is stale.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum VerificationState {
     Unaudited,

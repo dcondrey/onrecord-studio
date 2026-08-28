@@ -1,13 +1,4 @@
-// TODO(analysis): Generate these shared configuration types from the Rust
-// command schema so threshold defaults remain identical across platforms.
-export interface AnalysisConfig {
-  latency_threshold_days?: number;
-  min_ocr_character_density?: number;
-  suspicious_closure_window_minutes?: number;
-  target_policy_keywords?: string[];
-  created_from?: string | null;
-  created_to?: string | null;
-}
+export type { AnalysisConfig } from '../generated/analysisConfig';
 
 export interface AgencyPerformanceProfile {
   agencyId: number;

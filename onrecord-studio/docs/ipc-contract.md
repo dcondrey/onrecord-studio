@@ -194,30 +194,29 @@ Any change to a serialized shape is a two-file change at minimum, and often four
 3. `src/ipc.ts` if the change touches a command's arguments or result.
 4. The consumer, if a new telemetry variant needs a handler.
 
-`npm run check:ipc` catches part of this. Know exactly which part:
+`npm run check:ipc` checks the generated bridge and its use:
 
-- **Command coverage.** It extracts `commands::<module>::<name>` from `src-tauri/src/lib.rs` and
-  diffs it against the keys of `NativeCommandMap` in `src/ipc.ts`, both directions.
-- **Telemetry variant coverage.** It extracts variants from `pub enum IngestionProgress` in
-  `src-tauri/src/ingestion/queue.rs`, lowercases the first letter, and diffs against the
-  `| { type: '...' }` members in `src/types/investigation.ts`, both directions.
+- **Command shapes.** `scripts/generate-contracts.mjs` derives every registered command's argument
+  names, optionality, and response type from its Rust signature into
+  `src/generated/nativeCommands.ts`.
+- **Shared protocol shapes.** The same generator derives all `IngestionProgress` payloads,
+  `VerificationState`, `TimelineAnomalyMarker`, and `AnalysisConfig` into `src/generated/`.
+- **Staleness.** Check mode regenerates all four files in memory and compares them byte-for-byte
+  with the checked-in output, so any supported Rust field or variant change fails the build.
 - **Centralization.** It fails if any file under `src/` other than `src/ipc.ts` calls `invoke(`
   directly. All native calls must route through `invokeCommand`.
 
-What it does **not** catch, and what therefore needs care in review:
+The generator deliberately supports the Rust schema forms used by this bridge: named command
+parameters, `Result<T, AppError>`, struct-style ingestion variants, unit audit enums, `Option<T>`,
+`Vec<T>`, primitive scalars, and application types re-exported from `src/types`. Unsupported syntax
+is a hard generator error rather than a partial contract. Review is still required for:
 
-- **Field names and types inside any payload.** Only command names and variant names are
-  compared. A renamed field, a changed numeric type, or an `Option` added to an existing field
-  passes cleanly.
-- **Non-struct telemetry variants.** The scan matches `^ {4}([A-Z][A-Za-z0-9]*)\s*\{`, so a unit
-  or tuple variant is invisible to it.
-- **Formatting-dependent parsing.** `NativeCommandMap` keys are matched at exactly two-space
-  indent, and both scans assume `IngestionProgress` stays in `queue.rs` and `NativeCommandMap`
-  stays in `src/ipc.ts`. Moving either file breaks the check into a false pass or a hard error.
-- **Whether a new telemetry variant is actually handled.** Union membership is verified;
-  the consumer's `switch` is not. A `default:` case calling an `assertNever` helper is what
-  would close that gap.
+- **Semantic compatibility.** A field can retain its serialized type while changing meaning.
+- **Nested application types.** The generator references their exported TypeScript names; changes
+  within those independently maintained structs still require paired review.
+- **Consumer behavior.** A generated union ensures the payload is typed, but a consumer can still
+  intentionally ignore a telemetry event. `App.tsx` records every event and explicitly handles
+  the state-changing variants.
 
-TODO(protocol): Generate `NativeCommandMap` and the telemetry union from the Rust types so
-field-level drift becomes impossible and the regex fragility above goes away. Until then, treat
-every serialized-shape change as needing a manual both-sides review.
+Run `npm run generate:contracts` after an intentional Rust protocol change and commit the generated
+files with that change. Never edit files under `src/generated/` directly.
