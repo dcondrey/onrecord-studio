@@ -7314,6 +7314,25 @@ mod tests {
                         'legacy-statute', 'CA', 'CPRA 7922.535', 'Legacy Authority',
                         'The agency shall respond within ten days.', 10
                      );
+                     CREATE TABLE requests (
+                        id BIGINT NOT NULL,
+                        portal_subdomain TEXT NOT NULL,
+                        rpid TEXT,
+                        title TEXT,
+                        description TEXT,
+                        status TEXT NOT NULL,
+                        current_status_id BIGINT,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL,
+                        closed_at TEXT,
+                        due_date TEXT,
+                        determination_at TEXT,
+                        determination_source TEXT,
+                        neighborhood_block TEXT,
+                        agency_id BIGINT,
+                        category_id BIGINT,
+                        PRIMARY KEY (id, portal_subdomain)
+                     );
                      CREATE TABLE documents (
                         id BIGINT NOT NULL,
                         request_id BIGINT NOT NULL,
@@ -7337,6 +7356,12 @@ mod tests {
                      );
                      INSERT INTO portals
                      VALUES ('legacy-portal', 'Legacy Portal', 'https://legacy.test');
+                     INSERT INTO requests (
+                        id, portal_subdomain, status, created_at, updated_at
+                     ) VALUES (
+                        41, 'legacy-portal', 'open',
+                        '2026-08-24T12:00:00Z', '2026-08-24T12:00:00Z'
+                     );
                      INSERT INTO portal_sync_runs (
                         run_id, portal_subdomain, started_at, status
                      ) VALUES (
@@ -8251,19 +8276,21 @@ mod tests {
         assert_eq!(audit_state, ("Compliant".to_string(), 0));
     }
 
-    /// A finding whose two dates were both recorded is the only one this path may store at
-    /// certainty. Nothing was inferred, so there is nothing to discount.
+    /// A finding whose determination date and source were both recorded is the only one this path
+    /// may store at certainty. Nothing was inferred, so there is nothing to discount.
     #[tokio::test]
     async fn a_cpra_finding_built_from_recorded_dates_is_stored_at_certainty() {
         use crate::analysis::{DeterminationBasis, StatutoryExtensionStatus};
 
-        // Receipt and a recorded portal activity 46 calendar days later, well past the 10-day
+        // Receipt and a sourced determination event 46 calendar days later, well past the 10-day
         // determination deadline, with no extension claimed.
-        let analysis = crate::analysis::evaluate_statutory_compliance_at(
+        let analysis = crate::analysis::evaluate_statutory_compliance_with_determination_at(
             REQUEST_ID as u64,
             "2026-01-05T09:00:00Z",
             Some("2026-02-20T09:00:00Z"),
             Some("2026-02-20T09:00:00Z"),
+            Some("2026-02-20T09:00:00Z"),
+            Some("portal determination event"),
             None,
             "2026-03-01T00:00:00Z",
         )
@@ -8271,7 +8298,7 @@ mod tests {
         assert!(analysis.is_violation);
         assert_eq!(
             analysis.determination_basis,
-            DeterminationBasis::EarliestRecordedActivityProxy
+            DeterminationBasis::SourcedDeterminationEvent
         );
         assert_eq!(
             analysis.extension_status,
@@ -8319,14 +8346,14 @@ mod tests {
         // the deduction the formula allows, and still lands short of certainty.
         assert_eq!(inferred_confidence, 8_750);
 
-        // An extension claimed with no recorded notice discounts a finding whose determination
-        // date was itself recorded.
+        // An extension claimed with no recorded notice compounds the uncertainty of a generic
+        // activity timestamp standing in for a sourced determination event.
         let mut unsourced_extension = inferred.clone();
         unsourced_extension.determination_basis = DeterminationBasis::EarliestRecordedActivityProxy;
         unsourced_extension.extension_status = StatutoryExtensionStatus::MissingNoticeSource;
         assert_eq!(
             cpra_calendar_confidence_basis_points(&unsourced_extension, variance_days),
-            9_400
+            8_900
         );
     }
 
