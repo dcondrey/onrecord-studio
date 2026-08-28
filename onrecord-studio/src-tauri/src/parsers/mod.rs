@@ -1,19 +1,11 @@
-// TODO(parsers): Replace the hand-maintained export list with a capability
-// registry that reports format support, memory bounds, and extraction routes.
-// FEATURE(parsers): Allow signed, sandboxed parser extensions for formats that
-// should not increase the trusted core binary surface.
-// PERF(parsers): Benchmark parser concurrency and memory permits by format;
-// OCR and archive expansion currently have very different cost profiles.
-
 pub mod archive;
+pub mod capability;
+pub mod compression_oracle;
 pub mod database;
 pub mod entropy;
 pub mod excel;
-pub mod format;
-// FEATURE(forensics): These bounded modules define residual-evidence contracts. Keep collectors
-// separate from ordinary searchable-text ingestion so their confidence and coverage remain clear.
-pub mod compression_oracle;
 pub mod forensic_evidence;
+pub mod format;
 pub mod html;
 pub mod hypothesis;
 pub mod layout_side_channel;
@@ -38,6 +30,7 @@ pub mod unredactor;
 pub mod zip;
 
 pub use archive::extract_archive_container;
+pub use capability::{parser_capability, ParserCapability, ParserCostClass};
 pub use database::extract_sqlite_text;
 pub use entropy::{assess_file_entropy, calculate_shannon_entropy, EntropyAssessment};
 pub use excel::extract_spreadsheet_layers;

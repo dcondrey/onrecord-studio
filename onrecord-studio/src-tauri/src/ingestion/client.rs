@@ -48,10 +48,10 @@ const DNS_LOOKUP_TIMEOUT: Duration = Duration::from_secs(5);
 const ROBOTS_PRODUCT_TOKEN_DISPLAY: &str = "OnRecordStudio";
 const APPLICATION_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-// TODO(ingestion): Add a browser-backed acquisition path for authenticated, JavaScript-only,
-// CAPTCHA-gated, and session-bound sources that cannot expose a public HTTP representation.
-// PERF(ingestion): Stream large response bodies directly into bounded files
-// instead of retaining the complete payload in `ResponsePayload.bytes`.
+// Authenticated, CAPTCHA-gated, and session-bound systems are intentionally manual-import-only:
+// this public acquisition client never collects browser credentials or bypasses an access gate.
+// Document bodies use `stream_response_to_path`; only bounded discovery/metadata responses remain
+// in `ResponsePayload.bytes` because their decoders require one complete JSON or HTML value.
 
 #[derive(Debug, Clone)]
 pub struct HttpClientConfig {
@@ -2861,10 +2861,45 @@ fn parse_retry_after(headers: &HeaderMap) -> Option<Duration> {
 
 #[cfg(test)]
 mod tests {
-    // TODO(test): Add recorded, replayable acceptance fixtures for generic regional open-data,
-    // ArcGIS Hub, Tableau, NextRequest, and agency-reading-room shapes. Keep San Diego fixtures
-    // as one regional example rather than making them a product-level special case.
     use super::*;
+
+    #[test]
+    fn recorded_source_shapes_replay_without_network_access() {
+        let ckan: Value =
+            serde_json::from_str(include_str!("../../fixtures/open-data/ckan-page.json"))
+                .expect("CKAN replay fixture must parse");
+        let ckan_page = decode_ckan_page(&ckan, None).expect("CKAN replay must decode");
+        assert_eq!(ckan_page.downloads.len(), 1);
+        assert_eq!(ckan_page.asset_count, 2);
+
+        let socrata: Value =
+            serde_json::from_str(include_str!("../../fixtures/open-data/socrata-page.json"))
+                .expect("Socrata replay fixture must parse");
+        let socrata_page =
+            decode_socrata_page(&socrata, "data.example.gov").expect("Socrata replay must decode");
+        assert_eq!(socrata_page.downloads.len(), 1);
+
+        let nextrequest: Value = serde_json::from_str(include_str!(
+            "../../fixtures/open-data/nextrequest-page.json"
+        ))
+        .expect("NextRequest replay fixture must parse");
+        let response = decode_nextrequest_response(&nextrequest, "/requests", Some("/meta"), 1, 50)
+            .expect("NextRequest replay must decode");
+        assert_eq!(response.requests.len(), 1);
+
+        let base = Url::parse("https://records.example.gov/reading-room").unwrap();
+        let (_, links, _) = extract_public_resource_links(
+            &base,
+            include_bytes!("../../fixtures/open-data/reading-room.html"),
+            None,
+            None,
+        )
+        .expect("reading-room replay must decode");
+        assert!(links.iter().any(|link| link.download_candidate));
+        assert!(links
+            .iter()
+            .any(|link| link.url.contains("public.tableau.com")));
+    }
 
     fn sample_request(id: u64) -> Value {
         serde_json::json!({

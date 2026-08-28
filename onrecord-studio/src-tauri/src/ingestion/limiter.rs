@@ -98,8 +98,9 @@ impl RateLimiter {
     /// refill rate a single token takes ~1000s across many iterations, and a waiter can be
     /// repeatedly beaten to the token by a newcomer. Callers needing a deadline must impose it.
     ///
-    /// TODO(ingestion): Adapt politeness from Retry-After and observed throttling while preserving
-    /// independent portal buckets and bounded sleep intervals.
+    /// HTTP-level adaptive pacing is host-specific and lives in `HostGovernor`: it records 429
+    /// strikes, honors bounded Retry-After values, and advances that host's next-allowed instant.
+    /// This portal-level bucket remains the operator-configured outer ceiling.
     pub async fn acquire(&self, portal_key: &str) -> Result<(), AppError> {
         let bucket = self.bucket(portal_key).await?;
         loop {

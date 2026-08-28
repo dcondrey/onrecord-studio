@@ -15,8 +15,8 @@ use crate::parsers::{
     assess_file_entropy, detect_document_format, execute_local_ocr_scan, extract_archive_container,
     extract_html_text, extract_msg_layers, extract_office_package, extract_plain_text,
     extract_rtf_text, extract_salvaged_text, extract_spreadsheet_layers, extract_sqlite_text,
-    extract_svg_text, extract_text_layers, extract_zip_container_with_manifest, DocumentFormat,
-    ExtractionRoute, MsgExtractionContext,
+    extract_svg_text, extract_text_layers, extract_zip_container_with_manifest, parser_capability,
+    DocumentFormat, ExtractionRoute, MsgExtractionContext,
 };
 use crate::storage::corpus::{CorpusDocumentInput, CorpusIndex};
 use crate::storage::sqlite::{
@@ -2622,8 +2622,9 @@ async fn prepare_crawl_url(
     depth: usize,
     structured_depth: usize,
 ) -> Option<IngestionTask> {
-    // FEATURE(ingestion): Add native adapters for Socrata, CKAN, HUD, SharePoint, and other
-    // catalog families so pagination and field metadata are preserved instead of flattened.
+    // CKAN and Socrata are detected before this path and use their native paginated catalog task;
+    // ArcGIS uses the layer task below. Other public catalogs remain bounded generic discovery,
+    // while credentialed SharePoint/HUD tenant systems are manual-import-only by policy.
     if let Some(layer_url) = arcgis_layer_url(&url) {
         let identity = format!("arcgis-layer|{layer_url}");
         if !mark_crawl_url(context, &identity).await {
@@ -3014,9 +3015,25 @@ async fn process_binary_payload(
     .await??;
     document.local_path = Some(local_path.to_string_lossy().into_owned());
     document.file_size = Some(byte_count);
-    // The permit estimate includes source plus a comparable decoded working set. Parsers that add
-    // larger intermediate representations should revise `parser_memory_permits` before deployment.
-    let memory_permits = parser_memory_permits(byte_count);
+    let format_path = local_path.clone();
+    let declared_file_name = document.file_name.clone();
+    let content_type = document.content_type.clone();
+    let format = spawn_blocking("Format detector", move || {
+        detect_document_format(
+            &format_path,
+            declared_file_name.as_deref(),
+            content_type.as_deref(),
+        )
+    })
+    .await??;
+    let capability = parser_capability(format);
+    if byte_count > capability.maximum_source_bytes {
+        return Err(AppError::DataParsing(format!(
+            "PARSER_SOURCE_SIZE_EXCEEDED: {format:?} source contains {byte_count} bytes; capability limit is {}",
+            capability.maximum_source_bytes
+        )));
+    }
+    let memory_permits = parser_memory_permits(byte_count, capability.working_set_multiplier);
     let _memory_permit = context
         .parser_memory
         .clone()
@@ -3033,6 +3050,7 @@ async fn process_binary_payload(
         request_id,
         &document,
         &local_path,
+        format,
         depth,
         &raw_file_sha256,
         container_root_directory.as_deref(),
@@ -4000,6 +4018,7 @@ async fn extract_document(
     request_id: u64,
     document: &DocumentMetadata,
     local_path: &Path,
+    format: DocumentFormat,
     depth: PayloadDepth,
     raw_file_sha256: &str,
     container_root_directory: Option<&Path>,
@@ -4010,17 +4029,6 @@ async fn extract_document(
         .acquire_owned()
         .await
         .map_err(|_| AppError::Internal("Parser scheduler is unavailable".to_string()))?;
-    let path = local_path.to_path_buf();
-    let declared_file_name = document.file_name.clone();
-    let content_type = document.content_type.clone();
-    let format = spawn_blocking("Format detector", move || {
-        detect_document_format(
-            &path,
-            declared_file_name.as_deref(),
-            content_type.as_deref(),
-        )
-    })
-    .await??;
     let primary_result = async {
         match format {
         DocumentFormat::Pdf => {
@@ -5098,9 +5106,9 @@ async fn sha256_file(path: &Path) -> Result<String, AppError> {
         .map_err(|error| AppError::Storage(format!("Failed to hash '{}': {error}", path.display())))
 }
 
-fn parser_memory_permits(source_bytes: u64) -> u32 {
+fn parser_memory_permits(source_bytes: u64, working_set_multiplier: u32) -> u32 {
     let estimated_bytes = source_bytes
-        .saturating_mul(2)
+        .saturating_mul(u64::from(working_set_multiplier.max(1)))
         .max(PARSER_MEMORY_PERMIT_BYTES);
     estimated_bytes
         .saturating_add(PARSER_MEMORY_PERMIT_BYTES - 1)
@@ -6210,6 +6218,17 @@ mod tests {
             ]
         );
         assert!(discovery.next_page.is_none());
+
+        let replay = include_bytes!("../../fixtures/open-data/arcgis-item.json");
+        let replay_discovery = discover_structured_document_links(
+            replay,
+            Some("https://hub.example.gov/datasets/facilities"),
+        )
+        .expect("recorded ArcGIS item fixture must replay");
+        assert_eq!(replay_discovery.candidates.len(), 1);
+        assert!(replay_discovery.candidates[0]
+            .url
+            .ends_with("/PublicFacilities/FeatureServer/0"));
         assert!(discover_structured_document_links(b"{broken", Some(source_url)).is_none());
     }
 

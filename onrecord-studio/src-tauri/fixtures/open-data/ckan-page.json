@@ -1,0 +1,1 @@
+{"success":true,"result":{"count":2,"results":[{"name":"permits","resources":[{"url":"https://data.example.gov/dataset/permits.csv","name":"Permit records","format":"CSV","size":128}]},{"name":"metadata-only","resources":[]}]}}
