@@ -81,9 +81,8 @@ pub fn lint_redaction_export_compression(
     }
     let rejected_scope_ids = scopes
         .into_iter()
-        .filter_map(|(scope, (sensitive, attacker))| {
-            (sensitive && attacker).then(|| scope.to_string())
-        })
+        .filter(|(_, (sensitive, attacker))| *sensitive && *attacker)
+        .map(|(scope, _)| scope.to_string())
         .collect::<Vec<_>>();
     Ok(RedactionExportLint {
         safe: rejected_scope_ids.is_empty(),

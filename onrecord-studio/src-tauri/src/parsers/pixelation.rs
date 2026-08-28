@@ -88,16 +88,23 @@ pub fn analyze_pixelation<P: AsRef<Path>>(
         }
     }
     let mut findings = Vec::new();
+    let raster = RasterView {
+        bytes: &decoded,
+        row_bytes,
+        channels,
+        width,
+        height,
+    };
     for &block_size in BLOCK_SIZES {
         let mut best = (0_usize, 0_usize, 0_usize, 0_usize);
         for origin_y in [0, block_size / 2] {
             for origin_x in [0, block_size / 2] {
-                let (uniform, total) = measure_uniform_grid(
-                    &decoded, row_bytes, channels, width, height, block_size, origin_x, origin_y,
-                );
-                if total > 0 && uniform.saturating_mul(best.3) > best.2.saturating_mul(total) {
-                    best = (origin_x, origin_y, uniform, total);
-                } else if best.3 == 0 && total > 0 {
+                let (uniform, total) =
+                    measure_uniform_grid(&raster, block_size, (origin_x, origin_y));
+                if total > 0
+                    && (best.3 == 0
+                        || uniform.saturating_mul(best.3) > best.2.saturating_mul(total))
+                {
                     best = (origin_x, origin_y, uniform, total);
                 }
             }
@@ -124,25 +131,29 @@ pub fn analyze_pixelation<P: AsRef<Path>>(
     })
 }
 
-fn measure_uniform_grid(
-    bytes: &[u8],
+struct RasterView<'a> {
+    bytes: &'a [u8],
     row_bytes: usize,
     channels: usize,
     width: usize,
     height: usize,
+}
+
+fn measure_uniform_grid(
+    raster: &RasterView<'_>,
     size: usize,
-    origin_x: usize,
-    origin_y: usize,
+    origin: (usize, usize),
 ) -> (usize, usize) {
-    let columns = width.saturating_sub(origin_x) / size;
-    let rows = height.saturating_sub(origin_y) / size;
+    let (origin_x, origin_y) = origin;
+    let columns = raster.width.saturating_sub(origin_x) / size;
+    let rows = raster.height.saturating_sub(origin_y) / size;
     let mut uniform = 0;
     for block_y in 0..rows {
         for block_x in 0..columns {
             if block_is_uniform(
-                bytes,
-                row_bytes,
-                channels,
+                raster.bytes,
+                raster.row_bytes,
+                raster.channels,
                 origin_x + block_x * size,
                 origin_y + block_y * size,
                 size,
@@ -189,9 +200,7 @@ mod tests {
         encoder.set_color(png::ColorType::Rgb);
         encoder.set_depth(png::BitDepth::Eight);
         let mut writer = encoder.write_header().expect("header");
-        writer
-            .write_image_data(&vec![42; 8 * 8 * 3])
-            .expect("pixels");
+        writer.write_image_data(&[42; 8 * 8 * 3]).expect("pixels");
         drop(writer);
 
         let result = analyze_pixelation(&path, ForensicAuditOptions::default()).expect("audit");

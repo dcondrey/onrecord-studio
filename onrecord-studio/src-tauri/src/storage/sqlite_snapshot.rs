@@ -129,11 +129,11 @@ fn import_table(
             )));
         }
         let mut values = Vec::with_capacity(columns.len());
-        for index in 0..columns.len() {
+        for (index, column) in columns.iter().enumerate() {
             let value = row.get_ref(index).map_err(|error| {
                 AppError::Analysis(format!(
                     "Failed to decode SQLite table '{table}' column {}: {error}",
-                    columns[index].name
+                    column.name
                 ))
             })?;
             values.push(convert_value(value, total_value_bytes)?);

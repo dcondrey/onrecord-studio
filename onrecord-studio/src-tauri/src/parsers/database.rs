@@ -98,7 +98,7 @@ pub fn extract_sqlite_text<P: AsRef<Path>>(file_path: P) -> Result<String, AppEr
         let column_names = statement
             .column_names()
             .into_iter()
-            .map(|name| sanitize_field(&name))
+            .map(sanitize_field)
             .collect::<Vec<_>>();
         append_output(&mut output, &column_names.join(","), path)?;
         append_output(&mut output, "\n", path)?;

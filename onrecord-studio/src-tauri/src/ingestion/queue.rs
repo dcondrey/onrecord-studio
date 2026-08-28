@@ -3051,13 +3051,15 @@ async fn process_binary_payload(
     expand_structured_document_links(context, request_id, &document, &local_path, depth).await?;
     let extracted_document = extract_document(
         context,
-        request_id,
-        &document,
-        &local_path,
-        format,
-        depth,
-        &raw_file_sha256,
-        container_root_directory.as_deref(),
+        DocumentExtractionInput {
+            request_id,
+            document: &document,
+            local_path: &local_path,
+            format,
+            depth,
+            raw_file_sha256: &raw_file_sha256,
+            container_root_directory: container_root_directory.as_deref(),
+        },
     )
     .await?;
     let download_finalization = DocumentDownloadFinalization {
@@ -4022,16 +4024,30 @@ fn arcgis_layers_from_metadata(source_url: Option<&str>, value: &serde_json::Val
         .collect()
 }
 
-async fn extract_document(
-    context: &WorkerContext,
+#[derive(Clone, Copy)]
+struct DocumentExtractionInput<'a> {
     request_id: u64,
-    document: &DocumentMetadata,
-    local_path: &Path,
+    document: &'a DocumentMetadata,
+    local_path: &'a Path,
     format: DocumentFormat,
     depth: PayloadDepth,
-    raw_file_sha256: &str,
-    container_root_directory: Option<&Path>,
+    raw_file_sha256: &'a str,
+    container_root_directory: Option<&'a Path>,
+}
+
+async fn extract_document(
+    context: &WorkerContext,
+    input: DocumentExtractionInput<'_>,
 ) -> Result<ExtractedDocument, AppError> {
+    let DocumentExtractionInput {
+        request_id,
+        document,
+        local_path,
+        format,
+        depth,
+        raw_file_sha256: _,
+        container_root_directory,
+    } = input;
     let _parser_permit = context
         .parser_semaphore
         .clone()
@@ -4256,17 +4272,7 @@ async fn extract_document(
             })
         }
         DocumentFormat::Zip | DocumentFormat::EmailArchive => {
-            expand_container(
-                context,
-                request_id,
-                document,
-                local_path,
-                format,
-                depth,
-                raw_file_sha256,
-                container_root_directory,
-            )
-            .await
+            expand_container(context, input).await
         }
         DocumentFormat::Tar
         | DocumentFormat::TarGzip
@@ -4277,17 +4283,7 @@ async fn extract_document(
         | DocumentFormat::Xz
         | DocumentFormat::TarZstd
         | DocumentFormat::Zstd => {
-            expand_container(
-                context,
-                request_id,
-                document,
-                local_path,
-                format,
-                depth,
-                raw_file_sha256,
-                container_root_directory,
-            )
-            .await
+            expand_container(context, input).await
         }
             _ => Ok(ExtractedDocument::Deferred {
                 format,
@@ -4335,14 +4331,17 @@ fn salvage_allowed(format: DocumentFormat) -> bool {
 
 async fn expand_container(
     context: &WorkerContext,
-    request_id: u64,
-    source_document: &DocumentMetadata,
-    local_path: &Path,
-    format: DocumentFormat,
-    depth: PayloadDepth,
-    raw_file_sha256: &str,
-    container_root_directory: Option<&Path>,
+    input: DocumentExtractionInput<'_>,
 ) -> Result<ExtractedDocument, AppError> {
+    let DocumentExtractionInput {
+        request_id,
+        document: source_document,
+        local_path,
+        format,
+        depth,
+        raw_file_sha256,
+        container_root_directory,
+    } = input;
     if depth.container >= MAXIMUM_CONTAINER_DEPTH {
         return Ok(ExtractedDocument::Deferred {
             format,

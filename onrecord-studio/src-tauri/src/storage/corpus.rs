@@ -584,7 +584,7 @@ fn validate_pattern_query(query: &CorpusPatternQuery) -> Result<(), AppError> {
     let indexed_from = query
         .indexed_from
         .as_deref()
-        .map(|value| chrono::DateTime::parse_from_rfc3339(value))
+        .map(chrono::DateTime::parse_from_rfc3339)
         .transpose()
         .map_err(|error| {
             AppError::DataParsing(format!("Invalid corpus index start time: {error}"))
@@ -592,7 +592,7 @@ fn validate_pattern_query(query: &CorpusPatternQuery) -> Result<(), AppError> {
     let indexed_to = query
         .indexed_to
         .as_deref()
-        .map(|value| chrono::DateTime::parse_from_rfc3339(value))
+        .map(chrono::DateTime::parse_from_rfc3339)
         .transpose()
         .map_err(|error| {
             AppError::DataParsing(format!("Invalid corpus index end time: {error}"))

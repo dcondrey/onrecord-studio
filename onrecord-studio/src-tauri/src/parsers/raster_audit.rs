@@ -2,8 +2,8 @@
 
 use crate::error::AppError;
 use crate::parsers::forensic_evidence::{
-    finding_for_bytes, finding_for_text, EvidenceBundle, EvidenceClass, EvidenceConfidence,
-    EvidenceLocator, ForensicAuditOptions,
+    finding_for_bytes, finding_for_text, ByteEvidence, EvidenceBundle, EvidenceClass,
+    EvidenceConfidence, EvidenceLocator, ForensicAuditOptions,
 };
 use crate::parsers::source::read_regular_file;
 use std::path::Path;
@@ -69,8 +69,10 @@ fn audit_png(bytes: &[u8], options: ForensicAuditOptions) -> Result<EvidenceBund
                 EvidenceConfidence::Exact,
                 "PNG_ALPHA_CHANNEL_PRESENT",
                 EvidenceLocator { byte_offset: Some(offset as u64), ..EvidenceLocator::default() },
-                data,
-                Some("PNG color type includes an alpha channel"),
+                ByteEvidence {
+                    value: data,
+                    text_preview: Some("PNG color type includes an alpha channel"),
+                },
                 "The PNG header declares an alpha channel. This identifies preserved transparency data, not hidden content.",
                 options,
             )?);
@@ -90,8 +92,10 @@ fn audit_png(bytes: &[u8], options: ForensicAuditOptions) -> Result<EvidenceBund
                     byte_offset: Some(offset as u64),
                     ..EvidenceLocator::default()
                 },
-                data,
-                preview.as_deref(),
+                ByteEvidence {
+                    value: data,
+                    text_preview: preview.as_deref(),
+                },
                 "The named ancillary PNG chunk is preserved in the source bytes.",
                 options,
             )?);
@@ -104,8 +108,10 @@ fn audit_png(bytes: &[u8], options: ForensicAuditOptions) -> Result<EvidenceBund
                     EvidenceConfidence::Exact,
                     "PNG_TRAILING_BYTES",
                     EvidenceLocator { byte_offset: Some(chunk_end as u64), ..EvidenceLocator::default() },
-                    &bytes[chunk_end..],
-                    None,
+                    ByteEvidence {
+                        value: &bytes[chunk_end..],
+                        text_preview: None,
+                    },
                     "Bytes remain after the PNG IEND chunk. Their presence is exact; their origin is not inferred.",
                     options,
                 )?);
@@ -275,8 +281,10 @@ fn audit_jpeg(bytes: &[u8], options: ForensicAuditOptions) -> Result<EvidenceBun
                 EvidenceConfidence::Exact,
                 kind,
                 EvidenceLocator { byte_offset: Some((data_start - 4) as u64), ..EvidenceLocator::default() },
-                data,
-                preview.as_deref(),
+                ByteEvidence {
+                    value: data,
+                    text_preview: preview.as_deref(),
+                },
                 "The JPEG marker segment is preserved in the source bytes; no claim is made about whether its payload is current or authoritative.",
                 options,
             )?);
@@ -295,8 +303,10 @@ fn audit_jpeg(bytes: &[u8], options: ForensicAuditOptions) -> Result<EvidenceBun
                 byte_offset: Some(offset as u64),
                 ..EvidenceLocator::default()
             },
-            &bytes[offset..],
-            None,
+            ByteEvidence {
+                value: &bytes[offset..],
+                text_preview: None,
+            },
             "Bytes remain after the JPEG end-of-image marker.",
             options,
         )?);

@@ -284,19 +284,25 @@ fn collect_graph_references(object: &Object, depth: usize, pending: &mut Vec<Obj
     match object {
         Object::Reference(object_id) => pending.push(*object_id),
         Object::Array(values) => {
-            return values.iter().fold(true, |complete, value| {
-                collect_graph_references(value, depth + 1, pending) && complete
-            });
+            let mut complete = true;
+            for value in values {
+                complete = collect_graph_references(value, depth + 1, pending) && complete;
+            }
+            return complete;
         }
         Object::Dictionary(dictionary) => {
-            return dictionary.iter().fold(true, |complete, (_, value)| {
-                collect_graph_references(value, depth + 1, pending) && complete
-            });
+            let mut complete = true;
+            for (_, value) in dictionary {
+                complete = collect_graph_references(value, depth + 1, pending) && complete;
+            }
+            return complete;
         }
         Object::Stream(stream) => {
-            return stream.dict.iter().fold(true, |complete, (_, value)| {
-                collect_graph_references(value, depth + 1, pending) && complete
-            });
+            let mut complete = true;
+            for (_, value) in &stream.dict {
+                complete = collect_graph_references(value, depth + 1, pending) && complete;
+            }
+            return complete;
         }
         _ => {}
     }

@@ -206,7 +206,7 @@ fn from_reader(reader: &c2pa::Reader) -> AssetProvenance {
 
     let active_manifest_label = reader.active_label().map(String::from);
     let mut manifest_entries = reader.manifests().iter().collect::<Vec<_>>();
-    manifest_entries.sort_by(|(left, _), (right, _)| left.cmp(right));
+    manifest_entries.sort_by_key(|(label, _)| label.as_str());
     let mut truncated = manifest_entries.len() > MAX_CLAIMS;
     let mut claims = Vec::new();
     let mut ingredients = Vec::new();

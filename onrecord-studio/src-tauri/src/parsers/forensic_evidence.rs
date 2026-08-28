@@ -98,17 +98,21 @@ pub(crate) fn finding_for_text(
     })
 }
 
+pub(crate) struct ByteEvidence<'a> {
+    pub value: &'a [u8],
+    pub text_preview: Option<&'a str>,
+}
+
 pub(crate) fn finding_for_bytes(
     class: EvidenceClass,
     confidence: EvidenceConfidence,
     kind: impl Into<String>,
     locator: EvidenceLocator,
-    value: &[u8],
-    text_preview: Option<&str>,
+    evidence: ByteEvidence<'_>,
     explanation: impl Into<String>,
     options: ForensicAuditOptions,
 ) -> Result<ForensicFinding, AppError> {
-    let masked_preview = match text_preview {
+    let masked_preview = match evidence.text_preview {
         Some(preview) => {
             let bounded: String = preview.chars().take(240).collect();
             Some(if options.preserve_raw_values {
@@ -124,7 +128,7 @@ pub(crate) fn finding_for_bytes(
         confidence,
         kind: kind.into(),
         locator,
-        value_sha256: Some(sha256_hex(value)),
+        value_sha256: Some(sha256_hex(evidence.value)),
         masked_preview,
         explanation: explanation.into(),
     })

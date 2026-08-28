@@ -4,8 +4,8 @@ use std::path::Path;
 
 use crate::error::AppError;
 use crate::parsers::forensic_evidence::{
-    finding_for_bytes, EvidenceBundle, EvidenceClass, EvidenceConfidence, EvidenceLocator,
-    ForensicAuditOptions,
+    finding_for_bytes, ByteEvidence, EvidenceBundle, EvidenceClass, EvidenceConfidence,
+    EvidenceLocator, ForensicAuditOptions,
 };
 use crate::parsers::source::read_regular_file;
 use crate::parsers::text::windows_1252_char;
@@ -140,8 +140,10 @@ fn collect_rtf_control_findings(
             EvidenceConfidence::Exact,
             kind,
             EvidenceLocator { byte_offset: Some(offset as u64), ..EvidenceLocator::default() },
-            &bytes[offset..end],
-            Some(&String::from_utf8_lossy(&bytes[offset..end])),
+            ByteEvidence {
+                value: &bytes[offset..end],
+                text_preview: Some(&String::from_utf8_lossy(&bytes[offset..end])),
+            },
             "The RTF control or destination is preserved at the reported byte offset. The ordinary text extractor intentionally omits non-display destinations.",
             options,
         )?);
