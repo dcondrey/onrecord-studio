@@ -59,14 +59,14 @@ correlated AS (
         request_candidates.request_timestamp,
         request_candidates.normalized_neighborhood,
         request_candidates.keyword_signal_count,
-        COUNT(*) AS complaint_count_48h,
+        COUNT(*) AS complaint_count,
         COUNT(DISTINCT complaint_events.source_id) AS distinct_source_count,
         MIN(complaint_events.occurred_timestamp) AS first_correlated_event_at,
         MAX(complaint_events.occurred_timestamp) AS last_correlated_event_at
     FROM request_candidates
     INNER JOIN complaint_events
       ON complaint_events.normalized_neighborhood = request_candidates.normalized_neighborhood
-     AND complaint_events.occurred_timestamp >= request_candidates.request_timestamp - INTERVAL 48 HOURS
+     AND complaint_events.occurred_timestamp >= request_candidates.request_timestamp - CAST(?4 AS BIGINT) * INTERVAL '1 hour'
      AND complaint_events.occurred_timestamp <= request_candidates.request_timestamp
     WHERE request_candidates.request_timestamp IS NOT NULL
       AND request_candidates.normalized_neighborhood <> ''
@@ -82,15 +82,16 @@ SELECT
     request_title,
     CAST(request_timestamp AS VARCHAR),
     normalized_neighborhood,
-    complaint_count_48h,
+    complaint_count,
+    CAST(?4 AS BIGINT) AS correlation_window_hours,
     distinct_source_count,
     CAST(first_correlated_event_at AS VARCHAR),
     CAST(last_correlated_event_at AS VARCHAR),
     keyword_signal_count,
-    CAST(complaint_count_48h AS DOUBLE) / 48.0 AS correlation_density
+    CAST(complaint_count AS DOUBLE) / CAST(?4 AS DOUBLE) AS correlation_density
 FROM correlated
-WHERE complaint_count_48h >= ?2
-ORDER BY complaint_count_48h DESC, portal_key, request_id
+WHERE complaint_count >= ?2
+ORDER BY complaint_count DESC, portal_key, request_id
 LIMIT ?3
 "#;
 
@@ -140,7 +141,8 @@ struct CorrelationRow {
     request_title: String,
     request_timestamp: String,
     neighborhood_block: String,
-    complaint_count_48h: i64,
+    complaint_count: i64,
+    correlation_window_hours: i64,
     distinct_source_count: i64,
     first_correlated_event_at: String,
     last_correlated_event_at: String,
@@ -248,6 +250,7 @@ impl DuckDbWorkspace {
         portal_key: Option<&str>,
         minimum_complaints: usize,
         result_limit: usize,
+        correlation_window_hours: usize,
     ) -> Result<Vec<CrossAgencyCorrelation>, AppError> {
         if minimum_complaints == 0 {
             return Err(AppError::DataParsing(
@@ -259,12 +262,20 @@ impl DuckDbWorkspace {
                 "Correlation result limit must be between 1 and 10000".to_string(),
             ));
         }
+        if !(1..=168).contains(&correlation_window_hours) {
+            return Err(AppError::DataParsing(
+                "Correlation window must be between 1 and 168 hours".to_string(),
+            ));
+        }
         let portal_key = portal_key.unwrap_or("").trim().to_string();
         let minimum_complaints = i64::try_from(minimum_complaints).map_err(|_| {
             AppError::DataParsing("Minimum complaint count exceeds DuckDB capacity".to_string())
         })?;
         let result_limit = i64::try_from(result_limit).map_err(|_| {
             AppError::DataParsing("Correlation result limit exceeds DuckDB capacity".to_string())
+        })?;
+        let correlation_window_hours = i64::try_from(correlation_window_hours).map_err(|_| {
+            AppError::DataParsing("Correlation window exceeds DuckDB capacity".to_string())
         })?;
         let state = Arc::clone(&self.state);
         spawn_with("DuckDB correlation worker", AppError::Analysis, move || {
@@ -282,7 +293,12 @@ impl DuckDbWorkspace {
             })?;
             let rows = statement
                 .query_map(
-                    params![portal_key, minimum_complaints, result_limit],
+                    params![
+                        portal_key,
+                        minimum_complaints,
+                        result_limit,
+                        correlation_window_hours
+                    ],
                     map_correlation_row,
                 )
                 .map_err(|error| {
@@ -303,7 +319,11 @@ impl DuckDbWorkspace {
                     request_title: row.request_title,
                     request_timestamp: row.request_timestamp,
                     neighborhood_block: row.neighborhood_block,
-                    complaint_count_48h: count(row.complaint_count_48h, "complaint count")?,
+                    complaint_count: count(row.complaint_count, "complaint count")?,
+                    correlation_window_hours: count(
+                        row.correlation_window_hours,
+                        "correlation window",
+                    )?,
                     distinct_source_count: count(row.distinct_source_count, "source count")?,
                     first_correlated_event_at: row.first_correlated_event_at,
                     last_correlated_event_at: row.last_correlated_event_at,
@@ -326,12 +346,13 @@ fn map_correlation_row(row: &Row<'_>) -> duckdb::Result<CorrelationRow> {
         request_title: row.get(4)?,
         request_timestamp: row.get(5)?,
         neighborhood_block: row.get(6)?,
-        complaint_count_48h: row.get(7)?,
-        distinct_source_count: row.get(8)?,
-        first_correlated_event_at: row.get(9)?,
-        last_correlated_event_at: row.get(10)?,
-        keyword_signal_count: row.get(11)?,
-        correlation_density: row.get(12)?,
+        complaint_count: row.get(7)?,
+        correlation_window_hours: row.get(8)?,
+        distinct_source_count: row.get(9)?,
+        first_correlated_event_at: row.get(10)?,
+        last_correlated_event_at: row.get(11)?,
+        keyword_signal_count: row.get(12)?,
+        correlation_density: row.get(13)?,
     })
 }
 
@@ -568,11 +589,19 @@ mod tests {
             .await
             .unwrap();
         let correlations = workspace
-            .correlate_311_with_enforcement_requests(Some("city-a"), 2, 100)
+            .correlate_311_with_enforcement_requests(Some("city-a"), 2, 100, 48)
             .await
             .unwrap();
         assert_eq!(correlations.len(), 1);
-        assert_eq!(correlations[0].complaint_count_48h, 2);
+        assert_eq!(correlations[0].complaint_count, 2);
+        assert_eq!(correlations[0].correlation_window_hours, 48);
         assert_eq!(correlations[0].keyword_signal_count, 2);
+        let one_day = workspace
+            .correlate_311_with_enforcement_requests(Some("city-a"), 1, 100, 24)
+            .await
+            .unwrap();
+        assert_eq!(one_day[0].complaint_count, 1);
+        assert_eq!(one_day[0].correlation_window_hours, 24);
+        assert!((one_day[0].correlation_density - (1.0 / 24.0)).abs() < f64::EPSILON);
     }
 }

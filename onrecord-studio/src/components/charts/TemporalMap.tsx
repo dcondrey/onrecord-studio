@@ -1,33 +1,77 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import AnalyticsUnavailable from './AnalyticsUnavailable';
+import { invokeCommand } from '../../ipc';
+import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
+import type { CrossAgencyCorrelation } from '../../types';
 
 export default function TemporalMap() {
-  // FEATURE(analytics): Add a time-window control and neighborhood drill-down
-  // instead of keeping the correlation window fixed at 48 hours.
   const correlations = useAppStore((state) => state.crossAgencyCorrelations);
   const analyticsError = useAppStore((state) => state.analyticsError);
+  const activePortalKey = useAppStore((state) => state.activePortalKey);
   const setActivePortal = useAppStore((state) => state.setActivePortal);
   const setSearchFilters = useAppStore((state) => state.setSearchFilters);
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
-  // PERF(analytics): Keep the visible-cell cap until a canvas/virtualized grid
-  // is introduced for larger correlation result sets.
+  const [windowHours, setWindowHours] = useState(48);
+  const [windowCorrelations, setWindowCorrelations] = useState<CrossAgencyCorrelation[]>([]);
+  const [neighborhood, setNeighborhood] = useState('');
+  const [windowError, setWindowError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const correlationGate = useLatestRequestGate();
+
+  useEffect(() => {
+    if (windowHours === 48) {
+      correlationGate.invalidate();
+      setWindowCorrelations([]);
+      setWindowError(null);
+      setIsLoading(false);
+      return;
+    }
+    const request = correlationGate.begin();
+    setIsLoading(true);
+    setWindowError(null);
+    void invokeCommand('get_cross_agency_correlations', {
+      portalKey: activePortalKey,
+      minimumComplaints: 1,
+      resultLimit: 2_000,
+      windowHours,
+    }).then((values) => {
+      if (correlationGate.isCurrent(request)) setWindowCorrelations(values);
+    }).catch((reason) => {
+      if (correlationGate.isCurrent(request)) setWindowError(String(reason));
+    }).finally(() => {
+      if (correlationGate.isCurrent(request)) setIsLoading(false);
+    });
+    return correlationGate.invalidate;
+  }, [activePortalKey, correlationGate, windowHours]);
+
+  const available = windowHours === 48
+    ? correlations.filter((value) => !activePortalKey || value.portalKey === activePortalKey)
+    : windowCorrelations;
+  const neighborhoods = useMemo(() => [...new Set(available.map((value) => value.neighborhoodBlock))].sort(), [available]);
   const cells = useMemo(
-    () => [...correlations].sort((left, right) => right.complaintCount48h - left.complaintCount48h).slice(0, 18),
-    [correlations],
+    () => available
+      .filter((value) => !neighborhood || value.neighborhoodBlock === neighborhood)
+      .sort((left, right) => right.complaintCount - left.complaintCount)
+      .slice(0, 60),
+    [available, neighborhood],
   );
-  const maximum = Math.max(1, ...cells.map((cell) => cell.complaintCount48h));
+  const maximum = Math.max(1, ...cells.map((cell) => cell.complaintCount));
 
   return (
     <section className="app-panel flex min-h-[360px] flex-col overflow-hidden p-5">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="app-eyebrow">48-hour signal density</div>
+          <div className="app-eyebrow">{windowHours}-hour signal density</div>
           <div className="mt-1 text-[10px] text-slate-500">311 activity preceding enforcement-linked requests.</div>
         </div>
-        <div className="rounded-lg border border-slate-800 bg-slate-950/50 px-2.5 py-1.5 font-mono text-[8px] text-slate-600">{cells.length} clusters</div>
+        <div className="flex flex-wrap justify-end gap-1.5">
+          <label className="rounded-lg border border-slate-800 bg-slate-950/50 px-2 py-1 font-mono text-[8px] text-slate-500">Window <select value={windowHours} onChange={(event) => setWindowHours(Number(event.target.value))} className="bg-transparent text-slate-300"><option value={6}>6h</option><option value={12}>12h</option><option value={24}>24h</option><option value={48}>48h</option><option value={72}>72h</option><option value={168}>7d</option></select></label>
+          <label className="max-w-40 rounded-lg border border-slate-800 bg-slate-950/50 px-2 py-1 font-mono text-[8px] text-slate-500">Area <select value={neighborhood} onChange={(event) => setNeighborhood(event.target.value)} className="max-w-28 bg-transparent text-slate-300"><option value="">All</option>{neighborhoods.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+          <div className="rounded-lg border border-slate-800 bg-slate-950/50 px-2.5 py-1.5 font-mono text-[8px] text-slate-600">{isLoading ? 'Loading…' : `${cells.length} clusters`}</div>
+        </div>
       </div>
-      {cells.length === 0 && analyticsError ? (
+      {cells.length === 0 && (windowError || analyticsError) ? (
         <AnalyticsUnavailable className="mt-4 flex-1" heading="Correlation window unavailable" />
       ) : cells.length === 0 ? (
         <div className="chart-surface data-grid relative mt-4 flex-1 overflow-hidden rounded-xl border border-slate-800 bg-slate-950/40 p-4">
@@ -46,7 +90,7 @@ export default function TemporalMap() {
       ) : (
         <div className="mt-4 grid flex-1 grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3">
           {cells.map((cell) => {
-            const intensity = cell.complaintCount48h / maximum;
+            const intensity = cell.complaintCount / maximum;
             return (
               <button
                 key={`${cell.portalKey}-${cell.requestId}-${cell.neighborhoodBlock}`}
@@ -61,7 +105,7 @@ export default function TemporalMap() {
               >
                 <span className="absolute bottom-0 left-0 h-0.5 bg-cyan-400/70" style={{ width: `${Math.max(8, intensity * 100)}%` }} />
                 <div className="truncate text-[10px] font-semibold text-slate-300">{cell.neighborhoodBlock}</div>
-                <div className="mt-2 font-mono text-lg font-bold text-cyan-300">{cell.complaintCount48h}</div>
+                <div className="mt-2 font-mono text-lg font-bold text-cyan-300">{cell.complaintCount}</div>
                 <div className="mt-1 truncate font-mono text-[8px] text-slate-500">Request {cell.requestId} · {cell.keywordSignalCount} signals</div>
               </button>
             );

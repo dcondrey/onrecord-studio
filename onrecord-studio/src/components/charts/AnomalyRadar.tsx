@@ -47,14 +47,13 @@ function deviationFor(profile: AgencyPerformanceProfile) {
 }
 
 export default function AnomalyRadar() {
-  // TODO(analytics): Make the portal and agency ring weights configurable so
-  // the visualization can distinguish volume from anomaly severity explicitly.
   const profiles = useAppStore((state) => state.agencyProfiles);
   const analyticsError = useAppStore((state) => state.analyticsError);
   const setActivePortal = useAppStore((state) => state.setActivePortal);
   const setSearchFilters = useAppStore((state) => state.setSearchFilters);
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
   const [focused, setFocused] = useState<ArcDatum | null>(null);
+  const [weightMode, setWeightMode] = useState<'volume' | 'severity'>('volume');
 
   const arcs = useMemo(() => {
     const grouped = new Map<string, AgencyPerformanceProfile[]>();
@@ -64,15 +63,18 @@ export default function AnomalyRadar() {
       grouped.set(profile.portalSubdomain, values);
     }
     const portalEntries = [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right));
+    const weight = (profile: AgencyPerformanceProfile) => weightMode === 'volume'
+      ? Math.max(1, profile.totalRequestsProcessed)
+      : Math.max(0.01, profile.statutoryViolationRate + profile.suspiciousFastClosureCount / Math.max(1, profile.totalRequestsProcessed));
     const globalTotal = Math.max(
-      1,
-      profiles.reduce((total, profile) => total + Math.max(1, profile.totalRequestsProcessed), 0),
+      Number.EPSILON,
+      profiles.reduce((total, profile) => total + weight(profile), 0),
     );
     const result: ArcDatum[] = [];
     let cursor = 0;
     portalEntries.forEach(([portalKey, agencies], portalIndex) => {
       const portalTotal = agencies.reduce(
-        (total, profile) => total + Math.max(1, profile.totalRequestsProcessed),
+        (total, profile) => total + weight(profile),
         0,
       );
       const portalSweep = (portalTotal / globalTotal) * Math.PI * 2;
@@ -94,7 +96,7 @@ export default function AnomalyRadar() {
       agencies
         .sort((left, right) => left.agencyName.localeCompare(right.agencyName))
         .forEach((profile, agencyIndex) => {
-          const sweep = (Math.max(1, profile.totalRequestsProcessed) / globalTotal) * Math.PI * 2;
+          const sweep = (weight(profile) / globalTotal) * Math.PI * 2;
           const severity = Math.min(
             1,
             profile.statutoryViolationRate
@@ -119,7 +121,7 @@ export default function AnomalyRadar() {
       cursor = portalEnd;
     });
     return result.filter((arc) => arc.endAngle > arc.startAngle);
-  }, [profiles]);
+  }, [profiles, weightMode]);
 
   const activate = (arc: ArcDatum) => {
     setFocused(arc);
@@ -164,7 +166,10 @@ export default function AnomalyRadar() {
           <div className="app-eyebrow">Department deviation sunburst</div>
           <div className="mt-1 text-[10px] text-slate-500">Portal ring → department ring. Select a slice to inspect evidence.</div>
         </div>
-        <div className="rounded border border-slate-800 bg-slate-900/60 px-2 py-1 font-mono text-[9px] text-slate-500">{profiles.length} departments</div>
+        <div className="flex items-center gap-1.5">
+          <label className="rounded border border-slate-800 bg-slate-900/60 px-2 py-1 font-mono text-[8px] text-slate-500">Slice by <select value={weightMode} onChange={(event) => setWeightMode(event.target.value as 'volume' | 'severity')} className="bg-transparent text-slate-300"><option value="volume">request volume</option><option value="severity">anomaly rate</option></select></label>
+          <div className="rounded border border-slate-800 bg-slate-900/60 px-2 py-1 font-mono text-[9px] text-slate-500">{profiles.length} departments</div>
+        </div>
       </div>
       <div className="grid flex-1 grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_160px]">
         <svg viewBox="0 0 240 240" className="mx-auto h-full max-h-[280px] w-full max-w-[320px]" aria-label="Multi-portal department deviation sunburst">
@@ -190,7 +195,7 @@ export default function AnomalyRadar() {
           ))}
           <circle cx="120" cy="120" r="29" fill="var(--chart-center)" stroke="var(--chart-grid)" />
           <text x="120" y="116" textAnchor="middle" fill="var(--text-muted)" fontSize="11" fontWeight="700">AUDIT</text>
-          <text x="120" y="130" textAnchor="middle" fill="var(--chart-axis)" fontSize="11">DENSITY</text>
+          <text x="120" y="130" textAnchor="middle" fill="var(--chart-axis)" fontSize="11">{weightMode === 'volume' ? 'VOLUME' : 'SEVERITY'}</text>
         </svg>
         <div className="space-y-2 rounded-lg border border-slate-800 bg-slate-950/70 p-3 font-mono text-[9px]">
           <div className="truncate text-[10px] font-bold text-slate-300">{focused?.label ?? 'Hover a slice'}</div>

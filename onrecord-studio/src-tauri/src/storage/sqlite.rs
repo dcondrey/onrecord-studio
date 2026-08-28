@@ -647,6 +647,18 @@ impl DuckDbRepository {
         ensure_column(&conn, "requests", "neighborhood_block", "TEXT")?;
         ensure_column(&conn, "requests", "determination_at", "TEXT")?;
         ensure_column(&conn, "requests", "determination_source", "TEXT")?;
+        ensure_column(
+            &conn,
+            "cross_correlation_alerts",
+            "complaint_count",
+            "BIGINT DEFAULT 0",
+        )?;
+        ensure_column(
+            &conn,
+            "cross_correlation_alerts",
+            "correlation_window_hours",
+            "BIGINT DEFAULT 48",
+        )?;
         ensure_column(&conn, "documents", "raw_file_sha256", "TEXT")?;
         // Same rule as the portals block above. The base schema bounds these three; an upgraded
         // database carries the DEFAULT but not the range check.
@@ -3601,13 +3613,14 @@ impl DuckDbRepository {
             for correlation in correlations {
                 tx.execute(
                     "INSERT INTO cross_correlation_alerts (
-                    request_id, portal_subdomain, neighborhood_block, complaint_count_48h,
-                    distinct_source_count, keyword_signal_count, correlation_density,
+                    request_id, portal_subdomain, neighborhood_block, complaint_count,
+                    correlation_window_hours, distinct_source_count, keyword_signal_count, correlation_density,
                     first_correlated_event_at, last_correlated_event_at, evaluated_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
                  ON CONFLICT(request_id, portal_subdomain) DO UPDATE SET
                     neighborhood_block = excluded.neighborhood_block,
-                    complaint_count_48h = excluded.complaint_count_48h,
+                    complaint_count = excluded.complaint_count,
+                    correlation_window_hours = excluded.correlation_window_hours,
                     distinct_source_count = excluded.distinct_source_count,
                     keyword_signal_count = excluded.keyword_signal_count,
                     correlation_density = excluded.correlation_density,
@@ -3618,7 +3631,8 @@ impl DuckDbRepository {
                         correlation.request_id,
                         correlation.portal_key,
                         correlation.neighborhood_block,
-                        correlation.complaint_count_48h,
+                        correlation.complaint_count,
+                        correlation.correlation_window_hours,
                         correlation.distinct_source_count,
                         correlation.keyword_signal_count,
                         correlation.correlation_density,
@@ -6429,7 +6443,7 @@ mod tests {
         // The correlation workspace shares the same liveness requirement; it must at minimum
         // execute against the live catalog rather than reporting a missing attachment.
         correlation_engine
-            .correlate_311_with_enforcement_requests(Some(PORTAL_SUBDOMAIN), 1, 10)
+            .correlate_311_with_enforcement_requests(Some(PORTAL_SUBDOMAIN), 1, 10, 48)
             .await
             .expect("correlation must execute against the live core database");
     }

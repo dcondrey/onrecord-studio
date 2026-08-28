@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import type { AgencyPerformanceProfile } from '../../types';
 import { cn } from '../../utils/cn';
@@ -10,8 +10,6 @@ const HEIGHT = 320;
 const MARGIN = { top: 24, right: 24, bottom: 46, left: 52 };
 
 export default function PerformanceScatter() {
-  // FEATURE(analytics): Add brush/zoom and an exportable vector snapshot for
-  // investigators preparing a briefing or legal exhibit.
   const profiles = useAppStore((state) => state.agencyProfiles);
   const analyticsError = useAppStore((state) => state.analyticsError);
   const activePortalKey = useAppStore((state) => state.activePortalKey);
@@ -19,9 +17,10 @@ export default function PerformanceScatter() {
   const setSearchFilters = useAppStore((state) => state.setSearchFilters);
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
   const [focused, setFocused] = useState<AgencyPerformanceProfile | null>(null);
+  const [dayRange, setDayRange] = useState<[number, number] | null>(null);
+  const [brush, setBrush] = useState<{ start: number; current: number } | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
 
-  // PERF(analytics): The current sort and SVG node count are appropriate for
-  // the bounded profile set; aggregate or virtualize if agency counts grow.
   const data = useMemo(
     () => profiles
       .filter((profile) => !activePortalKey || profile.portalSubdomain === activePortalKey)
@@ -41,18 +40,52 @@ export default function PerformanceScatter() {
   );
   const unmeasuredCount = data.length - plotted.length;
   const maxDays = Math.max(10, ...plotted.map((profile) => profile.averageClosureDays));
+  const minimumVisibleDay = dayRange?.[0] ?? 0;
+  const maximumVisibleDay = dayRange?.[1] ?? maxDays;
+  const visiblePoints = plotted.filter((profile) => profile.averageClosureDays >= minimumVisibleDay && profile.averageClosureDays <= maximumVisibleDay);
+  const renderedPoints = visiblePoints.length <= 800
+    ? visiblePoints
+    : [...visiblePoints].sort((left, right) => right.totalRequestsProcessed - left.totalRequestsProcessed).slice(0, 800);
   const minZ = Math.min(-1, ...plotted.map((profile) => profile.performanceZScore));
   const maxZ = Math.max(3, ...plotted.map((profile) => profile.performanceZScore));
   const maxRequests = Math.max(1, ...data.map((profile) => profile.totalRequestsProcessed));
   const plotWidth = WIDTH - MARGIN.left - MARGIN.right;
   const plotHeight = HEIGHT - MARGIN.top - MARGIN.bottom;
-  const x = (value: number) => MARGIN.left + (value / maxDays) * plotWidth;
+  const x = (value: number) => MARGIN.left + ((value - minimumVisibleDay) / Math.max(1, maximumVisibleDay - minimumVisibleDay)) * plotWidth;
   const y = (value: number) => MARGIN.top + (1 - (value - minZ) / (maxZ - minZ)) * plotHeight;
 
   const inspect = (profile: AgencyPerformanceProfile) => {
     setActivePortal(profile.portalSubdomain);
     setSearchFilters('', profile.agencyId, null, deviationFor(profile));
     setWorkspaceView('evidence');
+  };
+
+  const brushCoordinate = (event: ReactPointerEvent<SVGRectElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    return Math.max(MARGIN.left, Math.min(WIDTH - MARGIN.right, ((event.clientX - bounds.left) / Math.max(1, bounds.width)) * WIDTH));
+  };
+
+  const finishBrush = (event: ReactPointerEvent<SVGRectElement>) => {
+    if (!brush) return;
+    const current = brushCoordinate(event);
+    const left = Math.min(brush.start, current);
+    const right = Math.max(brush.start, current);
+    setBrush(null);
+    if (right - left < 12) return;
+    const toDay = (coordinate: number) => minimumVisibleDay + ((coordinate - MARGIN.left) / plotWidth) * (maximumVisibleDay - minimumVisibleDay);
+    setDayRange([Math.max(0, toDay(left)), Math.min(maxDays, toDay(right))]);
+  };
+
+  const exportSvg = () => {
+    if (!svgRef.current) return;
+    const clone = svgRef.current.cloneNode(true) as SVGSVGElement;
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `onrecord-performance-${new Date().toISOString().replace(/[:.]/g, '-')}.svg`;
+    anchor.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -63,10 +96,14 @@ export default function PerformanceScatter() {
           <h2 className="mt-1 text-[13px] font-semibold text-slate-200">Response time vs. statistical deviation</h2>
           <p className="mt-1 text-[10px] text-slate-600">Bubble size represents audited request volume. Select a department to inspect its evidence.</p>
         </div>
-        <div className="hidden items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2 text-[8px] text-slate-500 sm:flex">
+        <div className="hidden flex-wrap items-center justify-end gap-2 sm:flex">
+          {dayRange && <button type="button" onClick={() => setDayRange(null)} className="rounded-lg border border-slate-800 bg-slate-950/40 px-2 py-1.5 text-[8px] text-slate-400">Reset zoom</button>}
+          <button type="button" onClick={exportSvg} className="rounded-lg border border-slate-800 bg-slate-950/40 px-2 py-1.5 text-[8px] text-slate-400">Export SVG</button>
+          <div className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2 text-[8px] text-slate-500">
           <LegendDot color="bg-cyan-400" label="Typical" />
           <LegendDot color="bg-amber-400" label="Elevated" />
           <LegendDot color="bg-rose-400" label="Critical" />
+          </div>
         </div>
       </div>
 
@@ -85,7 +122,9 @@ export default function PerformanceScatter() {
                 {unmeasuredCount} department{unmeasuredCount === 1 ? '' : 's'} not plotted: no closure has been recorded, so there is no closure time or deviation to place.
               </p>
             )}
-            <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="h-full min-h-[280px] w-full" role="img" aria-label="Scatter plot of agency average closure time and performance z-score">
+            {visiblePoints.length > renderedPoints.length && <p className="mb-1 text-[8px] text-amber-300/70">Showing the 800 highest-volume departments in this viewport; narrow the day range to inspect the remainder.</p>}
+            <p className="mb-1 text-[8px] text-slate-600">Drag horizontally across the plot to zoom the closure-time axis.</p>
+            <svg ref={svgRef} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="h-full min-h-[280px] w-full" role="img" aria-label="Scatter plot of agency average closure time and performance z-score">
               <defs>
                 <filter id="pointGlow" x="-100%" y="-100%" width="300%" height="300%">
                   <feGaussianBlur stdDeviation="3" result="blur" />
@@ -93,7 +132,7 @@ export default function PerformanceScatter() {
                 </filter>
               </defs>
               {[0, 0.25, 0.5, 0.75, 1].map((tick) => {
-                const value = tick * maxDays;
+                const value = minimumVisibleDay + tick * (maximumVisibleDay - minimumVisibleDay);
                 const xPosition = x(value);
                 return (
                   <g key={`x-${tick}`}>
@@ -112,7 +151,9 @@ export default function PerformanceScatter() {
               <text transform={`translate(13 ${HEIGHT / 2}) rotate(-90)`} fill="var(--chart-axis)" fontSize="11" textAnchor="middle">Performance z-score</text>
               <text x={WIDTH - MARGIN.right} y={y(2) - 8} fill="var(--chart-alert)" fontSize="11" textAnchor="end">critical threshold</text>
 
-              {plotted.map((profile) => {
+              <rect x={MARGIN.left} y={MARGIN.top} width={plotWidth} height={plotHeight} fill="transparent" className="cursor-crosshair" onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); const coordinate = brushCoordinate(event); setBrush({ start: coordinate, current: coordinate }); }} onPointerMove={(event) => { if (brush) setBrush((value) => value ? { ...value, current: brushCoordinate(event) } : null); }} onPointerUp={finishBrush} onPointerCancel={() => setBrush(null)} />
+              {brush && <rect x={Math.min(brush.start, brush.current)} y={MARGIN.top} width={Math.abs(brush.current - brush.start)} height={plotHeight} fill="var(--viz-cyan)" fillOpacity="0.12" stroke="var(--viz-cyan)" strokeDasharray="4 3" pointerEvents="none" />}
+              {renderedPoints.map((profile) => {
                 const severity = severityFor(profile);
                 const color = severity === 'critical' ? 'var(--viz-red)' : severity === 'elevated' ? 'var(--viz-amber)' : 'var(--viz-cyan)';
                 const radius = 5 + Math.sqrt(profile.totalRequestsProcessed / maxRequests) * 12;

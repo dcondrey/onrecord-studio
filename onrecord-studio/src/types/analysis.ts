@@ -1,10 +1,12 @@
 // TODO(analysis): Generate these shared configuration types from the Rust
 // command schema so threshold defaults remain identical across platforms.
 export interface AnalysisConfig {
-  latency_threshold_days: number;
-  min_ocr_character_density: number;
-  suspicious_closure_window_minutes: number;
-  target_policy_keywords: string[];
+  latency_threshold_days?: number;
+  min_ocr_character_density?: number;
+  suspicious_closure_window_minutes?: number;
+  target_policy_keywords?: string[];
+  created_from?: string | null;
+  created_to?: string | null;
 }
 
 export interface AgencyPerformanceProfile {
@@ -44,7 +46,8 @@ export interface CrossAgencyCorrelation {
   requestTitle: string;
   requestTimestamp: string;
   neighborhoodBlock: string;
-  complaintCount48h: number;
+  complaintCount: number;
+  correlationWindowHours: number;
   distinctSourceCount: number;
   firstCorrelatedEventAt: string;
   lastCorrelatedEventAt: string;

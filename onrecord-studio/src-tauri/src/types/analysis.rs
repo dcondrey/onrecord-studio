@@ -5,11 +5,16 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AnalysisConfig {
     pub latency_threshold_days: f64,
     pub min_ocr_character_density: usize,
     pub suspicious_closure_window_minutes: i64,
     pub target_policy_keywords: Vec<String>,
+    #[serde(default)]
+    pub created_from: Option<String>,
+    #[serde(default)]
+    pub created_to: Option<String>,
 }
 
 impl Default for AnalysisConfig {
@@ -26,6 +31,8 @@ impl Default for AnalysisConfig {
                 "clean up".to_string(),
                 "property storage".to_string(),
             ],
+            created_from: None,
+            created_to: None,
         }
     }
 }

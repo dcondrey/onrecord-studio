@@ -115,6 +115,7 @@ export interface NativeCommandMap {
       portalKey?: string | null;
       minimumComplaints?: number | null;
       resultLimit?: number | null;
+      windowHours?: number | null;
     };
     result: CrossAgencyCorrelation[];
   };

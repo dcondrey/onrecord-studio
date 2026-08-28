@@ -84,6 +84,8 @@ WITH parsed AS (
       ON statutory_extensions.request_id = requests.id
      AND statutory_extensions.portal_subdomain = requests.portal_subdomain
     WHERE requests.agency_id IS NOT NULL
+      AND (?2 = '' OR TRY_CAST(requests.created_at AS TIMESTAMPTZ) >= TRY_CAST(?2 AS TIMESTAMPTZ))
+      AND (?3 = '' OR TRY_CAST(requests.created_at AS TIMESTAMPTZ) < TRY_CAST(?3 AS TIMESTAMPTZ))
 ),
 milestones AS (
     SELECT
@@ -164,6 +166,8 @@ released_documents AS (
       ON requests.id = documents.request_id
      AND requests.portal_subdomain = documents.portal_subdomain
     WHERE requests.agency_id IS NOT NULL
+      AND (?2 = '' OR TRY_CAST(requests.created_at AS TIMESTAMPTZ) >= TRY_CAST(?2 AS TIMESTAMPTZ))
+      AND (?3 = '' OR TRY_CAST(requests.created_at AS TIMESTAMPTZ) < TRY_CAST(?3 AS TIMESTAMPTZ))
     GROUP BY requests.agency_id, requests.portal_subdomain
 )
 SELECT
@@ -344,6 +348,8 @@ impl AnalyticsEngine {
         validate_latency_threshold(config.latency_threshold_days)?;
         let patterns = keyword_patterns(&config.target_policy_keywords);
         let threshold = config.latency_threshold_days;
+        let created_from = config.created_from.clone().unwrap_or_default();
+        let created_to = config.created_to.clone().unwrap_or_default();
         let state = Arc::clone(&self.state);
         tokio::task::spawn_blocking(move || {
             let state = lock_analytics_state(&state)?;
@@ -355,12 +361,19 @@ impl AnalyticsEngine {
                 ));
             }
             let table_prefix = state.source.table_prefix();
-            let mut profiles =
-                query_agency_performance_profiles(&state.connection, threshold, table_prefix)?;
+            let mut profiles = query_agency_performance_profiles(
+                &state.connection,
+                threshold,
+                &created_from,
+                &created_to,
+                table_prefix,
+            )?;
             hydrate_keyword_frequency_maps(
                 &state.connection,
                 &mut profiles,
                 &patterns,
+                &created_from,
+                &created_to,
                 table_prefix,
             )?;
             Ok(profiles)
@@ -384,32 +397,37 @@ fn agency_performance_query(table_prefix: &str) -> String {
 fn query_agency_performance_profiles(
     connection: &Connection,
     latency_threshold_days: f64,
+    created_from: &str,
+    created_to: &str,
     table_prefix: &str,
 ) -> Result<Vec<AgencyPerformanceProfile>, AppError> {
     let mut statement = connection
         .prepare(&agency_performance_query(table_prefix))
         .map_err(|error| AppError::Analysis(format!("Failed to prepare agency query: {error}")))?;
     let rows = statement
-        .query_map(params![latency_threshold_days], |row| {
-            Ok(RawAgencyPerformanceProfile {
-                agency_id: row.get(0)?,
-                portal_subdomain: row.get(1)?,
-                agency_name: row.get(2)?,
-                total_requests_processed: row.get(3)?,
-                total_closed: row.get(4)?,
-                valid_latency_sample_size: row.get(5)?,
-                excluded_invalid_lifetime_count: row.get(6)?,
-                average_closure_days: row.get(7)?,
-                global_mean_closure_days: row.get(8)?,
-                global_stddev_closure_days: row.get(9)?,
-                performance_z_score: row.get(10)?,
-                anomaly_count: row.get(11)?,
-                statutory_violation_count: row.get(12)?,
-                statutory_violation_rate: row.get(13)?,
-                suspicious_fast_closure_count: row.get(14)?,
-                total_documents_released: row.get(15)?,
-            })
-        })
+        .query_map(
+            params![latency_threshold_days, created_from, created_to],
+            |row| {
+                Ok(RawAgencyPerformanceProfile {
+                    agency_id: row.get(0)?,
+                    portal_subdomain: row.get(1)?,
+                    agency_name: row.get(2)?,
+                    total_requests_processed: row.get(3)?,
+                    total_closed: row.get(4)?,
+                    valid_latency_sample_size: row.get(5)?,
+                    excluded_invalid_lifetime_count: row.get(6)?,
+                    average_closure_days: row.get(7)?,
+                    global_mean_closure_days: row.get(8)?,
+                    global_stddev_closure_days: row.get(9)?,
+                    performance_z_score: row.get(10)?,
+                    anomaly_count: row.get(11)?,
+                    statutory_violation_count: row.get(12)?,
+                    statutory_violation_rate: row.get(13)?,
+                    suspicious_fast_closure_count: row.get(14)?,
+                    total_documents_released: row.get(15)?,
+                })
+            },
+        )
         .map_err(|error| AppError::Analysis(format!("Failed to execute agency query: {error}")))?;
     rows.map(|row| {
         convert_raw_profile(
@@ -425,6 +443,8 @@ fn hydrate_keyword_frequency_maps(
     connection: &Connection,
     profiles: &mut [AgencyPerformanceProfile],
     patterns: &[KeywordPattern],
+    created_from: &str,
+    created_to: &str,
     table_prefix: &str,
 ) -> Result<(), AppError> {
     for profile in profiles.iter_mut() {
@@ -446,12 +466,14 @@ fn hydrate_keyword_frequency_maps(
             "SELECT agency_id, portal_subdomain,
                 COALESCE(title, '') || ' ' || COALESCE(description, '')
              FROM {db}requests
-             WHERE agency_id IS NOT NULL",
+             WHERE agency_id IS NOT NULL
+               AND (?1 = '' OR TRY_CAST(created_at AS TIMESTAMPTZ) >= TRY_CAST(?1 AS TIMESTAMPTZ))
+               AND (?2 = '' OR TRY_CAST(created_at AS TIMESTAMPTZ) < TRY_CAST(?2 AS TIMESTAMPTZ))",
             table_prefix,
         ))
         .map_err(|error| AppError::Analysis(format!("Failed to prepare keyword scan: {error}")))?;
     let rows = statement
-        .query_map([], |row| {
+        .query_map(params![created_from, created_to], |row| {
             Ok((
                 row.get::<_, i64>(0)?,
                 row.get::<_, String>(1)?,
@@ -830,6 +852,8 @@ mod tests {
         let profiles = query_agency_performance_profiles(
             &connection(),
             90.0,
+            "",
+            "",
             AnalyticsSource::ForeignSqlite.table_prefix(),
         )
         .unwrap();
@@ -841,6 +865,28 @@ mod tests {
             slow.compliance_indicator,
             VerificationState::StatutoryDeadlineExceeded
         );
+    }
+
+    #[test]
+    fn limits_profiles_to_the_requested_creation_interval() {
+        let included = query_agency_performance_profiles(
+            &connection(),
+            90.0,
+            "2024-01-01T00:00:00Z",
+            "2024-01-02T00:00:00Z",
+            AnalyticsSource::ForeignSqlite.table_prefix(),
+        )
+        .unwrap();
+        assert!(!included.is_empty());
+        let excluded = query_agency_performance_profiles(
+            &connection(),
+            90.0,
+            "2024-02-01T00:00:00Z",
+            "2024-03-01T00:00:00Z",
+            AnalyticsSource::ForeignSqlite.table_prefix(),
+        )
+        .unwrap();
+        assert!(excluded.is_empty());
     }
 
     /// One request the parity fixture drives through both statutory implementations.
@@ -1055,6 +1101,8 @@ mod tests {
             let profiles = query_agency_performance_profiles(
                 &connection,
                 90.0,
+                "",
+                "",
                 AnalyticsSource::ForeignSqlite.table_prefix(),
             )
             .unwrap();
@@ -1088,6 +1136,8 @@ mod tests {
         let profiles = query_agency_performance_profiles(
             &connection,
             365.0,
+            "",
+            "",
             AnalyticsSource::ForeignSqlite.table_prefix(),
         )
         .expect("the aggregate must evaluate the sourced event");
@@ -1140,6 +1190,8 @@ mod tests {
         let profiles = query_agency_performance_profiles(
             &connection,
             365.0,
+            "",
+            "",
             AnalyticsSource::ForeignSqlite.table_prefix(),
         )
         .unwrap();

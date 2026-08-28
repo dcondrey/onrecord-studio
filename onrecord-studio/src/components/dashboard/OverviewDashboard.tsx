@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import AnomalyRadar from '../charts/AnomalyRadar';
 import LifecycleFunnel from '../charts/LifecycleFunnel';
 import PerformanceScatter from '../charts/PerformanceScatter';
@@ -7,10 +7,11 @@ import AnalyticsUnavailable from '../charts/AnalyticsUnavailable';
 import { useAppStore } from '../../store/useAppStore';
 import MetricsGrid from './MetricsGrid';
 import Icon from '../ui/icons';
+import { invokeCommand } from '../../ipc';
+import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
+import type { AgencyPerformanceProfile } from '../../types';
 
 export default function OverviewDashboard() {
-  // FEATURE(overview): Add a comparison period selector so investigators can
-  // compare current response behavior against a prior interval.
   const portals = useAppStore((state) => state.portals);
   const workspaceInitializationStatus = useAppStore((state) => state.workspaceInitializationStatus);
   const workspaceInitializationError = useAppStore((state) => state.workspaceInitializationError);
@@ -55,6 +56,8 @@ export default function OverviewDashboard() {
           </div>
         </section>
 
+        <PeriodComparison activePortalKey={activePortalKey} />
+
         {workspaceInitializationStatus === 'loading' ? (
           <WorkspaceSourcesLoading />
         ) : workspaceInitializationStatus === 'error' ? (
@@ -78,6 +81,57 @@ export default function OverviewDashboard() {
       </div>
     </div>
   );
+}
+
+function PeriodComparison({ activePortalKey }: { activePortalKey: string | null }) {
+  const [days, setDays] = useState(30);
+  const [current, setCurrent] = useState<AgencyPerformanceProfile[]>([]);
+  const [prior, setPrior] = useState<AgencyPerformanceProfile[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const comparisonGate = useLatestRequestGate();
+
+  useEffect(() => {
+    const request = comparisonGate.begin();
+    const end = new Date();
+    const middle = new Date(end.valueOf() - days * 86_400_000);
+    const start = new Date(end.valueOf() - days * 2 * 86_400_000);
+    setIsLoading(true);
+    setError(null);
+    void Promise.all([
+      invokeCommand('get_agency_performance_profiles', { config: { created_from: middle.toISOString(), created_to: end.toISOString() } }),
+      invokeCommand('get_agency_performance_profiles', { config: { created_from: start.toISOString(), created_to: middle.toISOString() } }),
+    ]).then(([currentProfiles, priorProfiles]) => {
+      if (!comparisonGate.isCurrent(request)) return;
+      setCurrent(currentProfiles.filter((profile) => !activePortalKey || profile.portalSubdomain === activePortalKey));
+      setPrior(priorProfiles.filter((profile) => !activePortalKey || profile.portalSubdomain === activePortalKey));
+    }).catch((reason) => {
+      if (comparisonGate.isCurrent(request)) setError(String(reason));
+    }).finally(() => {
+      if (comparisonGate.isCurrent(request)) setIsLoading(false);
+    });
+    return comparisonGate.invalidate;
+  }, [activePortalKey, comparisonGate, days]);
+
+  const currentSummary = summarizePeriod(current);
+  const priorSummary = summarizePeriod(prior);
+  return <section className="app-panel flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between" aria-label="Response behavior period comparison"><div><div className="app-eyebrow">Period comparison</div><p className="mt-1 text-[9px] text-slate-600">Current interval versus the immediately preceding interval, based on request creation time.</p></div><label className="secondary-action w-fit rounded-lg border px-2.5 py-1.5 text-[9px] text-slate-500">Interval <select value={days} onChange={(event) => setDays(Number(event.target.value))} className="bg-transparent font-mono text-slate-200"><option value={7}>7 days</option><option value={30}>30 days</option><option value={90}>90 days</option><option value={365}>365 days</option></select></label>{error ? <div role="alert" className="text-[9px] text-rose-300">Comparison unavailable: {error}</div> : <div className="grid flex-1 grid-cols-2 gap-2 sm:grid-cols-4"><ComparisonMetric label="Requests" current={currentSummary.requests} prior={priorSummary.requests} loading={isLoading} /><ComparisonMetric label="Closure rate" current={currentSummary.closureRate} prior={priorSummary.closureRate} percent loading={isLoading} /><ComparisonMetric label="Deadline rate" current={currentSummary.violationRate} prior={priorSummary.violationRate} percent inverse loading={isLoading} /><ComparisonMetric label="Avg. closure days" current={currentSummary.averageClosureDays} prior={priorSummary.averageClosureDays} inverse loading={isLoading} /></div>}</section>;
+}
+
+function summarizePeriod(profiles: AgencyPerformanceProfile[]) {
+  const requests = profiles.reduce((sum, profile) => sum + profile.totalRequestsProcessed, 0);
+  const closed = profiles.reduce((sum, profile) => sum + profile.totalClosed, 0);
+  const violations = profiles.reduce((sum, profile) => sum + profile.statutoryViolationCount, 0);
+  const latencySamples = profiles.reduce((sum, profile) => sum + profile.validLatencySampleSize, 0);
+  const latencyTotal = profiles.reduce((sum, profile) => sum + (profile.averageClosureDays ?? 0) * profile.validLatencySampleSize, 0);
+  return { requests, closureRate: requests ? closed / requests : null, violationRate: requests ? violations / requests : null, averageClosureDays: latencySamples ? latencyTotal / latencySamples : null };
+}
+
+function ComparisonMetric({ label, current, prior, percent = false, inverse = false, loading = false }: { label: string; current: number | null; prior: number | null; percent?: boolean; inverse?: boolean; loading?: boolean }) {
+  const delta = current === null || prior === null || prior === 0 ? null : (current - prior) / Math.abs(prior);
+  const favorable = delta === null ? null : inverse ? delta <= 0 : delta >= 0;
+  const format = (value: number) => percent ? `${(value * 100).toFixed(1)}%` : Number.isInteger(value) ? value.toLocaleString() : value.toFixed(1);
+  return <div className="rounded-lg border border-slate-800 bg-slate-950/35 px-3 py-2"><div className="text-[8px] text-slate-600">{label}</div><div className="mt-1 font-mono text-sm text-slate-200">{loading ? '—' : current === null ? 'Not measured' : format(current)}</div><div className={favorable === null ? 'text-[8px] text-slate-600' : favorable ? 'text-[8px] text-emerald-300' : 'text-[8px] text-amber-300'}>{loading ? 'Loading…' : delta === null ? 'No comparable prior baseline' : `${delta >= 0 ? '+' : ''}${(delta * 100).toFixed(1)}% vs prior`}</div></div>;
 }
 
 function WorkspaceSourcesLoading() {

@@ -83,17 +83,20 @@ pub async fn get_cross_agency_correlations(
     portal_key: Option<String>,
     minimum_complaints: Option<usize>,
     result_limit: Option<usize>,
+    window_hours: Option<usize>,
     correlation_engine: State<'_, DuckDbWorkspace>,
     repository: State<'_, DuckDbRepository>,
 ) -> Result<Vec<CrossAgencyCorrelation>, AppError> {
     let portal_key = optional_portal_key(portal_key)?;
     let minimum_complaints = minimum_complaints.unwrap_or(2);
     let result_limit = result_limit.unwrap_or(1_000);
+    let window_hours = window_hours.unwrap_or(48);
     let correlations = correlation_engine
         .correlate_311_with_enforcement_requests(
             portal_key.as_deref(),
             minimum_complaints,
             result_limit,
+            window_hours,
         )
         .await?;
     repository
@@ -458,6 +461,34 @@ fn validate_analysis_config(config: &AnalysisConfig) -> Result<(), AppError> {
     }
     for keyword in &config.target_policy_keywords {
         required_text(keyword, "Policy keyword", 128)?;
+    }
+    let created_from = config
+        .created_from
+        .as_deref()
+        .map(|value| {
+            chrono::DateTime::parse_from_rfc3339(value).map(|date| date.with_timezone(&chrono::Utc))
+        })
+        .transpose()
+        .map_err(|error| {
+            AppError::DataParsing(format!("Analysis start timestamp is invalid: {error}"))
+        })?;
+    let created_to = config
+        .created_to
+        .as_deref()
+        .map(|value| {
+            chrono::DateTime::parse_from_rfc3339(value).map(|date| date.with_timezone(&chrono::Utc))
+        })
+        .transpose()
+        .map_err(|error| {
+            AppError::DataParsing(format!("Analysis end timestamp is invalid: {error}"))
+        })?;
+    if created_from
+        .zip(created_to)
+        .is_some_and(|(from, to)| from >= to)
+    {
+        return Err(AppError::DataParsing(
+            "Analysis start timestamp must be earlier than the end timestamp".to_string(),
+        ));
     }
     Ok(())
 }

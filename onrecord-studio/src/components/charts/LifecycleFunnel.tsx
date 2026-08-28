@@ -3,8 +3,6 @@ import { useAppStore } from '../../store/useAppStore';
 import AnalyticsUnavailable from './AnalyticsUnavailable';
 
 export default function LifecycleFunnel() {
-  // TODO(analytics): Define how multiple policy predicates combine when a
-  // stage maps to more than one legal or integrity classification.
   const profiles = useAppStore((state) => state.agencyProfiles);
   const analyticsError = useAppStore((state) => state.analyticsError);
   const searchTerm = useAppStore((state) => state.searchTerm);
@@ -17,10 +15,10 @@ export default function LifecycleFunnel() {
     const statutory = profiles.reduce((sum, profile) => sum + profile.statutoryViolationCount, 0);
     const fast = profiles.reduce((sum, profile) => sum + profile.suspiciousFastClosureCount, 0);
     return [
-      { label: 'Ingested requests', value: total, policy: null, status: null, color: 'var(--viz-indigo)' },
-      { label: 'Closed requests', value: closed, policy: null, status: 'closed', color: 'var(--viz-cyan)' },
-      { label: 'Statutory exceptions', value: statutory, policy: 'STATUTORY_LATENCY_VIOLATION', status: null, color: 'var(--viz-amber)' },
-      { label: 'Fast-drop closures', value: fast, policy: 'SUSPICIOUSLY_FAST_CLOSURE', status: 'closed', color: 'var(--viz-red)' },
+      { label: 'Ingested requests', value: total, policy: null, status: null, predicate: 'All indexed requests', color: 'var(--viz-indigo)' },
+      { label: 'Closed requests', value: closed, policy: null, status: 'closed', predicate: 'Status is closed', color: 'var(--viz-cyan)' },
+      { label: 'Statutory exceptions', value: statutory, policy: 'STATUTORY_LATENCY_VIOLATION', status: null, predicate: 'Statutory latency predicate matches', color: 'var(--viz-amber)' },
+      { label: 'Fast-drop closures', value: fast, policy: 'SUSPICIOUSLY_FAST_CLOSURE', status: 'closed', predicate: 'Status is closed AND rapid-closure predicate matches', color: 'var(--viz-red)' },
     ];
   }, [profiles]);
   const maximum = Math.max(1, ...stages.map((stage) => stage.value));
@@ -29,7 +27,7 @@ export default function LifecycleFunnel() {
   return (
     <section className="app-panel min-h-[360px] overflow-hidden p-5">
       <div className="app-eyebrow">Evidence lifecycle</div>
-      <div className="mt-1 text-[10px] text-slate-500">Select a stage to open its matching records.</div>
+      <div className="mt-1 text-[10px] text-slate-500">Select a stage to open its matching records. Multiple predicates use AND semantics.</div>
       {!hasData && analyticsError ? (
         <AnalyticsUnavailable className="mt-6" heading="Lifecycle counts unavailable" />
       ) : (
@@ -50,6 +48,7 @@ export default function LifecycleFunnel() {
                 <span className="text-slate-400 transition-colors group-hover:text-slate-200">{stage.label}</span>
                 <span className={stage.policy ? 'text-amber-300' : 'text-slate-500'}>{stage.value.toLocaleString()}</span>
               </div>
+              <div className="mb-1 text-[8px] text-slate-600">{stage.predicate}</div>
               <div className="h-8 overflow-hidden rounded-lg border border-slate-800/90 bg-slate-950/60 p-1">
                 {hasData && (
                   <div

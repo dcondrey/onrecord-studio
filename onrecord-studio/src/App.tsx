@@ -68,6 +68,7 @@ export default function App() {
           portalKey: null,
           minimumComplaints: 2,
           resultLimit: 1000,
+          windowHours: 48,
         }),
       ]);
       setAnalyticsData(profiles, correlations);
