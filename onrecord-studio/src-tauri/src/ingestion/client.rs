@@ -308,7 +308,14 @@ impl ApiClient {
         let outcome = self
             .execute_with_retries(&robots_url, "robots.txt", || async {
                 let mut current = robots_url.clone();
+                let mut visited = BTreeSet::new();
                 for hop in 0..=MAX_REDIRECTS {
+                    current.set_fragment(None);
+                    if !visited.insert(current.as_str().to_string()) {
+                        return Err(RetryDisposition::Terminal(AppError::PortalSecurity(
+                            format!("robots.txt redirect loop detected at '{current}'"),
+                        )));
+                    }
                     validate_remote_url(&self.dns, &current)
                         .await
                         .map_err(RetryDisposition::Terminal)?;
@@ -329,7 +336,7 @@ impl ApiClient {
                             .headers()
                             .get(LOCATION)
                             .and_then(|value| value.to_str().ok())
-                            .and_then(|value| current.join(value).ok())
+                            .and_then(|value| next_redirect_url(&current, value).ok())
                         else {
                             return Ok(RobotsRules::unrestricted());
                         };
@@ -1069,29 +1076,41 @@ impl ApiClient {
     ) -> Result<(reqwest::Response, HostPermit), RetryDisposition> {
         let mut current_url = initial_url;
         let mut current_query = Some(query);
-        // SECURITY(security): The loop bound is the redirect limit, and validation is the FIRST
-        // statement inside it, so the initial URL and every subsequent hop are validated before a
-        // socket is opened. Hoisting this call out of the loop, or moving it below `send()`, would
-        // reintroduce the standard SSRF hole where a permitted host redirects to a private
-        // address. Any `continue` added below must land back on this line.
+        let mut visited_requests = BTreeSet::new();
+        // SECURITY(security): The loop bound is the redirect limit. After pure URL/query and loop
+        // bookkeeping, validation is the first operation that can resolve or contact anything,
+        // so the initial URL and every subsequent hop are validated before a socket is opened.
+        // Hoisting validation out of the loop, or moving it below `send()`, would reintroduce the
+        // standard SSRF hole where a permitted host redirects to a private address.
         //
-        // LIMIT(protocol): `join` replaces the query string, so parameters supplied by the caller
-        // apply to the first hop only. A redirect to a path-only Location silently drops
-        // pagination parameters and returns the first page.
+        // Query parameters supplied by the caller apply to the first request only. They are first
+        // materialized into `request_url` so loop detection distinguishes that request from a
+        // legitimate redirect back to the same path without its pagination query.
         for redirect_count in 0..=MAX_REDIRECTS {
-            validate_remote_url(&self.dns, &current_url)
+            let mut request_url = current_url.clone();
+            if let Some(query_values) = current_query.take() {
+                request_url.query_pairs_mut().extend_pairs(
+                    query_values
+                        .iter()
+                        .map(|(key, value)| (*key, value.as_str())),
+                );
+            }
+            request_url.set_fragment(None);
+            if !visited_requests.insert(request_url.as_str().to_string()) {
+                return Err(RetryDisposition::Terminal(AppError::PortalSecurity(
+                    format!("Redirect loop detected at '{request_url}'"),
+                )));
+            }
+            validate_remote_url(&self.dns, &request_url)
                 .await
                 .map_err(RetryDisposition::Terminal)?;
             // Every hop is governed independently: a redirect can cross hosts, and the host that
             // answers is the one whose robots.txt, pacing, budget, and stop state apply.
-            let host_permit = self.reserve_host_slot(&current_url).await?;
-            let mut request = self.client.get(current_url.clone());
-            if let Some(query_values) = current_query.take() {
-                request = request.query(query_values);
-            }
+            let host_permit = self.reserve_host_slot(&request_url).await?;
+            let request = self.client.get(request_url.clone());
             let response = request.send().await.map_err(|error| {
                 RetryDisposition::Retry(
-                    AppError::Network(format!("GET '{}' failed: {error}", current_url)),
+                    AppError::Network(format!("GET '{}' failed: {error}", request_url)),
                     None,
                 )
             })?;
@@ -1099,35 +1118,23 @@ impl ApiClient {
             // Recorded before the status is classified so a refusal stops the host even though
             // the disposition below is terminal for this one URL.
             self.governor.record_status(
-                &current_url,
+                &request_url,
                 status.as_u16(),
                 parse_retry_after(response.headers()),
             );
             if status.is_redirection() {
                 if redirect_count == MAX_REDIRECTS {
                     return Err(RetryDisposition::Terminal(AppError::PortalSecurity(
-                        format!("Redirect limit exceeded for '{current_url}'"),
+                        format!("Redirect limit exceeded for '{request_url}'"),
                     )));
                 }
-                let location = response.headers().get(LOCATION).ok_or_else(|| {
-                    RetryDisposition::Terminal(AppError::Network(format!(
-                        "Redirect from '{current_url}' omitted the Location header"
-                    )))
-                })?;
-                let location = location.to_str().map_err(|error| {
-                    RetryDisposition::Terminal(AppError::Network(format!(
-                        "Redirect from '{current_url}' contained an invalid Location header: {error}"
-                    )))
-                })?;
-                current_url = current_url.join(location).map_err(|error| {
-                    RetryDisposition::Terminal(AppError::Network(format!(
-                        "Redirect target '{location}' from '{current_url}' is invalid: {error}"
-                    )))
-                })?;
+                current_url =
+                    redirect_url_from_header(&request_url, response.headers().get(LOCATION))
+                        .map_err(RetryDisposition::Terminal)?;
                 drop(host_permit);
                 continue;
             }
-            validate_success_status("GET", &current_url, &response)?;
+            validate_success_status("GET", &request_url, &response)?;
             if let Some(content_length) = response
                 .headers()
                 .get(CONTENT_LENGTH)
@@ -1137,7 +1144,7 @@ impl ApiClient {
                 if content_length > maximum_bytes as u64 {
                     return Err(RetryDisposition::Terminal(AppError::PortalSecurity(
                         format!(
-                            "Response from '{current_url}' declared {content_length} bytes, exceeding the {maximum_bytes}-byte limit"
+                            "Response from '{request_url}' declared {content_length} bytes, exceeding the {maximum_bytes}-byte limit"
                         ),
                     )));
                 }
@@ -2232,6 +2239,35 @@ fn with_query_parameters(url: &Url, values: &[(&str, String)]) -> Url {
     updated
 }
 
+fn next_redirect_url(current: &Url, location: &str) -> Result<Url, AppError> {
+    let mut target = current.join(location).map_err(|error| {
+        AppError::Network(format!(
+            "Redirect target '{location}' from '{current}' is invalid: {error}"
+        ))
+    })?;
+    // Fragments are not sent in an HTTP request. Removing them prevents a server from evading
+    // exact loop detection by alternating `#one` and `#two` on the same request target.
+    target.set_fragment(None);
+    Ok(target)
+}
+
+fn redirect_url_from_header(
+    current: &Url,
+    location: Option<&HeaderValue>,
+) -> Result<Url, AppError> {
+    let location = location.ok_or_else(|| {
+        AppError::Network(format!(
+            "Redirect from '{current}' omitted the Location header"
+        ))
+    })?;
+    let location = location.to_str().map_err(|error| {
+        AppError::Network(format!(
+            "Redirect from '{current}' contained an invalid Location header: {error}"
+        ))
+    })?;
+    next_redirect_url(current, location)
+}
+
 async fn validate_remote_url(dns: &PinnedDnsResolver, url: &Url) -> Result<(), AppError> {
     if url.scheme() != "https" {
         return Err(AppError::PortalSecurity(format!(
@@ -2415,19 +2451,23 @@ fn is_public_ipv6(address: Ipv6Addr) -> bool {
             segments[7] as u8,
         )
     };
-    // These prefixes carry an IPv4 destination inside an IPv6 address, so `::ffff:` is not the
-    // only spelling that reaches 127.0.0.1 or a LAN address. Judge each by the address it
-    // actually reaches.
-    //
-    // LIMIT(security): This arm implements RFC 6052's `64:ff9b::/96` embedding only, where the
-    // IPv4 destination is the last 32 bits. RFC 8215's `64:ff9b:1::/48` matches the same two
-    // leading segments but carries its destination in segments 3 and 4, so for such an address
-    // `embedded_v4()` judges bytes that are not the destination. Reachable only on a host with a
-    // NAT64 gateway configured for that prefix.
-    // TODO(security): Decompose `64:ff9b:1::/48` per RFC 8215 rather than sharing this arm, and
-    // decide explicitly whether Teredo `2001::/32` should be decomposed as well.
-    if segments[0] == 0x0064 && segments[1] == 0xff9b {
+    // RFC 8215 reserves 64:ff9b:1::/48 for local use and explicitly forbids assuming an embedded
+    // IPv4 layout. The IANA registry marks it not globally reachable, so a public-only client
+    // rejects the entire prefix rather than guessing which bytes a local translator interprets.
+    if segments[0] == 0x0064 && segments[1] == 0xff9b && segments[2] == 0x0001 {
+        return false;
+    }
+    // RFC 6052's distinct well-known 64:ff9b::/96 format carries IPv4 in the last 32 bits.
+    if segments[0] == 0x0064
+        && segments[1] == 0xff9b
+        && segments[2..6].iter().all(|segment| *segment == 0)
+    {
         return is_public_ipv4(embedded_v4());
+    }
+    // Teredo's 2001::/32 transition addresses route through relays and encode obfuscated endpoint
+    // state. They are not accepted as ordinary public destinations by this direct-fetch client.
+    if segments[0] == 0x2001 && segments[1] == 0 {
+        return false;
     }
     // 6to4: the IPv4 address sits in the second and third groups.
     if segments[0] == 0x2002 {
@@ -3213,10 +3253,12 @@ mod tests {
         // Each of these reaches an IPv4 address that `is_public_ipv4` rejects, spelled so that
         // `to_ipv4_mapped` returns None and the old prefix checks all pass.
         for candidate in [
-            "64:ff9b::7f00:1",        // NAT64 well-known prefix, 127.0.0.1
-            "64:ff9b::a00:1",         // NAT64 well-known prefix, 10.0.0.1
-            "2002:c0a8:1::",          // 6to4, 192.168.0.1
-            "::7f00:1",               // deprecated IPv4-compatible, 127.0.0.1
+            "64:ff9b::7f00:1",                      // NAT64 well-known prefix, 127.0.0.1
+            "64:ff9b::a00:1",                       // NAT64 well-known prefix, 10.0.0.1
+            "64:ff9b:1::808:808", // RFC 8215 local-use prefix, regardless of tail bytes
+            "2001:0:4136:e378:8000:63bf:3fff:fdd2", // Teredo transition address
+            "2002:c0a8:1::",      // 6to4, 192.168.0.1
+            "::7f00:1",           // deprecated IPv4-compatible, 127.0.0.1
             "::ffff:169.254.169.254", // link-local metadata service, for contrast
         ] {
             let address: Ipv6Addr = candidate.parse().expect("fixture address should parse");
@@ -3514,11 +3556,57 @@ mod url_security_tests {
         assert_eq!((0..=MAX_REDIRECTS).count(), MAX_REDIRECTS + 1);
     }
 
-    // TODO(test): The redirect loop itself has no coverage. `send_response_following_safe_redirects`
-    // is a private `&self` method needing a live socket, and the pinned resolver plus the
-    // loopback rejection above make a local test server unreachable by construction. Extracting
-    // the hop-advance step as a pure `fn next_redirect_url(current: &Url, location: &str)` would
-    // make the Location-header handling (missing, non-UTF-8, protocol-relative, scheme-changing,
-    // query-dropping) testable without a network. Not done here: it changes production structure,
-    // which is outside this session's remit.
+    #[test]
+    fn redirect_targets_resolve_relative_and_protocol_relative_locations() {
+        let current = url("https://93.184.216.34/records/pages/2?old=yes");
+        assert_eq!(
+            next_redirect_url(&current, "../3?new=yes#not-sent")
+                .expect("relative redirect")
+                .as_str(),
+            "https://93.184.216.34/records/3?new=yes"
+        );
+        assert_eq!(
+            next_redirect_url(&current, "//1.1.1.1/landing")
+                .expect("protocol-relative redirect")
+                .as_str(),
+            "https://1.1.1.1/landing"
+        );
+        assert_eq!(
+            next_redirect_url(&current, "/landing")
+                .expect("path redirect")
+                .as_str(),
+            "https://93.184.216.34/landing",
+            "a redirect Location owns the next query rather than retaining caller pagination"
+        );
+    }
+
+    #[test]
+    fn redirect_header_errors_are_explicit_and_offline_testable() {
+        let current = url("https://93.184.216.34/records");
+        let missing = redirect_url_from_header(&current, None).expect_err("header is required");
+        assert!(missing.to_string().contains("omitted the Location header"));
+
+        let non_utf8 = HeaderValue::from_bytes(b"/records/\xff").expect("opaque header bytes");
+        let invalid = redirect_url_from_header(&current, Some(&non_utf8))
+            .expect_err("Location must be visible text");
+        assert!(invalid.to_string().contains("invalid Location header"));
+
+        let malformed = HeaderValue::from_static("https://[");
+        assert!(redirect_url_from_header(&current, Some(&malformed)).is_err());
+    }
+
+    #[test]
+    fn redirect_request_identity_detects_cycles_without_conflating_query_removal() {
+        let mut visited = BTreeSet::new();
+        let paginated = url("https://93.184.216.34/records?page=2");
+        let landing = next_redirect_url(&paginated, "/records").expect("landing redirect");
+        let alternate = next_redirect_url(&landing, "/alternate").expect("alternate redirect");
+        let cycle =
+            next_redirect_url(&alternate, "/records#different-fragment").expect("cycle redirect");
+
+        assert!(visited.insert(paginated.as_str().to_string()));
+        assert!(visited.insert(landing.as_str().to_string()));
+        assert!(visited.insert(alternate.as_str().to_string()));
+        assert!(!visited.insert(cycle.as_str().to_string()));
+    }
 }
