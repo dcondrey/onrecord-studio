@@ -850,7 +850,10 @@ fn validate_page_content_streams(
     Ok(())
 }
 
-fn bounded_page_content(document: &Document, page_id: ObjectId) -> Result<Vec<u8>, String> {
+pub(crate) fn bounded_page_content(
+    document: &Document,
+    page_id: ObjectId,
+) -> Result<Vec<u8>, String> {
     let mut content = Vec::new();
     for identifier in document.get_page_contents(page_id) {
         let stream = document

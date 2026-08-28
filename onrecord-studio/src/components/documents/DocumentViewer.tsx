@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useC2PA } from '../../hooks/useC2PA';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { invokeCommand } from '../../ipc';
-import type { ProvenanceConfidence, ProvenanceVerificationRecord, RecoveredVersionProfile } from '../../types';
+import type { EvidenceBundle, ForensicFinding, ProvenanceConfidence, ProvenanceVerificationRecord, RecoveredVersionProfile } from '../../types';
 import UnredactorPanel from './UnredactorPanel';
 
 interface DocumentViewerProps {
@@ -28,8 +28,12 @@ export default function DocumentViewer({ documentId, portalKey, fileName, textCo
   const [verificationHistory, setVerificationHistory] = useState<ProvenanceVerificationRecord[] | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [residualAudit, setResidualAudit] = useState<EvidenceBundle | null>(null);
+  const [residualAuditError, setResidualAuditError] = useState<string | null>(null);
+  const [isAuditingResiduals, setIsAuditingResiduals] = useState(false);
   const historyGate = useLatestRequestGate();
   const recoveryGate = useLatestRequestGate();
+  const residualAuditGate = useLatestRequestGate();
 
   useEffect(() => {
     void verifyAssetProvenance(documentId, portalKey);
@@ -38,6 +42,7 @@ export default function DocumentViewer({ documentId, portalKey, fileName, textCo
   useEffect(() => {
     historyGate.invalidate();
     recoveryGate.invalidate();
+    residualAuditGate.invalidate();
     setRecoveryProfile(null);
     setRecoveryError(null);
     setIsRecovering(false);
@@ -48,7 +53,10 @@ export default function DocumentViewer({ documentId, portalKey, fileName, textCo
     setVerificationHistory(null);
     setHistoryError(null);
     setIsLoadingHistory(false);
-  }, [documentId, historyGate, portalKey, recoveryGate]);
+    setResidualAudit(null);
+    setResidualAuditError(null);
+    setIsAuditingResiduals(false);
+  }, [documentId, historyGate, portalKey, recoveryGate, residualAuditGate]);
 
   const toggleVerificationHistory = async () => {
     if (showVerificationHistory) {
@@ -102,6 +110,26 @@ export default function DocumentViewer({ documentId, portalKey, fileName, textCo
     }
   };
 
+  const inspectResidualEvidence = async () => {
+    const request = residualAuditGate.begin();
+    setIsAuditingResiduals(true);
+    setResidualAuditError(null);
+    try {
+      const bundle = await invokeCommand('audit_document_residual_evidence', {
+        documentId,
+        portalKey,
+        includeHypotheses: false,
+      });
+      if (residualAuditGate.isCurrent(request)) setResidualAudit(bundle);
+    } catch (reason) {
+      if (!residualAuditGate.isCurrent(request)) return;
+      setResidualAudit(null);
+      setResidualAuditError(String(reason));
+    } finally {
+      if (residualAuditGate.isCurrent(request)) setIsAuditingResiduals(false);
+    }
+  };
+
   return (
     <section className="flex h-full flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-950 shadow-md">
       <div className="flex items-center justify-between gap-4 border-b border-slate-800 bg-slate-900/40 px-4 py-3">
@@ -110,6 +138,9 @@ export default function DocumentViewer({ documentId, portalKey, fileName, textCo
           <div className="mt-1 font-mono text-[9px] text-slate-600">{portalKey} / document {documentId} · {fileSizeFormatted}</div>
         </div>
         <div className="flex items-center gap-2">
+          <button type="button" onClick={() => void inspectResidualEvidence()} disabled={isAuditingResiduals} className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-2.5 py-1 text-[9px] font-medium text-cyan-300 transition hover:border-cyan-300/40 disabled:cursor-wait disabled:opacity-60">
+            {isAuditingResiduals ? 'Auditing residuals…' : residualAudit ? 'Reaudit residuals' : 'Audit residual evidence'}
+          </button>
           {fileName.toLocaleLowerCase().endsWith('.pdf') && (
             <>
               <button type="button" onClick={() => setShowRedactionAudit((visible) => !visible)} aria-expanded={showRedactionAudit} className="rounded-full border border-indigo-400/25 bg-indigo-500/10 px-2.5 py-1 text-[9px] font-medium text-indigo-300 transition hover:border-indigo-300/40">
@@ -136,6 +167,7 @@ export default function DocumentViewer({ documentId, portalKey, fileName, textCo
       </div>
       {showVerificationHistory && <VerificationHistoryPanel records={verificationHistory} isLoading={isLoadingHistory} error={historyError} />}
       {(recoveryProfile || recoveryError) && <RevisionRecoveryPanel profile={recoveryProfile} error={recoveryError} />}
+      {(residualAudit || residualAuditError) && <ResidualEvidencePanel bundle={residualAudit} error={residualAuditError} />}
       {showRedactionAudit && <div className="border-b border-slate-800 p-3"><UnredactorPanel documentId={documentId} portalKey={portalKey} /></div>}
       {/* PERF(documents): Virtualize or paginate very large extracted text
           instead of mounting the entire chunk as one DOM text node. */}
@@ -144,6 +176,54 @@ export default function DocumentViewer({ documentId, portalKey, fileName, textCo
       </div>
     </section>
   );
+}
+
+function ResidualEvidencePanel({ bundle, error }: { bundle: EvidenceBundle | null; error: string | null }) {
+  if (error) {
+    return <div role="alert" className="border-b border-rose-500/20 bg-rose-500/[0.06] px-4 py-2 text-[9px] leading-relaxed text-rose-300">Residual-evidence audit unavailable: {error}</div>;
+  }
+  if (!bundle) return null;
+  return (
+    <section className="max-h-72 overflow-y-auto border-b border-cyan-400/15 bg-cyan-500/[0.03] px-4 py-3" aria-label="Residual evidence audit result">
+      <div className="flex flex-wrap items-center gap-2 text-[9px]">
+        <span className="font-semibold text-cyan-300">Residual evidence audit</span>
+        <span className={bundle.coverageComplete ? 'text-emerald-300' : 'text-amber-300'}>{bundle.coverageComplete ? 'Supported collector coverage complete' : 'Coverage incomplete'}</span>
+        <span className="text-slate-500">{bundle.findings.length.toLocaleString()} finding{bundle.findings.length === 1 ? '' : 's'}</span>
+      </div>
+      {bundle.warnings.length > 0 && <ul className="mt-2 space-y-1 text-[9px] text-amber-200/80">{bundle.warnings.map((warning) => <li key={warning}>{humanizeEvidenceKind(warning)}</li>)}</ul>}
+      {bundle.findings.length === 0 && <p className="mt-2 text-[9px] text-slate-500">No evidence was reported by the collectors that ran. An incomplete audit is not a negative finding.</p>}
+      <div className="mt-2 space-y-2">
+        {bundle.findings.map((finding, index) => <ResidualFinding key={`${finding.kind}-${finding.valueSha256 ?? index}-${index}`} finding={finding} />)}
+      </div>
+    </section>
+  );
+}
+
+function ResidualFinding({ finding }: { finding: ForensicFinding }) {
+  const location = [
+    finding.locator.pageNumber !== null ? `page ${finding.locator.pageNumber}` : null,
+    finding.locator.objectReference,
+    finding.locator.containerPart,
+    finding.locator.xmlPath,
+    finding.locator.byteOffset !== null ? `byte ${finding.locator.byteOffset.toLocaleString()}` : null,
+  ].filter(Boolean).join(' · ');
+  return (
+    <article className="rounded-lg border border-slate-800 bg-slate-950/70 p-2.5">
+      <div className="flex flex-wrap items-center gap-2 text-[8px] uppercase tracking-wider">
+        <span className="font-semibold text-slate-300">{humanizeEvidenceKind(finding.kind)}</span>
+        <span className="rounded border border-slate-700 px-1.5 py-0.5 text-slate-500">{finding.class}</span>
+        <span className="rounded border border-slate-700 px-1.5 py-0.5 text-slate-500">{finding.confidence}</span>
+      </div>
+      {location && <div className="mt-1 break-all font-mono text-[8px] text-slate-600">{location}</div>}
+      {finding.maskedPreview && <pre className="mt-2 max-h-24 overflow-auto whitespace-pre-wrap rounded border border-slate-800 p-2 font-mono text-[9px] text-slate-400">{finding.maskedPreview}</pre>}
+      <p className="mt-2 text-[9px] leading-relaxed text-slate-500">{finding.explanation}</p>
+      {finding.valueSha256 && <div className="mt-1 break-all font-mono text-[8px] text-slate-700">SHA-256 {finding.valueSha256}</div>}
+    </article>
+  );
+}
+
+function humanizeEvidenceKind(value: string) {
+  return value.split(/[_:]/).filter(Boolean).map((part) => part.toLocaleLowerCase()).join(' ');
 }
 
 function RevisionRecoveryPanel({ profile, error }: { profile: RecoveredVersionProfile | null; error: string | null }) {

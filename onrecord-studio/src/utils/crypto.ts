@@ -1,6 +1,6 @@
 export function isValidContentHash(hash: string): boolean {
-  // TODO(integrity): Add a typed digest representation so callers cannot pass
-  // an algorithm-ambiguous string where a specific hash is required.
+  // LIMIT(integrity): This compatibility predicate accepts SHA-256 in either hex or base64. Callers
+  // that persist a digest also retain the field/schema that specifies its representation.
   return isSha256Hex(hash) || isSha256Base64(hash);
 }
 
@@ -49,7 +49,7 @@ export function parseDidWeb(did: string): ParsedDid | null {
   }
 }
 
-function isSha256Hex(value: string) {
+export function isSha256Hex(value: string) {
   return value.length === 64 && Array.from(value).every((character) => {
     const code = character.toLocaleLowerCase().charCodeAt(0);
     return (code >= 48 && code <= 57) || (code >= 97 && code <= 102);

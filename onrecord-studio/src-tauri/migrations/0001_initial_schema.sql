@@ -48,6 +48,8 @@ CREATE TABLE IF NOT EXISTS portal_sync_runs (
     completed_at TEXT,
     status TEXT NOT NULL,
     pages_processed BIGINT NOT NULL DEFAULT 0,
+    crawl_pages_started BIGINT NOT NULL DEFAULT 0 CHECK (crawl_pages_started >= 0),
+    resources_started BIGINT NOT NULL DEFAULT 0 CHECK (resources_started >= 0),
     requests_processed BIGINT NOT NULL DEFAULT 0,
     documents_processed BIGINT NOT NULL DEFAULT 0,
     failures BIGINT NOT NULL DEFAULT 0,
@@ -207,6 +209,10 @@ CREATE TABLE IF NOT EXISTS documents (
     suspicious_data_density BIGINT NOT NULL DEFAULT 0 CHECK (suspicious_data_density IN (0, 1)),
     was_ocr_processed BIGINT DEFAULT 0,      -- Boolean flag check (0=False, 1=True)
     download_status TEXT DEFAULT 'pending',   -- 'pending', 'completed', 'failed'
+    extraction_status TEXT NOT NULL DEFAULT 'PENDING'
+        CHECK (extraction_status IN ('PENDING', 'SEARCHABLE', 'SALVAGED', 'EXPANDED', 'DEFERRED', 'DOWNLOADED', 'FAILED')),
+    extraction_format TEXT,
+    extraction_deferred_reason TEXT,
     
     PRIMARY KEY (id, portal_subdomain),
     -- Relations are validated by repository write paths.

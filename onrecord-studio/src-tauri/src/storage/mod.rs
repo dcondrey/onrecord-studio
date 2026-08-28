@@ -1,9 +1,8 @@
 //! Persistence layer orchestration tree registration.
 //!
 //! The application core is DuckDB. [`sqlite::DuckDbRepository`] owns the single durable writer and
-//! every canonical table; the module is still named `sqlite` for the same compatibility reason
-//! [`sqlite::SqliteRepository`] still exists, and renaming it would touch command and ingestion
-//! modules that do not otherwise change.
+//! every canonical table. The module retains its historical `sqlite` filename to avoid a noisy
+//! source-file move; its public repository terminology reflects the actual engine.
 //!
 //! SQLite appears only at boundaries, never in the core:
 //!
@@ -26,4 +25,4 @@ pub mod sqlite;
 
 pub use duckdb::DuckDbWorkspace;
 pub use pii::{mask_json_pii, mask_pii, PiiFinding, PiiKind, PiiMaskResult};
-pub use sqlite::{DocumentExtractionFinalization, DuckDbRepository, SqliteRepository};
+pub use sqlite::{DocumentExtractionFinalization, DuckDbRepository};

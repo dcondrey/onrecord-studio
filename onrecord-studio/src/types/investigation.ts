@@ -30,6 +30,9 @@ export type SourceLifecycleState = 'ACTIVE' | 'PAUSED' | 'REMOVED';
 export interface SavedSource {
   registration: PortalRegistration;
   lifecycleState: SourceLifecycleState;
+  /** Durable health survives startup events emitted before the webview listener is ready. */
+  healthStatus: string;
+  lastError: string | null;
 }
 
 /// What withdrawing a source discarded, and what it kept. The retained document count is carried
@@ -306,6 +309,9 @@ export interface RequestDocumentSummary {
   downloadStatus: string;
   rawFileSha256: string | null;
   extractedTextSha256: string | null;
+  extractionStatus: string;
+  extractionFormat: string | null;
+  extractionDeferredReason: string | null;
 }
 
 export interface DocumentTextChunk {
@@ -317,6 +323,34 @@ export interface DocumentTextChunk {
   totalCharacterCount: number;
   maskedText: string;
   maskedFindingCount: number;
+}
+
+export type EvidenceClass = 'preserved' | 'derived' | 'historical' | 'hypothesis';
+export type EvidenceConfidence = 'exact' | 'strong' | 'limited' | 'speculative';
+
+export interface EvidenceLocator {
+  containerPart: string | null;
+  objectReference: string | null;
+  byteOffset: number | null;
+  pageNumber: number | null;
+  bounds: [number, number, number, number] | null;
+  xmlPath: string | null;
+}
+
+export interface ForensicFinding {
+  class: EvidenceClass;
+  confidence: EvidenceConfidence;
+  kind: string;
+  locator: EvidenceLocator;
+  valueSha256: string | null;
+  maskedPreview: string | null;
+  explanation: string;
+}
+
+export interface EvidenceBundle {
+  findings: ForensicFinding[];
+  warnings: string[];
+  coverageComplete: boolean;
 }
 
 export interface RecoveredTextSegment {

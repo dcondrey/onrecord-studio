@@ -1,24 +1,16 @@
 /**
  * Canonical query types shared by every search surface.
  *
- * NOTE(query): This is intentionally independent from the current IPC payload.
- * The backend still accepts the legacy flat fields today; the adapter in
- * `compile.ts` keeps that boundary explicit until the richer contract lands.
+ * The supported release grammar maps exactly onto the bounded flat native query.
+ * `compile.ts` additionally exposes filters that cannot be represented because
+ * they are negated, duplicated, or ambiguous, so the UI can label them honestly.
  */
 
-export type QuerySource = 'visual' | 'qualifier' | 'natural-language' | 'imported';
+export type QuerySource = 'qualifier';
 
-export type QueryField =
-  | 'agency'
-  | 'portal'
-  | 'status'
-  | 'after'
-  | 'before'
-  | 'has'
-  | 'flag'
-  | 'type';
+export type QueryField = 'agency' | 'portal' | 'status' | 'flag';
 
-export type QueryOperator = 'equals' | 'contains' | 'after' | 'before' | 'exists';
+export type QueryOperator = 'equals';
 
 export interface QueryFilter {
   field: QueryField;

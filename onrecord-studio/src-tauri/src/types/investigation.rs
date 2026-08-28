@@ -259,6 +259,9 @@ pub struct RequestDocumentSummary {
     pub download_status: String,
     pub raw_file_sha256: Option<String>,
     pub extracted_text_sha256: Option<String>,
+    pub extraction_status: String,
+    pub extraction_format: Option<String>,
+    pub extraction_deferred_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

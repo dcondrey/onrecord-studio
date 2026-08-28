@@ -2,8 +2,8 @@ import { useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 
 export default function AgencySelector() {
-  // FEATURE(query): Support typeahead and multi-agency selection once the
-  // canonical QueryAst can represent an agency set without flattening IDs.
+  // One agency is the supported native filter. The active portal scopes otherwise-duplicate
+  // agency identifiers before they are offered to the user.
   const profiles = useAppStore((state) => state.agencyProfiles);
   const activePortalKey = useAppStore((state) => state.activePortalKey);
   const searchTerm = useAppStore((state) => state.searchTerm);

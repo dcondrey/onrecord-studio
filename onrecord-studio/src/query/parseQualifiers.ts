@@ -1,29 +1,19 @@
 import type { QueryAst, QueryField, QueryFilter, QueryIssue } from './types';
 
-const supportedFields = new Set<QueryField>([
-  'agency',
-  'portal',
-  'status',
-  'after',
-  'before',
-  'has',
-  'flag',
-  'type',
-]);
+const supportedFields = new Set<QueryField>(['agency', 'portal', 'status', 'flag']);
 
 /**
  * Parse the intentionally small, human-readable qualifier grammar.
  *
- * Supported now: `field:value`, `field:"quoted value"`, and `-field:value`.
- * TODO(query): Add parenthesized groups and explicit AND/OR once the backend
- * can accept an expression tree instead of the current flat IPC payload.
+ * Supported fields are deliberately limited to the four fields the native query executes.
+ * Negation is retained only so the compiler can label it as not applied.
  */
 export function parseQualifierQuery(input: string): QueryAst {
   const filters: QueryFilter[] = [];
   const issues: QueryIssue[] = [];
   const textTokens: string[] = [];
-  // Keep `agency:"City Attorney"` and standalone quoted phrases intact.
-  // TODO(query): Support escaped quotes and a cursor-aware tokenizer for the editor.
+  // Keep `agency:"City Attorney"` and standalone quoted phrases intact. A quote inside a value
+  // ends that value; the resulting extra token remains visible as searchable text.
   const tokenPattern = /(?:[A-Za-z][\w-]*:"[^"]*"|[^\s"]+|"[^"]*")+/g;
   const tokens = input.match(tokenPattern) ?? [];
 
@@ -48,7 +38,7 @@ export function parseQualifierQuery(input: string): QueryAst {
 
     filters.push({
       field,
-      operator: operatorFor(field),
+      operator: 'equals',
       value,
       negated: Boolean(minus),
       raw: token,
@@ -62,13 +52,6 @@ export function parseQualifierQuery(input: string): QueryAst {
     filters,
     issues,
   };
-}
-
-function operatorFor(field: QueryField) {
-  if (field === 'after') return 'after' as const;
-  if (field === 'before') return 'before' as const;
-  if (field === 'has') return 'exists' as const;
-  return 'equals' as const;
 }
 
 function stripQuotes(value: string) {

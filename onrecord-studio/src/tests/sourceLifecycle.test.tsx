@@ -80,7 +80,12 @@ const registration: PortalRegistration = {
 function mountWith(lifecycleState: SourceLifecycleState, syncing: boolean) {
   useAppStore.setState({
     portalUrlDraft: '',
-    portals: [{ registration, lifecycleState }],
+    portals: [{
+      registration,
+      lifecycleState,
+      healthStatus: 'verified',
+      lastError: null,
+    }],
     activePortalKey: registration.portalKey,
     syncingPortalKeys: syncing ? [registration.portalKey] : [],
     syncRunIdsByPortal: syncing ? { [registration.portalKey]: 'run-1' } : {},

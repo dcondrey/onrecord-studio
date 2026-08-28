@@ -1,14 +1,12 @@
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import './index.css';
+import { readThemePreference, resolveTheme } from './utils/theme';
 
-// TODO(theme): Centralize initial theme resolution with the Zustand store so
-// the first paint and hydrated application state cannot diverge.
-const savedTheme = window.localStorage.getItem('onrecord-theme');
-const initialTheme = savedTheme === 'dark'
-  || (savedTheme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches)
-  ? 'dark'
-  : 'light';
+const initialTheme = resolveTheme(
+  readThemePreference(),
+  window.matchMedia('(prefers-color-scheme: dark)').matches,
+);
 document.documentElement.dataset.theme = initialTheme;
 
 const rootElement = document.getElementById('root');

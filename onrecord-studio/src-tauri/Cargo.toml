@@ -29,6 +29,7 @@ chrono = { version = "0.4", features = ["serde"] }
 rusqlite = { version = "0.31", default-features = false, features = ["bundled", "limits"] }
 duckdb = { version = "1.10505.0", features = ["bundled"] }
 lopdf = "0.44"
+png = "0.18"
 calamine = { version = "0.36", features = ["dates"] }
 msg_parser = "0.3"
 zip = { version = "1.1.4", default-features = false, features = ["deflate", "bzip2", "zstd", "lzma"] }

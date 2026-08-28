@@ -11,6 +11,7 @@ import type {
   CorpusPatternQuery,
   DocumentProvenanceVerification,
   DocumentTextChunk,
+  EvidenceBundle,
   LegalAuthorityImport,
   LegalAuthorityImportResult,
   LegalBriefExportResult,
@@ -185,6 +186,10 @@ export interface NativeCommandMap {
   carve_document_version_history: {
     args: { documentId: number; portalKey: string };
     result: RecoveredVersionProfile;
+  };
+  audit_document_residual_evidence: {
+    args: { documentId: number; portalKey: string; includeHypotheses?: boolean | null };
+    result: EvidenceBundle;
   };
 }
 

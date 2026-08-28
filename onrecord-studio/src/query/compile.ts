@@ -3,9 +3,8 @@ import type { LegacyQueryFilters, QueryAgencyOption, QueryAst, QueryFilter } fro
 /**
  * Compatibility adapter for `query_audit_records`.
  *
- * NOTE(query): agency names, portal qualifiers, dates, document existence,
- * and boolean groups are intentionally returned as deferred filters until the
- * Rust query command gains typed support. They must never be silently dropped.
+ * Status, flag, portal, and a uniquely resolvable agency map onto the native command. Negated,
+ * duplicated, or ambiguous filters are returned explicitly instead of being silently dropped.
  */
 export function compileToLegacyQuery(
   query: QueryAst,
@@ -67,9 +66,3 @@ export function compileToLegacyQuery(
     deferredFilters,
   };
 }
-
-/**
- * TODO(query): Replace this adapter with a typed IPC query payload once the
- * Rust command supports QueryAst. Keeping this function named and isolated
- * makes that migration a one-file boundary change.
- */

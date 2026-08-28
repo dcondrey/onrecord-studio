@@ -15,11 +15,12 @@ pub use ingest::{
     start_portal_sync,
 };
 pub use investigation::{
-    carve_document_version_history, evaluate_request_legal_compliance,
-    get_agency_performance_profiles, get_cross_agency_correlations, get_document_text_chunk,
-    import_auxiliary_events, import_legal_authority, list_document_provenance_verifications,
-    list_legal_authorities, list_request_documents, list_request_legal_findings,
-    mask_sensitive_text, register_statutory_extension, review_legal_finding,
-    verify_document_provenance, verify_document_redaction_integrity,
+    audit_document_residual_evidence, carve_document_version_history,
+    evaluate_request_legal_compliance, get_agency_performance_profiles,
+    get_cross_agency_correlations, get_document_text_chunk, import_auxiliary_events,
+    import_legal_authority, list_document_provenance_verifications, list_legal_authorities,
+    list_request_documents, list_request_legal_findings, mask_sensitive_text,
+    register_statutory_extension, review_legal_finding, verify_document_provenance,
+    verify_document_redaction_integrity,
 };
 pub use query::query_audit_records;

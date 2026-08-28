@@ -119,6 +119,9 @@ struct RequestDocumentRow {
     download_status: String,
     raw_file_sha256: Option<String>,
     extracted_text_sha256: Option<String>,
+    extraction_status: String,
+    extraction_format: Option<String>,
+    extraction_deferred_reason: Option<String>,
 }
 
 struct LegalBriefRow {
@@ -223,6 +226,12 @@ pub struct PortalSyncRunFinalization<'a> {
     pub failures: u64,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct IngestionSchedulerCounts {
+    pub crawl_pages_started: u64,
+    pub resources_started: u64,
+}
+
 #[derive(Debug)]
 pub struct ClaimedIngestionTask {
     pub frontier_id: i64,
@@ -248,12 +257,6 @@ pub struct DuckDbRepository {
     conn: Arc<Mutex<Connection>>,
     database_path: Arc<PathBuf>,
 }
-
-/// Compatibility alias retained while command modules migrate their terminology. The backing
-/// engine is DuckDB; SQLite remains supported only by the standalone import parser.
-// TODO(storage-naming): Remove this compatibility alias after Tauri command state types are
-// renamed to `DuckDbRepository`; the implementation is already entirely DuckDB-backed.
-pub type SqliteRepository = DuckDbRepository;
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -572,6 +575,20 @@ impl DuckDbRepository {
         // Readers still coalesce, because DuckDB's own backfill for an added column is what this
         // depends on and it is not worth trusting silently.
         ensure_column(&conn, "portals", "lifecycle_state", "TEXT DEFAULT 'ACTIVE'")?;
+        // These admission counters bound an interrupted crawl across process restarts. Older runs
+        // predate durable counting, so zero is the only evidence-backed backfill available.
+        ensure_column(
+            &conn,
+            "portal_sync_runs",
+            "crawl_pages_started",
+            "BIGINT DEFAULT 0",
+        )?;
+        ensure_column(
+            &conn,
+            "portal_sync_runs",
+            "resources_started",
+            "BIGINT DEFAULT 0",
+        )?;
         // Provenance results gained an explicit confidence classification. Rows written before it
         // existed cannot be reclassified after the fact -- the file they described may since have
         // changed -- so they keep a sentinel rather than being backfilled into a real state.
@@ -648,6 +665,33 @@ impl DuckDbRepository {
             "suspicious_data_density",
             "BIGINT DEFAULT 0",
         )?;
+        ensure_column(
+            &conn,
+            "documents",
+            "extraction_status",
+            "TEXT DEFAULT 'PENDING'",
+        )?;
+        ensure_column(&conn, "documents", "extraction_format", "TEXT")?;
+        ensure_column(&conn, "documents", "extraction_deferred_reason", "TEXT")?;
+        conn.execute_batch(
+            "UPDATE documents
+             SET extraction_status = CASE
+                WHEN EXISTS (
+                    SELECT 1 FROM documents_fts
+                    WHERE documents_fts.document_id = documents.id
+                      AND documents_fts.portal_subdomain = documents.portal_subdomain
+                ) THEN 'SEARCHABLE'
+                WHEN LOWER(COALESCE(download_status, 'pending')) = 'completed' THEN 'DOWNLOADED'
+                WHEN LOWER(COALESCE(download_status, 'pending')) = 'failed' THEN 'FAILED'
+                ELSE 'PENDING'
+             END
+             WHERE extraction_status IS NULL OR extraction_status = 'PENDING';",
+        )
+        .map_err(|error| {
+            AppError::Storage(format!(
+                "Failed to backfill document extraction state: {error}"
+            ))
+        })?;
         backfill_legal_authority_versions(&conn)?;
         migrate_archived_statutory_findings(&conn)?;
         conn.execute_batch(
@@ -740,6 +784,107 @@ impl DuckDbRepository {
         Ok(())
     }
 
+    pub async fn ingestion_scheduler_counts(
+        &self,
+        run_id: &str,
+        portal_key: &str,
+    ) -> Result<IngestionSchedulerCounts, AppError> {
+        let conn = self.conn.lock().await;
+        let (crawl_pages_started, resources_started): (i64, i64) = conn
+            .query_row(
+                "SELECT crawl_pages_started, resources_started
+                 FROM portal_sync_runs
+                 WHERE run_id = ?1 AND portal_subdomain = ?2",
+                params![run_id, portal_key],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .map_err(|error| {
+                AppError::Storage(format!(
+                    "Failed to load ingestion scheduler counters: {error}"
+                ))
+            })?;
+        Ok(IngestionSchedulerCounts {
+            crawl_pages_started: u64::try_from(crawl_pages_started).map_err(|_| {
+                AppError::Storage("Stored crawl page counter was negative".to_string())
+            })?,
+            resources_started: u64::try_from(resources_started).map_err(|_| {
+                AppError::Storage("Stored resource counter was negative".to_string())
+            })?,
+        })
+    }
+
+    pub async fn reserve_ingestion_crawl_page(
+        &self,
+        run_id: &str,
+        portal_key: &str,
+        maximum: usize,
+    ) -> Result<Option<u64>, AppError> {
+        self.reserve_ingestion_budget(run_id, portal_key, "crawl_pages_started", maximum)
+            .await
+    }
+
+    pub async fn reserve_ingestion_resource(
+        &self,
+        run_id: &str,
+        portal_key: &str,
+        maximum: usize,
+    ) -> Result<Option<u64>, AppError> {
+        self.reserve_ingestion_budget(run_id, portal_key, "resources_started", maximum)
+            .await
+    }
+
+    async fn reserve_ingestion_budget(
+        &self,
+        run_id: &str,
+        portal_key: &str,
+        counter_column: &'static str,
+        maximum: usize,
+    ) -> Result<Option<u64>, AppError> {
+        debug_assert!(matches!(
+            counter_column,
+            "crawl_pages_started" | "resources_started"
+        ));
+        let maximum = i64::try_from(maximum).map_err(|_| {
+            AppError::PortalCapacity(
+                "Ingestion scheduler budget exceeds DuckDB capacity".to_string(),
+            )
+        })?;
+        let conn = self.conn.lock().await;
+        let statement = format!(
+            "UPDATE portal_sync_runs
+             SET {counter_column} = {counter_column} + 1
+             WHERE run_id = ?1 AND portal_subdomain = ?2 AND status = 'RUNNING'
+               AND {counter_column} < ?3"
+        );
+        let updated = conn
+            .execute(&statement, params![run_id, portal_key, maximum])
+            .map_err(|error| {
+                AppError::Storage(format!(
+                    "Failed to reserve ingestion scheduler capacity: {error}"
+                ))
+            })?;
+        if updated == 0 {
+            return Ok(None);
+        }
+        let current: i64 = conn
+            .query_row(
+                &format!(
+                    "SELECT {counter_column} FROM portal_sync_runs
+                     WHERE run_id = ?1 AND portal_subdomain = ?2"
+                ),
+                params![run_id, portal_key],
+                |row| row.get(0),
+            )
+            .map_err(|error| {
+                AppError::Storage(format!(
+                    "Failed to read reserved ingestion scheduler capacity: {error}"
+                ))
+            })?;
+        Ok(Some(u64::try_from(current).map_err(|_| {
+            AppError::Storage("Stored ingestion scheduler counter was negative".to_string())
+        })?))
+    }
+
     pub async fn record_source_task_failure(
         &self,
         run_id: &str,
@@ -794,6 +939,39 @@ impl DuckDbRepository {
                 })?;
             Ok(())
         })
+    }
+
+    /// Persists a failure that happens before startup recovery can create a replacement run.
+    ///
+    /// These failures cannot use `source_ingestion_failures`, whose `run_id` is a required foreign
+    /// key. The portal health row is the durable source of truth exposed by `SavedSource`, while
+    /// live telemetry provides the same detail to an already-open webview.
+    pub async fn record_source_recovery_failure(
+        &self,
+        source_key: &str,
+        stage: &str,
+        error: &AppError,
+    ) -> Result<(), AppError> {
+        let message = format!("Startup recovery failed during {stage}: {error}");
+        let conn = self.conn.lock().await;
+        let updated = conn
+            .execute(
+                "UPDATE portals
+                 SET health_status = 'degraded', last_error = ?1
+                 WHERE subdomain = ?2",
+                params![message, source_key],
+            )
+            .map_err(|database_error| {
+                AppError::Storage(format!(
+                    "Failed to persist startup recovery failure for {source_key}: {database_error}"
+                ))
+            })?;
+        if updated != 1 {
+            return Err(AppError::Storage(format!(
+                "Cannot persist startup recovery failure for unknown source '{source_key}'"
+            )));
+        }
+        Ok(())
     }
 
     pub async fn persist_ingestion_frontier_task(
@@ -1049,6 +1227,49 @@ impl DuckDbRepository {
     ) -> Result<u64, AppError> {
         let mut conn = self.conn.lock().await;
         execute_transaction(&mut conn, "orphaned frontier adoption", |transaction| {
+            let inherited_counts: (i64, i64) = transaction
+                .query_row(
+                    "SELECT
+                        COALESCE(MAX(previous.crawl_pages_started), 0),
+                        COALESCE(MAX(previous.resources_started), 0)
+                     FROM portal_sync_runs previous
+                     WHERE previous.portal_subdomain = ?1
+                       AND previous.status <> 'RUNNING'
+                       AND EXISTS (
+                           SELECT 1 FROM ingestion_task_frontier frontier
+                           WHERE frontier.run_id = previous.run_id
+                             AND frontier.source_key = ?1
+                       )",
+                    params![source_key],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!(
+                        "Failed to recover ingestion scheduler counters: {error}"
+                    ))
+                })?;
+            let counter_update = transaction
+                .execute(
+                    "UPDATE portal_sync_runs
+                     SET crawl_pages_started = ?1, resources_started = ?2
+                     WHERE run_id = ?3 AND portal_subdomain = ?4 AND status = 'RUNNING'",
+                    params![
+                        inherited_counts.0,
+                        inherited_counts.1,
+                        new_run_id,
+                        source_key
+                    ],
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!(
+                        "Failed to restore ingestion scheduler counters: {error}"
+                    ))
+                })?;
+            if counter_update != 1 {
+                return Err(AppError::Storage(format!(
+                    "New ingestion run '{new_run_id}' was unavailable during frontier adoption"
+                )));
+            }
             let adopted = transaction
                 .execute(
                     "UPDATE ingestion_task_frontier
@@ -1453,7 +1674,9 @@ impl DuckDbRepository {
                 .execute(
                     "UPDATE documents SET file_size = ?1, local_path = ?2, raw_file_sha256 = ?3,
                     shannon_entropy = ?4, entropy_sample_bytes = ?5,
-                    suspicious_data_density = ?6, download_status = ?7
+                    suspicious_data_density = ?6, download_status = ?7,
+                    extraction_status = 'DOWNLOADED', extraction_format = NULL,
+                    extraction_deferred_reason = NULL
                  WHERE id = ?8 AND portal_subdomain = ?9",
                     params![
                         file_size,
@@ -1478,6 +1701,63 @@ impl DuckDbRepository {
             synchronize_density_audit(tx, document_id, subdomain)?;
             Ok(())
         })
+    }
+
+    pub async fn mark_document_extraction_state(
+        &self,
+        document_id: u64,
+        portal_subdomain: &str,
+        status: &str,
+        format: Option<&str>,
+        deferred_reason: Option<&str>,
+    ) -> Result<(), AppError> {
+        if !matches!(
+            status,
+            "SEARCHABLE" | "SALVAGED" | "EXPANDED" | "DEFERRED" | "DOWNLOADED" | "FAILED"
+        ) {
+            return Err(AppError::DataParsing(format!(
+                "Unsupported document extraction status '{status}'"
+            )));
+        }
+        if portal_subdomain.trim().is_empty()
+            || format.is_some_and(|value| value.trim().is_empty() || value.len() > 128)
+            || deferred_reason.is_some_and(|value| value.trim().is_empty() || value.len() > 2_048)
+            || (status == "DEFERRED" && deferred_reason.is_none())
+            || (status != "DEFERRED" && deferred_reason.is_some())
+        {
+            return Err(AppError::DataParsing(
+                "Document extraction state is invalid".to_string(),
+            ));
+        }
+        let document_id = i64::try_from(document_id).map_err(|_| {
+            AppError::DataParsing("Document identifier exceeds DuckDB capacity".to_string())
+        })?;
+        let conn = self.conn.lock().await;
+        let updated = conn
+            .execute(
+                "UPDATE documents
+                 SET extraction_status = ?1, extraction_format = ?2,
+                     extraction_deferred_reason = ?3
+                 WHERE id = ?4 AND portal_subdomain = ?5",
+                params![
+                    status,
+                    format,
+                    deferred_reason,
+                    document_id,
+                    portal_subdomain
+                ],
+            )
+            .map_err(|error| {
+                AppError::Storage(format!(
+                    "Failed to persist document extraction state: {error}"
+                ))
+            })?;
+        if updated != 1 {
+            return Err(AppError::Storage(format!(
+                "Document extraction state update affected {updated} rows for {portal_subdomain}/{document_id}"
+            )));
+        }
+        Ok(())
     }
 
     /// Commits a PublicRequest object and its sub-relations inside an isolated ACID transaction block.
@@ -1889,7 +2169,9 @@ impl DuckDbRepository {
                         "SELECT
                     id, portal_subdomain, COALESCE(file_name, 'Untitled document'),
                     file_size, content_type, visibility, COALESCE(download_status, 'pending'),
-                    raw_file_sha256, extracted_text_sha256
+                    raw_file_sha256, extracted_text_sha256,
+                    COALESCE(extraction_status, 'PENDING'), extraction_format,
+                    extraction_deferred_reason
                  FROM documents
                  WHERE request_id = ?1
                    AND portal_subdomain = ?2
@@ -1931,6 +2213,9 @@ impl DuckDbRepository {
                 download_status: row.download_status,
                 raw_file_sha256: row.raw_file_sha256,
                 extracted_text_sha256: row.extracted_text_sha256,
+                extraction_status: row.extraction_status,
+                extraction_format: row.extraction_format,
+                extraction_deferred_reason: row.extraction_deferred_reason,
             });
         }
         Ok(documents)
@@ -2222,7 +2507,9 @@ impl DuckDbRepository {
                 entropy_sample_bytes = ?7,
                 suspicious_data_density = ?8,
                 download_status = ?9,
-                extracted_text_projection_sha256 = ?12
+                extracted_text_projection_sha256 = ?12,
+                extraction_status = 'SEARCHABLE', extraction_format = NULL,
+                extraction_deferred_reason = NULL
              WHERE id = ?10 AND portal_subdomain = ?11",
                     params![
                         stored_file_size,
@@ -2451,7 +2738,8 @@ impl DuckDbRepository {
                     "SELECT subdomain, display_name, base_url, origin_url, requests_endpoint,
                     requests_pointer, metadata_pointer, page_parameter, page_size_parameter,
                     COALESCE(verified_at, created_at), source_kind,
-                    COALESCE(lifecycle_state, 'ACTIVE')
+                    COALESCE(lifecycle_state, 'ACTIVE'),
+                    COALESCE(health_status, 'verified'), last_error
                  FROM portals
                  WHERE requests_endpoint <> ''
                    AND COALESCE(lifecycle_state, 'ACTIVE') <> 'REMOVED'
@@ -2483,6 +2771,8 @@ impl DuckDbRepository {
                         lifecycle_state: SourceLifecycleState::from_stored(
                             &row.get::<_, String>(11)?,
                         ),
+                        health_status: row.get(12)?,
+                        last_error: row.get(13)?,
                     })
                 })
                 .map_err(|error| AppError::Storage(format!("Failed to query portals: {error}")))?;
@@ -4044,6 +4334,9 @@ fn map_request_document_row(row: &Row<'_>) -> duckdb::Result<RequestDocumentRow>
         download_status: row.get(6)?,
         raw_file_sha256: row.get(7)?,
         extracted_text_sha256: row.get(8)?,
+        extraction_status: row.get(9)?,
+        extraction_format: row.get(10)?,
+        extraction_deferred_reason: row.get(11)?,
     })
 }
 
@@ -5753,12 +6046,14 @@ mod tests {
 
     use duckdb::params;
 
+    use crate::error::AppError;
     use crate::types::PublicRequest;
 
     use super::{
         compute_extracted_text_sha256, cpra_calendar_confidence_basis_points,
         validate_entropy_metadata, DocumentDownloadFinalization, DocumentExtractionFinalization,
-        PortalSyncRunFinalization, ProvenanceEvidenceFile, SourceLifecycleState, SqliteRepository,
+        DuckDbRepository, IngestionSchedulerCounts, PortalSyncRunFinalization,
+        ProvenanceEvidenceFile, SourceLifecycleState,
     };
 
     const MIGRATION: &str = include_str!("../../migrations/0001_initial_schema.sql");
@@ -5768,12 +6063,12 @@ mod tests {
     const RAW_FILE_SHA256: &str =
         "1111111111111111111111111111111111111111111111111111111111111111";
 
-    async fn repository_with_document() -> SqliteRepository {
+    async fn repository_with_document() -> DuckDbRepository {
         file_repository_with_document(Path::new(":memory:")).await
     }
 
-    async fn file_repository_with_document(path: &Path) -> SqliteRepository {
-        let repository = SqliteRepository::new(path).expect("DuckDB core must open");
+    async fn file_repository_with_document(path: &Path) -> DuckDbRepository {
+        let repository = DuckDbRepository::new(path).expect("DuckDB core must open");
         repository
             .run_migrations(MIGRATION)
             .await
@@ -5911,7 +6206,7 @@ mod tests {
     }
 
     async fn set_document_file(
-        repository: &SqliteRepository,
+        repository: &DuckDbRepository,
         local_path: &Path,
         recorded_digest: Option<&str>,
     ) {
@@ -5932,7 +6227,7 @@ mod tests {
     }
 
     async fn record_manifest_claim(
-        repository: &SqliteRepository,
+        repository: &DuckDbRepository,
         file_hash_sha256: &str,
         claims_signature: bool,
     ) {
@@ -6609,7 +6904,7 @@ mod tests {
     #[tokio::test]
     async fn migrations_restore_columns_missing_from_an_older_database() {
         let repository =
-            SqliteRepository::new(Path::new(":memory:")).expect("DuckDB core must open");
+            DuckDbRepository::new(Path::new(":memory:")).expect("DuckDB core must open");
         {
             let connection = repository.conn.lock().await;
             // `CREATE TABLE IF NOT EXISTS` in the base schema leaves both of these alone, so the
@@ -6643,8 +6938,24 @@ mod tests {
                         download_status TEXT DEFAULT 'pending',
                         PRIMARY KEY (id, portal_subdomain)
                      );
+                     CREATE TABLE portal_sync_runs (
+                        run_id TEXT PRIMARY KEY,
+                        portal_subdomain TEXT NOT NULL,
+                        started_at TEXT NOT NULL,
+                        completed_at TEXT,
+                        status TEXT NOT NULL,
+                        pages_processed BIGINT NOT NULL DEFAULT 0,
+                        requests_processed BIGINT NOT NULL DEFAULT 0,
+                        documents_processed BIGINT NOT NULL DEFAULT 0,
+                        failures BIGINT NOT NULL DEFAULT 0
+                     );
                      INSERT INTO portals
-                     VALUES ('legacy-portal', 'Legacy Portal', 'https://legacy.test');",
+                     VALUES ('legacy-portal', 'Legacy Portal', 'https://legacy.test');
+                     INSERT INTO portal_sync_runs (
+                        run_id, portal_subdomain, started_at, status
+                     ) VALUES (
+                        'legacy-run', 'legacy-portal', '2026-08-24T12:00:00Z', 'CANCELLED'
+                     );",
                 )
                 .expect("the pre-upgrade tables must be creatable");
             connection
@@ -6675,6 +6986,15 @@ mod tests {
         assert_eq!(pointer, "/requests");
         assert_eq!(health, "verified");
         assert_eq!(kind, "NEXT_REQUEST");
+        let scheduler_counts: (i64, i64) = connection
+            .query_row(
+                "SELECT crawl_pages_started, resources_started
+                 FROM portal_sync_runs WHERE run_id = 'legacy-run'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("legacy scheduler counters must be backfilled explicitly");
+        assert_eq!(scheduler_counts, (0, 0));
 
         // `prepare_legacy_legal_schema` runs before the base schema and is gated on the table
         // already existing, so its five shims are unreachable on a fresh database and were never
@@ -6826,6 +7146,27 @@ mod tests {
             .await
             .expect("frontier lease should succeed")
             .expect("first task should be leased");
+        assert_eq!(
+            repository
+                .reserve_ingestion_crawl_page("run-before-crash", PORTAL_SUBDOMAIN, 2)
+                .await
+                .unwrap(),
+            Some(1)
+        );
+        assert_eq!(
+            repository
+                .reserve_ingestion_crawl_page("run-before-crash", PORTAL_SUBDOMAIN, 2)
+                .await
+                .unwrap(),
+            Some(2)
+        );
+        assert_eq!(
+            repository
+                .reserve_ingestion_resource("run-before-crash", PORTAL_SUBDOMAIN, 1)
+                .await
+                .unwrap(),
+            Some(1)
+        );
 
         let interrupted = repository
             .recover_interrupted_source_keys()
@@ -6844,6 +7185,24 @@ mod tests {
                 .expect("interrupted tasks should be adopted"),
             2
         );
+        assert_eq!(
+            repository
+                .ingestion_scheduler_counts("run-after-restart", PORTAL_SUBDOMAIN)
+                .await
+                .unwrap(),
+            IngestionSchedulerCounts {
+                crawl_pages_started: 2,
+                resources_started: 1,
+            }
+        );
+        assert_eq!(
+            repository
+                .reserve_ingestion_crawl_page("run-after-restart", PORTAL_SUBDOMAIN, 2)
+                .await
+                .unwrap(),
+            None,
+            "restart must not reset the configured page budget"
+        );
         for _ in 0..2 {
             let task = repository
                 .claim_ingestion_frontier_task("run-after-restart", PORTAL_SUBDOMAIN)
@@ -6860,6 +7219,41 @@ mod tests {
             .await
             .expect("empty recovered frontier query should succeed")
             .is_none());
+    }
+
+    #[tokio::test]
+    async fn startup_recovery_failure_is_exposed_through_saved_source_health() {
+        let repository = repository_with_document().await;
+        {
+            let connection = repository.conn.lock().await;
+            connection
+                .execute(
+                    "UPDATE portals SET requests_endpoint = '/requests' WHERE subdomain = ?1",
+                    params![PORTAL_SUBDOMAIN],
+                )
+                .expect("source fixture must be listable");
+        }
+        repository
+            .record_source_recovery_failure(
+                PORTAL_SUBDOMAIN,
+                "connector recipe loading",
+                &AppError::DataParsing("recipe bytes are invalid".to_string()),
+            )
+            .await
+            .expect("recovery failure must persist");
+
+        let saved = repository
+            .list_portal_registrations()
+            .await
+            .expect("saved sources must load");
+        assert_eq!(saved.len(), 1);
+        assert_eq!(saved[0].health_status, "degraded");
+        let last_error = saved[0]
+            .last_error
+            .as_deref()
+            .expect("durable error must be exposed");
+        assert!(last_error.contains("connector recipe loading"));
+        assert!(last_error.contains("recipe bytes are invalid"));
     }
 
     /// A run the operator stopped ends `CANCELLED`, not `INTERRUPTED`, yet its frontier is just as
@@ -6956,7 +7350,7 @@ mod tests {
         );";
 
         let repository =
-            SqliteRepository::new(Path::new(":memory:")).expect("DuckDB core must open");
+            DuckDbRepository::new(Path::new(":memory:")).expect("DuckDB core must open");
         {
             let connection = repository.conn.lock().await;
             connection
@@ -7081,9 +7475,10 @@ mod tests {
 
         {
             let connection = repository.conn.lock().await;
-            let document_state: (i64, String, String, i64, f64, i64, i64, String) = connection
-                .query_row(
-                    "SELECT
+            let document_state: (i64, String, String, i64, f64, i64, i64, String, String) =
+                connection
+                    .query_row(
+                        "SELECT
                         file_size,
                         local_path,
                         extracted_text_sha256,
@@ -7091,24 +7486,26 @@ mod tests {
                         shannon_entropy,
                         entropy_sample_bytes,
                         suspicious_data_density,
-                        download_status
+                        download_status,
+                        extraction_status
                      FROM documents
                      WHERE id = ?1 AND portal_subdomain = ?2",
-                    params![DOCUMENT_ID, PORTAL_SUBDOMAIN],
-                    |row| {
-                        Ok((
-                            row.get(0)?,
-                            row.get(1)?,
-                            row.get(2)?,
-                            row.get(3)?,
-                            row.get(4)?,
-                            row.get(5)?,
-                            row.get(6)?,
-                            row.get(7)?,
-                        ))
-                    },
-                )
-                .expect("document state must exist");
+                        params![DOCUMENT_ID, PORTAL_SUBDOMAIN],
+                        |row| {
+                            Ok((
+                                row.get(0)?,
+                                row.get(1)?,
+                                row.get(2)?,
+                                row.get(3)?,
+                                row.get(4)?,
+                                row.get(5)?,
+                                row.get(6)?,
+                                row.get(7)?,
+                                row.get(8)?,
+                            ))
+                        },
+                    )
+                    .expect("document state must exist");
             assert_eq!(
                 document_state,
                 (
@@ -7120,6 +7517,7 @@ mod tests {
                     9_876,
                     1,
                     "completed".to_string(),
+                    "SEARCHABLE".to_string(),
                 )
             );
 
@@ -7524,7 +7922,7 @@ mod tests {
     /// The operator sees a crash instead of a sentence naming what happened.
     #[tokio::test]
     async fn a_core_with_thirty_two_bit_identifiers_is_refused_with_its_reason() {
-        let repository = SqliteRepository::new(Path::new(":memory:")).expect("DuckDB must open");
+        let repository = DuckDbRepository::new(Path::new(":memory:")).expect("DuckDB must open");
         {
             let connection = repository.conn.lock().await;
             connection
@@ -7639,7 +8037,7 @@ mod tests {
     async fn never_computed_entropy_reads_absent_while_a_measured_zero_reads_zero() {
         let repository = repository_with_document().await;
 
-        async fn recorded_entropy(repository: &SqliteRepository) -> Option<f64> {
+        async fn recorded_entropy(repository: &DuckDbRepository) -> Option<f64> {
             let connection = repository.conn.lock().await;
             connection
                 .query_row(

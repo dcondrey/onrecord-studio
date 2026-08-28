@@ -48,7 +48,8 @@ pub fn run() {
             commands::investigation::list_request_documents,
             commands::investigation::get_document_text_chunk,
             commands::investigation::verify_document_redaction_integrity,
-            commands::investigation::carve_document_version_history
+            commands::investigation::carve_document_version_history,
+            commands::investigation::audit_document_residual_evidence
         ])
         .setup(|app| {
             setup::configure_onrecord_studio_runtime(app)?;

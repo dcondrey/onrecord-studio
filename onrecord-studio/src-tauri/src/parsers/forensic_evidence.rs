@@ -1,11 +1,13 @@
-//! Shared evidence contracts for the future residual-redaction audit pipeline.
+//! Shared evidence contracts and bounded dispatch for residual-evidence audits.
 //!
 //! This module intentionally contains data contracts and bounded collection helpers only.
 //! It must not mutate the source file, rewrite a container, or label an inferred candidate as
 //! recovered text. Keep preserved bytes, deterministic derivatives, and hypotheses distinct.
 
 use crate::error::AppError;
-use serde::Serialize;
+use crate::integrity::sha256_hex;
+use crate::storage::pii::mask_pii;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -63,22 +65,129 @@ pub struct EvidenceBundle {
 
 /// Both flags default to the conservative posture: no speculative hypotheses and no unmasked
 /// values in the returned bundle.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
 pub struct ForensicAuditOptions {
     pub include_hypotheses: bool,
     pub preserve_raw_values: bool,
 }
 
-/// Entry point reserved for a format-neutral audit coordinator.
-pub fn audit_document_path<P: AsRef<Path>>(
-    _path: P,
-    _options: ForensicAuditOptions,
-) -> Result<EvidenceBundle, AppError> {
-    // TODO(forensics): Detect the container, dispatch bounded collectors, and merge findings.
-    // NOTE(security): Preserve the original hash and never expose unmasked values by default.
-    Ok(EvidenceBundle {
-        coverage_complete: false,
-        warnings: vec!["FORMAT_NEUTRAL_AUDIT_NOT_IMPLEMENTED".to_string()],
-        ..EvidenceBundle::default()
+pub(crate) fn finding_for_text(
+    class: EvidenceClass,
+    confidence: EvidenceConfidence,
+    kind: impl Into<String>,
+    locator: EvidenceLocator,
+    value: &str,
+    explanation: impl Into<String>,
+    options: ForensicAuditOptions,
+) -> Result<ForensicFinding, AppError> {
+    let preview: String = value.chars().take(240).collect();
+    let masked_preview = if options.preserve_raw_values {
+        preview
+    } else {
+        mask_pii(&preview)?.masked_text
+    };
+    Ok(ForensicFinding {
+        class,
+        confidence,
+        kind: kind.into(),
+        locator,
+        value_sha256: Some(sha256_hex(value.as_bytes())),
+        masked_preview: Some(masked_preview),
+        explanation: explanation.into(),
     })
+}
+
+pub(crate) fn finding_for_bytes(
+    class: EvidenceClass,
+    confidence: EvidenceConfidence,
+    kind: impl Into<String>,
+    locator: EvidenceLocator,
+    value: &[u8],
+    text_preview: Option<&str>,
+    explanation: impl Into<String>,
+    options: ForensicAuditOptions,
+) -> Result<ForensicFinding, AppError> {
+    let masked_preview = match text_preview {
+        Some(preview) => {
+            let bounded: String = preview.chars().take(240).collect();
+            Some(if options.preserve_raw_values {
+                bounded
+            } else {
+                mask_pii(&bounded)?.masked_text
+            })
+        }
+        None => None,
+    };
+    Ok(ForensicFinding {
+        class,
+        confidence,
+        kind: kind.into(),
+        locator,
+        value_sha256: Some(sha256_hex(value)),
+        masked_preview,
+        explanation: explanation.into(),
+    })
+}
+
+pub(crate) fn merge_bundle(target: &mut EvidenceBundle, mut source: EvidenceBundle) {
+    target.findings.append(&mut source.findings);
+    target.warnings.append(&mut source.warnings);
+    target.coverage_complete &= source.coverage_complete;
+}
+
+/// Format-neutral coordinator. Each collector is bounded independently and unsupported formats
+/// return an explicit incomplete-coverage warning rather than a false negative.
+pub fn audit_document_path<P: AsRef<Path>>(
+    path: P,
+    options: ForensicAuditOptions,
+) -> Result<EvidenceBundle, AppError> {
+    // NOTE(security): Preserve the original hash and never expose unmasked values by default.
+    use crate::parsers::format::{detect_document_format, DocumentFormat};
+    let path = path.as_ref();
+    let file_name = path.file_name().and_then(|value| value.to_str());
+    if file_name.is_some_and(|name| name.to_ascii_lowercase().ends_with(".svg")) {
+        return crate::parsers::svg::audit_svg_file(path, options);
+    }
+    let format = detect_document_format(path, file_name, None)?;
+    match format {
+        DocumentFormat::Pdf => {
+            let document = lopdf::Document::load(path).map_err(|error| {
+                AppError::DataParsing(format!("FORENSIC_PDF_LOAD_FAILED: {error}"))
+            })?;
+            let mut bundle =
+                crate::parsers::pdf_auxiliary::collect_pdf_auxiliary_evidence(&document, options)?;
+            merge_bundle(
+                &mut bundle,
+                crate::parsers::layout_side_channel::assess_glyph_position_leak(
+                    &document, options,
+                )?,
+            );
+            Ok(bundle)
+        }
+        DocumentFormat::WordPackage
+        | DocumentFormat::PresentationPackage
+        | DocumentFormat::OpenDocumentText
+        | DocumentFormat::OpenDocumentPresentation => {
+            crate::parsers::office_audit::audit_office_package(path, format, options)
+        }
+        DocumentFormat::Image => {
+            let mut bundle = crate::parsers::raster_audit::audit_raster_file(path, options)?;
+            merge_bundle(
+                &mut bundle,
+                crate::parsers::pixelation::analyze_pixelation(path, options)?,
+            );
+            Ok(bundle)
+        }
+        DocumentFormat::Zip => {
+            let bytes =
+                crate::parsers::source::read_regular_file(path, "FORENSIC_ZIP", 128 * 1024 * 1024)?;
+            crate::parsers::compression_oracle::assess_package_compression_risk(&bytes, options)
+        }
+        other => Ok(EvidenceBundle {
+            coverage_complete: false,
+            warnings: vec![format!("FORMAT_AUDIT_UNSUPPORTED:{other:?}")],
+            ..EvidenceBundle::default()
+        }),
+    }
 }

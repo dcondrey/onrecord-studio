@@ -87,6 +87,7 @@ export default function Header() {
   const syncRunIdsByPortal = useAppStore((state) => state.syncRunIdsByPortal);
   const workspaceView = useAppStore((state) => state.workspaceView);
   const theme = useAppStore((state) => state.theme);
+  const audioAlertsEnabled = useAppStore((state) => state.audioAlertsEnabled);
   const setPortalUrlDraft = useAppStore((state) => state.setPortalUrlDraft);
   const setPortalSyncState = useAppStore((state) => state.setPortalSyncState);
   const setActivePortal = useAppStore((state) => state.setActivePortal);
@@ -96,6 +97,7 @@ export default function Header() {
   const appendSyncLog = useAppStore((state) => state.appendSyncLog);
   const setSidebarOpen = useAppStore((state) => state.setSidebarOpen);
   const setTheme = useAppStore((state) => state.setTheme);
+  const setAudioAlertsEnabled = useAppStore((state) => state.setAudioAlertsEnabled);
   const pendingSourceRepair = useAppStore((state) => state.pendingSourceRepair);
   const setPendingSourceRepair = useAppStore((state) => state.setPendingSourceRepair);
   const [isDiscovering, setIsDiscovering] = useState(false);
@@ -413,7 +415,6 @@ export default function Header() {
         onChange={(event) => {
           const next = BUILT_IN_SOURCE_OPTIONS.find((source) => source.id === event.target.value) ?? BUILT_IN_SOURCE_OPTIONS[0];
           setSelectedSourceId(next.id);
-          if (next.startingUrl) setPortalUrlDraft(next.startingUrl);
           if (error) setError(null);
         }}
         disabled={isDiscovering}
@@ -540,6 +541,16 @@ export default function Header() {
         <div className="hidden min-w-[300px] max-w-[720px] flex-1 lg:flex">{connectorForm('portal-url-desktop')}</div>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            title={audioAlertsEnabled ? 'Disable completion and failure sounds' : 'Enable completion and failure sounds'}
+            aria-label={audioAlertsEnabled ? 'Disable audio alerts' : 'Enable audio alerts'}
+            aria-pressed={audioAlertsEnabled}
+            onClick={() => setAudioAlertsEnabled(!audioAlertsEnabled)}
+            className={cn('focus-ring grid h-9 w-9 place-items-center rounded-xl border transition', audioAlertsEnabled ? 'border-cyan-400/30 bg-cyan-400/10 text-cyan-300' : 'border-slate-800 bg-slate-900/50 text-slate-500 hover:text-slate-300')}
+          >
+            <Icon name="volume" className="h-3.5 w-3.5" />
+          </button>
           <div className="theme-switcher flex items-center rounded-xl border p-0.5" role="group" aria-label="Appearance">
             <button
               type="button"

@@ -7,16 +7,9 @@ interface MetadataCardProps {
 }
 
 export default function MetadataCard({ sha256, contentType, visibility, downloadStatus, fileSize }: MetadataCardProps) {
-  // TODO(integrity): Reuse the shared hash validator from `utils/crypto` so
-  // metadata presentation and backend validation cannot diverge.
   // FEATURE(integrity): Add a copyable digest format selector and provenance
   // verification status beside the recorded hash.
-  const digestIsValid = sha256 !== null
-    && sha256.length === 64
-    && Array.from(sha256).every((character) => {
-      const code = character.toLocaleLowerCase().charCodeAt(0);
-      return (code >= 48 && code <= 57) || (code >= 97 && code <= 102);
-    });
+  const digestIsValid = sha256 !== null && isSha256Hex(sha256);
 
   return (
     <section className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/20 p-4 font-mono text-[10px]" aria-label="Document integrity metadata">
@@ -46,3 +39,4 @@ function formatFileSize(value: number | null) {
   if (value < 1024 * 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
   return `${(value / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
+import { isSha256Hex } from '../../utils/crypto';

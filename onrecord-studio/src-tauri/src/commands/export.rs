@@ -5,7 +5,7 @@ use crate::commands::validation::{
 use crate::error::AppError;
 use crate::integrity::sha256_hex;
 use crate::storage::pii::mask_pii;
-use crate::storage::sqlite::{EvidenceDocument, LegalBriefEvidence, SqliteRepository};
+use crate::storage::sqlite::{DuckDbRepository, EvidenceDocument, LegalBriefEvidence};
 use crate::types::{LegalBriefExportResult, LegalComplianceFinding, TimelineAnomalyMarker};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -51,7 +51,7 @@ pub async fn export_legal_brief(
     portal_key: String,
     target_path: Option<String>,
     author_name: Option<String>,
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, DuckDbRepository>,
     report_directory: State<'_, PathBuf>,
 ) -> Result<LegalBriefExportResult, AppError> {
     let portal_key = validate_portal_key(&portal_key)?;

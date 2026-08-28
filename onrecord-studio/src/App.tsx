@@ -10,6 +10,8 @@ import { useAppStore } from './store/useAppStore';
 import { invokeCommand } from './ipc';
 import type { IngestionTelemetry } from './types';
 import { shouldReportFailure, type ReportedFailure } from './utils/repeatedFailure';
+import { resolveTheme, THEME_STORAGE_KEY } from './utils/theme';
+import { useAudioAlerts } from './hooks/useAudioAlerts';
 
 const RUNTIME_FAILURE_REMINDER_MILLISECONDS = 60_000;
 
@@ -30,8 +32,10 @@ export default function App() {
   const setAnalyticsError = useAppStore((state) => state.setAnalyticsError);
   const setPendingSourceRepair = useAppStore((state) => state.setPendingSourceRepair);
   const runtimeRefreshFailure = useRef<ReportedFailure | null>(null);
+  const audioAlertsEnabled = useAppStore((state) => state.audioAlertsEnabled);
+  const { triggerFailureAlert, triggerSuccessAlert } = useAudioAlerts(audioAlertsEnabled);
 
-  const resolvedTheme = theme === 'auto' ? systemTheme : theme;
+  const resolvedTheme = resolveTheme(theme, systemTheme === 'dark');
   const platform = getPlatform();
 
   useEffect(() => {
@@ -49,7 +53,7 @@ export default function App() {
       'content',
       resolvedTheme === 'dark' ? '#050a12' : '#eef2f6',
     );
-    window.localStorage.setItem('onrecord-theme', theme);
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
     if (isTauri()) void setNativeTheme(theme === 'auto' ? null : theme);
   }, [resolvedTheme, theme]);
 
@@ -186,10 +190,12 @@ export default function App() {
           appendSyncLog(`${payload.payload.portalKey}: synchronization pool stopped.`);
           void refreshRuntimes();
           void refreshAnalytics();
+          triggerSuccessAlert();
           break;
         case 'taskFailed':
           incrementMetric('anomaliesFound');
           appendSyncLog(`${payload.payload.portalKey}: ${payload.payload.targetId} failed — ${payload.payload.errorMsg}`);
+          triggerFailureAlert();
           break;
         case 'taskRetryScheduled':
           appendSyncLog(`${payload.payload.portalKey}: retrying ${payload.payload.targetId} in ${payload.payload.delaySeconds}s after attempt ${payload.payload.attempt} — ${payload.payload.errorMsg}`);
@@ -239,7 +245,7 @@ export default function App() {
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
       stopListening?.();
     };
-  }, [addBytesTransferred, appendSyncLog, incrementMetric, refreshAnalytics, refreshRuntimes, setPendingSourceRepair, setPortalSyncState, upsertPortal]);
+  }, [addBytesTransferred, appendSyncLog, incrementMetric, refreshAnalytics, refreshRuntimes, setPendingSourceRepair, setPortalSyncState, triggerFailureAlert, triggerSuccessAlert, upsertPortal]);
 
   return (
     <div data-theme={resolvedTheme} data-platform={platform} className="app-theme flex h-screen w-screen overflow-hidden antialiased">

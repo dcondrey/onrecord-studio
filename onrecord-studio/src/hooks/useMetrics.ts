@@ -2,34 +2,28 @@ import { useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
 
 export function useMetrics() {
-  // TODO(metrics): Replace the fixed 50-record page estimate with telemetry
-  // from the actual page-size and source pagination metadata.
-  const { metrics, filteredResults } = useAppStore();
+  const metrics = useAppStore((state) => state.metrics);
+  const activeSearchMatchesCount = useAppStore((state) => state.filteredResults.length);
+  const runtimes = useAppStore((state) => state.portalRuntimes);
 
-  // PERF(metrics): Prefer narrow Zustand selectors if this hook is mounted in
-  // high-frequency event views; the current selector observes the whole store.
   return useMemo(() => {
-    const totalProcessedAssets = metrics.pagesProcessed * 50; // Based on standard page size bounds
-    const discoveryConversionRatio = totalProcessedAssets > 0 
-      ? parseFloat(((metrics.documentsDownloaded / totalProcessedAssets) * 100).toFixed(1))
-      : 0;
-
-    const systemicAnomalyRiskScore = metrics.documentsDownloaded > 0
-      ? parseFloat(((metrics.anomaliesFound / metrics.documentsDownloaded) * 100).toFixed(1))
-      : 0;
+    const runtime = runtimes.reduce((summary, current) => ({
+      requestsProcessed: summary.requestsProcessed + current.requestsProcessed,
+      documentsProcessed: summary.documentsProcessed + current.documentsProcessed,
+      completedTasks: summary.completedTasks + current.completedTasks,
+      failedTasks: summary.failedTasks + current.failedTasks,
+      activeTasks: summary.activeTasks + current.activeTasks,
+      queuedTasks: summary.queuedTasks + current.queuedTasks,
+    }), { requestsProcessed: 0, documentsProcessed: 0, completedTasks: 0, failedTasks: 0, activeTasks: 0, queuedTasks: 0 });
+    const finishedTasks = runtime.completedTasks + runtime.failedTasks;
 
     return {
-      // Raw state vectors
       ...metrics,
-      activeSearchMatchesCount: filteredResults.length,
-      
-      // Derived statistical trends
-      estimatedTotalAssetsEvaluated: totalProcessedAssets,
-      attachmentExtractionRatePercentage: discoveryConversionRatio,
-      calculatedRiskScorePercentage: systemicAnomalyRiskScore,
-      
-      // Qualitative triage flags
-      requiresPriorityIntervention: systemicAnomalyRiskScore > 15.0 || metrics.anomaliesFound > 20
+      ...runtime,
+      activeSearchMatchesCount,
+      taskFailureRatePercentage: finishedTasks > 0
+        ? Number(((runtime.failedTasks / finishedTasks) * 100).toFixed(1))
+        : 0,
     };
-  }, [metrics, filteredResults]);
+  }, [activeSearchMatchesCount, metrics, runtimes]);
 }

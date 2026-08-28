@@ -753,3 +753,47 @@ select:not(:disabled) {
     transition-duration: 0.01ms !important;
   }
 }
+
+@media (prefers-contrast: more) {
+  :root {
+    --panel-surface: #ffffff;
+    --panel-hover: #ffffff;
+    --hairline: rgba(23, 32, 51, 0.58);
+    --hairline-strong: rgba(23, 32, 51, 0.86);
+    --control-border: #334155;
+    --text-muted: #334155;
+    --text-faint: #334155;
+  }
+
+  :root[data-theme="dark"] {
+    --panel-surface: #07101c;
+    --panel-hover: #0f1d30;
+    --hairline: rgba(232, 238, 247, 0.62);
+    --hairline-strong: rgba(232, 238, 247, 0.9);
+    --control-border: #cbd5e1;
+    --text-muted: #e2e8f0;
+    --text-faint: #cbd5e1;
+  }
+
+  .focus-ring:focus-visible {
+    outline-width: 3px;
+  }
+}
+
+@media (forced-colors: active) {
+  *,
+  *::before,
+  *::after {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  :is(button, input, select, textarea, [role="button"]):focus-visible {
+    outline: 3px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  :is(button, input, select, textarea) {
+    border-color: ButtonText !important;
+  }
+}

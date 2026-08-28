@@ -13,7 +13,7 @@ limit, context compaction, or a change of contributor. Search for `TODO(` and
 
 Before the unfinished feature surfaces were restored, the last complete verification run was
 green: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
-and `cargo test --workspace` (226 unit tests passing, 0 failing, plus doctests). Frontend
+and `cargo test --workspace` (229 unit tests passing, 0 failing, plus doctests). Frontend
 verification was also green: `npm run lint`, `npm run test:unit` (70 tests), `npm run build`,
 and `npm run check:ipc` (26 commands, 18 telemetry events, 6 verification states). These counts
 are historical evidence, not a claim about the restored worktree; verification must be rerun.
@@ -37,8 +37,8 @@ are historical evidence, not a claim about the restored worktree; verification m
       Tests cover cleanup, idempotence, committed-object preservation, and symlink refusal.
 - [x] Re-audited two stale lower-severity claims. `Retry-After` is already capped at 120 seconds in
       `src-tauri/src/portal/client.rs`, and robots policy is fetched, cached, and enforced by the
-      crawl host-policy path. Non-persisted scheduler state remains a separate lower-priority
-      concern.
+      crawl host-policy path. Scheduler page/resource admissions are now persisted per run and
+      inherited when an interrupted frontier is resumed.
 - [x] Re-audited source-guidance boundaries. The frontend now enforces the backend's 100-rule and
       1,024-character per-rule limits before submission, and malformed NextRequest timestamps are
       treated as absent dates instead of being compared lexically. The valid document-carried date
@@ -78,6 +78,18 @@ are historical evidence, not a claim about the restored worktree; verification m
       preserving the retryability and attempt ceilings while preventing rows that fail together
       from replaying in lockstep. Crawl/resource identity sets now stop growing at their configured
       page/resource budgets instead of retaining an unbounded set of discovered strings.
+- [x] Recursive container work persists its managed root directory in every durable child task.
+      The worker remeasures the real tree after each archive or message expansion and rejects trees
+      above 2 GiB or 16,000 entries, so nesting and process restart cannot reset the aggregate cap.
+- [x] Source stop now joins in-flight parser work before finalizing or deleting frontier state.
+      Workers skip refill/self-retirement once cancellation is observed, avoiding both detached
+      blocking writers and provisioning-lock re-entry during teardown.
+- [x] Crawl page/resource admissions are atomic DuckDB counters on the sync run. Frontier adoption
+      carries the prior run's counters forward; migration tests cover the zero backfill for runs
+      written before the counters existed and restart tests prove an exhausted budget stays closed.
+- [x] Analytics workspace lock acquisition has a five-second bound and an explicit busy result.
+      The obsolete `SqliteRepository` compatibility alias and all misleading command/test state
+      types have been replaced with `DuckDbRepository`.
 
 ### Continuation — 2026-08-27 evening
 
@@ -301,26 +313,21 @@ at the line; two carry running proof-of-concept binaries.
       breaks something real. The alternatives are (a) leave permissive and record provenance,
       (b) restrict to the source's registrable domain, which needs a public-suffix list,
       (c) an explicit `follow_cross_host_downloads` policy flag, and a default has to be chosen.
-- [ ] `queue.rs:1561` (`abort_workers`) — cancellation does not stop in-flight extraction.
-      `spawn_blocking` tasks cannot be aborted, so the pause and remove paths write CANCELLED and
-      return while extraction runs on.
-      Thread an `AtomicBool` into the tar/zip/OCR loops.
+- [x] In-flight extraction is no longer detached during cancellation. Source teardown signals the
+      workers, joins their current task, then finalizes the run; cancelled workers bypass frontier
+      refill and self-retirement so they cannot re-enter the provisioning lock held by teardown.
 - [x] `.msg` nesting now spends `container_depth`; parser export identity and format detection use
       the same filename, and the obsolete durable backstop field is compatibility-tested.
-- [ ] `queue.rs` container expansion — per-member and per-depth bounds are enforced, but no single
-      aggregate byte budget spans an entire recursively extracted tree. Committed attachment and
-      container trees are retained evidence, not disposable caches; lifecycle policy must preserve
-      references rather than deleting these paths blindly.
+- [x] Container expansion enforces one 2 GiB/16,000-entry budget across the on-disk recursive tree.
+      The persisted root path lets resumed child tasks apply the same budget after restart.
 - [x] Structured JSON parsing and recursive discovery were moved off the async runtime and now
       return only bounded scheduling summaries.
-- [ ] Lower: scheduler counters are not persisted across restart. `visited_urls`/resource identity
-      sets are bounded by configured page/resource budgets, durable retries are jittered,
-      untrusted SQLite enables defensive/cell-size controls, `Retry-After` is capped at 120 seconds,
-      robots policy is fetched/cached/enforced, and abandoned uncommitted staging is reconciled
-      safely at startup.
-- [ ] `source.rs:45` `BUG(evidence)` — assessed **not a real defect**: the code already re-stats the
-      open descriptor and re-verifies the byte count. The residual race needs local write access to
-      the evidence store, which is outside the untrusted-input threat model. Remove the marker.
+- [x] Scheduler page/resource counters persist on each sync run and transfer during frontier
+      adoption. Identity sets are bounded by the configured budgets; retries are jittered; SQLite
+      evidence uses defensive/cell-size controls; `Retry-After` is capped; robots policy is
+      enforced; and abandoned uncommitted staging is reconciled at startup.
+- [x] Removed the stale `BUG(evidence)` marker: the source parser already re-stats the open
+      descriptor and re-verifies the byte count.
 
 **Frontend**
 - [x] `LegalCompliancePanel.tsx` — reports unavailable rather than "No active findings recorded"
@@ -337,12 +344,10 @@ at the line; two carry running proof-of-concept binaries.
       the same state. Superseded `finally` blocks are guarded as well as success/error branches.
 
 **Storage**
-- [ ] `duckdb.rs` `TODO(concurrency)` — write serialization and live sibling reads are correct, but
-      an analytics query during heavy ingest waits on the mutex with no timeout, queue-depth signal,
-      or cancellation.
-- [ ] `SqliteRepository` → `DuckDbRepository` rename. The alias is gone from `setup.rs`; the
-      remaining call sites are the command modules' `State<'_, SqliteRepository>`. Do this alone —
-      it touches every command signature.
+- [x] Analytics workspace lock acquisition returns an explicit busy error after five seconds
+      instead of waiting indefinitely. A focused contention regression pins the bound.
+- [x] Renamed every command, ingestion, storage export, and test reference to `DuckDbRepository` and
+      removed the obsolete `SqliteRepository` alias.
 
 ### Blocked on David — needs a commit decision, not a code change
 

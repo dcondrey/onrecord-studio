@@ -7,6 +7,7 @@ use std::path::Path;
 use uuid::Uuid;
 
 use crate::error::AppError;
+use crate::parsers::staging::cleanup_failed_extraction;
 
 const MAX_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_ENTRY_COUNT: usize = 2_000;
@@ -58,18 +59,17 @@ pub fn extract_zip_container_with_manifest<A: AsRef<Path>, D: AsRef<Path>>(
     let relative_files = match extract_into(archive_path, &staging) {
         Ok(files) => files,
         Err(error) => {
-            let _ = fs::remove_dir_all(&staging);
-            return Err(error);
+            return Err(cleanup_failed_extraction(&staging, "ZIP", error));
         }
     };
 
     if let Err(error) = fs::rename(&staging, destination) {
-        let _ = fs::remove_dir_all(&staging);
-        return Err(AppError::Internal(format!(
+        let commit_error = AppError::Internal(format!(
             "ZIP_COMMIT_FAILED: failed to commit '{}' as '{}': {error}",
             staging.display(),
             destination.display()
-        )));
+        ));
+        return Err(cleanup_failed_extraction(&staging, "ZIP", commit_error));
     }
 
     Ok(relative_files

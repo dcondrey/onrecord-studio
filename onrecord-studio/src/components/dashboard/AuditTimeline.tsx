@@ -1,29 +1,19 @@
 import { useAppStore } from '../../store/useAppStore';
 
 export default function AuditTimeline() {
-  const { syncLogs } = useAppStore();
-
-  // BUG(audit): Event matching is currently case-sensitive while ingestion
-  // messages are not normalized; some completed events may never enter this log.
-  // TODO(audit): Parse typed telemetry instead of inferring timeline semantics
-  // from display strings.
-
-  // Extract only the operational change notices or warnings from terminal streams
-  const timelineEvents = syncLogs
-    .filter(log => log.includes('COMPLETED') || log.includes('Warning'))
-    .slice(0, 5);
+  const timelineEvents = useAppStore((state) => state.syncLogs.slice(0, 8));
 
   return (
     <div className="p-4 bg-slate-950/30 border border-slate-900 rounded-xl space-y-4 font-sans select-none">
       <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-        Case Audit Log Matrix
+        Recent operational activity
       </div>
       <div className="relative border-l border-slate-800 ml-2 pl-4 space-y-4">
         {timelineEvents.length === 0 ? (
-          <p className="text-xs text-slate-600 italic pl-1">Awaiting data injection to sequence timeline modifications...</p>
+          <p className="pl-1 text-xs italic text-slate-600">No activity has been recorded in this session.</p>
         ) : (
           timelineEvents.map((event, idx) => {
-            const isWarning = event.includes('Warning');
+            const isWarning = isErrorLog(event);
             return (
               <div key={idx} className="relative group">
                 {/* Node connector ring anchor */}
@@ -31,11 +21,8 @@ export default function AuditTimeline() {
                   isWarning ? 'border-amber-500 shadow-sm shadow-amber-500/20' : 'border-indigo-500'
                 }`} />
                 <div className="space-y-0.5">
-                  <div className="text-[11px] font-medium text-slate-300 leading-tight">
-                    {isWarning ? 'Compliance Boundary Deviation Detected' : 'Operational Synchronization Finalized'}
-                  </div>
-                  <div className="text-[10px] font-mono text-slate-500 truncate max-w-md">
-                    {event.substring(event.indexOf(']') + 2)}
+                  <div className="max-w-md break-words font-mono text-[10px] text-slate-500">
+                    {event}
                   </div>
                 </div>
               </div>
@@ -45,4 +32,9 @@ export default function AuditTimeline() {
       </div>
     </div>
   );
+}
+
+function isErrorLog(value: string) {
+  const normalized = value.toLocaleLowerCase();
+  return normalized.includes('failed') || normalized.includes('error') || normalized.includes('warning');
 }

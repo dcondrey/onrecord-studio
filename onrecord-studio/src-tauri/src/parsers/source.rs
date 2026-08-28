@@ -42,9 +42,6 @@ pub(crate) fn read_regular_file(
             path.display()
         ))
     })?;
-    // BUG(evidence): The inspection and open are separate filesystem operations, so a same-size
-    // replacement can win this race. Open with no-follow semantics and compare the opened file's
-    // stable identity to the inspected entry before treating the bytes as a forensic snapshot.
     let file = File::open(path).map_err(|error| {
         AppError::Storage(format!(
             "{format}_READ_FAILED: failed to open '{}': {error}",
@@ -57,12 +54,13 @@ pub(crate) fn read_regular_file(
             path.display()
         ))
     })?;
-    if !opened.is_file() || opened.len() != inspected.len() {
+    if !opened.is_file() || !same_file_snapshot(&inspected, &opened) {
         return Err(changed_while_reading(path, format));
     }
 
     let mut bytes = Vec::with_capacity(expected_size);
-    file.take(maximum_bytes + 1)
+    (&file)
+        .take(maximum_bytes + 1)
         .read_to_end(&mut bytes)
         .map_err(|error| {
             AppError::Storage(format!(
@@ -73,7 +71,35 @@ pub(crate) fn read_regular_file(
     if bytes.len() != expected_size {
         return Err(changed_while_reading(path, format));
     }
+    let after_read = file.metadata().map_err(|error| {
+        AppError::Storage(format!(
+            "{format}_INSPECTION_FAILED: failed to re-inspect opened source '{}': {error}",
+            path.display()
+        ))
+    })?;
+    if !same_file_snapshot(&opened, &after_read) {
+        return Err(changed_while_reading(path, format));
+    }
     Ok(bytes)
+}
+
+#[cfg(unix)]
+fn same_file_snapshot(left: &Metadata, right: &Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    left.dev() == right.dev()
+        && left.ino() == right.ino()
+        && left.len() == right.len()
+        && left.mtime() == right.mtime()
+        && left.mtime_nsec() == right.mtime_nsec()
+        && left.ctime() == right.ctime()
+        && left.ctime_nsec() == right.ctime_nsec()
+}
+
+#[cfg(not(unix))]
+fn same_file_snapshot(left: &Metadata, right: &Metadata) -> bool {
+    left.len() == right.len()
+        && left.modified().ok() == right.modified().ok()
+        && left.created().ok() == right.created().ok()
 }
 
 fn changed_while_reading(path: &Path, format: &'static str) -> AppError {
@@ -85,6 +111,7 @@ fn changed_while_reading(path: &Path, format: &'static str) -> AppError {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
     use std::io::Write;
 
     use tempfile::NamedTempFile;
@@ -109,5 +136,19 @@ mod tests {
 
         assert!(read_regular_file(empty.path(), "TEST", 5).is_err());
         assert!(read_regular_file(oversized.path(), "TEST", 4).is_err());
+    }
+
+    #[test]
+    fn stable_identity_distinguishes_same_size_files() {
+        let mut first = NamedTempFile::new().unwrap();
+        let mut second = NamedTempFile::new().unwrap();
+        first.write_all(b"same").unwrap();
+        second.write_all(b"size").unwrap();
+        let first_metadata = fs::metadata(first.path()).unwrap();
+        let second_metadata = fs::metadata(second.path()).unwrap();
+        assert!(!super::same_file_snapshot(
+            &first_metadata,
+            &second_metadata
+        ));
     }
 }

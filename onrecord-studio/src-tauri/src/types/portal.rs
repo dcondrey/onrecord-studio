@@ -118,6 +118,10 @@ impl SourceLifecycleState {
 pub struct SavedSource {
     pub registration: PortalRegistration,
     pub lifecycle_state: SourceLifecycleState,
+    /// Durable source-health state. Recovery failures are carried here because startup telemetry
+    /// can be emitted before the webview has attached its event listener.
+    pub health_status: String,
+    pub last_error: Option<String>,
 }
 
 /// What withdrawing a source actually discarded, and what it kept.

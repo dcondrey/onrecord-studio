@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { cn } from '../../utils/cn';
 import Icon from '../ui/icons';
+import { useMetrics } from '../../hooks/useMetrics';
+import AuditTimeline from './AuditTimeline';
 
 type LogFilter = 'all' | 'errors';
 
@@ -13,7 +15,7 @@ export default function ActivityDashboard() {
   const runtimes = useAppStore((state) => state.portalRuntimes);
   const syncLogs = useAppStore((state) => state.syncLogs);
   const syncingPortalKeys = useAppStore((state) => state.syncingPortalKeys);
-  const metrics = useAppStore((state) => state.metrics);
+  const metrics = useMetrics();
   const resetMetrics = useAppStore((state) => state.resetTelemetryMetrics);
   const [filter, setFilter] = useState<LogFilter>('all');
   const [query, setQuery] = useState('');
@@ -21,13 +23,6 @@ export default function ActivityDashboard() {
     if (filter === 'errors' && !isErrorLog(log)) return false;
     return !query.trim() || log.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
   }), [filter, query, syncLogs]);
-
-  const totals = useMemo(() => runtimes.reduce((summary, runtime) => ({
-    queued: summary.queued + runtime.queuedTasks,
-    completed: summary.completed + runtime.completedTasks,
-    failed: summary.failed + runtime.failedTasks,
-    requests: summary.requests + runtime.requestsProcessed,
-  }), { queued: 0, completed: 0, failed: 0, requests: 0 }), [runtimes]);
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -45,10 +40,10 @@ export default function ActivityDashboard() {
         </section>
 
         <section aria-label="Session throughput" className="instrument-strip app-panel grid grid-cols-1 overflow-hidden sm:grid-cols-2 xl:grid-cols-4">
-          <ActivityMetric label="Requests processed" value={totals.requests} detail="Current runtime snapshots" color="text-cyan-300" accent="bg-cyan-400" />
-          <ActivityMetric label="Tasks completed" value={totals.completed} detail={`${totals.queued.toLocaleString()} waiting in queues`} color="text-emerald-300" accent="bg-emerald-400" />
+          <ActivityMetric label="Requests processed" value={metrics.requestsProcessed} detail="Current runtime snapshots" color="text-cyan-300" accent="bg-cyan-400" />
+          <ActivityMetric label="Tasks completed" value={metrics.completedTasks} detail={`${metrics.queuedTasks.toLocaleString()} waiting in queues`} color="text-emerald-300" accent="bg-emerald-400" />
           <ActivityMetric label="Documents saved" value={metrics.documentsDownloaded} detail={formatBytes(metrics.bytesTransferred)} color="text-indigo-300" accent="bg-indigo-400" />
-          <ActivityMetric label="Task exceptions" value={totals.failed + metrics.anomaliesFound} detail="Failures and anomalies" color="text-rose-300" accent="bg-rose-400" />
+          <ActivityMetric label="Task exceptions" value={metrics.failedTasks + metrics.anomaliesFound} detail={`${metrics.taskFailureRatePercentage.toFixed(1)}% of finished tasks failed`} color="text-rose-300" accent="bg-rose-400" />
         </section>
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
@@ -94,6 +89,7 @@ export default function ActivityDashboard() {
             )}
           </section>
 
+          <div className="space-y-4">
           <section className="app-panel min-h-[420px] overflow-hidden">
             <div className="border-b border-slate-800/70 px-4 py-3.5">
               <div className="app-eyebrow">Source runtimes</div>
@@ -140,6 +136,8 @@ export default function ActivityDashboard() {
               })}
             </div>
           </section>
+          <AuditTimeline />
+          </div>
         </div>
       </div>
     </div>

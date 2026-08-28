@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import AgencySelector from './AgencySelector';
 import { useAppStore } from '../../store/useAppStore';
 import { invokeCommand } from '../../ipc';
-import { compileToLegacyQuery, parseQualifierQuery, serializeQualifierQuery } from '../../query';
+import { compileToLegacyQuery, interpretNaturalLanguage, parseQualifierQuery, serializeQualifierQuery } from '../../query';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 
 export default function SearchFilter() {
@@ -18,12 +18,15 @@ export default function SearchFilter() {
   const resultCount = useAppStore((state) => state.filteredResults.length);
   const agencyProfiles = useAppStore((state) => state.agencyProfiles);
   const [inputValue, setInputValue] = useState(searchTerm);
+  const [interpretPlainLanguage, setInterpretPlainLanguage] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const requestGate = useLatestRequestGate();
-  // NOTE(query): `parsedQuery` is currently presentation-only. The legacy IPC
-  // call below intentionally remains unchanged until deferred filters can be
-  // enforced by Rust; see docs/query-language.md before wiring execution.
-  const parsedQuery = useMemo(() => parseQualifierQuery(inputValue), [inputValue]);
+  // The parser accepts only fields the native command can execute. The compiler still returns
+  // negated, duplicate, or ambiguous filters so they can be labeled instead of ignored.
+  const parsedQuery = useMemo(
+    () => interpretPlainLanguage ? interpretNaturalLanguage(inputValue) : parseQualifierQuery(inputValue),
+    [inputValue, interpretPlainLanguage],
+  );
   const compiledQuery = useMemo(
     () => compileToLegacyQuery(
       parsedQuery,
@@ -45,9 +48,8 @@ export default function SearchFilter() {
   }, [searchTerm]);
 
   useEffect(() => {
-    // PERF(query): Replace debounce-only protection with AbortController once
-    // the native command bridge accepts cancellation; requestSequence guards
-    // against stale responses for now.
+    // LIMIT(query): Tauri invoke calls have no cancellation handle. Debouncing avoids work that has
+    // not started; the latest-request gate prevents every stale completion from changing the UI.
     const request = requestGate.begin();
     const timer = window.setTimeout(async () => {
       setIsSearching(true);
@@ -76,8 +78,6 @@ export default function SearchFilter() {
   }, [activePortalKey, compiledQuery, inputValue, requestGate, selectedAgencyId, selectedPolicyDeviation, selectedStatus, setFilteredResults, setSearchError]);
 
   const updateTerm = (value: string) => {
-    // FEATURE(query): Add visual filter rows and autocomplete suggestions while
-    // preserving this text field as the canonical qualifier editor.
     setInputValue(value);
     setSearchFilters(value, selectedAgencyId, selectedStatus, selectedPolicyDeviation);
   };
@@ -132,6 +132,14 @@ export default function SearchFilter() {
         </div>
       </div>
       <div className="mt-1.5 flex min-h-4 items-center gap-2 px-2 text-[8px]">
+        <button
+          type="button"
+          aria-pressed={interpretPlainLanguage}
+          onClick={() => setInterpretPlainLanguage((enabled) => !enabled)}
+          className={interpretPlainLanguage ? 'rounded-full border border-indigo-400/30 bg-indigo-500/10 px-2 py-0.5 font-semibold text-indigo-200' : 'rounded-full border border-slate-800 px-2 py-0.5 font-semibold text-slate-500 hover:text-slate-300'}
+        >
+          Plain-language interpretation {interpretPlainLanguage ? 'on' : 'off'}
+        </button>
         {parsedQuery.filters.map((filter, index) => {
           const deferred = deferredFilterKeys.has(filterKey(filter));
           return (
@@ -158,7 +166,7 @@ export default function SearchFilter() {
             Search unavailable; {resultCount > 0 ? `showing ${resultCount.toLocaleString()} results from the last successful query` : 'no result set is available'}: {error}
           </span>
         )}
-        {!error && parsedQuery.filters.length === 0 && <span className="text-slate-600">Search remains available while WAL ingestion is active.</span>}
+        {!error && parsedQuery.filters.length === 0 && <span className="text-slate-600">Search remains available while ingestion is active.</span>}
       </div>
     </section>
   );

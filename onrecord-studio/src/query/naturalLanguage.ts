@@ -13,28 +13,19 @@ export function interpretNaturalLanguage(input: string): QueryAst {
   const issues: QueryIssue[] = [];
   let text = input.trim();
 
-  text = text.replace(/\bafter\s+(\d{4}-\d{2}-\d{2})\b/gi, (_, value: string) => {
-    filters.push({ field: 'after', operator: 'after', value, raw: `after ${value}` });
+  text = text.replace(/\bstatus\s+(?:is\s+)?(closed|open|referred)\b/gi, (raw: string, value: string) => {
+    filters.push({ field: 'status', operator: 'equals', value: value.toLocaleLowerCase(), raw });
     return '';
   });
-  text = text.replace(/\bbefore\s+(\d{4}-\d{2}-\d{2})\b/gi, (_, value: string) => {
-    filters.push({ field: 'before', operator: 'before', value, raw: `before ${value}` });
-    return '';
-  });
+  text = extractNamedFilter(text, /\bagency\s+(?:is\s+)?(?:"([^"]+)"|'([^']+)'|([^,;]+?))(?=\s+(?:portal|status|flag)\b|[,;]|$)/i, 'agency', filters);
+  text = extractNamedFilter(text, /\bportal\s+(?:is\s+)?(?:"([^"]+)"|'([^']+)'|([a-z0-9._-]+))/i, 'portal', filters);
+  text = extractNamedFilter(text, /\bflag\s+(?:is\s+)?(?:"([^"]+)"|'([^']+)'|([a-z0-9_-]+))/i, 'flag', filters);
 
-  for (const status of ['closed', 'open', 'referred']) {
-    const pattern = new RegExp(`\\b${status}\\b`, 'i');
-    if (pattern.test(text)) {
-      filters.push({ field: 'status', operator: 'equals', value: status, raw: status });
-      text = text.replace(pattern, '');
-      break;
-    }
+  if (/\b(?:after|before)\s+\d{4}-\d{2}-\d{2}\b/i.test(text)) {
+    issues.push({ severity: 'warning', message: 'Date phrases remain full-text terms because the native query contract has no date filter.' });
   }
-
   if (/\bwith\s+(?:no\s+)?response\b/i.test(text)) {
-    const negated = /\bwith\s+no\s+response\b/i.test(text);
-    filters.push({ field: 'has', operator: 'exists', value: 'response', negated, raw: negated ? 'no response' : 'with response' });
-    text = text.replace(/\bwith\s+(?:no\s+)?response\b/i, '');
+    issues.push({ severity: 'warning', message: 'Response-existence phrases remain full-text terms because the native query contract has no existence filter.' });
   }
 
   if (filters.length === 0) {
@@ -44,4 +35,18 @@ export function interpretNaturalLanguage(input: string): QueryAst {
   }
 
   return { version: 1, source: 'natural-language', text: text.replace(/\s+/g, ' ').trim(), filters, issues };
+}
+
+function extractNamedFilter(
+  text: string,
+  pattern: RegExp,
+  field: 'agency' | 'portal' | 'flag',
+  filters: QueryFilter[],
+) {
+  return text.replace(pattern, (raw: string, ...groups: Array<string | undefined>) => {
+    const value = groups.slice(0, 3).find((candidate) => candidate?.trim())?.trim();
+    if (!value) return raw;
+    filters.push({ field, operator: 'equals', value, raw });
+    return '';
+  });
 }

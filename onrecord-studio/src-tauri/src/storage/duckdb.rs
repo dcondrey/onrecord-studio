@@ -4,9 +4,12 @@ use crate::types::CrossAgencyCorrelation;
 use duckdb::{params, Connection, Row};
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock, TryLockError};
+use std::time::{Duration, Instant};
 
 static SQLITE_EXTENSION_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+const WORKSPACE_LOCK_TIMEOUT: Duration = Duration::from_secs(5);
+const WORKSPACE_LOCK_POLL_INTERVAL: Duration = Duration::from_millis(5);
 
 const CROSS_CORRELATION_QUERY: &str = r#"
 WITH request_candidates AS (
@@ -122,10 +125,10 @@ fn qualify(template: &str, table_prefix: &str) -> String {
     template.replace("{db}", table_prefix)
 }
 
-// TODO(concurrency): Writes are serialized by the repository's `Arc<Mutex<Connection>>` and
-// analytics reads run on sibling connections to the same instance, so the writer/reader boundary is
-// correct. Backpressure is not: an analytics query issued during heavy ingest simply waits on the
-// mutex with no timeout, no queue depth signal, and no way for the caller to cancel.
+// LIMIT(concurrency): Writes are serialized by the repository's `Arc<Mutex<Connection>>` and
+// analytics reads run on sibling connections to the same instance, so the writer/reader boundary
+// is correct. A competing analytics operation returns a retryable-looking busy message after the
+// bounded workspace timeout. DuckDB query execution itself is still synchronous once it starts.
 // TODO(performance-validation): Add a benchmark corpus covering million-row ingestion, concurrent
 // analytics, large extracted text, and index rebuild latency before tuning production pragmas.
 
@@ -448,9 +451,36 @@ fn quote_path(path: &Path) -> Result<String, AppError> {
 }
 
 fn lock_state(state: &Arc<Mutex<DuckDbState>>) -> Result<MutexGuard<'_, DuckDbState>, AppError> {
-    state
-        .lock()
-        .map_err(|_| AppError::Analysis("DuckDB workspace lock was poisoned".to_string()))
+    lock_state_with_timeout(state, WORKSPACE_LOCK_TIMEOUT)
+}
+
+fn lock_state_with_timeout(
+    state: &Arc<Mutex<DuckDbState>>,
+    timeout: Duration,
+) -> Result<MutexGuard<'_, DuckDbState>, AppError> {
+    let started_at = Instant::now();
+    loop {
+        match state.try_lock() {
+            Ok(guard) => return Ok(guard),
+            Err(TryLockError::Poisoned(_)) => {
+                return Err(AppError::Analysis(
+                    "DuckDB workspace lock was poisoned".to_string(),
+                ));
+            }
+            Err(TryLockError::WouldBlock) => {
+                let elapsed = started_at.elapsed();
+                if elapsed >= timeout {
+                    return Err(AppError::Analysis(format!(
+                        "DuckDB workspace remained busy for {} ms; retry the operation",
+                        timeout.as_millis()
+                    )));
+                }
+                std::thread::sleep(
+                    WORKSPACE_LOCK_POLL_INTERVAL.min(timeout.saturating_sub(elapsed)),
+                );
+            }
+        }
+    }
 }
 
 fn unsigned(value: i64, label: &str) -> Result<u64, AppError> {
@@ -466,6 +496,20 @@ fn count(value: i64, label: &str) -> Result<usize, AppError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn workspace_lock_reports_contention_after_the_requested_timeout() {
+        let workspace = DuckDbWorkspace::open_workspace().expect("workspace must open");
+        let _held = workspace
+            .state
+            .lock()
+            .expect("fixture lock must be available");
+        let error = match lock_state_with_timeout(&workspace.state, Duration::from_millis(10)) {
+            Ok(_) => panic!("a held workspace lock must time out"),
+            Err(error) => error,
+        };
+        assert!(error.to_string().contains("remained busy for 10 ms"));
+    }
 
     #[tokio::test]
     async fn correlates_persisted_keyword_signals_with_prior_311_events() {

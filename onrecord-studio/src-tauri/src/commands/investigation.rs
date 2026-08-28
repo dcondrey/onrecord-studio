@@ -6,10 +6,13 @@ use crate::commands::validation::{
 };
 use crate::error::AppError;
 use crate::integrity::sha256_hex;
-use crate::parsers::{parse_legal_authority, recovery, unredactor};
+use crate::parsers::{
+    audit_document_path, parse_legal_authority, recovery, unredactor, EvidenceBundle,
+    ForensicAuditOptions,
+};
 use crate::storage::duckdb::DuckDbWorkspace;
 use crate::storage::pii::{mask_pii, PiiMaskResult};
-use crate::storage::sqlite::{ProvenanceEvidenceFile, SqliteRepository};
+use crate::storage::sqlite::{DuckDbRepository, ProvenanceEvidenceFile};
 use crate::types::{
     AgencyPerformanceProfile, AnalysisConfig, AuxiliaryEventInput, AuxiliaryImportResult,
     AuxiliaryStreamKind, CrossAgencyCorrelation, DocumentProvenanceVerification, DocumentTextChunk,
@@ -24,6 +27,7 @@ use tokio::sync::Semaphore;
 
 const MAXIMUM_REDACTION_AUDIT_BYTES: u64 = 512 * 1024 * 1024;
 const MAXIMUM_VERSION_RECOVERY_BYTES: u64 = 128 * 1024 * 1024;
+const MAXIMUM_FORENSIC_AUDIT_BYTES: u64 = 1024 * 1024 * 1024;
 const MAXIMUM_MASK_INPUT_BYTES: usize = 4 * 1024 * 1024;
 const MAXIMUM_AUXILIARY_EVENTS: usize = 50_000;
 const MAXIMUM_AUXILIARY_PAYLOAD_BYTES: usize = 64 * 1024 * 1024;
@@ -31,6 +35,7 @@ const DEFAULT_VERIFICATION_HISTORY_LIMIT: usize = 50;
 const MAXIMUM_VERIFICATION_HISTORY_LIMIT: usize = 500;
 const MAXIMUM_CONCURRENT_REDACTION_AUDITS: usize = 1;
 const MAXIMUM_CONCURRENT_VERSION_RECOVERIES: usize = 1;
+const MAXIMUM_CONCURRENT_FORENSIC_AUDITS: usize = 1;
 /// Digest verification streams through a fixed buffer, so it is bounded by disk rather than
 /// memory. The limit is higher than the redaction audit's, which materializes its input, but still
 /// finite: a request-level "verify everything" would otherwise queue one blocking hash per
@@ -41,6 +46,7 @@ pub struct AppInvestigationPaths {
     pub document_root: PathBuf,
     pub redaction_audit_permits: Arc<Semaphore>,
     pub version_recovery_permits: Arc<Semaphore>,
+    pub forensic_audit_permits: Arc<Semaphore>,
     pub provenance_verification_permits: Arc<Semaphore>,
 }
 
@@ -52,6 +58,7 @@ impl AppInvestigationPaths {
             version_recovery_permits: Arc::new(Semaphore::new(
                 MAXIMUM_CONCURRENT_VERSION_RECOVERIES,
             )),
+            forensic_audit_permits: Arc::new(Semaphore::new(MAXIMUM_CONCURRENT_FORENSIC_AUDITS)),
             provenance_verification_permits: Arc::new(Semaphore::new(
                 MAXIMUM_CONCURRENT_PROVENANCE_VERIFICATIONS,
             )),
@@ -77,7 +84,7 @@ pub async fn get_cross_agency_correlations(
     minimum_complaints: Option<usize>,
     result_limit: Option<usize>,
     correlation_engine: State<'_, DuckDbWorkspace>,
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, DuckDbRepository>,
 ) -> Result<Vec<CrossAgencyCorrelation>, AppError> {
     let portal_key = optional_portal_key(portal_key)?;
     let minimum_complaints = minimum_complaints.unwrap_or(2);
@@ -102,7 +109,7 @@ pub async fn import_auxiliary_events(
     display_name: String,
     source_uri: Option<String>,
     events: Vec<AuxiliaryEventInput>,
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, DuckDbRepository>,
 ) -> Result<AuxiliaryImportResult, AppError> {
     let portal_key = optional_portal_key(portal_key)?;
     let display_name = required_text(&display_name, "Auxiliary source display name", 256)?;
@@ -125,7 +132,7 @@ pub async fn register_statutory_extension(
     request_id: u64,
     portal_key: String,
     extension: StatutoryExtensionRecord,
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, DuckDbRepository>,
 ) -> Result<Vec<String>, AppError> {
     let portal_key = validate_portal_key(&portal_key)?;
     required_text(
@@ -144,7 +151,7 @@ pub async fn register_statutory_extension(
 #[tauri::command]
 pub async fn import_legal_authority(
     input: LegalAuthorityImport,
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, DuckDbRepository>,
 ) -> Result<LegalAuthorityImportResult, AppError> {
     let parse_input = input.clone();
     let parsed = spawn_blocking("Legal authority parsing", move || {
@@ -156,7 +163,7 @@ pub async fn import_legal_authority(
 
 #[tauri::command]
 pub async fn list_legal_authorities(
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, DuckDbRepository>,
 ) -> Result<Vec<LegalAuthoritySummary>, AppError> {
     repository.list_legal_authorities().await
 }
@@ -165,7 +172,7 @@ pub async fn list_legal_authorities(
 pub async fn evaluate_request_legal_compliance(
     request_id: u64,
     portal_key: String,
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, DuckDbRepository>,
 ) -> Result<LegalEvaluationResult, AppError> {
     let portal_key = validate_portal_key(&portal_key)?;
     repository
@@ -180,7 +187,7 @@ pub async fn evaluate_request_legal_compliance(
 pub async fn list_request_legal_findings(
     request_id: u64,
     portal_key: String,
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, DuckDbRepository>,
 ) -> Result<Vec<LegalComplianceFinding>, AppError> {
     let portal_key = validate_portal_key(&portal_key)?;
     repository
@@ -195,7 +202,7 @@ pub async fn review_legal_finding(
     portal_key: String,
     review_status: LegalFindingReviewStatus,
     reviewer_notes: Option<String>,
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, DuckDbRepository>,
 ) -> Result<Vec<LegalComplianceFinding>, AppError> {
     let portal_key = validate_portal_key(&portal_key)?;
     let violation_id = required_text(&violation_id, "Legal finding identifier", 256)?;
@@ -236,7 +243,7 @@ pub async fn mask_sensitive_text(text: String) -> Result<PiiMaskResult, AppError
 pub async fn verify_document_provenance(
     document_id: u64,
     portal_key: String,
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, DuckDbRepository>,
     paths: State<'_, AppInvestigationPaths>,
 ) -> Result<DocumentProvenanceVerification, AppError> {
     let portal_key = validate_portal_key(&portal_key)?;
@@ -277,7 +284,7 @@ pub async fn list_document_provenance_verifications(
     document_id: u64,
     portal_key: String,
     limit: Option<usize>,
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, DuckDbRepository>,
 ) -> Result<Vec<ProvenanceVerificationRecord>, AppError> {
     let portal_key = validate_portal_key(&portal_key)?;
     let limit = limit.unwrap_or(DEFAULT_VERIFICATION_HISTORY_LIMIT);
@@ -295,7 +302,7 @@ pub async fn list_document_provenance_verifications(
 pub async fn list_request_documents(
     request_id: u64,
     portal_key: String,
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, DuckDbRepository>,
 ) -> Result<Vec<RequestDocumentSummary>, AppError> {
     let portal_key = validate_portal_key(&portal_key)?;
     repository
@@ -309,7 +316,7 @@ pub async fn get_document_text_chunk(
     portal_key: String,
     character_offset: Option<usize>,
     character_limit: Option<usize>,
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, DuckDbRepository>,
 ) -> Result<DocumentTextChunk, AppError> {
     let portal_key = validate_portal_key(&portal_key)?;
     let character_limit = character_limit.unwrap_or(100_000);
@@ -332,7 +339,7 @@ pub async fn get_document_text_chunk(
 pub async fn verify_document_redaction_integrity(
     document_id: u64,
     portal_key: String,
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, DuckDbRepository>,
     paths: State<'_, AppInvestigationPaths>,
 ) -> Result<unredactor::UnredactorForensicReport, AppError> {
     let portal_key = validate_portal_key(&portal_key)?;
@@ -363,7 +370,7 @@ pub async fn verify_document_redaction_integrity(
 pub async fn carve_document_version_history(
     document_id: u64,
     portal_key: String,
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, DuckDbRepository>,
     paths: State<'_, AppInvestigationPaths>,
 ) -> Result<recovery::RecoveredVersionProfile, AppError> {
     let portal_key = validate_portal_key(&portal_key)?;
@@ -386,6 +393,42 @@ pub async fn carve_document_version_history(
     spawn_blocking("Version recovery", move || {
         let _permit = permit;
         recovery::carve_historical_pdf_versions(path)
+    })
+    .await?
+}
+
+#[tauri::command]
+pub async fn audit_document_residual_evidence(
+    document_id: u64,
+    portal_key: String,
+    include_hypotheses: Option<bool>,
+    repository: State<'_, DuckDbRepository>,
+    paths: State<'_, AppInvestigationPaths>,
+) -> Result<EvidenceBundle, AppError> {
+    let portal_key = validate_portal_key(&portal_key)?;
+    let permit = paths
+        .forensic_audit_permits
+        .clone()
+        .acquire_owned()
+        .await
+        .map_err(|_| AppError::Internal("Forensic audit scheduler is unavailable".to_string()))?;
+    let stored_path = repository
+        .resolve_public_document_path(document_id, portal_key)
+        .await?;
+    let path = managed_evidence_file(
+        stored_path,
+        &paths.document_root,
+        MAXIMUM_FORENSIC_AUDIT_BYTES,
+        "Residual evidence audit",
+    )
+    .await?;
+    let options = ForensicAuditOptions {
+        include_hypotheses: include_hypotheses.unwrap_or(false),
+        preserve_raw_values: false,
+    };
+    spawn_blocking("Residual evidence audit", move || {
+        let _permit = permit;
+        audit_document_path(path, options)
     })
     .await?
 }

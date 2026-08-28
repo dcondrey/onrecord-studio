@@ -7,7 +7,7 @@ use crate::ingestion::client::{ApiClient, HttpClientConfig};
 use crate::ingestion::limiter::RateLimiter;
 use crate::ingestion::queue::{ingestion_telemetry_envelope, IngestionProgress, QueueManager};
 use crate::storage::corpus::CorpusIndex;
-use crate::storage::sqlite::SqliteRepository;
+use crate::storage::sqlite::DuckDbRepository;
 use crate::types::{
     CrawlPolicy, PastedContentInput, PortalRuntimeSnapshot, PortalSyncStart, RateLimitPolicy,
     SavedSource, SourceDiscoveryPreview, SourceGuidance, SourceIngestionStart, SourceKind,
@@ -17,6 +17,35 @@ use std::path::Path;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Runtime, State};
 use tokio::sync::mpsc;
+
+const STARTUP_RECOVERY_CAPACITY_ATTEMPTS: usize = 30;
+const STARTUP_RECOVERY_CAPACITY_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
+
+async fn report_startup_recovery_failure(
+    repository: &DuckDbRepository,
+    progress_sender: &mpsc::Sender<IngestionProgress>,
+    source_key: &str,
+    stage: &str,
+    error: AppError,
+) {
+    let persistence_error = repository
+        .record_source_recovery_failure(source_key, stage, &error)
+        .await
+        .err();
+    let error_msg = match persistence_error {
+        Some(persistence_error) => format!(
+            "Startup recovery failed during {stage}: {error}. The failure could not be persisted: {persistence_error}"
+        ),
+        None => format!("Startup recovery failed during {stage}: {error}"),
+    };
+    let _ = progress_sender
+        .send(IngestionProgress::TaskFailed {
+            portal_key: source_key.to_string(),
+            target_id: format!("startup-recovery:{stage}"),
+            error_msg,
+        })
+        .await;
+}
 
 #[tauri::command]
 pub async fn start_portal_sync(
@@ -53,7 +82,7 @@ pub async fn start_data_source(
     guidance: Option<SourceGuidance>,
     rate_limit_policy: Option<RateLimitPolicy>,
     manager: State<'_, Arc<QueueManager>>,
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, DuckDbRepository>,
 ) -> Result<SourceIngestionStart, AppError> {
     let url = required_text(&url, "Data source URL", 4_096)?;
     let rate_limit_policy = rate_limit_policy.unwrap_or_default();
@@ -130,7 +159,7 @@ pub async fn pause_source_sync(
 #[tauri::command]
 pub async fn resume_source_sync(
     source_key: String,
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, DuckDbRepository>,
     manager: State<'_, Arc<QueueManager>>,
 ) -> Result<SourceIngestionStart, AppError> {
     let source_key = validate_portal_key(&source_key)?;
@@ -184,20 +213,21 @@ pub async fn list_portal_runtimes(
 
 #[tauri::command]
 pub async fn list_saved_portals(
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, DuckDbRepository>,
 ) -> Result<Vec<SavedSource>, AppError> {
     repository.list_portal_registrations().await
 }
 
 pub async fn initialize_queue_runtime<R: Runtime, P: AsRef<Path>>(
     app_handle: AppHandle<R>,
-    repository: SqliteRepository,
+    repository: DuckDbRepository,
     corpus_index: CorpusIndex,
     download_root: P,
 ) -> Result<Arc<QueueManager>, AppError> {
     let client = ApiClient::new(HttpClientConfig::default())?;
     let limiter = RateLimiter::new(5)?;
     let (progress_sender, mut progress_receiver) = mpsc::channel::<IngestionProgress>(2_048);
+    let recovery_progress_sender = progress_sender.clone();
     let recovery_repository = repository.clone();
     let manager = Arc::new(QueueManager::new(
         client,
@@ -215,34 +245,55 @@ pub async fn initialize_queue_runtime<R: Runtime, P: AsRef<Path>>(
             );
         }
     });
+    // A failure to enumerate durable work is a startup failure, not an empty queue. Waiting here
+    // makes setup surface the error instead of presenting an apparently healthy workspace.
+    let interrupted_keys = recovery_repository
+        .recover_interrupted_source_keys()
+        .await?;
+    let sources = if interrupted_keys.is_empty() {
+        Vec::new()
+    } else {
+        recovery_repository.list_portal_registrations().await?
+    };
     let recovery_manager = Arc::clone(&manager);
-    // TODO(recovery): Persist and emit startup-recovery failures instead of returning silently;
-    // operators otherwise cannot distinguish a clean startup from an abandoned durable frontier.
     tokio::spawn(async move {
-        let Ok(interrupted_keys) = recovery_repository.recover_interrupted_source_keys().await
-        else {
-            return;
-        };
-        if interrupted_keys.is_empty() {
-            return;
-        }
-        let Ok(sources) = recovery_repository.list_portal_registrations().await else {
-            return;
-        };
         for source_key in interrupted_keys {
             let Some(source) = sources
                 .iter()
                 .find(|saved| saved.registration.portal_key == source_key)
                 .map(|saved| saved.registration.clone())
             else {
+                report_startup_recovery_failure(
+                    &recovery_repository,
+                    &recovery_progress_sender,
+                    &source_key,
+                    "registration lookup",
+                    AppError::DataParsing(format!(
+                        "Durable work refers to source '{source_key}', but no resumable registration exists"
+                    )),
+                )
+                .await;
                 continue;
             };
-            let saved_recipe = recovery_repository
+            let saved_recipe = match recovery_repository
                 .load_source_connector_recipe(&source.canonical_url)
                 .await
-                .ok()
-                .flatten();
+            {
+                Ok(recipe) => recipe,
+                Err(error) => {
+                    report_startup_recovery_failure(
+                        &recovery_repository,
+                        &recovery_progress_sender,
+                        &source_key,
+                        "connector recipe loading",
+                        error,
+                    )
+                    .await;
+                    continue;
+                }
+            };
             let (crawl_policy, guidance) = saved_recipe.unwrap_or_default();
+            let mut capacity_attempts = 0_usize;
             loop {
                 match recovery_manager
                     .resume_registered_source(
@@ -257,9 +308,35 @@ pub async fn initialize_queue_runtime<R: Runtime, P: AsRef<Path>>(
                         if recovery_manager.is_source_running(&source.portal_key).await {
                             break;
                         }
-                        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                        capacity_attempts = capacity_attempts.saturating_add(1);
+                        if capacity_attempts >= STARTUP_RECOVERY_CAPACITY_ATTEMPTS {
+                            report_startup_recovery_failure(
+                                &recovery_repository,
+                                &recovery_progress_sender,
+                                &source_key,
+                                "queue capacity waiting",
+                                AppError::PortalCapacity(format!(
+                                    "No queue slot became available after {} seconds",
+                                    STARTUP_RECOVERY_CAPACITY_DELAY.as_secs()
+                                        * STARTUP_RECOVERY_CAPACITY_ATTEMPTS as u64
+                                )),
+                            )
+                            .await;
+                            break;
+                        }
+                        tokio::time::sleep(STARTUP_RECOVERY_CAPACITY_DELAY).await;
                     }
-                    Err(_) => break,
+                    Err(error) => {
+                        report_startup_recovery_failure(
+                            &recovery_repository,
+                            &recovery_progress_sender,
+                            &source_key,
+                            "source resume",
+                            error,
+                        )
+                        .await;
+                        break;
+                    }
                 }
             }
         }

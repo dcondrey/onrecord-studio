@@ -18,18 +18,18 @@ import ActivityDashboard from './ActivityDashboard';
 import PatternExplorer from './PatternExplorer';
 import Icon from '../ui/icons';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
+import ExtractionTerminal from '../documents/ExtractionTerminal';
+import MetadataCard from '../documents/MetadataCard';
 
 export default function MainLayout() {
-  // TODO(workspace): Persist selected request/document context when switching
-  // views so investigators can return to the exact evidence position.
+  // Request selection lives in the shared workspace store and survives view switches. The open
+  // document chunk is session-local and is deliberately cleared when the selected request changes.
   const workspaceView = useAppStore((state) => state.workspaceView);
   const results = useAppStore((state) => state.filteredResults);
   const searchError = useAppStore((state) => state.searchError);
   const selectedRequestId = useAppStore((state) => state.selectedRequestId);
   const selectedRequestPortalKey = useAppStore((state) => state.selectedRequestPortalKey);
   const setSelectedRequest = useAppStore((state) => state.setSelectedRequest);
-  const syncLogs = useAppStore((state) => state.syncLogs);
-  const isSyncing = useAppStore((state) => state.isSyncing);
   const [exportState, setExportState] = useState<{ key: string; isExporting: boolean; result: LegalBriefExportResult | null; error: string | null } | null>(null);
   const [documents, setDocuments] = useState<RequestDocumentSummary[]>([]);
   const [documentError, setDocumentError] = useState<string | null>(null);
@@ -213,17 +213,31 @@ export default function MainLayout() {
                   </div>
                   <LegalCompliancePanel record={selected} onOpenLibrary={() => setLegalLibraryOpen(true)} />
                   {documents.length > 0 && (
-                    <div className="mt-3 space-y-1.5">
+                    <div className="mt-3">
                       <div className="text-[8px] font-semibold uppercase tracking-wider text-slate-600">Public documents</div>
-                      {/* TODO(documents): Add pagination or a searchable document drawer; documents
-                          after the first five are counted here but cannot be opened from this view. */}
-                      {documents.slice(0, 5).map((document) => (
-                        <button key={document.documentId} type="button" onClick={() => void openDocument(document)} className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 text-left transition hover:border-indigo-400/30 hover:bg-indigo-500/[0.05]">
-                          <span className="min-w-0 truncate text-[10px] font-medium text-slate-300">{document.fileName}</span>
-                          <span className="shrink-0 font-mono text-[8px] text-slate-600">{formatFileSize(document.fileSize)}</span>
-                        </button>
-                      ))}
-                      {documents.length > 5 && <div className="text-right text-[8px] text-slate-600">{documents.length - 5} additional documents</div>}
+                      <div className="mt-1.5 max-h-64 space-y-1.5 overflow-y-auto pr-1">
+                        {documents.map((document) => {
+                          const canOpen = document.extractionStatus === 'SEARCHABLE'
+                            || document.extractionStatus === 'SALVAGED';
+                          const stateLabel = formatExtractionState(document);
+                          return (
+                            <button
+                              key={document.documentId}
+                              type="button"
+                              disabled={!canOpen}
+                              title={document.extractionDeferredReason ?? stateLabel}
+                              onClick={() => void openDocument(document)}
+                              className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 text-left transition hover:border-indigo-400/30 hover:bg-indigo-500/[0.05] disabled:cursor-default disabled:opacity-65 disabled:hover:border-slate-800 disabled:hover:bg-slate-950/50"
+                            >
+                              <span className="min-w-0">
+                                <span className="block truncate text-[10px] font-medium text-slate-300">{document.fileName}</span>
+                                <span className="mt-0.5 block truncate text-[8px] text-slate-600">{stateLabel}</span>
+                              </span>
+                              <span className="shrink-0 font-mono text-[8px] text-slate-600">{formatFileSize(document.fileSize)}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                   {documentError && <div role="alert" className="mt-2 text-[9px] leading-relaxed text-rose-300">Document view unavailable: {documentError}</div>}
@@ -251,22 +265,7 @@ export default function MainLayout() {
               )}
             </section>
 
-            <section className="app-panel flex min-h-[220px] flex-col overflow-hidden">
-              <div className="flex items-center justify-between border-b border-slate-800 px-4 py-2.5">
-                <div className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-600">Ingestion activity</div>
-                <div className="flex items-center gap-1.5 text-[9px] text-slate-500">
-                  <span className={cn('h-1.5 w-1.5 rounded-full', isSyncing ? 'bg-emerald-400' : 'bg-slate-700')} />
-                  {isSyncing ? 'Live' : 'Idle'}
-                </div>
-              </div>
-              <div className="min-h-0 flex-1 overflow-y-auto p-3 font-mono text-[9px] leading-relaxed">
-                {syncLogs.length === 0 ? (
-                  <div className="p-2 text-slate-700">No activity recorded in this session.</div>
-                ) : syncLogs.slice(0, 80).map((log, index) => (
-                  <div key={`${index}-${log}`} className={cn('border-l pl-2.5 py-1', isErrorLog(log) ? 'border-rose-500/50 text-rose-300/80' : 'border-slate-800 text-slate-500')}>{log}</div>
-                ))}
-              </div>
-            </section>
+            <div className="min-h-[220px]"><ExtractionTerminal /></div>
           </div>
         </div>
       </div>
@@ -274,7 +273,7 @@ export default function MainLayout() {
         <div className="app-backdrop fixed inset-0 z-50 grid place-items-center p-8 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`Document ${activeDocument.summary.fileName}`}>
           <div className={cn('relative h-[min(760px,88vh)]', isPdfDocument(activeDocument.summary) ? 'w-[min(1440px,96vw)]' : 'w-[min(1080px,92vw)]')}>
             <button type="button" autoFocus onClick={() => setActiveDocument(null)} className="absolute -top-7 right-0 z-10 rounded-md border border-slate-700 bg-slate-950/90 px-2 py-1 text-[9px] font-semibold text-slate-300 shadow-lg hover:border-slate-500">Close</button>
-            <div className={cn('grid h-full gap-4', isPdfDocument(activeDocument.summary) && 'grid-cols-[minmax(0,1fr)_360px]')}>
+            <div className="grid h-full grid-cols-[minmax(0,1fr)_360px] gap-4">
               <DocumentViewer
                 documentId={activeDocument.summary.documentId}
                 portalKey={activeDocument.summary.portalKey}
@@ -285,7 +284,16 @@ export default function MainLayout() {
                 knownMaskedFindingCount={activeDocument.chunk.maskedFindingCount}
                 onNextChunk={activeDocument.chunk.nextCharacterOffset === null ? undefined : () => void openDocument(activeDocument.summary, activeDocument.chunk.nextCharacterOffset ?? 0)}
               />
-              {isPdfDocument(activeDocument.summary) && <UnredactorPanel documentId={activeDocument.summary.documentId} portalKey={activeDocument.summary.portalKey} />}
+              <aside className="min-h-0 space-y-4 overflow-y-auto" aria-label="Document evidence details">
+                <MetadataCard
+                  sha256={activeDocument.summary.rawFileSha256}
+                  contentType={activeDocument.summary.contentType}
+                  visibility={activeDocument.summary.visibility}
+                  downloadStatus={activeDocument.summary.downloadStatus}
+                  fileSize={activeDocument.summary.fileSize}
+                />
+                {isPdfDocument(activeDocument.summary) && <UnredactorPanel documentId={activeDocument.summary.documentId} portalKey={activeDocument.summary.portalKey} />}
+              </aside>
             </div>
           </div>
         </div>
@@ -343,15 +351,20 @@ function isPdfDocument(document: RequestDocumentSummary) {
     || document.fileName.toLocaleLowerCase().endsWith('.pdf');
 }
 
+function formatExtractionState(document: RequestDocumentSummary) {
+  if (document.extractionStatus === 'SEARCHABLE') return 'Searchable text';
+  if (document.extractionStatus === 'SALVAGED') return 'Searchable text · recovered';
+  if (document.extractionStatus === 'EXPANDED') return `Container expanded${document.extractionFormat ? ` · ${document.extractionFormat}` : ''}`;
+  if (document.extractionStatus === 'DEFERRED') return `Not searchable${document.extractionFormat ? ` · ${document.extractionFormat}` : ''}`;
+  if (document.extractionStatus === 'FAILED') return 'Extraction failed';
+  if (document.extractionStatus === 'DOWNLOADED') return 'Downloaded · no searchable text recorded';
+  return 'Extraction pending';
+}
+
 function hasReportableFinding(record: RequestSearchResult) {
   return record.integrityFlags.some((flag) => [
     'STATUTORY_LATENCY_VIOLATION',
     'STATUTORY_EXTENSION_DEFECTIVE',
     'SUSPICIOUSLY_FAST_CLOSURE',
   ].includes(flag));
-}
-
-function isErrorLog(value: string) {
-  const normalized = value.toLocaleLowerCase();
-  return normalized.includes('failed') || normalized.includes('error');
 }

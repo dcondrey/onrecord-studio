@@ -10,8 +10,8 @@ pub mod database;
 pub mod entropy;
 pub mod excel;
 pub mod format;
-// FEATURE(forensics): These bounded placeholder modules define future residual-evidence
-// contracts. Keep them separate from ordinary ingestion until coverage is verified.
+// FEATURE(forensics): These bounded modules define residual-evidence contracts. Keep collectors
+// separate from ordinary searchable-text ingestion so their confidence and coverage remain clear.
 pub mod compression_oracle;
 pub mod forensic_evidence;
 pub mod html;
@@ -31,6 +31,7 @@ pub mod recovery;
 pub mod rtf;
 pub mod salvage;
 mod source;
+pub(crate) mod staging;
 pub mod svg;
 pub mod text;
 pub mod unredactor;

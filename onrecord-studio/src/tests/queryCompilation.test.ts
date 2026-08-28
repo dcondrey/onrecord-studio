@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { compileToLegacyQuery, parseQualifierQuery } from '../query';
+import { compileToLegacyQuery, interpretNaturalLanguage, parseQualifierQuery } from '../query';
 
 const agencies = [
   { agencyId: 10, agencyName: 'City Attorney', portalKey: 'oakland' },
@@ -25,11 +25,11 @@ describe('qualifier query compilation', () => {
     });
   });
 
-  it('defers unsupported, negated, ambiguous, and duplicate qualifiers instead of dropping them', () => {
-    const compiled = compileToLegacyQuery(
-      parseQualifierQuery('records agency:"Public Works" status:open status:closed -flag:late after:2025-01-01'),
-      agencies,
+  it('defers negated, ambiguous, and duplicate qualifiers while rejecting unknown fields', () => {
+    const parsed = parseQualifierQuery(
+      'records agency:"Public Works" status:open status:closed -flag:late after:2025-01-01',
     );
+    const compiled = compileToLegacyQuery(parsed, agencies);
 
     expect(compiled.searchTerm).toBe('records');
     expect(compiled.agencyId).toBeNull();
@@ -40,7 +40,9 @@ describe('qualifier query compilation', () => {
       'status:open',
       'status:closed',
       '-flag:late',
-      'after:2025-01-01',
+    ]);
+    expect(parsed.issues).toEqual([
+      expect.objectContaining({ severity: 'warning', token: 'after:2025-01-01' }),
     ]);
   });
 
@@ -50,5 +52,29 @@ describe('qualifier query compilation', () => {
     expect(parsed.issues).toEqual([
       expect.objectContaining({ severity: 'warning', token: 'mystery:value' }),
     ]);
+  });
+});
+
+describe('plain-language query interpretation', () => {
+  it('emits only filters supported by the native flat query contract', () => {
+    const parsed = interpretNaturalLanguage('budget agency "City Attorney" portal oakland status is closed flag late');
+    const compiled = compileToLegacyQuery(parsed, agencies);
+
+    expect(compiled).toMatchObject({
+      searchTerm: 'budget',
+      portalKey: 'oakland',
+      agencyId: 10,
+      status: 'closed',
+      policyDeviation: 'LATE',
+      deferredFilters: [],
+    });
+  });
+
+  it('keeps unsupported date and existence phrases in full text and warns', () => {
+    const parsed = interpretNaturalLanguage('contracts after 2025-01-01 with no response');
+
+    expect(parsed.text).toBe('contracts after 2025-01-01 with no response');
+    expect(parsed.filters).toEqual([]);
+    expect(parsed.issues.filter((issue) => issue.severity === 'warning')).toHaveLength(2);
   });
 });

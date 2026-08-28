@@ -9,6 +9,7 @@ use xz2::read::XzDecoder;
 
 use crate::error::AppError;
 use crate::parsers::format::DocumentFormat;
+use crate::parsers::staging::cleanup_failed_extraction;
 
 const MAX_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_ENTRY_COUNT: usize = 2_000;
@@ -54,19 +55,16 @@ pub fn extract_archive_container<A: AsRef<Path>, D: AsRef<Path>>(
     let relative_files = match result {
         Ok(files) => files,
         Err(error) => {
-            // TODO(archive): Record cleanup failures for startup reconciliation instead of
-            // silently leaving potentially large extraction directories in the evidence store.
-            let _ = fs::remove_dir_all(&staging);
-            return Err(error);
+            return Err(cleanup_failed_extraction(&staging, "ARCHIVE", error));
         }
     };
     if let Err(error) = fs::rename(&staging, destination) {
-        let _ = fs::remove_dir_all(&staging);
-        return Err(AppError::Internal(format!(
+        let commit_error = AppError::Internal(format!(
             "ARCHIVE_COMMIT_FAILED: failed to commit '{}' as '{}': {error}",
             staging.display(),
             destination.display()
-        )));
+        ));
+        return Err(cleanup_failed_extraction(&staging, "ARCHIVE", commit_error));
     }
     Ok(relative_files
         .into_iter()

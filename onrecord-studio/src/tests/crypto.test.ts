@@ -108,7 +108,7 @@ describe('isValidContentHash', () => {
   it('LIMIT(integrity): does not distinguish which algorithm produced the digest', () => {
     // Pinned deliberately. Any 64-char hex string passes, so this function answers "is this
     // shaped like a SHA-256 digest", NOT "is this a SHA-256 digest of the content at hand".
-    // The TODO(integrity) in crypto.ts tracks giving callers a typed digest instead.
+    // The compatibility predicate deliberately accepts both supported SHA-256 encodings.
     expect(isValidContentHash('0'.repeat(64))).toBe(true);
   });
 });

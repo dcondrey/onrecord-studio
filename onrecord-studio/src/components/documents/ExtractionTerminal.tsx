@@ -1,30 +1,37 @@
 import { useAppStore } from '../../store/useAppStore';
+import { cn } from '../../utils/cn';
 
 export default function ExtractionTerminal() {
-  // BUG(documents): These system lines are currently illustrative rather than
-  // a real event stream; wire this panel to typed ingestion telemetry before
-  // presenting it as an operational terminal.
-  const { metrics, isSyncing } = useAppStore();
+  const syncLogs = useAppStore((state) => state.syncLogs);
+  const isSyncing = useAppStore((state) => state.isSyncing);
+  const isOpen = useAppStore((state) => state.isExtractionTerminalOpen);
+  const setOpen = useAppStore((state) => state.setTerminalVisibility);
+  const clear = useAppStore((state) => state.resetTelemetryMetrics);
 
   return (
-    <div className="border border-slate-800 rounded-xl bg-slate-950 font-mono text-[10px] leading-relaxed shadow-lg overflow-hidden flex flex-col h-full">
+    <section className="flex h-full flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-950 font-mono text-[10px] leading-relaxed shadow-lg" aria-label="Extraction event stream">
       <div className="h-9 border-b border-slate-800 px-4 bg-slate-900/30 flex items-center justify-between select-none">
-        <span className="font-bold text-slate-400 uppercase tracking-wider text-[9px]">Text Core Processor</span>
-        {isSyncing && <div className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse" />}
+        <button type="button" className="focus-ring flex items-center gap-2 rounded text-[9px] font-bold uppercase tracking-wider text-slate-400" aria-expanded={isOpen} onClick={() => setOpen(!isOpen)}>
+          Extraction event stream
+          <span aria-hidden="true">{isOpen ? '−' : '+'}</span>
+        </button>
+        <div className="flex items-center gap-3">
+          {syncLogs.length > 0 && <button type="button" onClick={clear} className="focus-ring rounded px-1.5 py-1 text-[8px] text-slate-500 hover:text-slate-300">Clear session telemetry</button>}
+          <span className={cn('h-1.5 w-1.5 rounded-full', isSyncing ? 'status-pulse bg-cyan-400' : 'bg-slate-700')} aria-label={isSyncing ? 'Synchronization active' : 'Synchronization idle'} />
+        </div>
       </div>
-      {/* TODO(documents): Add bounded retention and a clear/export action once
-          this view is backed by the real telemetry buffer. */}
-      <div className="p-4 flex-1 overflow-y-auto space-y-1 text-slate-400 select-none">
-        <div>[SYSTEM] Initializing Rust core extraction channels...</div>
-        <div>[SYSTEM] Local SQLite connection mapping pools online. WAL enabled.</div>
-        {metrics.pagesProcessed > 0 && <div className="text-indigo-400">[PARSER] Sync pipeline linked to DuckDB database memory boundaries.</div>}
-        {metrics.documentsDownloaded > 0 && <div className="text-cyan-400">[DECOMPRESSOR] Extracted {metrics.documentsDownloaded} file blobs via native PDF text layers.</div>}
-        {isSyncing ? (
-          <div className="text-emerald-400 animate-pulse">[PARSER] Streaming background thread processes...</div>
-        ) : (
-          <div className="text-slate-600">[SYSTEM] Extraction core idle. Standby status.</div>
-        )}
-      </div>
-    </div>
+      {isOpen && (
+        <div className="min-h-0 flex-1 overflow-y-auto p-3 text-slate-400" aria-live="polite">
+          {syncLogs.length === 0
+            ? <div className="p-2 text-slate-700">No ingestion activity has been recorded in this session.</div>
+            : syncLogs.map((log, index) => <div key={`${index}-${log}`} className={cn('border-l py-1 pl-2.5', isErrorLog(log) ? 'border-rose-500/50 text-rose-300/80' : 'border-slate-800 text-slate-500')}>{log}</div>)}
+        </div>
+      )}
+    </section>
   );
+}
+
+function isErrorLog(value: string) {
+  const normalized = value.toLocaleLowerCase();
+  return normalized.includes('failed') || normalized.includes('error') || normalized.includes('warning');
 }

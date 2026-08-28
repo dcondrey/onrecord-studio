@@ -141,9 +141,10 @@ export default function Sidebar() {
             {!isCollapsed && <span className="numeric-value rounded-md bg-slate-900 px-1.5 py-0.5 text-[11px] text-slate-600">{portals.length}</span>}
           </button>
 
-          {portals.map(({ registration: portal, lifecycleState }) => {
+          {portals.map(({ registration: portal, lifecycleState, healthStatus, lastError }) => {
             const runtime = runtimeByPortal.get(portal.portalKey);
             const paused = lifecycleState === 'PAUSED';
+            const degraded = healthStatus === 'degraded';
             const syncing = syncingPortalKeys.includes(portal.portalKey);
             const selected = activePortalKey === portal.portalKey;
             // `activeTasks` is how many downloads are in flight right now, which is a concurrency
@@ -161,7 +162,13 @@ export default function Sidebar() {
               <button
                 key={portal.portalKey}
                 type="button"
-                title={isCollapsed ? portal.displayName : undefined}
+                title={
+                  degraded
+                    ? `${portal.displayName} needs attention${lastError ? `: ${lastError}` : ''}`
+                    : isCollapsed
+                      ? portal.displayName
+                      : undefined
+                }
                 onClick={() => setActivePortal(portal.portalKey)}
                 className={cn(
                   'sidebar-nav-item focus-ring relative mb-0.5 w-full overflow-hidden rounded-lg border text-left transition',
@@ -178,12 +185,13 @@ export default function Sidebar() {
                         halted and one that has simply finished are different facts, and a shared
                         dot would say neither. */}
                     <span
-                      title={paused ? `${portal.displayName} is paused` : undefined}
-                      className={cn('portal-status-dot absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border-2', syncing ? 'status-pulse bg-emerald-400' : paused ? 'bg-amber-400' : 'bg-slate-600')}
+                      title={degraded ? `${portal.displayName} needs attention` : paused ? `${portal.displayName} is paused` : undefined}
+                      className={cn('portal-status-dot absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border-2', degraded ? 'bg-rose-400' : syncing ? 'status-pulse bg-emerald-400' : paused ? 'bg-amber-400' : 'bg-slate-600')}
                     />
                   </span>
                   {!isCollapsed && <span className={cn('min-w-0 flex-1 truncate text-[13px] font-medium', selected ? 'text-indigo-100' : 'text-slate-300')}>{portal.displayName}</span>}
                   {!isCollapsed && paused && <span className="shrink-0 rounded-md bg-amber-400/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-300/90">Paused</span>}
+                  {!isCollapsed && degraded && <span className="shrink-0 rounded-md bg-rose-400/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-rose-300/90">Attention</span>}
                 </div>
                 {!isCollapsed && runtime && totalTasks > 0 && (
                   <div className="mt-1 pl-9">

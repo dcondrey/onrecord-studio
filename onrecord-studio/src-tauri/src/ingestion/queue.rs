@@ -20,8 +20,8 @@ use crate::parsers::{
 };
 use crate::storage::corpus::{CorpusDocumentInput, CorpusIndex};
 use crate::storage::sqlite::{
-    DocumentDownloadFinalization, DocumentExtractionFinalization, PortalSyncRunFinalization,
-    SqliteRepository,
+    DocumentDownloadFinalization, DocumentExtractionFinalization, DuckDbRepository,
+    PortalSyncRunFinalization,
 };
 use crate::types::{
     CrawlPolicy, DocumentMetadata, FrontierExclusionCount, PastedContentInput, PortalApiLayout,
@@ -58,6 +58,8 @@ const MAXIMUM_CONTAINER_DEPTH: usize = 8;
 // or a catalog found deep in a portal silently stops yielding documents.
 const MAXIMUM_STRUCTURED_CHAIN: usize = 8;
 const MAXIMUM_CONTAINER_ENTRIES: usize = 2_000;
+const MAXIMUM_CONTAINER_TREE_ENTRIES: usize = MAXIMUM_CONTAINER_ENTRIES * MAXIMUM_CONTAINER_DEPTH;
+const MAXIMUM_CONTAINER_TREE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 // Synthetic child IDs occupy a dedicated range that remains exactly representable by JavaScript.
 // Keep this namespace disjoint from upstream IDs when introducing another derived document kind.
 const SYNTHETIC_DOCUMENT_NAMESPACE: u64 = 1_u64 << 52;
@@ -66,17 +68,15 @@ const MAXIMUM_LOCAL_IMPORT_BYTES: u64 = 512 * 1024 * 1024;
 const MAXIMUM_LOCAL_IMPORT_FILES: usize = 1_000;
 const MAXIMUM_PASTED_CONTENT_BYTES: usize = 16 * 1024 * 1024;
 
-// TODO(ingestion): Replace the fixed per-file ceiling with out-of-core extraction for very large
-// evidence objects; raising this value alone would permit downloads that parsers cannot safely hold.
+// LIMIT(ingestion): Structured discovery is intentionally unavailable above this fixed per-file
+// ceiling; raising it alone would permit downloads that parsers cannot safely hold.
 const MAXIMUM_STRUCTURED_DISCOVERY_BYTES: u64 = 64 * 1024 * 1024;
 const MAXIMUM_STRUCTURED_DISCOVERY_LINKS: usize = 100_000;
 const ARCGIS_FEATURE_PAGE_SIZE: usize = 500;
 const MAXIMUM_DURABLE_TASK_ATTEMPTS: u64 = 4;
 
-// TODO(ingestion): Add a persisted per-portal scheduler snapshot so an app
-// restart can restore queue priority and backoff state deterministically.
-// FEATURE(ingestion): Expose a user-editable crawl policy editor for depth,
-// allowlists, download selectors, and rate budgets.
+// Scheduler admission counters, durable task attempts, and retry eligibility persist in DuckDB.
+// Channel position is rebuilt from monotonically increasing frontier identifiers after restart.
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(
@@ -226,6 +226,10 @@ pub enum IngestionTask {
         document: Box<DocumentMetadata>,
         output_directory: String,
         container_depth: usize,
+        /// Managed root of the recursive container tree. This is persisted so aggregate disk
+        /// accounting remains effective when a durable child task resumes after restart.
+        #[serde(default)]
+        container_root_directory: Option<String>,
         /// Crawl-graph depth; see `PayloadDepth`. Defaulted because the durable frontier holds
         /// rows serialized before this field existed, and those resume at depth 0 as they did.
         #[serde(default)]
@@ -612,7 +616,7 @@ impl PayloadDepth {
 struct WorkerContext {
     portal: PortalRegistration,
     client: ApiClient,
-    repository: SqliteRepository,
+    repository: DuckDbRepository,
     corpus_index: CorpusIndex,
     limiter: RateLimiter,
     dispatcher: mpsc::Sender<ScheduledTask>,
@@ -638,7 +642,7 @@ struct WorkerContext {
 
 pub struct QueueManager {
     client: ApiClient,
-    repository: SqliteRepository,
+    repository: DuckDbRepository,
     corpus_index: CorpusIndex,
     limiter: RateLimiter,
     progress_sender: mpsc::Sender<IngestionProgress>,
@@ -680,7 +684,7 @@ enum ExtractedDocument {
 impl QueueManager {
     pub fn new<P: AsRef<Path>>(
         client: ApiClient,
-        repository: SqliteRepository,
+        repository: DuckDbRepository,
         corpus_index: CorpusIndex,
         limiter: RateLimiter,
         progress_sender: mpsc::Sender<IngestionProgress>,
@@ -916,6 +920,30 @@ impl QueueManager {
                 return Err(error);
             }
         };
+        let scheduler_counts = match self
+            .repository
+            .ingestion_scheduler_counts(&sync_run_id, &portal.portal_key)
+            .await
+        {
+            Ok(counts) => counts,
+            Err(error) => {
+                self.cancel_task_pool_start(&sync_run_id, &portal.portal_key)
+                    .await;
+                return Err(error);
+            }
+        };
+        let recovered_pages_started = usize::try_from(scheduler_counts.crawl_pages_started)
+            .map_err(|_| {
+                AppError::PortalCapacity(
+                    "Recovered crawl page counter exceeds platform capacity".to_string(),
+                )
+            })?;
+        let recovered_resources_started = usize::try_from(scheduler_counts.resources_started)
+            .map_err(|_| {
+                AppError::PortalCapacity(
+                    "Recovered resource counter exceeds platform capacity".to_string(),
+                )
+            })?;
         if initial_tasks.is_empty() && adopted_frontier_tasks == 0 {
             self.cancel_task_pool_start(&sync_run_id, &portal.portal_key)
                 .await;
@@ -949,8 +977,8 @@ impl QueueManager {
             crawl_path_claims: Mutex::new(HashSet::new()),
             announced_host_stops: Mutex::new(HashSet::new()),
             frontier_exclusions: Mutex::new(BTreeMap::new()),
-            pages_started: AtomicUsize::new(0),
-            resources_started: AtomicUsize::new(0),
+            pages_started: AtomicUsize::new(recovered_pages_started),
+            resources_started: AtomicUsize::new(recovered_resources_started),
             frontier_refill_lock: Mutex::new(()),
             arcgis_page_hashes: Mutex::new(HashSet::new()),
         });
@@ -1013,7 +1041,7 @@ impl QueueManager {
         if let Err(error) = enqueue_result {
             let pool = self.pools.write().await.remove(&portal.portal_key);
             if let Some(pool) = pool {
-                let _ = abort_workers(pool.worker_handles).await;
+                let _ = join_workers(pool.worker_handles).await;
             }
             self.slot_freed.send_modify(|generation| {
                 *generation = generation.wrapping_add(1);
@@ -1375,6 +1403,7 @@ impl QueueManager {
                     document: Box::new(document),
                     output_directory: output_directory.to_string_lossy().into_owned(),
                     container_depth: 0,
+                    container_root_directory: None,
                     crawl_depth: 0,
                     structured_depth: 0,
                 }],
@@ -1474,7 +1503,7 @@ impl QueueManager {
             .store(true, Ordering::Release);
         pool.statistics.running.store(false, Ordering::Release);
         let _ = pool.cancellation.send(true);
-        let worker_result = abort_workers(pool.worker_handles).await;
+        let worker_result = join_workers(pool.worker_handles).await;
         let finalization = self
             .repository
             .finish_portal_sync_run(PortalSyncRunFinalization {
@@ -1629,6 +1658,9 @@ async fn worker_loop(
                         })
                         .await;
                     decrement_atomic(&context.statistics.active_tasks);
+                    if *context.cancellation.borrow() {
+                        break;
+                    }
                     let retry_context = context.clone();
                     tokio::spawn(async move {
                         tokio::time::sleep(std::time::Duration::from_secs(
@@ -1696,6 +1728,9 @@ async fn worker_loop(
                     .await;
             }
         }
+        if *context.cancellation.borrow() {
+            break;
+        }
         if let Err(error) = refill_ingestion_frontier(&context).await {
             context
                 .statistics
@@ -1751,17 +1786,15 @@ fn durable_retry_delay_for_error(error: &AppError, attempt: u64, jitter_seed: u6
     })
 }
 
-async fn abort_workers(worker_handles: Vec<tokio::task::JoinHandle<()>>) -> Result<(), AppError> {
-    for handle in &worker_handles {
-        handle.abort();
-    }
+/// Waits for workers to observe the cancellation signal at a task boundary. Aborting their async
+/// handles would detach any `spawn_blocking` parser already in flight, allowing it to keep writing
+/// after the source run had been finalized or withdrawn.
+async fn join_workers(worker_handles: Vec<tokio::task::JoinHandle<()>>) -> Result<(), AppError> {
     for handle in worker_handles {
         if let Err(error) = handle.await {
-            if !error.is_cancelled() {
-                return Err(AppError::Internal(format!(
-                    "Ingestion worker failed while stopping: {error}"
-                )));
-            }
+            return Err(AppError::Internal(format!(
+                "Ingestion worker failed while stopping: {error}"
+            )));
         }
     }
     Ok(())
@@ -1894,6 +1927,7 @@ async fn execute_task(context: &WorkerContext, task: IngestionTask) -> Result<()
             document,
             output_directory,
             container_depth,
+            container_root_directory,
             crawl_depth,
             structured_depth,
             ..
@@ -1908,6 +1942,7 @@ async fn execute_task(context: &WorkerContext, task: IngestionTask) -> Result<()
                     crawl: crawl_depth,
                     structured: structured_depth,
                 },
+                container_root_directory.map(PathBuf::from),
             )
             .await
         }
@@ -1945,6 +1980,7 @@ async fn execute_task(context: &WorkerContext, task: IngestionTask) -> Result<()
                 *document,
                 PathBuf::from(output_directory),
                 PayloadDepth::discovered(0, 0),
+                None,
             )
             .await
         }
@@ -2326,7 +2362,7 @@ async fn process_arcgis_layer(
     {
         return Ok(());
     }
-    if !reserve_resource(context, &page.request_url).await {
+    if !reserve_resource(context, &page.request_url).await? {
         return Ok(());
     }
     let request_id = stable_source_identifier(&format!("arcgis-layer|{layer_url}"));
@@ -2414,7 +2450,7 @@ async fn prepare_html_page_document(
     body: &[u8],
     depth: PayloadDepth,
 ) -> Result<Option<IngestionTask>, AppError> {
-    if !reserve_resource(context, &inspection.final_url).await {
+    if !reserve_resource(context, &inspection.final_url).await? {
         return Ok(None);
     }
     let document_id = stable_source_identifier(&format!("page|{}", inspection.final_url));
@@ -2529,7 +2565,7 @@ async fn prepare_discovered_download(
     discovered_from: &str,
     depth: PayloadDepth,
 ) -> Result<Option<IngestionTask>, AppError> {
-    if !reserve_resource(context, &inspection.final_url).await {
+    if !reserve_resource(context, &inspection.final_url).await? {
         return Ok(None);
     }
     let request_id = match parent_request_id {
@@ -2756,28 +2792,51 @@ async fn reserve_crawl_page(context: &WorkerContext, depth: usize) -> Result<boo
 /// `maximum_depth`; `maximum_pages`, the per-layer page-hash dedup and the 100M offset ceiling
 /// bound it instead.
 async fn reserve_paginated_page(context: &WorkerContext) -> Result<bool, AppError> {
-    let page_number = context
+    let Some(page_number) = context
+        .repository
+        .reserve_ingestion_crawl_page(
+            &context.sync_run_id,
+            &context.portal.portal_key,
+            context.crawl.policy.maximum_pages,
+        )
+        .await?
+    else {
+        return Ok(false);
+    };
+    let page_number = usize::try_from(page_number).map_err(|_| {
+        AppError::PortalCapacity("Crawl page counter exceeds platform capacity".to_string())
+    })?;
+    context
         .crawl
         .pages_started
-        .fetch_add(1, Ordering::AcqRel)
-        .saturating_add(1);
-    if page_number > context.crawl.policy.maximum_pages {
-        return Ok(false);
-    }
+        .fetch_max(page_number, Ordering::AcqRel);
     context.limiter.acquire(&context.portal.portal_key).await?;
     Ok(true)
 }
 
-async fn reserve_resource(context: &WorkerContext, url: &str) -> bool {
+async fn reserve_resource(context: &WorkerContext, url: &str) -> Result<bool, AppError> {
     if !mark_resource_url(context, url).await {
-        return false;
+        return Ok(false);
     }
+    let Some(resources_started) = context
+        .repository
+        .reserve_ingestion_resource(
+            &context.sync_run_id,
+            &context.portal.portal_key,
+            context.crawl.policy.maximum_resources,
+        )
+        .await?
+    else {
+        return Ok(false);
+    };
+    let resources_started = usize::try_from(resources_started).map_err(|_| {
+        AppError::PortalCapacity("Resource counter exceeds platform capacity".to_string())
+    })?;
     context
         .crawl
         .resources_started
-        .fetch_add(1, Ordering::AcqRel)
-        .saturating_add(1)
-        <= context.crawl.policy.maximum_resources
+        .fetch_max(resources_started, Ordering::AcqRel);
+    Ok(true)
 }
 
 fn standard_document_task(
@@ -2795,6 +2854,7 @@ fn standard_document_task(
         document: Box::new(document),
         output_directory: output_directory.to_string_lossy().into_owned(),
         container_depth: depth.container,
+        container_root_directory: None,
         crawl_depth: depth.crawl,
         structured_depth: depth.structured,
     }
@@ -2882,8 +2942,12 @@ async fn process_binary_payload(
     mut document: DocumentMetadata,
     output_directory: PathBuf,
     depth: PayloadDepth,
+    container_root_directory: Option<PathBuf>,
 ) -> Result<(), AppError> {
     validate_internal_output_directory(&context.download_root, &output_directory)?;
+    if let Some(root) = container_root_directory.as_deref() {
+        validate_internal_output_directory(&context.download_root, root)?;
+    }
     let file_name = sanitize_file_name(document.file_name.as_deref().unwrap_or(""), document.id);
     send_progress(
         context,
@@ -2951,6 +3015,7 @@ async fn process_binary_payload(
         &local_path,
         depth,
         &raw_file_sha256,
+        container_root_directory.as_deref(),
     )
     .await?;
     let download_finalization = DocumentDownloadFinalization {
@@ -3012,28 +3077,48 @@ async fn process_binary_payload(
             format,
             entry_count,
         } => {
+            let format_label = format!("{format:?}");
+            context
+                .repository
+                .mark_document_extraction_state(
+                    document.id,
+                    &context.portal.portal_key,
+                    "EXPANDED",
+                    Some(&format_label),
+                    None,
+                )
+                .await?;
             send_progress(
                 context,
                 IngestionProgress::DocumentExpanded {
                     portal_key: context.portal.portal_key.clone(),
                     document_id: document.id,
-                    format: format!("{format:?}"),
+                    format: format_label,
                     entry_count,
                 },
             )
             .await;
         }
         ExtractedDocument::Deferred { format, route } => {
-            // TODO(ingestion): Persist the actionable deferral route and provide a requeue path
-            // when a required key or specialist tool becomes available; telemetry alone cannot
-            // resume this document without rediscovering its source.
+            let format_label = format!("{format:?}");
+            let reason = extraction_route_label(route);
+            context
+                .repository
+                .mark_document_extraction_state(
+                    document.id,
+                    &context.portal.portal_key,
+                    "DEFERRED",
+                    Some(&format_label),
+                    Some(&reason),
+                )
+                .await?;
             send_progress(
                 context,
                 IngestionProgress::DocumentDeferred {
                     portal_key: context.portal.portal_key.clone(),
                     document_id: document.id,
-                    format: format!("{format:?}"),
-                    reason: extraction_route_label(route),
+                    format: format_label,
+                    reason,
                 },
             )
             .await;
@@ -3056,12 +3141,23 @@ async fn process_binary_payload(
             {
                 return Ok(());
             }
+            let format_label = format!("{format:?}");
+            context
+                .repository
+                .mark_document_extraction_state(
+                    document.id,
+                    &context.portal.portal_key,
+                    "SALVAGED",
+                    Some(&format_label),
+                    None,
+                )
+                .await?;
             send_progress(
                 context,
                 IngestionProgress::DocumentSalvaged {
                     portal_key: context.portal.portal_key.clone(),
                     document_id: document.id,
-                    format: format!("{format:?}"),
+                    format: format_label,
                     primary_error,
                 },
             )
@@ -3886,6 +3982,7 @@ async fn extract_document(
     local_path: &Path,
     depth: PayloadDepth,
     raw_file_sha256: &str,
+    container_root_directory: Option<&Path>,
 ) -> Result<ExtractedDocument, AppError> {
     let _parser_permit = context
         .parser_semaphore
@@ -3959,6 +4056,9 @@ async fn extract_document(
                 .parent()
                 .unwrap_or_else(|| Path::new("."))
                 .join(format!("{}_attachments", document.id));
+            let attachment_root_directory = container_root_directory
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|| attachment_cache.clone());
             let payload = extract_msg_layers(
                 local_path,
                 MsgExtractionContext {
@@ -3969,7 +4069,13 @@ async fn extract_document(
             )
             .await?;
             let attachment_tasks = if let Some(container_depth) = attachment_container_depth {
+                if let Err(error) = validate_container_tree_budget(&attachment_root_directory) {
+                    let _ = std::fs::remove_dir_all(&attachment_cache);
+                    return Err(error);
+                }
                 let output_directory = attachment_cache.to_string_lossy().into_owned();
+                let container_root_directory =
+                    Some(attachment_root_directory.to_string_lossy().into_owned());
                 payload
                     .attachment_documents
                     .into_iter()
@@ -3979,6 +4085,7 @@ async fn extract_document(
                         document: Box::new(attachment.metadata),
                         output_directory: output_directory.clone(),
                         container_depth,
+                        container_root_directory: container_root_directory.clone(),
                         crawl_depth: depth.crawl,
                         structured_depth: depth.structured,
                     })
@@ -4102,6 +4209,7 @@ async fn extract_document(
                 format,
                 depth,
                 raw_file_sha256,
+                container_root_directory,
             )
             .await
         }
@@ -4122,6 +4230,7 @@ async fn extract_document(
                 format,
                 depth,
                 raw_file_sha256,
+                container_root_directory,
             )
             .await
         }
@@ -4174,6 +4283,7 @@ async fn expand_container(
     format: DocumentFormat,
     depth: PayloadDepth,
     raw_file_sha256: &str,
+    container_root_directory: Option<&Path>,
 ) -> Result<ExtractedDocument, AppError> {
     if depth.container >= MAXIMUM_CONTAINER_DEPTH {
         return Ok(ExtractedDocument::Deferred {
@@ -4212,6 +4322,14 @@ async fn expand_container(
         }
     })
     .await??;
+
+    let root_directory = container_root_directory
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| destination.clone());
+    if let Err(error) = validate_container_tree_budget(&root_directory) {
+        let _ = std::fs::remove_dir_all(&destination);
+        return Err(error);
+    }
 
     let mut identifiers = HashSet::with_capacity(extracted_files.len());
     let mut tasks = Vec::with_capacity(extracted_files.len());
@@ -4281,6 +4399,7 @@ async fn expand_container(
             document: Box::new(document),
             output_directory: destination.to_string_lossy().into_owned(),
             container_depth: depth.container + 1,
+            container_root_directory: Some(root_directory.to_string_lossy().into_owned()),
             crawl_depth: depth.crawl,
             structured_depth: depth.structured,
         });
@@ -4359,6 +4478,100 @@ fn existing_container_manifest(destination: &Path) -> Result<Vec<PathBuf>, AppEr
     }
     files.sort();
     Ok(files)
+}
+
+/// Measures the real managed extraction tree without following links. Unlike each format parser's
+/// per-archive expansion ceiling, this bound covers every recursively extracted descendant and is
+/// recomputed from disk, so a durable child task cannot reset it by resuming after process restart.
+fn validate_container_tree_budget(root: &Path) -> Result<u64, AppError> {
+    validate_container_tree_budget_with_limits(
+        root,
+        MAXIMUM_CONTAINER_TREE_ENTRIES,
+        MAXIMUM_CONTAINER_TREE_BYTES,
+    )
+}
+
+fn validate_container_tree_budget_with_limits(
+    root: &Path,
+    maximum_entries: usize,
+    maximum_bytes: u64,
+) -> Result<u64, AppError> {
+    let root_metadata = std::fs::symlink_metadata(root).map_err(|error| {
+        AppError::Storage(format!(
+            "CONTAINER_TREE_INSPECTION_FAILED: failed to inspect '{}': {error}",
+            root.display()
+        ))
+    })?;
+    if root_metadata.file_type().is_symlink() || !root_metadata.is_dir() {
+        return Err(AppError::PortalSecurity(format!(
+            "CONTAINER_TREE_INVALID: '{}' is not a managed directory",
+            root.display()
+        )));
+    }
+
+    let mut directories = vec![root.to_path_buf()];
+    let mut entry_count = 0_usize;
+    let mut total_bytes = 0_u64;
+    while let Some(directory) = directories.pop() {
+        for entry in std::fs::read_dir(&directory).map_err(|error| {
+            AppError::Storage(format!(
+                "CONTAINER_TREE_ENUMERATION_FAILED: failed to enumerate '{}': {error}",
+                directory.display()
+            ))
+        })? {
+            let entry = entry.map_err(|error| {
+                AppError::Storage(format!(
+                    "CONTAINER_TREE_ENUMERATION_FAILED: failed to enumerate '{}': {error}",
+                    directory.display()
+                ))
+            })?;
+            entry_count = entry_count.checked_add(1).ok_or_else(|| {
+                AppError::DataParsing(
+                    "CONTAINER_TREE_ENTRY_COUNT_OVERFLOW: entry count overflowed".to_string(),
+                )
+            })?;
+            if entry_count > maximum_entries {
+                return Err(AppError::DataParsing(format!(
+                    "CONTAINER_TREE_ENTRY_COUNT_EXCEEDED: recursive extraction exceeds {maximum_entries} entries"
+                )));
+            }
+            let path = entry.path();
+            let metadata = std::fs::symlink_metadata(&path).map_err(|error| {
+                AppError::Storage(format!(
+                    "CONTAINER_TREE_ENTRY_INSPECTION_FAILED: failed to inspect '{}': {error}",
+                    path.display()
+                ))
+            })?;
+            if metadata.file_type().is_symlink() {
+                return Err(AppError::PortalSecurity(format!(
+                    "CONTAINER_TREE_ENTRY_INVALID: '{}' is a symbolic link",
+                    path.display()
+                )));
+            }
+            if metadata.is_dir() {
+                directories.push(path);
+                continue;
+            }
+            if !metadata.is_file() {
+                return Err(AppError::PortalSecurity(format!(
+                    "CONTAINER_TREE_ENTRY_INVALID: '{}' is not a regular file or directory",
+                    path.display()
+                )));
+            }
+            total_bytes = total_bytes.checked_add(metadata.len()).ok_or_else(|| {
+                AppError::DataParsing(
+                    "CONTAINER_TREE_SIZE_OVERFLOW: recursive extraction size overflowed"
+                        .to_string(),
+                )
+            })?;
+            if total_bytes > maximum_bytes {
+                return Err(AppError::DataParsing(format!(
+                    "CONTAINER_TREE_SIZE_EXCEEDED: recursive extraction exceeds {maximum_bytes} bytes"
+                )));
+            }
+        }
+    }
+    Ok(total_bytes)
 }
 
 fn archive_entry_id(
@@ -5362,12 +5575,12 @@ mod tests {
         directory: &tempfile::TempDir,
     ) -> (
         Arc<QueueManager>,
-        SqliteRepository,
+        DuckDbRepository,
         PortalRegistration,
         mpsc::Receiver<IngestionProgress>,
     ) {
         let repository =
-            SqliteRepository::new(Path::new(":memory:")).expect("DuckDB core must open");
+            DuckDbRepository::new(Path::new(":memory:")).expect("DuckDB core must open");
         repository
             .run_migrations(include_str!("../../migrations/0001_initial_schema.sql"))
             .await
@@ -5762,6 +5975,7 @@ mod tests {
             }),
             output_directory: "/managed/records".to_string(),
             container_depth: 0,
+            container_root_directory: Some("/managed/root_contents".to_string()),
             crawl_depth: 5,
             structured_depth: 3,
         };
@@ -5769,6 +5983,7 @@ mod tests {
         let decoded: IngestionTask = serde_json::from_str(&encoded).unwrap();
         let IngestionTask::DownloadBinaryPayload {
             document,
+            container_root_directory,
             crawl_depth,
             structured_depth,
             ..
@@ -5777,6 +5992,10 @@ mod tests {
             panic!("durable task kind changed during round trip");
         };
         assert_eq!(document.local_path.as_deref(), Some("/managed/objects/abc"));
+        assert_eq!(
+            container_root_directory.as_deref(),
+            Some("/managed/root_contents")
+        );
         assert_eq!(crawl_depth, 5);
         assert_eq!(structured_depth, 3);
 
@@ -5821,22 +6040,26 @@ mod tests {
             }),
             output_directory: "/managed/records".to_string(),
             container_depth: 0,
+            container_root_directory: Some("/managed/root_contents".to_string()),
             crawl_depth: 5,
             structured_depth: 3,
         };
         let mut encoded = serde_json::to_value(&task).unwrap();
         let object = encoded.as_object_mut().unwrap();
-        for axis in ["crawl", "structured"] {
-            let removed = object
-                .keys()
-                .find(|key| key.contains(axis) && key.contains("epth"))
-                .cloned()
-                .unwrap_or_else(|| panic!("the durable payload must carry a {axis} depth key"));
-            object.remove(&removed);
+        for field in [
+            "crawl_depth",
+            "structured_depth",
+            "container_root_directory",
+        ] {
+            assert!(
+                object.remove(field).is_some(),
+                "the durable payload must carry {field}"
+            );
         }
 
         let decoded: IngestionTask = serde_json::from_value(encoded).unwrap();
         let IngestionTask::DownloadBinaryPayload {
+            container_root_directory,
             crawl_depth,
             structured_depth,
             ..
@@ -5846,6 +6069,7 @@ mod tests {
         };
         assert_eq!(crawl_depth, 0);
         assert_eq!(structured_depth, 0);
+        assert_eq!(container_root_directory, None);
     }
 
     #[test]
@@ -6215,6 +6439,53 @@ mod tests {
             identities,
             HashSet::from(["first".to_string(), "second".to_string()])
         );
+    }
+
+    #[test]
+    fn recursive_container_budget_measures_the_persisted_tree() {
+        let fixture = tempdir().expect("fixture directory must open");
+        let nested = fixture.path().join("nested");
+        std::fs::create_dir(&nested).expect("nested fixture directory must be created");
+        std::fs::write(fixture.path().join("first.bin"), b"abc")
+            .expect("first fixture must be written");
+        std::fs::write(nested.join("second.bin"), b"de").expect("second fixture must be written");
+
+        assert_eq!(
+            validate_container_tree_budget_with_limits(fixture.path(), 3, 5)
+                .expect("tree at both limits must be accepted"),
+            5
+        );
+        assert!(
+            validate_container_tree_budget_with_limits(fixture.path(), 3, 4)
+                .unwrap_err()
+                .to_string()
+                .contains("CONTAINER_TREE_SIZE_EXCEEDED")
+        );
+        assert!(
+            validate_container_tree_budget_with_limits(fixture.path(), 2, 5)
+                .unwrap_err()
+                .to_string()
+                .contains("CONTAINER_TREE_ENTRY_COUNT_EXCEEDED")
+        );
+    }
+
+    #[tokio::test]
+    async fn stopping_workers_does_not_detach_in_flight_blocking_work() {
+        let completed = Arc::new(AtomicBool::new(false));
+        let worker_completed = Arc::clone(&completed);
+        let worker = tokio::spawn(async move {
+            tokio::task::spawn_blocking(|| {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            })
+            .await
+            .expect("fixture blocking worker must finish");
+            worker_completed.store(true, Ordering::Release);
+        });
+
+        join_workers(vec![worker])
+            .await
+            .expect("worker shutdown must join in-flight work");
+        assert!(completed.load(Ordering::Acquire));
     }
 
     // LIMIT(protocol): the two synthetic identifier generators are NOT disjoint. Both set

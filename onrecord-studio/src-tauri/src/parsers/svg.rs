@@ -1,7 +1,10 @@
-//! SVG text extraction, plus a placeholder for safe metadata and overlay inspection.
+//! SVG text extraction and conservative static visibility inspection.
 
 use crate::error::AppError;
-use crate::parsers::forensic_evidence::{EvidenceBundle, ForensicAuditOptions};
+use crate::parsers::forensic_evidence::{
+    finding_for_text, EvidenceBundle, EvidenceClass, EvidenceConfidence, EvidenceLocator,
+    ForensicAuditOptions,
+};
 use crate::parsers::source::read_regular_file;
 use scraper::{ElementRef, Html};
 use std::path::Path;
@@ -75,19 +78,118 @@ pub fn extract_svg_text<P: AsRef<Path>>(file_path: P) -> Result<String, AppError
 }
 
 pub fn audit_svg_file<P: AsRef<Path>>(
-    _path: P,
-    _options: ForensicAuditOptions,
+    path: P,
+    options: ForensicAuditOptions,
 ) -> Result<EvidenceBundle, AppError> {
     // FEATURE(svg-audit): Parse XML without external entities, scripts, network fetches, or
     // resource expansion. Collect text/tspan/title/desc/metadata and effective visibility.
     // TODO(svg-audit): Track transforms, z-order, masks, clips, opacity, paint servers, and
     // rectangles/paths that geometrically cover text. `extract_svg_text` above already delivers
     // the collection half; what remains here is the visibility half.
-    Ok(EvidenceBundle {
+    let bytes = read_regular_file(path.as_ref(), "SVG_AUDIT", MAX_SVG_SOURCE_BYTES)?;
+    let source = String::from_utf8_lossy(&bytes);
+    let document = Html::parse_document(&source);
+    let mut bundle = EvidenceBundle {
         coverage_complete: false,
-        warnings: vec!["SVG_AUDIT_NOT_IMPLEMENTED".to_string()],
+        warnings: vec!["SVG_GEOMETRIC_OCCLUSION_NOT_EVALUATED".to_string()],
         ..EvidenceBundle::default()
-    })
+    };
+    let mut text_index = 0_usize;
+    for node in document.root_element().descendants() {
+        let Some(element) = ElementRef::wrap(node) else {
+            continue;
+        };
+        if !matches!(
+            element.value().name(),
+            "text" | "tspan" | "title" | "desc" | "metadata"
+        ) {
+            continue;
+        }
+        text_index += 1;
+        let value = element
+            .text()
+            .flat_map(str::split_whitespace)
+            .collect::<Vec<_>>()
+            .join(" ");
+        if value.is_empty() {
+            continue;
+        }
+        let hidden_reason = element
+            .ancestors()
+            .filter_map(ElementRef::wrap)
+            .find_map(hidden_reason);
+        if let Some(reason) = hidden_reason {
+            bundle.findings.push(finding_for_text(
+                EvidenceClass::Preserved,
+                EvidenceConfidence::Exact,
+                "SVG_TEXT_EXPLICITLY_HIDDEN",
+                EvidenceLocator { xml_path: Some(format!("svg/{}[{text_index}]", element.value().name())), ..EvidenceLocator::default() },
+                &value,
+                format!("Text is preserved under a static SVG visibility rule: {reason}. Scripted styles, transforms, clipping, masks, and geometric overlays are not interpreted."),
+                options,
+            )?);
+        }
+        for attribute in ["mask", "clip-path", "filter", "transform"] {
+            if let Some(raw) = element.value().attr(attribute) {
+                bundle.findings.push(finding_for_text(
+                    EvidenceClass::Preserved,
+                    EvidenceConfidence::Exact,
+                    format!("SVG_TEXT_{}_REFERENCE", attribute.replace('-', "_").to_ascii_uppercase()),
+                    EvidenceLocator { xml_path: Some(format!("svg/{}[{text_index}]", element.value().name())), ..EvidenceLocator::default() },
+                    raw,
+                    "The text element preserves a rendering-affecting attribute. Its visual effect requires a renderer and is not inferred here.",
+                    options,
+                )?);
+            }
+        }
+    }
+    Ok(bundle)
+}
+
+fn hidden_reason(element: ElementRef<'_>) -> Option<&'static str> {
+    let attributes = element.value();
+    if attributes
+        .attr("display")
+        .is_some_and(|value| value.eq_ignore_ascii_case("none"))
+    {
+        return Some("display=none");
+    }
+    if attributes
+        .attr("visibility")
+        .is_some_and(|value| matches!(value.to_ascii_lowercase().as_str(), "hidden" | "collapse"))
+    {
+        return Some("visibility is hidden or collapsed");
+    }
+    if attributes.attr("opacity").is_some_and(is_zero_css_number)
+        || attributes
+            .attr("fill-opacity")
+            .is_some_and(is_zero_css_number)
+    {
+        return Some("opacity is zero");
+    }
+    let style = attributes
+        .attr("style")?
+        .to_ascii_lowercase()
+        .replace(' ', "");
+    if style.split(';').any(|rule| {
+        matches!(
+            rule,
+            "display:none"
+                | "visibility:hidden"
+                | "visibility:collapse"
+                | "opacity:0"
+                | "opacity:0.0"
+                | "fill-opacity:0"
+                | "fill-opacity:0.0"
+        )
+    }) {
+        return Some("inline style suppresses visibility");
+    }
+    None
+}
+
+fn is_zero_css_number(value: &str) -> bool {
+    value.trim().parse::<f64>().is_ok_and(|value| value == 0.0)
 }
 
 #[cfg(test)]
@@ -158,5 +260,21 @@ mod tests {
         assert!(
             matches!(outcome, Err(AppError::DataParsing(message)) if message.contains("SVG_TEXT_EMPTY"))
         );
+    }
+
+    #[test]
+    fn audit_attributes_statically_hidden_text_without_claiming_full_visibility_coverage() {
+        let path = fixture(r#"<svg><g style="display:none"><text>preserved note</text></g></svg>"#);
+        let result = audit_svg_file(&path, ForensicAuditOptions::default()).expect("audit");
+        let _ = fs::remove_file(&path);
+        assert!(!result.coverage_complete);
+        assert!(result
+            .findings
+            .iter()
+            .any(|finding| finding.kind == "SVG_TEXT_EXPLICITLY_HIDDEN"
+                && finding.masked_preview.as_deref() == Some("preserved note")));
+        assert!(result
+            .warnings
+            .contains(&"SVG_GEOMETRIC_OCCLUSION_NOT_EVALUATED".to_string()));
     }
 }

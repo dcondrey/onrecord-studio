@@ -7,7 +7,7 @@ This document is the handoff point for the multi-surface search system.
 The canonical user-facing grammar is a readable qualifier syntax:
 
 ```text
-"body camera" agency:"City Attorney" status:closed after:2025-01-01 -has:response
+"body camera" agency:"City Attorney" status:closed portal:oakland flag:late
 ```
 
 Users do not need to know this syntax. The evidence search currently combines the
@@ -15,10 +15,10 @@ qualifier text field with visual department/status controls. Natural-language in
 saved searches are outside the supported release surface until they have a reviewable execution
 plan and persistence contract.
 
-Executable qualifier fields today are `status`, `flag`, `portal`, and a uniquely resolvable
-`agency`. Negation, duplicate flat fields, ambiguous agency names, date ranges, `has`, and `type`
-are parsed but visibly marked **not applied**. They are never silently dropped and are never sent
-to the backend as document text.
+Executable qualifier fields are `status`, `flag`, `portal`, and a uniquely resolvable `agency`.
+Negation, duplicate flat fields, and ambiguous agency names are visibly marked **not applied**.
+Every other `field:value` form is rejected with a query warning and is never sent to the backend as
+document text.
 
 ## Canonical model
 

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { readThemePreference, type ThemePreference } from '../utils/theme';
 import type {
   AgencyPerformanceProfile,
   CrossAgencyCorrelation,
@@ -19,7 +20,7 @@ export interface IngestionMetrics {
 }
 
 export type WorkspaceView = 'overview' | 'patterns' | 'evidence' | 'activity';
-export type AppTheme = 'light' | 'dark' | 'auto';
+export type AppTheme = ThemePreference;
 export type WorkspaceInitializationStatus = 'loading' | 'ready' | 'error';
 
 export interface SourceRepairNotice {
@@ -29,8 +30,8 @@ export interface SourceRepairNotice {
 }
 
 interface AppState {
-  // TODO(query): Add `queryAst` and `queryMode` once saved searches and the
-  // visual/qualifier/natural-language editors share a single controlled value.
+  // Search state mirrors the four filters in the supported native query contract; qualifier text
+  // is parsed at the search boundary and unsupported syntax never enters this store.
   workspaceView: WorkspaceView;
   theme: AppTheme;
   isSidebarOpen: boolean;
@@ -44,6 +45,7 @@ interface AppState {
   syncingPortalKeys: string[];
   syncRunIdsByPortal: Record<string, string>;
   isSyncing: boolean;
+  audioAlertsEnabled: boolean;
   syncLogs: string[];
   metrics: IngestionMetrics;
   agencyProfiles: AgencyPerformanceProfile[];
@@ -81,6 +83,7 @@ interface AppState {
   setPortalRuntimes: (runtimes: PortalRuntimeSnapshot[]) => void;
   setActivePortal: (portalKey: string | null) => void;
   setPortalSyncState: (portalKey: string, syncing: boolean, syncRunId?: string) => void;
+  setAudioAlertsEnabled: (enabled: boolean) => void;
   appendSyncLog: (log: string) => void;
   incrementMetric: (metricKey: 'pagesProcessed' | 'documentsDownloaded' | 'anomaliesFound') => void;
   addBytesTransferred: (bytes: number) => void;
@@ -114,7 +117,7 @@ const emptyMetrics = (): IngestionMetrics => ({
 
 export const useAppStore = create<AppState>((set) => ({
   workspaceView: 'overview',
-  theme: getInitialTheme(),
+  theme: readThemePreference(),
   isSidebarOpen: false,
   isSidebarCollapsed: false,
   portals: [],
@@ -126,6 +129,7 @@ export const useAppStore = create<AppState>((set) => ({
   syncingPortalKeys: [],
   syncRunIdsByPortal: {},
   isSyncing: false,
+  audioAlertsEnabled: readAudioAlertsPreference(),
   syncLogs: [],
   metrics: emptyMetrics(),
   agencyProfiles: [],
@@ -158,7 +162,12 @@ export const useAppStore = create<AppState>((set) => ({
       const portals = state.portals.filter(
         (entry) => entry.registration.portalKey !== portal.portalKey,
       );
-      portals.push({ registration: portal, lifecycleState: 'ACTIVE' });
+      portals.push({
+        registration: portal,
+        lifecycleState: 'ACTIVE',
+        healthStatus: 'verified',
+        lastError: null,
+      });
       portals.sort((left, right) =>
         left.registration.displayName.localeCompare(right.registration.displayName),
       );
@@ -251,6 +260,12 @@ export const useAppStore = create<AppState>((set) => ({
         isSyncing: syncingPortalKeys.length > 0,
       };
     }),
+  setAudioAlertsEnabled: (audioAlertsEnabled) => set(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('onrecord-audio-alerts', audioAlertsEnabled ? 'enabled' : 'disabled');
+    }
+    return { audioAlertsEnabled };
+  }),
   appendSyncLog: (log) =>
     set((state) => ({
       syncLogs: [`[${new Date().toLocaleTimeString()}] ${log}`, ...state.syncLogs].slice(0, 250),
@@ -296,8 +311,7 @@ export const useAppStore = create<AppState>((set) => ({
   setPendingSourceRepair: (pendingSourceRepair) => set({ pendingSourceRepair }),
 }));
 
-function getInitialTheme(): AppTheme {
-  if (typeof window === 'undefined') return 'light';
-  const savedTheme = window.localStorage.getItem('onrecord-theme');
-  return savedTheme === 'dark' || savedTheme === 'auto' ? savedTheme : 'light';
+function readAudioAlertsPreference() {
+  return typeof window !== 'undefined'
+    && window.localStorage.getItem('onrecord-audio-alerts') === 'enabled';
 }

@@ -5,6 +5,7 @@ use crate::commands::ingest::initialize_queue_runtime;
 use crate::commands::investigation::AppInvestigationPaths;
 use crate::error::AppError;
 use crate::ingestion::queue::{ingestion_telemetry_envelope, IngestionProgress};
+use crate::parsers::staging::is_managed_extraction_staging_name;
 use crate::storage::corpus::{CorpusDocumentInput, CorpusIndex};
 use crate::storage::duckdb::DuckDbWorkspace;
 use crate::storage::legacy_import::{
@@ -69,6 +70,7 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
     let download_root = app_data_dir.join("documents");
     create_runtime_directory(&download_root)?;
     clear_abandoned_ingestion_staging(&download_root)?;
+    clear_abandoned_extraction_staging(&download_root)?;
     let manager = tauri::async_runtime::block_on(initialize_queue_runtime(
         app_handle.clone(),
         repository.clone(),
@@ -231,9 +233,75 @@ fn clear_abandoned_ingestion_staging(download_root: &Path) -> Result<(), AppErro
     })
 }
 
+/// Removes partial atomic container extractions left by a process interruption.
+///
+/// Container staging lives beside the source document so its final rename remains on one
+/// filesystem. The walk never follows symlinks and removes only directories carrying the
+/// generated `.<destination>.<uuid>.extracting` name; committed container evidence is untouched.
+fn clear_abandoned_extraction_staging(download_root: &Path) -> Result<(), AppError> {
+    const MAXIMUM_INSPECTED_ENTRIES: usize = 100_000;
+    const MAXIMUM_DIRECTORY_DEPTH: usize = 64;
+
+    let mut pending = vec![(download_root.to_path_buf(), 0_usize)];
+    let mut inspected = 0_usize;
+    while let Some((directory, depth)) = pending.pop() {
+        let entries = std::fs::read_dir(&directory).map_err(|error| {
+            AppError::Storage(format!(
+                "Failed to inspect extraction staging parent '{}': {error}",
+                directory.display()
+            ))
+        })?;
+        for entry in entries {
+            inspected = inspected.saturating_add(1);
+            if inspected > MAXIMUM_INSPECTED_ENTRIES {
+                return Err(AppError::Storage(format!(
+                    "Extraction staging reconciliation exceeded {MAXIMUM_INSPECTED_ENTRIES} entries"
+                )));
+            }
+            let entry = entry.map_err(|error| {
+                AppError::Storage(format!(
+                    "Failed to read an extraction staging entry in '{}': {error}",
+                    directory.display()
+                ))
+            })?;
+            let path = entry.path();
+            let metadata = std::fs::symlink_metadata(&path).map_err(|error| {
+                AppError::Storage(format!(
+                    "Failed to inspect possible extraction staging path '{}': {error}",
+                    path.display()
+                ))
+            })?;
+            if metadata.file_type().is_symlink() || !metadata.is_dir() {
+                continue;
+            }
+            let managed_staging = entry
+                .file_name()
+                .to_str()
+                .is_some_and(is_managed_extraction_staging_name);
+            if managed_staging {
+                std::fs::remove_dir_all(&path).map_err(|error| {
+                    AppError::Storage(format!(
+                        "Failed to clear abandoned extraction staging directory '{}': {error}",
+                        path.display()
+                    ))
+                })?;
+                continue;
+            }
+            if depth >= MAXIMUM_DIRECTORY_DEPTH {
+                return Err(AppError::Storage(format!(
+                    "Extraction staging reconciliation exceeded directory depth {MAXIMUM_DIRECTORY_DEPTH} at '{}'",
+                    path.display()
+                )));
+            }
+            pending.push((path, depth + 1));
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::clear_abandoned_ingestion_staging;
+    use super::{clear_abandoned_extraction_staging, clear_abandoned_ingestion_staging};
 
     #[test]
     fn startup_cleanup_removes_only_the_dedicated_staging_area() {
@@ -258,6 +326,31 @@ mod tests {
         );
         clear_abandoned_ingestion_staging(&download_root)
             .expect("cleanup must be idempotent when staging is absent");
+    }
+
+    #[test]
+    fn startup_cleanup_removes_only_generated_container_staging_directories() {
+        let directory = tempfile::tempdir().expect("temporary directory must be created");
+        let root = directory.path().join("documents");
+        let parent = root.join("portal").join("objects");
+        let abandoned =
+            parent.join(".report_contents.550e8400-e29b-41d4-a716-446655440000.extracting");
+        let ordinary_hidden = parent.join(".research.extracting");
+        let committed = parent.join("report_contents");
+        std::fs::create_dir_all(&abandoned).expect("abandoned fixture");
+        std::fs::create_dir_all(&ordinary_hidden).expect("ordinary hidden fixture");
+        std::fs::create_dir_all(&committed).expect("committed fixture");
+        std::fs::write(abandoned.join("partial"), b"partial").expect("partial fixture");
+        std::fs::write(committed.join("evidence"), b"retained").expect("evidence fixture");
+
+        clear_abandoned_extraction_staging(&root).expect("reconciliation must succeed");
+
+        assert!(!abandoned.exists());
+        assert!(ordinary_hidden.is_dir());
+        assert_eq!(
+            std::fs::read(committed.join("evidence")).expect("committed evidence must remain"),
+            b"retained"
+        );
     }
 
     #[cfg(unix)]
