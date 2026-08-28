@@ -1,5 +1,14 @@
-// TODO(legal): Replace free-form ISO date strings with branded date types and
-// validate effective-range ordering before authority imports reach Rust.
+declare const isoDateBrand: unique symbol;
+export type IsoDateString = string & { readonly [isoDateBrand]: true };
+
+export function parseIsoDateString(value: string): IsoDateString | null {
+  const normalized = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return null;
+  const date = new Date(`${normalized}T00:00:00Z`);
+  return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== normalized
+    ? null
+    : normalized as IsoDateString;
+}
 export type LegalAuthorityKind =
   | 'STATE_STATUTE'
   | 'MUNICIPAL_ORDINANCE'
@@ -28,8 +37,8 @@ export interface LegalAuthorityImport {
   rawText: string;
   mandatedDeadlineDays: number | null;
   canonicalSourceUri: string | null;
-  effectiveFrom: string | null;
-  effectiveTo: string | null;
+  effectiveFrom: IsoDateString | null;
+  effectiveTo: IsoDateString | null;
   mandates: LegalMandateInput[];
 }
 
@@ -43,8 +52,8 @@ export interface LegalAuthoritySummary {
   contentSha256: string;
   mandatedDeadlineDays: number | null;
   canonicalSourceUri: string | null;
-  effectiveFrom: string | null;
-  effectiveTo: string | null;
+  effectiveFrom: IsoDateString | null;
+  effectiveTo: IsoDateString | null;
   provisionCount: number;
   mandateCount: number;
   importedAt: string;

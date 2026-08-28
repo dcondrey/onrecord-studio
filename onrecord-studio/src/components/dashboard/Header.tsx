@@ -254,8 +254,6 @@ export default function Header() {
   };
 
   const chooseFiles = async () => {
-    // FEATURE(source): Add a recent-source picker beside the URL composer so
-    // recurring investigations can resume without re-entering a URL.
     repairDiscoveryGate.invalidate();
     const request = sourceRequestGate.begin();
     setPendingSourceRepair(null);
@@ -429,6 +427,7 @@ export default function Header() {
         <Icon name="globe" className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
         <input
           id={inputId}
+          list={`${inputId}-saved-sources`}
           type="url"
           inputMode="url"
           value={portalUrlDraft}
@@ -440,6 +439,13 @@ export default function Header() {
           autoComplete="url"
           className="h-full w-full rounded-lg border-0 bg-transparent pl-8 pr-2 text-[11px] text-slate-100 outline-none placeholder:text-slate-600"
         />
+        <datalist id={`${inputId}-saved-sources`}>
+          {portals.map(({ registration }) => (
+            <option key={registration.portalKey} value={registration.canonicalUrl}>
+              {registration.displayName}
+            </option>
+          ))}
+        </datalist>
       </div>
       <span className="source-composer-divider" aria-hidden="true" />
       <button

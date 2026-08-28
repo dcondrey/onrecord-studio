@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { invokeCommand } from '../../ipc';
 import { useAppStore } from '../../store/useAppStore';
+import { parseIsoDateString } from '../../types';
 import type {
   LegalAuthorityImport,
   LegalAuthorityKind,
@@ -63,8 +64,6 @@ const emptyMandate = (): MandateEditorState => ({
 });
 
 export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorityManagerProps) {
-  // TODO(legal): Add schema-level validation for citations, date ranges,
-  // deadline bounds, and mandate identifiers before invoking native import.
   // FEATURE(legal): Add version comparison and effective-date timeline views
   // for authorities that have been amended over time.
   const authorities = useAppStore((state) => state.legalAuthorities);
@@ -145,6 +144,11 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
     setIsImporting(true);
     try {
       const deadline = editor.mandatedDeadlineDays.trim();
+      const validation = validateAuthorityEditor(editor, mandates);
+      if (!validation.ok) {
+        setError(validation.error);
+        return;
+      }
       const input: LegalAuthorityImport = {
         statuteId: editor.statuteId.trim(),
         jurisdiction: editor.jurisdiction.trim(),
@@ -154,8 +158,8 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
         rawText: editor.rawText,
         mandatedDeadlineDays: deadline ? Number(deadline) : null,
         canonicalSourceUri: nullable(editor.canonicalSourceUri),
-        effectiveFrom: nullable(editor.effectiveFrom),
-        effectiveTo: nullable(editor.effectiveTo),
+        effectiveFrom: validation.effectiveFrom,
+        effectiveTo: validation.effectiveTo,
         mandates: mandates.map(toMandateInput),
       };
       const result = await invokeCommand('import_legal_authority', { input });
@@ -368,6 +372,60 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
       </div>
     </div>
   );
+}
+
+function validateAuthorityEditor(
+  editor: AuthorityEditorState,
+  mandates: MandateEditorState[],
+): { ok: true; effectiveFrom: ReturnType<typeof parseIsoDateString>; effectiveTo: ReturnType<typeof parseIsoDateString> }
+  | { ok: false; error: string } {
+  if (!/^[A-Za-z0-9._:-]{1,128}$/.test(editor.statuteId.trim())) {
+    return { ok: false, error: 'Authority ID must use 1–128 letters, numbers, dots, colons, underscores, or hyphens.' };
+  }
+  for (const [label, value, limit] of [
+    ['Jurisdiction', editor.jurisdiction, 256],
+    ['Citation', editor.statuteCitation, 512],
+    ['Title', editor.title, 512],
+  ] as const) {
+    if (!value.trim() || value.trim().length > limit) {
+      return { ok: false, error: `${label} is required and must be at most ${limit} characters.` };
+    }
+  }
+  if (!editor.rawText.trim() || new TextEncoder().encode(editor.rawText).length > MAXIMUM_SOURCE_BYTES) {
+    return { ok: false, error: 'Authority text is required and must remain within the 8 MiB import limit.' };
+  }
+  const deadline = editor.mandatedDeadlineDays.trim();
+  if (deadline && (!/^\d+$/.test(deadline) || Number(deadline) > 36_500)) {
+    return { ok: false, error: 'Deadline days must be a whole number from 0 through 36,500.' };
+  }
+  const effectiveFrom = editor.effectiveFrom ? parseIsoDateString(editor.effectiveFrom) : null;
+  const effectiveTo = editor.effectiveTo ? parseIsoDateString(editor.effectiveTo) : null;
+  if (editor.effectiveFrom && !effectiveFrom || editor.effectiveTo && !effectiveTo) {
+    return { ok: false, error: 'Effective dates must be real calendar dates in YYYY-MM-DD form.' };
+  }
+  if (effectiveFrom && effectiveTo && effectiveFrom > effectiveTo) {
+    return { ok: false, error: 'Effective-from date must not be later than effective-to date.' };
+  }
+  if (editor.canonicalSourceUri.trim()) {
+    try {
+      const source = new URL(editor.canonicalSourceUri.trim());
+      if (source.protocol !== 'https:') throw new Error('not HTTPS');
+    } catch {
+      return { ok: false, error: 'Canonical source must be a valid HTTPS URL.' };
+    }
+  }
+  const mandateIds = new Set<string>();
+  for (const mandate of mandates) {
+    const identifier = mandate.mandateId.trim();
+    if (!/^[A-Za-z0-9._:-]{1,128}$/.test(identifier) || mandateIds.has(identifier)) {
+      return { ok: false, error: 'Mandate IDs must be unique and use the same safe identifier format as authority IDs.' };
+    }
+    mandateIds.add(identifier);
+    if (!mandate.title.trim() || !mandate.description.trim()) {
+      return { ok: false, error: `Mandate ${identifier} requires a title and description.` };
+    }
+  }
+  return { ok: true, effectiveFrom, effectiveTo };
 }
 
 interface TextFieldProps {

@@ -1,5 +1,5 @@
-// TODO(source): Keep publisher-specific wire types separate from normalized
-// domain types as additional portal adapters are added.
+// INVARIANT(source): This module contains publisher-specific NextRequest wire types; normalized
+// cross-source domain types remain in investigation.ts and source.ts.
 export interface PaginationMeta {
   current_page: number;
   next_page: number | null;
