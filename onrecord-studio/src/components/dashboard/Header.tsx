@@ -84,6 +84,7 @@ export default function Header() {
   const activePortalKey = useAppStore((state) => state.activePortalKey);
   const portalUrlDraft = useAppStore((state) => state.portalUrlDraft);
   const syncingPortalKeys = useAppStore((state) => state.syncingPortalKeys);
+  const syncRunIdsByPortal = useAppStore((state) => state.syncRunIdsByPortal);
   const workspaceView = useAppStore((state) => state.workspaceView);
   const theme = useAppStore((state) => state.theme);
   const setPortalUrlDraft = useAppStore((state) => state.setPortalUrlDraft);
@@ -351,10 +352,11 @@ export default function Header() {
   const pauseSync = async () => {
     const source = activePortal;
     if (!source) return;
+    const syncRunId = syncRunIdsByPortal[source.portalKey];
     setError(null);
     try {
       await invokeCommand('pause_source_sync', { sourceKey: source.portalKey });
-      setPortalSyncState(source.portalKey, false);
+      setPortalSyncState(source.portalKey, false, syncRunId);
       setPortalLifecycleState(source.portalKey, 'PAUSED');
       appendSyncLog(
         `${source.displayName}: paused. Queued work is kept, so resuming continues rather than restarting.`,
@@ -384,10 +386,11 @@ export default function Header() {
     // The source the confirmation was opened for, not whichever one is selected when it resolves.
     const source = pendingRemoval;
     if (!source) return;
+    const syncRunId = syncRunIdsByPortal[source.portalKey];
     setError(null);
     try {
       const removal = await invokeCommand('remove_source', { sourceKey: source.portalKey });
-      setPortalSyncState(source.portalKey, false);
+      setPortalSyncState(source.portalKey, false, syncRunId);
       removePortalFromWorkspace(source.portalKey);
       appendSyncLog(
         `${source.displayName}: removed. ${removal.retainedDocuments.toLocaleString()} ingested ` +

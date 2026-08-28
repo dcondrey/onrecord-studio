@@ -43,7 +43,6 @@ export function parseQualifierQuery(input: string): QueryAst {
     }
     if (!supportedFields.has(field)) {
       issues.push({ severity: 'warning', message: `Unknown search field “${rawField}”.`, token });
-      textTokens.push(stripQuotes(token));
       continue;
     }
 

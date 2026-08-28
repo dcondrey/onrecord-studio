@@ -9,33 +9,14 @@ use crate::ingestion::queue::{ingestion_telemetry_envelope, IngestionProgress, Q
 use crate::storage::corpus::CorpusIndex;
 use crate::storage::sqlite::SqliteRepository;
 use crate::types::{
-    CrawlPolicy, PastedContentInput, PortalRuntimeSnapshot, PortalSyncStart, RateLimitPolicy,
-    SavedSource, SourceDiscoveryPreview, SourceGuidance, SourceIngestionStart, SourceKind,
-    SourceLifecycleState, SourceRemoval,
+    CrawlPolicy, PastedContentInput, PortalRuntimeSnapshot, RateLimitPolicy, SavedSource,
+    SourceDiscoveryPreview, SourceGuidance, SourceIngestionStart, SourceKind, SourceLifecycleState,
+    SourceRemoval,
 };
 use std::path::Path;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Runtime, State};
 use tokio::sync::mpsc;
-
-#[tauri::command]
-pub async fn start_portal_sync(
-    portal_url: String,
-    start_page: Option<usize>,
-    per_page: Option<usize>,
-    rate_limit_policy: Option<RateLimitPolicy>,
-    manager: State<'_, Arc<QueueManager>>,
-) -> Result<PortalSyncStart, AppError> {
-    let portal_url = required_text(&portal_url, "Portal URL", 2_048)?;
-    manager
-        .discover_and_start(
-            portal_url,
-            start_page.unwrap_or(1),
-            per_page.unwrap_or(50),
-            rate_limit_policy.unwrap_or_default(),
-        )
-        .await
-}
 
 #[tauri::command]
 pub async fn preview_data_source(

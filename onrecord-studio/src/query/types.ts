@@ -45,9 +45,16 @@ export interface QueryAst {
 
 export interface LegacyQueryFilters {
   searchTerm: string;
+  portalKey: string | null;
   agencyId: number | null;
   status: string | null;
   policyDeviation: string | null;
   /** Filters that cannot be represented by the current IPC command. */
   deferredFilters: QueryFilter[];
+}
+
+export interface QueryAgencyOption {
+  agencyId: number;
+  agencyName: string;
+  portalKey: string;
 }

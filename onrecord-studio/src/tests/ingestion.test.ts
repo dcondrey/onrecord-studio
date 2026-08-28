@@ -39,6 +39,7 @@ describe('setPortalSyncState run scoping', () => {
   // The defended case. This is what the guard in the store exists for.
   it('ignores a late stop from a superseded run', () => {
     state().setPortalSyncState('portal-a', true, 'run-1');
+    state().setPortalSyncState('portal-a', false, 'run-1');
     state().setPortalSyncState('portal-a', true, 'run-2');
     expect(state().syncRunIdsByPortal).toEqual({ 'portal-a': 'run-2' });
 
@@ -50,33 +51,25 @@ describe('setPortalSyncState run scoping', () => {
     expect(state().isSyncing).toBe(true);
   });
 
-  // The gap. Pinned as CURRENT behavior, not as desired behavior: a stop with no run id skips
-  // the guard entirely, because the condition requires a truthy syncRunId to compare against.
-  // Both live stop paths (the Stop button and the runtime poll) omit it, so the guard above
-  // cannot fire in production today. See TODO(protocol) in src/store/useAppStore.ts.
-  it('DOCUMENTS A GAP: an unscoped stop clears a live replacement run', () => {
+  it('ignores an unscoped stop while a run is active', () => {
     state().setPortalSyncState('portal-a', true, 'run-1');
-    state().setPortalSyncState('portal-a', true, 'run-2');
 
     state().setPortalSyncState('portal-a', false);
 
-    // If this assertion ever flips, the gap has been closed and this test should become the
-    // positive assertion (['portal-a'] / { 'portal-a': 'run-2' } / true) instead.
-    expect(state().syncingPortalKeys).toEqual([]);
-    expect(state().isSyncing).toBe(false);
+    expect(state().syncingPortalKeys).toEqual(['portal-a']);
+    expect(state().syncRunIdsByPortal).toEqual({ 'portal-a': 'run-1' });
+    expect(state().isSyncing).toBe(true);
   });
 
-  // The inversion. A stale syncStarted has no guard at all, so it can rewrite the active run id
-  // and then the genuine stop for the live run is rejected as stale, stranding the portal.
-  it('DOCUMENTS A GAP: a stale start can strand a portal in the syncing set', () => {
+  it('ignores a stale start while a newer run is active', () => {
     state().setPortalSyncState('portal-a', true, 'run-2');
     state().setPortalSyncState('portal-a', true, 'run-1');
-    expect(state().syncRunIdsByPortal).toEqual({ 'portal-a': 'run-1' });
+    expect(state().syncRunIdsByPortal).toEqual({ 'portal-a': 'run-2' });
 
     state().setPortalSyncState('portal-a', false, 'run-2');
 
-    expect(state().syncingPortalKeys).toEqual(['portal-a']);
-    expect(state().isSyncing).toBe(true);
+    expect(state().syncingPortalKeys).toEqual([]);
+    expect(state().isSyncing).toBe(false);
   });
 
   it('lets a stop with no prior run id through, which is what the runtime poll relies on', () => {
@@ -91,9 +84,9 @@ describe('setPortalSyncState run scoping', () => {
     expect(state().syncingPortalKeys).toEqual([]);
   });
 
-  it('does not register a run id for a start that omits one', () => {
+  it('rejects a start that omits its run id', () => {
     state().setPortalSyncState('portal-a', true);
-    expect(state().syncingPortalKeys).toEqual(['portal-a']);
+    expect(state().syncingPortalKeys).toEqual([]);
     expect(state().syncRunIdsByPortal).toEqual({});
   });
 });

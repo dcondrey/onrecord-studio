@@ -10,12 +10,15 @@ The canonical user-facing grammar is a readable qualifier syntax:
 "body camera" agency:"City Attorney" status:closed after:2025-01-01 -has:response
 ```
 
-Users should not need to know this syntax. The evidence search should eventually
-offer three equivalent entry points:
+Users do not need to know this syntax. The evidence search currently combines the
+qualifier text field with visual department/status controls. Natural-language interpretation and
+saved searches are outside the supported release surface until they have a reviewable execution
+plan and persistence contract.
 
-1. Visual filters and editable chips.
-2. Qualifier text with autocomplete and inline validation.
-3. Natural-language text with an explicit interpreted-query preview.
+Executable qualifier fields today are `status`, `flag`, `portal`, and a uniquely resolvable
+`agency`. Negation, duplicate flat fields, ambiguous agency names, date ranges, `has`, and `type`
+are parsed but visibly marked **not applied**. They are never silently dropped and are never sent
+to the backend as document text.
 
 ## Canonical model
 
@@ -24,22 +27,12 @@ Saved searches should store the AST plus the original input for display.
 
 ## Compatibility boundary
 
-`src/query/compile.ts` adapts the richer AST to the current flat
-`query_audit_records` IPC command. Deferred filters are returned explicitly so
-the UI can explain what is not yet enforced. No unsupported qualifier should be
-silently ignored.
+`src/query/compile.ts` adapts the AST to the bounded flat `query_audit_records` IPC command.
+Deferred filters are returned explicitly and rendered in amber with a count. Unknown qualifier
+fields produce a warning and are excluded from the free-text predicate.
 
-## TODO / NOTES
+## Safety boundary
 
-- TODO(query): Add a typed Rust IPC payload for `QueryAst`.
-- TODO(query): Resolve `agency:"name"` against the loaded agency index.
-- TODO(query): Add date, document-existence, type, portal, and negation support
-  to the Rust query planner.
-- TODO(query): Add parenthesized boolean groups and a query formatter.
-- TODO(query): Add saved-search persistence and shareable links.
-- TODO(query): Add parser/property tests for quoting, escaping, dates, and
-  malformed input.
-- NOTE(query): Natural-language interpretation must remain reviewable; never
-  execute an opaque model result without showing its filters.
-- NOTE(query): SQL/Lucene compatibility should be an import/export feature,
-  not a second execution engine.
+Natural-language interpretation, if added later, must remain reviewable; never execute an opaque
+model result without showing its filters. SQL/Lucene compatibility belongs in an import/export
+adapter, not a second execution engine.

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import AgencySelector from './AgencySelector';
 import { useAppStore } from '../../store/useAppStore';
 import { invokeCommand } from '../../ipc';
-import { parseQualifierQuery, serializeQualifierQuery } from '../../query';
+import { compileToLegacyQuery, parseQualifierQuery, serializeQualifierQuery } from '../../query';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 
 export default function SearchFilter() {
@@ -16,6 +16,7 @@ export default function SearchFilter() {
   const error = useAppStore((state) => state.searchError);
   const setSearchError = useAppStore((state) => state.setSearchError);
   const resultCount = useAppStore((state) => state.filteredResults.length);
+  const agencyProfiles = useAppStore((state) => state.agencyProfiles);
   const [inputValue, setInputValue] = useState(searchTerm);
   const [isSearching, setIsSearching] = useState(false);
   const requestGate = useLatestRequestGate();
@@ -23,6 +24,21 @@ export default function SearchFilter() {
   // call below intentionally remains unchanged until deferred filters can be
   // enforced by Rust; see docs/query-language.md before wiring execution.
   const parsedQuery = useMemo(() => parseQualifierQuery(inputValue), [inputValue]);
+  const compiledQuery = useMemo(
+    () => compileToLegacyQuery(
+      parsedQuery,
+      agencyProfiles.map((profile) => ({
+        agencyId: profile.agencyId,
+        agencyName: profile.agencyName,
+        portalKey: profile.portalSubdomain,
+      })),
+    ),
+    [agencyProfiles, parsedQuery],
+  );
+  const deferredFilterKeys = useMemo(
+    () => new Set(compiledQuery.deferredFilters.map(filterKey)),
+    [compiledQuery.deferredFilters],
+  );
 
   useEffect(() => {
     setInputValue(searchTerm);
@@ -37,14 +53,12 @@ export default function SearchFilter() {
       setIsSearching(true);
       setSearchError(null);
       try {
-        // BUG(query): parsedQuery is currently presentation-only; deferred qualifiers are not
-        // sent to Rust, so searches can return broader results than the visible qualifier chips imply.
         const results = await invokeCommand('query_audit_records', {
-          searchTerm: inputValue.trim(),
-          portalKey: activePortalKey,
-          agencyId: selectedAgencyId,
-          status: selectedStatus,
-          policyDeviation: selectedPolicyDeviation,
+          searchTerm: compiledQuery.searchTerm,
+          portalKey: compiledQuery.portalKey ?? activePortalKey,
+          agencyId: compiledQuery.agencyId ?? selectedAgencyId,
+          status: compiledQuery.status ?? selectedStatus,
+          policyDeviation: compiledQuery.policyDeviation ?? selectedPolicyDeviation,
           limit: 500,
         });
         if (requestGate.isCurrent(request)) setFilteredResults(results);
@@ -59,7 +73,7 @@ export default function SearchFilter() {
       }
     }, 220);
     return () => window.clearTimeout(timer);
-  }, [activePortalKey, inputValue, requestGate, selectedAgencyId, selectedPolicyDeviation, selectedStatus, setFilteredResults, setSearchError]);
+  }, [activePortalKey, compiledQuery, inputValue, requestGate, selectedAgencyId, selectedPolicyDeviation, selectedStatus, setFilteredResults, setSearchError]);
 
   const updateTerm = (value: string) => {
     // FEATURE(query): Add visual filter rows and autocomplete suggestions while
@@ -118,11 +132,19 @@ export default function SearchFilter() {
         </div>
       </div>
       <div className="mt-1.5 flex min-h-4 items-center gap-2 px-2 text-[8px]">
-        {parsedQuery.filters.map((filter, index) => (
-          <span key={`${filter.field}-${filter.value}-${index}`} title={`Recognized qualifier: ${filter.raw ?? serializeQualifierQuery({ version: 1, source: 'qualifier', text: '', filters: [filter], issues: [] })}`} className="rounded-full border border-cyan-500/20 bg-cyan-500/[0.06] px-2 py-0.5 font-semibold text-cyan-300">
+        {parsedQuery.filters.map((filter, index) => {
+          const deferred = deferredFilterKeys.has(filterKey(filter));
+          return (
+          <span key={`${filter.field}-${filter.value}-${index}`} title={deferred ? 'Recognized qualifier, but not applied to this search' : `Applied qualifier: ${filter.raw ?? serializeQualifierQuery({ version: 1, source: 'qualifier', text: '', filters: [filter], issues: [] })}`} className={deferred ? 'rounded-full border border-amber-500/25 bg-amber-500/[0.08] px-2 py-0.5 font-semibold text-amber-300' : 'rounded-full border border-cyan-500/20 bg-cyan-500/[0.06] px-2 py-0.5 font-semibold text-cyan-300'}>
             {filter.negated ? '-' : ''}{filter.field}:{filter.value}
           </span>
-        ))}
+          );
+        })}
+        {compiledQuery.deferredFilters.length > 0 && (
+          <span className="text-amber-300" role="status">
+            {compiledQuery.deferredFilters.length} qualifier{compiledQuery.deferredFilters.length === 1 ? '' : 's'} not applied
+          </span>
+        )}
         {parsedQuery.issues.some((issue) => issue.severity === 'warning' || issue.severity === 'error') && (
           <span className="text-amber-300" title="Some query tokens need review">Query syntax needs review</span>
         )}
@@ -144,4 +166,8 @@ export default function SearchFilter() {
 
 function formatPolicy(value: string) {
   return value.toLowerCase().split('_').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+}
+
+function filterKey(filter: { field: string; operator: string; value: string; negated?: boolean }) {
+  return `${filter.field}\u0000${filter.operator}\u0000${filter.value}\u0000${Boolean(filter.negated)}`;
 }

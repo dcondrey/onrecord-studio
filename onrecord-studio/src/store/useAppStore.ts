@@ -63,7 +63,6 @@ interface AppState {
   searchError: string | null;
   selectedRequestId: number | null;
   selectedRequestPortalKey: string | null;
-  isExtractionTerminalOpen: boolean;
   pendingSourceRepair: SourceRepairNotice | null;
   setWorkspaceView: (view: WorkspaceView) => void;
   setTheme: (theme: AppTheme) => void;
@@ -101,7 +100,6 @@ interface AppState {
   setFilteredResults: (results: RequestSearchResult[]) => void;
   setSearchError: (message: string | null) => void;
   setSelectedRequest: (requestId: number | null, portalKey?: string | null) => void;
-  setTerminalVisibility: (visible: boolean) => void;
   setPendingSourceRepair: (notice: SourceRepairNotice | null) => void;
 }
 
@@ -143,7 +141,6 @@ export const useAppStore = create<AppState>((set) => ({
   searchError: null,
   selectedRequestId: null,
   selectedRequestPortalKey: null,
-  isExtractionTerminalOpen: false,
   pendingSourceRepair: null,
   setWorkspaceView: (workspaceView) => set({ workspaceView, isSidebarOpen: false }),
   setTheme: (theme) => set({ theme }),
@@ -199,7 +196,22 @@ export const useAppStore = create<AppState>((set) => ({
             : state.activePortalKey,
       };
     }),
-  setPortalRuntimes: (portalRuntimes) => set({ portalRuntimes }),
+  // A runtime snapshot is authoritative and replaces event-derived run state atomically. This is
+  // the recovery path when telemetry was missed or a process restarted between start/stop events.
+  setPortalRuntimes: (portalRuntimes) => set(() => {
+    const running = portalRuntimes.filter((runtime) => runtime.isRunning);
+    const syncingPortalKeys = running
+      .map((runtime) => runtime.portal.portalKey)
+      .sort((left, right) => left.localeCompare(right));
+    return {
+      portalRuntimes,
+      syncingPortalKeys,
+      syncRunIdsByPortal: Object.fromEntries(
+        running.map((runtime) => [runtime.portal.portalKey, runtime.syncRunId]),
+      ),
+      isSyncing: syncingPortalKeys.length > 0,
+    };
+  }),
   setActivePortal: (activePortalKey) =>
     set({
       activePortalKey,
@@ -216,18 +228,11 @@ export const useAppStore = create<AppState>((set) => ({
   setPortalSyncState: (portalKey, syncing, syncRunId) =>
     set((state) => {
       const currentRunId = state.syncRunIdsByPortal[portalKey];
-      // Drops a stop that names a run which is no longer the active one, so a late `syncStopped`
-      // from run A cannot clear a replacement run B on the same portal.
-      //
-      // LIMIT(protocol): This only fires when the caller supplies `syncRunId`. An unscoped stop
-      // skips the check entirely and clears whatever run is live, and both stop paths in the app
-      // (the Stop button and the runtime poll) currently omit it, so in practice this guard is
-      // unreachable. There is also no guard on the `syncing === true` branch, so a stale start can
-      // overwrite the active run id and strand the portal. Both behaviors are pinned in
-      // src/tests/ingestion.test.ts.
-      // TODO(protocol): Thread the run id through both stop paths, then decide whether an unscoped
-      // stop should be rejected outright rather than treated as "stop whatever is running".
-      if (!syncing && syncRunId && currentRunId && currentRunId !== syncRunId) {
+      // Event-derived updates must identify their run. A stale start cannot replace the active
+      // run, and an unscoped or stale stop cannot clear it. `setPortalRuntimes` is the deliberate
+      // authoritative escape hatch for missed telemetry and process-restart reconciliation.
+      if (syncing && !syncRunId) return state;
+      if (currentRunId && syncRunId !== currentRunId) {
         return state;
       }
       const keys = new Set(state.syncingPortalKeys);
@@ -284,7 +289,6 @@ export const useAppStore = create<AppState>((set) => ({
   setSearchError: (searchError) => set({ searchError }),
   setSelectedRequest: (selectedRequestId, selectedRequestPortalKey = null) =>
     set({ selectedRequestId, selectedRequestPortalKey, activeLegalFindings: [] }),
-  setTerminalVisibility: (isExtractionTerminalOpen) => set({ isExtractionTerminalOpen }),
   setPendingSourceRepair: (pendingSourceRepair) => set({ pendingSourceRepair }),
 }));
 

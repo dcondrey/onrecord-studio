@@ -51,11 +51,6 @@ export type SourceKind =
   | 'LOCAL_FILE'
   | 'PASTED_CONTENT';
 
-export interface PortalSyncStart {
-  portal: PortalRegistration;
-  syncRunId: string;
-}
-
 export interface RateLimitPolicy {
   burstCapacity: number;
   refillTokensPerSecond: number;
@@ -121,55 +116,6 @@ export type IngestionTelemetry = {
   sequence: string;
   emittedAt: string;
 } & IngestionTelemetryEvent;
-
-export type StatutoryExtensionReason =
-  | 'SEPARATE_FIELD_FACILITIES'
-  | 'VOLUMINOUS_RECORDS'
-  | 'INTERAGENCY_CONSULTATION'
-  | 'DATA_COMPILATION'
-  | 'CYBERATTACK_SYSTEMS_UNAVAILABLE'
-  | 'DECLARED_EMERGENCY_OPERATIONAL_IMPACT';
-
-export interface StatutoryExtensionRecord {
-  noticeAt: string;
-  expectedDeterminationAt: string;
-  reason: StatutoryExtensionReason;
-  noticeSource: string;
-}
-
-export type AuxiliaryStreamKind =
-  | 'MUNICIPAL_311'
-  | 'CODE_ENFORCEMENT'
-  | 'POLICE_DISPATCH'
-  | 'SANITATION_OPERATIONS'
-  | 'CUSTOM';
-
-export type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | JsonValue[]
-  | { [key: string]: JsonValue };
-
-export interface AuxiliaryEventInput {
-  externalId: string;
-  occurredAt: string;
-  neighborhoodBlock: string;
-  eventType: string;
-  description: string;
-  latitude: number | null;
-  longitude: number | null;
-  sourcePayload: JsonValue;
-}
-
-export interface AuxiliaryImportResult {
-  sourceId: string;
-  importedCount: number;
-  updatedCount: number;
-  rejectedCount: number;
-  sourceSha256: string;
-}
 
 export interface RequestSearchResult {
   requestId: number;
@@ -271,20 +217,6 @@ export interface ProvenanceVerificationRecord {
   chainOfCustodyConfirmed: boolean;
   verificationErrors: string[];
   predatesClassification: boolean;
-}
-
-export interface PiiMaskResult {
-  maskedText: string;
-  findings: Array<{
-    kind: 'SOCIAL_SECURITY_NUMBER' | 'TELEPHONE_NUMBER' | 'PRIVATE_STREET_ADDRESS';
-    byteStart: number;
-    byteEnd: number;
-    characterStart: number;
-    characterEnd: number;
-    matchedCharacterCount: number;
-    confidenceBasisPoints: number;
-    evidenceSha256: string;
-  }>;
 }
 
 export interface LegalBriefExportResult {

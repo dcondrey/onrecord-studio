@@ -2,9 +2,6 @@ import { invoke } from '@tauri-apps/api/core';
 import type {
   AgencyPerformanceProfile,
   AnalysisConfig,
-  AuxiliaryEventInput,
-  AuxiliaryImportResult,
-  AuxiliaryStreamKind,
   CrossAgencyCorrelation,
   CorpusIndexStatus,
   CorpusPattern,
@@ -18,16 +15,13 @@ import type {
   LegalComplianceFinding,
   LegalEvaluationResult,
   LegalFindingReviewStatus,
-  PiiMaskResult,
   PortalRuntimeSnapshot,
-  PortalSyncStart,
   ProvenanceVerificationRecord,
   RateLimitPolicy,
   RecoveredVersionProfile,
   RedactionIntegrityReport,
   RequestDocumentSummary,
   RequestSearchResult,
-  StatutoryExtensionRecord,
   CrawlPolicy,
   SourceDiscoveryPreview,
   SourceGuidance,
@@ -43,15 +37,6 @@ import type {
 type NoArgs = Record<string, never>;
 
 export interface NativeCommandMap {
-  start_portal_sync: {
-    args: {
-      portalUrl: string;
-      startPage?: number | null;
-      perPage?: number | null;
-      rateLimitPolicy?: RateLimitPolicy | null;
-    };
-    result: PortalSyncStart;
-  };
   pause_source_sync: { args: { sourceKey: string }; result: boolean };
   resume_source_sync: { args: { sourceKey: string }; result: SourceIngestionStart };
   remove_source: { args: { sourceKey: string }; result: SourceRemoval };
@@ -115,24 +100,6 @@ export interface NativeCommandMap {
     };
     result: CrossAgencyCorrelation[];
   };
-  import_auxiliary_events: {
-    args: {
-      portalKey?: string | null;
-      sourceKind: AuxiliaryStreamKind;
-      displayName: string;
-      sourceUri?: string | null;
-      events: AuxiliaryEventInput[];
-    };
-    result: AuxiliaryImportResult;
-  };
-  register_statutory_extension: {
-    args: {
-      requestId: number;
-      portalKey: string;
-      extension: StatutoryExtensionRecord;
-    };
-    result: string[];
-  };
   import_legal_authority: {
     args: { input: LegalAuthorityImport };
     result: LegalAuthorityImportResult;
@@ -156,7 +123,6 @@ export interface NativeCommandMap {
     };
     result: LegalComplianceFinding[];
   };
-  mask_sensitive_text: { args: { text: string }; result: PiiMaskResult };
   verify_document_provenance: {
     args: { documentId: number; portalKey: string };
     result: DocumentProvenanceVerification;

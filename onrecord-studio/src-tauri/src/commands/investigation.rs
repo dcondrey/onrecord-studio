@@ -2,20 +2,18 @@ use crate::analysis::AnalyticsEngine;
 use crate::blocking::spawn as spawn_blocking;
 use crate::commands::validation::{
     managed_evidence_file, optional_portal_key, optional_text, portal_key as validate_portal_key,
-    readable_evidence_file, required_text, validate_text,
+    readable_evidence_file, required_text,
 };
 use crate::error::AppError;
-use crate::integrity::sha256_hex;
 use crate::parsers::{parse_legal_authority, recovery, unredactor};
 use crate::storage::duckdb::DuckDbWorkspace;
-use crate::storage::pii::{mask_pii, PiiMaskResult};
 use crate::storage::sqlite::{ProvenanceEvidenceFile, SqliteRepository};
 use crate::types::{
-    AgencyPerformanceProfile, AnalysisConfig, AuxiliaryEventInput, AuxiliaryImportResult,
-    AuxiliaryStreamKind, CrossAgencyCorrelation, DocumentProvenanceVerification, DocumentTextChunk,
-    LegalAuthorityImport, LegalAuthorityImportResult, LegalAuthoritySummary,
-    LegalComplianceFinding, LegalEvaluationResult, LegalFindingReviewStatus,
-    ProvenanceVerificationRecord, RequestDocumentSummary, StatutoryExtensionRecord,
+    AgencyPerformanceProfile, AnalysisConfig, CrossAgencyCorrelation,
+    DocumentProvenanceVerification, DocumentTextChunk, LegalAuthorityImport,
+    LegalAuthorityImportResult, LegalAuthoritySummary, LegalComplianceFinding,
+    LegalEvaluationResult, LegalFindingReviewStatus, ProvenanceVerificationRecord,
+    RequestDocumentSummary,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -24,12 +22,10 @@ use tokio::sync::Semaphore;
 
 const MAXIMUM_REDACTION_AUDIT_BYTES: u64 = 512 * 1024 * 1024;
 const MAXIMUM_VERSION_RECOVERY_BYTES: u64 = 128 * 1024 * 1024;
-const MAXIMUM_MASK_INPUT_BYTES: usize = 4 * 1024 * 1024;
-const MAXIMUM_AUXILIARY_EVENTS: usize = 50_000;
-const MAXIMUM_AUXILIARY_PAYLOAD_BYTES: usize = 64 * 1024 * 1024;
 const DEFAULT_VERIFICATION_HISTORY_LIMIT: usize = 50;
 const MAXIMUM_VERIFICATION_HISTORY_LIMIT: usize = 500;
 const MAXIMUM_CONCURRENT_REDACTION_AUDITS: usize = 1;
+const MAXIMUM_CONCURRENT_VERSION_RECOVERIES: usize = 1;
 /// Digest verification streams through a fixed buffer, so it is bounded by disk rather than
 /// memory. The limit is higher than the redaction audit's, which materializes its input, but still
 /// finite: a request-level "verify everything" would otherwise queue one blocking hash per
@@ -39,6 +35,7 @@ const MAXIMUM_CONCURRENT_PROVENANCE_VERIFICATIONS: usize = 4;
 pub struct AppInvestigationPaths {
     pub document_root: PathBuf,
     pub redaction_audit_permits: Arc<Semaphore>,
+    pub version_recovery_permits: Arc<Semaphore>,
     pub provenance_verification_permits: Arc<Semaphore>,
 }
 
@@ -47,6 +44,9 @@ impl AppInvestigationPaths {
         Self {
             document_root,
             redaction_audit_permits: Arc::new(Semaphore::new(MAXIMUM_CONCURRENT_REDACTION_AUDITS)),
+            version_recovery_permits: Arc::new(Semaphore::new(
+                MAXIMUM_CONCURRENT_VERSION_RECOVERIES,
+            )),
             provenance_verification_permits: Arc::new(Semaphore::new(
                 MAXIMUM_CONCURRENT_PROVENANCE_VERIFICATIONS,
             )),
@@ -88,52 +88,6 @@ pub async fn get_cross_agency_correlations(
         .synchronize_cross_correlation_alerts(&correlations)
         .await?;
     Ok(correlations)
-}
-
-#[tauri::command]
-pub async fn import_auxiliary_events(
-    portal_key: Option<String>,
-    source_kind: AuxiliaryStreamKind,
-    display_name: String,
-    source_uri: Option<String>,
-    events: Vec<AuxiliaryEventInput>,
-    repository: State<'_, SqliteRepository>,
-) -> Result<AuxiliaryImportResult, AppError> {
-    let portal_key = optional_portal_key(portal_key)?;
-    let display_name = required_text(&display_name, "Auxiliary source display name", 256)?;
-    let source_uri = optional_text(source_uri, "Auxiliary source URI", 2_048)?;
-    let source_sha256 = validate_auxiliary_events(&events)?;
-    repository
-        .import_auxiliary_events(
-            portal_key.as_deref(),
-            source_kind,
-            display_name,
-            source_uri.as_deref(),
-            &events,
-            &source_sha256,
-        )
-        .await
-}
-
-#[tauri::command]
-pub async fn register_statutory_extension(
-    request_id: u64,
-    portal_key: String,
-    extension: StatutoryExtensionRecord,
-    repository: State<'_, SqliteRepository>,
-) -> Result<Vec<String>, AppError> {
-    let portal_key = validate_portal_key(&portal_key)?;
-    required_text(
-        &extension.notice_source,
-        "Statutory extension notice source",
-        4_096,
-    )?;
-    repository
-        .record_statutory_extension(request_id, portal_key, &extension)
-        .await?;
-    repository
-        .refresh_request_timeline_audit(request_id, portal_key)
-        .await
 }
 
 #[tauri::command]
@@ -212,12 +166,6 @@ pub async fn review_legal_finding(
             reviewer_notes.as_deref(),
         )
         .await
-}
-
-#[tauri::command]
-pub async fn mask_sensitive_text(text: String) -> Result<PiiMaskResult, AppError> {
-    validate_text(&text, "Sensitive-text mask input", MAXIMUM_MASK_INPUT_BYTES)?;
-    mask_pii(&text)
 }
 
 /// Verifies a stored document against the digest recorded for it.
@@ -362,6 +310,12 @@ pub async fn carve_document_version_history(
     paths: State<'_, AppInvestigationPaths>,
 ) -> Result<recovery::RecoveredVersionProfile, AppError> {
     let portal_key = validate_portal_key(&portal_key)?;
+    let permit = paths
+        .version_recovery_permits
+        .clone()
+        .acquire_owned()
+        .await
+        .map_err(|_| AppError::Internal("Version recovery scheduler is unavailable".to_string()))?;
     let stored_path = repository
         .resolve_public_document_path(document_id, portal_key)
         .await?;
@@ -372,9 +326,8 @@ pub async fn carve_document_version_history(
         "Version recovery",
     )
     .await?;
-    // TODO(recovery): Schedule revision carving through a bounded forensic-work semaphore, as the
-    // redaction command does, to prevent concurrent 128 MiB snapshots from exhausting memory.
     spawn_blocking("Version recovery", move || {
+        let _permit = permit;
         recovery::carve_historical_pdf_versions(path)
     })
     .await?
@@ -407,31 +360,4 @@ fn validate_analysis_config(config: &AnalysisConfig) -> Result<(), AppError> {
         required_text(keyword, "Policy keyword", 128)?;
     }
     Ok(())
-}
-
-fn validate_auxiliary_events(events: &[AuxiliaryEventInput]) -> Result<String, AppError> {
-    if events.is_empty() || events.len() > MAXIMUM_AUXILIARY_EVENTS {
-        return Err(AppError::DataParsing(format!(
-            "Auxiliary imports must contain between 1 and {MAXIMUM_AUXILIARY_EVENTS} events"
-        )));
-    }
-    for event in events {
-        required_text(&event.external_id, "Auxiliary event identifier", 256)?;
-        required_text(&event.occurred_at, "Auxiliary event timestamp", 64)?;
-        required_text(
-            &event.neighborhood_block,
-            "Auxiliary event neighborhood",
-            512,
-        )?;
-        required_text(&event.event_type, "Auxiliary event type", 256)?;
-        validate_text(&event.description, "Auxiliary event description", 64 * 1024)?;
-    }
-    let canonical_payload = serde_json::to_vec(events)
-        .map_err(|error| AppError::DataParsing(format!("Auxiliary events are invalid: {error}")))?;
-    if canonical_payload.len() > MAXIMUM_AUXILIARY_PAYLOAD_BYTES {
-        return Err(AppError::DataParsing(format!(
-            "Auxiliary import exceeds the {MAXIMUM_AUXILIARY_PAYLOAD_BYTES}-byte payload limit"
-        )));
-    }
-    Ok(sha256_hex(&canonical_payload))
 }

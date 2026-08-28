@@ -5192,7 +5192,8 @@ fn guidance_explicitly_allows_host(guidance: &SourceGuidance, value: &str) -> bo
 }
 
 fn is_supported_external_data_platform(value: &str) -> bool {
-    // TODO(ingestion): Add robots.txt-aware, per-domain crawl policy before expanding this allowlist.
+    // Host policy fetches, caches, and enforces robots rules before any supported external host is
+    // crawled. This list decides only which off-source platforms are eligible for that policy.
     let Some(host) = reqwest::Url::parse(value)
         .ok()
         .and_then(|url| url.host_str().map(str::to_ascii_lowercase))

@@ -80,15 +80,6 @@ export default function App() {
         appendSyncLog('Portal runtime refresh recovered.');
       }
       setPortalRuntimes(runtimes);
-      const running = new Map(
-        runtimes
-          .filter((runtime) => runtime.isRunning)
-          .map((runtime) => [runtime.portal.portalKey, runtime.syncRunId]),
-      );
-      for (const { registration } of useAppStore.getState().portals) {
-        const syncRunId = running.get(registration.portalKey);
-        setPortalSyncState(registration.portalKey, syncRunId !== undefined, syncRunId);
-      }
     } catch (error) {
       const message = String(error);
       const now = Date.now();
@@ -141,12 +132,13 @@ export default function App() {
   }, [refreshRuntimes]);
 
   useEffect(() => {
-    // TODO(app): Reconnect the telemetry listener after a transient bridge
-    // failure and surface a recoverable connection state in the header.
     let active = true;
     let stopListening: (() => void) | null = null;
+    let reconnectTimer: number | null = null;
+    let reconnectAttempt = 0;
     const seenTelemetrySequences = new Set<string>();
-    void listen<IngestionTelemetry>('ingestion-telemetry', ({ payload }) => {
+    const connect = () => {
+      void listen<IngestionTelemetry>('ingestion-telemetry', ({ payload }) => {
       if (payload.protocolVersion !== 1 || !/^\d+$/.test(payload.sequence)) {
         appendSyncLog('Ignored an ingestion event with an unsupported bridge protocol.');
         return;
@@ -229,14 +221,22 @@ export default function App() {
           appendSyncLog(`Ignored an unrecognized ingestion event: ${assertNever(payload)}.`);
           break;
       }
-    }).then((unlisten) => {
-      if (active) stopListening = unlisten;
-      else unlisten();
-    }).catch((error) => {
-      if (active) appendSyncLog(`Telemetry listener failed: ${String(error)}`);
-    });
+      }).then((unlisten) => {
+        reconnectAttempt = 0;
+        if (active) stopListening = unlisten;
+        else unlisten();
+      }).catch((error) => {
+        if (!active) return;
+        reconnectAttempt += 1;
+        const delay = Math.min(30_000, 1_000 * (2 ** Math.min(reconnectAttempt - 1, 5)));
+        appendSyncLog(`Telemetry listener failed; retrying in ${Math.round(delay / 1_000)}s: ${String(error)}`);
+        reconnectTimer = window.setTimeout(connect, delay);
+      });
+    };
+    connect();
     return () => {
       active = false;
+      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
       stopListening?.();
     };
   }, [addBytesTransferred, appendSyncLog, incrementMetric, refreshAnalytics, refreshRuntimes, setPendingSourceRepair, setPortalSyncState, upsertPortal]);

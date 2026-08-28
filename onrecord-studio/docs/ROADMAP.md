@@ -14,8 +14,8 @@ limit, context compaction, or a change of contributor. Search for `TODO(` and
 Current Rust verification is green after the changes below: `cargo fmt --all -- --check`,
 `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test --workspace`
 (223 unit tests passing, 0 failing, plus doctests). The frontend verification is also green:
-`npm run lint`, `npm run test:unit` (66 tests), `npm run build`,
-and `npm run check:ipc` (30 commands, 18 telemetry events, 6 verification states).
+`npm run lint`, `npm run test:unit` (70 tests), `npm run build`,
+and `npm run check:ipc` (26 commands, 18 telemetry events, 6 verification states).
 
 - [x] Every embedded `.msg` descent now spends the shared container-depth budget. The parser
       exports only immediate attachments, and the durable worker schedules nested messages through
@@ -49,8 +49,31 @@ and `npm run check:ipc` (30 commands, 18 telemetry events, 6 verification states
       itself cannot yet be aborted. The hook has token, explicit-invalidation, and unmount tests;
       existing viewer tests continue to exercise late native responses across document changes.
 - [x] Verification after the guidance and sequencing pass: frontend lint, TypeScript, production
-      build/IPC contract, and 66 unit tests are green; Rust fmt, strict clippy, all 223 unit tests,
+      build/IPC contract, and 70 unit tests are green; Rust fmt, strict clippy, all 223 unit tests,
       and doctests are green.
+- [x] Removed eight proven-unreachable frontend files (`AuditTimeline`, `ExtractionTerminal`,
+      `MetadataCard`, three unused hooks, and unused dialog/table primitives) plus the orphaned
+      terminal-visibility store state. Two removed components contained illustrative operational
+      text, so integrating them would have created unsupported evidence claims.
+- [x] Removed all nine unreachable forensic placeholder modules and the unused SVG audit stub.
+      They were not called by ingestion, IPC, tests, or UI and returned literal `NOT_IMPLEMENTED`
+      results. Active SVG text extraction remains bounded and tested; it explicitly makes no
+      visibility or redaction-integrity claim.
+- [x] Retired four registered-but-uncalled native commands. `start_portal_sync` was superseded by
+      `start_data_source`; standalone text masking duplicated mandatory masking in evidence reads;
+      auxiliary-event import and manual statutory-extension mutation had no production caller.
+      Automatic NextRequest statutory-extension ingestion and existing auxiliary storage/schema
+      compatibility remain intact. The supported IPC surface is now 26 commands.
+- [x] Qualifier search no longer sends visible qualifier syntax as document text. Status, flag,
+      portal, and uniquely resolvable agency qualifiers compile into the existing native fields;
+      negated, duplicate, ambiguous, and not-yet-executable filters are visibly marked "not
+      applied" and never silently change the search term. Unknown fields warn without becoming
+      text predicates.
+- [x] Closed run-state races: event updates require the run they describe, stale starts/stops and
+      unscoped active-run stops are rejected, pause/removal carry the captured run, and periodic
+      runtime snapshots reconcile the entire run map atomically. Initial telemetry-listener
+      registration retries with capped exponential delay. Version recovery now has its own
+      one-at-a-time memory semaphore.
 
 ### Continuation — 2026-08-27 evening
 

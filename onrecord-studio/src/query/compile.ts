@@ -1,4 +1,4 @@
-import type { LegacyQueryFilters, QueryAst, QueryFilter } from './types';
+import type { LegacyQueryFilters, QueryAgencyOption, QueryAst, QueryFilter } from './types';
 
 /**
  * Compatibility adapter for `query_audit_records`.
@@ -7,14 +7,27 @@ import type { LegacyQueryFilters, QueryAst, QueryFilter } from './types';
  * and boolean groups are intentionally returned as deferred filters until the
  * Rust query command gains typed support. They must never be silently dropped.
  */
-export function compileToLegacyQuery(query: QueryAst): LegacyQueryFilters {
-  const agencyId: number | null = null;
+export function compileToLegacyQuery(
+  query: QueryAst,
+  agencies: QueryAgencyOption[] = [],
+): LegacyQueryFilters {
+  const positiveFieldCounts = new Map<string, number>();
+  for (const filter of query.filters) {
+    if (!filter.negated) {
+      positiveFieldCounts.set(filter.field, (positiveFieldCounts.get(filter.field) ?? 0) + 1);
+    }
+  }
+  const portalFilter = query.filters.find(
+    (filter) => filter.field === 'portal' && !filter.negated && positiveFieldCounts.get('portal') === 1,
+  );
+  let portalKey: string | null = portalFilter?.value ?? null;
+  let agencyId: number | null = null;
   let status: string | null = null;
   let policyDeviation: string | null = null;
   const deferredFilters: QueryFilter[] = [];
 
   for (const filter of query.filters) {
-    if (filter.negated) {
+    if (filter.negated || (positiveFieldCounts.get(filter.field) ?? 0) > 1) {
       deferredFilters.push(filter);
       continue;
     }
@@ -26,12 +39,28 @@ export function compileToLegacyQuery(query: QueryAst): LegacyQueryFilters {
       policyDeviation = filter.value.toUpperCase();
       continue;
     }
-    // TODO(query): Resolve agency names through the loaded agency index.
+    if (filter.field === 'portal' && filter.operator === 'equals') {
+      portalKey = filter.value;
+      continue;
+    }
+    if (filter.field === 'agency' && filter.operator === 'equals') {
+      const matches = agencies.filter(
+        (agency) =>
+          agency.agencyName.localeCompare(filter.value, undefined, { sensitivity: 'base' }) === 0
+          && (!portalKey || agency.portalKey === portalKey),
+      );
+      if (matches.length === 1) {
+        agencyId = matches[0].agencyId;
+        if (!portalKey) portalKey = matches[0].portalKey;
+        continue;
+      }
+    }
     deferredFilters.push(filter);
   }
 
   return {
     searchTerm: query.text,
+    portalKey,
     agencyId,
     status,
     policyDeviation,

@@ -10,23 +10,12 @@ pub mod database;
 pub mod entropy;
 pub mod excel;
 pub mod format;
-// FEATURE(forensics): These bounded placeholder modules define future residual-evidence
-// contracts. Keep them separate from ordinary ingestion until coverage is verified.
-pub mod compression_oracle;
-pub mod forensic_evidence;
 pub mod html;
-pub mod hypothesis;
-pub mod layout_side_channel;
 pub mod legislation;
 pub mod msg;
-pub mod neural_inference;
 pub mod ocr;
 pub mod office;
-pub mod office_audit;
 pub mod pdf;
-pub mod pdf_auxiliary;
-pub mod pixelation;
-pub mod raster_audit;
 pub mod recovery;
 pub mod rtf;
 pub mod salvage;
@@ -40,10 +29,6 @@ pub use archive::extract_archive_container;
 pub use database::extract_sqlite_text;
 pub use entropy::{assess_file_entropy, calculate_shannon_entropy, EntropyAssessment};
 pub use excel::extract_spreadsheet_layers;
-pub use forensic_evidence::{
-    audit_document_path, EvidenceBundle, EvidenceClass, EvidenceConfidence, EvidenceLocator,
-    ForensicAuditOptions, ForensicFinding,
-};
 pub use format::{detect_document_format, DocumentFormat, ExtractionRoute};
 pub use html::extract_html_text;
 pub use legislation::{

@@ -32,10 +32,17 @@ const bridge = vi.hoisted(() => ({
   invoked: [] as string[],
   setTheme: [] as (string | null)[],
   failSavedPortals: false,
+  listenerFailures: 0,
+  listenerAttempts: 0,
 }));
 
 vi.mock('@tauri-apps/api/event', () => ({
   listen: (name: string, handler: (event: { payload: unknown }) => void) => {
+    bridge.listenerAttempts += 1;
+    if (bridge.listenerFailures > 0) {
+      bridge.listenerFailures -= 1;
+      return Promise.reject(new Error('event bridge unavailable'));
+    }
     bridge.listeners.set(name, handler);
     return Promise.resolve(() => bridge.listeners.delete(name));
   },
@@ -87,6 +94,8 @@ describe('App', () => {
     bridge.invoked.length = 0;
     bridge.setTheme.length = 0;
     bridge.failSavedPortals = false;
+    bridge.listenerFailures = 0;
+    bridge.listenerAttempts = 0;
     window.localStorage.clear();
     useAppStore.setState({
       syncLogs: [],
@@ -127,6 +136,26 @@ describe('App', () => {
     expect(bridge.invoked).toContain('list_portal_runtimes');
     expect(bridge.invoked).toContain('get_agency_performance_profiles');
     await waitFor(() => expect(useAppStore.getState().workspaceInitializationStatus).toBe('ready'));
+  });
+
+  it('reconnects the telemetry listener after a transient registration failure', async () => {
+    vi.useFakeTimers();
+    bridge.listenerFailures = 1;
+    try {
+      render(<App />);
+      await act(async () => Promise.resolve());
+      expect(bridge.listenerAttempts).toBe(1);
+      expect(useAppStore.getState().syncLogs.join('\n')).toContain(
+        'Telemetry listener failed; retrying in 1s',
+      );
+
+      await act(async () => vi.advanceTimersByTimeAsync(1_000));
+      expect(bridge.listenerAttempts).toBe(2);
+      expect(bridge.listeners.has('ingestion-telemetry')).toBe(true);
+    } finally {
+      cleanup();
+      vi.useRealTimers();
+    }
   });
 
   it('records a failed source-catalog load as unavailable instead of an empty workspace', async () => {
