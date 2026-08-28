@@ -25,9 +25,8 @@ pub fn extract_zip_container_with_manifest<A: AsRef<Path>, D: AsRef<Path>>(
     archive_path: A,
     destination: D,
 ) -> Result<Vec<std::path::PathBuf>, AppError> {
-    // FEATURE(container-audit): Keep ordinary extraction atomic and bounded. Compression
-    // side-channel inspection belongs in compression_oracle.rs and must analyze a read-only
-    // snapshot rather than appending attacker-controlled guesses to the evidence package.
+    // Ordinary extraction is atomic and bounded. Compression side-channel inspection belongs in
+    // compression_oracle.rs and analyzes a read-only snapshot without appending guesses.
     let archive_path = archive_path.as_ref();
     let destination = destination.as_ref();
     validate_archive(archive_path, destination)?;
@@ -140,9 +139,19 @@ fn extract_into(archive_path: &Path, staging: &Path) -> Result<Vec<std::path::Pa
     let mut files = Vec::new();
     for index in 0..archive.len() {
         let mut entry = archive.by_index(index).map_err(|error| {
-            AppError::DataParsing(format!(
-                "ZIP_ENTRY_READ_FAILED: failed to open entry {index}: {error}"
-            ))
+            if matches!(
+                error,
+                zip::result::ZipError::UnsupportedArchive(reason)
+                    if reason == zip::result::ZipError::PASSWORD_REQUIRED
+            ) {
+                AppError::DataParsing(format!(
+                    "ZIP_ENCRYPTED_ENTRY_REQUIRES_MANUAL_DECRYPTION: entry {index}; decrypt an investigator-controlled working copy and re-import it while retaining the encrypted original"
+                ))
+            } else {
+                AppError::DataParsing(format!(
+                    "ZIP_ENTRY_READ_FAILED: failed to open entry {index}: {error}"
+                ))
+            }
         })?;
         let relative_path = entry.enclosed_name().ok_or_else(|| {
             AppError::DataParsing(format!(

@@ -158,8 +158,9 @@ fn extract_to_staging(
             })?;
             extract_single_stream(decoder, staging, archive_path, &[".zst", ".zstd"])
         }
-        // FEATURE(archive): Add an explicit credential-vault workflow for encrypted containers
-        // so password-protected evidence can be retried without placing secrets in task payloads.
+        // Credential-bearing archives are never accepted by this worker or placed in task
+        // payloads. Encrypted ZIPs return the explicit manual-decrypt-and-reimport disposition in
+        // zip.rs; unsupported formats remain outside this bounded extraction process.
         _ => Err(AppError::DataParsing(format!(
             "ARCHIVE_FORMAT_UNSUPPORTED: {:?} requires a specialist extraction tool",
             format
