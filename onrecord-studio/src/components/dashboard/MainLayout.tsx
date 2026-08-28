@@ -34,6 +34,7 @@ export default function MainLayout() {
   const [documents, setDocuments] = useState<RequestDocumentSummary[]>([]);
   const [documentError, setDocumentError] = useState<string | null>(null);
   const [activeDocument, setActiveDocument] = useState<{ summary: RequestDocumentSummary; chunk: DocumentTextChunk } | null>(null);
+  const [pendingEvidenceLink, setPendingEvidenceLink] = useState(readEvidenceLink);
   const [isLegalLibraryOpen, setLegalLibraryOpen] = useState(false);
   const closeLegalLibrary = useCallback(() => setLegalLibraryOpen(false), []);
   const selected = results.find(
@@ -44,22 +45,32 @@ export default function MainLayout() {
   const exportGate = useLatestRequestGate();
 
   useEffect(() => {
+    if (pendingEvidenceLink) {
+      setSelectedRequest(pendingEvidenceLink.requestId, pendingEvidenceLink.portalKey);
+    }
+  }, [pendingEvidenceLink, setSelectedRequest]);
+
+  useEffect(() => {
     const request = documentListGate.begin();
     documentOpenGate.invalidate();
     setDocuments([]);
     setDocumentError(null);
     setActiveDocument(null);
-    if (!selected) return documentListGate.invalidate;
+    const target = selected ?? (pendingEvidenceLink ? {
+      requestId: pendingEvidenceLink.requestId,
+      portalKey: pendingEvidenceLink.portalKey,
+    } : null);
+    if (!target) return documentListGate.invalidate;
     void invokeCommand('list_request_documents', {
-      requestId: selected.requestId,
-      portalKey: selected.portalKey,
+      requestId: target.requestId,
+      portalKey: target.portalKey,
     }).then((values) => {
       if (documentListGate.isCurrent(request)) setDocuments(values);
     }).catch((reason) => {
       if (documentListGate.isCurrent(request)) setDocumentError(String(reason));
     });
     return documentListGate.invalidate;
-  }, [documentListGate, documentOpenGate, selected?.portalKey, selected?.requestId]);
+  }, [documentListGate, documentOpenGate, pendingEvidenceLink, selected?.portalKey, selected?.requestId]);
 
   useEffect(() => {
     if (!activeDocument) return;
@@ -90,6 +101,21 @@ export default function MainLayout() {
       setDocumentError(String(reason));
     }
   };
+
+  useEffect(() => {
+    if (!pendingEvidenceLink || documents.length === 0) return;
+    const summary = documents.find((document) =>
+      document.documentId === pendingEvidenceLink.documentId
+      && document.portalKey === pendingEvidenceLink.portalKey
+    );
+    if (!summary) {
+      setDocumentError(`Evidence link document ${pendingEvidenceLink.portalKey}/${pendingEvidenceLink.documentId} is not part of request ${pendingEvidenceLink.requestId}.`);
+      setPendingEvidenceLink(null);
+      return;
+    }
+    void openDocument(summary, pendingEvidenceLink.characterOffset);
+    setPendingEvidenceLink(null);
+  }, [documents, pendingEvidenceLink]);
 
   const exportBrief = async (record: RequestSearchResult) => {
     const request = exportGate.begin();
@@ -276,16 +302,20 @@ export default function MainLayout() {
             <div className="grid h-full grid-cols-[minmax(0,1fr)_360px] gap-4">
               <DocumentViewer
                 documentId={activeDocument.summary.documentId}
+                requestId={selectedRequestId ?? undefined}
                 portalKey={activeDocument.summary.portalKey}
                 fileName={activeDocument.summary.fileName}
                 textContent={activeDocument.chunk.maskedText}
                 fileSizeFormatted={formatFileSize(activeDocument.summary.fileSize)}
                 textPositionLabel={`${activeDocument.chunk.characterOffset.toLocaleString()}–${Math.min(activeDocument.chunk.characterOffset + activeDocument.chunk.returnedCharacterCount, activeDocument.chunk.totalCharacterCount).toLocaleString()} of ${activeDocument.chunk.totalCharacterCount.toLocaleString()} characters`}
+                characterOffset={activeDocument.chunk.characterOffset}
                 knownMaskedFindingCount={activeDocument.chunk.maskedFindingCount}
                 onNextChunk={activeDocument.chunk.nextCharacterOffset === null ? undefined : () => void openDocument(activeDocument.summary, activeDocument.chunk.nextCharacterOffset ?? 0)}
               />
               <aside className="min-h-0 space-y-4 overflow-y-auto" aria-label="Document evidence details">
                 <MetadataCard
+                  documentId={activeDocument.summary.documentId}
+                  portalKey={activeDocument.summary.portalKey}
                   sha256={activeDocument.summary.rawFileSha256}
                   contentType={activeDocument.summary.contentType}
                   visibility={activeDocument.summary.visibility}
@@ -301,6 +331,19 @@ export default function MainLayout() {
       <LegalAuthorityManager isOpen={isLegalLibraryOpen} onClose={closeLegalLibrary} />
     </main>
   );
+}
+
+function readEvidenceLink() {
+  const parameters = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  const portalKey = parameters.get('portal')?.trim();
+  const requestValue = parameters.get('request');
+  const documentValue = parameters.get('document');
+  if (!portalKey || requestValue === null || documentValue === null) return null;
+  const requestId = Number(requestValue);
+  const documentId = Number(documentValue);
+  const characterOffset = Number(parameters.get('offset') ?? 0);
+  if (!Number.isSafeInteger(requestId) || requestId < 0 || !Number.isSafeInteger(documentId) || documentId < 0 || !Number.isSafeInteger(characterOffset) || characterOffset < 0) return null;
+  return { portalKey, requestId, documentId, characterOffset };
 }
 
 function EmptyResults({ error }: { error: string | null }) {

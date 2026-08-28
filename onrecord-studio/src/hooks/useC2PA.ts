@@ -10,8 +10,8 @@ export function useC2PA() {
   const requestGate = useLatestRequestGate();
 
   const verifyAssetProvenance = useCallback(async (documentId: number, portalKey: string) => {
-    // FEATURE(provenance): Expose signer identity, assertion history, and
-    // verification timestamps as a first-class evidence panel.
+    // The document viewer pairs this current check with a first-class append-only history panel
+    // containing signer identity, assertion counts, and exact verification timestamps.
     const request = requestGate.begin();
     setIsValidating(true);
     setError(null);

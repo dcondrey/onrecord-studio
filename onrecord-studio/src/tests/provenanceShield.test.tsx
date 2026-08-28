@@ -133,6 +133,7 @@ async function openLog(history: ProvenanceVerificationRecord[]): Promise<HTMLEle
 
 afterEach(() => {
   cleanup();
+  window.history.replaceState(null, '', '/');
   bridge.result = null;
   bridge.history = [];
   bridge.gate = null;
@@ -140,6 +141,36 @@ afterEach(() => {
   bridge.verifyGates.clear();
   bridge.revisionProfile = null;
   bridge.revisionGate = null;
+});
+
+describe('document evidence navigation', () => {
+  it('finds extracted text and copies a Unicode-correct evidence offset', async () => {
+    bridge.result = verification({});
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    render(<DocumentViewer documentId={7} requestId={3} portalKey="example" fileName="release.pdf" textContent="😀 evidence appears here" characterOffset={10} fileSizeFormatted="1 KB" />);
+    await waitFor(() => expect(screen.queryByText('Verifying…')).toBeNull());
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search within this extracted-text chunk' }), { target: { value: 'evidence' } });
+    expect(screen.getByText('1/1')).toBeTruthy();
+    expect(document.querySelector('mark')?.textContent).toBe('evidence');
+    fireEvent.click(screen.getByRole('button', { name: 'Copy evidence link' }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    const copied = new URL(writeText.mock.calls[0][0]);
+    const fragment = new URLSearchParams(copied.hash.slice(1));
+    expect(Object.fromEntries(fragment)).toEqual({ portal: 'example', request: '3', document: '7', offset: '12' });
+  });
+
+  it('paginates a large extracted-text chunk instead of mounting it all at once', async () => {
+    bridge.result = verification({});
+    render(<DocumentViewer documentId={7} portalKey="example" fileName="release.pdf" textContent={`${'a'.repeat(12_000)}SECOND_PAGE`} fileSizeFormatted="1 KB" />);
+    await waitFor(() => expect(screen.queryByText('Verifying…')).toBeNull());
+
+    expect(screen.queryByText('SECOND_PAGE')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Next text page' }));
+    expect(screen.getByText('SECOND_PAGE')).toBeTruthy();
+  });
 });
 
 describe('provenance shield', () => {

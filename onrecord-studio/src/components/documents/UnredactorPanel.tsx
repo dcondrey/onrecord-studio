@@ -1,19 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { invokeCommand } from '../../ipc';
-import type { RedactionIntegrityReport, RedactionPageFinding } from '../../types';
+import type { EvidenceBundle, EvidenceClass, RedactionIntegrityReport, RedactionPageFinding } from '../../types';
 import { cn } from '../../utils/cn';
 
 export default function UnredactorPanel({ documentId, portalKey }: { documentId: number; portalKey: string }) {
-  // FEATURE(documents): Add typed evidence tabs for preserved, historical, derived, and
-  // hypothesis findings once the native forensic collectors expose their shared contract.
   // NOTE(documents): Do not display speculative candidates beside preserved text.
-  // PERF(documents): A bounded scan is safe for now; add progress reporting
-  // and worker scheduling before allowing repeated scans across many pages.
-  // FEATURE(documents): Add a review workflow that lets investigators attach
-  // notes to each quarantined intersection without exposing raw sensitive text.
   const [isScanning, setIsScanning] = useState(false);
   const [report, setReport] = useState<RedactionIntegrityReport | null>(null);
+  const [evidence, setEvidence] = useState<EvidenceBundle | null>(null);
+  const [evidenceClass, setEvidenceClass] = useState<EvidenceClass>('preserved');
   const [error, setError] = useState<string | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const reviewStorageKey = `onrecord:redaction-review:${portalKey}:${documentId}`;
+  const [reviewNotes, setReviewNotes] = useState<Record<string, string>>(() => readReviewNotes(reviewStorageKey));
   const scanGeneration = useRef(0);
   const coverageLimited = report !== null && !report.coverageComplete;
 
@@ -21,17 +20,36 @@ export default function UnredactorPanel({ documentId, portalKey }: { documentId:
     scanGeneration.current += 1;
     setIsScanning(false);
     setReport(null);
+    setEvidence(null);
     setError(null);
+    setElapsedSeconds(0);
+    setReviewNotes(readReviewNotes(reviewStorageKey));
   }, [documentId, portalKey]);
+
+  useEffect(() => {
+    if (!isScanning) return;
+    const started = Date.now();
+    const timer = window.setInterval(() => setElapsedSeconds(Math.floor((Date.now() - started) / 1_000)), 250);
+    return () => window.clearInterval(timer);
+  }, [isScanning]);
 
   const scan = async () => {
     const generation = ++scanGeneration.current;
     setIsScanning(true);
     setReport(null);
+    setEvidence(null);
     setError(null);
+    setElapsedSeconds(0);
     try {
-      const result = await invokeCommand('verify_document_redaction_integrity', { documentId, portalKey });
-      if (generation === scanGeneration.current) setReport(result);
+      const [result, bundle] = await Promise.all([
+        invokeCommand('verify_document_redaction_integrity', { documentId, portalKey }),
+        invokeCommand('audit_document_residual_evidence', { documentId, portalKey, includeHypotheses: true }),
+      ]);
+      if (generation === scanGeneration.current) {
+        setReport(result);
+        setEvidence(bundle);
+        setEvidenceClass(firstPopulatedEvidenceClass(bundle));
+      }
     } catch (reason) {
       if (generation === scanGeneration.current) setError(String(reason));
     } finally {
@@ -47,9 +65,10 @@ export default function UnredactorPanel({ documentId, portalKey }: { documentId:
           <div className="mt-0.5 text-[9px] text-slate-600">Conservative vector, text-layer, and metadata inspection; permanently removed content cannot be recovered</div>
         </div>
         <button type="button" onClick={() => void scan()} disabled={isScanning} className="rounded-lg border border-indigo-400/25 bg-indigo-500/10 px-3 py-2 text-[10px] font-semibold text-indigo-300 transition hover:bg-indigo-500/15 disabled:cursor-not-allowed disabled:opacity-50">
-          {isScanning ? 'Inspecting…' : 'Run integrity scan'}
+          {isScanning ? `Inspecting… ${elapsedSeconds}s` : 'Run integrity scan'}
         </button>
       </div>
+      {isScanning && <div className="h-1 overflow-hidden bg-slate-950" role="progressbar" aria-label="Redaction evidence collectors are running"><div className="h-full w-1/3 animate-pulse rounded-full bg-indigo-400" /></div>}
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         {error && <div role="alert" className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-3 text-[10px] text-rose-300">{error}</div>}
         {report ? (
@@ -79,7 +98,13 @@ export default function UnredactorPanel({ documentId, portalKey }: { documentId:
               </div>
             )}
             {report.metadataLeaks.length > 0 && <ForensicList title="PII-masked metadata" values={report.metadataLeaks} />}
-            {report.pageFindings.length > 0 && <PageFindings findings={report.pageFindings} />}
+            {evidence && <EvidenceTabs bundle={evidence} activeClass={evidenceClass} onSelect={setEvidenceClass} />}
+            {report.pageFindings.length > 0 && <PageFindings findings={report.pageFindings} notes={reviewNotes} onNoteChange={(key, value) => {
+              const next = { ...reviewNotes, [key]: value };
+              if (!value.trim()) delete next[key];
+              setReviewNotes(next);
+              persistReviewNotes(reviewStorageKey, next);
+            }} />}
             {report.isolatedStructuralAnomalies.length > 0 && <ForensicList title="Structural signals" values={report.isolatedStructuralAnomalies} />}
           </div>
         ) : !error && (
@@ -105,7 +130,7 @@ function ForensicList({ title, values }: { title: string; values: string[] }) {
   );
 }
 
-function PageFindings({ findings }: { findings: RedactionPageFinding[] }) {
+function PageFindings({ findings, notes, onNoteChange }: { findings: RedactionPageFinding[]; notes: Record<string, string>; onNoteChange: (key: string, value: string) => void }) {
   return (
     <div>
       <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-wider text-slate-600">Page-level findings</div>
@@ -124,7 +149,10 @@ function PageFindings({ findings }: { findings: RedactionPageFinding[] }) {
                 <summary className="cursor-pointer text-slate-500">Intersection coordinates</summary>
                 <ul className="mt-1 space-y-1 font-mono text-[8px] text-slate-500">
                   {finding.intersections.map((intersection, index) => (
-                    <li key={`${intersection.kind}-${index}`}>{intersection.kind} · text [{formatBounds(intersection.textBounds)}] · mask [{formatBounds(intersection.maskBounds)}]</li>
+                    <li key={`${intersection.kind}-${index}`} className="space-y-1.5 rounded border border-slate-800 p-2">
+                      <div>{intersection.kind} · text [{formatBounds(intersection.textBounds)}] · mask [{formatBounds(intersection.maskBounds)}]</div>
+                      <label className="block text-[8px] text-slate-600">Review note (geometry only; no recovered text)<textarea value={notes[reviewKey(finding.pageNumber, intersection.kind, index)] ?? ''} onChange={(event) => onNoteChange(reviewKey(finding.pageNumber, intersection.kind, index), event.target.value.slice(0, 2_000))} className="mt-1 block min-h-14 w-full rounded border border-slate-800 bg-slate-950 p-2 text-[9px] text-slate-300" placeholder="Record reviewer disposition or follow-up…" /></label>
+                    </li>
                   ))}
                 </ul>
               </details>
@@ -134,6 +162,39 @@ function PageFindings({ findings }: { findings: RedactionPageFinding[] }) {
       </div>
     </div>
   );
+}
+
+const EVIDENCE_CLASSES: EvidenceClass[] = ['preserved', 'historical', 'derived', 'hypothesis'];
+
+function EvidenceTabs({ bundle, activeClass, onSelect }: { bundle: EvidenceBundle; activeClass: EvidenceClass; onSelect: (value: EvidenceClass) => void }) {
+  const findings = bundle.findings.filter((finding) => finding.class === activeClass);
+  return <section className="rounded-lg border border-slate-800 bg-slate-950/50 p-3"><div className="flex flex-wrap gap-1" role="tablist" aria-label="Evidence class">{EVIDENCE_CLASSES.map((value) => { const count = bundle.findings.filter((finding) => finding.class === value).length; return <button key={value} type="button" role="tab" aria-selected={activeClass === value} onClick={() => onSelect(value)} className={activeClass === value ? 'rounded border border-indigo-400/30 bg-indigo-500/10 px-2 py-1 text-[8px] font-semibold uppercase text-indigo-200' : 'rounded border border-slate-800 px-2 py-1 text-[8px] uppercase text-slate-500'}>{value} · {count}</button>; })}</div><div className="mt-2 space-y-1.5">{findings.length === 0 ? <p className="text-[9px] text-slate-600">No {activeClass} findings were reported by the collectors that completed.</p> : findings.map((finding, index) => <article key={`${finding.kind}-${finding.valueSha256 ?? index}`} className="rounded border border-slate-800 p-2 text-[9px]"><div className="font-semibold text-slate-300">{finding.kind.split('_').join(' ').toLocaleLowerCase()} · {finding.confidence}</div>{finding.maskedPreview && <pre className="mt-1 max-h-20 overflow-auto whitespace-pre-wrap font-mono text-slate-400">{finding.maskedPreview}</pre>}<p className="mt-1 text-slate-500">{finding.explanation}</p></article>)}</div></section>;
+}
+
+function firstPopulatedEvidenceClass(bundle: EvidenceBundle): EvidenceClass {
+  return EVIDENCE_CLASSES.find((value) => bundle.findings.some((finding) => finding.class === value)) ?? 'preserved';
+}
+
+function reviewKey(pageNumber: number, kind: string, index: number) {
+  return `${pageNumber}:${kind}:${index}`;
+}
+
+function readReviewNotes(key: string): Record<string, string> {
+  try {
+    const value: unknown = JSON.parse(window.localStorage.getItem(key) ?? '{}');
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
+  } catch {
+    return {};
+  }
+}
+
+function persistReviewNotes(key: string, notes: Record<string, string>) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(notes));
+  } catch {
+    // Review notes remain available for this session when browser storage is disabled or full.
+  }
 }
 
 function formatBounds(bounds: [number, number, number, number]) {

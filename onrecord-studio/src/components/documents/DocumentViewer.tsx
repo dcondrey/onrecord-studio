@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useC2PA } from '../../hooks/useC2PA';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { invokeCommand } from '../../ipc';
@@ -7,18 +7,20 @@ import UnredactorPanel from './UnredactorPanel';
 
 interface DocumentViewerProps {
   documentId: number;
+  requestId?: number;
   portalKey: string;
   fileName: string;
   textContent: string;
   fileSizeFormatted: string;
   textPositionLabel?: string;
+  characterOffset?: number;
   knownMaskedFindingCount?: number;
   onNextChunk?: () => void;
 }
 
-export default function DocumentViewer({ documentId, portalKey, fileName, textContent, fileSizeFormatted, textPositionLabel, knownMaskedFindingCount = 0, onNextChunk }: DocumentViewerProps) {
-  // FEATURE(documents): Add in-document search, match highlighting, and a
-  // shareable character-offset link for evidence review.
+const TEXT_PAGE_CHARACTERS = 12_000;
+
+export default function DocumentViewer({ documentId, requestId, portalKey, fileName, textContent, fileSizeFormatted, textPositionLabel, characterOffset = 0, knownMaskedFindingCount = 0, onNextChunk }: DocumentViewerProps) {
   const { verifyAssetProvenance, activeManifest, isValidating, error: provenanceError } = useC2PA();
   const [recoveryProfile, setRecoveryProfile] = useState<RecoveredVersionProfile | null>(null);
   const [isRecovering, setIsRecovering] = useState(false);
@@ -31,6 +33,10 @@ export default function DocumentViewer({ documentId, portalKey, fileName, textCo
   const [residualAudit, setResidualAudit] = useState<EvidenceBundle | null>(null);
   const [residualAuditError, setResidualAuditError] = useState<string | null>(null);
   const [isAuditingResiduals, setIsAuditingResiduals] = useState(false);
+  const [documentSearch, setDocumentSearch] = useState('');
+  const [activeMatch, setActiveMatch] = useState(0);
+  const [textPage, setTextPage] = useState(0);
+  const [shareStatus, setShareStatus] = useState<string | null>(null);
   const historyGate = useLatestRequestGate();
   const recoveryGate = useLatestRequestGate();
   const residualAuditGate = useLatestRequestGate();
@@ -56,7 +62,48 @@ export default function DocumentViewer({ documentId, portalKey, fileName, textCo
     setResidualAudit(null);
     setResidualAuditError(null);
     setIsAuditingResiduals(false);
+    setDocumentSearch('');
+    setActiveMatch(0);
+    setTextPage(0);
+    setShareStatus(null);
   }, [documentId, historyGate, portalKey, recoveryGate, residualAuditGate]);
+
+  const searchMatches = useMemo(() => findMatches(textContent, documentSearch), [documentSearch, textContent]);
+  const pageCount = Math.max(1, Math.ceil(textContent.length / TEXT_PAGE_CHARACTERS));
+  const selectedMatch = searchMatches[activeMatch] ?? null;
+
+  useEffect(() => {
+    setActiveMatch(0);
+    if (searchMatches[0] !== undefined) {
+      setTextPage(Math.floor(searchMatches[0] / TEXT_PAGE_CHARACTERS));
+    }
+  }, [documentSearch, searchMatches]);
+
+  const moveToMatch = (direction: -1 | 1) => {
+    if (searchMatches.length === 0) return;
+    const next = (activeMatch + direction + searchMatches.length) % searchMatches.length;
+    setActiveMatch(next);
+    setTextPage(Math.floor(searchMatches[next] / TEXT_PAGE_CHARACTERS));
+  };
+
+  const shareEvidenceLocation = async () => {
+    const localIndex = selectedMatch ?? textPage * TEXT_PAGE_CHARACTERS;
+    const sourceCharacterOffset = characterOffset + Array.from(textContent.slice(0, localIndex)).length;
+    const fragment = new URLSearchParams({
+      portal: portalKey,
+      ...(requestId === undefined ? {} : { request: String(requestId) }),
+      document: String(documentId),
+      offset: String(sourceCharacterOffset),
+    }).toString();
+    const url = `${window.location.href.split('#')[0]}#${fragment}`;
+    window.history.replaceState(null, '', `#${fragment}`);
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareStatus(`Copied offset ${sourceCharacterOffset.toLocaleString()}`);
+    } catch {
+      setShareStatus(`Link set at offset ${sourceCharacterOffset.toLocaleString()}`);
+    }
+  };
 
   const toggleVerificationHistory = async () => {
     if (showVerificationHistory) {
@@ -87,8 +134,9 @@ export default function DocumentViewer({ documentId, portalKey, fileName, textCo
   };
 
   const inspectRevisionHistory = async () => {
-    // FEATURE(documents): Add container-specific archaeology actions only after the result is
-    // represented as typed evidence with source offsets and confidence labels.
+    // PDF revision carving returns a typed recovery profile; the adjacent residual-evidence audit
+    // uses the shared finding contract with source locators and confidence labels for every
+    // supported container.
     const request = recoveryGate.begin();
     setIsRecovering(true);
     setRecoveryError(null);
@@ -165,17 +213,63 @@ export default function DocumentViewer({ documentId, portalKey, fileName, textCo
           {onNextChunk && <button type="button" onClick={onNextChunk} className="rounded border border-slate-800 px-2 py-1 text-slate-400 transition hover:border-indigo-400/30 hover:text-indigo-300">Next chunk</button>}
         </div>
       </div>
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-900 px-4 py-2 text-[9px]">
+        <label className="relative min-w-[220px] flex-1">
+          <span className="sr-only">Search within this extracted-text chunk</span>
+          <input value={documentSearch} onChange={(event) => setDocumentSearch(event.target.value)} placeholder="Find in extracted text" className="focus-ring h-8 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 text-[10px] text-slate-200 placeholder:text-slate-700" />
+        </label>
+        <span className="min-w-16 text-center font-mono text-slate-500">{searchMatches.length === 0 ? '0 matches' : `${activeMatch + 1}/${searchMatches.length}`}</span>
+        <button type="button" onClick={() => moveToMatch(-1)} disabled={searchMatches.length === 0} className="rounded border border-slate-800 px-2 py-1 text-slate-400 disabled:opacity-40">Previous</button>
+        <button type="button" onClick={() => moveToMatch(1)} disabled={searchMatches.length === 0} className="rounded border border-slate-800 px-2 py-1 text-slate-400 disabled:opacity-40">Next</button>
+        <button type="button" onClick={() => void shareEvidenceLocation()} className="rounded border border-indigo-400/25 bg-indigo-500/10 px-2 py-1 text-indigo-300">Copy evidence link</button>
+        {shareStatus && <span role="status" className="text-emerald-300">{shareStatus}</span>}
+      </div>
       {showVerificationHistory && <VerificationHistoryPanel records={verificationHistory} isLoading={isLoadingHistory} error={historyError} />}
       {(recoveryProfile || recoveryError) && <RevisionRecoveryPanel profile={recoveryProfile} error={recoveryError} />}
       {(residualAudit || residualAuditError) && <ResidualEvidencePanel bundle={residualAudit} error={residualAuditError} />}
       {showRedactionAudit && <div className="border-b border-slate-800 p-3"><UnredactorPanel documentId={documentId} portalKey={portalKey} /></div>}
-      {/* PERF(documents): Virtualize or paginate very large extracted text
-          instead of mounting the entire chunk as one DOM text node. */}
-      <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap p-5 font-mono text-xs leading-relaxed text-slate-300 selection:bg-indigo-500/30">
-        {textContent || 'No extracted text is available for this chunk.'}
+      <div className="min-h-0 flex-1 overflow-y-auto p-5 font-mono text-xs leading-relaxed text-slate-300 selection:bg-indigo-500/30">
+        <HighlightedTextPage text={textContent} query={documentSearch} page={textPage} activeMatchIndex={selectedMatch} />
       </div>
+      {pageCount > 1 && <div className="flex items-center justify-center gap-3 border-t border-slate-900 px-4 py-2 text-[9px] text-slate-500"><button type="button" disabled={textPage === 0} onClick={() => setTextPage((page) => Math.max(0, page - 1))} className="rounded border border-slate-800 px-2 py-1 disabled:opacity-40">Previous text page</button><span className="font-mono">{textPage + 1}/{pageCount}</span><button type="button" disabled={textPage + 1 >= pageCount} onClick={() => setTextPage((page) => Math.min(pageCount - 1, page + 1))} className="rounded border border-slate-800 px-2 py-1 disabled:opacity-40">Next text page</button></div>}
     </section>
   );
+}
+
+function findMatches(text: string, query: string) {
+  const needle = query.trim().toLocaleLowerCase();
+  if (!needle) return [];
+  const haystack = text.toLocaleLowerCase();
+  const matches: number[] = [];
+  let cursor = 0;
+  while (matches.length < 1_000) {
+    const index = haystack.indexOf(needle, cursor);
+    if (index < 0) break;
+    matches.push(index);
+    cursor = index + Math.max(1, needle.length);
+  }
+  return matches;
+}
+
+function HighlightedTextPage({ text, query, page, activeMatchIndex }: { text: string; query: string; page: number; activeMatchIndex: number | null }) {
+  if (!text) return <span className="whitespace-pre-wrap">No extracted text is available for this chunk.</span>;
+  const start = page * TEXT_PAGE_CHARACTERS;
+  const end = Math.min(text.length, start + TEXT_PAGE_CHARACTERS);
+  const visible = text.slice(start, end);
+  const needle = query.trim();
+  if (!needle) return <span className="whitespace-pre-wrap">{visible}</span>;
+  const matches = findMatches(visible, needle);
+  if (matches.length === 0) return <span className="whitespace-pre-wrap">{visible}</span>;
+  const segments: React.ReactNode[] = [];
+  let copied = 0;
+  for (const localIndex of matches) {
+    if (localIndex > copied) segments.push(visible.slice(copied, localIndex));
+    const isActive = start + localIndex === activeMatchIndex;
+    segments.push(<mark key={localIndex} className={isActive ? 'rounded bg-amber-300 px-0.5 text-slate-950 ring-2 ring-amber-200/60' : 'rounded bg-indigo-400/35 px-0.5 text-slate-100'}>{visible.slice(localIndex, localIndex + needle.length)}</mark>);
+    copied = localIndex + needle.length;
+  }
+  segments.push(visible.slice(copied));
+  return <span className="whitespace-pre-wrap">{segments}</span>;
 }
 
 function ResidualEvidencePanel({ bundle, error }: { bundle: EvidenceBundle | null; error: string | null }) {
