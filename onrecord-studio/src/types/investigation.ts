@@ -354,12 +354,30 @@ export interface RecoveredMetadataArtifact {
   maskedFindingCount: number;
 }
 
+export interface RecoveredRevisionDiagnostic {
+  revisionNumber: number;
+  snapshotEndOffset: number;
+  xrefStartOffset: number | null;
+  crossReferenceType: string | null;
+  declaredPreviousXrefOffset: number | null;
+  objectCount: number;
+  nonzeroGenerationObjectCount: number;
+  unreferencedObjectCount: number;
+  unreferencedStreamCount: number;
+  objectGraphTraversalComplete: boolean;
+  pageCount: number;
+  pageExtractionFailureCount: number;
+  representativePageErrors: string[];
+  structuralParseError: string | null;
+}
+
 export interface RecoveredVersionProfile {
   sourceSha256: string;
   sourceSizeBytes: number;
   totalEofMarkers: number;
   historicalVersionsFound: number;
   inspectedHistoricalVersions: number;
+  revisionDiagnostics: RecoveredRevisionDiagnostic[];
   recoveredTextSegments: RecoveredTextSegment[];
   postEofMetadataArtifacts: RecoveredMetadataArtifact[];
   analysisTruncated: boolean;

@@ -385,6 +385,20 @@ function RevisionRecoveryPanel({ profile, error }: { profile: RecoveredVersionPr
       {profile.historicalVersionsFound === 0 && <p className="mt-2 text-[9px] text-slate-500">No earlier incremental-save boundary was present. This does not rule out edits made before the current file was created.</p>}
       {profile.analysisTruncated && <p className="mt-2 text-[9px] text-amber-300">The bounded inspection reached a safety limit; the results are incomplete.</p>}
       {profile.warnings.length > 0 && <ul className="mt-2 space-y-1 text-[9px] text-amber-200/80">{profile.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
+      {profile.revisionDiagnostics.map((diagnostic) => (
+        <details key={`diagnostic-${diagnostic.revisionNumber}-${diagnostic.snapshotEndOffset}`} className="mt-2 rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2">
+          <summary className="cursor-pointer text-[9px] font-medium text-slate-300">Revision {diagnostic.revisionNumber} structure · {diagnostic.objectCount.toLocaleString()} objects · {diagnostic.pageCount.toLocaleString()} pages · {diagnostic.pageExtractionFailureCount.toLocaleString()} page errors</summary>
+          <dl className="mt-2 grid grid-cols-2 gap-2 border-t border-slate-800 pt-2 text-[9px] text-slate-500">
+            <div><dt>Xref</dt><dd className="font-mono text-slate-300">{diagnostic.crossReferenceType ?? 'unparsed'} at {diagnostic.xrefStartOffset?.toLocaleString() ?? 'unknown'}</dd></div>
+            <div><dt>Previous xref</dt><dd className="font-mono text-slate-300">{diagnostic.declaredPreviousXrefOffset?.toLocaleString() ?? 'none declared'}</dd></div>
+            <div><dt>Nonzero generations</dt><dd className="font-mono text-slate-300">{diagnostic.nonzeroGenerationObjectCount.toLocaleString()}</dd></div>
+            <div><dt>Unreferenced objects / streams</dt><dd className="font-mono text-slate-300">{diagnostic.unreferencedObjectCount.toLocaleString()} / {diagnostic.unreferencedStreamCount.toLocaleString()}</dd></div>
+          </dl>
+          {!diagnostic.objectGraphTraversalComplete && <p className="mt-2 text-[9px] text-amber-300">Object-graph traversal encountered an unresolved reference or nesting limit.</p>}
+          {diagnostic.structuralParseError && <p className="mt-2 break-words font-mono text-[9px] text-rose-300">{diagnostic.structuralParseError}</p>}
+          {diagnostic.representativePageErrors.length > 0 && <ul className="mt-2 space-y-1 font-mono text-[9px] text-amber-200/80">{diagnostic.representativePageErrors.map((message) => <li key={message}>{message}</li>)}</ul>}
+        </details>
+      ))}
       {profile.recoveredTextSegments.map((segment) => (
         <details key={`${segment.revisionNumber}-${segment.recoveredTextSha256}`} className="mt-2 rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2">
           <summary className="cursor-pointer text-[9px] font-medium text-slate-300">Revision {segment.revisionNumber} · {segment.recoveredCharacterCount.toLocaleString()} recovered characters · {segment.maskedFindingCount} sensitive values masked</summary>

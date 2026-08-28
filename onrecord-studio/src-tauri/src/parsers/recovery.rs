@@ -3,6 +3,7 @@ use crate::integrity::sha256_hex;
 use crate::normalization::collapse_whitespace;
 use crate::parsers::source::read_regular_file;
 use crate::storage::pii::mask_pii;
+use lopdf::{Document, Object, ObjectId};
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -16,6 +17,8 @@ const MAXIMUM_CUMULATIVE_SNAPSHOT_BYTES: usize = 512 * 1024 * 1024;
 const MAXIMUM_METADATA_FINDINGS: usize = 64;
 const MAXIMUM_METADATA_RUN_BYTES: usize = 4_096;
 const MAXIMUM_METADATA_DISPLAY_CHARACTERS: usize = 512;
+const MAXIMUM_REPRESENTATIVE_PAGE_ERRORS: usize = 8;
+const MAXIMUM_OBJECT_GRAPH_DEPTH: usize = 64;
 
 #[derive(Debug, serde::Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -40,12 +43,32 @@ pub struct RecoveredMetadataArtifact {
 
 #[derive(Debug, serde::Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+pub struct RecoveredRevisionDiagnostic {
+    pub revision_number: usize,
+    pub snapshot_end_offset: u64,
+    pub xref_start_offset: Option<u64>,
+    pub cross_reference_type: Option<String>,
+    pub declared_previous_xref_offset: Option<u64>,
+    pub object_count: usize,
+    pub nonzero_generation_object_count: usize,
+    pub unreferenced_object_count: usize,
+    pub unreferenced_stream_count: usize,
+    pub object_graph_traversal_complete: bool,
+    pub page_count: usize,
+    pub page_extraction_failure_count: usize,
+    pub representative_page_errors: Vec<String>,
+    pub structural_parse_error: Option<String>,
+}
+
+#[derive(Debug, serde::Serialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct RecoveredVersionProfile {
     pub source_sha256: String,
     pub source_size_bytes: u64,
     pub total_eof_markers: usize,
     pub historical_versions_found: usize,
     pub inspected_historical_versions: usize,
+    pub revision_diagnostics: Vec<RecoveredRevisionDiagnostic>,
     pub recovered_text_segments: Vec<RecoveredTextSegment>,
     pub post_eof_metadata_artifacts: Vec<RecoveredMetadataArtifact>,
     pub analysis_truncated: bool,
@@ -55,9 +78,10 @@ pub struct RecoveredVersionProfile {
 pub fn carve_historical_pdf_versions<P: AsRef<Path>>(
     file_path: P,
 ) -> Result<RecoveredVersionProfile, AppError> {
-    // FEATURE(recovery): This is a bounded PDF revision reader, not a general deleted-data
-    // carver. Future object-generation archaeology should report exact offsets and confidence
-    // separately from recovered page text.
+    // This is a bounded incremental-revision reader, not a deleted-sector or unallocated-space
+    // carver. lopdf follows classic /Prev chains, hybrid xrefs, and xref streams while loading
+    // each snapshot; the diagnostics below preserve the resulting structural facts separately
+    // from any recovered page text.
     let path = file_path.as_ref();
     let source = read_regular_file(path, "PDF_RECOVERY", MAXIMUM_SOURCE_BYTES)?;
     if !has_pdf_signature(&source) {
@@ -68,8 +92,6 @@ pub fn carve_historical_pdf_versions<P: AsRef<Path>>(
     }
 
     let source_sha256 = sha256_hex(&source);
-    // TODO(recovery): Follow /Prev and xref streams, compare object generations, and detect
-    // orphaned streams instead of relying only on %%EOF snapshot boundaries.
     let eof_offsets = find_eof_markers(&source)?;
     if eof_offsets.is_empty() {
         return Err(AppError::DataParsing(
@@ -82,6 +104,7 @@ pub fn carve_historical_pdf_versions<P: AsRef<Path>>(
     let first_revision = historical_versions_found.saturating_sub(MAXIMUM_HISTORICAL_REVISIONS);
     let selected_offsets = &eof_offsets[first_revision..historical_versions_found];
     let mut recovered_text_segments = Vec::new();
+    let mut revision_diagnostics = Vec::new();
     let mut seen_text_hashes = HashSet::new();
     let mut inspected_historical_versions = 0_usize;
     let mut cumulative_snapshot_bytes = 0_usize;
@@ -114,9 +137,26 @@ pub fn carve_historical_pdf_versions<P: AsRef<Path>>(
         }
         inspected_historical_versions += 1;
         let revision_number = first_revision + selected_index + 1;
-        let historical_document = match lopdf::Document::load_mem(&source[..snapshot_end]) {
+        let xref_start_offset = find_startxref_offset(&source[..snapshot_end]);
+        let historical_document = match Document::load_mem(&source[..snapshot_end]) {
             Ok(document) => document,
             Err(error) => {
+                revision_diagnostics.push(RecoveredRevisionDiagnostic {
+                    revision_number,
+                    snapshot_end_offset: snapshot_end as u64,
+                    xref_start_offset,
+                    cross_reference_type: None,
+                    declared_previous_xref_offset: None,
+                    object_count: 0,
+                    nonzero_generation_object_count: 0,
+                    unreferenced_object_count: 0,
+                    unreferenced_stream_count: 0,
+                    object_graph_traversal_complete: false,
+                    page_count: 0,
+                    page_extraction_failure_count: 0,
+                    representative_page_errors: Vec::new(),
+                    structural_parse_error: Some(error.to_string()),
+                });
                 warnings.push(format!(
                     "Historical revision {revision_number} could not be structurally parsed: {error}"
                 ));
@@ -124,6 +164,35 @@ pub fn carve_historical_pdf_versions<P: AsRef<Path>>(
             }
         };
         let pages = historical_document.get_pages();
+        let (unreferenced_object_count, unreferenced_stream_count, graph_complete) =
+            object_graph_diagnostics(&historical_document);
+        let declared_previous_xref_offset = xref_start_offset.and_then(|start| {
+            find_declared_previous_xref_offset(&source[start as usize..snapshot_end])
+        });
+        let diagnostic_index = revision_diagnostics.len();
+        revision_diagnostics.push(RecoveredRevisionDiagnostic {
+            revision_number,
+            snapshot_end_offset: snapshot_end as u64,
+            xref_start_offset: Some(historical_document.xref_start as u64),
+            cross_reference_type: Some(format!(
+                "{:?}",
+                historical_document.reference_table.cross_reference_type
+            )),
+            declared_previous_xref_offset,
+            object_count: historical_document.objects.len(),
+            nonzero_generation_object_count: historical_document
+                .objects
+                .keys()
+                .filter(|object_id| object_id.1 > 0)
+                .count(),
+            unreferenced_object_count,
+            unreferenced_stream_count,
+            object_graph_traversal_complete: graph_complete,
+            page_count: pages.len(),
+            page_extraction_failure_count: 0,
+            representative_page_errors: Vec::new(),
+            structural_parse_error: None,
+        });
         if pages.len() > MAXIMUM_PAGES_PER_REVISION {
             analysis_truncated = true;
             warnings.push(format!(
@@ -133,11 +202,20 @@ pub fn carve_historical_pdf_versions<P: AsRef<Path>>(
         let mut recovered_text = String::new();
         let mut recovered_text_characters = 0_usize;
         for page_number in pages.keys().take(MAXIMUM_PAGES_PER_REVISION) {
-            // TODO(recovery): Retain bounded page-extraction failure counts and representative
-            // diagnostics so an empty recovery result is distinguishable from failed parsing.
             let page_text = match historical_document.extract_text(&[*page_number]) {
                 Ok(text) => text,
-                Err(_) => continue,
+                Err(error) => {
+                    let diagnostic = &mut revision_diagnostics[diagnostic_index];
+                    diagnostic.page_extraction_failure_count += 1;
+                    if diagnostic.representative_page_errors.len()
+                        < MAXIMUM_REPRESENTATIVE_PAGE_ERRORS
+                    {
+                        diagnostic
+                            .representative_page_errors
+                            .push(format!("page {page_number}: {error}"));
+                    }
+                    continue;
+                }
             };
             append_bounded_text(
                 &mut recovered_text,
@@ -198,11 +276,97 @@ pub fn carve_historical_pdf_versions<P: AsRef<Path>>(
         total_eof_markers: eof_offsets.len(),
         historical_versions_found,
         inspected_historical_versions,
+        revision_diagnostics,
         recovered_text_segments,
         post_eof_metadata_artifacts,
         analysis_truncated,
         warnings,
     })
+}
+
+fn find_startxref_offset(snapshot: &[u8]) -> Option<u64> {
+    let marker = b"startxref";
+    let offset = snapshot
+        .windows(marker.len())
+        .rposition(|window| window == marker)?;
+    let value = snapshot.get(offset + marker.len()..)?;
+    parse_leading_pdf_integer(value)
+}
+
+fn find_declared_previous_xref_offset(xref_tail: &[u8]) -> Option<u64> {
+    let marker = b"/Prev";
+    let offset = xref_tail
+        .windows(marker.len())
+        .rposition(|window| window == marker)?;
+    parse_leading_pdf_integer(xref_tail.get(offset + marker.len()..)?)
+}
+
+fn parse_leading_pdf_integer(value: &[u8]) -> Option<u64> {
+    let value = value
+        .iter()
+        .copied()
+        .skip_while(u8::is_ascii_whitespace)
+        .take_while(u8::is_ascii_digit)
+        .collect::<Vec<_>>();
+    (!value.is_empty())
+        .then(|| std::str::from_utf8(&value).ok()?.parse().ok())
+        .flatten()
+}
+
+fn object_graph_diagnostics(document: &Document) -> (usize, usize, bool) {
+    let mut reachable = HashSet::<ObjectId>::new();
+    let mut pending = Vec::<ObjectId>::new();
+    let mut complete = collect_references(
+        &Object::Dictionary(document.trailer.clone()),
+        0,
+        &mut pending,
+    );
+    while let Some(object_id) = pending.pop() {
+        if !reachable.insert(object_id) {
+            continue;
+        }
+        let Some(object) = document.objects.get(&object_id) else {
+            complete = false;
+            continue;
+        };
+        complete &= collect_references(object, 0, &mut pending);
+    }
+    let unreferenced = document
+        .objects
+        .iter()
+        .filter(|(object_id, _)| !reachable.contains(object_id))
+        .collect::<Vec<_>>();
+    let streams = unreferenced
+        .iter()
+        .filter(|(_, object)| matches!(object, Object::Stream(_)))
+        .count();
+    (unreferenced.len(), streams, complete)
+}
+
+fn collect_references(object: &Object, depth: usize, pending: &mut Vec<ObjectId>) -> bool {
+    if depth > MAXIMUM_OBJECT_GRAPH_DEPTH {
+        return false;
+    }
+    match object {
+        Object::Reference(object_id) => pending.push(*object_id),
+        Object::Array(values) => {
+            return values.iter().fold(true, |complete, value| {
+                collect_references(value, depth + 1, pending) && complete
+            });
+        }
+        Object::Dictionary(dictionary) => {
+            return dictionary.iter().fold(true, |complete, (_, value)| {
+                collect_references(value, depth + 1, pending) && complete
+            });
+        }
+        Object::Stream(stream) => {
+            return stream.dict.iter().fold(true, |complete, (_, value)| {
+                collect_references(value, depth + 1, pending) && complete
+            });
+        }
+        _ => {}
+    }
+    true
 }
 
 fn has_pdf_signature(source: &[u8]) -> bool {
@@ -367,13 +531,34 @@ fn metadata_category(value: &str) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use crate::error::AppError;
+    use lopdf::{dictionary, Document, Stream};
 
-    use super::find_eof_markers;
+    use super::{
+        find_declared_previous_xref_offset, find_eof_markers, find_startxref_offset,
+        object_graph_diagnostics,
+    };
 
     #[test]
     fn eof_scanner_ignores_marker_text_inside_a_stream() -> Result<(), AppError> {
         let source = b"%PDF-1.7\n(stream %%EOF bytes)\n%%EOF\nrevision\n%%EOF\n";
         assert_eq!(find_eof_markers(source)?.len(), 2);
         Ok(())
+    }
+
+    #[test]
+    fn reports_xref_offsets_and_unreferenced_streams() {
+        let source = b"xref\ntrailer << /Prev 41 >>\nstartxref\n92\n%%EOF";
+        assert_eq!(find_startxref_offset(source), Some(92));
+        assert_eq!(find_declared_previous_xref_offset(source), Some(41));
+
+        let mut document = Document::with_version("1.7");
+        let reachable_stream = document.add_object(Stream::new(dictionary! {}, b"shown".to_vec()));
+        let root = document.add_object(dictionary! { "Evidence" => reachable_stream });
+        document.add_object(Stream::new(dictionary! {}, b"unreferenced".to_vec()));
+        document.trailer.set("Root", root);
+        let (unreferenced, streams, complete) = object_graph_diagnostics(&document);
+        assert!(complete);
+        assert_eq!(unreferenced, 1);
+        assert_eq!(streams, 1);
     }
 }
