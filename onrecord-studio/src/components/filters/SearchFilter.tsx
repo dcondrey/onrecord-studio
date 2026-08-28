@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import AgencySelector from './AgencySelector';
 import { useAppStore } from '../../store/useAppStore';
 import { invokeCommand } from '../../ipc';
 import { parseQualifierQuery, serializeQualifierQuery } from '../../query';
+import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 
 export default function SearchFilter() {
   const activePortalKey = useAppStore((state) => state.activePortalKey);
@@ -17,7 +18,7 @@ export default function SearchFilter() {
   const resultCount = useAppStore((state) => state.filteredResults.length);
   const [inputValue, setInputValue] = useState(searchTerm);
   const [isSearching, setIsSearching] = useState(false);
-  const requestSequence = useRef(0);
+  const requestGate = useLatestRequestGate();
   // NOTE(query): `parsedQuery` is currently presentation-only. The legacy IPC
   // call below intentionally remains unchanged until deferred filters can be
   // enforced by Rust; see docs/query-language.md before wiring execution.
@@ -31,7 +32,7 @@ export default function SearchFilter() {
     // PERF(query): Replace debounce-only protection with AbortController once
     // the native command bridge accepts cancellation; requestSequence guards
     // against stale responses for now.
-    const sequence = ++requestSequence.current;
+    const request = requestGate.begin();
     const timer = window.setTimeout(async () => {
       setIsSearching(true);
       setSearchError(null);
@@ -46,19 +47,19 @@ export default function SearchFilter() {
           policyDeviation: selectedPolicyDeviation,
           limit: 500,
         });
-        if (sequence === requestSequence.current) setFilteredResults(results);
+        if (requestGate.isCurrent(request)) setFilteredResults(results);
       } catch (reason) {
-        if (sequence === requestSequence.current) {
+        if (requestGate.isCurrent(request)) {
           // Keep the last successful result set. Clearing it turns a transport/query failure into
           // the false finding "no matches" and makes the visible filters look responsible.
           setSearchError(String(reason));
         }
       } finally {
-        if (sequence === requestSequence.current) setIsSearching(false);
+        if (requestGate.isCurrent(request)) setIsSearching(false);
       }
     }, 220);
     return () => window.clearTimeout(timer);
-  }, [activePortalKey, inputValue, selectedAgencyId, selectedPolicyDeviation, selectedStatus, setFilteredResults, setSearchError]);
+  }, [activePortalKey, inputValue, requestGate, selectedAgencyId, selectedPolicyDeviation, selectedStatus, setFilteredResults, setSearchError]);
 
   const updateTerm = (value: string) => {
     // FEATURE(query): Add visual filter rows and autocomplete suggestions while

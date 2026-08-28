@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useC2PA } from '../../hooks/useC2PA';
+import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { invokeCommand } from '../../ipc';
 import type { ProvenanceConfidence, ProvenanceVerificationRecord, RecoveredVersionProfile } from '../../types';
 import UnredactorPanel from './UnredactorPanel';
@@ -27,17 +28,16 @@ export default function DocumentViewer({ documentId, portalKey, fileName, textCo
   const [verificationHistory, setVerificationHistory] = useState<ProvenanceVerificationRecord[] | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
-  // Which document the viewer is on now, readable from an async continuation that started under a
-  // different one. Resetting state at switch time is not enough: an in-flight read still resolves
-  // afterwards, and its records would be cached under the new document and shown as its history.
-  const activeDocumentRef = useRef('');
+  const historyGate = useLatestRequestGate();
+  const recoveryGate = useLatestRequestGate();
 
   useEffect(() => {
     void verifyAssetProvenance(documentId, portalKey);
   }, [documentId, portalKey, verifyAssetProvenance]);
 
   useEffect(() => {
-    activeDocumentRef.current = `${documentId}:${portalKey}`;
+    historyGate.invalidate();
+    recoveryGate.invalidate();
     setRecoveryProfile(null);
     setRecoveryError(null);
     setIsRecovering(false);
@@ -48,7 +48,7 @@ export default function DocumentViewer({ documentId, portalKey, fileName, textCo
     setVerificationHistory(null);
     setHistoryError(null);
     setIsLoadingHistory(false);
-  }, [documentId, portalKey]);
+  }, [documentId, historyGate, portalKey, recoveryGate]);
 
   const toggleVerificationHistory = async () => {
     if (showVerificationHistory) {
@@ -57,9 +57,9 @@ export default function DocumentViewer({ documentId, portalKey, fileName, textCo
     }
     setShowVerificationHistory(true);
     if (verificationHistory || isLoadingHistory) return;
+    const request = historyGate.begin();
     setIsLoadingHistory(true);
     setHistoryError(null);
-    const requestedFor = `${documentId}:${portalKey}`;
     try {
       // No limit is passed: the backend rejects out-of-range values and its default is the
       // contract this view wants.
@@ -67,38 +67,38 @@ export default function DocumentViewer({ documentId, portalKey, fileName, textCo
         documentId,
         portalKey,
       });
-      if (activeDocumentRef.current !== requestedFor) return;
+      if (!historyGate.isCurrent(request)) return;
       setVerificationHistory(records);
     } catch (reason) {
-      if (activeDocumentRef.current !== requestedFor) return;
+      if (!historyGate.isCurrent(request)) return;
       setVerificationHistory(null);
       setHistoryError(String(reason));
     } finally {
-      if (activeDocumentRef.current === requestedFor) setIsLoadingHistory(false);
+      if (historyGate.isCurrent(request)) setIsLoadingHistory(false);
     }
   };
 
   const inspectRevisionHistory = async () => {
     // FEATURE(documents): Add container-specific archaeology actions only after the result is
     // represented as typed evidence with source offsets and confidence labels.
+    const request = recoveryGate.begin();
     setIsRecovering(true);
     setRecoveryError(null);
     // The scan is bounded but not instant, and it cannot be cancelled. Sequencing is what keeps
     // one document's recovered revisions from being rendered as another document's.
-    const requestedFor = `${documentId}:${portalKey}`;
     try {
       const profile = await invokeCommand('carve_document_version_history', {
         documentId,
         portalKey,
       });
-      if (activeDocumentRef.current !== requestedFor) return;
+      if (!recoveryGate.isCurrent(request)) return;
       setRecoveryProfile(profile);
     } catch (reason) {
-      if (activeDocumentRef.current !== requestedFor) return;
+      if (!recoveryGate.isCurrent(request)) return;
       setRecoveryProfile(null);
       setRecoveryError(String(reason));
     } finally {
-      if (activeDocumentRef.current === requestedFor) setIsRecovering(false);
+      if (recoveryGate.isCurrent(request)) setIsRecovering(false);
     }
   };
 

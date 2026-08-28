@@ -98,4 +98,36 @@ describe('evidence error states', () => {
     expect(await screen.findByText('Legal findings unavailable')).toBeTruthy();
     expect(screen.queryByText('No active findings recorded')).toBeNull();
   });
+
+  it('does not attribute the previous record findings to a record whose load failed', async () => {
+    useAppStore.setState({
+      activeLegalFindings: [{
+        violationId: 'old-record-finding',
+        requestId: 7,
+        portalKey: 'other-gov',
+        matchedStatuteId: 'statute-1',
+        matchedVersionId: 'version-1',
+        mandateId: null,
+        statuteCitation: 'Old citation',
+        authorityTitle: 'Old authority',
+        mandateTitle: null,
+        classification: 'OLD_RECORD_CLASSIFICATION',
+        calculatedVarianceMetric: null,
+        varianceDays: null,
+        confidenceBasisPoints: 9_000,
+        evidenceSummary: 'Belongs to another record',
+        supportingDocumentIds: [],
+        missingEvidencePhrases: [],
+        reviewStatus: 'OPEN',
+        firstDetectedAt: '2026-07-01T00:00:00Z',
+        evaluatedAt: '2026-07-01T00:00:00Z',
+      }],
+    });
+
+    render(<LegalCompliancePanel record={record} onOpenLibrary={() => undefined} />);
+
+    expect(await screen.findByText('Legal findings unavailable')).toBeTruthy();
+    expect(screen.queryByText('Old Record Classification')).toBeNull();
+    expect(useAppStore.getState().activeLegalFindings).toEqual([]);
+  });
 });

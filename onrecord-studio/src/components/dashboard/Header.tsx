@@ -18,6 +18,7 @@ import {
 import Icon from '../ui/icons';
 import { Select } from '../ui/select';
 import { BUILT_IN_SOURCE_OPTIONS, type PortalRegistration, type SourceDiscoveryPreview, type SourceKind } from '../../types';
+import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 
 const viewLabels = {
   overview: 'Intelligence overview',
@@ -97,6 +98,8 @@ export default function Header() {
   const pendingSourceRepair = useAppStore((state) => state.pendingSourceRepair);
   const setPendingSourceRepair = useAppStore((state) => state.setPendingSourceRepair);
   const [isDiscovering, setIsDiscovering] = useState(false);
+  const sourceRequestGate = useLatestRequestGate();
+  const repairDiscoveryGate = useLatestRequestGate();
   const [isConnectorOpen, setConnectorOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPasteOpen, setPasteOpen] = useState(false);
@@ -153,13 +156,27 @@ export default function Header() {
   const syncCapacityReached = syncingPortalKeys.length >= 5;
   const selectedSource = BUILT_IN_SOURCE_OPTIONS.find((source) => source.id === selectedSourceId) ?? BUILT_IN_SOURCE_OPTIONS[0];
 
+  const cancelSourceOperation = () => {
+    sourceRequestGate.invalidate();
+    repairDiscoveryGate.invalidate();
+    setIsDiscovering(false);
+  };
+  const closePasteDialog = () => {
+    cancelSourceOperation();
+    setPasteOpen(false);
+  };
+  const closeRepairDialog = () => {
+    cancelSourceOperation();
+    setRepairPreview(null);
+  };
+
   useEffect(() => {
     if (!pendingSourceRepair) return;
-    let active = true;
+    const request = repairDiscoveryGate.begin();
     setError(pendingSourceRepair.reason);
     void invokeCommand('preview_data_source', { url: pendingSourceRepair.sourceUrl })
       .then((preview) => {
-        if (!active) return;
+        if (!repairDiscoveryGate.isCurrent(request)) return;
         setRepairPreview(preview);
         setRepairRootUrl(pendingSourceRepair.sourceUrl);
         setRepairSeedUrl(
@@ -171,16 +188,12 @@ export default function Header() {
         // The persisted ingestion failure remains visible even if previewing also fails.
       })
       .finally(() => {
-        if (active) setPendingSourceRepair(null);
+        if (repairDiscoveryGate.isCurrent(request)) setPendingSourceRepair(null);
       });
-    return () => {
-      active = false;
-    };
-  }, [pendingSourceRepair, setPendingSourceRepair]);
+    return repairDiscoveryGate.invalidate;
+  }, [pendingSourceRepair, repairDiscoveryGate, setPendingSourceRepair]);
 
   const startSync = async (event: FormEvent) => {
-    // TODO(source): Add an explicit cancellation token for discovery so a
-    // closed dialog cannot leave a long-running preview request in flight.
     event.preventDefault();
     const targetUrl = portalUrlDraft.trim() || activePortal?.canonicalUrl || '';
     if (!targetUrl) {
@@ -189,6 +202,9 @@ export default function Header() {
     }
     const settings = resolveCrawlSettings();
     if (!settings) return;
+    repairDiscoveryGate.invalidate();
+    const request = sourceRequestGate.begin();
+    setPendingSourceRepair(null);
     setError(null);
     setIsDiscovering(true);
     appendSyncLog(`Verifying portal layout and public network route for ${targetUrl}.`);
@@ -199,15 +215,18 @@ export default function Header() {
         guidance: null,
         rateLimitPolicy: settings.rateLimitPolicy,
       });
+      if (!sourceRequestGate.isCurrent(request)) return;
       registerSourceStart(source, syncRunId, detectedKind);
       setPortalUrlDraft('');
       setConnectorOpen(false);
     } catch (reason) {
+      if (!sourceRequestGate.isCurrent(request)) return;
       const message = String(reason);
       setError(message);
       appendSyncLog(`Automatic source discovery failed: ${message}`);
       try {
         const preview = await invokeCommand('preview_data_source', { url: targetUrl });
+        if (!sourceRequestGate.isCurrent(request)) return;
         setRepairPreview(preview);
         setRepairRootUrl(targetUrl);
         setRepairSeedUrl(preview.candidateLinks.find((link) => link.downloadCandidate)?.url ?? '');
@@ -216,7 +235,7 @@ export default function Header() {
         // The original actionable discovery error remains visible.
       }
     } finally {
-      setIsDiscovering(false);
+      if (sourceRequestGate.isCurrent(request)) setIsDiscovering(false);
     }
   };
 
@@ -234,24 +253,33 @@ export default function Header() {
   const chooseFiles = async () => {
     // FEATURE(source): Add a recent-source picker beside the URL composer so
     // recurring investigations can resume without re-entering a URL.
+    repairDiscoveryGate.invalidate();
+    const request = sourceRequestGate.begin();
+    setPendingSourceRepair(null);
     setError(null);
     try {
       const selected = await open({ multiple: true, directory: false });
+      if (!sourceRequestGate.isCurrent(request)) return;
       if (!selected) return;
       const paths = Array.isArray(selected) ? selected : [selected];
       setIsDiscovering(true);
       const { source, syncRunId, detectedKind } = await invokeCommand('ingest_local_files', { paths });
+      if (!sourceRequestGate.isCurrent(request)) return;
       registerSourceStart(source, syncRunId, detectedKind);
       setConnectorOpen(false);
     } catch (reason) {
+      if (!sourceRequestGate.isCurrent(request)) return;
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
-      setIsDiscovering(false);
+      if (sourceRequestGate.isCurrent(request)) setIsDiscovering(false);
     }
   };
 
   const importPaste = async (event: FormEvent) => {
     event.preventDefault();
+    repairDiscoveryGate.invalidate();
+    const request = sourceRequestGate.begin();
+    setPendingSourceRepair(null);
     setError(null);
     setIsDiscovering(true);
     try {
@@ -262,14 +290,16 @@ export default function Header() {
           declaredMediaType: null,
         },
       });
+      if (!sourceRequestGate.isCurrent(request)) return;
       registerSourceStart(source, syncRunId, detectedKind);
       setPasteContent('');
       setPasteOpen(false);
       setConnectorOpen(false);
     } catch (reason) {
+      if (!sourceRequestGate.isCurrent(request)) return;
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
-      setIsDiscovering(false);
+      if (sourceRequestGate.isCurrent(request)) setIsDiscovering(false);
     }
   };
 
@@ -280,6 +310,9 @@ export default function Header() {
     if (!settings) return;
     const filters = resolveGuidanceFilters();
     if (!filters) return;
+    repairDiscoveryGate.invalidate();
+    const request = sourceRequestGate.begin();
+    setPendingSourceRepair(null);
     setError(null);
     setIsDiscovering(true);
     try {
@@ -297,15 +330,17 @@ export default function Header() {
         },
         rateLimitPolicy: settings.rateLimitPolicy,
       });
+      if (!sourceRequestGate.isCurrent(request)) return;
       registerSourceStart(source, syncRunId, detectedKind);
       appendSyncLog(`${source.displayName}: guided connector recipe saved for future synchronizations.`);
       setRepairPreview(null);
       setPortalUrlDraft('');
       setConnectorOpen(false);
     } catch (reason) {
+      if (!sourceRequestGate.isCurrent(request)) return;
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
-      setIsDiscovering(false);
+      if (sourceRequestGate.isCurrent(request)) setIsDiscovering(false);
     }
   };
 
@@ -543,7 +578,10 @@ export default function Header() {
           <button
             type="button"
             aria-label="Connect a data source"
-            onClick={() => setConnectorOpen((open) => !open)}
+            onClick={() => {
+              if (isConnectorOpen) cancelSourceOperation();
+              setConnectorOpen((open) => !open);
+            }}
             className={cn('focus-ring rounded-xl border p-2.5 transition lg:hidden', isConnectorOpen ? 'border-cyan-400/30 bg-cyan-400/10 text-cyan-300' : 'border-slate-800 bg-slate-900/50 text-slate-400 hover:text-slate-100')}
           >
             <Icon name="database" />
@@ -590,7 +628,7 @@ export default function Header() {
               <h2 id="paste-source-title" className="mt-1 text-sm font-semibold text-slate-100">Paste content to analyze</h2>
               <p className="mt-1 text-[9px] text-slate-600">Text, CSV, JSON, XML, HTML, and tabular content are detected automatically.</p>
             </div>
-            <button type="button" onClick={() => setPasteOpen(false)} aria-label="Close paste dialog" className="rounded-lg p-2 text-slate-600 hover:bg-slate-800 hover:text-slate-300"><Icon name="x" /></button>
+            <button type="button" onClick={closePasteDialog} aria-label="Close paste dialog" className="rounded-lg p-2 text-slate-600 hover:bg-slate-800 hover:text-slate-300"><Icon name="x" /></button>
           </div>
           <div className="space-y-3 p-4">
             <label className="block text-[9px] font-semibold text-slate-500">
@@ -605,7 +643,7 @@ export default function Header() {
           <div className="flex items-center justify-between border-t border-slate-800 px-4 py-3">
             <span className="font-mono text-[8px] text-slate-600">{new Blob([pasteContent]).size.toLocaleString()} / 16,777,216 bytes</span>
             <div className="flex gap-2">
-              <button type="button" onClick={() => setPasteOpen(false)} className="rounded-lg px-3 py-2 text-[9px] font-semibold text-slate-500 hover:text-slate-300">Cancel</button>
+              <button type="button" onClick={closePasteDialog} className="rounded-lg px-3 py-2 text-[9px] font-semibold text-slate-500 hover:text-slate-300">Cancel</button>
               <button type="submit" disabled={isDiscovering || !pasteContent.trim() || !pasteTitle.trim()} className="focus-ring rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-4 py-2 text-[9px] font-semibold text-cyan-200 disabled:opacity-40">{isDiscovering ? 'Analyzing…' : 'Add & analyze'}</button>
             </div>
           </div>
@@ -674,7 +712,7 @@ export default function Header() {
               <h2 id="repair-source-title" className="mt-1 text-sm font-semibold text-slate-100">Show OnRecord where the data lives</h2>
               <p className="mt-1 max-w-xl text-[9px] leading-relaxed text-slate-600">The site is reachable, but it did not expose a reliable static data link. Paste the underlying download, folder, catalog, dashboard, or API URL. This guidance is saved and reused automatically.</p>
             </div>
-            <button type="button" onClick={() => setRepairPreview(null)} aria-label="Close repair dialog" className="rounded-lg p-2 text-slate-600 hover:bg-slate-800 hover:text-slate-300"><Icon name="x" /></button>
+            <button type="button" onClick={closeRepairDialog} aria-label="Close repair dialog" className="rounded-lg p-2 text-slate-600 hover:bg-slate-800 hover:text-slate-300"><Icon name="x" /></button>
           </div>
           <div className="space-y-4 overflow-y-auto p-4">
             <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
@@ -771,7 +809,7 @@ export default function Header() {
             </details>
           </div>
           <div className="flex justify-end gap-2 border-t border-slate-800 px-4 py-3">
-            <button type="button" onClick={() => setRepairPreview(null)} className="rounded-lg px-3 py-2 text-[9px] font-semibold text-slate-500 hover:text-slate-300">Cancel</button>
+            <button type="button" onClick={closeRepairDialog} className="rounded-lg px-3 py-2 text-[9px] font-semibold text-slate-500 hover:text-slate-300">Cancel</button>
             <button type="submit" disabled={isDiscovering || !repairSeedUrl.trim() || !guidanceFilters.ok} className="focus-ring rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-4 py-2 text-[9px] font-semibold text-cyan-200 disabled:opacity-40">{isDiscovering ? 'Testing…' : 'Use this data source'}</button>
           </div>
         </form>

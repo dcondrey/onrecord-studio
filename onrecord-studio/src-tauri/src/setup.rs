@@ -246,8 +246,7 @@ mod tests {
             .expect("object fixture directory must be created");
         std::fs::write(staging.join("partial"), b"incomplete")
             .expect("staged fixture must be written");
-        std::fs::write(&evidence, b"committed evidence")
-            .expect("evidence fixture must be written");
+        std::fs::write(&evidence, b"committed evidence").expect("evidence fixture must be written");
 
         clear_abandoned_ingestion_staging(&download_root)
             .expect("abandoned staging cleanup must succeed");
@@ -271,8 +270,7 @@ mod tests {
         let outside = directory.path().join("outside");
         std::fs::create_dir_all(&download_root).expect("download root must be created");
         std::fs::create_dir_all(&outside).expect("outside fixture must be created");
-        std::fs::write(outside.join("keep"), b"outside")
-            .expect("outside fixture must be written");
+        std::fs::write(outside.join("keep"), b"outside").expect("outside fixture must be written");
         symlink(&outside, download_root.join(".staging"))
             .expect("staging symlink fixture must be created");
 

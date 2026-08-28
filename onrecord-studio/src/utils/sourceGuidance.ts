@@ -80,8 +80,34 @@ function splitPatternLines(value: string): string[] {
 
 type ListResult = { ok: true; value: string[] } | { ok: false; problem: string };
 
+const MAX_GUIDANCE_RULES_PER_FIELD = 100;
+const MAX_GUIDANCE_RULE_LENGTH = 1_024;
+
+function validateRuleList(values: string[], label: string): ListResult {
+  if (values.length > MAX_GUIDANCE_RULES_PER_FIELD) {
+    return {
+      ok: false,
+      problem: `${label} contains more than ${MAX_GUIDANCE_RULES_PER_FIELD} rules.`,
+    };
+  }
+  const oversized = values.find((value) => value.length > MAX_GUIDANCE_RULE_LENGTH);
+  if (oversized !== undefined) {
+    return {
+      ok: false,
+      problem: `${label} contains a rule longer than ${MAX_GUIDANCE_RULE_LENGTH.toLocaleString()} characters.`,
+    };
+  }
+  return { ok: true, value: values };
+}
+
+function parseSimpleList(value: string, label: string): ListResult {
+  return validateRuleList(splitList(value), label);
+}
+
 function parsePatternList(value: string, label: string): ListResult {
   const patterns = splitPatternLines(value);
+  const listResult = validateRuleList(patterns, label);
+  if (!listResult.ok) return listResult;
   for (const pattern of patterns) {
     try {
       new RegExp(pattern);
@@ -126,15 +152,27 @@ function parseByteCount(value: string, label: string): ByteResult {
 }
 
 export function parseGuidanceFilters(draft: GuidanceFilterDraft): GuidanceFilterResult {
+  const includeFilenameGlobs = parseSimpleList(draft.includeFilenameGlobs, 'Filename include globs');
+  if (!includeFilenameGlobs.ok) return includeFilenameGlobs;
+  const excludeFilenameGlobs = parseSimpleList(draft.excludeFilenameGlobs, 'Filename exclude globs');
+  if (!excludeFilenameGlobs.ok) return excludeFilenameGlobs;
   const includeFilenamePatterns = parsePatternList(draft.includeFilenamePatterns, 'Filename include pattern');
   if (!includeFilenamePatterns.ok) return includeFilenamePatterns;
   const excludeFilenamePatterns = parsePatternList(draft.excludeFilenamePatterns, 'Filename exclude pattern');
   if (!excludeFilenamePatterns.ok) return excludeFilenamePatterns;
 
+  const includeContentKeywords = parseSimpleList(draft.includeContentKeywords, 'Content include keywords');
+  if (!includeContentKeywords.ok) return includeContentKeywords;
+  const excludeContentKeywords = parseSimpleList(draft.excludeContentKeywords, 'Content exclude keywords');
+  if (!excludeContentKeywords.ok) return excludeContentKeywords;
   const includeContentPatterns = parsePatternList(draft.includeContentPatterns, 'Content include pattern');
   if (!includeContentPatterns.ok) return includeContentPatterns;
   const excludeContentPatterns = parsePatternList(draft.excludeContentPatterns, 'Content exclude pattern');
   if (!excludeContentPatterns.ok) return excludeContentPatterns;
+  const includeOrganizations = parseSimpleList(draft.includeOrganizations, 'Organization include rules');
+  if (!includeOrganizations.ok) return includeOrganizations;
+  const excludeOrganizations = parseSimpleList(draft.excludeOrganizations, 'Organization exclude rules');
+  if (!excludeOrganizations.ok) return excludeOrganizations;
 
   const minimumFileSizeBytes = parseByteCount(draft.minimumFileSizeBytes, 'Minimum file size');
   if (!minimumFileSizeBytes.ok) return minimumFileSizeBytes;
@@ -163,16 +201,16 @@ export function parseGuidanceFilters(draft: GuidanceFilterDraft): GuidanceFilter
   return {
     ok: true,
     filters: {
-      includeFilenameGlobs: splitList(draft.includeFilenameGlobs),
-      excludeFilenameGlobs: splitList(draft.excludeFilenameGlobs),
+      includeFilenameGlobs: includeFilenameGlobs.value,
+      excludeFilenameGlobs: excludeFilenameGlobs.value,
       includeFilenamePatterns: includeFilenamePatterns.value,
       excludeFilenamePatterns: excludeFilenamePatterns.value,
-      includeContentKeywords: splitList(draft.includeContentKeywords),
-      excludeContentKeywords: splitList(draft.excludeContentKeywords),
+      includeContentKeywords: includeContentKeywords.value,
+      excludeContentKeywords: excludeContentKeywords.value,
       includeContentPatterns: includeContentPatterns.value,
       excludeContentPatterns: excludeContentPatterns.value,
-      includeOrganizations: splitList(draft.includeOrganizations),
-      excludeOrganizations: splitList(draft.excludeOrganizations),
+      includeOrganizations: includeOrganizations.value,
+      excludeOrganizations: excludeOrganizations.value,
       minimumFileSizeBytes: minimumFileSizeBytes.value,
       maximumFileSizeBytes: maximumFileSizeBytes.value,
       documentDateFrom: documentDateFrom.value,

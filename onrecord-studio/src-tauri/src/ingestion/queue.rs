@@ -3194,7 +3194,12 @@ fn evaluate_extracted_document_guidance(
 }
 
 fn document_date_for_guidance(source_kind: SourceKind, created_at: &str) -> Option<&str> {
-    (source_kind == SourceKind::NextRequest).then_some(created_at)
+    if source_kind != SourceKind::NextRequest {
+        return None;
+    }
+    let date = created_at.get(0..10)?;
+    NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()?;
+    Some(date)
 }
 
 async fn finalize_and_index_extracted_document(
@@ -6280,7 +6285,15 @@ mod tests {
         let timestamp = "2024-06-01T00:00:00Z";
         assert_eq!(
             document_date_for_guidance(SourceKind::NextRequest, timestamp),
-            Some(timestamp)
+            Some("2024-06-01")
+        );
+        assert_eq!(
+            document_date_for_guidance(SourceKind::NextRequest, "2024-02-30T00:00:00Z"),
+            None
+        );
+        assert_eq!(
+            document_date_for_guidance(SourceKind::NextRequest, "not-a-date"),
+            None
         );
         for kind in [
             SourceKind::WebCrawl,

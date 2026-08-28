@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { invokeCommand } from '../../ipc';
+import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
 import type {
   CorpusEvidenceReference,
@@ -36,14 +37,15 @@ export default function PatternExplorer() {
   const [isLoading, setIsLoading] = useState(false);
   const [excerptLoadingKey, setExcerptLoadingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const requestSequence = useRef(0);
+  const refreshGate = useLatestRequestGate();
+  const evidenceGate = useLatestRequestGate();
 
   const refresh = useCallback(async () => {
     // The "Minimum evidence" select is not disabled while a refresh runs, so refreshes are already
     // concurrent. Without a sequence the slower one wins: patterns supported by three documents
     // render under a control reading "5", and portal A's cross-document patterns render under
     // portal B. Same guard `SearchFilter` uses.
-    const sequence = ++requestSequence.current;
+    const request = refreshGate.begin();
     setIsLoading(true);
     setError(null);
     try {
@@ -57,7 +59,7 @@ export default function PatternExplorer() {
         }),
         invokeCommand('get_corpus_index_status', {}),
       ]);
-      if (sequence !== requestSequence.current) return;
+      if (!refreshGate.isCurrent(request)) return;
       setPatterns(nextPatterns);
       setStatus(nextStatus);
       setSelectedPatternId((current) =>
@@ -66,12 +68,12 @@ export default function PatternExplorer() {
           : nextPatterns[0]?.patternId ?? null,
       );
     } catch (reason) {
-      if (sequence !== requestSequence.current) return;
+      if (!refreshGate.isCurrent(request)) return;
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
-      if (sequence === requestSequence.current) setIsLoading(false);
+      if (refreshGate.isCurrent(request)) setIsLoading(false);
     }
-  }, [activePortalKey, minimumEvidenceCount]);
+  }, [activePortalKey, minimumEvidenceCount, refreshGate]);
 
   useEffect(() => {
     void refresh();
@@ -93,6 +95,7 @@ export default function PatternExplorer() {
     // TODO(patterns): Preserve the selected evidence offset in workspace state
     // so reopening the pattern view restores the excerpt.
     const key = `${evidence.portalKey}:${evidence.documentId}`;
+    const request = evidenceGate.begin();
     setExcerptLoadingKey(key);
     setError(null);
     const sourceOffset = evidence.characterStart ?? 0;
@@ -103,11 +106,13 @@ export default function PatternExplorer() {
         characterOffset: Math.max(0, sourceOffset - 500),
         characterLimit: 3_000,
       });
+      if (!evidenceGate.isCurrent(request)) return;
       setExcerpt({ evidence, chunk });
     } catch (reason) {
+      if (!evidenceGate.isCurrent(request)) return;
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
-      setExcerptLoadingKey(null);
+      if (evidenceGate.isCurrent(request)) setExcerptLoadingKey(null);
     }
   };
 

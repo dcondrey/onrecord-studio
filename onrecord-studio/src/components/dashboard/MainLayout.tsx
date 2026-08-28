@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import SearchFilter from '../filters/SearchFilter';
 import { useAppStore } from '../../store/useAppStore';
 import { cn } from '../../utils/cn';
@@ -17,6 +17,7 @@ import OverviewDashboard from './OverviewDashboard';
 import ActivityDashboard from './ActivityDashboard';
 import PatternExplorer from './PatternExplorer';
 import Icon from '../ui/icons';
+import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 
 export default function MainLayout() {
   // TODO(workspace): Persist selected request/document context when switching
@@ -38,31 +39,27 @@ export default function MainLayout() {
   const selected = results.find(
     (result) => result.requestId === selectedRequestId && result.portalKey === selectedRequestPortalKey,
   ) ?? null;
-  // Which request the workspace is on now, readable from an async continuation that started under
-  // a different one. Clearing state when the selection changes is not enough: a chunk already in
-  // flight still resolves afterwards, and it would open the viewer on one request's document while
-  // the record panel behind it describes another.
-  const activeRequestRef = useRef('');
-  // The most recently requested document, so a slower earlier click cannot reopen the older one.
-  const lastRequestedDocumentRef = useRef('');
+  const documentListGate = useLatestRequestGate();
+  const documentOpenGate = useLatestRequestGate();
+  const exportGate = useLatestRequestGate();
 
   useEffect(() => {
-    let active = true;
-    activeRequestRef.current = selected ? `${selected.portalKey}:${selected.requestId}` : '';
+    const request = documentListGate.begin();
+    documentOpenGate.invalidate();
     setDocuments([]);
     setDocumentError(null);
     setActiveDocument(null);
-    if (!selected) return () => { active = false; };
+    if (!selected) return documentListGate.invalidate;
     void invokeCommand('list_request_documents', {
       requestId: selected.requestId,
       portalKey: selected.portalKey,
     }).then((values) => {
-      if (active) setDocuments(values);
+      if (documentListGate.isCurrent(request)) setDocuments(values);
     }).catch((reason) => {
-      if (active) setDocumentError(String(reason));
+      if (documentListGate.isCurrent(request)) setDocumentError(String(reason));
     });
-    return () => { active = false; };
-  }, [selected?.portalKey, selected?.requestId]);
+    return documentListGate.invalidate;
+  }, [documentListGate, documentOpenGate, selected?.portalKey, selected?.requestId]);
 
   useEffect(() => {
     if (!activeDocument) return;
@@ -78,9 +75,7 @@ export default function MainLayout() {
     // Identity is the request, not the document: two rapid clicks resolve out of order and reopen
     // the older document, and a chunk from request A resolving after B is selected opens A's text
     // under B's header. Both are false attributions of evidence.
-    const requestedFor = activeRequestRef.current;
-    const requestedDocument = `${summary.portalKey}:${summary.documentId}`;
-    lastRequestedDocumentRef.current = requestedDocument;
+    const request = documentOpenGate.begin();
     try {
       const chunk = await invokeCommand('get_document_text_chunk', {
         documentId: summary.documentId,
@@ -88,17 +83,16 @@ export default function MainLayout() {
         characterOffset,
         characterLimit: 100000,
       });
-      if (activeRequestRef.current !== requestedFor) return;
-      if (lastRequestedDocumentRef.current !== requestedDocument) return;
+      if (!documentOpenGate.isCurrent(request)) return;
       setActiveDocument({ summary, chunk });
     } catch (reason) {
-      if (activeRequestRef.current !== requestedFor) return;
-      if (lastRequestedDocumentRef.current !== requestedDocument) return;
+      if (!documentOpenGate.isCurrent(request)) return;
       setDocumentError(String(reason));
     }
   };
 
   const exportBrief = async (record: RequestSearchResult) => {
+    const request = exportGate.begin();
     const key = `${record.portalKey}-${record.requestId}`;
     setExportState({ key, isExporting: true, result: null, error: null });
     try {
@@ -108,9 +102,13 @@ export default function MainLayout() {
         targetPath: null,
         authorName: null,
       });
-      setExportState({ key, isExporting: false, result, error: null });
+      if (exportGate.isCurrent(request)) {
+        setExportState({ key, isExporting: false, result, error: null });
+      }
     } catch (reason) {
-      setExportState({ key, isExporting: false, result: null, error: String(reason) });
+      if (exportGate.isCurrent(request)) {
+        setExportState({ key, isExporting: false, result: null, error: String(reason) });
+      }
     }
   };
 

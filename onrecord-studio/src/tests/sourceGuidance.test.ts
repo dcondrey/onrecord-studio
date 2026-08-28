@@ -80,4 +80,27 @@ describe('source guidance parsing', () => {
       }),
     ).toMatchObject({ ok: false, problem: expect.stringContaining('too large') });
   });
+
+  it('enforces the backend rule-count and rule-length boundaries before submission', () => {
+    expect(
+      parseGuidanceFilters({
+        ...DEFAULT_GUIDANCE_FILTER_DRAFT,
+        includeContentKeywords: Array.from({ length: 101 }, (_, index) => `rule-${index}`).join(','),
+      }),
+    ).toMatchObject({ ok: false, problem: expect.stringContaining('more than 100 rules') });
+
+    expect(
+      parseGuidanceFilters({
+        ...DEFAULT_GUIDANCE_FILTER_DRAFT,
+        excludeFilenamePatterns: 'x'.repeat(1_025),
+      }),
+    ).toMatchObject({ ok: false, problem: expect.stringContaining('longer than 1,024 characters') });
+
+    expect(
+      parseGuidanceFilters({
+        ...DEFAULT_GUIDANCE_FILTER_DRAFT,
+        includeOrganizations: 'x'.repeat(1_024),
+      }),
+    ).toMatchObject({ ok: true });
+  });
 });

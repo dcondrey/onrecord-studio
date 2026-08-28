@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { invokeCommand } from '../../ipc';
+import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
 import type {
   LegalComplianceFinding,
@@ -36,20 +37,21 @@ export default function LegalCompliancePanel({
   } | null>(null);
   const [reviewerNotes, setReviewerNotes] = useState('');
   const [isReviewing, setIsReviewing] = useState(false);
-  // `setFindings` writes to the global store, so an evaluation that resolves after the panel has
-  // been handed a different record renders one request's statutory violations, citations and
-  // evidence summary under another request's header, with nothing on screen saying so.
-  const activeRecordRef = useRef('');
+  // Loading, evaluating, and reviewing all publish to the same global findings collection. One
+  // gate makes the newest of those operations authoritative, including across record changes.
+  const findingsGate = useLatestRequestGate();
 
   useEffect(() => {
-    let active = true;
-    activeRecordRef.current = `${record.portalKey}:${record.requestId}`;
+    const request = findingsGate.begin();
     setIsLoading(true);
     // Reset with the rest: otherwise the button stays on "Evaluating…" for the new record until
     // the previous record's evaluation returns.
     setIsEvaluating(false);
     setError(null);
     setEvaluation(null);
+    // Findings live in the global workspace store. Clear the previous record immediately so a
+    // failed load cannot render record A's legal findings under record B's heading.
+    setFindings([]);
     setPendingReview(null);
     setReviewerNotes('');
     void invokeCommand('list_request_legal_findings', {
@@ -57,18 +59,16 @@ export default function LegalCompliancePanel({
       portalKey: record.portalKey,
     })
       .then((value) => {
-        if (active) setFindings(value);
+        if (findingsGate.isCurrent(request)) setFindings(value);
       })
       .catch((reason) => {
-        if (active) setError(String(reason));
+        if (findingsGate.isCurrent(request)) setError(String(reason));
       })
       .finally(() => {
-        if (active) setIsLoading(false);
+        if (findingsGate.isCurrent(request)) setIsLoading(false);
       });
-    return () => {
-      active = false;
-    };
-  }, [record.portalKey, record.requestId, setFindings]);
+    return findingsGate.invalidate;
+  }, [findingsGate, record.portalKey, record.requestId, setFindings]);
 
   const activeFindings = useMemo(
     () => findings.filter((finding) => ['OPEN', 'CONFIRMED'].includes(finding.reviewStatus)),
@@ -76,22 +76,24 @@ export default function LegalCompliancePanel({
   );
 
   const evaluate = async () => {
+    const request = findingsGate.begin();
+    setIsLoading(false);
+    setIsReviewing(false);
     setIsEvaluating(true);
     setError(null);
-    const requestedFor = `${record.portalKey}:${record.requestId}`;
     try {
       const result = await invokeCommand('evaluate_request_legal_compliance', {
         requestId: record.requestId,
         portalKey: record.portalKey,
       });
-      if (activeRecordRef.current !== requestedFor) return;
+      if (!findingsGate.isCurrent(request)) return;
       setEvaluation(result);
       setFindings(result.findings);
     } catch (reason) {
-      if (activeRecordRef.current !== requestedFor) return;
+      if (!findingsGate.isCurrent(request)) return;
       setError(String(reason));
     } finally {
-      setIsEvaluating(false);
+      if (findingsGate.isCurrent(request)) setIsEvaluating(false);
     }
   };
 
@@ -106,10 +108,12 @@ export default function LegalCompliancePanel({
 
   const submitReview = async () => {
     if (!pendingReview) return;
+    const request = findingsGate.begin();
+    setIsLoading(false);
+    setIsEvaluating(false);
     setIsReviewing(true);
     setError(null);
     try {
-      const requestedFor = `${record.portalKey}:${record.requestId}`;
       const result = await invokeCommand('review_legal_finding', {
         violationId: pendingReview.violationId,
         requestId: record.requestId,
@@ -117,15 +121,15 @@ export default function LegalCompliancePanel({
         reviewStatus: pendingReview.status,
         reviewerNotes: reviewerNotes.trim() || null,
       });
-      if (activeRecordRef.current !== requestedFor) return;
+      if (!findingsGate.isCurrent(request)) return;
       setFindings(result);
       setPendingReview(null);
       setReviewerNotes('');
     } catch (reason) {
-      if (activeRecordRef.current !== `${record.portalKey}:${record.requestId}`) return;
+      if (!findingsGate.isCurrent(request)) return;
       setError(String(reason));
     } finally {
-      setIsReviewing(false);
+      if (findingsGate.isCurrent(request)) setIsReviewing(false);
     }
   };
 

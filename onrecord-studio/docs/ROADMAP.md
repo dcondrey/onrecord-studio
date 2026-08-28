@@ -13,8 +13,8 @@ limit, context compaction, or a change of contributor. Search for `TODO(` and
 
 Current Rust verification is green after the changes below: `cargo fmt --all -- --check`,
 `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test --workspace`
-(223 unit tests passing, 0 failing, plus doctests). The frontend was not changed in this pass; its
-latest verified baseline remains `npm run lint`, `npm run test:unit` (61 tests), `npm run build`,
+(223 unit tests passing, 0 failing, plus doctests). The frontend verification is also green:
+`npm run lint`, `npm run test:unit` (66 tests), `npm run build`,
 and `npm run check:ipc` (30 commands, 18 telemetry events, 6 verification states).
 
 - [x] Every embedded `.msg` descent now spends the shared container-depth budget. The parser
@@ -38,6 +38,19 @@ and `npm run check:ipc` (30 commands, 18 telemetry events, 6 verification states
       `src-tauri/src/portal/client.rs`, and robots policy is fetched, cached, and enforced by the
       crawl host-policy path. Deterministic (unjittered) retry timing and non-persisted scheduler
       state remain separate lower-priority concerns.
+- [x] Re-audited source-guidance boundaries. The frontend now enforces the backend's 100-rule and
+      1,024-character per-rule limits before submission, and malformed NextRequest timestamps are
+      treated as absent dates instead of being compared lexically. The valid document-carried date
+      path remains NextRequest-only.
+- [x] Consolidated latest-request sequencing in `useLatestRequestGate`. Search, corpus patterns and
+      excerpts, provenance, legal findings, document lists/opening/history/recovery, brief exports,
+      and source discovery/import flows all reject superseded results, errors, and `finally` state
+      transitions. Closing a source dialog invalidates its native request even though the IPC call
+      itself cannot yet be aborted. The hook has token, explicit-invalidation, and unmount tests;
+      existing viewer tests continue to exercise late native responses across document changes.
+- [x] Verification after the guidance and sequencing pass: frontend lint, TypeScript, production
+      build/IPC contract, and 66 unit tests are green; Rust fmt, strict clippy, all 223 unit tests,
+      and doctests are green.
 
 ### Continuation — 2026-08-27 evening
 
@@ -292,9 +305,9 @@ at the line; two carry running proof-of-concept binaries.
 - [x] `App.tsx` — identical failures from the 1500 ms runtime poll are logged immediately and then
       at most once per minute, with a recovery event, so they cannot rapidly evict the diagnostic
       activity that preceded the outage.
-- [ ] Unsequenced async resolution in six places (`MainLayout.tsx:68`, `PatternExplorer.tsx:41`,
-      `DocumentViewer.tsx:39`, `LegalCompliancePanel.tsx:21`, `useC2PA.ts:6`, `Header.tsx:73`) —
-      one shared hook, not six patches.
+- [x] Async result publication is centralized through `useLatestRequestGate`, including the six
+      originally identified surfaces and related search/export/source operations that publish into
+      the same state. Superseded `finally` blocks are guarded as well as success/error branches.
 
 **Storage**
 - [ ] `duckdb.rs` `TODO(concurrency)` — write serialization and live sibling reads are correct, but
