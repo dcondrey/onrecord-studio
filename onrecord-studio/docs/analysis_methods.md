@@ -91,17 +91,18 @@ The numerator counts *characters*, not placeholders: `[REDACTED]████` sc
 To isolate records tied to systemic homelessness or housing rights violations, the engine processes unformatted description text through a case-insensitive keyword filter.
 
 ### A. Word-Stem Target Matrix
-Matching is exact-token, case-folded, against the list in `enforcement_keyword`
-(`analysis/cluster.rs`). Three stems are implemented; each maps its surface forms to one label:
+Matching is case-folded against `enforcement_keyword` and the bounded two-token phrase scanner in
+`enforcement_keywords` (`analysis/cluster.rs`). Six labels are implemented; each maps its accepted
+surface forms to one stable label:
 
 | Label | Accepted tokens |
 |---|---|
 | `sweep` | `sweep`, `sweeps`, `sweeping`, `sweeped`, `swept` |
 | `encampment` | `encampment`, `encampments` |
 | `eviction` | `evict`, `evicts`, `evicted`, `evicting`, `eviction`, `evictions` |
-
-FEATURE(analysis): `clean`, `displace`, and `property storage` are not implemented. Adding a
-multi-word stem needs phrase matching, which the current single-token scanner does not do.
+| `clean` | `clean`, `cleans`, `cleaned`, `cleaning`, `cleanup`, `cleanups` |
+| `displace` | `displace`, `displaces`, `displaced`, `displacing`, `displacement`, `displacements` |
+| `property storage` | exact adjacent phrase `property storage` or `property stored` |
 
 ### B. Density Calculation
 $$\text{Keyword Density} (D_k) = \frac{\text{Total Count of Keyword Matches}}{\text{Total Count of Words in Case Description}} \times 100$$

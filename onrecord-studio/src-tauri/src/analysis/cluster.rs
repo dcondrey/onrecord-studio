@@ -223,18 +223,16 @@ pub fn compute_neighborhood_keyword_densities(
             .total_word_count
             .checked_add(words.len())
             .ok_or_else(|| AppError::Analysis("Neighborhood word count overflowed".to_string()))?;
-        let mut matched = false;
-        for word in words {
-            if let Some(keyword) = enforcement_keyword(&word.normalized) {
-                let count = accumulator
-                    .keyword_match_counts
-                    .entry(keyword.to_string())
-                    .or_insert(0);
-                *count = count.checked_add(1).ok_or_else(|| {
-                    AppError::Analysis(format!("Keyword count for '{keyword}' overflowed"))
-                })?;
-                matched = true;
-            }
+        let keyword_matches = enforcement_keywords(&words);
+        let matched = !keyword_matches.is_empty();
+        for keyword in keyword_matches {
+            let count = accumulator
+                .keyword_match_counts
+                .entry(keyword.to_string())
+                .or_insert(0);
+            *count = count.checked_add(1).ok_or_else(|| {
+                AppError::Analysis(format!("Keyword count for '{keyword}' overflowed"))
+            })?;
         }
         if matched {
             accumulator.matching_request_ids.insert(record.request_id);
@@ -244,7 +242,14 @@ pub fn compute_neighborhood_keyword_densities(
     accumulators
         .into_values()
         .map(|mut accumulator| {
-            for keyword in ["sweep", "encampment", "eviction"] {
+            for keyword in [
+                "sweep",
+                "encampment",
+                "eviction",
+                "clean",
+                "displace",
+                "property storage",
+            ] {
                 accumulator
                     .keyword_match_counts
                     .entry(keyword.to_string())
@@ -288,11 +293,10 @@ pub fn compute_neighborhood_keyword_densities(
 
 pub fn extract_enforcement_keyword_counts(text: &str) -> BTreeMap<String, usize> {
     let mut counts = BTreeMap::new();
-    for token in word_tokens(text) {
-        if let Some(keyword) = enforcement_keyword(&token.normalized) {
-            let count = counts.entry(keyword.to_string()).or_insert(0_usize);
-            *count = count.saturating_add(1);
-        }
+    let words = word_tokens(text);
+    for keyword in enforcement_keywords(&words) {
+        let count = counts.entry(keyword.to_string()).or_insert(0_usize);
+        *count = count.saturating_add(1);
     }
     counts
 }
@@ -303,10 +307,7 @@ pub fn compute_thematic_clusters(
     let mut cluster_members: BTreeMap<String, BTreeSet<u64>> = BTreeMap::new();
     for (request_id, description, anomaly_type) in raw_data {
         let words = word_tokens(description);
-        let cluster_key = if words
-            .iter()
-            .any(|word| enforcement_keyword(&word.normalized).is_some())
-        {
+        let cluster_key = if !enforcement_keywords(&words).is_empty() {
             "CIVIC_DISPLACEMENT".to_string()
         } else if contains_procurement_signal(&words) {
             "PROCUREMENT_ANOMALY".to_string()
@@ -481,8 +482,28 @@ fn enforcement_keyword(word: &str) -> Option<&'static str> {
         "sweep" | "sweeps" | "sweeping" | "sweeped" | "swept" => Some("sweep"),
         "encampment" | "encampments" => Some("encampment"),
         "evict" | "evicts" | "evicted" | "evicting" | "eviction" | "evictions" => Some("eviction"),
+        "clean" | "cleans" | "cleaned" | "cleaning" | "cleanup" | "cleanups" => Some("clean"),
+        "displace" | "displaces" | "displaced" | "displacing" | "displacement"
+        | "displacements" => Some("displace"),
         _ => None,
     }
+}
+
+fn enforcement_keywords(words: &[WordToken<'_>]) -> Vec<&'static str> {
+    let mut matches = Vec::new();
+    for (index, word) in words.iter().enumerate() {
+        if let Some(keyword) = enforcement_keyword(&word.normalized) {
+            matches.push(keyword);
+        }
+        if word.normalized == "property"
+            && words
+                .get(index + 1)
+                .is_some_and(|next| matches!(next.normalized.as_str(), "storage" | "stored"))
+        {
+            matches.push("property storage");
+        }
+    }
+    matches
 }
 
 fn contains_procurement_signal(words: &[WordToken<'_>]) -> bool {
@@ -562,5 +583,15 @@ mod tests {
         let density = compute_neighborhood_keyword_densities(&records).unwrap();
         assert_eq!(density[0].total_keyword_matches, 3);
         assert_eq!(density[0].matching_request_ids, vec![1]);
+    }
+
+    #[test]
+    fn matches_cleanup_displacement_and_bounded_property_storage_phrases() {
+        let counts = extract_enforcement_keyword_counts(
+            "Cleanup crews displaced residents while property storage was arranged. A property tax storage rule is unrelated.",
+        );
+        assert_eq!(counts.get("clean"), Some(&1));
+        assert_eq!(counts.get("displace"), Some(&1));
+        assert_eq!(counts.get("property storage"), Some(&1));
     }
 }
