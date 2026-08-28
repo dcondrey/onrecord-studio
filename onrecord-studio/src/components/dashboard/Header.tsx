@@ -116,6 +116,7 @@ export default function Header() {
   const [repairSeedUrl, setRepairSeedUrl] = useState('');
   const [repairLinkSelector, setRepairLinkSelector] = useState('');
   const [repairDownloadSelector, setRepairDownloadSelector] = useState('');
+  const [reuseRepairForPublisher, setReuseRepairForPublisher] = useState(false);
   const [isPreviewingSelectors, setIsPreviewingSelectors] = useState(false);
   const [selectedSourceId, setSelectedSourceId] = useState('auto');
   const [isCrawlSettingsOpen, setCrawlSettingsOpen] = useState(false);
@@ -176,6 +177,7 @@ export default function Header() {
     setRepairPreview(null);
     setRepairLinkSelector('');
     setRepairDownloadSelector('');
+    setReuseRepairForPublisher(false);
     setIsPreviewingSelectors(false);
   };
 
@@ -194,6 +196,7 @@ export default function Header() {
         setGuidanceDraft(DEFAULT_GUIDANCE_FILTER_DRAFT);
         setRepairLinkSelector('');
         setRepairDownloadSelector('');
+        setReuseRepairForPublisher(false);
       })
       .catch(() => {
         // The persisted ingestion failure remains visible even if previewing also fails.
@@ -328,7 +331,7 @@ export default function Header() {
       const { source, syncRunId, detectedKind } = await invokeCommand('start_data_source', {
         url: repairRootUrl,
         crawlPolicy: crawlPolicyOverride(settings.crawlPolicy),
-        guidance: buildRepairGuidance(filters.filters, [repairSeedUrl.trim()], repairLinkSelector, repairDownloadSelector),
+        guidance: buildRepairGuidance(filters.filters, [repairSeedUrl.trim()], repairLinkSelector, repairDownloadSelector, reuseRepairForPublisher),
         rateLimitPolicy: settings.rateLimitPolicy,
       });
       if (!sourceRequestGate.isCurrent(request)) return;
@@ -355,7 +358,7 @@ export default function Header() {
     try {
       const preview = await invokeCommand('preview_data_source', {
         url: repairRootUrl,
-        guidance: buildRepairGuidance(filters.filters, [], repairLinkSelector, repairDownloadSelector),
+        guidance: buildRepairGuidance(filters.filters, [], repairLinkSelector, repairDownloadSelector, false),
       });
       if (!repairDiscoveryGate.isCurrent(request)) return;
       setRepairPreview(preview);
@@ -677,6 +680,10 @@ export default function Header() {
               Source title
               <input value={pasteTitle} onChange={(event) => setPasteTitle(event.target.value)} maxLength={256} className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 text-[11px] text-slate-200" />
             </label>
+            <label className="flex items-start gap-2 rounded-xl border border-slate-800 bg-slate-950/35 p-3">
+              <input type="checkbox" checked={reuseRepairForPublisher} onChange={(event) => setReuseRepairForPublisher(event.target.checked)} className="focus-ring mt-0.5 h-3.5 w-3.5 rounded border-slate-700 bg-slate-950 accent-cyan-400" />
+              <span><span className="block text-[9px] font-semibold text-slate-400">Approve for this publisher hostname</span><span className="mt-1 block text-[8px] leading-relaxed text-slate-600">Reuse this mapping for a different source root only when its normalized hostname is exactly the same. Leave off for a source-specific layout.</span></span>
+            </label>
             <label className="block text-[9px] font-semibold text-slate-500">
               Content
               <textarea value={pasteContent} onChange={(event) => setPasteContent(event.target.value)} autoFocus rows={14} placeholder="Paste the source material here…" className="focus-ring mt-1.5 w-full resize-y rounded-xl border border-slate-800 bg-slate-950/70 p-3 font-mono text-[10px] leading-relaxed text-slate-300 placeholder:text-slate-700" />
@@ -864,10 +871,11 @@ export default function Header() {
 }
 
 type SourceGuidanceScope = Omit<SourceGuidance,
-  'additionalSeedUrls' | 'allowedHostnames' | 'includeUrlPrefixes' | 'excludeUrlPrefixes' | 'linkSelector' | 'downloadSelector'>;
+  'reuseForPublisherPattern' | 'additionalSeedUrls' | 'allowedHostnames' | 'includeUrlPrefixes' | 'excludeUrlPrefixes' | 'linkSelector' | 'downloadSelector'>;
 
-function buildRepairGuidance(scope: SourceGuidanceScope, additionalSeedUrls: string[], linkSelector: string, downloadSelector: string): SourceGuidance {
+function buildRepairGuidance(scope: SourceGuidanceScope, additionalSeedUrls: string[], linkSelector: string, downloadSelector: string, reuseForPublisherPattern: boolean): SourceGuidance {
   return {
+    reuseForPublisherPattern,
     additionalSeedUrls,
     allowedHostnames: [],
     includeUrlPrefixes: [],

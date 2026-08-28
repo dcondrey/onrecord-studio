@@ -50,6 +50,14 @@ const FLAG_STATUTORY_EXTENSION_DEFECTIVE: &str =
 const FLAG_POTENTIAL_POLICY_VIOLATION: &str = "POTENTIAL_POLICY_VIOLATION";
 const POLICY_CLASSIFIER_VERSION: &str = "structural-evidence-gap-v1";
 const MAXIMUM_POLICY_CORPUS_BYTES: usize = 32 * 1024 * 1024;
+
+fn publisher_pattern_for_url(value: &str) -> Option<String> {
+    reqwest::Url::parse(value)
+        .ok()?
+        .host_str()
+        .map(|host| host.trim_end_matches('.').to_ascii_lowercase())
+        .filter(|host| !host.is_empty())
+}
 const LEGAL_AUTHORITY_SUMMARY_SELECT: &str = "SELECT
     legal_statutes.statute_id, legal_statutes.jurisdiction,
     legal_statutes.statute_citation, legal_statutes.title,
@@ -580,6 +588,18 @@ impl DuckDbRepository {
         // Readers still coalesce, because DuckDB's own backfill for an added column is what this
         // depends on and it is not worth trusting silently.
         ensure_column(&conn, "portals", "lifecycle_state", "TEXT DEFAULT 'ACTIVE'")?;
+        ensure_column(
+            &conn,
+            "source_connector_recipes",
+            "publisher_pattern",
+            "TEXT",
+        )?;
+        ensure_column(
+            &conn,
+            "source_connector_recipes",
+            "reuse_approved",
+            "BIGINT DEFAULT 0",
+        )?;
         // These admission counters bound an interrupted crawl across process restarts. Older runs
         // predate durable counting, so zero is the only evidence-backed backfill available.
         ensure_column(
@@ -1348,18 +1368,30 @@ impl DuckDbRepository {
         let guidance_json = serde_json::to_string(guidance).map_err(|error| {
             AppError::DataParsing(format!("Failed to encode source repair guidance: {error}"))
         })?;
+        let publisher_pattern = publisher_pattern_for_url(root_url);
         let conn = self.conn.lock().await;
         conn.execute(
             "INSERT INTO source_connector_recipes (
-                source_key, root_url, recipe_version, crawl_policy_json, guidance_json, updated_at
-             ) VALUES (?1, ?2, 1, ?3, ?4, strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ'))
+                source_key, root_url, recipe_version, publisher_pattern, reuse_approved,
+                crawl_policy_json, guidance_json, updated_at
+             ) VALUES (?1, ?2, 2, ?3, ?4, ?5, ?6,
+                       strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ'))
              ON CONFLICT(source_key) DO UPDATE SET
                 root_url = excluded.root_url,
                 recipe_version = excluded.recipe_version,
+                publisher_pattern = excluded.publisher_pattern,
+                reuse_approved = excluded.reuse_approved,
                 crawl_policy_json = excluded.crawl_policy_json,
                 guidance_json = excluded.guidance_json,
                 updated_at = excluded.updated_at",
-            params![source_key, root_url, crawl_policy_json, guidance_json],
+            params![
+                source_key,
+                root_url,
+                publisher_pattern,
+                guidance.reuse_for_publisher_pattern,
+                crawl_policy_json,
+                guidance_json
+            ],
         )
         .map_err(|error| {
             AppError::Storage(format!("Failed to save source connector recipe: {error}"))
@@ -1372,6 +1404,7 @@ impl DuckDbRepository {
         root_url: &str,
     ) -> Result<Option<(CrawlPolicy, SourceGuidance)>, AppError> {
         let root_url = root_url.to_string();
+        let publisher_pattern = publisher_pattern_for_url(&root_url);
         let encoded = self
             .query_connection("Source connector recipe query", move |connection| {
                 let mut statement = connection
@@ -1379,6 +1412,8 @@ impl DuckDbRepository {
                         "SELECT crawl_policy_json, guidance_json
                          FROM source_connector_recipes
                          WHERE root_url = ?1
+                            OR (reuse_approved = 1 AND publisher_pattern = ?2)
+                         ORDER BY CASE WHEN root_url = ?1 THEN 0 ELSE 1 END, updated_at DESC
                          LIMIT 1",
                     )
                     .map_err(|error| {
@@ -1386,9 +1421,13 @@ impl DuckDbRepository {
                             "Failed to prepare source connector recipe: {error}"
                         ))
                     })?;
-                let mut rows = statement.query(params![root_url]).map_err(|error| {
-                    AppError::Storage(format!("Failed to query source connector recipe: {error}"))
-                })?;
+                let mut rows = statement
+                    .query(params![root_url, publisher_pattern])
+                    .map_err(|error| {
+                        AppError::Storage(format!(
+                            "Failed to query source connector recipe: {error}"
+                        ))
+                    })?;
                 let Some(row) = rows.next().map_err(|error| {
                     AppError::Storage(format!("Failed to read source connector recipe: {error}"))
                 })?
@@ -6371,9 +6410,10 @@ mod tests {
 
     use super::{
         compute_extracted_text_sha256, cpra_calendar_confidence_basis_points,
-        validate_entropy_metadata, verify_logical_relations, DocumentDownloadFinalization,
-        DocumentExtractionFinalization, DuckDbRepository, IngestionSchedulerCounts,
-        PortalSyncRunFinalization, ProvenanceEvidenceFile, SourceLifecycleState,
+        publisher_pattern_for_url, validate_entropy_metadata, verify_logical_relations,
+        DocumentDownloadFinalization, DocumentExtractionFinalization, DuckDbRepository,
+        IngestionSchedulerCounts, PortalSyncRunFinalization, ProvenanceEvidenceFile,
+        SourceLifecycleState,
     };
 
     const MIGRATION: &str = include_str!("../../migrations/0001_initial_schema.sql");
@@ -6448,6 +6488,19 @@ mod tests {
         }
 
         repository
+    }
+
+    #[test]
+    fn publisher_recipe_patterns_are_exact_normalized_hostnames() {
+        assert_eq!(
+            publisher_pattern_for_url("https://Data.Example.Gov./records/a"),
+            Some("data.example.gov".to_string())
+        );
+        assert_eq!(
+            publisher_pattern_for_url("https://other.example.gov/records/a"),
+            Some("other.example.gov".to_string())
+        );
+        assert_eq!(publisher_pattern_for_url("not a URL"), None);
     }
 
     /// Analytics nodes are constructed once at startup, before any document is ingested. A node

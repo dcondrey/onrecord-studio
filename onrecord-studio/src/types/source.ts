@@ -8,6 +8,7 @@ export interface CrawlPolicy {
 }
 
 export interface SourceGuidance {
+  reuseForPublisherPattern?: boolean;
   additionalSeedUrls: string[];
   allowedHostnames: string[];
   includeUrlPrefixes: string[];

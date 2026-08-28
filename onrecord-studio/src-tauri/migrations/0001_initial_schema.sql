@@ -59,7 +59,9 @@ CREATE TABLE IF NOT EXISTS portal_sync_runs (
 CREATE TABLE IF NOT EXISTS source_connector_recipes (
     source_key TEXT PRIMARY KEY,
     root_url TEXT NOT NULL UNIQUE,
-    recipe_version BIGINT NOT NULL DEFAULT 1,
+    recipe_version BIGINT NOT NULL DEFAULT 2,
+    publisher_pattern TEXT,
+    reuse_approved BIGINT NOT NULL DEFAULT 0 CHECK (reuse_approved IN (0, 1)),
     crawl_policy_json TEXT NOT NULL,
     guidance_json TEXT NOT NULL,
     updated_at TEXT NOT NULL DEFAULT strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ'),

@@ -1,4 +1,4 @@
-//! Placeholder registry for public-record and civic-data connector profiles.
+//! Versioned registry for public-record and civic-data connector profiles.
 //!
 //! Profiles describe acquisition requirements; they are not claims that a live connector exists.
 //! Every profile must still pass host validation, terms/licensing review, rate limits, and any
@@ -37,10 +37,102 @@ pub struct SourceProfile {
     pub notes: &'static str,
 }
 
-/// Returns planned connector profiles for UI discovery and future adapter dispatch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AdapterAvailability {
+    /// The built-in public URL inspector can acquire this family without provider credentials.
+    BuiltInPublicDiscovery,
+    /// The operator must export or paste the material; no remote automation is attempted.
+    ManualImportOnly,
+    /// The provider requires credentials or approval and this build deliberately does not collect
+    /// or retain them.
+    CredentialWorkflowUnavailable,
+}
+
+/// Immutable acquisition contract derived from a catalog profile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConnectorManifest {
+    pub manifest_version: u16,
+    pub slug: &'static str,
+    pub availability: AdapterAvailability,
+    pub endpoint_strategy: &'static str,
+    pub pagination_strategy: &'static str,
+    pub retry_policy: &'static str,
+    pub schema_strategy: &'static str,
+    pub attribution_requirement: &'static str,
+    pub retention_policy: &'static str,
+}
+
+impl SourceProfile {
+    /// Produces the versioned connector contract used to report exactly what this build can do.
+    pub const fn manifest(self) -> ConnectorManifest {
+        let availability = match self.access {
+            AccessRequirement::Public | AccessRequirement::PublicWithRateLimits => {
+                AdapterAvailability::BuiltInPublicDiscovery
+            }
+            AccessRequirement::LocalFileExport => AdapterAvailability::ManualImportOnly,
+            AccessRequirement::ApiKeyOrAccount
+            | AccessRequirement::PaidAccount
+            | AccessRequirement::AgencyOrPartnerApproval => {
+                AdapterAvailability::CredentialWorkflowUnavailable
+            }
+        };
+        let (endpoint_strategy, pagination_strategy, schema_strategy) = match self.family {
+            ConnectorFamily::GenericCrawl => (
+                "operator root URL plus bounded same-host link discovery",
+                "bounded breadth-first page frontier",
+                "HTML links and supported downloadable document formats",
+            ),
+            ConnectorFamily::PublicApi => (
+                "operator-supplied public API or bulk-download URL",
+                "Link/header or discovered next-page URLs within crawl bounds",
+                "JSON, CSV, XML, and supported document payloads",
+            ),
+            ConnectorFamily::OpenDataCatalog => (
+                "catalog metadata resolved to publisher resource URLs",
+                "catalog and resource pagination within crawl bounds",
+                "catalog metadata plus CSV, JSON, XML, and document resources",
+            ),
+            ConnectorFamily::ArcGis => (
+                "public ArcGIS service or feature-layer URL",
+                "service-declared result windows within crawl bounds",
+                "ArcGIS metadata and tabular feature payloads",
+            ),
+            ConnectorFamily::Tableau => (
+                "public Tableau view or published download URL",
+                "published workbook/download links only",
+                "published tables and supported exports",
+            ),
+            ConnectorFamily::ManualImport => (
+                "operator-selected local files or pasted content",
+                "not applicable",
+                "supported local documents, archives, tables, and text",
+            ),
+            ConnectorFamily::ApiKeyOrAccount
+            | ConnectorFamily::AuthenticatedApi
+            | ConnectorFamily::PaidOrCredentialed
+            | ConnectorFamily::RestrictedOrPartnerOnly => (
+                "manual export only in this build",
+                "not applicable",
+                "provider export retained as supplied",
+            ),
+        };
+        ConnectorManifest {
+            manifest_version: 1,
+            slug: self.slug,
+            availability,
+            endpoint_strategy,
+            pagination_strategy,
+            retry_policy: "bounded exponential retry with host token-bucket limits and stop budget",
+            schema_strategy,
+            attribution_requirement: "retain source URL, publisher identity, retrieval time, and provider-required attribution",
+            retention_policy: "retain acquired evidence and digests locally; never retain remote account credentials",
+        }
+    }
+}
+
+/// Returns connector coverage profiles. Each profile's manifest reports whether it is public,
+/// manual-only, or unavailable without a credential workflow in this build.
 pub const fn planned_source_profiles() -> &'static [SourceProfile] {
-    // FEATURE(source-catalog): Replace this static list with versioned connector manifests that
-    // include endpoint templates, pagination, retry policy, schemas, attribution, and retention.
     // NOTE(source-catalog): “Public” means reachable without login, not unrestricted scraping;
     // robots, terms, API fair-use rules, copyright, and court-access rules still apply.
     const PROFILES: &[SourceProfile] = &[
@@ -228,4 +320,48 @@ pub const fn planned_source_profiles() -> &'static [SourceProfile] {
         },
     ];
     PROFILES
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn every_catalog_entry_has_a_unique_complete_versioned_manifest() {
+        let mut slugs = HashSet::new();
+        for profile in planned_source_profiles() {
+            assert!(
+                slugs.insert(profile.slug),
+                "duplicate profile {}",
+                profile.slug
+            );
+            let manifest = (*profile).manifest();
+            assert_eq!(manifest.manifest_version, 1);
+            assert_eq!(manifest.slug, profile.slug);
+            assert!(!manifest.endpoint_strategy.is_empty());
+            assert!(!manifest.pagination_strategy.is_empty());
+            assert!(!manifest.retry_policy.is_empty());
+            assert!(!manifest.schema_strategy.is_empty());
+            assert!(!manifest.attribution_requirement.is_empty());
+            assert!(!manifest.retention_policy.is_empty());
+        }
+    }
+
+    #[test]
+    fn credentialed_profiles_never_claim_a_remote_adapter() {
+        for profile in planned_source_profiles() {
+            if matches!(
+                profile.access,
+                AccessRequirement::ApiKeyOrAccount
+                    | AccessRequirement::PaidAccount
+                    | AccessRequirement::AgencyOrPartnerApproval
+            ) {
+                assert_eq!(
+                    profile.manifest().availability,
+                    AdapterAvailability::CredentialWorkflowUnavailable
+                );
+            }
+        }
+    }
 }

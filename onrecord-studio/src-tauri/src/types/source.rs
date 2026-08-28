@@ -22,11 +22,13 @@ impl Default for CrawlPolicy {
     }
 }
 
-// FEATURE(source-repair): Persist successful selector/field mappings as reusable connector
-// hypotheses, then let the user approve them for other sources with the same publisher pattern.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceGuidance {
+    /// Apply this approved recipe to other source roots on the exact same normalized hostname.
+    /// False by default so a mapping is never generalized without an operator's decision.
+    #[serde(default)]
+    pub reuse_for_publisher_pattern: bool,
     #[serde(default)]
     pub additional_seed_urls: Vec<String>,
     #[serde(default)]
