@@ -6,6 +6,7 @@ use crate::parsers::forensic_evidence::{
     ForensicAuditOptions,
 };
 use crate::parsers::source::inspect_regular_file;
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
@@ -19,10 +20,6 @@ pub fn analyze_pixelation<P: AsRef<Path>>(
     path: P,
     options: ForensicAuditOptions,
 ) -> Result<EvidenceBundle, AppError> {
-    // FEATURE(raster-audit): Measure block size, grid origin uncertainty, color quantization,
-    // resampling, and renderer fingerprints before any candidate simulation is considered.
-    // TODO(raster-audit): Add a sandboxed renderer fixture using investigator-supplied plaintext;
-    // never run an open-ended DFS against real-world personal data in the desktop process.
     // NOTE(raster-audit): A successful fixture match demonstrates a vulnerable transformation,
     // not that arbitrary pixelated text is recoverable.
     let path = path.as_ref();
@@ -77,28 +74,37 @@ pub fn analyze_pixelation<P: AsRef<Path>>(
     let width = output.width as usize;
     let height = output.height as usize;
     let row_bytes = output.line_size;
+    let mut unique_colors = HashSet::new();
+    for row in 0..height {
+        for column in 0..width {
+            let start = row * row_bytes + column * channels;
+            unique_colors.insert(decoded[start..start + channels].to_vec());
+            if unique_colors.len() > 65_536 {
+                break;
+            }
+        }
+        if unique_colors.len() > 65_536 {
+            break;
+        }
+    }
     let mut findings = Vec::new();
     for &block_size in BLOCK_SIZES {
-        let columns = width / block_size;
-        let rows = height / block_size;
-        let total_blocks = columns.saturating_mul(rows);
-        if total_blocks == 0 {
-            continue;
-        }
-        let mut uniform_blocks = 0_usize;
-        for block_y in 0..rows {
-            for block_x in 0..columns {
-                if block_is_uniform(
-                    &decoded,
-                    row_bytes,
-                    channels,
-                    block_x * block_size,
-                    block_y * block_size,
-                    block_size,
-                ) {
-                    uniform_blocks += 1;
+        let mut best = (0_usize, 0_usize, 0_usize, 0_usize);
+        for origin_y in [0, block_size / 2] {
+            for origin_x in [0, block_size / 2] {
+                let (uniform, total) = measure_uniform_grid(
+                    &decoded, row_bytes, channels, width, height, block_size, origin_x, origin_y,
+                );
+                if total > 0 && uniform.saturating_mul(best.3) > best.2.saturating_mul(total) {
+                    best = (origin_x, origin_y, uniform, total);
+                } else if best.3 == 0 && total > 0 {
+                    best = (origin_x, origin_y, uniform, total);
                 }
             }
+        }
+        let (origin_x, origin_y, uniform_blocks, total_blocks) = best;
+        if total_blocks == 0 {
+            continue;
         }
         let basis_points = (uniform_blocks as u128 * 10_000 / total_blocks as u128) as u16;
         findings.push(finding_for_text(
@@ -106,8 +112,8 @@ pub fn analyze_pixelation<P: AsRef<Path>>(
             EvidenceConfidence::Exact,
             "RASTER_UNIFORM_BLOCK_GRID_MEASUREMENT",
             EvidenceLocator::default(),
-            &format!("blockSize={block_size};uniformBlocks={uniform_blocks};totalBlocks={total_blocks};coverageBasisPoints={basis_points}"),
-            "This deterministic measurement counts completely uniform aligned blocks. High coverage can result from ordinary flat artwork and does not prove pixelation, redaction, or recoverable text.",
+            &format!("blockSize={block_size};bestOrigin={origin_x},{origin_y};uniformBlocks={uniform_blocks};totalBlocks={total_blocks};coverageBasisPoints={basis_points};uniqueColorsAtMost={}", unique_colors.len()),
+            "This deterministic measurement compares two grid origins, counts uniform blocks, and reports color quantization. High coverage can result from ordinary flat artwork and does not prove pixelation, redaction, or recoverable text.",
             options,
         )?);
     }
@@ -116,6 +122,36 @@ pub fn analyze_pixelation<P: AsRef<Path>>(
         warnings: Vec::new(),
         coverage_complete: true,
     })
+}
+
+fn measure_uniform_grid(
+    bytes: &[u8],
+    row_bytes: usize,
+    channels: usize,
+    width: usize,
+    height: usize,
+    size: usize,
+    origin_x: usize,
+    origin_y: usize,
+) -> (usize, usize) {
+    let columns = width.saturating_sub(origin_x) / size;
+    let rows = height.saturating_sub(origin_y) / size;
+    let mut uniform = 0;
+    for block_y in 0..rows {
+        for block_x in 0..columns {
+            if block_is_uniform(
+                bytes,
+                row_bytes,
+                channels,
+                origin_x + block_x * size,
+                origin_y + block_y * size,
+                size,
+            ) {
+                uniform += 1;
+            }
+        }
+    }
+    (uniform, columns.saturating_mul(rows))
 }
 
 fn block_is_uniform(

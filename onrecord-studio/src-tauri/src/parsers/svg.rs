@@ -81,11 +81,6 @@ pub fn audit_svg_file<P: AsRef<Path>>(
     path: P,
     options: ForensicAuditOptions,
 ) -> Result<EvidenceBundle, AppError> {
-    // FEATURE(svg-audit): Parse XML without external entities, scripts, network fetches, or
-    // resource expansion. Collect text/tspan/title/desc/metadata and effective visibility.
-    // TODO(svg-audit): Track transforms, z-order, masks, clips, opacity, paint servers, and
-    // rectangles/paths that geometrically cover text. `extract_svg_text` above already delivers
-    // the collection half; what remains here is the visibility half.
     let bytes = read_regular_file(path.as_ref(), "SVG_AUDIT", MAX_SVG_SOURCE_BYTES)?;
     let source = String::from_utf8_lossy(&bytes);
     let document = Html::parse_document(&source);
@@ -129,7 +124,22 @@ pub fn audit_svg_file<P: AsRef<Path>>(
                 options,
             )?);
         }
-        for attribute in ["mask", "clip-path", "filter", "transform"] {
+        for attribute in [
+            "x",
+            "y",
+            "dx",
+            "dy",
+            "textLength",
+            "lengthAdjust",
+            "transform",
+            "mask",
+            "clip-path",
+            "filter",
+            "opacity",
+            "fill-opacity",
+            "fill",
+            "stroke",
+        ] {
             if let Some(raw) = element.value().attr(attribute) {
                 bundle.findings.push(finding_for_text(
                     EvidenceClass::Preserved,
@@ -137,11 +147,49 @@ pub fn audit_svg_file<P: AsRef<Path>>(
                     format!("SVG_TEXT_{}_REFERENCE", attribute.replace('-', "_").to_ascii_uppercase()),
                     EvidenceLocator { xml_path: Some(format!("svg/{}[{text_index}]", element.value().name())), ..EvidenceLocator::default() },
                     raw,
-                    "The text element preserves a rendering-affecting attribute. Its visual effect requires a renderer and is not inferred here.",
+                    "The text element preserves this geometry, paint, transform, mask, clip, or opacity attribute. Its source order is retained by the locator index; effects requiring full CSS or path rendering are not inferred.",
                     options,
                 )?);
             }
         }
+    }
+    let cover_selector = scraper::Selector::parse("rect, path, polygon, image, use")
+        .map_err(|error| AppError::Internal(format!("SVG cover selector failed: {error}")))?;
+    for (index, element) in document.select(&cover_selector).enumerate() {
+        let attributes = element.value();
+        let summary = [
+            "x",
+            "y",
+            "width",
+            "height",
+            "d",
+            "points",
+            "transform",
+            "mask",
+            "clip-path",
+            "opacity",
+            "fill",
+        ]
+        .into_iter()
+        .filter_map(|attribute| {
+            attributes
+                .attr(attribute)
+                .map(|value| format!("{attribute}={value}"))
+        })
+        .collect::<Vec<_>>()
+        .join(";");
+        if summary.is_empty() {
+            continue;
+        }
+        bundle.findings.push(finding_for_text(
+            EvidenceClass::Preserved,
+            EvidenceConfidence::Exact,
+            "SVG_POTENTIAL_COVERING_ELEMENT",
+            EvidenceLocator { xml_path: Some(format!("svg/{}[{index}]", attributes.name())), ..EvidenceLocator::default() },
+            &summary,
+            "A source-ordered shape or image preserves geometry that may cover text. The audit records it without claiming occlusion unless a full renderer confirms the visual result.",
+            options,
+        )?);
     }
     Ok(bundle)
 }
@@ -264,7 +312,9 @@ mod tests {
 
     #[test]
     fn audit_attributes_statically_hidden_text_without_claiming_full_visibility_coverage() {
-        let path = fixture(r#"<svg><g style="display:none"><text>preserved note</text></g></svg>"#);
+        let path = fixture(
+            r#"<svg><g style="display:none"><text x="4" transform="translate(2 3)">preserved note</text></g><rect x="0" y="0" width="50" height="12" opacity="0.9"/></svg>"#,
+        );
         let result = audit_svg_file(&path, ForensicAuditOptions::default()).expect("audit");
         let _ = fs::remove_file(&path);
         assert!(!result.coverage_complete);
@@ -276,5 +326,16 @@ mod tests {
         assert!(result
             .warnings
             .contains(&"SVG_GEOMETRIC_OCCLUSION_NOT_EVALUATED".to_string()));
+        assert!(result.findings.iter().any(|finding| {
+            finding.kind == "SVG_TEXT_TRANSFORM_REFERENCE"
+                && finding.masked_preview.as_deref() == Some("translate(2 3)")
+        }));
+        assert!(result.findings.iter().any(|finding| {
+            finding.kind == "SVG_POTENTIAL_COVERING_ELEMENT"
+                && finding
+                    .masked_preview
+                    .as_deref()
+                    .is_some_and(|preview| preview.contains("width=50"))
+        }));
     }
 }
