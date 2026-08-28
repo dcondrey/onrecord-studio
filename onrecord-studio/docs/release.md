@@ -1,94 +1,188 @@
-# Release and rollback runbook
+# Release, Mac App Store publication, and rollback
 
-This runbook describes the release process implemented by this repository. It does not assert that
-signing credentials exist: `.github/workflows/ci.yml` intentionally produces unsigned bundles, and
-`src-tauri/tauri.conf.json` currently has no macOS signing identity or entitlements configured.
-Those CI artifacts are build evidence, not public release artifacts.
+This runbook distinguishes build evidence from a distributable artifact. The ordinary CI bundles
+are intentionally unsigned. The paid macOS release is a separate Mac App Store build that must be
+sandboxed, provisioned for `com.onrecord.studio`, signed with Apple distribution identities, and
+submitted as a signed installer package.
 
-## Supported build contract
+## Distribution contract
 
 - Product and bundle identifier: `OnRecord Studio` / `com.onrecord.studio`.
 - Current version: `1.0.0` in `package.json`, `src-tauri/Cargo.toml`, and
   `src-tauri/tauri.conf.json`.
-- Bundles: every Tauri desktop target; CI exercises Ubuntu, macOS, and Windows.
-- macOS deployment target: 11.0. The app enables Tauri's macOS private API and native vibrancy,
-  so an App Store submission is not part of this repository's configured release path.
-- Runtime data: Tauri's resolved application-data directory, with
-  `onrecord_studio_core.db`, `onrecord_studio_corpus.db`, `documents/`, and `reports/` beneath it.
+- Development and ordinary desktop builds use the default Rust feature set. They identify their
+  license state as `DEVELOPMENT` and do not pretend to be paid App Store artifacts.
+- Paid macOS builds use the `app-store` Cargo feature and
+  `src-tauri/tauri.appstore.conf.json`. Their minimum system version is macOS 13 because that is the
+  first macOS release with StoreKit `AppTransaction`.
+- App Store builds use App Sandbox, client networking, and user-selected read/write file access.
+  They do not request incoming-network, unsigned-executable-memory, or disabled-library-validation
+  entitlements.
+- Runtime data is stored below Tauri's resolved application-data container, including
+  `onrecord_studio_core.db`, `onrecord_studio_corpus.db`, `documents/`, and `reports/`.
 
-## Release gate
+## Paid-license enforcement
+
+The App Store build asks StoreKit for Apple's cryptographically verified `AppTransaction`. It
+authorizes the workspace only when StoreKit reports a verified, unrevoked purchase for exactly
+`com.onrecord.studio`. Unknown results, malformed payloads, bundle mismatches, revocations, and
+verification failures fail closed.
+
+The decision is enforced twice: Swift validates the Apple transaction and Rust independently
+checks the returned bundle identifier. A global Tauri invoke handler rejects every application
+command while unauthorized except `get_license_status` and the user-initiated `refresh_license`.
+The React lock screen is therefore presentation, not the security boundary.
+
+`AppTransaction.shared` may require App Store authentication or network access. The automatic
+launch check is bounded to 20 seconds so StoreKit cannot hold application startup forever. The
+explicit refresh action is unbounded because Apple may show a system authentication prompt and the
+user must be allowed to finish it. An unavailable result does not create an offline bypass.
+
+This prevents ordinary unpaid use and casual copying. It cannot make piracy impossible: a capable
+attacker who controls a Mac can patch any entirely local executable. A future server could validate
+the AppTransaction JWS and issue short-lived capability tokens, but that only adds material
+protection if indispensable functionality is server-controlled; it would also add availability and
+privacy costs. No custom license server is part of this release.
+
+Apple references:
+
+- [AppTransaction](https://developer.apple.com/documentation/storekit/apptransaction)
+- [AppTransaction.shared](https://developer.apple.com/documentation/storekit/apptransaction/shared)
+- [AppTransaction.refresh()](https://developer.apple.com/documentation/storekit/apptransaction/4020517-refresh)
+- [App pricing and availability](https://developer.apple.com/help/app-store-connect/reference/pricing-and-availability/app-pricing-and-availability)
+
+## Source and dependency release gate
 
 Run from the application directory (`onrecord-studio/`):
 
 ```sh
 npm ci
 npm run check:ipc
+npm run check:app-store-config
 npx tsc --noEmit
 npm run lint
 npm run test:unit
 npm run build
 cargo fmt --all --manifest-path src-tauri/Cargo.toml -- --check
 cargo clippy --workspace --all-targets --manifest-path src-tauri/Cargo.toml -- -D warnings
+cargo clippy --workspace --all-targets --features app-store --manifest-path src-tauri/Cargo.toml -- -D warnings
 cargo test --workspace --manifest-path src-tauri/Cargo.toml
-npx tauri build --ci
+cargo audit
+npm audit --audit-level=high
 ```
 
-The release candidate fails if any command fails. `npm run build` repeats the IPC contract check;
-keeping the explicit earlier invocation makes protocol drift visible before the longer build.
+The candidate fails if any command fails. `npm run build` repeats the IPC contract check so a
+generated/native protocol drift cannot be hidden by running only the frontend compiler.
 
 Before tagging, also verify:
 
-1. The three version declarations above are identical.
+1. The three version declarations are identical.
 2. `git status --short` is empty and the intended commit is checked out.
-3. `npm audit --audit-level=high` and the repository's RustSec CI job pass.
-4. The bundle launches on each target platform, opens the main window, can add or paste a small
-   source, can search the resulting record, and can export a report.
-5. The release notes list schema changes and any change to supported source or document formats.
+3. The release notes identify schema changes and changes to supported source or document formats.
+4. The exact candidate can add a source, ingest a small fixture, search the resulting record, open
+   its evidence, and export a report while sandboxed.
 
-## Signing and publication
+## Apple prerequisites
 
-Do not publish the unsigned CI bundle. A publishing workflow must supply platform signing material
-through the CI secret store, build from the reviewed tag, and perform each platform's trust check
-against the produced artifact. The repository contains no signing keys, certificates, passwords,
-notarization credentials, or timestamp-service credentials.
+The Account Holder must accept the current Paid Apps Agreement and set a non-free app price in App
+Store Connect. In Certificates, Identifiers & Profiles, create or select:
 
-For a signed release, record without exposing secrets:
+1. The explicit App ID `com.onrecord.studio`.
+2. A `Mac App Store Connect` distribution provisioning profile for that App ID.
+3. An Apple Distribution application-signing identity linked to the profile.
+4. A Mac Installer Distribution identity for the final `.pkg`.
 
-- the source commit and tag;
-- SHA-256 for every installer/archive;
-- build workflow run and target operating system;
-- signing identity subject/fingerprint;
-- notarization or platform-verification result where the platform requires it;
-- smoke-test result for the exact signed artifact.
+Confirm locally without exposing private keys:
 
-Publication is blocked unless those records exist for every advertised platform.
+```sh
+security find-identity -p codesigning -v
+security find-identity -p basic -v
+```
 
-## Rollout
+Profiles for other bundle identifiers are invalid even if they belong to the same team. Do not put
+provisioning profiles, generated entitlements, API keys, or certificates in Git.
 
-1. Back up the complete Tauri application-data directory while OnRecord Studio is closed. The core
-   database and retained evidence files are one logical dataset; backing up only the database is
-   incomplete.
-2. Install the signed candidate on a non-production profile and run the smoke checks above.
-3. Release to a small operator group first. Confirm startup migration, source resume, search,
-   evidence opening, and report export with a copied dataset.
-4. Publish broadly only after the pilot produces no unexplained ingestion failures or integrity
-   warnings.
+## Materialize App Store configuration
 
-## Rollback
+Review Apple's export-compliance questionnaire before setting the compliance value. Then provide:
 
-1. Stop OnRecord Studio before changing its installation or data.
-2. Preserve the failed release's entire application-data directory for diagnosis.
-3. Reinstall the last verified signed artifact.
-4. If the newer release opened or migrated the data, restore the pre-upgrade application-data
-   backup as a unit. Do not mix an older core database with newer `documents/` or corpus files.
-5. Launch offline first, confirm that the saved-source list and evidence open correctly, then resume
-   network ingestion.
+```sh
+export APPLE_TEAM_ID="YOUR10CHARTEAM"
+export APPLE_APP_ID_PREFIX="YOUR10CHARPREFIX"
+export APPLE_PROVISIONING_PROFILE_PATH="/absolute/path/OnRecord.provisionprofile"
+export ONRECORD_EXPORT_COMPLIANCE="exempt"
+# Set APPLE_EXPORT_COMPLIANCE_CODE only when Apple issued one for this build.
+npm run prepare:app-store
+```
+
+The script validates formats, refuses symlinked or empty profiles, XML-escapes the optional export
+code, and writes ignored files with private permissions. It does not log credential values.
+
+## Build, validate, and package
+
+Select the Apple Distribution identity for application signing and build the App Store variant:
+
+```sh
+export APPLE_SIGNING_IDENTITY="Apple Distribution: Your Name (YOURTEAMID)"
+npm run build:app-store
+```
+
+Validate the exact signed `.app`. Set `ONRECORD_APP_BUNDLE_PATH` only if Cargo's target directory is
+not the default discovered by the script:
+
+```sh
+npm run validate:app-store-bundle
+```
+
+Validation fails on an ad-hoc signature, missing/mismatched provisioning profile, wrong bundle or
+team identifier, missing sandbox entitlement, prohibited entitlement, non-system dynamic library,
+invalid nested signature, or frontend source-map reference.
+
+Create the signed installer:
+
+```sh
+export APPLE_INSTALLER_SIGNING_IDENTITY="3rd Party Mac Developer Installer: Your Name (YOURTEAMID)"
+export ONRECORD_APP_STORE_PKG_PATH="/absolute/output/OnRecord Studio.pkg"
+npm run package:app-store
+```
+
+The packaging script validates the `.app` again, runs `productbuild`, and requires `pkgutil` to
+report a macOS-trusted installer signature. Follow Tauri's current
+[Mac App Store guide](https://tauri.app/distribute/app-store/) if Apple's certificate names change.
+
+## Upload and App Store verification
+
+Use an App Store Connect API key with the narrowest suitable role. Do not add the `.p8` file to the
+repository. Upload the exact verified package:
+
+```sh
+xcrun altool --upload-app --type macos \
+  --file "$ONRECORD_APP_STORE_PKG_PATH" \
+  --apiKey "$APPLE_API_KEY_ID" \
+  --apiIssuer "$APPLE_API_ISSUER"
+```
+
+An upload is not a release. Wait for Apple's processing, install the TestFlight build, and repeat
+the sandboxed smoke test against that Apple-processed artifact. Record the source commit, package
+SHA-256, application and installer certificate fingerprints, upload result, processing result, and
+smoke-test result without recording private credentials.
+
+## Rollout and rollback
+
+1. Back up the complete application-data container while OnRecord Studio is closed. The databases
+   and retained evidence files are one logical dataset.
+2. Test the Apple-processed candidate on a non-production macOS account before broad availability.
+3. Confirm startup migration, source resume, search, evidence opening, export, license refresh, and
+   refunded/revoked-purchase behavior.
+4. If rollback is required, stop the app, preserve the failed release's data for diagnosis, install
+   the last verified App Store version, and restore the pre-upgrade data container as a unit when a
+   newer schema was opened. Do not mix old databases with newer `documents/` or corpus files.
 
 The legacy SQLite-to-DuckDB migration retains its source as a sibling backup, but that narrow backup
-is not a substitute for the full pre-release application-data backup described here.
+is not a substitute for the full pre-release backup.
 
 ## Support evidence
 
-When reporting a release failure, include the version, operating system, source kind, time range,
-the visible structured error, and the relevant Activity entries. Do not attach confidential source
-documents unless the recipient is authorized to receive that evidence.
+For a release failure, record the version, macOS version, AppTransaction state (without transaction
+identifiers), source kind, time range, visible structured error, and relevant Activity entries. Do
+not attach confidential source documents unless the recipient is authorized to receive them.

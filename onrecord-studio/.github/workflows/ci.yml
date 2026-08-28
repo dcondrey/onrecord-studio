@@ -34,10 +34,14 @@ jobs:
       - run: npm ci
       - name: IPC contract
         run: npm run check:ipc
+      - name: Mac App Store configuration
+        run: npm run check:app-store-config
       - name: TypeScript
         run: npx tsc --noEmit
       - name: ESLint
         run: npm run lint
+      - name: Frontend unit tests
+        run: npm run test:unit
 
   rust:
     name: Rust ${{ matrix.os }}
@@ -66,6 +70,14 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Tests
         run: cargo test --workspace
+      - name: StoreKit licensing bridge
+        if: matrix.os == 'macos-latest'
+        run: cargo check --workspace --all-targets --features app-store
+      - name: Release-scale performance budgets
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          ONRECORD_PERFORMANCE_TARGET_DIR: target
+        run: npm run test:release-performance
 
   audit:
     name: Dependency advisories

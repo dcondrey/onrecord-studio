@@ -8,3 +8,4 @@ lto = "thin"
 codegen-units = 1
 incremental = false
 strip = "symbols"
+panic = "abort"

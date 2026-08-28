@@ -6,6 +6,12 @@
 # the corresponding entries rather than leaving them to mask a future advisory.
 [advisories]
 ignore = [
+    # rsa's Marvin advisory affects private-key decryption/signing operations. The only production
+    # path through c2pa is Reader-based public-signature verification; OnRecord never loads or
+    # constructs an RSA private key. C2PA signing appears only in an ephemeral unit-test fixture,
+    # and evidence-package signing uses Ed25519. No fixed stable rsa release exists as of this
+    # review, so this exact advisory is non-reachable rather than deferred.
+    "RUSTSEC-2023-0071",
     # gtk-rs GTK3 bindings are no longer maintained (tauri -> wry -> gtk).
     "RUSTSEC-2024-0411", # atk
     "RUSTSEC-2024-0412", # atk-sys

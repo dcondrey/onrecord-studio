@@ -6,11 +6,16 @@
   "scripts": {
     "dev": "vite",
     "check:ipc": "node scripts/check-ipc-contract.mjs",
+    "check:app-store-config": "node scripts/prepare-app-store.mjs --check",
     "generate:contracts": "node scripts/generate-contracts.mjs",
     "build": "npm run check:ipc && tsc && vite build",
     "lint": "eslint . --max-warnings 0",
     "test:unit": "vitest run",
     "test:release-performance": "node scripts/validate-release-performance.mjs",
+    "prepare:app-store": "node scripts/prepare-app-store.mjs",
+    "build:app-store": "npm run prepare:app-store && tauri build --ci --bundles app --features app-store --config src-tauri/tauri.appstore.conf.json",
+    "validate:app-store-bundle": "node scripts/package-app-store.mjs --validate-only",
+    "package:app-store": "node scripts/package-app-store.mjs",
     "test": "npm run check:ipc && tsc --noEmit && cargo test --workspace --manifest-path src-tauri/Cargo.toml && vitest run",
     "preview": "vite preview",
     "tauri": "tauri"

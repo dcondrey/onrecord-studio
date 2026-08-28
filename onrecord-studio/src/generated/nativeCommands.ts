@@ -5,6 +5,8 @@ import type * as Types from '../types';
 export type NoArgs = Record<string, never>;
 
 export interface NativeCommandMap {
+  get_license_status: { args: NoArgs; result: Types.LicenseStatus };
+  refresh_license: { args: NoArgs; result: Types.LicenseStatus };
   start_portal_sync: { args: { portalUrl: string; startPage?: number | null; perPage?: number | null; rateLimitPolicy?: Types.RateLimitPolicy | null }; result: Types.PortalSyncStart };
   pause_source_sync: { args: { sourceKey: string }; result: boolean };
   resume_source_sync: { args: { sourceKey: string }; result: Types.SourceIngestionStart };

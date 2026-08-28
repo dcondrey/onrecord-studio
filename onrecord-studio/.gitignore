@@ -32,6 +32,11 @@ src-tauri/target/
 
 # Tauri-generated ACL schemas, rebuilt on every build.
 src-tauri/gen/schemas/
+# Materialized from reviewed templates by `npm run prepare:app-store`; these contain the Apple
+# team identifier, provisioning profile, and export-compliance answer for one release account.
+src-tauri/Entitlements.appstore.plist
+src-tauri/Info.appstore.plist
+src-tauri/AppStore.provisionprofile
 
 # 4. Local App Data Caches, SQLite DBs, & Extracted Public Documents
 # Protects investigator database indices and scraped municipal files from being leaked to public repositories.

@@ -150,14 +150,17 @@ investigator-supplied URLs.
 ## 5. Security model
 
 **IPC.** Tauri v2 capabilities gate `core:` and plugin commands. They do **not** gate
-`#[tauri::command]` handlers registered through `generate_handler!`, so all 27 application commands
+`#[tauri::command]` handlers registered through `generate_handler!`, so all 36 application commands
 are reachable from the webview by design. `capabilities/main.json` grants `core:path:default`,
 `core:app:allow-set-app-theme`, `core:event:default`, `core:window:default`,
 `core:webview:default`, and `dialog:allow-open`.
 
-The consequence: **each command body is the trust boundary.** Validation belongs there, not in the
-manifest. `scripts/check-ipc-contract.mjs` enforces that the two sides agree and that no `invoke()`
-escapes `src/ipc.ts` — a typing and review discipline, not a sandbox.
+The generated handlers run behind one global native invoke gate. In Mac App Store builds, that gate
+rejects every application command until StoreKit has verified an unrevoked purchase for the exact
+bundle identifier; only the status and explicit refresh commands bypass it. Command-specific input
+validation still belongs in each handler. `scripts/check-ipc-contract.mjs` enforces that the two
+sides agree and that no `invoke()` escapes `src/ipc.ts` — a typing and review discipline, not a
+sandbox.
 
 **CSP** (`tauri.conf.json`):
 
@@ -172,7 +175,7 @@ Tailwind concession.
 **Defaults relied upon:** `withGlobalTauri` is absent and therefore false, so the webview gets no
 `window.__TAURI__`. `assetProtocol` is absent and therefore disabled.
 
-**Known gaps.** `ingest_local_files` (`commands/ingest.rs`) accepts arbitrary filesystem paths from
-the frontend, so the `dialog:allow-open` mediation is advisory rather than enforced.
-`macOSPrivateApi: true` is required by the transparent window and rules out Mac App Store
-distribution.
+**File access.** `ingest_local_files` (`commands/ingest.rs`) accepts paths selected by the trusted
+frontend. The Mac App Store build additionally confines access with App Sandbox and the
+user-selected read/write entitlement. The window is opaque and `macOSPrivateApi` is disabled, so
+the App Store build does not rely on Tauri's private macOS APIs.

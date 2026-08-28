@@ -3,8 +3,14 @@ name = "onrecord-studio-lib"
 version = "1.0.0"
 edition = "2021"
 
+[features]
+default = []
+# Statically links the native StoreKit 2 verifier and changes the runtime gate from development
+# access to fail-closed Mac App Store transaction enforcement.
+app-store = []
+
 [dependencies]
-tauri = { version = "2.11.5", features = ["macos-private-api"] }
+tauri = { version = "2.11.5", features = [] }
 tauri-plugin-dialog = "2.7.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -21,7 +27,7 @@ reqwest = { version = "0.13.4", default-features = false, features = ["json", "q
 # `fetch_remote_manifests` is deliberately NOT enabled. It makes verification follow a URL embedded
 # in the asset being examined, which for an evidence tool means the act of checking a document
 # reaches out to a server the document's author chose. Verification here reads only local bytes.
-c2pa = { version = "0.90.15", default-features = false, features = ["rust_native_crypto", "file_io", "pdf"] }
+c2pa = { version = "0.90.16", default-features = false, features = ["rust_native_crypto", "file_io", "pdf"] }
 futures-util = "0.3"
 scraper = "0.27"
 base64 = "0.22"
@@ -36,7 +42,7 @@ zip = { version = "1.1.4", default-features = false, features = ["deflate", "bzi
 tar = "0.4"
 flate2 = "1.1"
 bzip2 = "0.6.1"
-xz2 = "0.1.7"
+xz2 = { version = "0.1.7", features = ["static"] }
 zstd = "0.13"
 sha2 = "0.11.0"
 ed25519-dalek = "2.2.0"

@@ -50,6 +50,8 @@ pub enum AppError {
     Provenance(String),
     #[error("Report export failed: {0}")]
     Export(String),
+    #[error("Paid license verification failed: {0}")]
+    License(String),
     #[error("Data transformation failed: {0}")]
     DataParsing(String),
     #[error(
@@ -78,6 +80,7 @@ impl AppError {
             Self::Compliance(_) => "COMPLIANCE",
             Self::Provenance(_) => "PROVENANCE",
             Self::Export(_) => "EXPORT",
+            Self::License(_) => "LICENSE",
             Self::DataParsing(_) => "DATA_PARSING",
             Self::OcrRequired { .. } => "OCR_REQUIRED",
             Self::Internal(_) => "INTERNAL",

@@ -13,10 +13,73 @@ import { shouldReportFailure, type ReportedFailure } from './utils/repeatedFailu
 import { resolveTheme, THEME_STORAGE_KEY } from './utils/theme';
 import { useAudioAlerts } from './hooks/useAudioAlerts';
 import { workspaceCommandRegistry } from './commands/registry';
+import LicenseGate from './components/licensing/LicenseGate';
+import type { LicenseStatus } from './types';
 
 const RUNTIME_FAILURE_REMINDER_MILLISECONDS = 60_000;
 
+const BROWSER_DEVELOPMENT_LICENSE: LicenseStatus = {
+  enforced: false,
+  authorized: true,
+  state: 'DEVELOPMENT',
+  message: 'Browser preview uses development access.',
+  bundleId: 'com.onrecord.studio',
+  appVersion: null,
+  originalAppVersion: null,
+  appTransactionId: null,
+  appId: null,
+  environment: 'browser',
+  originalPurchaseDate: null,
+  signedDate: null,
+  revocationDate: null,
+};
+
 export default function App() {
+  const [license, setLicense] = useState<LicenseStatus | null>(() =>
+    isTauri() ? null : BROWSER_DEVELOPMENT_LICENSE,
+  );
+  const [refreshing, setRefreshing] = useState(false);
+  const [licenseError, setLicenseError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    let active = true;
+    void invokeCommand('get_license_status', {})
+      .then((status) => {
+        if (active) setLicense(status);
+      })
+      .catch((error) => {
+        if (active) setLicenseError(String(error));
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const refreshLicense = useCallback(() => {
+    if (!isTauri() || refreshing) return;
+    setRefreshing(true);
+    setLicenseError(null);
+    void invokeCommand('refresh_license', {})
+      .then(setLicense)
+      .catch((error) => setLicenseError(String(error)))
+      .finally(() => setRefreshing(false));
+  }, [refreshing]);
+
+  if (!license?.authorized) {
+    return (
+      <LicenseGate
+        status={license}
+        refreshing={refreshing}
+        error={licenseError}
+        onRefresh={refreshLicense}
+      />
+    );
+  }
+  return <LicensedWorkspace />;
+}
+
+function LicensedWorkspace() {
   const theme = useAppStore((state) => state.theme);
   const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(() =>
     window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',

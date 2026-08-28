@@ -4,10 +4,17 @@ import typescriptEslint from "typescript-eslint";
 
 export default typescriptEslint.config(
   {
-    ignores: ["dist"],
+    ignores: ["dist", "src-tauri/target"],
   },
   eslint.configs.recommended,
   ...typescriptEslint.configs.recommended,
+  {
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      globals: globals.node,
+    },
+  },
   {
     files: ["**/*.{ts,tsx}"],
     languageOptions: {

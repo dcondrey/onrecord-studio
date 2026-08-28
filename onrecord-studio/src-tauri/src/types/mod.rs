@@ -6,6 +6,7 @@ pub mod c2pa;
 pub mod corpus;
 pub mod investigation;
 pub mod legal;
+pub mod license;
 pub mod nextrequest;
 pub mod portal;
 pub mod source;
@@ -33,6 +34,7 @@ pub use legal::{
     LegalAuthorityVersionDetail, LegalAuthorityVersionSummary, LegalComplianceFinding,
     LegalEvaluationResult, LegalFindingReviewStatus, LegalMandateInput, LegalMandateSeverity,
 };
+pub use license::{LicenseState, LicenseStatus};
 pub use nextrequest::{
     DocumentMetadata, EmailMetadata, EmailParticipantMetadata, NextRequestResponse, PaginationMeta,
     PublicRequest,
