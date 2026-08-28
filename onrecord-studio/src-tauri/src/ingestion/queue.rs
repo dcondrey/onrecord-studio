@@ -225,7 +225,6 @@ pub enum IngestionTask {
         #[serde(with = "persisted_document")]
         document: Box<DocumentMetadata>,
         output_directory: String,
-        skip_msg_attachment_expansion: bool,
         container_depth: usize,
         /// Crawl-graph depth; see `PayloadDepth`. Defaulted because the durable frontier holds
         /// rows serialized before this field existed, and those resume at depth 0 as they did.
@@ -1373,7 +1372,6 @@ impl QueueManager {
                     request_id: request.id,
                     document: Box::new(document),
                     output_directory: output_directory.to_string_lossy().into_owned(),
-                    skip_msg_attachment_expansion: false,
                     container_depth: 0,
                     crawl_depth: 0,
                     structured_depth: 0,
@@ -1592,12 +1590,9 @@ async fn worker_loop(
         let frontier_id = scheduled.frontier_id;
         let frontier_attempt = scheduled.frontier_attempt;
         let mut result = execute_task(&context, scheduled.task).await;
-        let retry_delay = result.as_ref().err().and_then(|error| {
-            (frontier_id.is_some()
-                && error.is_retryable()
-                && frontier_attempt < MAXIMUM_DURABLE_TASK_ATTEMPTS)
-                .then(|| durable_retry_delay_seconds(frontier_attempt))
-        });
+        let retry_delay = frontier_id
+            .and(result.as_ref().err())
+            .and_then(|error| durable_retry_delay_for_error(error, frontier_attempt));
         if let (Some(frontier_id), Some(delay_seconds)) = (frontier_id, retry_delay) {
             match context
                 .repository
@@ -1731,6 +1726,11 @@ fn durable_retry_delay_seconds(attempt: u64) -> u64 {
         .checked_shl(attempt.saturating_sub(1).min(5) as u32)
         .unwrap_or(30)
         .min(30)
+}
+
+fn durable_retry_delay_for_error(error: &AppError, attempt: u64) -> Option<u64> {
+    (error.is_retryable() && attempt < MAXIMUM_DURABLE_TASK_ATTEMPTS)
+        .then(|| durable_retry_delay_seconds(attempt))
 }
 
 async fn abort_workers(worker_handles: Vec<tokio::task::JoinHandle<()>>) -> Result<(), AppError> {
@@ -1875,7 +1875,6 @@ async fn execute_task(context: &WorkerContext, task: IngestionTask) -> Result<()
             request_id,
             document,
             output_directory,
-            skip_msg_attachment_expansion,
             container_depth,
             crawl_depth,
             structured_depth,
@@ -1886,7 +1885,6 @@ async fn execute_task(context: &WorkerContext, task: IngestionTask) -> Result<()
                 request_id,
                 *document,
                 PathBuf::from(output_directory),
-                skip_msg_attachment_expansion,
                 PayloadDepth {
                     container: container_depth,
                     crawl: crawl_depth,
@@ -1928,7 +1926,6 @@ async fn execute_task(context: &WorkerContext, task: IngestionTask) -> Result<()
                 request_id,
                 *document,
                 PathBuf::from(output_directory),
-                false,
                 PayloadDepth::discovered(0, 0),
             )
             .await
@@ -2780,7 +2777,6 @@ fn standard_document_task(
         request_id,
         document: Box::new(document),
         output_directory: output_directory.to_string_lossy().into_owned(),
-        skip_msg_attachment_expansion: false,
         container_depth: depth.container,
         crawl_depth: depth.crawl,
         structured_depth: depth.structured,
@@ -2868,7 +2864,6 @@ async fn process_binary_payload(
     request_id: u64,
     mut document: DocumentMetadata,
     output_directory: PathBuf,
-    skip_msg_attachment_expansion: bool,
     depth: PayloadDepth,
 ) -> Result<(), AppError> {
     validate_internal_output_directory(&context.download_root, &output_directory)?;
@@ -2937,7 +2932,6 @@ async fn process_binary_payload(
         request_id,
         &document,
         &local_path,
-        skip_msg_attachment_expansion,
         depth,
         &raw_file_sha256,
     )
@@ -3281,6 +3275,13 @@ struct StructuredLinkCandidate {
     download_candidate: bool,
 }
 
+struct StructuredDocumentDiscovery {
+    candidates: Vec<StructuredLinkCandidate>,
+    next_page: Option<String>,
+    companion_urls: Vec<String>,
+    layer_urls: Vec<String>,
+}
+
 async fn expand_structured_document_links(
     context: &WorkerContext,
     request_id: u64,
@@ -3313,28 +3314,36 @@ async fn expand_structured_document_links(
             local_path.display()
         ))
     })?;
-    let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+    let source_url = document.download_url.clone();
+    // Parsing a 64 MB JSON value and recursively walking it are CPU/allocation work. Tauri IPC
+    // shares this Tokio runtime, so doing either directly in this future can stall unrelated UI
+    // commands even though the file read itself is asynchronous.
+    let Some(discovery) = spawn_blocking("Structured document discovery", move || {
+        Ok(discover_structured_document_links(
+            &bytes,
+            source_url.as_deref(),
+        ))
+    })
+    .await??
+    else {
         return Ok(());
     };
-    let base_url = document
-        .download_url
-        .as_deref()
-        .and_then(|value| reqwest::Url::parse(value).ok());
-    let mut candidates = HashMap::new();
-    collect_structured_link_candidates(&value, base_url.as_ref(), 0, None, &mut candidates);
-    let mut candidates = candidates.into_values().collect::<Vec<_>>();
-    candidates.sort_by(|left, right| left.url.cmp(&right.url));
-    let mut tasks = Vec::with_capacity(candidates.len());
+    let mut tasks = Vec::with_capacity(
+        discovery.candidates.len()
+            + discovery.companion_urls.len()
+            + discovery.layer_urls.len()
+            + usize::from(discovery.next_page.is_some()),
+    );
     // Paging one search result set revisits a single resource, so it holds its own depth and is
     // bounded by `maximum_pages` and `visited_urls` instead.
-    if let Some(next_page) = arcgis_search_next_page(document.download_url.as_deref(), &value) {
+    if let Some(next_page) = discovery.next_page {
         if let Some(task) =
             prepare_crawl_url(context, next_page, depth.crawl, depth.structured).await
         {
             tasks.push(task);
         }
     }
-    for companion_url in arcgis_structured_item_companion_urls(&value) {
+    for companion_url in discovery.companion_urls {
         if let Some(task) = prepare_crawl_url(
             context,
             companion_url,
@@ -3346,7 +3355,7 @@ async fn expand_structured_document_links(
             tasks.push(task);
         }
     }
-    for layer_url in arcgis_layers_from_metadata(document.download_url.as_deref(), &value) {
+    for layer_url in discovery.layer_urls {
         let identity = format!("arcgis-layer|{layer_url}");
         if mark_crawl_url(context, &identity).await {
             tasks.push(IngestionTask::CrawlArcGisLayer {
@@ -3362,7 +3371,7 @@ async fn expand_structured_document_links(
         .download_url
         .clone()
         .unwrap_or_else(|| format!("local document {}", document.id));
-    for candidate in candidates {
+    for candidate in discovery.candidates {
         if let Err(exclusion) = guidance_allows_url(
             &context.crawl.guidance,
             &context.crawl.compiled_guidance,
@@ -3420,6 +3429,27 @@ fn document_is_json(document: &DocumentMetadata) -> bool {
         [".json", ".jsonld"]
             .iter()
             .any(|extension| name.ends_with(extension))
+    })
+}
+
+/// Parses and walks one structured payload without retaining the potentially large JSON tree in
+/// the async worker. The caller runs this function on the blocking executor and receives only the
+/// bounded link/layer summaries needed for asynchronous policy checks and task scheduling.
+fn discover_structured_document_links(
+    bytes: &[u8],
+    source_url: Option<&str>,
+) -> Option<StructuredDocumentDiscovery> {
+    let value = serde_json::from_slice::<serde_json::Value>(bytes).ok()?;
+    let base_url = source_url.and_then(|value| reqwest::Url::parse(value).ok());
+    let mut candidates = HashMap::new();
+    collect_structured_link_candidates(&value, base_url.as_ref(), 0, None, &mut candidates);
+    let mut candidates = candidates.into_values().collect::<Vec<_>>();
+    candidates.sort_by(|left, right| left.url.cmp(&right.url));
+    Some(StructuredDocumentDiscovery {
+        candidates,
+        next_page: arcgis_search_next_page(source_url, &value),
+        companion_urls: arcgis_structured_item_companion_urls(&value),
+        layer_urls: arcgis_layers_from_metadata(source_url, &value),
     })
 }
 
@@ -3832,7 +3862,6 @@ async fn extract_document(
     request_id: u64,
     document: &DocumentMetadata,
     local_path: &Path,
-    skip_msg_attachment_expansion: bool,
     depth: PayloadDepth,
     raw_file_sha256: &str,
 ) -> Result<ExtractedDocument, AppError> {
@@ -3903,6 +3932,7 @@ async fn extract_document(
             })
         }
         DocumentFormat::OutlookMessage => {
+            let attachment_container_depth = next_msg_attachment_container_depth(depth.container);
             let attachment_cache = local_path
                 .parent()
                 .unwrap_or_else(|| Path::new("."))
@@ -3912,24 +3942,28 @@ async fn extract_document(
                 MsgExtractionContext {
                     source_document: document,
                     cache_directory: &attachment_cache,
-                    collect_attachments: !skip_msg_attachment_expansion,
+                    collect_attachments: attachment_container_depth.is_some(),
                 },
             )
             .await?;
-            let attachment_tasks = payload
-                .attachment_documents
-                .into_iter()
-                .map(|attachment| IngestionTask::DownloadBinaryPayload {
+            let attachment_tasks = if let Some(container_depth) = attachment_container_depth {
+                let output_directory = attachment_cache.to_string_lossy().into_owned();
+                payload
+                    .attachment_documents
+                    .into_iter()
+                    .map(|attachment| IngestionTask::DownloadBinaryPayload {
                         subdomain: context.portal.portal_key.clone(),
                         request_id,
                         document: Box::new(attachment.metadata),
-                        output_directory: attachment_cache.to_string_lossy().into_owned(),
-                        skip_msg_attachment_expansion: attachment.is_embedded_message,
-                        container_depth: depth.container,
+                        output_directory: output_directory.clone(),
+                        container_depth,
                         crawl_depth: depth.crawl,
                         structured_depth: depth.structured,
                     })
-                .collect();
+                    .collect()
+            } else {
+                Vec::new()
+            };
             enqueue_tasks_resilient(context, attachment_tasks).await?;
             let text = [payload.metadata_summary, payload.body_text]
                 .into_iter()
@@ -4224,7 +4258,6 @@ async fn expand_container(
             request_id,
             document: Box::new(document),
             output_directory: destination.to_string_lossy().into_owned(),
-            skip_msg_attachment_expansion: false,
             container_depth: depth.container + 1,
             crawl_depth: depth.crawl,
             structured_depth: depth.structured,
@@ -5106,6 +5139,14 @@ fn may_expand_structured_links(structured_depth: usize) -> bool {
     structured_depth < MAXIMUM_STRUCTURED_CHAIN
 }
 
+/// Returns the depth assigned to an Outlook attachment when the container budget permits another
+/// descent. `.msg` files deliberately emit only their immediate attachments; if one attachment is
+/// itself a message, the ordinary format detector classifies it on the next task. This keeps all
+/// nesting on the queue's single container-depth axis instead of hiding recursion inside a parser.
+fn next_msg_attachment_container_depth(container_depth: usize) -> Option<usize> {
+    (container_depth < MAXIMUM_CONTAINER_DEPTH).then(|| container_depth + 1)
+}
+
 /// Provenance for a discovered payload. The portal is not the origin: a crawled page can point
 /// at any host, and in an evidence tool the recorded origin has to be the page the link was on
 /// plus the host the bytes actually came from.
@@ -5678,7 +5719,7 @@ mod tests {
     }
 
     #[test]
-    fn durable_frontier_round_trip_preserves_managed_local_paths() {
+    fn durable_frontier_round_trip_preserves_paths_and_ignores_the_legacy_msg_backstop() {
         let task = IngestionTask::DownloadBinaryPayload {
             subdomain: "records".to_string(),
             request_id: 41,
@@ -5697,7 +5738,6 @@ mod tests {
                 was_ocr_processed: false,
             }),
             output_directory: "/managed/records".to_string(),
-            skip_msg_attachment_expansion: false,
             container_depth: 0,
             crawl_depth: 5,
             structured_depth: 3,
@@ -5716,6 +5756,25 @@ mod tests {
         assert_eq!(document.local_path.as_deref(), Some("/managed/objects/abc"));
         assert_eq!(crawl_depth, 5);
         assert_eq!(structured_depth, 3);
+
+        // Rows written before `.msg` expansion became format- and depth-driven carry this field.
+        // Serde's default unknown-field behavior must let those durable tasks resume after upgrade.
+        let mut legacy_encoded = serde_json::to_value(&task).unwrap();
+        legacy_encoded.as_object_mut().unwrap().insert(
+            "skip_msg_attachment_expansion".to_string(),
+            serde_json::Value::Bool(true),
+        );
+        let legacy_decoded: IngestionTask = serde_json::from_value(legacy_encoded).unwrap();
+        let IngestionTask::DownloadBinaryPayload {
+            document,
+            container_depth,
+            ..
+        } = legacy_decoded
+        else {
+            panic!("legacy durable task kind changed during resume");
+        };
+        assert_eq!(document.id, 73);
+        assert_eq!(container_depth, 0);
     }
 
     #[test]
@@ -5738,7 +5797,6 @@ mod tests {
                 was_ocr_processed: false,
             }),
             output_directory: "/managed/records".to_string(),
-            skip_msg_attachment_expansion: false,
             container_depth: 0,
             crawl_depth: 5,
             structured_depth: 3,
@@ -5773,6 +5831,23 @@ mod tests {
         assert!(may_expand_structured_links(MAXIMUM_STRUCTURED_CHAIN - 1));
         assert!(!may_expand_structured_links(MAXIMUM_STRUCTURED_CHAIN));
         assert!(!may_expand_structured_links(MAXIMUM_STRUCTURED_CHAIN + 7));
+    }
+
+    #[test]
+    fn every_msg_attachment_descent_spends_the_shared_container_budget() {
+        assert_eq!(next_msg_attachment_container_depth(0), Some(1));
+        assert_eq!(
+            next_msg_attachment_container_depth(MAXIMUM_CONTAINER_DEPTH - 1),
+            Some(MAXIMUM_CONTAINER_DEPTH)
+        );
+        assert_eq!(
+            next_msg_attachment_container_depth(MAXIMUM_CONTAINER_DEPTH),
+            None
+        );
+        assert_eq!(
+            next_msg_attachment_container_depth(MAXIMUM_CONTAINER_DEPTH + 1),
+            None
+        );
     }
 
     /// A catalog eight pages into a portal is exactly the case the previous gate killed: its
@@ -5832,6 +5907,41 @@ mod tests {
         assert!(candidates["https://data.example.gov/records.csv"].download_candidate);
         assert!(!candidates["https://data.example.gov/api/records"].download_candidate);
         assert!(!candidates.contains_key("https://example.gov/license"));
+    }
+
+    #[test]
+    fn structured_discovery_returns_only_scheduling_summaries_and_ignores_malformed_json() {
+        let source_url =
+            "https://gis.example.gov/arcgis/rest/services/Records/FeatureServer?f=json";
+        let payload = serde_json::json!({
+            "type": "Feature Service",
+            "id": "e75d5c7a59ff4d6a90e862a481c3ba96",
+            "title": "Records service",
+            "downloadURL": "https://files.example.gov/records.csv",
+            "mediaType": "text/csv",
+            "layers": [{"id": 0}],
+            "tables": [{"id": 2}]
+        });
+        let bytes = serde_json::to_vec(&payload).unwrap();
+
+        let discovery = discover_structured_document_links(&bytes, Some(source_url))
+            .expect("valid structured payload must produce a scheduling summary");
+        assert_eq!(discovery.candidates.len(), 1);
+        assert_eq!(
+            discovery.candidates[0].url,
+            "https://files.example.gov/records.csv"
+        );
+        assert!(discovery.candidates[0].download_candidate);
+        assert_eq!(discovery.companion_urls.len(), 2);
+        assert_eq!(
+            discovery.layer_urls,
+            vec![
+                "https://gis.example.gov/arcgis/rest/services/Records/FeatureServer/0".to_string(),
+                "https://gis.example.gov/arcgis/rest/services/Records/FeatureServer/2".to_string(),
+            ]
+        );
+        assert!(discovery.next_page.is_none());
+        assert!(discover_structured_document_links(b"{broken", Some(source_url)).is_none());
     }
 
     #[test]
@@ -6032,6 +6142,30 @@ mod tests {
         assert_eq!(full, vec![1, 1, 2, 4, 8, 16]);
         assert_eq!(durable_retry_delay_seconds(6), 30);
         assert_eq!(durable_retry_delay_seconds(u64::MAX), 30);
+    }
+
+    #[test]
+    fn durable_retry_policy_never_replays_permanent_parser_or_security_failures() {
+        for error in [
+            AppError::DataParsing("malformed document".to_string()),
+            AppError::PortalSecurity("unsafe path".to_string()),
+            AppError::Storage("database constraint".to_string()),
+            AppError::Internal("blocking worker panicked".to_string()),
+        ] {
+            assert_eq!(durable_retry_delay_for_error(&error, 1), None);
+        }
+
+        for error in [
+            AppError::Network("connection reset".to_string()),
+            AppError::RateLimiter("temporary throttle".to_string()),
+            AppError::PortalCapacity("queue is full".to_string()),
+        ] {
+            assert_eq!(durable_retry_delay_for_error(&error, 1), Some(1));
+            assert_eq!(
+                durable_retry_delay_for_error(&error, MAXIMUM_DURABLE_TASK_ATTEMPTS),
+                None
+            );
+        }
     }
 
     // LIMIT(protocol): the two synthetic identifier generators are NOT disjoint. Both set

@@ -9,6 +9,36 @@ limit, context compaction, or a change of contributor. Search for `TODO(` and
 
 ## Session log
 
+### Continuation — 2026-08-27 release-hardening pass
+
+Current Rust verification is green after the changes below: `cargo fmt --all -- --check`,
+`cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test --workspace`
+(223 unit tests passing, 0 failing, plus doctests). The frontend was not changed in this pass; its
+latest verified baseline remains `npm run lint`, `npm run test:unit` (61 tests), `npm run build`,
+and `npm run check:ipc` (30 commands, 18 telemetry events, 6 verification states).
+
+- [x] Every embedded `.msg` descent now spends the shared container-depth budget. The parser
+      exports only immediate attachments, and the durable worker schedules nested messages through
+      the same bounded path as other containers. Embedded-message identity is determined from the
+      exported long filename that format detection receives, and old frontier rows containing the
+      removed `skip_msg_attachment_expansion` field still deserialize. A real nested CFB fixture
+      verifies the boundary.
+- [x] Structured JSON parsing and recursive discovery run on the blocking executor. The async
+      worker receives only bounded scheduling summaries; malformed JSON remains a no-op. A focused
+      regression covers ordinary links, ArcGIS companions and layers, pagination termination, and
+      malformed input.
+- [x] Durable retries are explicitly pinned to the existing `AppError::is_retryable` policy:
+      network, rate-limiter, and portal-capacity failures retry up to the attempt ceiling; parsing,
+      portal-security, storage, and internal failures terminate immediately.
+- [x] Startup removes only the dedicated uncommitted `documents/.staging` tree. It refuses a
+      staging symlink or non-directory and deliberately retains committed attachment/container
+      trees because those paths are evidence used by viewing, provenance, pause, and retry flows.
+      Tests cover cleanup, idempotence, committed-object preservation, and symlink refusal.
+- [x] Re-audited two stale lower-severity claims. `Retry-After` is already capped at 120 seconds in
+      `src-tauri/src/portal/client.rs`, and robots policy is fetched, cached, and enforced by the
+      crawl host-policy path. Deterministic (unjittered) retry timing and non-persisted scheduler
+      state remain separate lower-priority concerns.
+
 ### Continuation — 2026-08-27 evening
 
 Current verification is green: `cargo fmt --all -- --check`,
@@ -235,16 +265,19 @@ at the line; two carry running proof-of-concept binaries.
       `spawn_blocking` tasks cannot be aborted, so the pause and remove paths write CANCELLED and
       return while extraction runs on.
       Thread an `AtomicBool` into the tar/zip/OCR loops.
-- [ ] `queue.rs:2952` + `msg.rs:387` — `.msg` nesting bypasses `container_depth`; the
-      `skip_msg_attachment_expansion` backstop reads a different filename than format detection does.
-- [ ] `queue.rs:3130` — no aggregate expansion budget across the container tree, and extracted trees
-      are never deleted.
-- [ ] `queue.rs:2381` — up to 64 MB of JSON parsed and walked on the async runtime, stalling the
-      runtime Tauri shares with UI-facing IPC. Move into `spawn_blocking`.
-- [ ] Lower: staging leaks on unwind (`archive.rs:50`, `zip.rs:58`, `queue.rs:3753`); uncapped
-      `visited_urls` (`queue.rs:1943`); attacker-controlled `Retry-After` amplification and
-      un-jittered backoff (`client.rs:2039`); robots.txt is honored nowhere (`queue.rs:3959`);
-      untrusted SQLite opened without `cell_size_check`/defensive mode (`database.rs:38`).
+- [x] `.msg` nesting now spends `container_depth`; parser export identity and format detection use
+      the same filename, and the obsolete durable backstop field is compatibility-tested.
+- [ ] `queue.rs` container expansion — per-member and per-depth bounds are enforced, but no single
+      aggregate byte budget spans an entire recursively extracted tree. Committed attachment and
+      container trees are retained evidence, not disposable caches; lifecycle policy must preserve
+      references rather than deleting these paths blindly.
+- [x] Structured JSON parsing and recursive discovery were moved off the async runtime and now
+      return only bounded scheduling summaries.
+- [ ] Lower: uncapped in-memory `visited_urls`; deterministic (unjittered) retry timing;
+      non-persisted scheduler counters on restart; and untrusted SQLite opened without
+      `cell_size_check`/defensive mode (`database.rs:38`). `Retry-After` is already capped at 120
+      seconds, robots policy is fetched/cached/enforced, and abandoned uncommitted staging is now
+      reconciled safely at startup.
 - [ ] `source.rs:45` `BUG(evidence)` — assessed **not a real defect**: the code already re-stats the
       open descriptor and re-verifies the byte count. The residual race needs local write access to
       the evidence store, which is outside the untrusted-input threat model. Remove the marker.
@@ -276,9 +309,9 @@ at the line; two carry running proof-of-concept binaries.
 - [x] **The earlier fresh-clone blocker no longer applies.** The previously untracked application
       files (`src-tauri/tauri.conf.json`, `src/ipc.ts`, `index.html`, `eslint.config.js`, both
       lockfiles, icons, templates, and Rust modules) are present in the current tracked tree, and
-      the stale root `tauri.conf.json` is absent. The remaining untracked files belong to the active
-      continuation above, plus the pre-existing `analytics-unavailable.png` screenshot; they still
-      need an ordinary commit before this continuation is available to a clone.
+      the stale root `tauri.conf.json` is absent. The pre-existing `analytics-unavailable.png`
+      screenshot was removed at the user's request; the continuation changes are tracked and
+      committed in ordinary history rather than being required from an untracked worktree.
 - [x] Resolved by renaming to `docs/ROADMAP.md`; `git check-ignore` now exits 1, so a clone sees it.
 
 ## Architecture decisions

@@ -13,7 +13,6 @@ use crate::file_name::sanitized_component;
 use crate::parsers::source::read_regular_file;
 use crate::types::{DocumentMetadata, EmailMetadata, EmailParticipantMetadata};
 
-const MAX_EMBEDDED_MESSAGE_DEPTH: usize = 32;
 const MAX_ATTACHMENT_COUNT: usize = 10_000;
 const MAX_TOTAL_ATTACHMENT_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 const MAX_MESSAGE_BYTES: u64 = 256 * 1024 * 1024;
@@ -31,7 +30,6 @@ pub struct ExtractedEmailPayload {
 #[derive(Debug, Clone)]
 pub struct ExtractedEmailDocument {
     pub metadata: DocumentMetadata,
-    pub is_embedded_message: bool,
 }
 
 pub struct MsgExtractionContext<'a> {
@@ -53,7 +51,6 @@ struct PendingAttachment {
     content_type: String,
     description: String,
     bytes: Vec<u8>,
-    is_embedded_message: bool,
 }
 
 fn strip_html_markup(html: &str) -> String {
@@ -327,16 +324,9 @@ fn collect_attachments(
     message: &Outlook,
     source_document_id: u64,
     parent_chain: &str,
-    depth: usize,
     attachments: &mut Vec<PendingAttachment>,
     total_bytes: &mut u64,
 ) -> Result<(), AppError> {
-    if depth > MAX_EMBEDDED_MESSAGE_DEPTH {
-        return Err(AppError::DataParsing(format!(
-            "MSG_ATTACHMENT_DEPTH_EXCEEDED: nested attachment depth exceeds {MAX_EMBEDDED_MESSAGE_DEPTH}"
-        )));
-    }
-
     for (index, attachment) in message.attachments.iter().enumerate() {
         if attachments.len() >= MAX_ATTACHMENT_COUNT {
             return Err(AppError::DataParsing(format!(
@@ -369,11 +359,6 @@ fn collect_attachments(
             )));
         }
 
-        let content_type = if attachment.mime_tag.trim().is_empty() {
-            "application/octet-stream".to_string()
-        } else {
-            attachment.mime_tag.trim().to_ascii_lowercase()
-        };
         let id = attachment_id(
             source_document_id,
             &chain,
@@ -381,38 +366,30 @@ fn collect_attachments(
             &attachment.payload_bytes,
         );
         let is_embedded_message = attachment.is_embedded_message()
-            || Path::new(&attachment.file_name)
+            || Path::new(&file_name)
                 .extension()
                 .and_then(|extension| extension.to_str())
                 .is_some_and(|extension| extension.eq_ignore_ascii_case("msg"))
             || attachment
                 .mime_tag
                 .eq_ignore_ascii_case("application/vnd.ms-outlook");
+        // The sanitized long/display name is the identity later supplied to the queue's format
+        // detector. Normalize the media type from that same identity so an attachment whose short
+        // name omits `.msg` cannot be classified differently by the parser and the queue.
+        let content_type = if is_embedded_message {
+            "application/vnd.ms-outlook".to_string()
+        } else if attachment.mime_tag.trim().is_empty() {
+            "application/octet-stream".to_string()
+        } else {
+            attachment.mime_tag.trim().to_ascii_lowercase()
+        };
         attachments.push(PendingAttachment {
             id,
             file_name,
             content_type,
             description: format!("Outlook attachment at {chain}"),
             bytes: attachment.payload_bytes.clone(),
-            is_embedded_message,
         });
-
-        if is_embedded_message {
-            let nested_message =
-                Outlook::from_slice(&attachment.payload_bytes).map_err(|error| {
-                    AppError::DataParsing(format!(
-                    "MSG_EMBEDDED_PARSE_FAILED: failed to parse embedded message '{chain}': {error}"
-                ))
-                })?;
-            collect_attachments(
-                &nested_message,
-                source_document_id,
-                &chain,
-                depth + 1,
-                attachments,
-                total_bytes,
-            )?;
-        }
     }
 
     Ok(())
@@ -441,7 +418,6 @@ fn parse_message(
             &message,
             source_document_id,
             "message",
-            0,
             &mut attachments,
             &mut total_bytes,
         )?;
@@ -633,10 +609,7 @@ pub async fn extract_msg_layers<P: AsRef<Path>>(
             extracted_text_sha256: None,
             was_ocr_processed: false,
         };
-        attachment_documents.push(ExtractedEmailDocument {
-            metadata: document,
-            is_embedded_message: attachment.is_embedded_message,
-        });
+        attachment_documents.push(ExtractedEmailDocument { metadata: document });
     }
 
     Ok(ExtractedEmailPayload {
@@ -683,7 +656,31 @@ mod tests {
         })
     }
 
+    struct MsgFixtureAttachment<'a> {
+        bytes: &'a [u8],
+        extension: &'a str,
+        short_file_name: &'a str,
+        long_file_name: &'a str,
+        mime_tag: &'a str,
+    }
+
     fn write_msg_fixture(path: &Path) -> Result<(), AppError> {
+        write_msg_fixture_with_attachment(
+            path,
+            MsgFixtureAttachment {
+                bytes: b"attachment evidence",
+                extension: ".txt",
+                short_file_name: "EVIDEN~1.TXT",
+                long_file_name: "evidence.txt",
+                mime_tag: "text/plain",
+            },
+        )
+    }
+
+    fn write_msg_fixture_with_attachment(
+        path: &Path,
+        attachment: MsgFixtureAttachment<'_>,
+    ) -> Result<(), AppError> {
         let file = File::options()
             .read(true)
             .write(true)
@@ -743,27 +740,27 @@ mod tests {
         write_msg_stream(
             &mut compound,
             &format!("{attachment_storage}/__substg1.0_37010102"),
-            b"attachment evidence",
+            attachment.bytes,
         )?;
         write_msg_stream(
             &mut compound,
             &format!("{attachment_storage}/__substg1.0_3703001F"),
-            &utf16le(".txt"),
+            &utf16le(attachment.extension),
         )?;
         write_msg_stream(
             &mut compound,
             &format!("{attachment_storage}/__substg1.0_3704001F"),
-            &utf16le("EVIDEN~1.TXT"),
+            &utf16le(attachment.short_file_name),
         )?;
         write_msg_stream(
             &mut compound,
             &format!("{attachment_storage}/__substg1.0_3707001F"),
-            &utf16le("evidence.txt"),
+            &utf16le(attachment.long_file_name),
         )?;
         write_msg_stream(
             &mut compound,
             &format!("{attachment_storage}/__substg1.0_370E001F"),
-            &utf16le("text/plain"),
+            &utf16le(attachment.mime_tag),
         )?;
         compound
             .flush()
@@ -792,6 +789,48 @@ mod tests {
         assert_eq!(first, second);
         assert!(first > 0);
         assert!(first <= MAX_JAVASCRIPT_SAFE_INTEGER);
+    }
+
+    #[test]
+    fn embedded_messages_are_exported_one_level_deep_using_their_detected_identity(
+    ) -> Result<(), AppError> {
+        let directory = tempdir().map_err(|error| {
+            AppError::Internal(format!("MSG_TEST_TEMP_DIRECTORY_FAILED: {error}"))
+        })?;
+        let inner_path = directory.path().join("inner.msg");
+        write_msg_fixture(&inner_path)?;
+        let inner_bytes = std::fs::read(&inner_path).map_err(|error| {
+            AppError::Internal(format!("MSG_TEST_FIXTURE_READ_FAILED: {error}"))
+        })?;
+        let outer_path = directory.path().join("outer.msg");
+        // Reproduces the old identity split: the parser's short name has no extension and the
+        // declared MIME is generic, while the exported long name is the `.msg` identity later
+        // supplied to `detect_document_format`.
+        write_msg_fixture_with_attachment(
+            &outer_path,
+            MsgFixtureAttachment {
+                bytes: &inner_bytes,
+                extension: ".msg",
+                short_file_name: "NESTED~1",
+                long_file_name: "nested.msg",
+                mime_tag: "application/octet-stream",
+            },
+        )?;
+        let outer_bytes = std::fs::read(&outer_path).map_err(|error| {
+            AppError::Internal(format!("MSG_TEST_FIXTURE_READ_FAILED: {error}"))
+        })?;
+
+        let parsed = parse_message(&outer_bytes, 42, true)?;
+        assert_eq!(
+            parsed.attachments.len(),
+            1,
+            "the outer parse must export only the embedded message, not flatten its attachment"
+        );
+        let embedded = &parsed.attachments[0];
+        assert_eq!(embedded.file_name, "nested.msg");
+        assert_eq!(embedded.content_type, "application/vnd.ms-outlook");
+        assert_eq!(embedded.bytes, inner_bytes);
+        Ok(())
     }
 
     #[tokio::test]

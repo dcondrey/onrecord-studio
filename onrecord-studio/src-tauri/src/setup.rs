@@ -68,6 +68,7 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
     let app_handle = app.handle().clone();
     let download_root = app_data_dir.join("documents");
     create_runtime_directory(&download_root)?;
+    clear_abandoned_ingestion_staging(&download_root)?;
     let manager = tauri::async_runtime::block_on(initialize_queue_runtime(
         app_handle.clone(),
         repository.clone(),
@@ -198,4 +199,87 @@ fn create_runtime_directory(path: &Path) -> Result<(), AppError> {
             path.display()
         ))
     })
+}
+
+/// Clears only the queue's dedicated pre-commit area before any worker can start. Durable tasks
+/// and document rows reference committed object/attachment paths, never `.staging`, so retaining
+/// this directory after a crash consumes disk without helping recovery. Container trees and MSG
+/// attachment stores are intentionally untouched because their committed files are evidence.
+fn clear_abandoned_ingestion_staging(download_root: &Path) -> Result<(), AppError> {
+    let staging = download_root.join(".staging");
+    let metadata = match std::fs::symlink_metadata(&staging) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => {
+            return Err(AppError::Storage(format!(
+                "Failed to inspect ingestion staging directory '{}': {error}",
+                staging.display()
+            )))
+        }
+    };
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(AppError::PortalSecurity(format!(
+            "Ingestion staging path '{}' is not a managed directory",
+            staging.display()
+        )));
+    }
+    std::fs::remove_dir_all(&staging).map_err(|error| {
+        AppError::Storage(format!(
+            "Failed to clear abandoned ingestion staging directory '{}': {error}",
+            staging.display()
+        ))
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::clear_abandoned_ingestion_staging;
+
+    #[test]
+    fn startup_cleanup_removes_only_the_dedicated_staging_area() {
+        let directory = tempfile::tempdir().expect("temporary directory must be created");
+        let download_root = directory.path().join("documents");
+        let staging = download_root.join(".staging").join("nested");
+        let evidence = download_root.join("objects").join("ab").join("evidence");
+        std::fs::create_dir_all(&staging).expect("staging fixture must be created");
+        std::fs::create_dir_all(evidence.parent().unwrap())
+            .expect("object fixture directory must be created");
+        std::fs::write(staging.join("partial"), b"incomplete")
+            .expect("staged fixture must be written");
+        std::fs::write(&evidence, b"committed evidence")
+            .expect("evidence fixture must be written");
+
+        clear_abandoned_ingestion_staging(&download_root)
+            .expect("abandoned staging cleanup must succeed");
+
+        assert!(!download_root.join(".staging").exists());
+        assert_eq!(
+            std::fs::read(evidence).expect("committed evidence must remain"),
+            b"committed evidence"
+        );
+        clear_abandoned_ingestion_staging(&download_root)
+            .expect("cleanup must be idempotent when staging is absent");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn startup_cleanup_refuses_to_follow_a_staging_symlink() {
+        use std::os::unix::fs::symlink;
+
+        let directory = tempfile::tempdir().expect("temporary directory must be created");
+        let download_root = directory.path().join("documents");
+        let outside = directory.path().join("outside");
+        std::fs::create_dir_all(&download_root).expect("download root must be created");
+        std::fs::create_dir_all(&outside).expect("outside fixture must be created");
+        std::fs::write(outside.join("keep"), b"outside")
+            .expect("outside fixture must be written");
+        symlink(&outside, download_root.join(".staging"))
+            .expect("staging symlink fixture must be created");
+
+        assert!(clear_abandoned_ingestion_staging(&download_root).is_err());
+        assert_eq!(
+            std::fs::read(outside.join("keep")).expect("outside data must remain"),
+            b"outside"
+        );
+    }
 }
