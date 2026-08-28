@@ -1170,7 +1170,12 @@ impl QueueManager {
     pub async fn preview_public_source(
         &self,
         source_url: &str,
+        guidance: Option<SourceGuidance>,
     ) -> Result<crate::types::SourceDiscoveryPreview, AppError> {
+        let guidance = guidance.unwrap_or_default();
+        validate_source_guidance(&guidance)?;
+        let selector_preview_applied =
+            guidance.link_selector.is_some() || guidance.download_selector.is_some();
         if let Ok(source) = self.client.discover_portal(source_url).await {
             return Ok(crate::types::SourceDiscoveryPreview {
                 detected_kind: SourceKind::NextRequest,
@@ -1179,9 +1184,21 @@ impl QueueManager {
                 candidate_links: Vec::new(),
                 warnings: Vec::new(),
                 repair_available: false,
+                selector_preview_applied: false,
             });
         }
-        let (source, inspection) = self.client.discover_public_source(source_url).await?;
+        let (source, default_inspection) = self.client.discover_public_source(source_url).await?;
+        let inspection = if selector_preview_applied {
+            self.client
+                .inspect_public_resource_with_selectors(
+                    source_url,
+                    guidance.link_selector.as_deref(),
+                    guidance.download_selector.as_deref(),
+                )
+                .await?
+        } else {
+            default_inspection
+        };
         let has_embedded_connector = !inspection.embedded_connectors.is_empty();
         let candidate_links = inspection
             .links
@@ -1221,6 +1238,7 @@ impl QueueManager {
             confidence_basis_points,
             candidate_links,
             repair_available: !warnings.is_empty(),
+            selector_preview_applied,
             warnings,
         })
     }

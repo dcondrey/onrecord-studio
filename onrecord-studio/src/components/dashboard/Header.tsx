@@ -17,7 +17,7 @@ import {
 } from '../../utils/sourceGuidance';
 import Icon from '../ui/icons';
 import { Select } from '../ui/select';
-import { BUILT_IN_SOURCE_OPTIONS, type PortalRegistration, type SourceDiscoveryPreview, type SourceKind } from '../../types';
+import { BUILT_IN_SOURCE_OPTIONS, type PortalRegistration, type SourceDiscoveryPreview, type SourceGuidance, type SourceKind } from '../../types';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 
 const viewLabels = {
@@ -114,6 +114,9 @@ export default function Header() {
   const [repairPreview, setRepairPreview] = useState<SourceDiscoveryPreview | null>(null);
   const [repairRootUrl, setRepairRootUrl] = useState('');
   const [repairSeedUrl, setRepairSeedUrl] = useState('');
+  const [repairLinkSelector, setRepairLinkSelector] = useState('');
+  const [repairDownloadSelector, setRepairDownloadSelector] = useState('');
+  const [isPreviewingSelectors, setIsPreviewingSelectors] = useState(false);
   const [selectedSourceId, setSelectedSourceId] = useState('auto');
   const [isCrawlSettingsOpen, setCrawlSettingsOpen] = useState(false);
   const [crawlDraft, setCrawlDraft] = useState<CrawlSettingsDraft>(DEFAULT_CRAWL_SETTINGS_DRAFT);
@@ -171,6 +174,9 @@ export default function Header() {
   const closeRepairDialog = () => {
     cancelSourceOperation();
     setRepairPreview(null);
+    setRepairLinkSelector('');
+    setRepairDownloadSelector('');
+    setIsPreviewingSelectors(false);
   };
 
   useEffect(() => {
@@ -186,6 +192,8 @@ export default function Header() {
           preview.candidateLinks.find((link) => link.downloadCandidate)?.url ?? '',
         );
         setGuidanceDraft(DEFAULT_GUIDANCE_FILTER_DRAFT);
+        setRepairLinkSelector('');
+        setRepairDownloadSelector('');
       })
       .catch(() => {
         // The persisted ingestion failure remains visible even if previewing also fails.
@@ -320,15 +328,7 @@ export default function Header() {
       const { source, syncRunId, detectedKind } = await invokeCommand('start_data_source', {
         url: repairRootUrl,
         crawlPolicy: crawlPolicyOverride(settings.crawlPolicy),
-        guidance: {
-          additionalSeedUrls: [repairSeedUrl.trim()],
-          allowedHostnames: [],
-          includeUrlPrefixes: [],
-          excludeUrlPrefixes: [],
-          linkSelector: null,
-          downloadSelector: null,
-          ...filters.filters,
-        },
+        guidance: buildRepairGuidance(filters.filters, [repairSeedUrl.trim()], repairLinkSelector, repairDownloadSelector),
         rateLimitPolicy: settings.rateLimitPolicy,
       });
       if (!sourceRequestGate.isCurrent(request)) return;
@@ -342,6 +342,28 @@ export default function Header() {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
       if (sourceRequestGate.isCurrent(request)) setIsDiscovering(false);
+    }
+  };
+
+  const previewRepairSelectors = async () => {
+    if (!repairRootUrl || (!repairLinkSelector.trim() && !repairDownloadSelector.trim())) return;
+    const filters = resolveGuidanceFilters();
+    if (!filters) return;
+    const request = repairDiscoveryGate.begin();
+    setIsPreviewingSelectors(true);
+    setError(null);
+    try {
+      const preview = await invokeCommand('preview_data_source', {
+        url: repairRootUrl,
+        guidance: buildRepairGuidance(filters.filters, [], repairLinkSelector, repairDownloadSelector),
+      });
+      if (!repairDiscoveryGate.isCurrent(request)) return;
+      setRepairPreview(preview);
+      setRepairSeedUrl(preview.candidateLinks.find((link) => link.downloadCandidate)?.url ?? preview.candidateLinks[0]?.url ?? repairSeedUrl);
+    } catch (reason) {
+      if (repairDiscoveryGate.isCurrent(request)) setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      if (repairDiscoveryGate.isCurrent(request)) setIsPreviewingSelectors(false);
     }
   };
 
@@ -726,8 +748,6 @@ export default function Header() {
         <form onSubmit={(event) => void retryWithGuidance(event)} className="app-panel flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden shadow-2xl shadow-black/40">
           <div className="flex items-start justify-between border-b border-slate-800 p-4">
             <div>
-              {/* FEATURE(source-repair): Add an interactive field-mapping preview here so users can
-                  approve inferred columns/entities before committing a repaired source recipe. */}
               <div className="app-eyebrow text-amber-300/70">Guided repair</div>
               <h2 id="repair-source-title" className="mt-1 text-sm font-semibold text-slate-100">Show OnRecord where the data lives</h2>
               <p className="mt-1 max-w-xl text-[9px] leading-relaxed text-slate-600">The site is reachable, but it did not expose a reliable static data link. Paste the underlying download, folder, catalog, dashboard, or API URL. This guidance is saved and reused automatically.</p>
@@ -754,6 +774,10 @@ export default function Header() {
                 </div>
               </div>
             )}
+            <details className="rounded-xl border border-slate-800 bg-slate-950/35" open={repairPreview.selectorPreviewApplied || undefined}>
+              <summary className="focus-ring cursor-pointer list-none rounded-xl px-3 py-2.5 text-[9px] font-semibold text-slate-400">CSS selector mapping <span className="ml-2 font-normal text-slate-600">Preview exact matches before saving</span></summary>
+              <div className="space-y-3 border-t border-slate-800 p-3"><div className="grid gap-3 sm:grid-cols-2"><label className="text-[9px] font-semibold text-slate-500">Link selector<input value={repairLinkSelector} onChange={(event) => setRepairLinkSelector(event.target.value)} placeholder="main a[href]" className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 font-mono text-[10px] text-slate-200" /></label><label className="text-[9px] font-semibold text-slate-500">Forced-download selector<input value={repairDownloadSelector} onChange={(event) => setRepairDownloadSelector(event.target.value)} placeholder="a.download[href]" className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 font-mono text-[10px] text-slate-200" /></label></div><div className="flex items-center justify-between"><p className="text-[8px] text-slate-600">Selectors are parsed natively; invalid CSS is rejected and no recipe is persisted by previewing.</p><button type="button" onClick={() => void previewRepairSelectors()} disabled={isPreviewingSelectors || (!repairLinkSelector.trim() && !repairDownloadSelector.trim())} className="rounded-lg border border-indigo-400/25 bg-indigo-500/10 px-3 py-2 text-[8px] font-semibold text-indigo-200 disabled:opacity-40">{isPreviewingSelectors ? 'Matching…' : 'Preview selector matches'}</button></div>{repairPreview.selectorPreviewApplied && <p role="status" className="text-[8px] text-emerald-300">Selector preview returned {repairPreview.candidateLinks.length.toLocaleString()} matched resource links. Choose one above or refine the selectors.</p>}</div>
+            </details>
             <label className="block text-[9px] font-semibold text-slate-500">
               Data, folder, dashboard, or API URL
               <input type="url" required value={repairSeedUrl} onChange={(event) => setRepairSeedUrl(event.target.value)} placeholder="https://…" className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 text-[10px] text-slate-200" />
@@ -837,4 +861,19 @@ export default function Header() {
     )}
     </>
   );
+}
+
+type SourceGuidanceScope = Omit<SourceGuidance,
+  'additionalSeedUrls' | 'allowedHostnames' | 'includeUrlPrefixes' | 'excludeUrlPrefixes' | 'linkSelector' | 'downloadSelector'>;
+
+function buildRepairGuidance(scope: SourceGuidanceScope, additionalSeedUrls: string[], linkSelector: string, downloadSelector: string): SourceGuidance {
+  return {
+    additionalSeedUrls,
+    allowedHostnames: [],
+    includeUrlPrefixes: [],
+    excludeUrlPrefixes: [],
+    linkSelector: linkSelector.trim() || null,
+    downloadSelector: downloadSelector.trim() || null,
+    ...scope,
+  };
 }

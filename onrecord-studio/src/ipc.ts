@@ -63,7 +63,7 @@ export interface NativeCommandMap {
   list_portal_runtimes: { args: NoArgs; result: PortalRuntimeSnapshot[] };
   list_saved_portals: { args: NoArgs; result: SavedSource[] };
   preview_data_source: {
-    args: { url: string };
+    args: { url: string; guidance?: SourceGuidance | null };
     result: SourceDiscoveryPreview;
   };
   start_data_source: {

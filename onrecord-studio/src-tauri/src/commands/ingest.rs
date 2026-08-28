@@ -69,10 +69,11 @@ pub async fn start_portal_sync(
 #[tauri::command]
 pub async fn preview_data_source(
     url: String,
+    guidance: Option<SourceGuidance>,
     manager: State<'_, Arc<QueueManager>>,
 ) -> Result<SourceDiscoveryPreview, AppError> {
     let url = required_text(&url, "Data source URL", 4_096)?;
-    manager.preview_public_source(url).await
+    manager.preview_public_source(url, guidance).await
 }
 
 #[tauri::command]

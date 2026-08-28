@@ -53,6 +53,7 @@ vi.mock('@tauri-apps/api/core', () => ({
         ],
         warnings: ['A guided seed is required.'],
         repairAvailable: true,
+        selectorPreviewApplied: false,
       });
     }
     return Promise.resolve({

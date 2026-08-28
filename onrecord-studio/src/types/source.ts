@@ -8,8 +8,6 @@ export interface CrawlPolicy {
 }
 
 export interface SourceGuidance {
-  // FEATURE(source): Add a guided selector preview type that returns matched
-  // elements before a repair recipe is persisted.
   additionalSeedUrls: string[];
   allowedHostnames: string[];
   includeUrlPrefixes: string[];
@@ -46,6 +44,7 @@ export interface SourceDiscoveryPreview {
   candidateLinks: DiscoveredSourceLink[];
   warnings: string[];
   repairAvailable: boolean;
+  selectorPreviewApplied: boolean;
 }
 
 export interface SourceIngestionStart {

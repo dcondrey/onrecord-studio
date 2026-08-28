@@ -85,6 +85,7 @@ pub struct SourceDiscoveryPreview {
     pub candidate_links: Vec<DiscoveredSourceLink>,
     pub warnings: Vec<String>,
     pub repair_available: bool,
+    pub selector_preview_applied: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
