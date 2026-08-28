@@ -32,10 +32,6 @@ pub fn audit_office_package<P: AsRef<Path>>(
     format: DocumentFormat,
     options: ForensicAuditOptions,
 ) -> Result<EvidenceBundle, AppError> {
-    // FEATURE(office-audit): Preserve part names, relationship IDs, XML paths, and run-level
-    // provenance for w:ins/w:del/w:delText, move ranges, comments, rPrChange, and pPrChange.
-    // TODO(office-audit): Inspect customXml, glossary, commentsExtended, people.xml, embedded
-    // packages, duplicate ZIP entries, trailing bytes, and package central-directory anomalies.
     // NOTE(office-audit): Stripping rPr is a derived forensic view; do not modify document.xml.
     if !matches!(
         format,
@@ -66,6 +62,11 @@ pub fn audit_office_package<P: AsRef<Path>>(
     };
     let mut total_read = 0_u64;
     let mut names = BTreeMap::<String, usize>::new();
+    let relationship_pattern =
+        regex::Regex::new(r#"<Relationship\b[^>]*\bId="([^"]+)"[^>]*\bTarget="([^"]+)"[^>]*/?>"#)
+            .map_err(|error| {
+            AppError::Internal(format!("OFFICE_AUDIT_RELATIONSHIP_PATTERN:{error}"))
+        })?;
     for index in 0..archive.len() {
         let mut entry = archive.by_index(index).map_err(|error| {
             AppError::DataParsing(format!("OFFICE_AUDIT_PART_INVALID at {index}: {error}"))
@@ -127,6 +128,27 @@ pub fn audit_office_package<P: AsRef<Path>>(
                 )?);
             }
         }
+        if name.to_ascii_lowercase().ends_with(".rels") {
+            for capture in relationship_pattern.captures_iter(xml) {
+                let relationship_id = capture
+                    .get(1)
+                    .map(|value| value.as_str())
+                    .unwrap_or_default();
+                let target = capture
+                    .get(2)
+                    .map(|value| value.as_str())
+                    .unwrap_or_default();
+                bundle.findings.push(finding_for_text(
+                    EvidenceClass::Preserved,
+                    EvidenceConfidence::Exact,
+                    "OFFICE_PACKAGE_RELATIONSHIP",
+                    EvidenceLocator { container_part: Some(name.clone()), xml_path: Some(format!("Relationship[@Id='{relationship_id}']")), ..EvidenceLocator::default() },
+                    &format!("{relationship_id} -> {target}"),
+                    "The relationship identifier and target are preserved in the package relationship part. External targets are reported but never fetched.",
+                    options,
+                )?);
+            }
+        }
     }
     for (name, count) in names.into_iter().filter(|(_, count)| *count > 1) {
         bundle.findings.push(finding_for_text(
@@ -143,13 +165,15 @@ pub fn audit_office_package<P: AsRef<Path>>(
 }
 
 fn is_xml_part(name: &str) -> bool {
-    name.to_ascii_lowercase().ends_with(".xml")
+    let lower = name.to_ascii_lowercase();
+    lower.ends_with(".xml") || lower.ends_with(".rels")
 }
 
 fn is_attributed_part(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
     lower.starts_with("customxml/")
         || lower.contains("/comments")
+        || lower.ends_with(".rels")
         || lower.contains("/embeddings/")
         || lower.contains("/glossary/")
         || lower.ends_with("people.xml")
@@ -168,6 +192,8 @@ fn attributed_part_kind(name: &str) -> &'static str {
         "OFFICE_GLOSSARY_PART"
     } else if lower.ends_with("people.xml") {
         "OFFICE_PEOPLE_METADATA"
+    } else if lower.ends_with(".rels") {
+        "OFFICE_RELATIONSHIP_PART"
     } else {
         "OFFICE_DOCUMENT_PROPERTIES"
     }
@@ -194,6 +220,15 @@ mod tests {
         archive
             .write_all(b"<w:document><w:del><w:delText>removed</w:delText></w:del></w:document>")
             .expect("xml");
+        archive
+            .start_file(
+                "word/_rels/document.xml.rels",
+                zip::write::SimpleFileOptions::default(),
+            )
+            .expect("rels part");
+        archive
+            .write_all(br#"<Relationships><Relationship Id="rId7" Target="comments.xml"/></Relationships>"#)
+            .expect("rels xml");
         archive.finish().expect("finish");
 
         let result = audit_office_package(
@@ -207,5 +242,9 @@ mod tests {
             .iter()
             .any(|finding| finding.kind == "OFFICE_TRACKED_DELETION"
                 && finding.locator.container_part.as_deref() == Some("word/document.xml")));
+        assert!(result.findings.iter().any(|finding| {
+            finding.kind == "OFFICE_PACKAGE_RELATIONSHIP"
+                && finding.locator.xml_path.as_deref() == Some("Relationship[@Id='rId7']")
+        }));
     }
 }

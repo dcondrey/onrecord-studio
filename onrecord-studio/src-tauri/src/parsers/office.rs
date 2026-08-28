@@ -12,10 +12,8 @@ const MAX_XML_PART_BYTES: u64 = 128 * 1024 * 1024;
 const MAX_TOTAL_XML_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_EXTRACTED_BYTES: usize = 128 * 1024 * 1024;
 
-// FEATURE(office): Expose tracked changes, comments, embedded objects, and package relationships
-// as separately attributable evidence instead of flattening every supported part into plain text.
-// TODO(office): Keep the current extractor as the searchable-text compatibility path while
-// office_audit.rs develops an immutable package manifest and run-level evidence model.
+// Searchable-text projection only. `office_audit.rs` is the separate attributed route for tracked
+// changes, comments, embedded parts, relationship IDs, duplicate parts, and revision structure.
 pub fn extract_office_package<P: AsRef<Path>>(
     file_path: P,
     format: DocumentFormat,
@@ -114,7 +112,8 @@ pub fn extract_office_package<P: AsRef<Path>>(
             })?;
         // NOTE(office): This deliberately ignores presentation styling, including rPr. That is
         // useful for search, but insufficient to prove a style-based concealment or revision.
-        // FEATURE(office-audit): Parse the same XML with element paths and inherited properties.
+        // Styling is deliberately absent from FTS; the attributed audit retains part and XML
+        // provenance separately so a search projection is never presented as reconstruction.
         append_xml_text(xml, &mut output, path)?;
         push_boundary(&mut output, path)?;
     }

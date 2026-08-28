@@ -149,6 +149,12 @@ pub fn audit_document_path<P: AsRef<Path>>(
     if file_name.is_some_and(|name| name.to_ascii_lowercase().ends_with(".svg")) {
         return crate::parsers::svg::audit_svg_file(path, options);
     }
+    if file_name.is_some_and(|name| {
+        let name = name.to_ascii_lowercase();
+        name.ends_with(".html") || name.ends_with(".htm") || name.ends_with(".xhtml")
+    }) {
+        return crate::parsers::html::audit_html_file(path, options);
+    }
     let format = detect_document_format(path, file_name, None)?;
     match format {
         DocumentFormat::Pdf => {
@@ -179,6 +185,7 @@ pub fn audit_document_path<P: AsRef<Path>>(
             );
             Ok(bundle)
         }
+        DocumentFormat::RichText => crate::parsers::rtf::audit_rtf_file(path, options),
         DocumentFormat::Zip => {
             let bytes =
                 crate::parsers::source::read_regular_file(path, "FORENSIC_ZIP", 128 * 1024 * 1024)?;

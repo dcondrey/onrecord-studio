@@ -3,11 +3,32 @@ use std::io::Read;
 use std::path::Path;
 
 use crate::error::AppError;
+use crate::parsers::forensic_evidence::{
+    finding_for_bytes, EvidenceBundle, EvidenceClass, EvidenceConfidence, EvidenceLocator,
+    ForensicAuditOptions,
+};
+use crate::parsers::source::read_regular_file;
 use crate::parsers::text::windows_1252_char;
 
 const MAX_RTF_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_RTF_OUTPUT_BYTES: usize = 128 * 1024 * 1024;
 const MAX_RTF_GROUP_DEPTH: usize = 512;
+const MAX_RTF_AUDIT_FINDINGS: usize = 5_000;
+const IGNORED_DESTINATIONS: &[&str] = &[
+    "colortbl",
+    "datastore",
+    "datafield",
+    "filetbl",
+    "fonttbl",
+    "generator",
+    "info",
+    "listoverridetable",
+    "listtable",
+    "object",
+    "pict",
+    "stylesheet",
+    "xmlnstbl",
+];
 
 #[derive(Clone, Copy)]
 struct RtfState {
@@ -16,8 +37,6 @@ struct RtfState {
 }
 
 pub fn extract_rtf_text<P: AsRef<Path>>(file_path: P) -> Result<String, AppError> {
-    // FEATURE(rtf-audit): Add a parallel attributed parser for hidden/deleted text, comments,
-    // revision marks, fields, and HTML encapsulation. Keep this flattening path stable for FTS.
     let path = file_path.as_ref();
     let metadata = std::fs::metadata(path).map_err(|error| {
         AppError::Internal(format!(
@@ -47,6 +66,87 @@ pub fn extract_rtf_text<P: AsRef<Path>>(file_path: P) -> Result<String, AppError
         )));
     }
     parse_rtf(&bytes, path)
+}
+
+/// Attributed RTF source audit kept separate from the stable flattened-text extraction path.
+pub fn audit_rtf_file<P: AsRef<Path>>(
+    file_path: P,
+    options: ForensicAuditOptions,
+) -> Result<EvidenceBundle, AppError> {
+    let path = file_path.as_ref();
+    let bytes = read_regular_file(path, "RTF_AUDIT", MAX_RTF_BYTES)?;
+    if !bytes.starts_with(b"{\\rtf") {
+        return Err(AppError::DataParsing(
+            "RTF_AUDIT_FORMAT_INVALID".to_string(),
+        ));
+    }
+    let mut bundle = EvidenceBundle {
+        coverage_complete: true,
+        ..EvidenceBundle::default()
+    };
+    let controls: &[(&[u8], &str)] = &[
+        (b"\\v", "RTF_HIDDEN_TEXT_CONTROL"),
+        (b"\\deleted", "RTF_TRACKED_DELETION"),
+        (b"\\revised", "RTF_REVISION_MARK"),
+        (b"\\annotation", "RTF_ANNOTATION_DESTINATION"),
+        (b"\\field", "RTF_FIELD_DESTINATION"),
+        (b"\\htmltag", "RTF_HTML_DESTINATION"),
+        (b"\\comment", "RTF_COMMENT_DESTINATION"),
+    ];
+    for (needle, kind) in controls {
+        collect_rtf_control_findings(&bytes, needle, kind, options, &mut bundle)?;
+    }
+    for destination in IGNORED_DESTINATIONS {
+        let needle = format!("\\{destination}");
+        collect_rtf_control_findings(
+            &bytes,
+            needle.as_bytes(),
+            "RTF_SKIPPED_NON_TEXT_DESTINATION",
+            options,
+            &mut bundle,
+        )?;
+    }
+    Ok(bundle)
+}
+
+fn collect_rtf_control_findings(
+    bytes: &[u8],
+    needle: &[u8],
+    kind: &str,
+    options: ForensicAuditOptions,
+    bundle: &mut EvidenceBundle,
+) -> Result<(), AppError> {
+    for offset in bytes
+        .windows(needle.len())
+        .enumerate()
+        .filter_map(|(offset, window)| (window == needle).then_some(offset))
+    {
+        if bundle.findings.len() >= MAX_RTF_AUDIT_FINDINGS {
+            bundle.coverage_complete = false;
+            if !bundle
+                .warnings
+                .iter()
+                .any(|warning| warning == "RTF_AUDIT_FINDING_LIMIT_REACHED")
+            {
+                bundle
+                    .warnings
+                    .push("RTF_AUDIT_FINDING_LIMIT_REACHED".to_string());
+            }
+            return Ok(());
+        }
+        let end = (offset + 256).min(bytes.len());
+        bundle.findings.push(finding_for_bytes(
+            EvidenceClass::Preserved,
+            EvidenceConfidence::Exact,
+            kind,
+            EvidenceLocator { byte_offset: Some(offset as u64), ..EvidenceLocator::default() },
+            &bytes[offset..end],
+            Some(&String::from_utf8_lossy(&bytes[offset..end])),
+            "The RTF control or destination is preserved at the reported byte offset. The ordinary text extractor intentionally omits non-display destinations.",
+            options,
+        )?);
+    }
+    Ok(())
 }
 
 fn parse_rtf(bytes: &[u8], path: &Path) -> Result<String, AppError> {
@@ -374,22 +474,38 @@ fn hex_nibble(value: u8) -> Option<u8> {
 }
 
 fn is_ignored_destination(word: &str) -> bool {
-    // TODO(rtf-audit): Record skipped destinations as evidence instead of discarding them in the
-    // forensic path. The ordinary extractor may continue treating style tables as non-text.
-    matches!(
-        word,
-        "colortbl"
-            | "datastore"
-            | "datafield"
-            | "filetbl"
-            | "fonttbl"
-            | "generator"
-            | "info"
-            | "listoverridetable"
-            | "listtable"
-            | "object"
-            | "pict"
-            | "stylesheet"
-            | "xmlnstbl"
-    )
+    IGNORED_DESTINATIONS.contains(&word)
+}
+
+#[cfg(test)]
+mod forensic_tests {
+    use super::*;
+
+    #[test]
+    fn audit_records_hidden_revision_and_skipped_destination_offsets() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("audit.rtf");
+        std::fs::write(
+            &path,
+            br"{\rtf1{\fonttbl Arial}{\annotation note}\v hidden\v0 \deleted removed}",
+        )
+        .unwrap();
+        let result = audit_rtf_file(&path, ForensicAuditOptions::default()).unwrap();
+        assert!(result
+            .findings
+            .iter()
+            .any(|finding| finding.kind == "RTF_HIDDEN_TEXT_CONTROL"));
+        assert!(result
+            .findings
+            .iter()
+            .any(|finding| finding.kind == "RTF_TRACKED_DELETION"));
+        assert!(result
+            .findings
+            .iter()
+            .any(|finding| finding.kind == "RTF_SKIPPED_NON_TEXT_DESTINATION"));
+        assert!(result
+            .findings
+            .iter()
+            .all(|finding| finding.locator.byte_offset.is_some()));
+    }
 }

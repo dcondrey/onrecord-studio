@@ -4207,8 +4207,8 @@ async fn extract_document(
         | DocumentFormat::OpenDocumentText
         | DocumentFormat::OpenDocumentPresentation
         | DocumentFormat::Ebook => {
-            // TODO(office-audit): Keep package extraction and attributed forensic inspection as
-            // separate routes; the latter must retain part names, relationships, and revisions.
+            // Search extraction stays separate from the attributed forensic command, which
+            // retains part names, relationship IDs, comments, and revision markers.
             let path = local_path.to_path_buf();
             let text = spawn_blocking("Package parser", move || {
                 extract_office_package(&path, format)

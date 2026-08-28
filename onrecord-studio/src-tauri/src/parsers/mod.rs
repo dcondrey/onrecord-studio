@@ -39,7 +39,7 @@ pub use forensic_evidence::{
     ForensicAuditOptions, ForensicFinding,
 };
 pub use format::{detect_document_format, DocumentFormat, ExtractionRoute};
-pub use html::extract_html_text;
+pub use html::{audit_html_file, extract_html_text};
 pub use legislation::{
     parse_legal_authority, phrase_match_count, policy_tokens, token_sequence_match_count,
     ParsedLegalAuthority, ParsedLegalProvision,
@@ -55,7 +55,7 @@ pub use recovery::{
     carve_historical_pdf_versions, RecoveredMetadataArtifact, RecoveredTextSegment,
     RecoveredVersionProfile,
 };
-pub use rtf::extract_rtf_text;
+pub use rtf::{audit_rtf_file, extract_rtf_text};
 pub use salvage::extract_salvaged_text;
 pub use svg::extract_svg_text;
 pub use text::extract_plain_text;
