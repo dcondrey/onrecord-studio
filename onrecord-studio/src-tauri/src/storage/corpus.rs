@@ -3,17 +3,17 @@
 use crate::error::AppError;
 use crate::integrity::digest_hex;
 use crate::types::{
-    CorpusEvidenceReference, CorpusIndexStatus, CorpusPattern, CorpusPatternKind,
+    CorpusEntityKind, CorpusEvidenceReference, CorpusIndexStatus, CorpusPattern, CorpusPatternKind,
     CorpusPatternQuery,
 };
 use duckdb::{params, Connection, OptionalExt, Transaction};
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{mpsc as std_mpsc, Arc};
 use tokio::sync::{mpsc, oneshot, Semaphore};
 
-const CORPUS_ALGORITHM_VERSION: &str = "deterministic-corpus-v2";
+const CORPUS_ALGORITHM_VERSION: &str = "deterministic-corpus-v3";
 /// Shape of the tables in [`CORPUS_SCHEMA`]. Bump this whenever a column type, key, or constraint
 /// changes; an index written under any other version is discarded and rebuilt rather than migrated.
 /// 3: every integer column widened to `BIGINT`. DuckDB's `INTEGER` is 32-bit, and a real source
@@ -28,7 +28,9 @@ const CORPUS_ALGORITHM_VERSION: &str = "deterministic-corpus-v2";
 /// 5: materialized distinct-document counts for entities avoid rebuilding concatenated document
 /// keys for the common unscoped interactive pattern query. Scoped/time-bounded queries still
 /// calculate within their requested slice.
-const CORPUS_SCHEMA_VERSION: i64 = 5;
+/// 6: canonical entity kinds are schema-constrained and same-segment entity relationships retain
+/// their source mention offsets for cross-format relationship patterns.
+const CORPUS_SCHEMA_VERSION: i64 = 6;
 
 const WRITER_QUEUE_CAPACITY: usize = 64;
 const MAXIMUM_CONCURRENT_ANALYSES: usize = 4;
@@ -47,20 +49,17 @@ const MAXIMUM_ENTITIES_PER_KIND: usize = 4_000;
 /// Every `kind` value ever passed to `push_entity`/`push_entity_with_display`. Used to seed the
 /// truncation map so a document's row set always states "not truncated" rather than omitting a kind
 /// that simply had nothing in it.
-const ENTITY_KINDS: [&str; 6] = [
-    "STATUTE",
-    "DATE",
-    "EMAIL_DOMAIN",
-    "URL_HOST",
-    "ACRONYM",
-    "ORGANIZATION",
+const ENTITY_KINDS: [CorpusEntityKind; 6] = [
+    CorpusEntityKind::Statute,
+    CorpusEntityKind::Date,
+    CorpusEntityKind::EmailDomain,
+    CorpusEntityKind::UrlHost,
+    CorpusEntityKind::Acronym,
+    CorpusEntityKind::Organization,
 ];
 const MAXIMUM_TOKEN_CHARACTERS: usize = 96;
-
-// TODO(corpus): Introduce a canonical typed entity/relationship layer for arbitrary tabular,
-// JSON, email, and document fields; the current index intentionally uses deterministic heuristics.
-// FEATURE(corpus): Add investigator-defined pattern recipes with a preview of
-// matching evidence before a recipe is indexed across the corpus.
+const MAXIMUM_RELATIONSHIPS_PER_DOCUMENT: usize = 20_000;
+const MAXIMUM_RELATIONSHIP_ENTITIES_PER_SEGMENT: usize = 64;
 
 type WriterJob = Box<dyn FnOnce(&mut Connection) + Send + 'static>;
 
@@ -70,8 +69,8 @@ pub struct CorpusIndex {
     analysis_permits: Arc<Semaphore>,
 }
 
-// PERF(corpus): Benchmark and, if necessary, shard corpus analysis/writes for million-document
-// workspaces; the current DuckDB writer is deliberately serialized for consistency.
+// The million-document throughput harness in scripts/validate-release-performance.mjs measures
+// the serialized writer and reports whether sharding is warranted for the release workload.
 
 pub struct CorpusDocumentInput {
     pub portal_key: String,
@@ -93,18 +92,20 @@ struct AnalyzedDocument {
     segments: Vec<AnalyzedSegment>,
     terms: Vec<(String, usize)>,
     entities: Vec<AnalyzedEntity>,
+    relationships: Vec<AnalyzedRelationship>,
+    relationships_truncated: bool,
     /// Per entity-kind: whether that kind's extraction hit [`MAXIMUM_ENTITIES_PER_KIND`] and had to
     /// stop before the text was fully scanned. Always has one entry per [`ENTITY_KINDS`] value, so a
     /// reader can tell "this document has no organizations" from "we stopped looking."
-    entity_truncations: HashMap<&'static str, bool>,
+    entity_truncations: HashMap<CorpusEntityKind, bool>,
 }
 
 /// Tracks, per entity kind, how many entities have been accepted and whether that kind's budget was
 /// exhausted. Enforcing the cap here rather than in every extraction loop keeps the truncation flag
 /// and the push that trips it in one place.
 struct EntityBudget {
-    counts: HashMap<&'static str, usize>,
-    truncated: HashMap<&'static str, bool>,
+    counts: HashMap<CorpusEntityKind, usize>,
+    truncated: HashMap<CorpusEntityKind, bool>,
 }
 
 impl EntityBudget {
@@ -123,8 +124,8 @@ impl EntityBudget {
     /// also why this is the one place that records truncation: every call site checks this *before*
     /// pushing another entity and stops as soon as it answers `true`, so `admit` below is never
     /// actually invoked while full and could not observe the cap being hit itself.
-    fn is_full(&mut self, kind: &'static str) -> bool {
-        let full = self.counts.get(kind).copied().unwrap_or(0) >= MAXIMUM_ENTITIES_PER_KIND;
+    fn is_full(&mut self, kind: CorpusEntityKind) -> bool {
+        let full = self.counts.get(&kind).copied().unwrap_or(0) >= MAXIMUM_ENTITIES_PER_KIND;
         if full {
             self.truncated.insert(kind, true);
         }
@@ -133,7 +134,7 @@ impl EntityBudget {
 
     /// Consumes one slot of `kind`'s budget. Every caller checks `is_full` first and stops rather
     /// than calling this once it is spent, so the count here never exceeds the cap.
-    fn admit(&mut self, kind: &'static str) {
+    fn admit(&mut self, kind: CorpusEntityKind) {
         *self.counts.entry(kind).or_insert(0) += 1;
     }
 }
@@ -147,12 +148,21 @@ struct AnalyzedSegment {
 }
 
 struct AnalyzedEntity {
-    kind: &'static str,
+    kind: CorpusEntityKind,
     normalized_value: String,
     display_value: String,
     character_start: usize,
     character_end: usize,
     segment_index: usize,
+    confidence_basis_points: u16,
+}
+
+struct AnalyzedRelationship {
+    left_entity_id: String,
+    right_entity_id: String,
+    segment_index: usize,
+    character_start: usize,
+    character_end: usize,
     confidence_basis_points: u16,
 }
 
@@ -318,18 +328,20 @@ impl CorpusIndex {
     pub async fn status(&self) -> Result<CorpusIndexStatus, AppError> {
         let available_write_capacity = self.writer.capacity();
         self.read("Corpus index status", move |connection| {
-            let (documents, segments, terms) = connection
+            let (documents, segments, terms, relationships) = connection
                 .query_row(
                     "SELECT
                         (SELECT COUNT(*) FROM corpus_documents),
                         (SELECT COUNT(*) FROM corpus_segments),
-                        (SELECT COUNT(*) FROM corpus_term_postings)",
+                        (SELECT COUNT(*) FROM corpus_term_postings),
+                        (SELECT COUNT(*) FROM corpus_entity_relationships)",
                     [],
                     |row| {
                         Ok((
                             row.get::<_, i64>(0)?,
                             row.get::<_, i64>(1)?,
                             row.get::<_, i64>(2)?,
+                            row.get::<_, i64>(3)?,
                         ))
                     },
                 )
@@ -340,6 +352,7 @@ impl CorpusIndex {
                 indexed_document_count: nonnegative_usize(documents, "document count")?,
                 indexed_segment_count: nonnegative_usize(segments, "segment count")?,
                 indexed_term_count: nonnegative_usize(terms, "term count")?,
+                indexed_relationship_count: nonnegative_usize(relationships, "relationship count")?,
                 available_write_capacity,
                 algorithm_version: CORPUS_ALGORITHM_VERSION.to_string(),
             })
@@ -537,6 +550,28 @@ fn validate_pattern_query(query: &CorpusPatternQuery) -> Result<(), AppError> {
             "Corpus confidence bound must be between 0 and 10000 basis points".to_string(),
         ));
     }
+    let unique_kinds = query
+        .pattern_kinds
+        .iter()
+        .map(|kind| kind.as_str())
+        .collect::<BTreeSet<_>>();
+    if query.pattern_kinds.len() > 7 || unique_kinds.len() != query.pattern_kinds.len() {
+        return Err(AppError::DataParsing(
+            "Corpus pattern-kind filters must be unique and contain at most seven values"
+                .to_string(),
+        ));
+    }
+    if query.required_terms.len() > 12
+        || query.required_terms.iter().any(|term| {
+            let trimmed = term.trim();
+            !(2..=64).contains(&trimmed.chars().count()) || trimmed.chars().any(char::is_control)
+        })
+    {
+        return Err(AppError::DataParsing(
+            "Corpus recipe terms must contain 2 to 64 printable characters and at most 12 values"
+                .to_string(),
+        ));
+    }
     if query
         .portal_key
         .as_deref()
@@ -577,6 +612,7 @@ fn analyze_document(input: CorpusDocumentInput) -> Result<AnalyzedDocument, AppE
     let segments = analyze_segments(&input.text, &tokens, character_count)?;
     let terms = top_terms(&tokens);
     let (entities, entity_truncations) = extract_entities(&input.text, &tokens, &segments);
+    let (relationships, relationships_truncated) = analyze_relationships(&entities);
     Ok(AnalyzedDocument {
         portal_key: input.portal_key,
         request_id: input.request_id,
@@ -588,8 +624,69 @@ fn analyze_document(input: CorpusDocumentInput) -> Result<AnalyzedDocument, AppE
         segments,
         terms,
         entities,
+        relationships,
+        relationships_truncated,
         entity_truncations,
     })
+}
+
+fn analyze_relationships(entities: &[AnalyzedEntity]) -> (Vec<AnalyzedRelationship>, bool) {
+    let mut by_segment = BTreeMap::<usize, Vec<&AnalyzedEntity>>::new();
+    for entity in entities {
+        by_segment
+            .entry(entity.segment_index)
+            .or_default()
+            .push(entity);
+    }
+    let mut relationships = Vec::new();
+    let mut seen = BTreeSet::new();
+    let mut truncated = false;
+    'segments: for (segment_index, segment_entities) in by_segment {
+        let mut unique = segment_entities
+            .into_iter()
+            .map(|entity| {
+                (
+                    stable_id(&format!(
+                        "{}|{}",
+                        entity.kind.as_str(),
+                        entity.normalized_value
+                    )),
+                    entity,
+                )
+            })
+            .collect::<Vec<_>>();
+        unique.sort_by(|left, right| left.0.cmp(&right.0));
+        unique.dedup_by(|left, right| left.0 == right.0);
+        if unique.len() > MAXIMUM_RELATIONSHIP_ENTITIES_PER_SEGMENT {
+            unique.truncate(MAXIMUM_RELATIONSHIP_ENTITIES_PER_SEGMENT);
+            truncated = true;
+        }
+        for left_index in 0..unique.len() {
+            for right_index in left_index + 1..unique.len() {
+                if relationships.len() >= MAXIMUM_RELATIONSHIPS_PER_DOCUMENT {
+                    truncated = true;
+                    break 'segments;
+                }
+                let (left_id, left) = &unique[left_index];
+                let (right_id, right) = &unique[right_index];
+                let identity = (segment_index, left_id.clone(), right_id.clone());
+                if !seen.insert(identity) {
+                    continue;
+                }
+                relationships.push(AnalyzedRelationship {
+                    left_entity_id: left_id.clone(),
+                    right_entity_id: right_id.clone(),
+                    segment_index,
+                    character_start: left.character_start.min(right.character_start),
+                    character_end: left.character_end.max(right.character_end),
+                    confidence_basis_points: left
+                        .confidence_basis_points
+                        .min(right.confidence_basis_points),
+                });
+            }
+        }
+    }
+    (relationships, truncated)
 }
 
 fn tokenize(text: &str) -> Vec<Token> {
@@ -751,11 +848,11 @@ fn extract_entities(
     text: &str,
     tokens: &[Token],
     segments: &[AnalyzedSegment],
-) -> (Vec<AnalyzedEntity>, HashMap<&'static str, bool>) {
+) -> (Vec<AnalyzedEntity>, HashMap<CorpusEntityKind, bool>) {
     let mut entities = Vec::new();
     let mut budget = EntityBudget::new();
     for (index, token) in tokens.iter().enumerate() {
-        if budget.is_full("STATUTE") {
+        if budget.is_full(CorpusEntityKind::Statute) {
             break;
         }
         if token.normalized == "section" {
@@ -770,7 +867,7 @@ fn extract_entities(
                     &mut budget,
                     text,
                     segments,
-                    "STATUTE",
+                    CorpusEntityKind::Statute,
                     format!("section {}", value.normalized),
                     token.byte_start,
                     value.byte_end,
@@ -796,7 +893,7 @@ fn extract_entities(
                 &mut budget,
                 text,
                 segments,
-                "STATUTE",
+                CorpusEntityKind::Statute,
                 format!("{} u.s.c. {}", token.normalized, last.normalized),
                 token.byte_start,
                 last.byte_end,
@@ -829,7 +926,7 @@ fn push_entity(
     budget: &mut EntityBudget,
     text: &str,
     segments: &[AnalyzedSegment],
-    kind: &'static str,
+    kind: CorpusEntityKind,
     normalized_value: String,
     byte_start: usize,
     byte_end: usize,
@@ -861,7 +958,7 @@ fn push_entity_with_display(
     entities: &mut Vec<AnalyzedEntity>,
     budget: &mut EntityBudget,
     segments: &[AnalyzedSegment],
-    kind: &'static str,
+    kind: CorpusEntityKind,
     normalized_value: String,
     display_value: String,
     character_start: usize,
@@ -966,7 +1063,7 @@ fn extract_dates(
     let bytes = text.as_bytes();
     let mut byte_index = 0_usize;
     let mut character_index = 0_usize;
-    while byte_index < bytes.len() && !budget.is_full("DATE") {
+    while byte_index < bytes.len() && !budget.is_full(CorpusEntityKind::Date) {
         let at_boundary = byte_index == 0 || !bytes[byte_index - 1].is_ascii_alphanumeric();
         if at_boundary {
             if let Some(matched) = match_date(&text[byte_index..]) {
@@ -981,7 +1078,7 @@ fn extract_dates(
                         budget,
                         text,
                         segments,
-                        "DATE",
+                        CorpusEntityKind::Date,
                         matched.date.format("%Y-%m-%d").to_string(),
                         byte_index,
                         byte_index + matched.length,
@@ -1192,7 +1289,7 @@ fn extract_email_domains(
     let bytes = text.as_bytes();
     let mut byte_index = 0_usize;
     let mut character_index = 0_usize;
-    while byte_index < bytes.len() && !budget.is_full("EMAIL_DOMAIN") {
+    while byte_index < bytes.len() && !budget.is_full(CorpusEntityKind::EmailDomain) {
         if bytes[byte_index] == b'@' {
             let mut start = byte_index;
             while start > 0 && is_email_local_byte(bytes[start - 1]) {
@@ -1216,7 +1313,7 @@ fn extract_email_domains(
                     entities,
                     budget,
                     segments,
-                    "EMAIL_DOMAIN",
+                    CorpusEntityKind::EmailDomain,
                     domain.clone(),
                     format!("@{domain}"),
                     character_index.saturating_sub(local_characters),
@@ -1252,7 +1349,7 @@ fn extract_url_hosts(
     let bytes = text.as_bytes();
     let mut byte_index = 0_usize;
     let mut character_index = 0_usize;
-    while byte_index < bytes.len() && !budget.is_full("URL_HOST") {
+    while byte_index < bytes.len() && !budget.is_full(CorpusEntityKind::UrlHost) {
         let tail = &bytes[byte_index..];
         if tail.starts_with(b"https://") || tail.starts_with(b"http://") {
             let mut end = byte_index;
@@ -1273,7 +1370,7 @@ fn extract_url_hosts(
                         entities,
                         budget,
                         segments,
-                        "URL_HOST",
+                        CorpusEntityKind::UrlHost,
                         host.clone(),
                         host,
                         character_index,
@@ -1304,7 +1401,7 @@ fn extract_organizations_and_acronyms(
     budget: &mut EntityBudget,
 ) {
     for token in tokens {
-        if budget.is_full("ACRONYM") {
+        if budget.is_full(CorpusEntityKind::Acronym) {
             break;
         }
         let raw = &text[token.byte_start..token.byte_end];
@@ -1324,7 +1421,7 @@ fn extract_organizations_and_acronyms(
                 budget,
                 text,
                 segments,
-                "ACRONYM",
+                CorpusEntityKind::Acronym,
                 token.normalized.clone(),
                 token.byte_start,
                 token.byte_end,
@@ -1338,7 +1435,7 @@ fn extract_organizations_and_acronyms(
     // A cap on ACRONYM must not stop ORGANIZATION extraction below: the two used to share one pool,
     // so a document saturated on one kind returned early and starved the other silently.
     let mut start = 0_usize;
-    while start < tokens.len() && !budget.is_full("ORGANIZATION") {
+    while start < tokens.len() && !budget.is_full(CorpusEntityKind::Organization) {
         if !is_title_token(text, &tokens[start]) {
             start += 1;
             continue;
@@ -1371,7 +1468,7 @@ fn extract_organizations_and_acronyms(
                 budget,
                 text,
                 segments,
-                "ORGANIZATION",
+                CorpusEntityKind::Organization,
                 normalized,
                 first.byte_start,
                 last.byte_end,
@@ -1455,14 +1552,15 @@ fn persist_analyzed_document(
         .execute(
             "INSERT INTO corpus_documents (
                 portal_key, request_id, document_id, raw_file_sha256, extracted_text_sha256,
-                character_count, simhash_hex, algorithm_version, indexed_at
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ'))
+                character_count, simhash_hex, relationships_truncated, algorithm_version, indexed_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ'))
              ON CONFLICT(portal_key, document_id) DO UPDATE SET
                 request_id = excluded.request_id,
                 raw_file_sha256 = excluded.raw_file_sha256,
                 extracted_text_sha256 = excluded.extracted_text_sha256,
                 character_count = excluded.character_count,
                 simhash_hex = excluded.simhash_hex,
+                relationships_truncated = excluded.relationships_truncated,
                 algorithm_version = excluded.algorithm_version,
                 indexed_at = excluded.indexed_at",
             params![
@@ -1473,6 +1571,7 @@ fn persist_analyzed_document(
                 document.extracted_text_sha256,
                 document.character_count,
                 format!("{:016x}", document.document_simhash),
+                document.relationships_truncated,
                 CORPUS_ALGORITHM_VERSION,
             ],
         )
@@ -1481,6 +1580,7 @@ fn persist_analyzed_document(
         "corpus_segments",
         "corpus_term_postings",
         "corpus_entity_mentions",
+        "corpus_entity_relationships",
         "corpus_entity_truncations",
         "corpus_lsh_bands",
     ] {
@@ -1494,6 +1594,7 @@ fn persist_analyzed_document(
     insert_segments(&transaction, &document)?;
     insert_terms(&transaction, &document)?;
     insert_entities(&transaction, &document)?;
+    insert_relationships(&transaction, &document)?;
     refresh_entity_document_counts(&transaction, &document, previous_entity_ids)?;
     insert_entity_truncations(&transaction, &document)?;
     insert_lsh_bands(&transaction, &document)?;
@@ -1508,12 +1609,13 @@ fn refresh_entity_document_counts(
     previous_entity_ids: Vec<String>,
 ) -> Result<(), AppError> {
     let mut affected = previous_entity_ids.into_iter().collect::<BTreeSet<_>>();
-    affected.extend(
-        document
-            .entities
-            .iter()
-            .map(|entity| stable_id(&format!("{}|{}", entity.kind, entity.normalized_value))),
-    );
+    affected.extend(document.entities.iter().map(|entity| {
+        stable_id(&format!(
+            "{}|{}",
+            entity.kind.as_str(),
+            entity.normalized_value
+        ))
+    }));
     for entity_id in affected {
         let document_count = transaction
             .query_row(
@@ -1635,11 +1737,15 @@ fn insert_entities(
             AppError::Storage(format!("Failed to prepare entity mentions: {error}"))
         })?;
     for entity in &document.entities {
-        let entity_id = stable_id(&format!("{}|{}", entity.kind, entity.normalized_value));
+        let entity_id = stable_id(&format!(
+            "{}|{}",
+            entity.kind.as_str(),
+            entity.normalized_value
+        ));
         entity_statement
             .execute(params![
                 entity_id,
-                entity.kind,
+                entity.kind.as_str(),
                 entity.normalized_value,
                 entity.display_value,
             ])
@@ -1663,6 +1769,39 @@ fn insert_entities(
     Ok(())
 }
 
+fn insert_relationships(
+    transaction: &Transaction<'_>,
+    document: &AnalyzedDocument,
+) -> Result<(), AppError> {
+    let mut statement = transaction
+        .prepare_cached(
+            "INSERT INTO corpus_entity_relationships (
+                portal_key, document_id, left_entity_id, right_entity_id, relationship_kind,
+                segment_index, character_start, character_end, confidence_basis_points
+             ) VALUES (?1, ?2, ?3, ?4, 'CO_OCCURS_IN_SEGMENT', ?5, ?6, ?7, ?8)",
+        )
+        .map_err(|error| {
+            AppError::Storage(format!("Failed to prepare entity relationships: {error}"))
+        })?;
+    for relationship in &document.relationships {
+        statement
+            .execute(params![
+                document.portal_key,
+                document.document_id,
+                relationship.left_entity_id,
+                relationship.right_entity_id,
+                relationship.segment_index,
+                relationship.character_start,
+                relationship.character_end,
+                relationship.confidence_basis_points,
+            ])
+            .map_err(|error| {
+                AppError::Storage(format!("Failed to persist entity relationship: {error}"))
+            })?;
+    }
+    Ok(())
+}
+
 fn insert_entity_truncations(
     transaction: &Transaction<'_>,
     document: &AnalyzedDocument,
@@ -1678,14 +1817,14 @@ fn insert_entity_truncations(
     for kind in ENTITY_KINDS {
         let truncated = document
             .entity_truncations
-            .get(kind)
+            .get(&kind)
             .copied()
             .unwrap_or(false);
         statement
             .execute(params![
                 document.portal_key,
                 document.document_id,
-                kind,
+                kind.as_str(),
                 truncated
             ])
             .map_err(|error| {
@@ -1726,16 +1865,45 @@ fn load_patterns(
 ) -> Result<Vec<CorpusPattern>, AppError> {
     let portal_key = query.portal_key.as_deref();
     let mut patterns = Vec::new();
-    load_exact_duplicate_patterns(connection, portal_key, query, &mut patterns)?;
-    if patterns.len() < query.result_limit {
-        load_shared_entity_patterns(connection, portal_key, query, &mut patterns)?;
+    if query_requests_any(query, &[CorpusPatternKind::ExactDuplicate]) {
+        load_exact_duplicate_patterns(connection, portal_key, query, &mut patterns)?;
     }
-    if patterns.len() < query.result_limit {
-        load_near_duplicate_patterns(connection, portal_key, query, &mut patterns)?;
+    if query_requests_any(
+        query,
+        &[
+            CorpusPatternKind::SharedStatute,
+            CorpusPatternKind::SharedEntity,
+            CorpusPatternKind::TemporalCluster,
+        ],
+    ) {
+        let mut category = Vec::new();
+        load_shared_entity_patterns(connection, portal_key, query, &mut category)?;
+        patterns.extend(category);
     }
-    if patterns.len() < query.result_limit {
-        load_shared_term_patterns(connection, portal_key, query, &mut patterns)?;
+    if query_requests_any(query, &[CorpusPatternKind::EntityRelationship]) {
+        let mut category = Vec::new();
+        load_shared_relationship_patterns(connection, portal_key, query, &mut category)?;
+        patterns.extend(category);
     }
+    if query_requests_any(query, &[CorpusPatternKind::NearDuplicate]) {
+        let mut category = Vec::new();
+        load_near_duplicate_patterns(connection, portal_key, query, &mut category)?;
+        patterns.extend(category);
+    }
+    if query_requests_any(query, &[CorpusPatternKind::SharedTerm]) {
+        let mut category = Vec::new();
+        load_shared_term_patterns(connection, portal_key, query, &mut category)?;
+        patterns.extend(category);
+    }
+    patterns.retain(|pattern| {
+        let searchable = format!("{} {}", pattern.title, pattern.explanation).to_lowercase();
+        pattern.confidence_basis_points >= query.minimum_confidence_basis_points
+            && pattern.evidence.len() >= query.minimum_evidence_count
+            && query
+                .required_terms
+                .iter()
+                .all(|term| searchable.contains(&term.trim().to_lowercase()))
+    });
     patterns.sort_by(|left, right| {
         right
             .confidence_basis_points
@@ -1743,12 +1911,20 @@ fn load_patterns(
             .then_with(|| right.evidence.len().cmp(&left.evidence.len()))
             .then_with(|| left.pattern_id.cmp(&right.pattern_id))
     });
-    patterns.retain(|pattern| {
-        pattern.confidence_basis_points >= query.minimum_confidence_basis_points
-            && pattern.evidence.len() >= query.minimum_evidence_count
-    });
     patterns.truncate(query.result_limit);
     Ok(patterns)
+}
+
+fn query_requests_any(query: &CorpusPatternQuery, kinds: &[CorpusPatternKind]) -> bool {
+    query.pattern_kinds.is_empty()
+        || query
+            .pattern_kinds
+            .iter()
+            .any(|requested| kinds.contains(requested))
+}
+
+fn pattern_kind_requested(query: &CorpusPatternQuery, kind: CorpusPatternKind) -> bool {
+    query.pattern_kinds.is_empty() || query.pattern_kinds.contains(&kind)
 }
 
 fn load_exact_duplicate_patterns(
@@ -1819,6 +1995,9 @@ fn load_shared_entity_patterns(
     patterns: &mut Vec<CorpusPattern>,
 ) -> Result<(), AppError> {
     let remaining = query.result_limit.saturating_sub(patterns.len());
+    let include_statutes = pattern_kind_requested(query, CorpusPatternKind::SharedStatute);
+    let include_dates = pattern_kind_requested(query, CorpusPatternKind::TemporalCluster);
+    let include_other_entities = pattern_kind_requested(query, CorpusPatternKind::SharedEntity);
     let entities = if portal_key.is_none()
         && query.indexed_from.is_none()
         && query.indexed_to.is_none()
@@ -1830,6 +2009,9 @@ fn load_shared_entity_patterns(
                  INNER JOIN corpus_entity_document_counts AS counts
                    ON counts.entity_id = entities.entity_id
                  WHERE counts.document_count >= ?1
+                   AND ((?3 AND entities.entity_kind = 'STATUTE')
+                     OR (?4 AND entities.entity_kind = 'DATE')
+                     OR (?5 AND entities.entity_kind NOT IN ('STATUTE', 'DATE')))
                  ORDER BY counts.document_count DESC, entities.entity_id
                  LIMIT ?2",
             )
@@ -1839,13 +2021,22 @@ fn load_shared_entity_patterns(
                 ))
             })?;
         statement
-            .query_map(params![query.minimum_evidence_count, remaining], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                ))
-            })
+            .query_map(
+                params![
+                    query.minimum_evidence_count,
+                    remaining,
+                    include_statutes,
+                    include_dates,
+                    include_other_entities
+                ],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
             .map_err(|error| {
                 AppError::Storage(format!("Failed to query materialized entities: {error}"))
             })?
@@ -1864,6 +2055,9 @@ fn load_shared_entity_patterns(
              WHERE (?1 IS NULL OR mentions.portal_key = ?1)
                AND (?4 IS NULL OR documents.indexed_at >= ?4)
                AND (?5 IS NULL OR documents.indexed_at <= ?5)
+               AND ((?6 AND entities.entity_kind = 'STATUTE')
+                 OR (?7 AND entities.entity_kind = 'DATE')
+                 OR (?8 AND entities.entity_kind NOT IN ('STATUTE', 'DATE')))
              GROUP BY entities.entity_id, entities.entity_kind, entities.display_value
              HAVING COUNT(DISTINCT mentions.portal_key || ':' || mentions.document_id) >= ?2
              ORDER BY COUNT(DISTINCT mentions.portal_key || ':' || mentions.document_id) DESC
@@ -1877,7 +2071,10 @@ fn load_shared_entity_patterns(
                     query.minimum_evidence_count,
                     remaining,
                     query.indexed_from,
-                    query.indexed_to
+                    query.indexed_to,
+                    include_statutes,
+                    include_dates,
+                    include_other_entities
                 ],
                 |row| {
                     Ok((
@@ -1922,6 +2119,157 @@ fn load_shared_entity_patterns(
         });
     }
     Ok(())
+}
+
+fn load_shared_relationship_patterns(
+    connection: &Connection,
+    portal_key: Option<&str>,
+    query: &CorpusPatternQuery,
+    patterns: &mut Vec<CorpusPattern>,
+) -> Result<(), AppError> {
+    let mut statement = connection
+        .prepare(
+            "SELECT relationships.left_entity_id, relationships.right_entity_id,
+                    left_entity.display_value, right_entity.display_value,
+                    MIN(relationships.confidence_basis_points)
+             FROM corpus_entity_relationships AS relationships
+             INNER JOIN corpus_documents AS documents
+               ON documents.portal_key = relationships.portal_key
+              AND documents.document_id = relationships.document_id
+             INNER JOIN corpus_entities AS left_entity
+               ON left_entity.entity_id = relationships.left_entity_id
+             INNER JOIN corpus_entities AS right_entity
+               ON right_entity.entity_id = relationships.right_entity_id
+             WHERE (?1 IS NULL OR relationships.portal_key = ?1)
+               AND (?4 IS NULL OR documents.indexed_at >= ?4)
+               AND (?5 IS NULL OR documents.indexed_at <= ?5)
+             GROUP BY relationships.left_entity_id, relationships.right_entity_id,
+                      left_entity.display_value, right_entity.display_value
+             HAVING COUNT(DISTINCT relationships.portal_key || ':' || relationships.document_id) >= ?2
+             ORDER BY COUNT(DISTINCT relationships.portal_key || ':' || relationships.document_id) DESC,
+                      relationships.left_entity_id, relationships.right_entity_id
+             LIMIT ?3",
+        )
+        .map_err(|error| {
+            AppError::Storage(format!("Failed to prepare entity-relationship query: {error}"))
+        })?;
+    let relationships = statement
+        .query_map(
+            params![
+                portal_key,
+                query.minimum_evidence_count,
+                query.result_limit,
+                query.indexed_from,
+                query.indexed_to
+            ],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, i64>(4)?,
+                ))
+            },
+        )
+        .map_err(|error| {
+            AppError::Storage(format!("Failed to query entity relationships: {error}"))
+        })?
+        .collect::<duckdb::Result<Vec<_>>>()
+        .map_err(|error| {
+            AppError::Storage(format!("Failed to decode entity relationship: {error}"))
+        })?;
+    for (left_id, right_id, left_display, right_display, confidence) in relationships {
+        let evidence = load_relationship_evidence(
+            connection,
+            &left_id,
+            &right_id,
+            &left_display,
+            &right_display,
+            query,
+        )?;
+        patterns.push(CorpusPattern {
+            pattern_id: stable_id(&format!("relationship|{left_id}|{right_id}")),
+            kind: CorpusPatternKind::EntityRelationship,
+            title: format!("Recurring relationship: {left_display} + {right_display}"),
+            explanation: format!(
+                "The two normalized entities occur in the same bounded source segment in {} independently indexed documents. Co-occurrence is not evidence of causation.",
+                evidence.len()
+            ),
+            confidence_basis_points: u16::try_from(confidence).map_err(|_| {
+                AppError::Storage(format!(
+                    "Invalid relationship confidence loaded from the corpus: {confidence}"
+                ))
+            })?,
+            evidence,
+            algorithm_version: CORPUS_ALGORITHM_VERSION.to_string(),
+        });
+    }
+    Ok(())
+}
+
+fn load_relationship_evidence(
+    connection: &Connection,
+    left_entity_id: &str,
+    right_entity_id: &str,
+    left_display: &str,
+    right_display: &str,
+    query: &CorpusPatternQuery,
+) -> Result<Vec<CorpusEvidenceReference>, AppError> {
+    let mut statement = connection
+        .prepare(
+            "SELECT relationships.portal_key, documents.request_id, relationships.document_id,
+                    MIN(relationships.segment_index), MIN(relationships.character_start),
+                    MAX(relationships.character_end), documents.extracted_text_sha256
+             FROM corpus_entity_relationships AS relationships
+             INNER JOIN corpus_documents AS documents
+               ON documents.portal_key = relationships.portal_key
+              AND documents.document_id = relationships.document_id
+             WHERE relationships.left_entity_id = ?1
+               AND relationships.right_entity_id = ?2
+               AND (?3 IS NULL OR relationships.portal_key = ?3)
+               AND (?5 IS NULL OR documents.indexed_at >= ?5)
+               AND (?6 IS NULL OR documents.indexed_at <= ?6)
+             GROUP BY relationships.portal_key, documents.request_id,
+                      relationships.document_id, documents.extracted_text_sha256
+             ORDER BY relationships.portal_key, relationships.document_id
+             LIMIT ?4",
+        )
+        .map_err(|error| {
+            AppError::Storage(format!("Failed to prepare relationship evidence: {error}"))
+        })?;
+    statement
+        .query_map(
+            params![
+                left_entity_id,
+                right_entity_id,
+                query.portal_key,
+                query.result_limit,
+                query.indexed_from,
+                query.indexed_to
+            ],
+            |row| {
+                Ok(CorpusEvidenceReference {
+                    portal_key: row.get(0)?,
+                    request_id: row.get(1)?,
+                    document_id: row.get(2)?,
+                    segment_index: Some(row.get(3)?),
+                    character_start: Some(row.get(4)?),
+                    character_end: Some(row.get(5)?),
+                    evidence_label: format!(
+                        "Same-segment co-occurrence: {left_display} + {right_display}"
+                    ),
+                    content_sha256: row.get(6)?,
+                })
+            },
+        )
+        .map_err(|error| {
+            AppError::Storage(format!("Failed to query relationship evidence: {error}"))
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| {
+            AppError::Storage(format!("Failed to decode relationship evidence: {error}"))
+        })
 }
 
 fn load_near_duplicate_patterns(
@@ -2328,6 +2676,7 @@ CREATE TABLE IF NOT EXISTS corpus_documents (
     extracted_text_sha256 TEXT NOT NULL CHECK (length(extracted_text_sha256) = 64),
     character_count BIGINT NOT NULL CHECK (character_count >= 0),
     simhash_hex TEXT NOT NULL CHECK (length(simhash_hex) = 16),
+    relationships_truncated BOOLEAN NOT NULL,
     algorithm_version TEXT NOT NULL,
     indexed_at TEXT NOT NULL,
     PRIMARY KEY (portal_key, document_id)
@@ -2367,7 +2716,9 @@ ON corpus_term_postings(term, portal_key, document_id);
 
 CREATE TABLE IF NOT EXISTS corpus_entities (
     entity_id TEXT PRIMARY KEY,
-    entity_kind TEXT NOT NULL,
+    entity_kind TEXT NOT NULL CHECK (
+        entity_kind IN ('STATUTE', 'DATE', 'EMAIL_DOMAIN', 'URL_HOST', 'ACRONYM', 'ORGANIZATION')
+    ),
     normalized_value TEXT NOT NULL,
     display_value TEXT NOT NULL,
     UNIQUE (entity_kind, normalized_value)
@@ -2395,6 +2746,29 @@ CREATE TABLE IF NOT EXISTS corpus_entity_document_counts (
 
 CREATE INDEX IF NOT EXISTS idx_corpus_mentions_entity
 ON corpus_entity_mentions(entity_id, portal_key, document_id);
+
+CREATE TABLE IF NOT EXISTS corpus_entity_relationships (
+    portal_key TEXT NOT NULL,
+    document_id BIGINT NOT NULL,
+    left_entity_id TEXT NOT NULL,
+    right_entity_id TEXT NOT NULL,
+    relationship_kind TEXT NOT NULL CHECK (relationship_kind = 'CO_OCCURS_IN_SEGMENT'),
+    segment_index BIGINT NOT NULL,
+    character_start BIGINT NOT NULL,
+    character_end BIGINT NOT NULL,
+    confidence_basis_points BIGINT NOT NULL CHECK (confidence_basis_points BETWEEN 0 AND 10000),
+    PRIMARY KEY (
+        portal_key, document_id, left_entity_id, right_entity_id, relationship_kind, segment_index
+    ),
+    CHECK (left_entity_id < right_entity_id),
+    FOREIGN KEY (portal_key, document_id)
+        REFERENCES corpus_documents(portal_key, document_id),
+    FOREIGN KEY (left_entity_id) REFERENCES corpus_entities(entity_id),
+    FOREIGN KEY (right_entity_id) REFERENCES corpus_entities(entity_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_corpus_relationships_pair
+ON corpus_entity_relationships(left_entity_id, right_entity_id, portal_key, document_id);
 
 -- One row per document per entity kind that was ever emitted (see ENTITY_KINDS), stating whether
 -- that kind's extraction hit MAXIMUM_ENTITIES_PER_KIND and stopped early. A reader must be able to
@@ -2445,7 +2819,7 @@ mod tests {
             .unwrap()
             .entities
             .into_iter()
-            .filter(|entity| entity.kind == "DATE")
+            .filter(|entity| entity.kind == CorpusEntityKind::Date)
             .map(|entity| (entity.normalized_value, entity.confidence_basis_points))
             .collect::<Vec<_>>();
         found.sort();
@@ -2516,28 +2890,26 @@ mod tests {
         assert_eq!(first.document_simhash, second.document_simhash);
         assert_eq!(first.segments.len(), 1);
         assert!(first.entities.iter().any(|entity| {
-            entity.kind == "STATUTE" && entity.normalized_value == "42 u.s.c. 1983"
+            entity.kind == CorpusEntityKind::Statute && entity.normalized_value == "42 u.s.c. 1983"
         }));
-        assert!(first
-            .entities
-            .iter()
-            .any(|entity| { entity.kind == "DATE" && entity.normalized_value == "2026-08-24" }));
         assert!(first.entities.iter().any(|entity| {
-            entity.kind == "ORGANIZATION"
+            entity.kind == CorpusEntityKind::Date && entity.normalized_value == "2026-08-24"
+        }));
+        assert!(first.entities.iter().any(|entity| {
+            entity.kind == CorpusEntityKind::Organization
                 && entity
                     .normalized_value
                     .contains("regional task force on homelessness")
         }));
         assert!(first.entities.iter().any(|entity| {
-            entity.kind == "EMAIL_DOMAIN" && entity.display_value == "@rtfhsd.org"
+            entity.kind == CorpusEntityKind::EmailDomain && entity.display_value == "@rtfhsd.org"
         }));
         assert!(first.entities.iter().any(|entity| {
-            entity.kind == "URL_HOST" && entity.normalized_value == "www.rtfhsd.org"
+            entity.kind == CorpusEntityKind::UrlHost && entity.normalized_value == "www.rtfhsd.org"
         }));
-        assert!(first
-            .entities
-            .iter()
-            .any(|entity| entity.kind == "ACRONYM" && entity.normalized_value == "rtfh"));
+        assert!(first.entities.iter().any(|entity| {
+            entity.kind == CorpusEntityKind::Acronym && entity.normalized_value == "rtfh"
+        }));
         for entity in first.entities {
             assert!(entity.character_start < entity.character_end);
             assert!(entity.character_end <= text.chars().count());
@@ -2678,7 +3050,8 @@ mod tests {
     async fn indexes_and_explains_cross_document_patterns() {
         let directory = tempdir().unwrap();
         let index = CorpusIndex::open(directory.path().join("corpus.db")).unwrap();
-        let shared = "Section 6254 requires records review. recurringterm recurringterm.";
+        let shared =
+            "Section 6254 requires records review on 2026-08-24. recurringterm recurringterm.";
         index.index_document(input(1, shared)).await.unwrap();
         index.index_document(input(2, shared)).await.unwrap();
         index
@@ -2698,6 +3071,13 @@ mod tests {
         }));
         assert!(patterns.iter().any(|pattern| {
             pattern.kind == CorpusPatternKind::SharedStatute && pattern.evidence.len() >= 2
+        }));
+        assert!(patterns.iter().any(|pattern| {
+            pattern.kind == CorpusPatternKind::EntityRelationship
+                && pattern.evidence.len() >= 2
+                && pattern
+                    .explanation
+                    .contains("Co-occurrence is not evidence of causation")
         }));
         assert!(patterns.iter().all(|pattern| {
             !pattern.pattern_id.is_empty()
@@ -2726,6 +3106,27 @@ mod tests {
             .await
             .unwrap();
         assert!(future_only.is_empty());
+
+        let relationship_recipe = index
+            .query_patterns(CorpusPatternQuery {
+                pattern_kinds: vec![CorpusPatternKind::EntityRelationship],
+                required_terms: vec!["causation".to_string()],
+                ..CorpusPatternQuery::default()
+            })
+            .await
+            .unwrap();
+        assert!(!relationship_recipe.is_empty());
+        assert!(relationship_recipe
+            .iter()
+            .all(|pattern| pattern.kind == CorpusPatternKind::EntityRelationship));
+
+        let invalid_recipe = index
+            .query_patterns(CorpusPatternQuery {
+                pattern_kinds: vec![CorpusPatternKind::SharedTerm, CorpusPatternKind::SharedTerm],
+                ..CorpusPatternQuery::default()
+            })
+            .await;
+        assert!(invalid_recipe.is_err());
     }
 }
 
@@ -2810,7 +3211,13 @@ mod offset_tests {
             // value (the whole URL, and `local@domain`), so they are checked separately below.
             // Compared on alphanumeric content only: a range legitimately includes punctuation
             // that normalization strips, so raw equality would fail on a correct offset.
-            if matches!(entity.kind, "STATUTE" | "DATE" | "ACRONYM" | "ORGANIZATION") {
+            if matches!(
+                entity.kind,
+                CorpusEntityKind::Statute
+                    | CorpusEntityKind::Date
+                    | CorpusEntityKind::Acronym
+                    | CorpusEntityKind::Organization
+            ) {
                 assert_eq!(
                     alphanumeric_words(&addressed),
                     alphanumeric_words(&entity.normalized_value),
@@ -2832,7 +3239,7 @@ mod offset_tests {
         let email = analyzed
             .entities
             .iter()
-            .find(|entity| entity.kind == "EMAIL_DOMAIN")
+            .find(|entity| entity.kind == CorpusEntityKind::EmailDomain)
             .expect("an email domain entity");
         let addressed = slice_by_characters(text, email.character_start, email.character_end);
         assert!(addressed.contains("@rtfhsd.org"), "{addressed:?}");
@@ -2844,7 +3251,7 @@ mod offset_tests {
         let host = analyzed
             .entities
             .iter()
-            .find(|entity| entity.kind == "URL_HOST")
+            .find(|entity| entity.kind == CorpusEntityKind::UrlHost)
             .expect("a url host entity");
         let addressed = slice_by_characters(text, host.character_start, host.character_end);
         assert!(
@@ -2950,7 +3357,7 @@ mod offset_tests {
                 &mut entities,
                 &mut budget,
                 &segments,
-                "TEST",
+                CorpusEntityKind::Organization,
                 "value".to_string(),
                 "value".to_string(),
                 start,
@@ -2978,7 +3385,7 @@ mod offset_tests {
             &mut entities,
             &mut budget,
             &[],
-            "TEST",
+            CorpusEntityKind::Organization,
             "value".to_string(),
             "value".to_string(),
             10,
@@ -2998,7 +3405,8 @@ mod offset_tests {
     // truncation inside `admit`'s over-budget branch, but every extraction loop checks `is_full`
     // and stops *before* calling `admit` again, so that branch could never run and the flag was
     // always `false` no matter how saturated a kind was. This test failed against that version
-    // (`entity_truncations.get("DATE")` read `Some(false)`), which is what moved the truncation
+    // (`entity_truncations.get(&CorpusEntityKind::Date)` read `Some(false)`), which is what moved
+    // the truncation
     // record into `is_full` itself.
     #[test]
     fn one_saturated_entity_kind_does_not_starve_or_hide_the_others() {
@@ -3009,13 +3417,16 @@ mod offset_tests {
         let analyzed = analyze_document(input(5, &text)).expect("analysis should succeed");
 
         assert_eq!(
-            analyzed.entity_truncations.get("DATE"),
+            analyzed.entity_truncations.get(&CorpusEntityKind::Date),
             Some(&true),
             "flooding DATE past its per-kind budget must record that kind as truncated"
         );
-        for kind in ["ORGANIZATION", "EMAIL_DOMAIN"] {
+        for kind in [
+            CorpusEntityKind::Organization,
+            CorpusEntityKind::EmailDomain,
+        ] {
             assert_eq!(
-                analyzed.entity_truncations.get(kind),
+                analyzed.entity_truncations.get(&kind),
                 Some(&false),
                 "kind {kind} was not saturated and must not be reported as truncated"
             );
@@ -3024,14 +3435,14 @@ mod offset_tests {
             analyzed
                 .entities
                 .iter()
-                .any(|entity| entity.kind == "ORGANIZATION"),
+                .any(|entity| entity.kind == CorpusEntityKind::Organization),
             "the flood of DATE entities must not have starved ORGANIZATION extraction"
         );
         assert!(
             analyzed
                 .entities
                 .iter()
-                .any(|entity| entity.kind == "EMAIL_DOMAIN"),
+                .any(|entity| entity.kind == CorpusEntityKind::EmailDomain),
             "the flood of DATE entities must not have starved EMAIL_DOMAIN extraction"
         );
     }

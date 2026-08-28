@@ -4,7 +4,8 @@ export type CorpusPatternKind =
   | 'SHARED_STATUTE'
   | 'SHARED_ENTITY'
   | 'SHARED_TERM'
-  | 'TEMPORAL_CLUSTER';
+  | 'TEMPORAL_CLUSTER'
+  | 'ENTITY_RELATIONSHIP';
 
 export interface CorpusEvidenceReference {
   portalKey: string;
@@ -35,6 +36,8 @@ export interface CorpusPatternQuery {
   indexedFrom?: string | null;
   /** Inclusive RFC 3339 upper bound over the time a document entered this derived index. */
   indexedTo?: string | null;
+  patternKinds?: CorpusPatternKind[];
+  requiredTerms?: string[];
   resultLimit: number;
 }
 
@@ -42,6 +45,7 @@ export interface CorpusIndexStatus {
   indexedDocumentCount: number;
   indexedSegmentCount: number;
   indexedTermCount: number;
+  indexedRelationshipCount: number;
   /** Remaining bounded writer-queue slots; zero means new writes must wait. */
   availableWriteCapacity: number;
   algorithmVersion: string;

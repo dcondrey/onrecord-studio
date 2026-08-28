@@ -10,6 +10,14 @@ import type {
   DocumentTextChunk,
 } from '../../types';
 import { cn } from '../../utils/cn';
+import {
+  loadPatternRecipes,
+  parsePatternRecipeTerms,
+  patternRecipeFingerprint,
+  persistPatternRecipes,
+  type PatternKindFilter,
+  type PatternRecipe,
+} from '../../utils/patternRecipes';
 import Icon from '../ui/icons';
 
 const patternLabels: Record<CorpusPatternKind, string> = {
@@ -19,9 +27,8 @@ const patternLabels: Record<CorpusPatternKind, string> = {
   SHARED_ENTITY: 'Shared entities',
   SHARED_TERM: 'Recurring language',
   TEMPORAL_CLUSTER: 'Date clusters',
+  ENTITY_RELATIONSHIP: 'Entity relationships',
 };
-
-type KindFilter = CorpusPatternKind | 'ALL';
 
 export default function PatternExplorer() {
   const activePortalKey = useAppStore((state) => state.activePortalKey);
@@ -29,11 +36,17 @@ export default function PatternExplorer() {
   const setPatternEvidenceSelection = useAppStore((state) => state.setPatternEvidenceSelection);
   const [patterns, setPatterns] = useState<CorpusPattern[]>([]);
   const [status, setStatus] = useState<CorpusIndexStatus | null>(null);
-  const [kindFilter, setKindFilter] = useState<KindFilter>('ALL');
+  const [kindFilter, setKindFilter] = useState<PatternKindFilter>('ALL');
   const [minimumEvidenceCount, setMinimumEvidenceCount] = useState(2);
   const [minimumConfidence, setMinimumConfidence] = useState(0);
   const [indexedFrom, setIndexedFrom] = useState('');
   const [indexedTo, setIndexedTo] = useState('');
+  const [requiredTerms, setRequiredTerms] = useState('');
+  const [recipeName, setRecipeName] = useState('');
+  const [savedRecipes, setSavedRecipes] = useState<PatternRecipe[]>(() =>
+    typeof window === 'undefined' ? [] : loadPatternRecipes(window.localStorage),
+  );
+  const [lastPreviewFingerprint, setLastPreviewFingerprint] = useState<string | null>(null);
   const [selectedPatternId, setSelectedPatternId] = useState<string | null>(patternEvidenceSelection?.patternId ?? null);
   const [excerpt, setExcerpt] = useState<{
     evidence: CorpusEvidenceReference;
@@ -46,7 +59,16 @@ export default function PatternExplorer() {
   const evidenceGate = useLatestRequestGate();
   const restoredEvidenceKey = useRef<string | null>(null);
 
-  const refresh = useCallback(async () => {
+  const currentRecipeControls = useCallback(() => ({
+    kindFilter,
+    minimumEvidenceCount,
+    minimumConfidence,
+    indexedFrom,
+    indexedTo,
+    requiredTerms,
+  }), [indexedFrom, indexedTo, kindFilter, minimumConfidence, minimumEvidenceCount, requiredTerms]);
+
+  const refresh = useCallback(async (markAsRecipePreview = false) => {
     // The "Minimum evidence" select is not disabled while a refresh runs, so refreshes are already
     // concurrent. Without a sequence the slower one wins: patterns supported by three documents
     // render under a control reading "5", and portal A's cross-document patterns render under
@@ -63,6 +85,8 @@ export default function PatternExplorer() {
             minimumConfidenceBasisPoints: minimumConfidence,
             indexedFrom: toRfc3339(indexedFrom),
             indexedTo: toRfc3339(indexedTo),
+            patternKinds: kindFilter === 'ALL' ? [] : [kindFilter],
+            requiredTerms: parsePatternRecipeTerms(requiredTerms),
             resultLimit: 250,
           },
         }),
@@ -71,6 +95,9 @@ export default function PatternExplorer() {
       if (!refreshGate.isCurrent(request)) return;
       setPatterns(nextPatterns);
       setStatus(nextStatus);
+      if (markAsRecipePreview) {
+        setLastPreviewFingerprint(patternRecipeFingerprint(currentRecipeControls()));
+      }
       setSelectedPatternId((current) =>
         current && nextPatterns.some((pattern) => pattern.patternId === current)
           ? current
@@ -82,7 +109,7 @@ export default function PatternExplorer() {
     } finally {
       if (refreshGate.isCurrent(request)) setIsLoading(false);
     }
-  }, [activePortalKey, indexedFrom, indexedTo, minimumConfidence, minimumEvidenceCount, refreshGate]);
+  }, [activePortalKey, currentRecipeControls, indexedFrom, indexedTo, kindFilter, minimumConfidence, minimumEvidenceCount, refreshGate, requiredTerms]);
 
   useEffect(() => {
     void refresh();
@@ -99,6 +126,47 @@ export default function PatternExplorer() {
     filteredPatterns.find((pattern) => pattern.patternId === selectedPatternId)
     ?? filteredPatterns[0]
     ?? null;
+
+  const recipeIsPreviewed = lastPreviewFingerprint === patternRecipeFingerprint(currentRecipeControls());
+
+  const saveRecipe = useCallback(() => {
+    const name = recipeName.trim();
+    if (!name || !recipeIsPreviewed) return;
+    const nextRecipe: PatternRecipe = {
+      id: globalThis.crypto?.randomUUID?.() ?? `pattern-recipe-${Date.now()}`,
+      name: name.slice(0, 80),
+      ...currentRecipeControls(),
+      createdAt: new Date().toISOString(),
+    };
+    const nextRecipes = [nextRecipe, ...savedRecipes].slice(0, 50);
+    try {
+      persistPatternRecipes(window.localStorage, nextRecipes);
+      setSavedRecipes(nextRecipes);
+      setRecipeName('');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }, [currentRecipeControls, recipeIsPreviewed, recipeName, savedRecipes]);
+
+  const loadRecipe = useCallback((recipe: PatternRecipe) => {
+    setKindFilter(recipe.kindFilter);
+    setMinimumEvidenceCount(recipe.minimumEvidenceCount);
+    setMinimumConfidence(recipe.minimumConfidence);
+    setIndexedFrom(recipe.indexedFrom);
+    setIndexedTo(recipe.indexedTo);
+    setRequiredTerms(recipe.requiredTerms);
+    setLastPreviewFingerprint(null);
+  }, []);
+
+  const deleteRecipe = useCallback((id: string) => {
+    const nextRecipes = savedRecipes.filter((recipe) => recipe.id !== id);
+    try {
+      persistPatternRecipes(window.localStorage, nextRecipes);
+      setSavedRecipes(nextRecipes);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }, [savedRecipes]);
 
   const openEvidence = useCallback(async (evidence: CorpusEvidenceReference) => {
     const key = `${evidence.portalKey}:${evidence.documentId}:${evidence.characterStart ?? 'document'}`;
@@ -193,22 +261,76 @@ export default function PatternExplorer() {
               Indexed before
               <input type="datetime-local" value={indexedTo} min={indexedFrom || undefined} onChange={(event) => setIndexedTo(event.target.value)} className="bg-transparent font-mono text-slate-200 outline-none" />
             </label>
+            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-[9px] text-slate-500">
+              Required terms
+              <input
+                value={requiredTerms}
+                onChange={(event) => setRequiredTerms(event.target.value)}
+                placeholder="deadline, response"
+                aria-label="Required pattern terms"
+                className="w-36 bg-transparent font-mono text-slate-200 outline-none"
+              />
+            </label>
             <button
               type="button"
-              onClick={() => void refresh()}
+              onClick={() => void refresh(true)}
               disabled={isLoading}
               className="primary-action focus-ring flex items-center gap-2 rounded-xl border border-transparent px-3 py-2 text-[9px] font-semibold text-white transition hover:brightness-105 disabled:opacity-50"
             >
               <Icon name="sync" className={cn('h-3.5 w-3.5', isLoading && 'animate-spin')} />
-              Refresh index
+              Preview results
             </button>
           </div>
         </header>
 
-        <div className="instrument-strip app-panel grid grid-cols-2 overflow-hidden sm:grid-cols-4">
+        <section className="app-panel rounded-2xl border border-slate-800 p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="app-eyebrow">Reusable investigation recipe</div>
+              <p className="mt-1 text-[9px] text-slate-600">
+                Preview the exact controls above before saving. Recipes stay on this device and never alter source evidence.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                value={recipeName}
+                maxLength={80}
+                onChange={(event) => setRecipeName(event.target.value)}
+                placeholder="Recipe name"
+                aria-label="Recipe name"
+                className="focus-ring h-9 rounded-lg border border-slate-800 bg-slate-950/60 px-3 text-[9px] text-slate-200"
+              />
+              <button
+                type="button"
+                onClick={saveRecipe}
+                disabled={!recipeName.trim() || !recipeIsPreviewed}
+                className="focus-ring h-9 rounded-lg border border-cyan-400/20 bg-cyan-400/[0.07] px-3 text-[9px] font-semibold text-cyan-200 disabled:opacity-35"
+              >
+                Save previewed recipe
+              </button>
+            </div>
+          </div>
+          {savedRecipes.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2" aria-label="Saved pattern recipes">
+              {savedRecipes.map((recipe) => (
+                <div key={recipe.id} className="flex items-center overflow-hidden rounded-lg border border-slate-800 bg-slate-950/40">
+                  <button type="button" onClick={() => loadRecipe(recipe)} className="focus-ring px-3 py-2 text-[9px] text-slate-300 hover:text-cyan-200">
+                    {recipe.name}
+                  </button>
+                  <button type="button" onClick={() => deleteRecipe(recipe.id)} aria-label={`Delete ${recipe.name}`} className="focus-ring border-l border-slate-800 px-2 py-2 text-slate-600 hover:text-rose-300">
+                    <Icon name="x" className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <div className="instrument-strip app-panel grid grid-cols-2 overflow-hidden sm:grid-cols-5">
           <IndexMetric label="Documents" value={status?.indexedDocumentCount} />
           <IndexMetric label="Segments" value={status?.indexedSegmentCount} />
           <IndexMetric label="Term postings" value={status?.indexedTermCount} />
+          <IndexMetric label="Relationships" value={status?.indexedRelationshipCount} />
           <IndexMetric label="Writer queue" value={status?.availableWriteCapacity} suffix=" free" />
         </div>
 
