@@ -278,7 +278,11 @@ export default function MainLayout() {
                         {exportState?.key === `${selected.portalKey}-${selected.requestId}` && exportState.isExporting ? 'Compiling protected draft…' : 'Generate administrative appeal draft'}
                       </button>
                       {exportState?.key === `${selected.portalKey}-${selected.requestId}` && exportState.result && (
-                        <div className="mt-2 break-all font-mono text-[8px] leading-relaxed text-emerald-300">Saved immutable report: {exportState.result.outputPath}</div>
+                        <div className="mt-2 break-all font-mono text-[8px] leading-relaxed text-emerald-300">
+                          <div>Saved immutable report: {exportState.result.outputPath}</div>
+                          <div>Signed evidence package: {exportState.result.packagePath}</div>
+                          <div>Signer {exportState.result.signatureAlgorithm}: {exportState.result.signerKeyId}</div>
+                        </div>
                       )}
                       {exportState?.key === `${selected.portalKey}-${selected.requestId}` && exportState.error && (
                         <div role="alert" className="mt-2 text-[9px] leading-relaxed text-rose-300">{exportState.error}</div>

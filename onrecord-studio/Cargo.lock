@@ -3930,6 +3930,7 @@ dependencies = [
  "cfb 0.14.0",
  "chrono",
  "duckdb",
+ "ed25519-dalek",
  "flate2",
  "futures-util",
  "lopdf",

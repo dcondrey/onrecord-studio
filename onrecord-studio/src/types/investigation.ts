@@ -279,6 +279,10 @@ export interface LegalBriefExportResult {
   portalKey: string;
   outputPath: string;
   reportSha256: string;
+  packagePath: string;
+  packageSha256: string;
+  signatureAlgorithm: string;
+  signerKeyId: string;
   generatedAt: string;
   includedViolationMarkers: string[];
 }

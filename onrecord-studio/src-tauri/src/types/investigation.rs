@@ -272,6 +272,10 @@ pub struct LegalBriefExportResult {
     pub portal_key: String,
     pub output_path: String,
     pub report_sha256: String,
+    pub package_path: String,
+    pub package_sha256: String,
+    pub signature_algorithm: String,
+    pub signer_key_id: String,
     pub generated_at: String,
     pub included_violation_markers: Vec<String>,
 }

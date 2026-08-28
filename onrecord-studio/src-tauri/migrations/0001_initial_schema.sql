@@ -374,6 +374,10 @@ CREATE TABLE IF NOT EXISTS report_exports (
     portal_subdomain TEXT NOT NULL,
     output_path TEXT NOT NULL,
     report_sha256 TEXT NOT NULL,
+    package_path TEXT,
+    package_sha256 TEXT,
+    signature_algorithm TEXT,
+    signer_key_id TEXT,
     generated_at TEXT NOT NULL,
     violation_markers_json TEXT NOT NULL,
     FOREIGN KEY (request_id, portal_subdomain) REFERENCES requests(id, portal_subdomain)

@@ -712,6 +712,14 @@ impl DuckDbRepository {
         )?;
         ensure_column(&conn, "documents", "extraction_format", "TEXT")?;
         ensure_column(&conn, "documents", "extraction_deferred_reason", "TEXT")?;
+        for column in [
+            "package_path",
+            "package_sha256",
+            "signature_algorithm",
+            "signer_key_id",
+        ] {
+            ensure_column(&conn, "report_exports", column, "TEXT")?;
+        }
         conn.execute_batch(
             "UPDATE documents
              SET extraction_status = CASE
@@ -4147,14 +4155,19 @@ impl DuckDbRepository {
         conn.execute(
             "INSERT INTO report_exports (
                 export_id, request_id, portal_subdomain, output_path, report_sha256,
+                package_path, package_sha256, signature_algorithm, signer_key_id,
                 generated_at, violation_markers_json
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
                 uuid::Uuid::new_v4().to_string(),
                 result.request_id,
                 result.portal_key,
                 result.output_path,
                 result.report_sha256,
+                result.package_path,
+                result.package_sha256,
+                result.signature_algorithm,
+                result.signer_key_id,
                 result.generated_at,
                 markers,
             ],
