@@ -4,6 +4,7 @@ import {
   lstatSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import process from 'node:process';
@@ -11,14 +12,15 @@ import process from 'node:process';
 const root = resolve(import.meta.dirname, '..');
 const tauriRoot = join(root, 'src-tauri');
 const identifier = 'com.onrecord.studio';
-// `build:app-store` builds for `universal-apple-darwin`, and cargo nests a cross-target build under
-// the triple. Resolving the untargeted `release/bundle` path instead would silently find a stale
-// single-architecture bundle from an earlier build and validate and sign that one.
-const bundleTarget = 'universal-apple-darwin';
+// Cargo nests a cross-target build under its triple, so the bundle path depends on whether
+// `build:app-store` passes `--target`. Reading the triple back out of that script keeps the two in
+// step: hardcoding it here means dropping the flag would leave this reading a path that still holds
+// the previous build, and the whole chain would then validate and sign that stale bundle.
+const bundleTarget = configuredBuildTarget();
 const appPath = resolve(
   argumentValue('--app')
     ?? process.env.ONRECORD_APP_BUNDLE_PATH
-    ?? join(cargoTargetDirectory(), bundleTarget, 'release', 'bundle', 'macos', 'OnRecord Studio.app'),
+    ?? join(cargoTargetDirectory(), ...bundleTarget ? [bundleTarget] : [], 'release', 'bundle', 'macos', 'OnRecord Studio.app'),
 );
 
 assert(process.platform === 'darwin', 'Mac App Store packages must be produced on macOS.');
@@ -89,14 +91,21 @@ for (const link of links) {
   );
 }
 
-// The App Store listing offers the app only to the architectures the executable actually carries,
-// so a bundle that lost an architecture is a silently narrowed release rather than a build error.
-const architectures = run('lipo', ['-archs', executable]).split(/\s+/).filter(Boolean);
-for (const architecture of ['arm64', 'x86_64']) {
-  assert(
-    architectures.includes(architecture),
-    `The app executable is missing the ${architecture} architecture; it carries ${architectures.join(', ')}.`,
-  );
+// The App Store listing offers the app only to the architectures it actually carries, so a bundle
+// that lost one is a silently narrowed release rather than a build error. Every Mach-O file is
+// checked, not just the main executable: the dependency allowlist above admits `@rpath` and
+// `@loader_path`, and a universal executable beside a single-architecture bundled library still
+// fails at dyld load on the architecture that library is missing.
+if (bundleTarget === 'universal-apple-darwin') {
+  for (const machO of machObjectsIn(join(appPath, 'Contents'))) {
+    const architectures = run('lipo', ['-archs', machO]).split(/\s+/).filter(Boolean);
+    for (const architecture of ['arm64', 'x86_64']) {
+      assert(
+        architectures.includes(architecture),
+        `${machO} is missing the ${architecture} architecture; it carries ${architectures.join(', ')}.`,
+      );
+    }
+  }
 }
 
 const executableBytes = readFileSync(executable);
@@ -155,6 +164,24 @@ function cargoTargetDirectory() {
     join(tauriRoot, 'Cargo.toml'),
   ]));
   return metadata.target_directory;
+}
+
+function configuredBuildTarget() {
+  const script = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts['build:app-store'];
+  assert(typeof script === 'string', 'package.json has no build:app-store script.');
+  const flag = script.match(/--target\s+(\S+)/);
+  return flag ? flag[1] : null;
+}
+
+function machObjectsIn(directory) {
+  const found = [];
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    if (entry.isSymbolicLink()) continue;
+    if (entry.isDirectory()) found.push(...machObjectsIn(path));
+    else if (entry.isFile() && run('file', ['-b', path]).includes('Mach-O')) found.push(path);
+  }
+  return found;
 }
 
 function argumentValue(name) {
