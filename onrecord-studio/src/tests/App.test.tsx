@@ -31,6 +31,7 @@ const bridge = vi.hoisted(() => ({
   listeners: new Map<string, (event: { payload: unknown }) => void>(),
   invoked: [] as string[],
   setTheme: [] as (string | null)[],
+  failSavedPortals: false,
 }));
 
 vi.mock('@tauri-apps/api/event', () => ({
@@ -49,6 +50,9 @@ vi.mock('@tauri-apps/api/core', () => ({
   isTauri: () => false,
   invoke: (command: string) => {
     bridge.invoked.push(command);
+    if (command === 'list_saved_portals' && bridge.failSavedPortals) {
+      return Promise.reject(new Error('source catalog unavailable'));
+    }
     return Promise.resolve([]);
   },
 }));
@@ -82,8 +86,14 @@ describe('App', () => {
     bridge.listeners.clear();
     bridge.invoked.length = 0;
     bridge.setTheme.length = 0;
+    bridge.failSavedPortals = false;
     window.localStorage.clear();
-    useAppStore.setState({ syncLogs: [] });
+    useAppStore.setState({
+      syncLogs: [],
+      portals: [],
+      workspaceInitializationStatus: 'loading',
+      workspaceInitializationError: null,
+    });
     window.matchMedia = vi.fn().mockImplementation((query: string) => ({
       matches: false,
       media: query,
@@ -116,6 +126,16 @@ describe('App', () => {
     await waitFor(() => expect(bridge.invoked).toContain('list_saved_portals'));
     expect(bridge.invoked).toContain('list_portal_runtimes');
     expect(bridge.invoked).toContain('get_agency_performance_profiles');
+    await waitFor(() => expect(useAppStore.getState().workspaceInitializationStatus).toBe('ready'));
+  });
+
+  it('records a failed source-catalog load as unavailable instead of an empty workspace', async () => {
+    bridge.failSavedPortals = true;
+    render(<App />);
+
+    await waitFor(() => expect(useAppStore.getState().workspaceInitializationStatus).toBe('error'));
+    expect(useAppStore.getState().workspaceInitializationError).toContain('source catalog unavailable');
+    expect(useAppStore.getState().syncLogs.join('\n')).toContain('Workspace initialization failed');
   });
 
   // REGRESSION(ipc): this variant was absent from App's switch, so a legacy-database migration --

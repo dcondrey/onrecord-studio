@@ -29,7 +29,7 @@ use crate::types::{
     SourceGuidance, SourceIngestionStart, SourceKind, SourceLifecycleState, SourceRemoval,
     StoppedHost,
 };
-use chrono::Utc;
+use chrono::{NaiveDate, Utc};
 use regex::Regex;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -515,7 +515,7 @@ enum FrontierExclusion {
     /// Evaluated before download, and only when a size is actually known pre-download.
     FileSize,
     /// The document's reported date falls outside `document_date_from`/`document_date_to`.
-    /// Evaluated before download, and only when a date is actually known pre-download.
+    /// Evaluated after extraction, and only when the source supplies a document-carried date.
     DocumentDate,
     /// The extracted text fails a content keyword include/exclude rule. Evaluated after
     /// extraction, once text is actually available.
@@ -2952,6 +2952,14 @@ async fn process_binary_payload(
         entropy_sample_bytes: entropy.sampled_bytes,
         suspicious_data_density: entropy.suspicious_data_density,
     };
+    // NextRequest's API supplies the document's own `created_at`. Every other source kind in this
+    // queue currently fills `DocumentMetadata::created_at` with `Utc::now()` when it discovers or
+    // materializes a payload (including local files, HTML pages, and ArcGIS pages). Treating those
+    // ingestion timestamps as document dates would make a bounded historical range refuse nearly
+    // every non-NextRequest document. Container members inherit their parent's value, so this gate
+    // remains correct for nested documents too.
+    let document_date =
+        document_date_for_guidance(context.portal.source_kind, document.created_at.as_str());
     if matches!(
         &extracted_document,
         ExtractedDocument::Expanded { .. } | ExtractedDocument::Deferred { .. }
@@ -2972,7 +2980,7 @@ async fn process_binary_payload(
                 download_finalization,
                 text,
                 was_ocr_processed,
-                &document.created_at,
+                document_date,
             )
             .await?
             else {
@@ -3030,7 +3038,7 @@ async fn process_binary_payload(
                 download_finalization,
                 text,
                 false,
-                &document.created_at,
+                document_date,
             )
             .await?
             .is_none()
@@ -3110,13 +3118,17 @@ async fn index_extracted_document(
 /// extracted text (and, via `agency_label_for_request`, the owning agency) are actually available
 /// -- unlike the pre-download predicates in `guidance_allows_url`. `agency_label` is `None` both
 /// when the source has no organization guidance (never fetched) and when the request has no
-/// agency on file; either way the organization predicate contributes nothing.
+/// agency on file; either way the organization predicate contributes nothing. `document_created_at`
+/// must be `None` unless the caller can attest it is a date the document itself actually carries
+/// -- see the call site's comment on `SourceKind::NextRequest` for why most ingestion paths stamp
+/// this field with the ingestion instant instead, which would make the date predicate exclude
+/// nearly everything on any bounded range.
 fn evaluate_extracted_document_guidance(
     guidance: &SourceGuidance,
     compiled: &CompiledGuidancePatterns,
     text: &str,
     agency_label: Option<&str>,
-    document_created_at: &str,
+    document_created_at: Option<&str>,
 ) -> Result<(), FrontierExclusion> {
     if guidance
         .exclude_content_keywords
@@ -3170,7 +3182,7 @@ fn evaluate_extracted_document_guidance(
         // The first 10 bytes of an ISO-8601 timestamp are its calendar date; a value too short to
         // hold one carries no date to compare, so the predicate contributes nothing rather than
         // excluding on an absence.
-        if let Some(date) = document_created_at.get(0..10) {
+        if let Some(date) = document_created_at.and_then(|value| value.get(0..10)) {
             let before_start = guidance
                 .document_date_from
                 .as_deref()
@@ -3187,13 +3199,17 @@ fn evaluate_extracted_document_guidance(
     Ok(())
 }
 
+fn document_date_for_guidance(source_kind: SourceKind, created_at: &str) -> Option<&str> {
+    (source_kind == SourceKind::NextRequest).then_some(created_at)
+}
+
 async fn finalize_and_index_extracted_document(
     context: &WorkerContext,
     request_id: u64,
     download: DocumentDownloadFinalization<'_>,
     text: String,
     was_ocr_processed: bool,
-    document_created_at: &str,
+    document_created_at: Option<&str>,
 ) -> Result<Option<usize>, AppError> {
     let guidance = &context.crawl.guidance;
     let agency_label =
@@ -3212,12 +3228,20 @@ async fn finalize_and_index_extracted_document(
         agency_label.as_deref(),
         document_created_at,
     ) {
-        record_frontier_exclusion(context, &exclusion).await;
-        context
+        // A resumed sync re-extracts every document regardless of prior completion, so this
+        // document may already carry a `documents_fts` row from an earlier pass. Guidance edited
+        // between syncs must not retroactively purge evidence a prior sync already finalized --
+        // `delete_unextracted_document` enforces that itself and reports whether it actually
+        // removed anything. When it didn't, the document stays and falls through to the normal
+        // finalize path below rather than being counted as a refusal that did not happen.
+        let discarded = context
             .repository
             .delete_unextracted_document(download.portal_subdomain, download.document_id)
             .await?;
-        return Ok(None);
+        if discarded {
+            record_frontier_exclusion(context, &exclusion).await;
+            return Ok(None);
+        }
     }
     let extracted_text_sha256 = sha256_hex(text.as_bytes());
     let character_count = text.chars().count();
@@ -4928,6 +4952,33 @@ fn validate_source_guidance(guidance: &SourceGuidance) -> Result<(), AppError> {
             ));
         }
     }
+    let date_from = guidance
+        .document_date_from
+        .as_deref()
+        .map(|value| {
+            NaiveDate::parse_from_str(value, "%Y-%m-%d").map_err(|error| {
+                AppError::DataParsing(format!(
+                    "Source repair document start date '{value}' is invalid: {error}"
+                ))
+            })
+        })
+        .transpose()?;
+    let date_to = guidance
+        .document_date_to
+        .as_deref()
+        .map(|value| {
+            NaiveDate::parse_from_str(value, "%Y-%m-%d").map_err(|error| {
+                AppError::DataParsing(format!(
+                    "Source repair document end date '{value}' is invalid: {error}"
+                ))
+            })
+        })
+        .transpose()?;
+    if date_from.zip(date_to).is_some_and(|(from, to)| from > to) {
+        return Err(AppError::DataParsing(
+            "Source repair document start date must not be after the end date".to_string(),
+        ));
+    }
     Ok(())
 }
 
@@ -4947,18 +4998,23 @@ fn glob_matches(pattern: &str, text: &str) -> bool {
     matches(pattern.as_bytes(), text.as_bytes())
 }
 
-/// The last non-empty path segment of a URL, treated as the filename a `SourceGuidance` filename
-/// rule evaluates against. `None` when the URL has no such segment (a bare host, or a value that
-/// does not parse as a URL at all) -- absence here means the filename predicates contribute
-/// nothing, not that they exclude, per the absence-versus-measurement rule.
+/// The immediate last path segment of a URL, treated as the filename a `SourceGuidance` filename
+/// rule evaluates against. Mirrors `client::file_name_from_url`'s convention: a trailing slash
+/// (a directory, not a file) is an empty segment and yields `None`, never the directory name one
+/// level up -- an include-glob like `*.pdf` must not silently prune a crawl into `/reports/2024/`
+/// because "2024" was mistaken for a filename. A non-URL value falls back to its immediate last
+/// slash-delimited segment for compatibility with the pre-parser path. Absence means the filename
+/// predicates contribute nothing, not that they exclude, per the absence-versus-measurement rule.
 fn filename_from_url(value: &str) -> Option<String> {
-    let path = reqwest::Url::parse(value)
+    let last_segment = reqwest::Url::parse(value)
         .ok()
-        .map(|url| url.path().to_string())
-        .unwrap_or_else(|| value.to_string());
-    path.rsplit('/')
-        .find(|segment| !segment.is_empty())
-        .map(str::to_string)
+        .and_then(|url| {
+            url.path_segments()
+                .and_then(|mut segments| segments.next_back())
+                .map(str::to_string)
+        })
+        .unwrap_or_else(|| value.rsplit('/').next().unwrap_or(value).to_string());
+    (!last_segment.is_empty()).then_some(last_segment)
 }
 
 /// Whether a discovered URL survives the source's saved scoping guidance, naming the specific
@@ -6062,6 +6118,50 @@ mod tests {
         assert_eq!(result, Ok(()));
     }
 
+    #[test]
+    fn source_guidance_requires_valid_ordered_calendar_dates() {
+        let invalid_date = SourceGuidance {
+            document_date_from: Some("2026-02-30".to_string()),
+            ..Default::default()
+        };
+        assert!(validate_source_guidance(&invalid_date).is_err());
+
+        let reversed_range = SourceGuidance {
+            document_date_from: Some("2026-08-28".to_string()),
+            document_date_to: Some("2026-08-27".to_string()),
+            ..Default::default()
+        };
+        assert!(validate_source_guidance(&reversed_range).is_err());
+
+        let valid_range = SourceGuidance {
+            document_date_from: Some("2024-02-29".to_string()),
+            document_date_to: Some("2026-08-27".to_string()),
+            ..Default::default()
+        };
+        assert!(validate_source_guidance(&valid_range).is_ok());
+    }
+
+    #[test]
+    fn only_nextrequest_metadata_supplies_a_document_date_for_guidance() {
+        let timestamp = "2024-06-01T00:00:00Z";
+        assert_eq!(
+            document_date_for_guidance(SourceKind::NextRequest, timestamp),
+            Some(timestamp)
+        );
+        for kind in [
+            SourceKind::WebCrawl,
+            SourceKind::DirectFile,
+            SourceKind::OpenDataCatalog,
+            SourceKind::ArcGis,
+            SourceKind::Tableau,
+            SourceKind::GoogleDrive,
+            SourceKind::LocalFile,
+            SourceKind::PastedContent,
+        ] {
+            assert_eq!(document_date_for_guidance(kind, timestamp), None);
+        }
+    }
+
     /// Each post-extraction predicate must report the rule that actually fired rather than a
     /// shared or wrong variant -- a content-pattern refusal reported as `ContentKeyword` (or vice
     /// versa) would misname the rule an operator sees in the refusal count. Proven per predicate;
@@ -6082,7 +6182,7 @@ mod tests {
                 &CompiledGuidancePatterns::compile(&keyword_guidance),
                 "this record is classified pending review",
                 None,
-                "2024-06-01T00:00:00Z",
+                Some("2024-06-01T00:00:00Z"),
             ),
             Err(FrontierExclusion::ContentKeyword)
         );
@@ -6097,7 +6197,7 @@ mod tests {
                 &CompiledGuidancePatterns::compile(&pattern_guidance),
                 "applicant SSN on file",
                 None,
-                "2024-06-01T00:00:00Z",
+                Some("2024-06-01T00:00:00Z"),
             ),
             Err(FrontierExclusion::ContentPattern)
         );
@@ -6112,7 +6212,7 @@ mod tests {
                 &CompiledGuidancePatterns::compile(&organization_guidance),
                 "unrelated content",
                 Some("Department of Public Works"),
-                "2024-06-01T00:00:00Z",
+                Some("2024-06-01T00:00:00Z"),
             ),
             Err(FrontierExclusion::Organization)
         );
@@ -6127,7 +6227,7 @@ mod tests {
                 &CompiledGuidancePatterns::compile(&date_guidance),
                 "unrelated content",
                 None,
-                "2024-06-01T00:00:00Z",
+                Some("2024-06-01T00:00:00Z"),
             ),
             Err(FrontierExclusion::DocumentDate)
         );
@@ -6138,7 +6238,21 @@ mod tests {
                 &compiled_base,
                 "unrelated content",
                 None,
-                "2024-06-01T00:00:00Z",
+                Some("2024-06-01T00:00:00Z"),
+            ),
+            Ok(())
+        );
+
+        // A missing document-carried date is an absent measurement, not evidence that the
+        // document falls outside the range. Non-NextRequest ingestion paths rely on this behavior
+        // because their metadata date is only the ingestion instant.
+        assert_eq!(
+            evaluate_extracted_document_guidance(
+                &date_guidance,
+                &CompiledGuidancePatterns::compile(&date_guidance),
+                "unrelated content",
+                None,
+                None,
             ),
             Ok(())
         );

@@ -12,10 +12,11 @@ export default function SearchFilter() {
   const selectedPolicyDeviation = useAppStore((state) => state.selectedPolicyDeviation);
   const setSearchFilters = useAppStore((state) => state.setSearchFilters);
   const setFilteredResults = useAppStore((state) => state.setFilteredResults);
+  const error = useAppStore((state) => state.searchError);
+  const setSearchError = useAppStore((state) => state.setSearchError);
   const resultCount = useAppStore((state) => state.filteredResults.length);
   const [inputValue, setInputValue] = useState(searchTerm);
   const [isSearching, setIsSearching] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const requestSequence = useRef(0);
   // NOTE(query): `parsedQuery` is currently presentation-only. The legacy IPC
   // call below intentionally remains unchanged until deferred filters can be
@@ -33,7 +34,7 @@ export default function SearchFilter() {
     const sequence = ++requestSequence.current;
     const timer = window.setTimeout(async () => {
       setIsSearching(true);
-      setError(null);
+      setSearchError(null);
       try {
         // BUG(query): parsedQuery is currently presentation-only; deferred qualifiers are not
         // sent to Rust, so searches can return broader results than the visible qualifier chips imply.
@@ -48,15 +49,16 @@ export default function SearchFilter() {
         if (sequence === requestSequence.current) setFilteredResults(results);
       } catch (reason) {
         if (sequence === requestSequence.current) {
-          setFilteredResults([]);
-          setError(String(reason));
+          // Keep the last successful result set. Clearing it turns a transport/query failure into
+          // the false finding "no matches" and makes the visible filters look responsible.
+          setSearchError(String(reason));
         }
       } finally {
         if (sequence === requestSequence.current) setIsSearching(false);
       }
     }, 220);
     return () => window.clearTimeout(timer);
-  }, [activePortalKey, inputValue, selectedAgencyId, selectedPolicyDeviation, selectedStatus, setFilteredResults]);
+  }, [activePortalKey, inputValue, selectedAgencyId, selectedPolicyDeviation, selectedStatus, setFilteredResults, setSearchError]);
 
   const updateTerm = (value: string) => {
     // FEATURE(query): Add visual filter rows and autocomplete suggestions while
@@ -128,7 +130,11 @@ export default function SearchFilter() {
             {formatPolicy(selectedPolicyDeviation)} ×
           </button>
         )}
-        {error && <span role="alert" className="truncate text-rose-300">Search unavailable: {error}</span>}
+        {error && (
+          <span role="alert" className="truncate text-rose-300">
+            Search unavailable; {resultCount > 0 ? `showing ${resultCount.toLocaleString()} results from the last successful query` : 'no result set is available'}: {error}
+          </span>
+        )}
         {!error && parsedQuery.filters.length === 0 && <span className="text-slate-600">Search remains available while WAL ingestion is active.</span>}
       </div>
     </section>

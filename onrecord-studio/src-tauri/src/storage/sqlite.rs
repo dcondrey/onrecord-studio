@@ -2351,29 +2351,42 @@ impl DuckDbRepository {
 
     /// Discards a document row that guidance refused after extraction, before any extracted text
     /// was ever committed for it. Scoped to that narrow case: a document with no `documents_fts`
-    /// row and no provenance rows, which is exactly the state a stub row is in between
-    /// `insert_or_update_document` and a successful `finalize_document_extraction`. Callers must
-    /// not use this once extraction has been finalized -- deleting a document that already has
-    /// dependent rows is out of scope here and would need to account for them explicitly.
+    /// row, which is exactly the state a stub row is in between `insert_or_update_document` and a
+    /// successful `finalize_document_extraction`. The `NOT EXISTS` guard makes that precondition
+    /// real rather than documentation-only: a resumed sync re-extracts every document regardless
+    /// of prior completion, and a guidance edit between syncs must not retroactively purge a
+    /// document a prior sync already finalized as evidence -- `documents_fts` carries no foreign
+    /// key back to `documents`, so an unconditional delete here would orphan it (and a stale
+    /// corpus index entry) silently. Returns whether a row was actually removed; `false` means
+    /// the document was already finalized and was left in place, and callers must not count that
+    /// as a refusal. `provenance_manifests` needs no matching guard: its foreign key to
+    /// `documents` already makes DuckDB refuse the delete outright if a manifest was recorded.
     pub async fn delete_unextracted_document(
         &self,
         subdomain: &str,
         document_id: u64,
-    ) -> Result<(), AppError> {
+    ) -> Result<bool, AppError> {
         let document_id = i64::try_from(document_id).map_err(|error| {
             AppError::DataParsing(format!(
                 "Document identifier cannot be represented by SQLite: {error}"
             ))
         })?;
         let conn = self.conn.lock().await;
-        conn.execute(
-            "DELETE FROM documents WHERE id = ?1 AND portal_subdomain = ?2",
-            params![document_id, subdomain],
-        )
-        .map_err(|error| {
-            AppError::Internal(format!("Failed to discard refused document: {error}"))
-        })?;
-        Ok(())
+        let removed = conn
+            .execute(
+                "DELETE FROM documents
+                 WHERE id = ?1 AND portal_subdomain = ?2
+                   AND NOT EXISTS (
+                     SELECT 1 FROM documents_fts
+                     WHERE documents_fts.document_id = documents.id
+                       AND documents_fts.portal_subdomain = documents.portal_subdomain
+                   )",
+                params![document_id, subdomain],
+            )
+            .map_err(|error| {
+                AppError::Internal(format!("Failed to discard refused document: {error}"))
+            })?;
+        Ok(removed > 0)
     }
 
     /// Submits manual case verification details and updates investigator flags.
@@ -4234,9 +4247,11 @@ fn map_evidence_document_row(row: &Row<'_>) -> duckdb::Result<EvidenceDocument> 
 /// source. A finding built on an unobserved input is not certain, and this path used to store
 /// every one of them at 10000 basis points regardless.
 ///
-///     confidence = 10000 - uncertainty + margin_relief
-///     uncertainty   = determination_penalty + extension_penalty
-///     margin_relief = uncertainty / 2 * min(variance_days, 30) / 30
+/// ```text
+/// confidence = 10000 - uncertainty + margin_relief
+/// uncertainty   = determination_penalty + extension_penalty
+/// margin_relief = uncertainty / 2 * min(variance_days, 30) / 30
+/// ```
 ///
 /// `10000` is therefore reserved for the case where every date input was recorded: no penalty,
 /// no relief to apply. `margin_relief` is capped at half the uncertainty so it can never reach
@@ -7165,6 +7180,61 @@ mod tests {
                 .expect("search must succeed"),
             vec![DOCUMENT_ID as u64]
         );
+    }
+
+    #[tokio::test]
+    async fn guidance_discard_removes_only_unfinalized_documents() {
+        let unfinalized = repository_with_document().await;
+        assert!(unfinalized
+            .delete_unextracted_document(PORTAL_SUBDOMAIN, DOCUMENT_ID as u64)
+            .await
+            .expect("an unfinalized stub must be removable"));
+        {
+            let connection = unfinalized.conn.lock().await;
+            let remaining: i64 = connection
+                .query_row(
+                    "SELECT COUNT(*) FROM documents WHERE id = ?1 AND portal_subdomain = ?2",
+                    params![DOCUMENT_ID, PORTAL_SUBDOMAIN],
+                    |row| row.get(0),
+                )
+                .expect("document count must decode");
+            assert_eq!(remaining, 0);
+        }
+
+        let finalized = repository_with_document().await;
+        let extracted_text = "responsive record";
+        let extracted_text_sha256 = compute_extracted_text_sha256(extracted_text);
+        finalized
+            .finalize_document_extraction(DocumentExtractionFinalization {
+                document_id: DOCUMENT_ID as u64,
+                portal_subdomain: PORTAL_SUBDOMAIN,
+                extracted_text,
+                extracted_text_sha256: &extracted_text_sha256,
+                raw_file_sha256: RAW_FILE_SHA256,
+                was_ocr_processed: false,
+                raw_file_size: 100,
+                local_path: Path::new("/var/data/test-portal/release.pdf"),
+                shannon_entropy: Some(4.0),
+                entropy_sample_bytes: 100,
+                suspicious_data_density: false,
+            })
+            .await
+            .expect("the document must finalize");
+        assert!(!finalized
+            .delete_unextracted_document(PORTAL_SUBDOMAIN, DOCUMENT_ID as u64)
+            .await
+            .expect("a finalized document must be retained without error"));
+        let connection = finalized.conn.lock().await;
+        let counts: (i64, i64) = connection
+            .query_row(
+                "SELECT
+                    (SELECT COUNT(*) FROM documents WHERE id = ?1 AND portal_subdomain = ?2),
+                    (SELECT COUNT(*) FROM documents_fts WHERE document_id = ?1 AND portal_subdomain = ?2)",
+                params![DOCUMENT_ID, PORTAL_SUBDOMAIN],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("document and FTS counts must decode");
+        assert_eq!(counts, (1, 1));
     }
 
     #[tokio::test]

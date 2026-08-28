@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { setTheme as setNativeTheme } from '@tauri-apps/api/app';
 import { isTauri } from '@tauri-apps/api/core';
@@ -9,6 +9,9 @@ import CommandPalette from './components/dashboard/CommandPalette';
 import { useAppStore } from './store/useAppStore';
 import { invokeCommand } from './ipc';
 import type { IngestionTelemetry } from './types';
+import { shouldReportFailure, type ReportedFailure } from './utils/repeatedFailure';
+
+const RUNTIME_FAILURE_REMINDER_MILLISECONDS = 60_000;
 
 export default function App() {
   const theme = useAppStore((state) => state.theme);
@@ -19,12 +22,14 @@ export default function App() {
   const incrementMetric = useAppStore((state) => state.incrementMetric);
   const addBytesTransferred = useAppStore((state) => state.addBytesTransferred);
   const setPortals = useAppStore((state) => state.setPortals);
+  const setWorkspaceInitialization = useAppStore((state) => state.setWorkspaceInitialization);
   const upsertPortal = useAppStore((state) => state.upsertPortal);
   const setPortalRuntimes = useAppStore((state) => state.setPortalRuntimes);
   const setPortalSyncState = useAppStore((state) => state.setPortalSyncState);
   const setAnalyticsData = useAppStore((state) => state.setAnalyticsData);
   const setAnalyticsError = useAppStore((state) => state.setAnalyticsError);
   const setPendingSourceRepair = useAppStore((state) => state.setPendingSourceRepair);
+  const runtimeRefreshFailure = useRef<ReportedFailure | null>(null);
 
   const resolvedTheme = theme === 'auto' ? systemTheme : theme;
   const platform = getPlatform();
@@ -70,6 +75,10 @@ export default function App() {
   const refreshRuntimes = useCallback(async () => {
     try {
       const runtimes = await invokeCommand('list_portal_runtimes', {});
+      if (runtimeRefreshFailure.current) {
+        runtimeRefreshFailure.current = null;
+        appendSyncLog('Portal runtime refresh recovered.');
+      }
       setPortalRuntimes(runtimes);
       const running = new Map(
         runtimes
@@ -81,25 +90,45 @@ export default function App() {
         setPortalSyncState(registration.portalKey, syncRunId !== undefined, syncRunId);
       }
     } catch (error) {
-      appendSyncLog(`Portal runtime refresh failed: ${String(error)}`);
+      const message = String(error);
+      const now = Date.now();
+      if (
+        shouldReportFailure(
+          runtimeRefreshFailure.current,
+          message,
+          now,
+          RUNTIME_FAILURE_REMINDER_MILLISECONDS,
+        )
+      ) {
+        runtimeRefreshFailure.current = { message, reportedAt: now };
+        appendSyncLog(`Portal runtime refresh failed: ${message}`);
+      }
     }
   }, [appendSyncLog, setPortalRuntimes, setPortalSyncState]);
 
   useEffect(() => {
     let active = true;
-    void Promise.all([
-      invokeCommand('list_saved_portals', {}),
-      refreshRuntimes(),
-      refreshAnalytics(),
-    ]).then(([savedPortals]) => {
-      if (active) setPortals(savedPortals);
-    }).catch((error) => {
-      if (active) appendSyncLog(`Workspace initialization failed: ${String(error)}`);
-    });
+    setWorkspaceInitialization('loading');
+    void invokeCommand('list_saved_portals', {})
+      .then((savedPortals) => {
+        if (!active) return;
+        setPortals(savedPortals);
+        setWorkspaceInitialization('ready');
+      })
+      .catch((error) => {
+        if (!active) return;
+        const message = String(error);
+        setWorkspaceInitialization('error', message);
+        appendSyncLog(`Workspace initialization failed: ${message}`);
+      });
+    // Runtime and analytics failures have their own visible/logged states and must not decide
+    // whether an empty saved-source list is genuine.
+    void refreshRuntimes();
+    void refreshAnalytics();
     return () => {
       active = false;
     };
-  }, [appendSyncLog, refreshAnalytics, refreshRuntimes, setPortals]);
+  }, [appendSyncLog, refreshAnalytics, refreshRuntimes, setPortals, setWorkspaceInitialization]);
 
   useEffect(() => {
     // PERF(app): This polling interval is intentionally conservative for the

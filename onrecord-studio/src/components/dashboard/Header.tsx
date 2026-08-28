@@ -9,6 +9,12 @@ import {
   parseCrawlSettings,
   type CrawlSettingsDraft,
 } from '../../utils/crawlPolicy';
+import {
+  DEFAULT_GUIDANCE_FILTER_DRAFT,
+  guidanceFiltersAreCustom,
+  parseGuidanceFilters,
+  type GuidanceFilterDraft,
+} from '../../utils/sourceGuidance';
 import Icon from '../ui/icons';
 import { Select } from '../ui/select';
 import { BUILT_IN_SOURCE_OPTIONS, type PortalRegistration, type SourceDiscoveryPreview, type SourceKind } from '../../types';
@@ -36,6 +42,40 @@ const crawlNumberFields: CrawlNumberField[] = [
   { field: 'maximumResources', label: 'Document limit', hint: 'Documents queued per source before the crawl stops.', min: 1, max: 1_000_000, step: 1 },
   { field: 'burstCapacity', label: 'Burst capacity', hint: 'Requests allowed back to back before pacing applies.', min: 1, max: 100, step: 1 },
   { field: 'refillTokensPerSecond', label: 'Requests per second', hint: 'Sustained request rate. Fractional values are allowed.', min: 0.001, max: 100, step: 0.1 },
+];
+
+interface GuidanceListField {
+  field: Exclude<
+    keyof GuidanceFilterDraft,
+    'minimumFileSizeBytes' | 'maximumFileSizeBytes' | 'documentDateFrom' | 'documentDateTo'
+  >;
+  label: string;
+  hint: string;
+}
+
+// Mirrors the `FrontierExclusion` rules this guidance drives (src-tauri/src/ingestion/queue.rs).
+// Each field is one rule per line, or comma-separated.
+const guidanceListFields: GuidanceListField[] = [
+  { field: 'includeFilenameGlobs', label: 'Filename include globs', hint: 'Only admits a discovered file whose name matches one of these globs, e.g. *.pdf' },
+  { field: 'excludeFilenameGlobs', label: 'Filename exclude globs', hint: 'Refuses a discovered file whose name matches one of these globs.' },
+  { field: 'includeFilenamePatterns', label: 'Filename include patterns', hint: 'Only admits a filename matching one of these regular expressions. Use one expression per line.' },
+  { field: 'excludeFilenamePatterns', label: 'Filename exclude patterns', hint: 'Refuses a filename matching one of these regular expressions. Use one expression per line.' },
+  { field: 'includeContentKeywords', label: 'Content include keywords', hint: 'Only admits a document whose extracted text contains one of these words. Checked after extraction.' },
+  { field: 'excludeContentKeywords', label: 'Content exclude keywords', hint: 'Refuses a document whose extracted text contains one of these words.' },
+  { field: 'includeContentPatterns', label: 'Content include patterns', hint: 'Only admits a document whose extracted text matches one of these regular expressions. Use one expression per line.' },
+  { field: 'excludeContentPatterns', label: 'Content exclude patterns', hint: 'Refuses a document whose extracted text matches one of these regular expressions. Use one expression per line.' },
+  { field: 'includeOrganizations', label: 'Organization include', hint: 'Only admits a document from a request whose agency name contains one of these fragments.' },
+  { field: 'excludeOrganizations', label: 'Organization exclude', hint: 'Refuses a document from a request whose agency name contains one of these fragments.' },
+];
+
+const guidanceSizeFields: { field: 'minimumFileSizeBytes' | 'maximumFileSizeBytes'; label: string; hint: string }[] = [
+  { field: 'minimumFileSizeBytes', label: 'Minimum file size (bytes)', hint: 'Refuses a document smaller than this, when its size is known before download.' },
+  { field: 'maximumFileSizeBytes', label: 'Maximum file size (bytes)', hint: 'Refuses a document larger than this, when its size is known before download.' },
+];
+
+const guidanceDateFields: { field: 'documentDateFrom' | 'documentDateTo'; label: string; hint: string }[] = [
+  { field: 'documentDateFrom', label: 'Document date from', hint: 'Refuses a document dated earlier than this when the source reports a document-carried date.' },
+  { field: 'documentDateTo', label: 'Document date to', hint: 'Refuses a document dated later than this when the source reports a document-carried date.' },
 ];
 
 export default function Header() {
@@ -81,6 +121,18 @@ export default function Header() {
   );
   const updateCrawlDraft = (patch: Partial<CrawlSettingsDraft>) =>
     setCrawlDraft((draft) => ({ ...draft, ...patch }));
+  const [guidanceDraft, setGuidanceDraft] = useState<GuidanceFilterDraft>(DEFAULT_GUIDANCE_FILTER_DRAFT);
+  const guidanceFilters = useMemo(() => parseGuidanceFilters(guidanceDraft), [guidanceDraft]);
+  const hasGuidanceFilters = useMemo(() => guidanceFiltersAreCustom(guidanceDraft), [guidanceDraft]);
+  const updateGuidanceDraft = (patch: Partial<GuidanceFilterDraft>) =>
+    setGuidanceDraft((draft) => ({ ...draft, ...patch }));
+  const resolveGuidanceFilters = () => {
+    if (!guidanceFilters.ok) {
+      setError(guidanceFilters.problem);
+      return null;
+    }
+    return guidanceFilters;
+  };
   // Both ingestion entry points refuse to start on a half-typed limit rather than sending a
   // number the backend would reject with an opaque serde error.
   const resolveCrawlSettings = () => {
@@ -113,6 +165,7 @@ export default function Header() {
         setRepairSeedUrl(
           preview.candidateLinks.find((link) => link.downloadCandidate)?.url ?? '',
         );
+        setGuidanceDraft(DEFAULT_GUIDANCE_FILTER_DRAFT);
       })
       .catch(() => {
         // The persisted ingestion failure remains visible even if previewing also fails.
@@ -158,6 +211,7 @@ export default function Header() {
         setRepairPreview(preview);
         setRepairRootUrl(targetUrl);
         setRepairSeedUrl(preview.candidateLinks.find((link) => link.downloadCandidate)?.url ?? '');
+        setGuidanceDraft(DEFAULT_GUIDANCE_FILTER_DRAFT);
       } catch {
         // The original actionable discovery error remains visible.
       }
@@ -224,6 +278,8 @@ export default function Header() {
     if (!repairRootUrl || !repairSeedUrl.trim()) return;
     const settings = resolveCrawlSettings();
     if (!settings) return;
+    const filters = resolveGuidanceFilters();
+    if (!filters) return;
     setError(null);
     setIsDiscovering(true);
     try {
@@ -237,6 +293,7 @@ export default function Header() {
           excludeUrlPrefixes: [],
           linkSelector: null,
           downloadSelector: null,
+          ...filters.filters,
         },
         rateLimitPolicy: settings.rateLimitPolicy,
       });
@@ -608,7 +665,7 @@ export default function Header() {
     )}
     {repairPreview && (
       <div className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="repair-source-title">
-        <form onSubmit={(event) => void retryWithGuidance(event)} className="app-panel w-full max-w-2xl overflow-hidden shadow-2xl shadow-black/40">
+        <form onSubmit={(event) => void retryWithGuidance(event)} className="app-panel flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden shadow-2xl shadow-black/40">
           <div className="flex items-start justify-between border-b border-slate-800 p-4">
             <div>
               {/* FEATURE(source-repair): Add an interactive field-mapping preview here so users can
@@ -619,7 +676,7 @@ export default function Header() {
             </div>
             <button type="button" onClick={() => setRepairPreview(null)} aria-label="Close repair dialog" className="rounded-lg p-2 text-slate-600 hover:bg-slate-800 hover:text-slate-300"><Icon name="x" /></button>
           </div>
-          <div className="space-y-4 p-4">
+          <div className="space-y-4 overflow-y-auto p-4">
             <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[9px] font-semibold text-slate-400">Detected {repairPreview.detectedKind.replace(/_/g, ' ').toLocaleLowerCase()}</span>
@@ -643,10 +700,79 @@ export default function Header() {
               Data, folder, dashboard, or API URL
               <input type="url" required value={repairSeedUrl} onChange={(event) => setRepairSeedUrl(event.target.value)} placeholder="https://…" className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 text-[10px] text-slate-200" />
             </label>
+            <details className="rounded-xl border border-slate-800 bg-slate-950/35">
+              <summary className="focus-ring flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-[9px] font-semibold text-slate-400">
+                <span>
+                  Scope imported documents
+                  <span className="ml-2 font-normal text-slate-600">Optional filename, content, agency, size, and date rules</span>
+                </span>
+                {hasGuidanceFilters && <span className="rounded-full bg-cyan-400/10 px-2 py-0.5 text-[8px] text-cyan-300">Customized</span>}
+              </summary>
+              <div className="space-y-4 border-t border-slate-800 p-3">
+                <p className="text-[8px] leading-relaxed text-slate-600">
+                  Include rules admit a document when any entry in that field matches. Exclude rules take precedence. Simple lists accept lines or commas; regular expressions use one line each.
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {guidanceListFields.map(({ field, label, hint }) => (
+                    <label key={field} className="block text-[9px] font-semibold text-slate-500">
+                      {label}
+                      <textarea
+                        rows={2}
+                        value={guidanceDraft[field]}
+                        onChange={(event) => updateGuidanceDraft({ [field]: event.target.value })}
+                        placeholder="One rule per line"
+                        className="focus-ring mt-1.5 w-full resize-y rounded-xl border border-slate-800 bg-slate-950/70 p-2.5 font-mono text-[10px] leading-relaxed text-slate-200 placeholder:text-slate-700"
+                      />
+                      <span className="mt-1 block text-[8px] font-normal leading-relaxed text-slate-600">{hint}</span>
+                    </label>
+                  ))}
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {guidanceSizeFields.map(({ field, label, hint }) => (
+                    <label key={field} className="block text-[9px] font-semibold text-slate-500">
+                      {label}
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        step={1}
+                        value={guidanceDraft[field]}
+                        onChange={(event) => updateGuidanceDraft({ [field]: event.target.value })}
+                        className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 font-mono text-[10px] text-slate-200"
+                      />
+                      <span className="mt-1 block text-[8px] font-normal leading-relaxed text-slate-600">{hint}</span>
+                    </label>
+                  ))}
+                  {guidanceDateFields.map(({ field, label, hint }) => (
+                    <label key={field} className="block text-[9px] font-semibold text-slate-500">
+                      {label}
+                      <input
+                        type="date"
+                        value={guidanceDraft[field]}
+                        onChange={(event) => updateGuidanceDraft({ [field]: event.target.value })}
+                        className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 font-mono text-[10px] text-slate-200"
+                      />
+                      <span className="mt-1 block text-[8px] font-normal leading-relaxed text-slate-600">{hint}</span>
+                    </label>
+                  ))}
+                </div>
+                {!guidanceFilters.ok && <p role="alert" className="text-[9px] text-rose-300">{guidanceFilters.problem}</p>}
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setGuidanceDraft(DEFAULT_GUIDANCE_FILTER_DRAFT)}
+                    disabled={!hasGuidanceFilters}
+                    className="rounded-lg px-3 py-2 text-[9px] font-semibold text-slate-500 hover:text-slate-300 disabled:opacity-40"
+                  >
+                    Clear scope rules
+                  </button>
+                </div>
+              </div>
+            </details>
           </div>
           <div className="flex justify-end gap-2 border-t border-slate-800 px-4 py-3">
             <button type="button" onClick={() => setRepairPreview(null)} className="rounded-lg px-3 py-2 text-[9px] font-semibold text-slate-500 hover:text-slate-300">Cancel</button>
-            <button type="submit" disabled={isDiscovering || !repairSeedUrl.trim()} className="focus-ring rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-4 py-2 text-[9px] font-semibold text-cyan-200 disabled:opacity-40">{isDiscovering ? 'Testing…' : 'Use this data source'}</button>
+            <button type="submit" disabled={isDiscovering || !repairSeedUrl.trim() || !guidanceFilters.ok} className="focus-ring rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-4 py-2 text-[9px] font-semibold text-cyan-200 disabled:opacity-40">{isDiscovering ? 'Testing…' : 'Use this data source'}</button>
           </div>
         </form>
       </div>

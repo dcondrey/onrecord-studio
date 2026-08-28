@@ -12,6 +12,8 @@ export default function OverviewDashboard() {
   // FEATURE(overview): Add a comparison period selector so investigators can
   // compare current response behavior against a prior interval.
   const portals = useAppStore((state) => state.portals);
+  const workspaceInitializationStatus = useAppStore((state) => state.workspaceInitializationStatus);
+  const workspaceInitializationError = useAppStore((state) => state.workspaceInitializationError);
   const profiles = useAppStore((state) => state.agencyProfiles);
   const activePortalKey = useAppStore((state) => state.activePortalKey);
   const analyticsUpdatedAt = useAppStore((state) => state.analyticsUpdatedAt);
@@ -53,7 +55,13 @@ export default function OverviewDashboard() {
           </div>
         </section>
 
-        {portals.length === 0 && <WelcomePanel />}
+        {workspaceInitializationStatus === 'loading' ? (
+          <WorkspaceSourcesLoading />
+        ) : workspaceInitializationStatus === 'error' ? (
+          <WorkspaceSourcesUnavailable detail={workspaceInitializationError} />
+        ) : portals.length === 0 ? (
+          <WelcomePanel />
+        ) : null}
 
         <MetricsGrid />
 
@@ -69,6 +77,37 @@ export default function OverviewDashboard() {
         </section>
       </div>
     </div>
+  );
+}
+
+function WorkspaceSourcesLoading() {
+  return (
+    <section className="onboarding-panel rounded-2xl border p-5 sm:p-6" role="status">
+      <div className="flex items-center gap-3">
+        <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-700 border-t-cyan-300" aria-hidden="true" />
+        <div>
+          <h3 className="text-sm font-semibold text-slate-300">Loading saved sources</h3>
+          <p className="mt-1 text-[10px] text-slate-600">Checking the local workspace before showing source-specific findings.</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function WorkspaceSourcesUnavailable({ detail }: { detail: string | null }) {
+  return (
+    <section className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.04] p-5 sm:p-6" role="alert">
+      <div className="flex items-start gap-3">
+        <Icon name="database" className="mt-0.5 h-4 w-4 text-rose-300" />
+        <div>
+          <h3 className="text-sm font-semibold text-rose-100">Saved sources unavailable</h3>
+          <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+            OnRecord could not load the local source catalog, so this is not a first-run workspace. Existing sources may still be present; review the activity log and retry after the storage error is resolved.
+          </p>
+          {detail && <p className="mt-2 font-mono text-[8px] text-rose-300/70">{detail}</p>}
+        </div>
+      </div>
+    </section>
   );
 }
 

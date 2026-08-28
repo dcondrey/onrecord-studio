@@ -9,6 +9,33 @@ limit, context compaction, or a change of contributor. Search for `TODO(` and
 
 ## Session log
 
+### Continuation — 2026-08-27 evening
+
+Current verification is green: `cargo fmt --all -- --check`,
+`cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`
+(217 unit tests plus doctests), `npm run lint`, `npm run test:unit` (61 tests),
+`npm run build`, and `npm run check:ipc` (30 commands, 18 telemetry events, 6 verification states).
+
+- [x] Finished the interrupted source-scoping work. Only NextRequest's API-carried
+      `DocumentMetadata.created_at` is eligible for document-date guidance; crawled, ArcGIS,
+      local, pasted, and other synthesized metadata dates are ingestion instants and now
+      contribute no date measurement. The backend validates real ordered calendar dates, and the
+      guided-repair dialog now exposes filename, content, organization, size, and date rules with
+      frontend validation. Regex rules are line-delimited so commas inside expressions survive.
+- [x] Made post-extraction guidance safe across resumed syncs. A newly created unfinalized stub can
+      be discarded, but a document with finalized FTS evidence cannot be deleted and orphan its
+      corpus row. Both paths have repository regressions.
+- [x] Failure is no longer rendered as a negative finding in evidence search or legal compliance.
+      Failed searches retain and label the last successful result set; an empty failed query says
+      unavailable, and a failed legal-findings query no longer says "No active findings recorded."
+- [x] Saved-source initialization now distinguishes loading, genuinely empty, and unavailable.
+      A failed `list_saved_portals` call no longer presents a returning user with first-run
+      onboarding in either the overview or source sidebar.
+- [x] Repeated runtime-poll failures are rate-limited in the activity log and recovery is recorded,
+      preserving the earlier events an investigator needs to diagnose the outage.
+- [x] Fixed the CPRA confidence formula's accidental executable doctest, which was the only failure
+      after all 217 Rust unit tests had passed.
+
 ### Verification state at the end of this session
 
 Green after the crawl-depth and provenance work, run together:
@@ -223,12 +250,15 @@ at the line; two carry running proof-of-concept binaries.
       the evidence store, which is outside the untrusted-input threat model. Remove the marker.
 
 **Frontend**
-- [ ] `LegalCompliancePanel.tsx:152` — reports "No active findings recorded" when the findings query
-      failed, directly above the error strip.
-- [ ] `App.tsx:86` — a failed `list_saved_portals` shows a returning user the first-run onboarding.
-- [ ] `MainLayout.tsx:51` — a failed search clears results, so the UI blames the user's filters.
-- [ ] `App.tsx:79` — a failing 1500 ms runtime poll evicts the entire activity log within ~6 s,
-      exactly when it is needed to diagnose the failure.
+- [x] `LegalCompliancePanel.tsx` — reports unavailable rather than "No active findings recorded"
+      when the findings query failed.
+- [x] `App.tsx` — a failed `list_saved_portals` has an explicit unavailable state and never shows
+      first-run onboarding.
+- [x] `SearchFilter.tsx` / `MainLayout.tsx` — a failed search retains and labels the last successful
+      results, and an empty failed query reports unavailable rather than blaming the filters.
+- [x] `App.tsx` — identical failures from the 1500 ms runtime poll are logged immediately and then
+      at most once per minute, with a recovery event, so they cannot rapidly evict the diagnostic
+      activity that preceded the outage.
 - [ ] Unsequenced async resolution in six places (`MainLayout.tsx:68`, `PatternExplorer.tsx:41`,
       `DocumentViewer.tsx:39`, `LegalCompliancePanel.tsx:21`, `useC2PA.ts:6`, `Header.tsx:73`) —
       one shared hook, not six patches.
@@ -243,11 +273,12 @@ at the line; two carry running proof-of-concept binaries.
 
 ### Blocked on David — needs a commit decision, not a code change
 
-- [ ] **A fresh clone cannot build.** 70 files are untracked, including `src-tauri/tauri.conf.json`,
-      `src/ipc.ts`, `index.html`, `eslint.config.js`, `Cargo.lock`, all of `src-tauri/icons/`, the
-      root `templates/`, and ~45 Rust modules. A stale pre-migration `tauri.conf.json` is tracked at
-      the repository root, a path Tauri never reads. Fixing this means `git add`/`git rm`, which I
-      have not done unasked. Add `src-tauri/gen/schemas/` to `.gitignore` first — already done.
+- [x] **The earlier fresh-clone blocker no longer applies.** The previously untracked application
+      files (`src-tauri/tauri.conf.json`, `src/ipc.ts`, `index.html`, `eslint.config.js`, both
+      lockfiles, icons, templates, and Rust modules) are present in the current tracked tree, and
+      the stale root `tauri.conf.json` is absent. The remaining untracked files belong to the active
+      continuation above, plus the pre-existing `analytics-unavailable.png` screenshot; they still
+      need an ordinary commit before this continuation is available to a clone.
 - [x] Resolved by renaming to `docs/ROADMAP.md`; `git check-ignore` now exits 1, so a clone sees it.
 
 ## Architecture decisions

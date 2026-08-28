@@ -23,6 +23,7 @@ export default function MainLayout() {
   // views so investigators can return to the exact evidence position.
   const workspaceView = useAppStore((state) => state.workspaceView);
   const results = useAppStore((state) => state.filteredResults);
+  const searchError = useAppStore((state) => state.searchError);
   const selectedRequestId = useAppStore((state) => state.selectedRequestId);
   const selectedRequestPortalKey = useAppStore((state) => state.selectedRequestPortalKey);
   const setSelectedRequest = useAppStore((state) => state.setSelectedRequest);
@@ -150,7 +151,7 @@ export default function MainLayout() {
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto">
               {results.length === 0 ? (
-                <EmptyResults />
+                <EmptyResults error={searchError} />
               ) : (
                 <div className="divide-y divide-slate-800/70">
                   {results.map((result) => {
@@ -296,15 +297,19 @@ export default function MainLayout() {
   );
 }
 
-function EmptyResults() {
+function EmptyResults({ error }: { error: string | null }) {
   return (
     <div className="grid h-full min-h-72 place-items-center p-8 text-center">
       <div className="max-w-xs">
         <div className="mx-auto grid h-9 w-9 place-items-center rounded-lg border border-slate-800 bg-slate-950 text-slate-600">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5h18M5.25 3.75h13.5A2.25 2.25 0 0 1 21 6v12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 18V6a2.25 2.25 0 0 1 2.25-2.25Z" /></svg>
         </div>
-        <h2 className="mt-3 text-xs font-semibold text-slate-400">No matching evidence</h2>
-        <p className="mt-1 text-[10px] leading-relaxed text-slate-600">Add or synchronize a source, or broaden the active department, status, and policy filters.</p>
+        <h2 className="mt-3 text-xs font-semibold text-slate-400">{error ? 'Search unavailable' : 'No matching evidence'}</h2>
+        <p className="mt-1 text-[10px] leading-relaxed text-slate-600">
+          {error
+            ? 'The query did not complete, so there is no result set to interpret. Retry before drawing a conclusion from these filters.'
+            : 'Add or synchronize a source, or broaden the active department, status, and policy filters.'}
+        </p>
       </div>
     </div>
   );

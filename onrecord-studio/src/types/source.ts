@@ -16,6 +16,20 @@ export interface SourceGuidance {
   excludeUrlPrefixes: string[];
   linkSelector: string | null;
   downloadSelector: string | null;
+  includeFilenameGlobs: string[];
+  excludeFilenameGlobs: string[];
+  includeFilenamePatterns: string[];
+  excludeFilenamePatterns: string[];
+  includeContentKeywords: string[];
+  excludeContentKeywords: string[];
+  includeContentPatterns: string[];
+  excludeContentPatterns: string[];
+  includeOrganizations: string[];
+  excludeOrganizations: string[];
+  minimumFileSizeBytes: number | null;
+  maximumFileSizeBytes: number | null;
+  documentDateFrom: string | null;
+  documentDateTo: string | null;
 }
 
 export interface DiscoveredSourceLink {

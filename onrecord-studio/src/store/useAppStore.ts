@@ -20,6 +20,7 @@ export interface IngestionMetrics {
 
 export type WorkspaceView = 'overview' | 'patterns' | 'evidence' | 'activity';
 export type AppTheme = 'light' | 'dark' | 'auto';
+export type WorkspaceInitializationStatus = 'loading' | 'ready' | 'error';
 
 export interface SourceRepairNotice {
   portalKey: string;
@@ -35,6 +36,8 @@ interface AppState {
   isSidebarOpen: boolean;
   isSidebarCollapsed: boolean;
   portals: SavedSource[];
+  workspaceInitializationStatus: WorkspaceInitializationStatus;
+  workspaceInitializationError: string | null;
   portalRuntimes: PortalRuntimeSnapshot[];
   activePortalKey: string | null;
   portalUrlDraft: string;
@@ -56,6 +59,8 @@ interface AppState {
   selectedStatus: string | null;
   selectedPolicyDeviation: string | null;
   filteredResults: RequestSearchResult[];
+  /** Set when the latest evidence query failed; retained results then belong to the last successful query. */
+  searchError: string | null;
   selectedRequestId: number | null;
   selectedRequestPortalKey: string | null;
   isExtractionTerminalOpen: boolean;
@@ -67,6 +72,10 @@ interface AppState {
   setPortalUrlDraft: (url: string) => void;
   upsertPortal: (portal: PortalRegistration) => void;
   setPortals: (portals: SavedSource[]) => void;
+  setWorkspaceInitialization: (
+    status: WorkspaceInitializationStatus,
+    error?: string | null,
+  ) => void;
   setPortalLifecycleState: (portalKey: string, lifecycleState: SourceLifecycleState) => void;
   removePortal: (portalKey: string) => void;
   setPortalRuntimes: (runtimes: PortalRuntimeSnapshot[]) => void;
@@ -90,6 +99,7 @@ interface AppState {
     policyDeviation?: string | null,
   ) => void;
   setFilteredResults: (results: RequestSearchResult[]) => void;
+  setSearchError: (message: string | null) => void;
   setSelectedRequest: (requestId: number | null, portalKey?: string | null) => void;
   setTerminalVisibility: (visible: boolean) => void;
   setPendingSourceRepair: (notice: SourceRepairNotice | null) => void;
@@ -108,6 +118,8 @@ export const useAppStore = create<AppState>((set) => ({
   isSidebarOpen: false,
   isSidebarCollapsed: false,
   portals: [],
+  workspaceInitializationStatus: 'loading',
+  workspaceInitializationError: null,
   portalRuntimes: [],
   activePortalKey: null,
   portalUrlDraft: '',
@@ -128,6 +140,7 @@ export const useAppStore = create<AppState>((set) => ({
   selectedStatus: null,
   selectedPolicyDeviation: null,
   filteredResults: [],
+  searchError: null,
   selectedRequestId: null,
   selectedRequestPortalKey: null,
   isExtractionTerminalOpen: false,
@@ -165,6 +178,10 @@ export const useAppStore = create<AppState>((set) => ({
           ? state.activePortalKey
           : portals[0]?.registration.portalKey ?? null,
     })),
+  setWorkspaceInitialization: (
+    workspaceInitializationStatus,
+    workspaceInitializationError = null,
+  ) => set({ workspaceInitializationStatus, workspaceInitializationError }),
   setPortalLifecycleState: (portalKey, lifecycleState) =>
     set((state) => ({
       portals: state.portals.map((entry) =>
@@ -189,6 +206,7 @@ export const useAppStore = create<AppState>((set) => ({
       selectedRequestId: null,
       selectedRequestPortalKey: null,
       filteredResults: [],
+      searchError: null,
       searchTerm: '',
       selectedAgencyId: null,
       selectedStatus: null,
@@ -262,7 +280,8 @@ export const useAppStore = create<AppState>((set) => ({
     selectedPolicyDeviation = null,
   ) =>
     set({ searchTerm, selectedAgencyId, selectedStatus, selectedPolicyDeviation }),
-  setFilteredResults: (filteredResults) => set({ filteredResults }),
+  setFilteredResults: (filteredResults) => set({ filteredResults, searchError: null }),
+  setSearchError: (searchError) => set({ searchError }),
   setSelectedRequest: (selectedRequestId, selectedRequestPortalKey = null) =>
     set({ selectedRequestId, selectedRequestPortalKey, activeLegalFindings: [] }),
   setTerminalVisibility: (isExtractionTerminalOpen) => set({ isExtractionTerminalOpen }),

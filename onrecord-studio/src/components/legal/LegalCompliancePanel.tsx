@@ -161,6 +161,13 @@ export default function LegalCompliancePanel({
 
       {isLoading ? (
         <div className="px-3 py-4 text-[9px] text-slate-600">Loading legal findings…</div>
+      ) : error && activeFindings.length === 0 ? (
+        <div className="px-3 py-4">
+          <div className="text-[10px] font-medium text-rose-200">Legal findings unavailable</div>
+          <p className="mt-1 text-[9px] leading-relaxed text-slate-600">
+            The findings query did not complete, so this panel cannot report whether active findings exist.
+          </p>
+        </div>
       ) : activeFindings.length === 0 ? (
         <div className="px-3 py-4">
           <div className="text-[10px] font-medium text-slate-400">No active findings recorded</div>

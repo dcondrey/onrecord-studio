@@ -20,6 +20,7 @@ export default function Sidebar() {
   // FEATURE(navigation): Mirror these workspace actions into native macOS and
   // Windows application menus when platform menu commands are introduced.
   const portals = useAppStore((state) => state.portals);
+  const workspaceInitializationStatus = useAppStore((state) => state.workspaceInitializationStatus);
   const runtimes = useAppStore((state) => state.portalRuntimes);
   const activePortalKey = useAppStore((state) => state.activePortalKey);
   const syncingPortalKeys = useAppStore((state) => state.syncingPortalKeys);
@@ -215,9 +216,19 @@ export default function Sidebar() {
             <div className="mx-1 mt-3 rounded-xl border border-dashed border-slate-800 bg-slate-900/25 p-3.5">
               <div className="flex items-center gap-2 text-[10px] font-semibold text-slate-400">
                 <Icon name="database" className="h-4 w-4 text-cyan-400/70" />
-                No sources connected
+                {workspaceInitializationStatus === 'loading'
+                  ? 'Loading saved sources'
+                  : workspaceInitializationStatus === 'error'
+                    ? 'Saved sources unavailable'
+                    : 'No sources connected'}
               </div>
-              <p className="mt-2 text-[9px] leading-relaxed text-slate-600">Add a URL, file, or pasted source in the toolbar to build your first audit workspace.</p>
+              <p className="mt-2 text-[9px] leading-relaxed text-slate-600">
+                {workspaceInitializationStatus === 'loading'
+                  ? 'Checking the local source catalog.'
+                  : workspaceInitializationStatus === 'error'
+                    ? 'The source catalog did not load. Existing sources may still be present; check the activity log.'
+                    : 'Add a URL, file, or pasted source in the toolbar to build your first audit workspace.'}
+              </p>
             </div>
           )}
         </nav>
