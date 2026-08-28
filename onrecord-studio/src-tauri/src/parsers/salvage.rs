@@ -1,6 +1,7 @@
 use crate::error::AppError;
+use crate::integrity::sha256_hex;
 use sha2::{Digest, Sha256};
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;
@@ -13,10 +14,72 @@ const MINIMUM_RUN_CHARACTERS: usize = 4;
 const MINIMUM_TOTAL_CHARACTERS: usize = 48;
 const MINIMUM_TOTAL_ALPHABETIC_CHARACTERS: usize = 16;
 const MINIMUM_LEXICAL_TOKENS: usize = 6;
+const SALVAGE_PROVENANCE_MARKER: &str = "FORENSIC_RECOVERY_FALLBACK_V1";
+const MAXIMUM_PRIMARY_ERROR_CHARACTERS: usize = 2_048;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum SalvageDecoder {
+    Ascii,
+    Utf16LeEven,
+    Utf16LeOdd,
+    Utf16BeEven,
+    Utf16BeOdd,
+}
+
+impl SalvageDecoder {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Ascii => "ASCII",
+            Self::Utf16LeEven => "UTF16_LE_EVEN",
+            Self::Utf16LeOdd => "UTF16_LE_ODD",
+            Self::Utf16BeEven => "UTF16_BE_EVEN",
+            Self::Utf16BeOdd => "UTF16_BE_ODD",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SalvagedTextRun {
+    pub decoder: SalvageDecoder,
+    pub recovered_character_count: usize,
+    pub text_sha256: String,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SalvageReport {
+    pub provenance_marker: &'static str,
+    pub primary_error: String,
+    pub source_sha256: String,
+    pub source_size_bytes: u64,
+    pub recovered_character_count: usize,
+    pub alphabetic_character_count: usize,
+    pub lexical_token_count: usize,
+    pub runs: Vec<SalvagedTextRun>,
+    pub text: String,
+}
+
+impl SalvageReport {
+    pub fn decoder_summary(&self) -> String {
+        let mut counts = BTreeMap::<SalvageDecoder, usize>::new();
+        for run in &self.runs {
+            *counts.entry(run.decoder).or_default() += 1;
+        }
+        counts
+            .into_iter()
+            .map(|(decoder, count)| format!("{}={count}", decoder.label()))
+            .collect::<Vec<_>>()
+            .join(";")
+    }
+}
 
 #[derive(Default)]
 struct RecoveryAccumulator {
-    output: String,
+    runs: Vec<SalvagedTextRun>,
+    output_bytes: usize,
     seen: HashSet<[u8; 32]>,
     recovered_characters: usize,
     alphabetic_characters: usize,
@@ -34,22 +97,13 @@ struct Utf16Run {
     pending_high_surrogate: Option<u16>,
 }
 
-pub fn extract_salvaged_text<P: AsRef<Path>>(file_path: P) -> Result<String, AppError> {
-    // NOTE(forensics): This is heuristic string recovery, not a format-aware parse. Preserve the
-    // fallback marker and primary extraction error anywhere this output is presented as evidence.
-    //
-    // LIMIT(forensics): There is no confidence score. The thresholds below are a binary admission
-    // gate, so a successful return means only "enough characters passed the gate", not "this text
-    // is trustworthy". The single machine-readable provenance signal is the
-    // `[FORENSIC_RECOVERY_FALLBACK]` prefix baked into the returned string.
-    //
-    // LIMIT(forensics): Five decoders (ASCII plus UTF-16 LE/BE at two alignments) share one
-    // accumulator, so decoding ASCII as UTF-16 yields alphanumeric CJK runs that the gate counts
-    // as recovered text. Output order follows flush order across those decoders, not byte order in
-    // the source. Do not present these lines as document order.
-    // TODO(forensics): Return a structured result carrying the marker, the primary error, and a
-    // per-run decoder tag instead of an in-band string prefix, so a caller cannot lose the
-    // provenance by trimming the first line.
+pub fn extract_salvage_report<P: AsRef<Path>>(
+    file_path: P,
+    primary_error: impl Into<String>,
+) -> Result<SalvageReport, AppError> {
+    // This is heuristic string recovery, not a format-aware parse. Every admitted run retains its
+    // decoder and digest in a structured report. The threshold is a binary gate, not a confidence
+    // score, and output order is decoder flush order rather than asserted document order.
     let path = file_path.as_ref();
     let metadata = std::fs::symlink_metadata(path).map_err(|error| {
         AppError::Storage(format!(
@@ -82,6 +136,7 @@ pub fn extract_salvaged_text<P: AsRef<Path>>(file_path: P) -> Result<String, App
     let mut utf16_big = [Utf16Run::default(), Utf16Run::default()];
     let mut pair_first = [None, None];
     let mut consumed = 0_u64;
+    let mut source_hasher = Sha256::new();
 
     loop {
         let read = reader.read(&mut buffer).map_err(|error| {
@@ -93,6 +148,7 @@ pub fn extract_salvaged_text<P: AsRef<Path>>(file_path: P) -> Result<String, App
         if read == 0 {
             break;
         }
+        source_hasher.update(&buffer[..read]);
         consumed = consumed.checked_add(read as u64).ok_or_else(|| {
             AppError::DataParsing("Salvage source byte count overflowed".to_string())
         })?;
@@ -104,7 +160,13 @@ pub fn extract_salvaged_text<P: AsRef<Path>>(file_path: P) -> Result<String, App
         }
         let chunk_start = consumed - read as u64;
         for (chunk_offset, byte) in buffer[..read].iter().copied().enumerate() {
-            process_ascii_byte(byte, &mut ascii, &mut accumulator, path)?;
+            process_ascii_byte(
+                byte,
+                &mut ascii,
+                &mut accumulator,
+                SalvageDecoder::Ascii,
+                path,
+            )?;
             let absolute_offset = chunk_start + chunk_offset as u64;
             for alignment in 0..=1_usize {
                 if absolute_offset < alignment as u64 {
@@ -117,12 +179,22 @@ pub fn extract_salvaged_text<P: AsRef<Path>>(file_path: P) -> Result<String, App
                         u16::from_le_bytes([first, byte]),
                         &mut utf16_little[alignment],
                         &mut accumulator,
+                        if alignment == 0 {
+                            SalvageDecoder::Utf16LeEven
+                        } else {
+                            SalvageDecoder::Utf16LeOdd
+                        },
                         path,
                     )?;
                     process_utf16_unit(
                         u16::from_be_bytes([first, byte]),
                         &mut utf16_big[alignment],
                         &mut accumulator,
+                        if alignment == 0 {
+                            SalvageDecoder::Utf16BeEven
+                        } else {
+                            SalvageDecoder::Utf16BeOdd
+                        },
                         path,
                     )?;
                 }
@@ -130,10 +202,32 @@ pub fn extract_salvaged_text<P: AsRef<Path>>(file_path: P) -> Result<String, App
         }
     }
 
-    flush_run(&mut ascii, &mut accumulator, path)?;
-    for run in utf16_little.iter_mut().chain(utf16_big.iter_mut()) {
+    flush_run(&mut ascii, &mut accumulator, SalvageDecoder::Ascii, path)?;
+    for (alignment, run) in utf16_little.iter_mut().enumerate() {
         run.pending_high_surrogate = None;
-        flush_run(&mut run.text, &mut accumulator, path)?;
+        flush_run(
+            &mut run.text,
+            &mut accumulator,
+            if alignment == 0 {
+                SalvageDecoder::Utf16LeEven
+            } else {
+                SalvageDecoder::Utf16LeOdd
+            },
+            path,
+        )?;
+    }
+    for (alignment, run) in utf16_big.iter_mut().enumerate() {
+        run.pending_high_surrogate = None;
+        flush_run(
+            &mut run.text,
+            &mut accumulator,
+            if alignment == 0 {
+                SalvageDecoder::Utf16BeEven
+            } else {
+                SalvageDecoder::Utf16BeOdd
+            },
+            path,
+        )?;
     }
     if consumed != metadata.len() {
         return Err(AppError::DataParsing(
@@ -151,16 +245,46 @@ pub fn extract_salvaged_text<P: AsRef<Path>>(file_path: P) -> Result<String, App
         )));
     }
 
-    Ok(format!(
-        "[FORENSIC_RECOVERY_FALLBACK]\n{}",
-        accumulator.output.trim_end()
-    ))
+    let text = accumulator
+        .runs
+        .iter()
+        .map(|run| run.text.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let primary_error = primary_error
+        .into()
+        .chars()
+        .take(MAXIMUM_PRIMARY_ERROR_CHARACTERS)
+        .collect();
+    let source_digest = source_hasher.finalize();
+    Ok(SalvageReport {
+        provenance_marker: SALVAGE_PROVENANCE_MARKER,
+        primary_error,
+        source_sha256: digest_hex(&source_digest),
+        source_size_bytes: consumed,
+        recovered_character_count: accumulator.recovered_characters,
+        alphabetic_character_count: accumulator.alphabetic_characters,
+        lexical_token_count: accumulator.lexical_tokens,
+        runs: accumulator.runs,
+        text,
+    })
+}
+
+fn digest_hex(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut encoded = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        encoded.push(char::from(HEX[usize::from(byte >> 4)]));
+        encoded.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    }
+    encoded
 }
 
 fn process_ascii_byte(
     byte: u8,
     run: &mut TextRun,
     accumulator: &mut RecoveryAccumulator,
+    decoder: SalvageDecoder,
     path: &Path,
 ) -> Result<(), AppError> {
     if matches!(byte, b'\t' | b'\n' | b'\r' | 0x20..=0x7e) {
@@ -169,9 +293,9 @@ fn process_ascii_byte(
         } else {
             char::from(byte)
         });
-        flush_oversized_run(run, accumulator, path)
+        flush_oversized_run(run, accumulator, decoder, path)
     } else {
-        flush_run(run, accumulator, path)
+        flush_run(run, accumulator, decoder, path)
     }
 }
 
@@ -179,32 +303,33 @@ fn process_utf16_unit(
     unit: u16,
     run: &mut Utf16Run,
     accumulator: &mut RecoveryAccumulator,
+    decoder: SalvageDecoder,
     path: &Path,
 ) -> Result<(), AppError> {
     if (0xd800..=0xdbff).contains(&unit) {
         if run.pending_high_surrogate.replace(unit).is_some() {
-            flush_run(&mut run.text, accumulator, path)?;
+            flush_run(&mut run.text, accumulator, decoder, path)?;
         }
         return Ok(());
     }
     let character = if (0xdc00..=0xdfff).contains(&unit) {
         let Some(high) = run.pending_high_surrogate.take() else {
-            flush_run(&mut run.text, accumulator, path)?;
+            flush_run(&mut run.text, accumulator, decoder, path)?;
             return Ok(());
         };
         let scalar = 0x1_0000 + ((u32::from(high) - 0xd800) << 10) + (u32::from(unit) - 0xdc00);
         char::from_u32(scalar)
     } else {
         if run.pending_high_surrogate.take().is_some() {
-            flush_run(&mut run.text, accumulator, path)?;
+            flush_run(&mut run.text, accumulator, decoder, path)?;
         }
         char::from_u32(u32::from(unit))
     };
     if let Some(character) = character.filter(|value| is_salvage_character(*value)) {
         run.text.value.push(character);
-        flush_oversized_run(&mut run.text, accumulator, path)
+        flush_oversized_run(&mut run.text, accumulator, decoder, path)
     } else {
-        flush_run(&mut run.text, accumulator, path)
+        flush_run(&mut run.text, accumulator, decoder, path)
     }
 }
 
@@ -221,10 +346,11 @@ fn is_salvage_character(character: char) -> bool {
 fn flush_oversized_run(
     run: &mut TextRun,
     accumulator: &mut RecoveryAccumulator,
+    decoder: SalvageDecoder,
     path: &Path,
 ) -> Result<(), AppError> {
     if run.value.len() >= MAXIMUM_SINGLE_RUN_BYTES {
-        flush_run(run, accumulator, path)?;
+        flush_run(run, accumulator, decoder, path)?;
     }
     Ok(())
 }
@@ -232,6 +358,7 @@ fn flush_oversized_run(
 fn flush_run(
     run: &mut TextRun,
     accumulator: &mut RecoveryAccumulator,
+    decoder: SalvageDecoder,
     path: &Path,
 ) -> Result<(), AppError> {
     let normalized = run.value.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -271,8 +398,7 @@ fn flush_run(
         )));
     }
     if accumulator
-        .output
-        .len()
+        .output_bytes
         .checked_add(normalized.len())
         .and_then(|size| size.checked_add(1))
         .is_none_or(|size| size > MAXIMUM_OUTPUT_BYTES)
@@ -296,8 +422,13 @@ fn flush_run(
         .lexical_tokens
         .checked_add(lexical_tokens)
         .ok_or_else(|| AppError::DataParsing("Recovered token count overflowed".to_string()))?;
-    accumulator.output.push_str(&normalized);
-    accumulator.output.push('\n');
+    accumulator.output_bytes += normalized.len() + 1;
+    accumulator.runs.push(SalvagedTextRun {
+        decoder,
+        recovered_character_count: character_count,
+        text_sha256: sha256_hex(normalized.as_bytes()),
+        text: normalized,
+    });
     Ok(())
 }
 
@@ -306,29 +437,30 @@ mod tests {
     use super::*;
     use std::io::Write;
 
-    fn salvage(bytes: &[u8]) -> Result<String, AppError> {
+    fn salvage(bytes: &[u8]) -> Result<SalvageReport, AppError> {
         let directory = tempfile::tempdir().expect("temp dir");
         let path = directory.path().join("fixture.bin");
         let mut file = std::fs::File::create(&path).expect("create fixture");
         file.write_all(bytes).expect("write fixture");
         file.sync_all().expect("flush fixture");
-        extract_salvaged_text(&path)
+        extract_salvage_report(&path, "primary parser fixture failure")
     }
 
-    // INVARIANT(forensics): every successful salvage carries the fallback marker as its first
-    // line. That prefix is the ONLY machine-readable signal separating recovered text from a
-    // verified parse once the text is stored, so losing it silently promotes a guess to evidence.
     #[test]
-    fn every_successful_salvage_is_marked_as_a_fallback() {
+    fn every_successful_salvage_has_structured_provenance_and_decoder_tags() {
         let text = "The requested records concern the municipal budget hearing minutes. \
                     Please review the attached schedule and confirm receipt promptly.";
-        let recovered = salvage(text.as_bytes()).expect("coherent prose should salvage");
+        let report = salvage(text.as_bytes()).expect("coherent prose should salvage");
 
-        assert!(
-            recovered.starts_with("[FORENSIC_RECOVERY_FALLBACK]\n"),
-            "missing provenance marker: {recovered:?}",
-        );
-        assert!(recovered.contains("municipal budget hearing"));
+        assert_eq!(report.provenance_marker, SALVAGE_PROVENANCE_MARKER);
+        assert_eq!(report.primary_error, "primary parser fixture failure");
+        assert!(report.text.contains("municipal budget hearing"));
+        assert!(report.runs.iter().any(|run| {
+            run.decoder == SalvageDecoder::Ascii
+                && run.text.contains("municipal budget hearing")
+                && run.text_sha256 == sha256_hex(run.text.as_bytes())
+        }));
+        assert_eq!(report.source_sha256, sha256_hex(text.as_bytes()));
     }
 
     // LIMIT(forensics): the coherence gate is a binary admission threshold, not a score. Input
@@ -364,7 +496,7 @@ mod tests {
         std::os::unix::fs::symlink(&target, &link).expect("symlink");
 
         assert!(
-            extract_salvaged_text(&link).is_err(),
+            extract_salvage_report(&link, "fixture").is_err(),
             "a symlinked salvage source must be refused",
         );
     }
@@ -378,11 +510,12 @@ mod tests {
                     Please review the attached schedule and confirm receipt promptly.";
         let recovered = salvage(text.as_bytes()).expect("salvage");
 
-        assert!(recovered.contains("municipal budget hearing"));
-        // If this ever becomes a single line, the decoders were changed and the LIMIT comment on
-        // `extract_salvaged_text` needs revisiting.
+        assert!(recovered.text.contains("municipal budget hearing"));
         assert!(
-            recovered.lines().count() >= 2,
+            recovered
+                .runs
+                .iter()
+                .any(|run| run.decoder != SalvageDecoder::Ascii),
             "expected decoder twins alongside the real text: {recovered:?}",
         );
     }

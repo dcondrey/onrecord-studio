@@ -11,7 +11,7 @@ export type IngestionTelemetryEvent =
   | { type: 'documentExtracted'; payload: { portalKey: string; documentId: number; characterCount: number; wasOcrProcessed: boolean } }
   | { type: 'documentExpanded'; payload: { portalKey: string; documentId: number; format: string; entryCount: number } }
   | { type: 'documentDeferred'; payload: { portalKey: string; documentId: number; format: string; reason: string } }
-  | { type: 'documentSalvaged'; payload: { portalKey: string; documentId: number; format: string; primaryError: string } }
+  | { type: 'documentSalvaged'; payload: { portalKey: string; documentId: number; format: string; provenanceMarker: string; sourceSha256: string; recoveredRunCount: number; decoderSummary: string; primaryError: string } }
   | { type: 'documentCompleted'; payload: { portalKey: string; documentId: number; bytesSaved: number } }
   | { type: 'syncStopped'; payload: { portalKey: string; syncRunId: string } }
   | { type: 'taskFailed'; payload: { portalKey: string; targetId: string; errorMsg: string } }

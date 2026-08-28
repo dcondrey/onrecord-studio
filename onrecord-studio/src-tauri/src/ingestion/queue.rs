@@ -14,7 +14,7 @@ use crate::integrity::{constant_time_equal, digest_hex, sha256_file_async, sha25
 use crate::parsers::{
     assess_file_entropy, detect_document_format, execute_local_ocr_scan, extract_archive_container,
     extract_html_text, extract_msg_layers, extract_office_package, extract_plain_text,
-    extract_rtf_text, extract_salvaged_text, extract_spreadsheet_layers, extract_sqlite_text,
+    extract_rtf_text, extract_salvage_report, extract_spreadsheet_layers, extract_sqlite_text,
     extract_svg_text, extract_text_layers, extract_zip_container_with_manifest, parser_capability,
     DocumentFormat, ExtractionRoute, MsgExtractionContext,
 };
@@ -129,6 +129,10 @@ pub enum IngestionProgress {
         portal_key: String,
         document_id: u64,
         format: String,
+        provenance_marker: String,
+        source_sha256: String,
+        recovered_run_count: usize,
+        decoder_summary: String,
         primary_error: String,
     },
     DocumentCompleted {
@@ -675,9 +679,8 @@ enum ExtractedDocument {
         route: ExtractionRoute,
     },
     Salvaged {
-        text: String,
+        report: crate::parsers::SalvageReport,
         format: DocumentFormat,
-        primary_error: String,
     },
 }
 
@@ -3161,16 +3164,17 @@ async fn process_binary_payload(
             )
             .await;
         }
-        ExtractedDocument::Salvaged {
-            text,
-            format,
-            primary_error,
-        } => {
+        ExtractedDocument::Salvaged { report, format } => {
+            let decoder_summary = report.decoder_summary();
+            let provenance_marker = report.provenance_marker.to_string();
+            let source_sha256 = report.source_sha256.clone();
+            let recovered_run_count = report.runs.len();
+            let primary_error = report.primary_error.clone();
             if finalize_and_index_extracted_document(
                 context,
                 request_id,
                 download_finalization,
-                text,
+                report.text,
                 false,
                 document_date,
             )
@@ -3196,6 +3200,10 @@ async fn process_binary_payload(
                     portal_key: context.portal.portal_key.clone(),
                     document_id: document.id,
                     format: format_label,
+                    provenance_marker,
+                    source_sha256,
+                    recovered_run_count,
+                    decoder_summary,
                     primary_error,
                 },
             )
@@ -4278,12 +4286,13 @@ async fn extract_document(
             ) && salvage_allowed(format) =>
         {
             let path = local_path.to_path_buf();
-            match spawn_blocking("Salvage parser", move || extract_salvaged_text(&path)).await {
-                Ok(Ok(text)) => Ok(ExtractedDocument::Salvaged {
-                    text,
-                    format,
-                    primary_error: error.to_string(),
-                }),
+            let primary_error = error.to_string();
+            match spawn_blocking("Salvage parser", move || {
+                extract_salvage_report(&path, primary_error)
+            })
+            .await
+            {
+                Ok(Ok(report)) => Ok(ExtractedDocument::Salvaged { report, format }),
                 _ => Err(error),
             }
         }

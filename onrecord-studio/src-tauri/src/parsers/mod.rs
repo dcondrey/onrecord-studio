@@ -56,7 +56,7 @@ pub use recovery::{
     RecoveredVersionProfile,
 };
 pub use rtf::{audit_rtf_file, extract_rtf_text};
-pub use salvage::extract_salvaged_text;
+pub use salvage::{extract_salvage_report, SalvageReport};
 pub use svg::extract_svg_text;
 pub use text::extract_plain_text;
 pub use zip::{extract_zip_container, extract_zip_container_with_manifest};
