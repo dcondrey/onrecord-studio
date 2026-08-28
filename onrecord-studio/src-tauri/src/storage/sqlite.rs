@@ -16,7 +16,7 @@ use crate::integrity::{constant_time_equal, sha256_file, sha256_hex};
 use crate::normalization::collapse_whitespace;
 use crate::parsers::{policy_tokens, token_sequence_match_count, ParsedLegalAuthority};
 use crate::provenance::{classify_confidence, read_asset_provenance, AssetProvenance};
-use crate::storage::fts::clean_plain_text_for_index;
+use crate::storage::fts::{clean_plain_text_for_index, core_query_tokens, token_frequencies};
 use crate::types::c2pa::{ProvenanceConfidence, RecordedDigestSource, SignatureVerificationState};
 use crate::types::ProvenanceVerificationRecord;
 use crate::types::{
@@ -517,7 +517,7 @@ impl DuckDbRepository {
 
     /// Run embedded raw text scripts to establish layout boundaries.
     pub async fn run_migrations(&self, migration_sql: &str) -> Result<(), AppError> {
-        let conn = self.conn.lock().await;
+        let mut conn = self.conn.lock().await;
         // Legacy repair must precede the idempotent base script; `ensure_column` calls that follow
         // are compatibility shims for databases created by older, partially versioned builds.
         prepare_legacy_legal_schema(&conn)?;
@@ -706,6 +706,7 @@ impl DuckDbRepository {
         .map_err(|error| {
             AppError::Storage(format!("Failed to finalize migration indexes: {error}"))
         })?;
+        backfill_search_token_index(&mut conn)?;
         Ok(())
     }
 
@@ -1957,41 +1958,34 @@ impl DuckDbRepository {
 
     /// Local document search query execution block.
     pub async fn full_text_search(&self, query_string: &str) -> Result<Vec<u64>, AppError> {
-        // PERF(search): DuckDB's bundled FTS extension is intentionally not required at runtime;
-        // this bounded substring fallback keeps the desktop binary self-contained. For very large
-        // corpora, replace it with a persisted token index or a verified DuckDB FTS extension.
-        let terms = query_string
-            .split_whitespace()
-            .map(|term| term.trim_matches(|character: char| !character.is_alphanumeric()))
-            .filter(|term| !term.is_empty())
-            .collect::<Vec<_>>();
-        let search_text = terms
-            .iter()
-            .enumerate()
-            .filter(|(index, term)| {
-                !matches!(term.to_ascii_uppercase().as_str(), "AND" | "OR" | "NOT")
-                    && (*index == 0 || !terms[*index - 1].eq_ignore_ascii_case("NOT"))
-            })
-            .map(|(_, term)| *term)
-            .find(|term| query_string.to_ascii_uppercase().contains(" OR ") && *term != terms[0])
-            .or_else(|| terms.first().copied())
-            .unwrap_or_default()
-            .to_string();
-        if search_text.is_empty() {
+        let tokens = core_query_tokens(query_string)
+            .map_err(|message| AppError::DataParsing(message.to_string()))?;
+        if tokens.is_empty() {
             return Ok(Vec::new());
         }
+        let placeholders = (1..=tokens.len())
+            .map(|index| format!("?{index}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let required_tokens = tokens.len();
         self.query_connection("Full-text search", move |conn| {
-            let mut stmt = conn
-                .prepare(
-                    "SELECT document_id FROM documents_fts
-                 WHERE lower(extracted_text) LIKE '%' || lower(?1) || '%'
-                 ORDER BY document_id",
-                )
-                .map_err(|e| {
-                    AppError::Internal(format!("FTS statement initialization breakdown: {}", e))
-                })?;
+            let query = format!(
+                "SELECT document_id
+                 FROM (
+                    SELECT document_id, portal_subdomain
+                    FROM document_search_tokens
+                    WHERE token IN ({placeholders})
+                    GROUP BY document_id, portal_subdomain
+                    HAVING COUNT(*) = {required_tokens}
+                 ) matching_documents
+                 GROUP BY document_id
+                 ORDER BY document_id"
+            );
+            let mut stmt = conn.prepare(&query).map_err(|e| {
+                AppError::Internal(format!("FTS statement initialization breakdown: {}", e))
+            })?;
             let rows = stmt
-                .query_map(params![search_text], |row| row.get::<_, u64>(0))
+                .query_map(params_from_iter(tokens.iter()), |row| row.get::<_, u64>(0))
                 .map_err(|e| AppError::Internal(format!("Search execution query error: {}", e)))?;
             rows.map(|id| {
                 id.map_err(|e| {
@@ -2016,18 +2010,34 @@ impl DuckDbRepository {
         // keyword, so `char(31)` reads as a type modifier and the whole statement fails to parse
         // at prepare time. SQLite accepts `char(31)`, which is where it came from, and the
         // evidence search returned an error banner instead of results for every query.
-        // TODO(search): Replace the compatibility substring predicate with the same persistent
-        // token index used by `full_text_search` once the DuckDB text-index design is finalized.
-        // PERF(search): The current projection includes correlated document and
-        // flag subqueries per request. Benchmark large corpora and consider a
-        // materialized search projection if this becomes the dominant query.
         if !(1..=5_000).contains(&limit) {
             return Err(AppError::DataParsing(
                 "Request search limit must be between 1 and 5000".to_string(),
             ));
         }
-        let fts_query = search_term.trim().to_string();
-        let fts_query = (!fts_query.is_empty()).then_some(fts_query);
+        let search_tokens = core_query_tokens(search_term)
+            .map_err(|message| AppError::DataParsing(message.to_string()))?;
+        let fts_query = (!search_tokens.is_empty()).then_some(search_term.trim().to_string());
+        let token_predicate = if search_tokens.is_empty() {
+            "TRUE".to_string()
+        } else {
+            let values = search_tokens
+                .iter()
+                .map(|token| format!("'{}'", token.replace('\'', "''")))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!(
+                "(SELECT COUNT(DISTINCT document_search_tokens.token)
+                   FROM documents
+                   INNER JOIN document_search_tokens
+                     ON document_search_tokens.document_id = documents.id
+                    AND document_search_tokens.portal_subdomain = documents.portal_subdomain
+                  WHERE documents.request_id = requests.id
+                    AND documents.portal_subdomain = requests.portal_subdomain
+                    AND document_search_tokens.token IN ({values})) = {}",
+                search_tokens.len()
+            )
+        };
         let agency_id = agency_id.map(i64::try_from).transpose().map_err(|_| {
             AppError::DataParsing("Agency identifier exceeds SQLite capacity".to_string())
         })?;
@@ -2047,9 +2057,8 @@ impl DuckDbRepository {
             .filter(|value| !value.is_empty())
             .map(str::to_string);
         self.query_connection("Request search", move |conn| {
-            let mut statement = conn
-                .prepare(
-                    "SELECT
+            let query = format!(
+                "SELECT
                     requests.id,
                     requests.portal_subdomain,
                     requests.agency_id,
@@ -2091,22 +2100,13 @@ impl DuckDbRepository {
                           AND case_audits.target_subdomain = requests.portal_subdomain
                           AND document_integrity_flags.flag_type = ?4
                    ))
-                   AND (?5 IS NULL OR EXISTS (
-                        SELECT 1
-                        FROM documents
-                        INNER JOIN documents_fts
-                          ON documents_fts.document_id = documents.id
-                         AND documents_fts.portal_subdomain = documents.portal_subdomain
-                        WHERE documents.request_id = requests.id
-                          AND documents.portal_subdomain = requests.portal_subdomain
-                          AND lower(documents_fts.extracted_text) LIKE '%' || lower(?5) || '%'
-                   ))
+                   AND (?5 IS NULL OR {token_predicate})
                  ORDER BY requests.created_at DESC, requests.portal_subdomain, requests.id
-                 LIMIT ?6",
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to prepare request search: {error}"))
-                })?;
+                 LIMIT ?6"
+            );
+            let mut statement = conn.prepare(&query).map_err(|error| {
+                AppError::Storage(format!("Failed to prepare request search: {error}"))
+            })?;
             let rows = statement
                 .query_map(
                     params![
@@ -5302,7 +5302,123 @@ fn synchronize_fts_row(
         )));
     }
 
+    synchronize_search_tokens(tx, document_id, subdomain, cleaned_text)?;
+
     Ok(())
+}
+
+const SEARCH_TOKEN_INDEX_VERSION: i64 = 1;
+const SEARCH_TOKEN_BACKFILL_BATCH_SIZE: i64 = 64;
+
+fn synchronize_search_tokens(
+    tx: &Transaction<'_>,
+    document_id: i64,
+    portal_subdomain: &str,
+    cleaned_text: &str,
+) -> Result<(), AppError> {
+    tx.execute(
+        "DELETE FROM document_search_tokens
+         WHERE document_id = ?1 AND portal_subdomain = ?2",
+        params![document_id, portal_subdomain],
+    )
+    .map_err(|error| AppError::Storage(format!("Failed to clear stale search tokens: {error}")))?;
+
+    let frequencies = token_frequencies(cleaned_text);
+    for (token, frequency) in &frequencies {
+        let frequency = i64::try_from(*frequency).map_err(|_| {
+            AppError::Storage("Search term frequency exceeds DuckDB capacity".to_string())
+        })?;
+        tx.execute(
+            "INSERT INTO document_search_tokens (
+                document_id, portal_subdomain, token, term_frequency
+             ) VALUES (?1, ?2, ?3, ?4)",
+            params![document_id, portal_subdomain, token, frequency],
+        )
+        .map_err(|error| AppError::Storage(format!("Failed to persist a search token: {error}")))?;
+    }
+
+    let token_count = i64::try_from(frequencies.len())
+        .map_err(|_| AppError::Storage("Search token count exceeds DuckDB capacity".to_string()))?;
+    tx.execute(
+        "INSERT INTO document_search_index_state (
+            document_id, portal_subdomain, index_version, token_count
+         ) VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT(document_id, portal_subdomain) DO UPDATE SET
+            index_version = excluded.index_version,
+            token_count = excluded.token_count",
+        params![
+            document_id,
+            portal_subdomain,
+            SEARCH_TOKEN_INDEX_VERSION,
+            token_count
+        ],
+    )
+    .map_err(|error| AppError::Storage(format!("Failed to persist search index state: {error}")))?;
+    Ok(())
+}
+
+/// Builds the token projection for documents created before the persistent index existed.
+/// Empty documents receive a state row with a zero token count, so the keyset scan still
+/// terminates. Each bounded batch is atomic and restartable.
+fn backfill_search_token_index(conn: &mut Connection) -> Result<(), AppError> {
+    loop {
+        let rows = {
+            let mut statement = conn
+                .prepare(
+                    "SELECT
+                        documents_fts.document_id,
+                        documents_fts.portal_subdomain,
+                        documents_fts.extracted_text
+                     FROM documents_fts
+                     LEFT JOIN document_search_index_state
+                       ON document_search_index_state.document_id = documents_fts.document_id
+                      AND document_search_index_state.portal_subdomain = documents_fts.portal_subdomain
+                      AND document_search_index_state.index_version = ?1
+                     WHERE document_search_index_state.document_id IS NULL
+                     ORDER BY documents_fts.portal_subdomain, documents_fts.document_id
+                     LIMIT ?2",
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to prepare search index backfill: {error}"))
+                })?;
+            statement
+                .query_map(
+                    params![SEARCH_TOKEN_INDEX_VERSION, SEARCH_TOKEN_BACKFILL_BATCH_SIZE],
+                    |row| {
+                        Ok((
+                            row.get::<_, i64>(0)?,
+                            row.get::<_, String>(1)?,
+                            row.get::<_, String>(2)?,
+                        ))
+                    },
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to query search index backfill: {error}"))
+                })?
+                .collect::<duckdb::Result<Vec<_>>>()
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to decode search index backfill: {error}"))
+                })?
+        };
+        if rows.is_empty() {
+            return Ok(());
+        }
+
+        let transaction = conn.transaction().map_err(|error| {
+            AppError::Storage(format!("Failed to begin search index backfill: {error}"))
+        })?;
+        for (document_id, portal_subdomain, extracted_text) in rows {
+            synchronize_search_tokens(
+                &transaction,
+                document_id,
+                &portal_subdomain,
+                &extracted_text,
+            )?;
+        }
+        transaction.commit().map_err(|error| {
+            AppError::Storage(format!("Failed to commit search index backfill: {error}"))
+        })?;
+    }
 }
 
 /// Whether a stored digest is a well-formed SHA-256 value.
@@ -7032,11 +7148,11 @@ mod tests {
         assert_eq!(density, 0);
     }
 
-    /// `documents_fts` is a plain DuckDB table, not an FTS5 index, and `full_text_search` matches
-    /// substrings rather than tokens. This pins that gap so the difference between the query
-    /// language `storage::fts` sanitizes and the one the core executes stays visible.
+    /// Core search uses the persistent exact-token projection and requires every plain-text term.
+    /// Boolean words have no special meaning because the typed frontend does not offer a Boolean
+    /// grammar; qualifiers are passed separately to `search_requests`.
     #[tokio::test]
-    async fn core_search_matches_substrings_and_ignores_boolean_operators() {
+    async fn core_search_uses_persistent_exact_tokens_and_all_term_matching() {
         let repository = repository_with_document().await;
         {
             let connection = repository.conn.lock().await;
@@ -7054,23 +7170,26 @@ mod tests {
                 )
                 .expect("search projection fixture must insert");
         }
+        repository
+            .run_migrations(MIGRATION)
+            .await
+            .expect("startup must backfill a legacy projection row");
         let document_id = DOCUMENT_ID as u64;
 
-        // A mid-word fragment matches, which a tokenized FTS5 index would not do.
-        assert_eq!(
-            repository.full_text_search("ncampmen").await.unwrap(),
-            vec![document_id]
-        );
-        // `AND` is dropped rather than honored: the absent second term does not exclude the row.
+        assert!(repository
+            .full_text_search("ncampmen")
+            .await
+            .unwrap()
+            .is_empty());
         assert_eq!(
             repository
-                .full_text_search("encampment AND absent")
+                .full_text_search("encampment notice")
                 .await
                 .unwrap(),
             vec![document_id]
         );
         assert!(repository
-            .full_text_search("absent")
+            .full_text_search("encampment absent")
             .await
             .unwrap()
             .is_empty());
@@ -7719,11 +7838,16 @@ mod tests {
         );
         assert_eq!(
             repository
-                .full_text_search("sweep OR retention NOT notice")
+                .full_text_search("ordinary retention")
                 .await
-                .expect("Boolean search must succeed"),
+                .expect("all-term search must succeed"),
             vec![DOCUMENT_ID as u64]
         );
+        assert!(repository
+            .full_text_search("sweep retention")
+            .await
+            .expect("all-term search must succeed")
+            .is_empty());
     }
 
     #[tokio::test]

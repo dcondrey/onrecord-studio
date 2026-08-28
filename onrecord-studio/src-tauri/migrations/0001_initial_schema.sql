@@ -539,6 +539,22 @@ CREATE TABLE IF NOT EXISTS documents_fts (
     PRIMARY KEY (document_id, portal_subdomain)
 );
 
+CREATE TABLE IF NOT EXISTS document_search_tokens (
+    document_id BIGINT NOT NULL,
+    portal_subdomain TEXT NOT NULL,
+    token TEXT NOT NULL,
+    term_frequency BIGINT NOT NULL CHECK (term_frequency > 0),
+    PRIMARY KEY (document_id, portal_subdomain, token)
+);
+
+CREATE TABLE IF NOT EXISTS document_search_index_state (
+    document_id BIGINT NOT NULL,
+    portal_subdomain TEXT NOT NULL,
+    index_version BIGINT NOT NULL CHECK (index_version > 0),
+    token_count BIGINT NOT NULL CHECK (token_count >= 0),
+    PRIMARY KEY (document_id, portal_subdomain)
+);
+
 -- ----------------------------------------------------------------------------
 -- 7. PERFORMANCE & ANALYTICS INDEXES
 -- Accelerates analytical timelines, cross-agency metrics, and outlier checks.
@@ -548,6 +564,7 @@ CREATE INDEX IF NOT EXISTS idx_requests_created ON requests(created_at);
 CREATE INDEX IF NOT EXISTS idx_requests_status ON requests(status);
 CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(download_status);
 CREATE INDEX IF NOT EXISTS idx_documents_request ON documents(request_id, portal_subdomain);
+CREATE INDEX IF NOT EXISTS idx_document_search_tokens_token ON document_search_tokens(token);
 CREATE INDEX IF NOT EXISTS idx_requests_portal_agency_status ON requests(portal_subdomain, agency_id, status);
 CREATE INDEX IF NOT EXISTS idx_request_keyword_signals_keyword ON request_keyword_signals(keyword, portal_subdomain);
 CREATE INDEX IF NOT EXISTS idx_statutory_extensions_notice ON statutory_extensions(notice_at);

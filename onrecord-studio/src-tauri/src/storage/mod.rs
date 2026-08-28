@@ -12,7 +12,8 @@
 //! * [`fts`] carries a SQLite FTS5 query sanitizer that no core path calls; see its module docs.
 //!
 //! The core search projection, `documents_fts`, is a plain DuckDB table maintained transactionally
-//! by the repository. It is not an FTS5 virtual table and provides no tokenization or ranking.
+//! by the repository. A versioned companion token table provides indexed all-term matching; it is
+//! not FTS5 and does not claim stemming or relevance ranking.
 //!
 //! See `docs/storage-and-evidence-architecture.md`.
 

@@ -124,11 +124,14 @@ is safe to retry. A file matching neither engine's header is never overwritten; 
 
 ### C. Search
 `documents_fts` is a **plain DuckDB table**, not an FTS5 virtual table, maintained transactionally
-by the repository (`migrations/0001_initial_schema.sql`). The live query path is a case-folded
-substring scan (`storage/sqlite.rs`): no stemming, no ranking, no text index.
-
-TODO(search): This is a full table scan and will not hold at corpus scale. Add a versioned DuckDB
-search index before relying on engine-provided ranking or tokenization.
+by the repository (`migrations/0001_initial_schema.sql`). A versioned
+`document_search_tokens` projection stores normalized token frequencies and is updated in the same
+transaction as extracted text. Startup backfills older projection rows in restart-safe batches;
+`document_search_index_state` records even zero-token documents so the backfill terminates.
+Queries require every distinct unqualified token and use the token index rather than scanning
+document bodies. Portal, agency, status, and policy-flag qualifiers are transported as separate
+typed parameters. The application does not claim stemming, relevance ranking, phrases, or Boolean
+operators.
 
 ---
 

@@ -1,36 +1,78 @@
-//! SQLite FTS5 query sanitization, kept at the compatibility boundary.
+//! Persistent core tokenization plus SQLite FTS5 compatibility sanitization.
 //!
 //! Read this before assuming the core supports Boolean search. It does not.
 //!
 //! [`format_sqlite_fts5_query`] emits SQLite FTS5 `MATCH` syntax and is exercised against a real
 //! FTS5 virtual table in this module's tests. **No core path calls it.** The core search
-//! projection `documents_fts` is a plain DuckDB table, and
-//! `DuckDbRepository::full_text_search` matches against it with a bounded `LIKE` substring scan
-//! that reduces a query to a single term and ignores `AND`/`OR`/`NOT` entirely. A user typing a
-//! Boolean query into the core therefore gets substring behavior, not the behavior this sanitizer
-//! describes.
+//! projection `documents_fts` is a plain DuckDB table. The core's persistent token projection
+//! implements the same intentionally small contract as the typed frontend: every unqualified
+//! text token must occur, while agency, portal, status, and flag qualifiers travel as separate
+//! typed command parameters. Boolean operators and field clauses are deliberately not part of
+//! that contract.
 //!
 //! The sanitizer is retained rather than deleted because it is the piece a real Boolean search
 //! needs and because the SQLite attachment boundary can still present FTS5 tables.
 //!
-//! The one export the core actually uses is [`clean_plain_text_for_index`].
-//
-// TODO(search): Give the core a persistent DuckDB token index and route `full_text_search`
-// through a sanitizer written for it, so the query language the frontend offers and the query
-// language the core executes are the same one.
+//! The DuckDB core persists [`token_frequencies`] and searches with [`positive_query_tokens`].
 
 pub(crate) use crate::normalization::normalize_index_text as clean_plain_text_for_index;
+use std::collections::{BTreeMap, BTreeSet};
 
 const MAXIMUM_QUERY_BYTES: usize = 16 * 1024;
 const MAXIMUM_QUERY_LEXEMES: usize = 512;
 const MAXIMUM_CLAUSE_BYTES: usize = 512;
 const MAXIMUM_GROUP_DEPTH: usize = 32;
 
-// TODO(search): Add field-qualified clauses to this sanitizer only after the
-// typed frontend query model has an explicit SQLite translation.
-// PERF(search): Keep the byte/lexeme limits aligned with the frontend parser
-// so hostile or accidentally pasted mega-queries fail consistently at both
-// boundaries.
+const MAXIMUM_INDEX_TOKEN_CHARACTERS: usize = 128;
+
+pub const MAXIMUM_CORE_QUERY_BYTES: usize = MAXIMUM_QUERY_BYTES;
+pub const MAXIMUM_CORE_QUERY_TOKENS: usize = MAXIMUM_QUERY_LEXEMES;
+
+pub fn token_frequencies(text: &str) -> BTreeMap<String, u64> {
+    let mut frequencies = BTreeMap::new();
+    for token in text
+        .split(|character: char| !character.is_alphanumeric())
+        .filter(|token| !token.is_empty())
+        .map(|token| {
+            token
+                .to_lowercase()
+                .chars()
+                .take(MAXIMUM_INDEX_TOKEN_CHARACTERS)
+                .collect::<String>()
+        })
+    {
+        let frequency = frequencies.entry(token).or_insert(0_u64);
+        *frequency = frequency.saturating_add(1);
+    }
+    frequencies
+}
+
+/// Extracts the distinct terms the typed frontend sends as full-text content. Structured fields
+/// are transported separately. All returned terms are required by the core query.
+pub fn core_query_tokens(query: &str) -> Result<Vec<String>, &'static str> {
+    if query.len() > MAXIMUM_CORE_QUERY_BYTES {
+        return Err("Search text exceeds the 16 KiB query limit");
+    }
+    let tokens = query
+        .split(|character: char| !character.is_alphanumeric())
+        .filter(|token| !token.is_empty())
+        .map(|token| {
+            token
+                .to_lowercase()
+                .chars()
+                .take(MAXIMUM_INDEX_TOKEN_CHARACTERS)
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>();
+    if tokens.len() > MAXIMUM_CORE_QUERY_TOKENS {
+        return Err("Search text exceeds the 512-token query limit");
+    }
+    Ok(tokens
+        .into_iter()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect())
+}
 
 /// Converts untrusted user input into a valid, parameter-ready SQLite FTS5 Boolean expression.
 ///
