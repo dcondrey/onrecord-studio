@@ -137,6 +137,8 @@ struct LegalBriefRow {
     created_at: String,
     updated_at: String,
     closed_at: Option<String>,
+    determination_at: Option<String>,
+    determination_source: Option<String>,
     extension_notice_at: Option<String>,
     extension_expected_determination_at: Option<String>,
     extension_reason: Option<String>,
@@ -289,6 +291,8 @@ pub struct LegalBriefEvidence {
     pub created_at: String,
     pub updated_at: String,
     pub closed_at: Option<String>,
+    pub determination_at: Option<String>,
+    pub determination_source: Option<String>,
     pub extension: Option<StatutoryExtensionRecord>,
     pub integrity_flags: Vec<String>,
     pub documents: Vec<EvidenceDocument>,
@@ -641,6 +645,8 @@ impl DuckDbRepository {
             "TEXT",
         )?;
         ensure_column(&conn, "requests", "neighborhood_block", "TEXT")?;
+        ensure_column(&conn, "requests", "determination_at", "TEXT")?;
+        ensure_column(&conn, "requests", "determination_source", "TEXT")?;
         ensure_column(&conn, "documents", "raw_file_sha256", "TEXT")?;
         // Same rule as the portals block above. The base schema bounds these three; an upgraded
         // database carries the DEFAULT but not the range check.
@@ -1802,7 +1808,8 @@ impl DuckDbRepository {
                 rpid = ?3, title = ?4, description = ?5, status = ?6,
                 current_status_id = ?7, updated_at = ?8, closed_at = ?9,
                 due_date = ?10, neighborhood_block = COALESCE(?11, neighborhood_block),
-                agency_id = ?12, category_id = ?13
+                agency_id = ?12, category_id = ?13,
+                determination_at = ?14, determination_source = ?15
              WHERE id = ?1 AND portal_subdomain = ?2",
                     params![
                         request.id,
@@ -1817,7 +1824,9 @@ impl DuckDbRepository {
                         request.due_date,
                         request.neighborhood_block,
                         request.agency.as_ref().map(|a| a.id),
-                        request.category.as_ref().map(|c| c.id)
+                        request.category.as_ref().map(|c| c.id),
+                        request.determination_at,
+                        request.determination_source,
                     ],
                 )
                 .map_err(|e| {
@@ -1828,8 +1837,8 @@ impl DuckDbRepository {
                     "INSERT INTO requests (
                 id, portal_subdomain, rpid, title, description, status, current_status_id,
                 created_at, updated_at, closed_at, due_date, neighborhood_block,
-                agency_id, category_id
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+                agency_id, category_id, determination_at, determination_source
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
              ",
                     params![
                         request.id,
@@ -1845,7 +1854,9 @@ impl DuckDbRepository {
                         request.due_date,
                         request.neighborhood_block,
                         request.agency.as_ref().map(|a| a.id),
-                        request.category.as_ref().map(|c| c.id)
+                        request.category.as_ref().map(|c| c.id),
+                        request.determination_at,
+                        request.determination_source,
                     ],
                 )
                 .map_err(|e| {
@@ -1945,13 +1956,17 @@ impl DuckDbRepository {
                 }
             }
             synchronize_timeline_audit(tx, &audit_id, request.id, subdomain, &timeline_flags)?;
-            let statutory_analysis = crate::analysis::evaluate_statutory_compliance(
-                request.id,
-                &request.created_at,
-                Some(&request.updated_at),
-                request.closed_at.as_deref(),
-                request.statutory_extension.as_ref(),
-            )?;
+            let statutory_analysis =
+                crate::analysis::evaluate_statutory_compliance_with_determination_at(
+                    request.id,
+                    &request.created_at,
+                    Some(&request.updated_at),
+                    request.closed_at.as_deref(),
+                    request.determination_at.as_deref(),
+                    request.determination_source.as_deref(),
+                    request.statutory_extension.as_ref(),
+                    &chrono::Utc::now().to_rfc3339(),
+                )?;
             synchronize_cpra_finding(tx, request.id, subdomain, &statutory_analysis)?;
             Ok(())
         })
@@ -2822,12 +2837,15 @@ impl DuckDbRepository {
             &evidence.created_at,
             evidence.closed_at.as_deref(),
         )?;
-        let statutory = crate::analysis::evaluate_statutory_compliance(
+        let statutory = crate::analysis::evaluate_statutory_compliance_with_determination_at(
             request_id,
             &evidence.created_at,
             Some(&evidence.updated_at),
             evidence.closed_at.as_deref(),
+            evidence.determination_at.as_deref(),
+            evidence.determination_source.as_deref(),
             evidence.extension.as_ref(),
+            &chrono::Utc::now().to_rfc3339(),
         )?;
         let mut flags = operational
             .anomaly_markers
@@ -3449,6 +3467,7 @@ impl DuckDbRepository {
                     requests.rpid, COALESCE(requests.title, ''),
                     COALESCE(requests.description, ''), requests.status,
                     requests.created_at, requests.updated_at, requests.closed_at,
+                    requests.determination_at, requests.determination_source,
                     statutory_extensions.notice_at,
                     statutory_extensions.expected_determination_at,
                     statutory_extensions.reason, statutory_extensions.notice_source
@@ -3546,6 +3565,8 @@ impl DuckDbRepository {
             created_at: row.created_at,
             updated_at: row.updated_at,
             closed_at: row.closed_at,
+            determination_at: row.determination_at,
+            determination_source: row.determination_source,
             extension,
             integrity_flags,
             documents,
@@ -4355,10 +4376,12 @@ fn map_legal_brief_row(row: &Row<'_>) -> duckdb::Result<LegalBriefRow> {
         created_at: row.get(9)?,
         updated_at: row.get(10)?,
         closed_at: row.get(11)?,
-        extension_notice_at: row.get(12)?,
-        extension_expected_determination_at: row.get(13)?,
-        extension_reason: row.get(14)?,
-        extension_notice_source: row.get(15)?,
+        determination_at: row.get(12)?,
+        determination_source: row.get(13)?,
+        extension_notice_at: row.get(14)?,
+        extension_expected_determination_at: row.get(15)?,
+        extension_reason: row.get(16)?,
+        extension_notice_source: row.get(17)?,
     })
 }
 
@@ -4535,11 +4558,9 @@ fn map_evidence_document_row(row: &Row<'_>) -> duckdb::Result<EvidenceDocument> 
 
 /// Grades a CPRA calendar finding by what the evaluation actually observed.
 ///
-/// The finding rests on two dates. Receipt is always recorded. The determination is either a
-/// recorded portal timestamp or the observation instant standing in for one, and where an
-/// extension moved the deadline, the notice behind it is either recorded or claimed without a
-/// source. A finding built on an unobserved input is not certain, and this path used to store
-/// every one of them at 10000 basis points regardless.
+/// The finding rests on two dates. Receipt is always recorded. The determination is a sourced
+/// determination event, a generic portal-activity proxy, or the observation instant. Where an
+/// extension moved the deadline, its notice is either recorded or claimed without a source.
 ///
 /// ```text
 /// confidence = 10000 - uncertainty + margin_relief
@@ -4558,11 +4579,10 @@ fn cpra_calendar_confidence_basis_points(
 ) -> i64 {
     use crate::analysis::StatutoryExtensionStatus;
 
-    // The determination was measured to the observation instant, not to anything the agency did.
-    let determination_penalty = if analysis.determination_basis.is_recorded_activity() {
-        0
-    } else {
-        2_500
+    let determination_penalty = match analysis.determination_basis {
+        crate::analysis::DeterminationBasis::SourcedDeterminationEvent => 0,
+        crate::analysis::DeterminationBasis::EarliestRecordedActivityProxy => 1_000,
+        crate::analysis::DeterminationBasis::ObservationWithoutRecordedActivity => 2_500,
     };
     let extension_penalty = match analysis.extension_status {
         // No extension date entered the evaluation, or the notice behind it was recorded.
@@ -7957,6 +7977,8 @@ mod tests {
             updated_at: "2026-08-24T11:59:00Z".to_string(),
             closed_at: Some("2026-08-24T12:04:00Z".to_string()),
             due_date: None,
+            determination_at: None,
+            determination_source: None,
             neighborhood_block: None,
             statutory_extension: None,
             documents: Vec::new(),
@@ -8221,6 +8243,8 @@ mod tests {
             updated_at: "2026-08-25T09:00:00Z".to_string(),
             closed_at: None,
             due_date: None,
+            determination_at: None,
+            determination_source: None,
             neighborhood_block: None,
             statutory_extension: None,
             documents: Vec::new(),

@@ -68,9 +68,12 @@ WITH parsed AS (
         CAST(TRY_CAST(requests.created_at AS TIMESTAMPTZ) AS TIMESTAMP) AS created_timestamp,
         CAST(TRY_CAST(requests.updated_at AS TIMESTAMPTZ) AS TIMESTAMP) AS updated_timestamp,
         CAST(TRY_CAST(requests.closed_at AS TIMESTAMPTZ) AS TIMESTAMP) AS closed_timestamp,
+        CAST(TRY_CAST(requests.determination_at AS TIMESTAMPTZ) AS TIMESTAMP) AS determination_timestamp,
         {calendar_date(requests.created_at)} AS created_date,
         {calendar_date(requests.updated_at)} AS updated_date,
         {calendar_date(requests.closed_at)} AS closed_date,
+        {calendar_date(requests.determination_at)} AS explicit_determination_date,
+        requests.determination_source,
         CAST(TRY_CAST(statutory_extensions.notice_at AS TIMESTAMPTZ) AS TIMESTAMP) AS extension_notice_timestamp,
         {calendar_date(statutory_extensions.notice_at)} AS extension_notice_date,
         {calendar_date(statutory_extensions.expected_determination_at)} AS extension_expected_date,
@@ -796,7 +799,8 @@ mod tests {
                 CREATE TABLE db.requests (
                     id BIGINT, portal_subdomain VARCHAR, agency_id BIGINT,
                     title VARCHAR, description VARCHAR, status VARCHAR,
-                    created_at VARCHAR, updated_at VARCHAR, closed_at VARCHAR
+                    created_at VARCHAR, updated_at VARCHAR, closed_at VARCHAR,
+                    determination_at VARCHAR, determination_source VARCHAR
                 );
                 CREATE TABLE db.agencies (id BIGINT, portal_subdomain VARCHAR, name VARCHAR);
                 CREATE TABLE db.documents (
@@ -809,11 +813,11 @@ mod tests {
                 INSERT INTO db.agencies VALUES (1, 'city', 'Routine'), (2, 'city', 'Slow');
                 INSERT INTO db.requests
                 SELECT i, 'city', 1, 'Routine', 'encampment sweeping', 'closed',
-                    '2024-01-01T00:00:00Z', '2024-01-05T00:00:00Z', '2024-01-11T00:00:00Z'
+                    '2024-01-01T00:00:00Z', '2024-01-05T00:00:00Z', '2024-01-11T00:00:00Z', NULL, NULL
                 FROM range(1, 10) rows(i);
                 INSERT INTO db.requests VALUES
                     (10, 'city', 2, 'Slow', 'eviction', 'closed',
-                     '2024-01-01T00:00:00Z', '2024-01-20T00:00:00Z', '2024-04-10T00:00:00Z');
+                     '2024-01-01T00:00:00Z', '2024-01-20T00:00:00Z', '2024-04-10T00:00:00Z', NULL, NULL);
                 INSERT INTO db.documents VALUES (1, 10, 'city', 'public');
                 "#,
             )
@@ -947,7 +951,8 @@ mod tests {
                 CREATE TABLE db.requests (
                     id BIGINT, portal_subdomain VARCHAR, agency_id BIGINT,
                     title VARCHAR, description VARCHAR, status VARCHAR,
-                    created_at VARCHAR, updated_at VARCHAR, closed_at VARCHAR
+                    created_at VARCHAR, updated_at VARCHAR, closed_at VARCHAR,
+                    determination_at VARCHAR, determination_source VARCHAR
                 );
                 CREATE TABLE db.agencies (id BIGINT, portal_subdomain VARCHAR, name VARCHAR);
                 CREATE TABLE db.documents (
@@ -969,7 +974,7 @@ mod tests {
                 .unwrap_or_else(|| "NULL".to_string());
             connection
                 .execute_batch(&format!(
-                    "INSERT INTO db.requests VALUES ({request_id}, 'city', 1, '{}', '', '{}', '{}', '{}', {closed});",
+                    "INSERT INTO db.requests VALUES ({request_id}, 'city', 1, '{}', '', '{}', '{}', '{}', {closed}, NULL, NULL);",
                     case.label, case.status, case.created_at, case.updated_at
                 ))
                 .unwrap();
@@ -1068,6 +1073,31 @@ mod tests {
         );
     }
 
+    #[test]
+    fn sourced_determination_event_takes_precedence_in_vectorized_analysis() {
+        let connection = connection();
+        connection
+            .execute(
+                "UPDATE db.requests
+                 SET determination_at = '2024-01-05T00:00:00Z',
+                     determination_source = 'Agency determination notice'
+                 WHERE id = 10",
+                [],
+            )
+            .expect("the sourced event fixture must update");
+        let profiles = query_agency_performance_profiles(
+            &connection,
+            365.0,
+            AnalyticsSource::ForeignSqlite.table_prefix(),
+        )
+        .expect("the aggregate must evaluate the sourced event");
+        let slow = profiles
+            .iter()
+            .find(|profile| profile.agency_id == 2)
+            .expect("the slow agency must be present");
+        assert_eq!(slow.statutory_violation_count, 0);
+    }
+
     /// Pins the separation `convert_raw_profile` draws: an agency that answered every request
     /// inside the statutory deadline but far more slowly than its peers is a statistical outlier
     /// and nothing more. Reporting that as a statutory breach states a legal conclusion the
@@ -1082,7 +1112,8 @@ mod tests {
                 CREATE TABLE db.requests (
                     id BIGINT, portal_subdomain VARCHAR, agency_id BIGINT,
                     title VARCHAR, description VARCHAR, status VARCHAR,
-                    created_at VARCHAR, updated_at VARCHAR, closed_at VARCHAR
+                    created_at VARCHAR, updated_at VARCHAR, closed_at VARCHAR,
+                    determination_at VARCHAR, determination_source VARCHAR
                 );
                 CREATE TABLE db.agencies (id BIGINT, portal_subdomain VARCHAR, name VARCHAR);
                 CREATE TABLE db.documents (
@@ -1096,13 +1127,13 @@ mod tests {
                 -- Peer agency: determination and closure both well inside the deadline.
                 INSERT INTO db.requests
                 SELECT i, 'city', 1, 'Peer', '', 'closed',
-                    '2024-01-01T00:00:00Z', '2024-01-02T00:00:00Z', '2024-01-02T00:00:00Z'
+                    '2024-01-01T00:00:00Z', '2024-01-02T00:00:00Z', '2024-01-02T00:00:00Z', NULL, NULL
                 FROM range(1, 10) rows(i);
                 -- Determined on day four, so no statutory violation, but the file stayed open for
                 -- a hundred days, which makes the agency a latency outlier.
                 INSERT INTO db.requests VALUES
                     (10, 'city', 2, 'Slow but lawful', '', 'closed',
-                     '2024-01-01T00:00:00Z', '2024-01-05T00:00:00Z', '2024-04-10T00:00:00Z');
+                     '2024-01-01T00:00:00Z', '2024-01-05T00:00:00Z', '2024-04-10T00:00:00Z', NULL, NULL);
                 "#,
             )
             .unwrap();

@@ -31,6 +31,7 @@ pub struct StatutoryComplianceAnalysis {
     pub statute_citation: String,
     pub created_at: String,
     pub determination_at: Option<String>,
+    pub determination_source: Option<String>,
     /// What `determination_at` actually is. A consumer that reports a violation without reading
     /// this is presenting a proxy, or an unfinished period, as a measured determination.
     pub determination_basis: DeterminationBasis,
@@ -137,6 +138,29 @@ pub fn evaluate_statutory_compliance_at(
     extension: Option<&StatutoryExtensionRecord>,
     observation_at: &str,
 ) -> Result<StatutoryComplianceAnalysis, AppError> {
+    evaluate_statutory_compliance_with_determination_at(
+        request_id,
+        created_at,
+        updated_at,
+        closed_at,
+        None,
+        None,
+        extension,
+        observation_at,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn evaluate_statutory_compliance_with_determination_at(
+    request_id: u64,
+    created_at: &str,
+    updated_at: Option<&str>,
+    closed_at: Option<&str>,
+    determination_at: Option<&str>,
+    determination_source: Option<&str>,
+    extension: Option<&StatutoryExtensionRecord>,
+    observation_at: &str,
+) -> Result<StatutoryComplianceAnalysis, AppError> {
     let created = parse_timestamp(created_at, "created")?;
     let observed = parse_timestamp(observation_at, "observation")?;
     if observed < created {
@@ -145,18 +169,49 @@ pub fn evaluate_statutory_compliance_at(
         )));
     }
 
-    // `updated_at`/`closed_at` remain observable proxies for an agency's determination. The
-    // limitation now travels with the result as `determination_basis` instead of living only in a
-    // comment, and the aggregate path renders the same proxy from
-    // `statute::sql::determination_calendar_date`, so the two cannot drift.
-    // TODO(compliance): Preserve an explicit, sourced determination event in the ingestion model
-    // and promote both paths off the proxy once one exists.
-    let determination = earliest_milestone(created, updated_at, closed_at)?;
-    let determination_basis = if determination.is_some() {
-        DeterminationBasis::EarliestRecordedActivityProxy
-    } else {
-        DeterminationBasis::ObservationWithoutRecordedActivity
+    let sourced_determination = match determination_at {
+        Some(value) => {
+            let source = determination_source
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| {
+                    AppError::Compliance(format!(
+                        "Request {request_id} has a determination timestamp without a source"
+                    ))
+                })?;
+            let timestamp = parse_timestamp(value, "determination")?;
+            if timestamp < created {
+                return Err(AppError::Compliance(format!(
+                    "Request {request_id} determination predates receipt"
+                )));
+            }
+            Some((timestamp, source.to_string()))
+        }
+        None => {
+            if determination_source.is_some_and(|value| !value.trim().is_empty()) {
+                return Err(AppError::Compliance(format!(
+                    "Request {request_id} has a determination source without a timestamp"
+                )));
+            }
+            None
+        }
     };
+    let (determination, determination_basis, recorded_determination_source) =
+        if let Some((timestamp, source)) = sourced_determination {
+            (
+                Some(timestamp),
+                DeterminationBasis::SourcedDeterminationEvent,
+                Some(source),
+            )
+        } else {
+            let proxy = earliest_milestone(created, updated_at, closed_at)?;
+            let basis = if proxy.is_some() {
+                DeterminationBasis::EarliestRecordedActivityProxy
+            } else {
+                DeterminationBasis::ObservationWithoutRecordedActivity
+            };
+            (proxy, basis, None)
+        };
     let initial_deadline = created
         .checked_add_days(Days::new(CPRA_INITIAL_DETERMINATION_DAYS))
         .ok_or_else(|| {
@@ -188,13 +243,19 @@ pub fn evaluate_statutory_compliance_at(
         anomaly_markers.push(TimelineAnomalyMarker::StatutoryLatencyViolation);
     }
 
-    let milestone_label = if determination_basis.is_recorded_activity() {
+    let milestone_label = if determination_basis.is_sourced_determination() {
+        "sourced determination event"
+    } else if determination_basis.is_recorded_activity() {
         "recorded determination milestone"
     } else {
         "observation without a recorded determination milestone"
     };
+    let determination_source_clause = recorded_determination_source
+        .as_deref()
+        .map(|source| format!("; determination source: {source}"))
+        .unwrap_or_default();
     let evidence_summary = format!(
-        "Request {request_id}: {calendar_days_elapsed} calendar days from receipt to {milestone_label}; effective deadline was {} under {CPRA_STATUTE_CITATION}; extension status {:?}.",
+        "Request {request_id}: {calendar_days_elapsed} calendar days from receipt to {milestone_label}{determination_source_clause}; effective deadline was {} under {CPRA_STATUTE_CITATION}; extension status {:?}.",
         effective_deadline.to_rfc3339(),
         extension_evaluation.status
     );
@@ -204,6 +265,7 @@ pub fn evaluate_statutory_compliance_at(
         statute_citation: CPRA_STATUTE_CITATION.to_string(),
         created_at: created.to_rfc3339(),
         determination_at: determination.map(|value| value.to_rfc3339()),
+        determination_source: recorded_determination_source,
         determination_basis,
         observed_at: observed.to_rfc3339(),
         initial_deadline_at: initial_deadline.to_rfc3339(),
@@ -454,6 +516,46 @@ mod tests {
             backdated.determination_basis,
             DeterminationBasis::ObservationWithoutRecordedActivity
         );
+    }
+
+    #[test]
+    fn sourced_determination_event_overrides_generic_activity_and_retains_provenance() {
+        let analysis = evaluate_statutory_compliance_with_determination_at(
+            17,
+            "2026-01-01T09:00:00-08:00",
+            Some("2026-01-02T09:00:00-08:00"),
+            Some("2026-01-20T09:00:00-08:00"),
+            Some("2026-01-09T15:30:00-08:00"),
+            Some("Agency determination notice dated January 9"),
+            None,
+            "2026-01-20T09:00:00-08:00",
+        )
+        .expect("a sourced determination must evaluate");
+        assert_eq!(
+            analysis.determination_basis,
+            DeterminationBasis::SourcedDeterminationEvent
+        );
+        assert_eq!(
+            analysis.determination_at.as_deref(),
+            Some("2026-01-09T15:30:00-08:00")
+        );
+        assert_eq!(
+            analysis.determination_source.as_deref(),
+            Some("Agency determination notice dated January 9")
+        );
+        assert!(!analysis.is_violation);
+
+        assert!(evaluate_statutory_compliance_with_determination_at(
+            17,
+            "2026-01-01T09:00:00-08:00",
+            None,
+            None,
+            Some("2026-01-09T15:30:00-08:00"),
+            None,
+            None,
+            "2026-01-20T09:00:00-08:00",
+        )
+        .is_err());
     }
 
     #[test]

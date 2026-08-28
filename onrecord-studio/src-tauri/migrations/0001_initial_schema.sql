@@ -134,6 +134,8 @@ CREATE TABLE IF NOT EXISTS requests (
     updated_at TEXT NOT NULL,
     closed_at TEXT,
     due_date TEXT,
+    determination_at TEXT,
+    determination_source TEXT,
     neighborhood_block TEXT,
     
     -- Relations

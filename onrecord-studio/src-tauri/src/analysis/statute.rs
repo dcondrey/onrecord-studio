@@ -23,6 +23,8 @@
 //! | `created_timestamp` | receipt instant |
 //! | `updated_timestamp` / `closed_timestamp` | activity instants, nullable |
 //! | `created_date` / `updated_date` / `closed_date` | the *recorded-offset* calendar dates |
+//! | `determination_timestamp` / `explicit_determination_date` | sourced determination, nullable |
+//! | `determination_source` | notice/source identifier required for the explicit date |
 //! | `extension_notice_timestamp` | extension notice instant, nullable |
 //! | `extension_notice_date` / `extension_expected_date` | extension calendar dates |
 //! | `extension_reason` / `extension_notice_source` | extension provenance |
@@ -48,13 +50,15 @@ pub const SUSPICIOUS_CLOSURE_THRESHOLD_SECONDS: i64 = 300;
 
 /// What a compliance evaluation actually measured the elapsed period against.
 ///
-/// The statute runs to the agency's *determination*, which is a distinct, noticed event. No
-/// ingested portal models that event as its own record, so neither evaluation path can observe it
-/// directly. Both therefore report which substitute they used, and no consumer may present a
-/// finding as a measured determination unless the basis says it is one.
+/// The statute runs to the agency's *determination*, which is a distinct, noticed event. Sources
+/// may carry that event and its provenance explicitly. When absent, both evaluation paths report
+/// which substitute they used, and no consumer may present a proxy as a measured event.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum DeterminationBasis {
+    /// MEASURED. The source carried a distinct determination timestamp and a non-empty notice or
+    /// source identifier, both retained with the request.
+    SourcedDeterminationEvent,
     /// PROXY. The earliest recorded portal activity at or after receipt (`updated_at`, else
     /// `closed_at`) stood in for the determination. Activity is an upper bound on when the agency
     /// acted, not evidence that the act was a determination: a request touched for an unrelated
@@ -72,11 +76,19 @@ impl DeterminationBasis {
     ///
     /// False means the elapsed period was measured to "now" and will keep growing.
     pub const fn is_recorded_activity(self) -> bool {
-        matches!(self, Self::EarliestRecordedActivityProxy)
+        matches!(
+            self,
+            Self::SourcedDeterminationEvent | Self::EarliestRecordedActivityProxy
+        )
+    }
+
+    pub const fn is_sourced_determination(self) -> bool {
+        matches!(self, Self::SourcedDeterminationEvent)
     }
 
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::SourcedDeterminationEvent => "SOURCED_DETERMINATION_EVENT",
             Self::EarliestRecordedActivityProxy => "EARLIEST_RECORDED_ACTIVITY_PROXY",
             Self::ObservationWithoutRecordedActivity => "OBSERVATION_WITHOUT_RECORDED_ACTIVITY",
         }
@@ -132,13 +144,16 @@ pub mod sql {
         format!("TRY_CAST(substr({timestamp_expression}, 1, 10) AS DATE)")
     }
 
-    /// Calendar date of the determination proxy: the earliest recorded activity at or after
-    /// receipt, mirroring `timeline::earliest_milestone`.
+    /// Calendar date of a sourced determination, or otherwise the earliest recorded activity at
+    /// or after receipt, mirroring `timeline`.
     ///
     /// The *instants* pick the winner and the winner's own date is returned, so the choice is made
     /// on real ordering while the arithmetic stays on calendar dates.
     pub fn determination_calendar_date() -> String {
         "CASE
+            WHEN determination_timestamp >= created_timestamp
+             AND TRIM(COALESCE(determination_source, '')) <> ''
+                THEN explicit_determination_date
             WHEN updated_timestamp >= created_timestamp AND closed_timestamp >= created_timestamp
                 THEN CASE
                     WHEN updated_timestamp <= closed_timestamp THEN updated_date

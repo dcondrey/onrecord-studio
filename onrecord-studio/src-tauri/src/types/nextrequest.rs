@@ -45,6 +45,12 @@ pub struct PublicRequest {
     pub closed_at: Option<String>,
     #[serde(alias = "dueDate")]
     pub due_date: Option<String>,
+    /// A source-reported determination event, distinct from generic request activity.
+    #[serde(default, alias = "determinationAt")]
+    pub determination_at: Option<String>,
+    /// Human-readable source/notice identifier that attests `determination_at`.
+    #[serde(default, alias = "determinationSource")]
+    pub determination_source: Option<String>,
 
     #[serde(default, alias = "neighborhoodBlock")]
     pub neighborhood_block: Option<String>,
@@ -148,12 +154,15 @@ impl PublicRequest {
                 .map(|marker| marker.as_str().to_string()),
         );
 
-        let statutory = crate::analysis::evaluate_statutory_compliance(
+        let statutory = crate::analysis::evaluate_statutory_compliance_with_determination_at(
             self.id,
             &self.created_at,
             Some(&self.updated_at),
             self.closed_at.as_deref(),
+            self.determination_at.as_deref(),
+            self.determination_source.as_deref(),
             self.statutory_extension.as_ref(),
+            &chrono::Utc::now().to_rfc3339(),
         )?;
         anomalies.extend(
             statutory

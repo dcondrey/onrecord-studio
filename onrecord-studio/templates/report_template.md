@@ -28,6 +28,7 @@ California Government Code § 7922.535 requires an agency to determine within 10
 | Initial determination deadline | {{INITIAL_DEADLINE_AT}} |
 | Effective determination deadline | {{EFFECTIVE_DEADLINE_AT}} |
 | Recorded determination milestone | {{DETERMINATION_AT}} |
+| Determination source | {{DETERMINATION_SOURCE}} |
 | Calendar days elapsed | {{CALENDAR_DAYS_ELAPSED}} |
 | Extension status | {{EXTENSION_STATUS}} |
 | Extension reason | {{EXTENSION_REASON}} |

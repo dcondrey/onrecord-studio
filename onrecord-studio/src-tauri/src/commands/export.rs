@@ -1,4 +1,4 @@
-use crate::analysis::{evaluate_statutory_compliance, StatutoryComplianceAnalysis};
+use crate::analysis::StatutoryComplianceAnalysis;
 use crate::commands::validation::{
     optional_text, portal_key as validate_portal_key, MAXIMUM_PATH_BYTES,
 };
@@ -18,7 +18,7 @@ const MAXIMUM_REPORT_BYTES: usize = 32 * 1024 * 1024;
 
 // FEATURE(export): Add a signed evidence-package export containing the report, referenced source
 // hashes, legal-authority versions, and a machine-verifiable manifest for external review.
-const TEMPLATE_VARIABLES: [&str; 24] = [
+const TEMPLATE_VARIABLES: [&str; 25] = [
     "GENERATED_AT",
     "AGENCY_NAME",
     "PORTAL_NAME",
@@ -35,6 +35,7 @@ const TEMPLATE_VARIABLES: [&str; 24] = [
     "INITIAL_DEADLINE_AT",
     "EFFECTIVE_DEADLINE_AT",
     "DETERMINATION_AT",
+    "DETERMINATION_SOURCE",
     "CALENDAR_DAYS_ELAPSED",
     "EXTENSION_STATUS",
     "EXTENSION_REASON",
@@ -60,12 +61,15 @@ pub async fn export_legal_brief(
     let evidence = repository
         .load_legal_brief_evidence(request_id, portal_key)
         .await?;
-    let compliance = evaluate_statutory_compliance(
+    let compliance = crate::analysis::evaluate_statutory_compliance_with_determination_at(
         request_id,
         &evidence.created_at,
         Some(&evidence.updated_at),
         evidence.closed_at.as_deref(),
+        evidence.determination_at.as_deref(),
+        evidence.determination_source.as_deref(),
         evidence.extension.as_ref(),
+        &chrono::Utc::now().to_rfc3339(),
     )?;
     let legal_findings = repository
         .list_request_legal_findings(request_id, portal_key)
@@ -224,6 +228,15 @@ fn render_report(
                 .determination_at
                 .as_deref()
                 .unwrap_or("No qualifying milestone recorded"),
+        )?,
+    );
+    values.insert(
+        "DETERMINATION_SOURCE",
+        markdown_inline(
+            compliance
+                .determination_source
+                .as_deref()
+                .unwrap_or("No sourced determination event recorded"),
         )?,
     );
     values.insert(

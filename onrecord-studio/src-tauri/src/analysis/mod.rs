@@ -17,7 +17,8 @@ pub use statute::{DeterminationBasis, CPRA_MAXIMUM_EXTENDED_DETERMINATION_DAYS};
 pub use timeline::{
     calculate_operational_latency, calculate_operational_latency_at,
     calculate_operational_latency_for_status, detect_fast_drop, detect_fast_drop_for_status,
-    evaluate_statutory_compliance, evaluate_statutory_compliance_at, StatutoryComplianceAnalysis,
+    evaluate_statutory_compliance, evaluate_statutory_compliance_at,
+    evaluate_statutory_compliance_with_determination_at, StatutoryComplianceAnalysis,
     StatutoryExtensionStatus, CPRA_INITIAL_DETERMINATION_DAYS, CPRA_MAXIMUM_EXTENSION_DAYS,
     CPRA_STATUTE_CITATION, SUSPICIOUS_CLOSURE_THRESHOLD_SECONDS,
 };
