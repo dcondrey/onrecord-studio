@@ -39,11 +39,15 @@ const EMPTY_DRAFT: ExtensionDraft = {
 
 /// `datetime-local` reads and writes local wall-clock time with no zone. The stored value is
 /// RFC 3339, so both directions convert explicitly rather than slicing the string.
+///
+/// Kept to seconds, with `step={1}` on the inputs to match. Truncating to the minute would mean
+/// that opening "Replace notice" and saving without editing anything silently rewrote the recorded
+/// instant, which is a change to evidence that nobody asked for.
 function toLocalInput(value: string) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return '';
   const offset = parsed.getTimezoneOffset() * 60_000;
-  return new Date(parsed.getTime() - offset).toISOString().slice(0, 16);
+  return new Date(parsed.getTime() - offset).toISOString().slice(0, 19);
 }
 
 function toRfc3339(value: string) {
@@ -109,6 +113,10 @@ export default function LegalCompliancePanel({
     setIsExtensionFormOpen(false);
     setExtensionDraft(EMPTY_DRAFT);
     setExtensionError(null);
+    // A save in flight for the previous record can no longer clear this: its `finally` is gated on
+    // the token this line has just superseded. Without the reset the form reopens on the new record
+    // stuck on a disabled "Saving…".
+    setIsSavingExtension(false);
     void invokeCommand('get_request_statutory_extension', {
       requestId: record.requestId,
       portalKey: record.portalKey,
@@ -347,6 +355,7 @@ export default function LegalCompliancePanel({
                 Notice given
                 <input
                   type="datetime-local"
+                  step={1}
                   value={extensionDraft.noticeAt}
                   onChange={(event) =>
                     setExtensionDraft((draft) => ({ ...draft, noticeAt: event.target.value }))
@@ -358,6 +367,7 @@ export default function LegalCompliancePanel({
                 Determination expected
                 <input
                   type="datetime-local"
+                  step={1}
                   value={extensionDraft.expectedDeterminationAt}
                   onChange={(event) =>
                     setExtensionDraft((draft) => ({

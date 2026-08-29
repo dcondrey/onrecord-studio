@@ -453,9 +453,14 @@ fn open_writer_connection(path: &Path) -> Result<Connection, AppError> {
     })?;
     connection
         .execute_batch(
+            // Same reason as `DuckDbRepository::new`: `indexed_at` is written with a literal `Z`
+            // and compared lexically against caller-supplied bounds. Without this the corpus index
+            // would carry local wall-clock time while the core database carries real UTC, and the
+            // two would disagree by the local offset.
             "SET preserve_insertion_order = false;
              SET threads = 1;
-             SET enable_progress_bar = false;",
+             SET enable_progress_bar = false;
+             SET TimeZone = 'UTC';",
         )
         .map_err(|error| AppError::Storage(format!("Failed to configure corpus index: {error}")))?;
     connection

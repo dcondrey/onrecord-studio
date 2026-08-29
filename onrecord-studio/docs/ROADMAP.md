@@ -12,7 +12,7 @@ limit, context compaction, or a change of contributor. Search for `TODO(` and
 ### Continuation — 2026-08-29 unreached-surface pass
 
 Verification at the end of this pass, all run together: `cargo fmt --check`,
-`cargo clippy --lib --all-targets` (clean), `cargo test --lib` (286 passing), `npx tsc --noEmit`,
+`cargo clippy --lib --all-targets` (clean), `cargo test --lib` (288 passing), `npx tsc --noEmit`,
 `npx eslint src --max-warnings 0`, `npx vitest run` (93 passing), `node scripts/check-ipc-contract.mjs`
 (38 commands, 18 telemetry events, 6 verification states). The counts recorded in the older entries
 below are stale by construction: they were 217/226/229 Rust and 61/70 frontend against 30 and 27

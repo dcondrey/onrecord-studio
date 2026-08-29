@@ -7124,6 +7124,161 @@ mod tests {
         assert_eq!(remaining, 0, "the document row itself must be gone");
     }
 
+    /// Every other test here opens a fresh database, so nothing about an upgraded one is covered.
+    /// This one writes the rows an older build would have left behind.
+    ///
+    /// `lease_expires_at` is the only timestamp this repository compares rather than merely stores,
+    /// and the format change moved both sides of that comparison at once. A row written by an older
+    /// build reads `2020-01-01T09:41:123456Z`: microseconds in the seconds field, and local
+    /// wall-clock time labelled `Z`. The comparison against a new `%S.%f` UTC string is lexical, so
+    /// what has to hold is that the date and hour still decide it. An expired legacy lease must be
+    /// reclaimed rather than stranding its task `LEASED` forever, and a live one must not be
+    /// reclaimed out from under a running worker.
+    ///
+    /// What this does not cover, because no deterministic test can: two timestamps inside the same
+    /// minute, where the old format's microseconds occupy the seconds field and the ordering is
+    /// meaningless. Leases are ten minutes long, so that window is not reachable in practice, and
+    /// the seconds an old row lost cannot be recovered by any backfill.
+    #[tokio::test]
+    async fn legacy_format_leases_are_reclaimed_when_expired_and_left_alone_when_live() {
+        let repository = repository_with_document().await;
+        {
+            let connection = repository.conn.lock().await;
+            connection
+                .execute(
+                    "INSERT INTO portal_sync_runs (run_id, portal_subdomain, started_at, status)
+                     VALUES (?1, ?2, ?3, 'RUNNING')",
+                    params!["run-legacy", PORTAL_SUBDOMAIN, "2026-08-25T09:00:00Z"],
+                )
+                .expect("sync run fixture must insert");
+            for (target, lease) in [
+                ("target-expired", "2020-01-01T09:41:123456Z"),
+                ("target-live", "2099-01-01T09:41:123456Z"),
+            ] {
+                connection
+                    .execute(
+                        "INSERT INTO ingestion_task_frontier (
+                            run_id, source_key, target_id, payload_json, status,
+                            lease_expires_at, created_at, updated_at
+                         ) VALUES (?1, ?2, ?3, ?4, 'LEASED', ?5, ?6, ?6)",
+                        params![
+                            "run-legacy",
+                            PORTAL_SUBDOMAIN,
+                            target,
+                            "{}",
+                            lease,
+                            "2026-08-25T09:00:00Z",
+                        ],
+                    )
+                    .expect("legacy frontier row must insert");
+            }
+        }
+
+        let claimed = repository
+            .claim_ingestion_frontier_task("run-legacy", PORTAL_SUBDOMAIN)
+            .await
+            .expect("claiming against legacy leases must not error");
+        let claimed = claimed.expect("the expired legacy lease must be recovered");
+
+        let connection = repository.conn.lock().await;
+        let claimed_target: String = connection
+            .query_row(
+                "SELECT target_id FROM ingestion_task_frontier WHERE frontier_id = ?1",
+                params![claimed.frontier_id],
+                |row| row.get(0),
+            )
+            .expect("the claimed frontier row must be readable");
+        assert_eq!(
+            claimed_target, "target-expired",
+            "only the expired lease may be recovered"
+        );
+        let live_status: String = connection
+            .query_row(
+                "SELECT status FROM ingestion_task_frontier WHERE target_id = ?1",
+                params!["target-live"],
+                |row| row.get(0),
+            )
+            .expect("the live frontier row must be readable");
+        assert_eq!(
+            live_status, "LEASED",
+            "a legacy lease that has not expired must not be reclaimed from a running worker"
+        );
+    }
+
+    /// The reason the recording surface exists, stated as the verdict it changes.
+    ///
+    /// The two writes below differ only in whether an extension was recorded. Without one, a
+    /// determination 19 days after the request exceeds the initial statutory period and the audit
+    /// reports `STATUTORY_LATENCY_VIOLATION`. With a notice given inside that period claiming a
+    /// period the statute grants, the same dates are compliant. Before this repository could
+    /// record an extension, only the first outcome was reachable, which is the difference between
+    /// a finding and a false accusation.
+    #[tokio::test]
+    async fn a_recorded_extension_withdraws_the_statutory_latency_violation() {
+        let repository = repository_with_document().await;
+        {
+            let connection = repository.conn.lock().await;
+            connection
+                .execute(
+                    "UPDATE requests
+                     SET created_at = ?1, updated_at = ?2, closed_at = ?2, status = 'closed'
+                     WHERE id = ?3 AND portal_subdomain = ?4",
+                    params![
+                        "2026-08-01T09:00:00Z",
+                        "2026-08-20T09:00:00Z",
+                        REQUEST_ID,
+                        PORTAL_SUBDOMAIN,
+                    ],
+                )
+                .expect("the overdue request fixture must update");
+        }
+
+        let without_extension = repository
+            .refresh_request_timeline_audit(REQUEST_ID as u64, PORTAL_SUBDOMAIN)
+            .await
+            .expect("the audit must run without an extension");
+        assert!(
+            without_extension
+                .iter()
+                .any(|flag| flag == "STATUTORY_LATENCY_VIOLATION"),
+            "a determination 19 days out with no recorded extension exceeds the initial period; \
+             got {without_extension:?}"
+        );
+
+        repository
+            .record_statutory_extension(
+                REQUEST_ID as u64,
+                PORTAL_SUBDOMAIN,
+                &StatutoryExtensionRecord {
+                    notice_at: "2026-08-06T09:00:00Z".to_string(),
+                    expected_determination_at: "2026-08-22T09:00:00Z".to_string(),
+                    reason: StatutoryExtensionReason::VoluminousRecords,
+                    notice_source: "Agency extension letter dated 2026-08-06".to_string(),
+                },
+            )
+            .await
+            .expect("a valid extension must record");
+
+        let with_extension = repository
+            .refresh_request_timeline_audit(REQUEST_ID as u64, PORTAL_SUBDOMAIN)
+            .await
+            .expect("the audit must run with an extension");
+        assert!(
+            !with_extension
+                .iter()
+                .any(|flag| flag == "STATUTORY_LATENCY_VIOLATION"),
+            "the same dates are within the extended period, so the violation must be withdrawn; \
+             got {with_extension:?}"
+        );
+        assert!(
+            !with_extension
+                .iter()
+                .any(|flag| flag == "STATUTORY_EXTENSION_DEFECTIVE"),
+            "the notice is inside the initial period and claims a period the statute grants, so \
+             it must not be reported as defective; got {with_extension:?}"
+        );
+    }
+
     /// `record_source_task_failure` upserts, and its `DO UPDATE SET` clause set `last_occurred_at`
     /// from `current_timestamp`. DuckDB binds a bare identifier there against the target table, so
     /// the statement never bound and no ingestion failure was ever recorded, on the first
