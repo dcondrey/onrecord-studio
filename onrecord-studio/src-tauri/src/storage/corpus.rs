@@ -240,6 +240,35 @@ impl CorpusIndex {
         .await
     }
 
+    /// Removes every corpus row derived from one document.
+    ///
+    /// This is not evidence deletion. The corpus index is a rebuildable projection of the core
+    /// database, so this exists only so that purging a document from the core does not leave the
+    /// projection asserting entities, near-duplicate bands and co-occurrence edges for a document
+    /// that no longer exists. A pattern query that still counts a purged document is a false
+    /// statement about the corpus.
+    ///
+    /// Returns the number of indexed documents removed. Zero is not a failure: the reconciler
+    /// indexes lazily, so a document can be purged before the index ever reached it.
+    pub async fn purge_document(
+        &self,
+        portal_key: String,
+        document_id: u64,
+    ) -> Result<u64, AppError> {
+        self.write("Corpus document purge", move |connection| {
+            purge_indexed_documents(connection, &portal_key, Some(document_id))
+        })
+        .await
+    }
+
+    /// Removes every corpus row derived from any document of one source. See [`Self::purge_document`].
+    pub async fn purge_portal(&self, portal_key: String) -> Result<u64, AppError> {
+        self.write("Corpus source purge", move |connection| {
+            purge_indexed_documents(connection, &portal_key, None)
+        })
+        .await
+    }
+
     pub async fn is_document_current(
         &self,
         portal_key: String,
@@ -1603,6 +1632,112 @@ fn persist_analyzed_document(
         .map_err(|error| AppError::Storage(format!("Failed to commit corpus index: {error}")))
 }
 
+/// Deletes the projection rows for one document, or for every document of a source when
+/// `document_id` is `None`, and recounts every entity whose mentions were removed.
+///
+/// Child tables are deleted before `corpus_documents` because DuckDB implements no cascading
+/// foreign-key actions (see the header of `0001_initial_schema.sql`); this order is the foreign-key
+/// order in `CORPUS_SCHEMA` reversed.
+fn purge_indexed_documents(
+    connection: &mut Connection,
+    portal_key: &str,
+    document_id: Option<u64>,
+) -> Result<u64, AppError> {
+    let transaction = connection.transaction().map_err(|error| {
+        AppError::Storage(format!("Failed to open corpus purge transaction: {error}"))
+    })?;
+    // Read the affected entities before their mentions are deleted. Afterwards there is nothing
+    // left to join on, and an entity whose `document_count` still includes a purged document
+    // reports evidence that is no longer indexed.
+    // Two prepared statements rather than one with a conditional predicate: DuckDB has no
+    // parameter form for "match anything", and a closure passed to `query_map` has a distinct type
+    // per branch, so the arms cannot share a binding.
+    let affected = {
+        let mut collected = BTreeSet::new();
+        match document_id {
+            Some(document_id) => {
+                let mut statement = transaction
+                    .prepare(
+                        "SELECT DISTINCT entity_id FROM corpus_entity_mentions
+                         WHERE portal_key = ?1 AND document_id = ?2",
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!(
+                            "Failed to prepare purged entity lookup: {error}"
+                        ))
+                    })?;
+                let rows = statement
+                    .query_map(params![portal_key, document_id], |row| {
+                        row.get::<_, String>(0)
+                    })
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to query purged entities: {error}"))
+                    })?;
+                for row in rows {
+                    collected.insert(row.map_err(|error| {
+                        AppError::Storage(format!("Failed to decode a purged entity: {error}"))
+                    })?);
+                }
+            }
+            None => {
+                let mut statement = transaction
+                    .prepare(
+                        "SELECT DISTINCT entity_id FROM corpus_entity_mentions
+                         WHERE portal_key = ?1",
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!(
+                            "Failed to prepare purged entity lookup: {error}"
+                        ))
+                    })?;
+                let rows = statement
+                    .query_map(params![portal_key], |row| row.get::<_, String>(0))
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to query purged entities: {error}"))
+                    })?;
+                for row in rows {
+                    collected.insert(row.map_err(|error| {
+                        AppError::Storage(format!("Failed to decode a purged entity: {error}"))
+                    })?);
+                }
+            }
+        }
+        collected
+    };
+
+    let mut removed = 0u64;
+    for table in [
+        "corpus_entity_relationships",
+        "corpus_entity_mentions",
+        "corpus_entity_truncations",
+        "corpus_lsh_bands",
+        "corpus_term_postings",
+        "corpus_segments",
+        "corpus_documents",
+    ] {
+        let deleted = match document_id {
+            Some(document_id) => transaction.execute(
+                &format!("DELETE FROM {table} WHERE portal_key = ?1 AND document_id = ?2"),
+                params![portal_key, document_id],
+            ),
+            None => transaction.execute(
+                &format!("DELETE FROM {table} WHERE portal_key = ?1"),
+                params![portal_key],
+            ),
+        }
+        .map_err(|error| AppError::Storage(format!("Failed to purge {table}: {error}")))?;
+        if table == "corpus_documents" {
+            removed = deleted as u64;
+        }
+    }
+
+    recount_entities(&transaction, affected)?;
+    transaction
+        .commit()
+        .map_err(|error| AppError::Storage(format!("Failed to commit corpus purge: {error}")))?;
+    Ok(removed)
+}
+
 fn refresh_entity_document_counts(
     transaction: &Transaction<'_>,
     document: &AnalyzedDocument,
@@ -1616,6 +1751,18 @@ fn refresh_entity_document_counts(
             entity.normalized_value
         ))
     }));
+    recount_entities(transaction, affected)
+}
+
+/// Recomputes `corpus_entity_document_counts` for exactly the entities whose mentions changed, and
+/// removes any entity the change left with no mentions and no relationships at all.
+///
+/// Both callers have already written their mention rows before reaching here, so an entity that
+/// counts zero really is unreferenced rather than mid-write.
+fn recount_entities(
+    transaction: &Transaction<'_>,
+    affected: BTreeSet<String>,
+) -> Result<(), AppError> {
     for entity_id in affected {
         let document_count = transaction
             .query_row(
@@ -1650,6 +1797,28 @@ fn refresh_entity_document_counts(
                 )
                 .map_err(|error| {
                     AppError::Storage(format!("Failed to materialize an entity count: {error}"))
+                })?;
+        }
+        if document_count == 0 {
+            // The count row is gone; drop the entity itself so a purged source leaves no
+            // vocabulary behind. Guarded on relationships as well as mentions because
+            // `corpus_entity_relationships` also references `corpus_entities`, and DuckDB has no
+            // cascading delete to fall back on.
+            transaction
+                .execute(
+                    "DELETE FROM corpus_entities
+                     WHERE entity_id = ?1
+                       AND NOT EXISTS (
+                         SELECT 1 FROM corpus_entity_mentions WHERE entity_id = ?1
+                       )
+                       AND NOT EXISTS (
+                         SELECT 1 FROM corpus_entity_relationships
+                         WHERE left_entity_id = ?1 OR right_entity_id = ?1
+                       )",
+                    params![entity_id],
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to remove an unreferenced entity: {error}"))
                 })?;
         }
     }

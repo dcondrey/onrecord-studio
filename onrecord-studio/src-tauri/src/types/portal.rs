@@ -137,6 +137,36 @@ pub struct SourceRemoval {
     pub retained_documents: u64,
 }
 
+/// What purging a single document destroyed.
+///
+/// `local_path` is reported rather than unlinked by the repository, because the repository owns
+/// rows and not the filesystem. A caller that ignores it leaves an orphaned evidence file, which is
+/// recoverable; a repository that deleted the file inside its transaction would leave an
+/// unrecoverable gap whenever the transaction rolled back.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentPurge {
+    pub document_id: u64,
+    pub source_key: String,
+    pub local_path: Option<String>,
+    pub search_rows_removed: u64,
+    pub provenance_rows_removed: u64,
+}
+
+/// What purging an entire source destroyed.
+///
+/// Counts are reported for the same reason [`SourceRemoval`] reports its retained documents: a
+/// destructive action that does not say what it destroyed is as misleading as one that silently
+/// keeps what the operator asked to remove.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SourcePurge {
+    pub source_key: String,
+    pub documents_removed: u64,
+    pub requests_removed: u64,
+    pub local_paths: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PortalSyncStart {

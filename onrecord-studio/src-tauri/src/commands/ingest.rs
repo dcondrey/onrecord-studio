@@ -9,9 +9,9 @@ use crate::ingestion::queue::{ingestion_telemetry_envelope, IngestionProgress, Q
 use crate::storage::corpus::CorpusIndex;
 use crate::storage::sqlite::DuckDbRepository;
 use crate::types::{
-    CrawlPolicy, PastedContentInput, PortalRuntimeSnapshot, PortalSyncStart, RateLimitPolicy,
-    SavedSource, SourceDiscoveryPreview, SourceGuidance, SourceIngestionStart, SourceKind,
-    SourceLifecycleState, SourceRemoval,
+    CrawlPolicy, DocumentPurge, PastedContentInput, PortalRuntimeSnapshot, PortalSyncStart,
+    RateLimitPolicy, SavedSource, SourceDiscoveryPreview, SourceGuidance, SourceIngestionStart,
+    SourceKind, SourceLifecycleState, SourcePurge, SourceRemoval,
 };
 use std::path::Path;
 use std::sync::Arc;
@@ -203,6 +203,61 @@ pub async fn remove_source(
 ) -> Result<SourceRemoval, AppError> {
     let source_key = validate_portal_key(&source_key)?;
     manager.remove_source(source_key).await
+}
+
+/// Destroys a source and every document ingested under it, then removes the derived corpus rows
+/// and unlinks the evidence files.
+///
+/// Distinct from `remove_source`, which withdraws a source and keeps its documents. This command
+/// exists so that "I want to start over" is expressible; the front end must confirm it separately
+/// and must not present the two as one control with a checkbox.
+///
+/// The corpus index is purged after the core commits, not before. The corpus is a rebuildable
+/// projection, so a corpus row surviving a failed core delete is a stale projection that the next
+/// reindex corrects, whereas a core row surviving a successful corpus delete would be evidence the
+/// index can no longer describe.
+#[tauri::command]
+pub async fn purge_source(
+    source_key: String,
+    manager: State<'_, Arc<QueueManager>>,
+    index: State<'_, CorpusIndex>,
+) -> Result<SourcePurge, AppError> {
+    let source_key = validate_portal_key(&source_key)?;
+    let purge = manager.purge_source(source_key).await?;
+    index.purge_portal(source_key.to_string()).await?;
+    remove_evidence_files(&purge.local_paths).await;
+    Ok(purge)
+}
+
+/// Destroys one ingested document and everything derived from it. See [`purge_source`].
+#[tauri::command]
+pub async fn purge_document(
+    source_key: String,
+    document_id: u64,
+    manager: State<'_, Arc<QueueManager>>,
+    index: State<'_, CorpusIndex>,
+) -> Result<DocumentPurge, AppError> {
+    let source_key = validate_portal_key(&source_key)?;
+    let purge = manager.purge_document(source_key, document_id).await?;
+    index
+        .purge_document(source_key.to_string(), document_id)
+        .await?;
+    if let Some(path) = purge.local_path.as_ref() {
+        remove_evidence_files(std::slice::from_ref(path)).await;
+    }
+    Ok(purge)
+}
+
+/// Unlinks purged evidence files, reporting nothing.
+///
+/// A file that is already gone, or that cannot be unlinked because the volume is read-only, must
+/// not fail a purge that has already committed: the rows describing the file are gone, so the file
+/// is an orphan blob rather than evidence, and reporting an error here would tell the operator the
+/// purge did not happen when it did.
+async fn remove_evidence_files(paths: &[String]) {
+    for path in paths {
+        let _ = tokio::fs::remove_file(path).await;
+    }
 }
 
 #[tauri::command]

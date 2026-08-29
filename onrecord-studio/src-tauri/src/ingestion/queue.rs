@@ -25,10 +25,10 @@ use crate::storage::sqlite::{
     PortalSyncRunFinalization,
 };
 use crate::types::{
-    CrawlPolicy, DocumentMetadata, FrontierExclusionCount, PastedContentInput, PortalApiLayout,
-    PortalRegistration, PortalRuntimeSnapshot, PortalSyncStart, PublicRequest, RateLimitPolicy,
-    SourceGuidance, SourceIngestionStart, SourceKind, SourceLifecycleState, SourceRemoval,
-    StoppedHost,
+    CrawlPolicy, DocumentMetadata, DocumentPurge, FrontierExclusionCount, PastedContentInput,
+    PortalApiLayout, PortalRegistration, PortalRuntimeSnapshot, PortalSyncStart, PublicRequest,
+    RateLimitPolicy, SourceGuidance, SourceIngestionStart, SourceKind, SourceLifecycleState,
+    SourcePurge, SourceRemoval, StoppedHost,
 };
 use chrono::{NaiveDate, Utc};
 use regex::Regex;
@@ -1505,6 +1505,50 @@ impl QueueManager {
             discarded_frontier_tasks,
             retained_documents,
         })
+    }
+
+    /// Destroys a source and everything ingested under it, including the `portals` row.
+    ///
+    /// [`Self::remove_source`] withdraws a source and keeps its documents. This is the other
+    /// operation, and the two are deliberately not one function with a flag: an operator who meant
+    /// "stop crawling this" and an operator who meant "erase this" have opposite intentions, and a
+    /// boolean parameter is a poor place for that distinction to live.
+    ///
+    /// Workers are joined before anything is deleted, for the same reason the withdrawal path does
+    /// it: a worker still in flight can finalize a document behind the delete, which would leave
+    /// rows referencing a `portals` row that no longer exists and make the next launch fail
+    /// `verify_logical_relations`.
+    ///
+    /// The returned evidence paths are unlinked by the caller. The repository owns rows, not files.
+    pub async fn purge_source(&self, source_key: &str) -> Result<SourcePurge, AppError> {
+        let _provisioning_guard = self.provisioning_lock.lock().await;
+        if self
+            .repository
+            .source_lifecycle_state(source_key)
+            .await?
+            .is_none()
+        {
+            return Err(AppError::DataParsing(format!(
+                "No saved source is registered as '{source_key}'"
+            )));
+        }
+        self.stop_source_pool_locked(source_key).await?;
+        self.repository.purge_source(source_key).await
+    }
+
+    /// Destroys one ingested document and everything derived from it.
+    ///
+    /// Takes the provisioning lock and stops nothing else: a purge is rare and a running crawl for
+    /// the same source could otherwise re-finalize the document between the delete and the commit.
+    pub async fn purge_document(
+        &self,
+        source_key: &str,
+        document_id: u64,
+    ) -> Result<DocumentPurge, AppError> {
+        let _provisioning_guard = self.provisioning_lock.lock().await;
+        self.repository
+            .purge_document(source_key, document_id)
+            .await
     }
 
     /// Tears down a running pool and finalizes its run. Returns `false` when the source was not

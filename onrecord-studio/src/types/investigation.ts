@@ -57,6 +57,26 @@ export interface SourceRemoval {
   retainedDocuments: number;
 }
 
+/// What purging a single document destroyed. `localPath` is reported rather than unlinked by the
+/// repository, so a caller that ignores it leaves an orphaned file rather than an unrecoverable gap.
+export interface DocumentPurge {
+  documentId: number;
+  sourceKey: string;
+  localPath: string | null;
+  searchRowsRemoved: number;
+  provenanceRowsRemoved: number;
+}
+
+/// What purging an entire source destroyed. Counts are carried for the same reason SourceRemoval
+/// carries its retained count: a destructive action that does not say what it destroyed is as
+/// misleading as one that silently keeps what the operator asked to remove.
+export interface SourcePurge {
+  sourceKey: string;
+  documentsRemoved: number;
+  requestsRemoved: number;
+  localPaths: string[];
+}
+
 export type SourceKind =
   | 'NEXT_REQUEST'
   | 'WEB_CRAWL'

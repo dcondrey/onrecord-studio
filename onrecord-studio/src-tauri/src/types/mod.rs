@@ -40,9 +40,9 @@ pub use nextrequest::{
     PublicRequest,
 };
 pub use portal::{
-    FrontierExclusionCount, PortalApiLayout, PortalRegistration, PortalRuntimeSnapshot,
-    PortalSyncStart, RateLimitPolicy, SavedSource, SourceKind, SourceLifecycleState, SourceRemoval,
-    StoppedHost,
+    DocumentPurge, FrontierExclusionCount, PortalApiLayout, PortalRegistration,
+    PortalRuntimeSnapshot, PortalSyncStart, RateLimitPolicy, SavedSource, SourceKind,
+    SourceLifecycleState, SourcePurge, SourceRemoval, StoppedHost,
 };
 pub use source::{
     CrawlPolicy, DiscoveredSourceLink, PastedContentInput, SourceDiscoveryPreview, SourceGuidance,

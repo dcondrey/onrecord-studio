@@ -40,6 +40,8 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::ingest::pause_source_sync,
         commands::ingest::resume_source_sync,
         commands::ingest::remove_source,
+        commands::ingest::purge_source,
+        commands::ingest::purge_document,
         commands::ingest::list_portal_runtimes,
         commands::ingest::list_saved_portals,
         commands::ingest::preview_data_source,
