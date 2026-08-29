@@ -562,6 +562,10 @@ CREATE TABLE IF NOT EXISTS document_search_index_state (
     portal_subdomain TEXT NOT NULL,
     index_version BIGINT NOT NULL CHECK (index_version > 0),
     token_count BIGINT NOT NULL CHECK (token_count >= 0),
+    -- Characters actually projected. A document longer than the cap is indexed to its prefix, and
+    -- this records how far that reached, so a miss beyond it is a known limit rather than a claim
+    -- that the term is absent from the corpus.
+    indexed_characters BIGINT CHECK (indexed_characters IS NULL OR indexed_characters >= 0),
     PRIMARY KEY (document_id, portal_subdomain)
 );
 

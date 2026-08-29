@@ -1,6 +1,7 @@
 //! Thread-safe DuckDB repository layer managing persistent storage and data indexing.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use duckdb::{params, params_from_iter, Connection, OptionalExt, Result, Row, ToSql, Transaction};
@@ -267,6 +268,9 @@ pub enum ProvenanceEvidenceFile {
 pub struct DuckDbRepository {
     conn: Arc<Mutex<Connection>>,
     database_path: Arc<PathBuf>,
+    /// Documents still missing from the token projection. Counted during migration and drained by
+    /// the background backfill, so a search can refuse rather than under-report while it runs.
+    search_index_pending: Arc<AtomicU64>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -395,6 +399,7 @@ impl DuckDbRepository {
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
             database_path: Arc::new(database_path),
+            search_index_pending: Arc::new(AtomicU64::new(0)),
         })
     }
 
@@ -530,7 +535,7 @@ impl DuckDbRepository {
 
     /// Run embedded raw text scripts to establish layout boundaries.
     pub async fn run_migrations(&self, migration_sql: &str) -> Result<(), AppError> {
-        let mut conn = self.conn.lock().await;
+        let conn = self.conn.lock().await;
         // Legacy repair must precede the idempotent base script; `ensure_column` calls that follow
         // are compatibility shims for databases created by older, partially versioned builds.
         prepare_legacy_legal_schema(&conn)?;
@@ -558,6 +563,12 @@ impl DuckDbRepository {
         // NOT NULL and CHECK that `0001_initial_schema.sql` declares. Those stay there because
         // they are live protection on a fresh install; deleting them so the two paths match would
         // trade a real guarantee for symmetry.
+        ensure_column(
+            &conn,
+            "document_search_index_state",
+            "indexed_characters",
+            "BIGINT",
+        )?;
         ensure_column(&conn, "portals", "origin_url", "TEXT DEFAULT ''")?;
         ensure_column(&conn, "portals", "requests_endpoint", "TEXT DEFAULT ''")?;
         ensure_column(
@@ -753,9 +764,51 @@ impl DuckDbRepository {
         .map_err(|error| {
             AppError::Storage(format!("Failed to finalize migration indexes: {error}"))
         })?;
-        backfill_search_token_index(&mut conn)?;
+        // Tokenizing every pre-index document is minutes of single-threaded work on a large
+        // corpus, and this runs inside the Tauri setup hook, before the event loop presents the
+        // window: doing it here means the application shows no window at all until it finishes.
+        // The migration therefore only counts the arrears; `backfill_search_token_index` drains
+        // them in the background, and a search refuses while the count is above zero.
+        self.search_index_pending.store(
+            count_pending_search_index_documents(&conn)?,
+            Ordering::Relaxed,
+        );
         verify_logical_relations(&conn)?;
         Ok(())
+    }
+
+    /// Documents still missing from the search token projection. Zero means a search covers the
+    /// whole corpus; anything else means it would not, which is a different fact and is reported
+    /// as one.
+    pub fn pending_search_index_documents(&self) -> u64 {
+        self.search_index_pending.load(Ordering::Relaxed)
+    }
+
+    /// Builds the token projection for documents created before the persistent index existed.
+    /// Each batch is atomic and restartable, and the writer lock is released between batches so
+    /// ingestion and analytics keep running while the arrears drain.
+    pub async fn backfill_search_token_index(&self) -> Result<u64, AppError> {
+        let mut completed = 0_u64;
+        loop {
+            let processed = {
+                let mut conn = self.conn.lock().await;
+                backfill_search_token_batch(&mut conn)?
+            };
+            if processed == 0 {
+                self.search_index_pending.store(0, Ordering::Relaxed);
+                return Ok(completed);
+            }
+            completed = completed.saturating_add(processed);
+            self.search_index_pending
+                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |pending| {
+                    Some(pending.saturating_sub(processed))
+                })
+                .ok();
+            // A bare yield returns to this task immediately when nothing else is ready, which
+            // keeps the writer lock hot and leaves interactive queries queued behind the drain.
+            // A short sleep hands the lock to the frontend's readers between batches.
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        }
     }
 
     pub fn database_path(&self) -> &Path {
@@ -5472,7 +5525,15 @@ fn synchronize_fts_row(
 }
 
 const SEARCH_TOKEN_INDEX_VERSION: i64 = 1;
-const SEARCH_TOKEN_BACKFILL_BATCH_SIZE: i64 = 64;
+const SEARCH_TOKEN_BACKFILL_BATCH_SIZE: i64 = 8;
+/// The longest text projected into the token index. The corpus holds bulk data exports -- a
+/// 128 MB CSV of service requests, for one -- whose tokens are overwhelmingly identifiers and
+/// coordinates: millions of rows of index for no readable match. Beyond this point a document is
+/// indexed to its prefix and `indexed_characters` records how far that reached.
+const SEARCH_TOKEN_MAX_INDEXED_CHARACTERS: usize = 4_000_000;
+/// Token rows written per statement. Bounded so a single document with millions of distinct tokens
+/// cannot build one statement large enough to matter.
+const SEARCH_TOKEN_INSERT_CHUNK_SIZE: usize = 512;
 
 fn synchronize_search_tokens(
     tx: &Transaction<'_>,
@@ -5487,47 +5548,99 @@ fn synchronize_search_tokens(
     )
     .map_err(|error| AppError::Storage(format!("Failed to clear stale search tokens: {error}")))?;
 
-    let frequencies = token_frequencies(cleaned_text);
-    for (token, frequency) in &frequencies {
-        let frequency = i64::try_from(*frequency).map_err(|_| {
-            AppError::Storage("Search term frequency exceeds DuckDB capacity".to_string())
-        })?;
+    // One statement per distinct token is the difference between seconds and hours here: the corpus
+    // holds documents with over a hundred megabytes of extracted text, and DuckDB pays full
+    // statement overhead on every single-row insert. Rows are written in bounded multi-value
+    // batches instead, which keeps one document's projection inside one transaction either way.
+    let indexed_text = match cleaned_text
+        .char_indices()
+        .nth(SEARCH_TOKEN_MAX_INDEXED_CHARACTERS)
+    {
+        Some((boundary, _)) => &cleaned_text[..boundary],
+        None => cleaned_text,
+    };
+    let indexed_characters = i64::try_from(indexed_text.chars().count()).map_err(|_| {
+        AppError::Storage("Indexed character count exceeds DuckDB capacity".to_string())
+    })?;
+    let frequencies = token_frequencies(indexed_text);
+    let entries: Vec<(&String, i64)> = frequencies
+        .iter()
+        .map(|(token, frequency)| {
+            i64::try_from(*frequency)
+                .map(|frequency| (token, frequency))
+                .map_err(|_| {
+                    AppError::Storage("Search term frequency exceeds DuckDB capacity".to_string())
+                })
+        })
+        .collect::<Result<Vec<_>, AppError>>()?;
+    for chunk in entries.chunks(SEARCH_TOKEN_INSERT_CHUNK_SIZE) {
+        let placeholders = std::iter::repeat_n("(?, ?, ?, ?)", chunk.len())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let mut values: Vec<duckdb::types::Value> = Vec::with_capacity(chunk.len() * 4);
+        for (token, frequency) in chunk {
+            values.push(duckdb::types::Value::BigInt(document_id));
+            values.push(duckdb::types::Value::Text(portal_subdomain.to_string()));
+            values.push(duckdb::types::Value::Text((*token).clone()));
+            values.push(duckdb::types::Value::BigInt(*frequency));
+        }
         tx.execute(
-            "INSERT INTO document_search_tokens (
-                document_id, portal_subdomain, token, term_frequency
-             ) VALUES (?1, ?2, ?3, ?4)",
-            params![document_id, portal_subdomain, token, frequency],
+            &format!(
+                "INSERT INTO document_search_tokens (
+                    document_id, portal_subdomain, token, term_frequency
+                 ) VALUES {placeholders}"
+            ),
+            params_from_iter(values.iter()),
         )
-        .map_err(|error| AppError::Storage(format!("Failed to persist a search token: {error}")))?;
+        .map_err(|error| {
+            AppError::Storage(format!("Failed to persist a search token batch: {error}"))
+        })?;
     }
 
     let token_count = i64::try_from(frequencies.len())
         .map_err(|_| AppError::Storage("Search token count exceeds DuckDB capacity".to_string()))?;
     tx.execute(
         "INSERT INTO document_search_index_state (
-            document_id, portal_subdomain, index_version, token_count
-         ) VALUES (?1, ?2, ?3, ?4)
+            document_id, portal_subdomain, index_version, token_count, indexed_characters
+         ) VALUES (?1, ?2, ?3, ?4, ?5)
          ON CONFLICT(document_id, portal_subdomain) DO UPDATE SET
             index_version = excluded.index_version,
-            token_count = excluded.token_count",
+            token_count = excluded.token_count,
+            indexed_characters = excluded.indexed_characters",
         params![
             document_id,
             portal_subdomain,
             SEARCH_TOKEN_INDEX_VERSION,
-            token_count
+            token_count,
+            indexed_characters
         ],
     )
     .map_err(|error| AppError::Storage(format!("Failed to persist search index state: {error}")))?;
     Ok(())
 }
 
-/// Builds the token projection for documents created before the persistent index existed.
-/// Empty documents receive a state row with a zero token count, so the keyset scan still
-/// terminates. Each bounded batch is atomic and restartable.
-fn backfill_search_token_index(conn: &mut Connection) -> Result<(), AppError> {
-    loop {
-        let rows = {
-            let mut statement = conn
+/// Counts the documents whose tokens have not been projected at the current index version.
+fn count_pending_search_index_documents(conn: &Connection) -> Result<u64, AppError> {
+    conn.query_row(
+        "SELECT COUNT(*)
+         FROM documents_fts
+         LEFT JOIN document_search_index_state
+           ON document_search_index_state.document_id = documents_fts.document_id
+          AND document_search_index_state.portal_subdomain = documents_fts.portal_subdomain
+          AND document_search_index_state.index_version = ?1
+         WHERE document_search_index_state.document_id IS NULL",
+        params![SEARCH_TOKEN_INDEX_VERSION],
+        |row| row.get::<_, i64>(0),
+    )
+    .map(|count| count.max(0) as u64)
+    .map_err(|error| AppError::Storage(format!("Failed to count search index arrears: {error}")))
+}
+
+/// Projects one bounded batch and returns how many documents it covered. Zero means the projection
+/// has caught up.
+fn backfill_search_token_batch(conn: &mut Connection) -> Result<u64, AppError> {
+    let rows = {
+        let mut statement = conn
                 .prepare(
                     "SELECT
                         documents_fts.document_id,
@@ -5545,44 +5658,47 @@ fn backfill_search_token_index(conn: &mut Connection) -> Result<(), AppError> {
                 .map_err(|error| {
                     AppError::Storage(format!("Failed to prepare search index backfill: {error}"))
                 })?;
-            statement
-                .query_map(
-                    params![SEARCH_TOKEN_INDEX_VERSION, SEARCH_TOKEN_BACKFILL_BATCH_SIZE],
-                    |row| {
-                        Ok((
-                            row.get::<_, i64>(0)?,
-                            row.get::<_, String>(1)?,
-                            row.get::<_, String>(2)?,
-                        ))
-                    },
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to query search index backfill: {error}"))
-                })?
-                .collect::<duckdb::Result<Vec<_>>>()
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to decode search index backfill: {error}"))
-                })?
-        };
-        if rows.is_empty() {
-            return Ok(());
-        }
-
-        let transaction = conn.transaction().map_err(|error| {
-            AppError::Storage(format!("Failed to begin search index backfill: {error}"))
-        })?;
-        for (document_id, portal_subdomain, extracted_text) in rows {
-            synchronize_search_tokens(
-                &transaction,
-                document_id,
-                &portal_subdomain,
-                &extracted_text,
-            )?;
-        }
-        transaction.commit().map_err(|error| {
-            AppError::Storage(format!("Failed to commit search index backfill: {error}"))
-        })?;
+        statement
+            .query_map(
+                params![SEARCH_TOKEN_INDEX_VERSION, SEARCH_TOKEN_BACKFILL_BATCH_SIZE],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .map_err(|error| {
+                AppError::Storage(format!("Failed to query search index backfill: {error}"))
+            })?
+            .collect::<duckdb::Result<Vec<_>>>()
+            .map_err(|error| {
+                AppError::Storage(format!("Failed to decode search index backfill: {error}"))
+            })?
+    };
+    if rows.is_empty() {
+        return Ok(0);
     }
+
+    // Empty documents receive a state row with a zero token count, so the keyset scan still
+    // terminates rather than re-selecting them forever.
+    let covered = rows.len() as u64;
+    let transaction = conn.transaction().map_err(|error| {
+        AppError::Storage(format!("Failed to begin search index backfill: {error}"))
+    })?;
+    for (document_id, portal_subdomain, extracted_text) in rows {
+        synchronize_search_tokens(
+            &transaction,
+            document_id,
+            &portal_subdomain,
+            &extracted_text,
+        )?;
+    }
+    transaction.commit().map_err(|error| {
+        AppError::Storage(format!("Failed to commit search index backfill: {error}"))
+    })?;
+    Ok(covered)
 }
 
 /// Audits relations kept logical because DuckDB cannot support the required parent updates with
@@ -7443,6 +7559,62 @@ mod tests {
         assert_eq!(density, 0);
     }
 
+    /// A document longer than the projection cap is indexed to its prefix, and the state row says
+    /// how far that reached. The corpus holds 128 MB CSV exports whose tokens are identifiers and
+    /// coordinates; projecting them in full is millions of index rows for no readable match. A term
+    /// past the cap must therefore not be reported as absent-from-the-corpus by silence alone: the
+    /// recorded `indexed_characters` is what distinguishes "not indexed here" from "not present".
+    #[tokio::test]
+    async fn oversized_documents_are_indexed_to_a_recorded_prefix() {
+        let repository = repository_with_document().await;
+        let mut text = "alpha ".repeat(super::SEARCH_TOKEN_MAX_INDEXED_CHARACTERS / 6 + 16);
+        text.push_str(" sentinelbeyondcap");
+        {
+            let connection = repository.conn.lock().await;
+            connection
+                .execute(
+                    "INSERT INTO documents_fts (
+                        document_id, portal_subdomain, file_name, extracted_text
+                     ) VALUES (?1, ?2, ?3, ?4)",
+                    params![DOCUMENT_ID, PORTAL_SUBDOMAIN, "bulk-export.csv", text],
+                )
+                .expect("oversized fixture must insert");
+        }
+        repository
+            .backfill_search_token_index()
+            .await
+            .expect("the drain must project the oversized document");
+
+        assert_eq!(
+            repository.full_text_search("alpha").await.unwrap(),
+            vec![DOCUMENT_ID as u64],
+            "a term inside the indexed prefix must still match"
+        );
+        assert!(
+            repository
+                .full_text_search("sentinelbeyondcap")
+                .await
+                .unwrap()
+                .is_empty(),
+            "a term past the cap is not in the projection"
+        );
+
+        let connection = repository.conn.lock().await;
+        let indexed_characters: Option<i64> = connection
+            .query_row(
+                "SELECT indexed_characters FROM document_search_index_state
+                 WHERE document_id = ?1 AND portal_subdomain = ?2",
+                params![DOCUMENT_ID, PORTAL_SUBDOMAIN],
+                |row| row.get(0),
+            )
+            .expect("the state row must record the indexed prefix");
+        assert_eq!(
+            indexed_characters,
+            Some(super::SEARCH_TOKEN_MAX_INDEXED_CHARACTERS as i64),
+            "the recorded prefix length is what makes the cap visible to a reader"
+        );
+    }
+
     /// Core search uses the persistent exact-token projection and requires every plain-text term.
     /// Boolean words have no special meaning because the typed frontend does not offer a Boolean
     /// grammar; qualifiers are passed separately to `search_requests`.
@@ -7468,7 +7640,19 @@ mod tests {
         repository
             .run_migrations(MIGRATION)
             .await
-            .expect("startup must backfill a legacy projection row");
+            .expect("migration must count the legacy projection arrears");
+        // Migration counts, it does not tokenize: doing the work here ran inside the Tauri setup
+        // hook and kept the window from ever appearing on a large corpus.
+        assert_eq!(
+            repository.pending_search_index_documents(),
+            1,
+            "a legacy projection row must be counted as arrears, not silently indexed at startup"
+        );
+        repository
+            .backfill_search_token_index()
+            .await
+            .expect("the background drain must project the legacy row");
+        assert_eq!(repository.pending_search_index_documents(), 0);
         let document_id = DOCUMENT_ID as u64;
 
         assert!(repository

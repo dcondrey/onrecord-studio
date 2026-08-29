@@ -89,6 +89,7 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
             }),
         );
     }
+    start_search_token_backfill(repository.clone());
     start_corpus_reconciliation(app_handle, repository.clone(), corpus_index.clone());
     app.manage(repository);
     app.manage(corpus_index);
@@ -108,6 +109,27 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
     }
 
     Ok(())
+}
+
+/// Drains the search token arrears counted during migration. This deliberately does not block
+/// startup: on a large corpus it is minutes of single-threaded DuckDB work, and running it inside
+/// the setup hook kept the event loop from ever presenting the window. Until it finishes,
+/// `query_audit_records` refuses rather than returning a partial answer.
+fn start_search_token_backfill(repository: DuckDbRepository) {
+    let pending = repository.pending_search_index_documents();
+    if pending == 0 {
+        return;
+    }
+    tauri::async_runtime::spawn(async move {
+        let started = std::time::Instant::now();
+        match repository.backfill_search_token_index().await {
+            Ok(covered) => eprintln!(
+                "Search token backfill projected {covered} of {pending} documents in {:.1}s",
+                started.elapsed().as_secs_f32()
+            ),
+            Err(error) => eprintln!("Search token backfill stopped: {error}"),
+        }
+    });
 }
 
 fn start_corpus_reconciliation<R: Runtime>(

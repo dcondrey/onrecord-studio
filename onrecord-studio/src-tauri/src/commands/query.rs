@@ -22,6 +22,16 @@ pub async fn query_audit_records(
     let status = optional_text(status, "Request status", 128)?;
     let policy_deviation = optional_text(policy_deviation, "Policy deviation", 128)?;
     let limit = limit.unwrap_or(500);
+    // A corpus whose token projection is still being built would answer with fewer matches than it
+    // holds, and a short result list reads as "these are the records", not as "the index is not
+    // ready". Refusing is the only answer that is true while the arrears drain.
+    let pending = repository.pending_search_index_documents();
+    if pending > 0 {
+        return Err(AppError::Storage(format!(
+            "The search index is still being built: {pending} documents are not yet indexed. \
+             Searching now would report fewer matches than the corpus holds."
+        )));
+    }
     repository
         .search_requests(
             search_term.trim(),
