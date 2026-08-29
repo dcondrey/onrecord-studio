@@ -31,6 +31,17 @@ use crate::types::{
     SourcePurgePreview, StatutoryExtensionReason, StatutoryExtensionRecord, TimelineAnomalyMarker,
 };
 
+/// SQL that renders the current instant as RFC 3339 in UTC.
+///
+/// Three things this expression is deliberately not. It is not `current_timestamp`, which DuckDB
+/// binds as a column reference inside `ON CONFLICT ... DO UPDATE SET` and refuses. It is not
+/// rendered without `AT TIME ZONE 'UTC'`, because `strftime` formats a `TIMESTAMPTZ` in the session
+/// zone while the literal `Z` claims UTC, which stamps local wall-clock time as UTC. And its format
+/// carries `%S.%f` rather than `%f` alone: `%f` is microseconds, so `'%H:%M:%fZ'` drops seconds
+/// entirely and writes microseconds into the seconds field, producing a string that
+/// `TRY_CAST(... AS TIMESTAMPTZ)` returns NULL for and `parse_from_rfc3339` rejects.
+const UTC_RFC3339_NOW: &str = "strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')";
+
 const MAXIMUM_DOCUMENT_CHUNK_CHARACTERS: usize = 250_000;
 const DOCUMENT_CHUNK_PII_BOUNDARY_CHARACTERS: usize = 256;
 
@@ -393,9 +404,13 @@ impl DuckDbRepository {
             ))
         })?;
         conn.execute_batch(
+            // Every timestamp this repository writes is formatted with a literal `Z`. `strftime`
+            // renders a `TIMESTAMPTZ` in the session zone, so without this the stored string
+            // claims UTC while carrying local wall-clock time.
             "SET preserve_insertion_order = false;
              SET threads = 1;
-             SET enable_progress_bar = false;",
+             SET enable_progress_bar = false;
+             SET TimeZone = 'UTC';",
         )
         .map_err(|error| AppError::Internal(format!("Failed to configure DuckDB: {error}")))?;
 
@@ -3230,6 +3245,52 @@ impl DuckDbRepository {
         upsert_statutory_extension(&conn, request_id, portal_key, extension)
     }
 
+    /// Reads back the one extension recorded for a request, if any.
+    ///
+    /// The write is an upsert on `(request_id, portal_subdomain)`, so an operator who cannot see
+    /// the existing row would silently replace recorded evidence. `None` here means no extension
+    /// was ever recorded, which is a different statement from an extension the statute rejects:
+    /// validity is [`crate::analysis`]'s verdict on a row that exists, not the absence of one.
+    pub async fn load_statutory_extension(
+        &self,
+        request_id: u64,
+        portal_key: &str,
+    ) -> Result<Option<StatutoryExtensionRecord>, AppError> {
+        let conn = self.conn.lock().await;
+        let row = conn
+            .query_row(
+                "SELECT notice_at, expected_determination_at, reason, notice_source
+                 FROM statutory_extensions
+                 WHERE request_id = ?1 AND portal_subdomain = ?2",
+                params![request_id, portal_key],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                    ))
+                },
+            )
+            .optional()
+            .map_err(|error| {
+                AppError::Storage(format!(
+                    "Failed to read statutory extension evidence: {error}"
+                ))
+            })?;
+        row.map(
+            |(notice_at, expected_determination_at, reason, notice_source)| {
+                Ok(StatutoryExtensionRecord {
+                    notice_at,
+                    expected_determination_at,
+                    reason: parse_extension_reason(&reason)?,
+                    notice_source,
+                })
+            },
+        )
+        .transpose()
+    }
+
     pub async fn refresh_request_timeline_audit(
         &self,
         request_id: u64,
@@ -4556,7 +4617,8 @@ fn upsert_statutory_extension(
 ) -> Result<(), AppError> {
     connection
         .execute(
-            "INSERT INTO statutory_extensions (
+            &format!(
+                "INSERT INTO statutory_extensions (
                 request_id, portal_subdomain, notice_at, expected_determination_at,
                 reason, notice_source
              ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
@@ -4565,7 +4627,8 @@ fn upsert_statutory_extension(
                 expected_determination_at = excluded.expected_determination_at,
                 reason = excluded.reason,
                 notice_source = excluded.notice_source,
-                recorded_at = strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ')",
+                recorded_at = {UTC_RFC3339_NOW}"
+            ),
             params![
                 request_id,
                 portal_key,
@@ -6921,7 +6984,7 @@ mod tests {
     use duckdb::params;
 
     use crate::error::AppError;
-    use crate::types::PublicRequest;
+    use crate::types::{PublicRequest, StatutoryExtensionReason, StatutoryExtensionRecord};
 
     use super::{
         compute_extracted_text_sha256, cpra_calendar_confidence_basis_points,
@@ -7060,6 +7123,73 @@ mod tests {
             )
             .expect("the document count must be readable");
         assert_eq!(remaining, 0, "the document row itself must be gone");
+    }
+
+    /// The extension write is an upsert on `(request_id, portal_subdomain)`, so the read is what
+    /// stops an operator replacing recorded evidence they were never shown. This pins the three
+    /// statements the recording surface depends on: an unrecorded extension is `None` and not a
+    /// zero-valued record, a recorded one reads back field for field, and a second write replaces
+    /// the row rather than adding a second one the reader would then have to choose between.
+    #[tokio::test]
+    async fn a_recorded_statutory_extension_reads_back_and_a_second_write_replaces_it() {
+        let repository = repository_with_document().await;
+        assert_eq!(
+            repository
+                .load_statutory_extension(REQUEST_ID as u64, PORTAL_SUBDOMAIN)
+                .await
+                .expect("reading an absent extension must succeed"),
+            None,
+            "a request with no recorded extension must report absence, not an empty record"
+        );
+
+        let recorded = StatutoryExtensionRecord {
+            notice_at: "2026-08-25T09:00:00Z".to_string(),
+            expected_determination_at: "2026-09-08T09:00:00Z".to_string(),
+            reason: StatutoryExtensionReason::VoluminousRecords,
+            notice_source: "Agency letter dated 2026-08-25".to_string(),
+        };
+        repository
+            .record_statutory_extension(REQUEST_ID as u64, PORTAL_SUBDOMAIN, &recorded)
+            .await
+            .expect("a well-formed extension must record");
+        assert_eq!(
+            repository
+                .load_statutory_extension(REQUEST_ID as u64, PORTAL_SUBDOMAIN)
+                .await
+                .expect("reading a recorded extension must succeed"),
+            Some(recorded),
+            "the recorded extension must read back exactly, reason included"
+        );
+
+        let corrected = StatutoryExtensionRecord {
+            notice_at: "2026-08-26T09:00:00Z".to_string(),
+            expected_determination_at: "2026-09-09T09:00:00Z".to_string(),
+            reason: StatutoryExtensionReason::InteragencyConsultation,
+            notice_source: "Corrected agency letter dated 2026-08-26".to_string(),
+        };
+        repository
+            .record_statutory_extension(REQUEST_ID as u64, PORTAL_SUBDOMAIN, &corrected)
+            .await
+            .expect("a corrected extension must record");
+        assert_eq!(
+            repository
+                .load_statutory_extension(REQUEST_ID as u64, PORTAL_SUBDOMAIN)
+                .await
+                .expect("reading the corrected extension must succeed"),
+            Some(corrected),
+            "the second write must replace the first"
+        );
+
+        let connection = repository.conn.lock().await;
+        let rows: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM statutory_extensions
+                 WHERE request_id = ?1 AND portal_subdomain = ?2",
+                params![REQUEST_ID, PORTAL_SUBDOMAIN],
+                |row| row.get(0),
+            )
+            .expect("the extension count must be readable");
+        assert_eq!(rows, 1, "a request must never carry two extension rows");
     }
 
     /// Withdrawal keeps the `portals` row on purpose, which is why a withdrawn source can never be

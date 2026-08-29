@@ -151,6 +151,23 @@ pub async fn register_statutory_extension(
         .await
 }
 
+/// Returns the extension already recorded for a request, or `None` when none is.
+///
+/// [`register_statutory_extension`] upserts, so the recording surface has to be able to show what
+/// it would replace. A caller that cannot read this cannot tell an unrecorded extension from one
+/// it is about to overwrite.
+#[tauri::command]
+pub async fn get_request_statutory_extension(
+    request_id: u64,
+    portal_key: String,
+    repository: State<'_, DuckDbRepository>,
+) -> Result<Option<StatutoryExtensionRecord>, AppError> {
+    let portal_key = validate_portal_key(&portal_key)?;
+    repository
+        .load_statutory_extension(request_id, portal_key)
+        .await
+}
+
 #[tauri::command]
 pub async fn import_legal_authority(
     input: LegalAuthorityImport,
