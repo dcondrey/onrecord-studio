@@ -36,7 +36,6 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
     let native_handler: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = generate_handler![
         commands::runtime::get_license_status,
         commands::runtime::refresh_license,
-        commands::ingest::start_portal_sync,
         commands::ingest::pause_source_sync,
         commands::ingest::resume_source_sync,
         commands::ingest::remove_source,
@@ -65,7 +64,6 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::investigation::evaluate_request_legal_compliance,
         commands::investigation::list_request_legal_findings,
         commands::investigation::review_legal_finding,
-        commands::investigation::mask_sensitive_text,
         commands::investigation::verify_document_provenance,
         commands::investigation::list_document_provenance_verifications,
         commands::investigation::list_request_documents,

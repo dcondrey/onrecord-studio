@@ -7,7 +7,6 @@ export type NoArgs = Record<string, never>;
 export interface NativeCommandMap {
   get_license_status: { args: NoArgs; result: Types.LicenseStatus };
   refresh_license: { args: NoArgs; result: Types.LicenseStatus };
-  start_portal_sync: { args: { portalUrl: string; startPage?: number | null; perPage?: number | null; rateLimitPolicy?: Types.RateLimitPolicy | null }; result: Types.PortalSyncStart };
   pause_source_sync: { args: { sourceKey: string }; result: boolean };
   resume_source_sync: { args: { sourceKey: string }; result: Types.SourceIngestionStart };
   remove_source: { args: { sourceKey: string }; result: Types.SourceRemoval };
@@ -36,7 +35,6 @@ export interface NativeCommandMap {
   evaluate_request_legal_compliance: { args: { requestId: number; portalKey: string }; result: Types.LegalEvaluationResult };
   list_request_legal_findings: { args: { requestId: number; portalKey: string }; result: Types.LegalComplianceFinding[] };
   review_legal_finding: { args: { violationId: string; requestId: number; portalKey: string; reviewStatus: Types.LegalFindingReviewStatus; reviewerNotes?: string | null }; result: Types.LegalComplianceFinding[] };
-  mask_sensitive_text: { args: { text: string }; result: Types.PiiMaskResult };
   verify_document_provenance: { args: { documentId: number; portalKey: string }; result: Types.DocumentProvenanceVerification };
   list_document_provenance_verifications: { args: { documentId: number; portalKey: string; limit?: number | null }; result: Types.ProvenanceVerificationRecord[] };
   list_request_documents: { args: { requestId: number; portalKey: string }; result: Types.RequestDocumentSummary[] };

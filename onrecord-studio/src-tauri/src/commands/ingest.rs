@@ -9,9 +9,9 @@ use crate::ingestion::queue::{ingestion_telemetry_envelope, IngestionProgress, Q
 use crate::storage::corpus::CorpusIndex;
 use crate::storage::sqlite::DuckDbRepository;
 use crate::types::{
-    CrawlPolicy, DocumentPurge, PastedContentInput, PortalRuntimeSnapshot, PortalSyncStart,
-    RateLimitPolicy, SavedSource, SourceDiscoveryPreview, SourceGuidance, SourceIngestionStart,
-    SourceKind, SourceLifecycleState, SourcePurge, SourcePurgePreview, SourceRemoval,
+    CrawlPolicy, DocumentPurge, PastedContentInput, PortalRuntimeSnapshot, RateLimitPolicy,
+    SavedSource, SourceDiscoveryPreview, SourceGuidance, SourceIngestionStart, SourceKind,
+    SourceLifecycleState, SourcePurge, SourcePurgePreview, SourceRemoval,
 };
 use std::path::Path;
 use std::sync::Arc;
@@ -45,25 +45,6 @@ async fn report_startup_recovery_failure(
             error_msg,
         })
         .await;
-}
-
-#[tauri::command]
-pub async fn start_portal_sync(
-    portal_url: String,
-    start_page: Option<usize>,
-    per_page: Option<usize>,
-    rate_limit_policy: Option<RateLimitPolicy>,
-    manager: State<'_, Arc<QueueManager>>,
-) -> Result<PortalSyncStart, AppError> {
-    let portal_url = required_text(&portal_url, "Portal URL", 2_048)?;
-    manager
-        .discover_and_start(
-            portal_url,
-            start_page.unwrap_or(1),
-            per_page.unwrap_or(50),
-            rate_limit_policy.unwrap_or_default(),
-        )
-        .await
 }
 
 #[tauri::command]

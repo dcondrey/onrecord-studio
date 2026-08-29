@@ -11,7 +11,6 @@ use crate::parsers::{
     ForensicAuditOptions,
 };
 use crate::storage::duckdb::DuckDbWorkspace;
-use crate::storage::pii::{mask_pii, PiiMaskResult};
 use crate::storage::sqlite::{DuckDbRepository, ProvenanceEvidenceFile};
 use crate::types::{
     AgencyPerformanceProfile, AnalysisConfig, AuxiliaryEventInput, AuxiliaryImportResult,
@@ -28,7 +27,6 @@ use tokio::sync::Semaphore;
 const MAXIMUM_REDACTION_AUDIT_BYTES: u64 = 512 * 1024 * 1024;
 const MAXIMUM_VERSION_RECOVERY_BYTES: u64 = 128 * 1024 * 1024;
 const MAXIMUM_FORENSIC_AUDIT_BYTES: u64 = 1024 * 1024 * 1024;
-const MAXIMUM_MASK_INPUT_BYTES: usize = 4 * 1024 * 1024;
 const MAXIMUM_AUXILIARY_EVENTS: usize = 50_000;
 const MAXIMUM_AUXILIARY_PAYLOAD_BYTES: usize = 64 * 1024 * 1024;
 const DEFAULT_VERIFICATION_HISTORY_LIMIT: usize = 50;
@@ -266,16 +264,6 @@ pub async fn review_legal_finding(
             reviewer_notes.as_deref(),
         )
         .await
-}
-
-#[tauri::command]
-pub async fn mask_sensitive_text(text: String) -> Result<PiiMaskResult, AppError> {
-    validate_text(&text, "Sensitive-text mask input", MAXIMUM_MASK_INPUT_BYTES)?;
-    // Detection is three linear passes plus a SHA-256 per finding, and the input bound is 4 MiB.
-    // Measured on this source in an optimized build: 29 ms for 4 MiB carrying no PII, 283 ms for
-    // 4 MiB that is dense with it. The caller chooses the size, so this cannot run on the runtime
-    // thread. Every other `mask_pii` call site already sits inside a blocking worker.
-    spawn_blocking("PII masking worker", move || mask_pii(&text)).await?
 }
 
 /// Verifies a stored document against the digest recorded for it.
