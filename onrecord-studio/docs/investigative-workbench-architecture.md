@@ -678,3 +678,32 @@ regex search with encoding and binary detection already handled. This is not a r
 index, which answers corpus-wide questions; it is the right tool for searching *within* one
 document without a round trip through the index, and for scanning the staging directory during
 ingestion. Modest, cheap, and it removes a class of hand-rolled buffer handling.
+
+## 15. Third-pass candidates
+
+**`ulid` — adopt for every new authored table.** MIT, 12.7 million downloads in ninety days,
+released 2026-07-16. A ULID is 128 bits like a UUID but lexicographically sortable by creation
+time, so a DuckDB index on a span, code-application or memo id clusters by time and answers range
+scans, where `uuid` v4 is deliberately random and clusters nothing. This tree already depends on
+`uuid` with the `v4` feature; leave existing uses alone and use ULIDs for spans, edges, code
+applications, memos and canvas cards, where "everything authored in this session" and "everything
+since last week" are queries an investigator actually runs.
+
+**`ole` — rejected, and the replacement is already here.** WTFPL, last released **2018-03-23**,
+1,802 downloads in ninety days. `cfb` does the same job (Compound File Binary, the OLE2 structured
+storage container) at 18.4 million downloads in ninety days, MIT, released 2026-02-13, and **it is
+already in this tree** as a dev-dependency. If production code needs to read OLE2 containers,
+promote `cfb` from `[dev-dependencies]` to `[dependencies]`. Do not add a second one.
+
+**`sled` — rejected twice over.** Its latest published version is `1.0.0-alpha.124`, last released
+2024-10-11: a perpetual alpha whose rewrite has not landed. Even if it were stable it is a third
+embedded storage engine, which section 11 rules out on evidence this project has already paid for.
+
+**`bufwriter` does not exist on crates.io, and should not.** `std::io::BufWriter` is in the standard
+library.
+
+**`note` does not exist. `bookmark` is a browser-bookmark manager** with 107 lifetime downloads and
+no relationship to anything here. If the intent behind those two names was the notes and bookmarks
+*features*, they are not dependencies: memos and saved positions are core-database tables hanging
+off the span primitive in section 1, and building them on an external crate would put authored
+evidence outside the durability boundary in section 2a.
