@@ -795,41 +795,42 @@ select:not(:disabled) {
   50% { opacity: 1; transform: scale(1.04); }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
+/* Motion and contrast are resolved in JS and applied as attributes, exactly as the theme is:
+   `system` consults the media query, an explicit choice overrides it in either direction. Keeping
+   the values in one attribute-selector block rather than duplicating them across a media query and
+   an override is why the query itself does not appear here. `main.tsx` stamps both attributes
+   before first paint. */
+:root[data-motion="reduce"] *,
+:root[data-motion="reduce"] *::before,
+:root[data-motion="reduce"] *::after {
+  scroll-behavior: auto !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
 }
 
-@media (prefers-contrast: more) {
-  :root {
-    --panel-surface: #ffffff;
-    --panel-hover: #ffffff;
-    --hairline: rgba(23, 32, 51, 0.58);
-    --hairline-strong: rgba(23, 32, 51, 0.86);
-    --control-border: #334155;
-    --text-muted: #334155;
-    --text-faint: #334155;
-  }
+:root[data-contrast="more"] {
+  --panel-surface: #ffffff;
+  --panel-hover: #ffffff;
+  --hairline: rgba(23, 32, 51, 0.58);
+  --hairline-strong: rgba(23, 32, 51, 0.86);
+  --control-border: #334155;
+  --text-muted: #334155;
+  --text-faint: #334155;
+}
 
-  :root[data-theme="dark"] {
-    --panel-surface: #07101c;
-    --panel-hover: #0f1d30;
-    --hairline: rgba(232, 238, 247, 0.62);
-    --hairline-strong: rgba(232, 238, 247, 0.9);
-    --control-border: #cbd5e1;
-    --text-muted: #e2e8f0;
-    --text-faint: #cbd5e1;
-  }
+:root[data-contrast="more"][data-theme="dark"] {
+  --panel-surface: #07101c;
+  --panel-hover: #0f1d30;
+  --hairline: rgba(232, 238, 247, 0.62);
+  --hairline-strong: rgba(232, 238, 247, 0.9);
+  --control-border: #cbd5e1;
+  --text-muted: #e2e8f0;
+  --text-faint: #cbd5e1;
+}
 
-  .focus-ring:focus-visible {
-    outline-width: 3px;
-  }
+:root[data-contrast="more"] .focus-ring:focus-visible {
+  outline-width: 3px;
 }
 
 @media (forced-colors: active) {

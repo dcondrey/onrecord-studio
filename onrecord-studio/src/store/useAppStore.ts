@@ -1,5 +1,11 @@
 import { create } from 'zustand';
 import { readThemePreference, type ThemePreference } from '../utils/theme';
+import {
+  readContrastPreference,
+  readMotionPreference,
+  type ContrastPreference,
+  type MotionPreference,
+} from '../utils/accessibility';
 import type {
   AgencyPerformanceProfile,
   CrossAgencyCorrelation,
@@ -22,6 +28,8 @@ export interface IngestionMetrics {
 
 export type WorkspaceView = 'overview' | 'patterns' | 'evidence' | 'activity';
 export type AppTheme = ThemePreference;
+export type AppMotion = MotionPreference;
+export type AppContrast = ContrastPreference;
 export type WorkspaceInitializationStatus = 'loading' | 'ready' | 'error';
 
 export interface SourceRepairNotice {
@@ -42,6 +50,8 @@ interface AppState {
   // is parsed at the search boundary and unsupported syntax never enters this store.
   workspaceView: WorkspaceView;
   theme: AppTheme;
+  motion: AppMotion;
+  contrast: AppContrast;
   isSidebarOpen: boolean;
   isSidebarCollapsed: boolean;
   portals: SavedSource[];
@@ -79,6 +89,8 @@ interface AppState {
   patternEvidenceSelection: PatternEvidenceSelection | null;
   setWorkspaceView: (view: WorkspaceView) => void;
   setTheme: (theme: AppTheme) => void;
+  setMotion: (motion: AppMotion) => void;
+  setContrast: (contrast: AppContrast) => void;
   setSidebarOpen: (open: boolean) => void;
   toggleSidebarCollapsed: () => void;
   setPortalUrlDraft: (url: string) => void;
@@ -130,6 +142,8 @@ const emptyMetrics = (): IngestionMetrics => ({
 export const useAppStore = create<AppState>((set) => ({
   workspaceView: 'overview',
   theme: readThemePreference(),
+  motion: readMotionPreference(),
+  contrast: readContrastPreference(),
   isSidebarOpen: false,
   isSidebarCollapsed: false,
   portals: [],
@@ -165,6 +179,8 @@ export const useAppStore = create<AppState>((set) => ({
   patternEvidenceSelection: null,
   setWorkspaceView: (workspaceView) => set({ workspaceView, isSidebarOpen: false }),
   setTheme: (theme) => set({ theme }),
+  setMotion: (motion) => set({ motion }),
+  setContrast: (contrast) => set({ contrast }),
   setSidebarOpen: (isSidebarOpen) => set({ isSidebarOpen }),
   toggleSidebarCollapsed: () => set((state) => ({ isSidebarCollapsed: !state.isSidebarCollapsed })),
   setPortalUrlDraft: (portalUrlDraft) => set({ portalUrlDraft }),

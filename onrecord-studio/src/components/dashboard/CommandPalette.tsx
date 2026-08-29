@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { cn } from '../../utils/cn';
 import Icon, { type IconName } from '../ui/icons';
-import { scoreCommand, themeCommandRegistry, workspaceCommandRegistry } from '../../commands/registry';
+import { contrastCommandRegistry, motionCommandRegistry, scoreCommand, themeCommandRegistry, workspaceCommandRegistry } from '../../commands/registry';
 
 export const OPEN_COMMAND_PALETTE_EVENT = 'onrecord:open-command-palette';
 
@@ -10,7 +10,7 @@ interface CommandAction {
   id: string;
   label: string;
   detail: string;
-  group: 'Navigate' | 'Create' | 'Appearance';
+  group: 'Navigate' | 'Create' | 'Appearance' | 'Accessibility';
   icon: IconName;
   keywords: string;
   shortcut?: string;
@@ -26,6 +26,8 @@ export default function CommandPalette() {
   const modifier = isApplePlatform() ? '⌘' : 'Ctrl';
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
   const setTheme = useAppStore((state) => state.setTheme);
+  const setMotion = useAppStore((state) => state.setMotion);
+  const setContrast = useAppStore((state) => state.setContrast);
   const toggleSidebarCollapsed = useAppStore((state) => state.toggleSidebarCollapsed);
 
   const openPalette = () => {
@@ -79,7 +81,25 @@ export default function CommandPalette() {
       keywords: command.keywords,
       perform: () => setTheme(command.theme),
     })),
-  ], [modifier, setTheme, setWorkspaceView, toggleSidebarCollapsed]);
+    ...motionCommandRegistry.map((command) => ({
+      id: command.id,
+      label: command.label,
+      detail: command.detail,
+      group: 'Accessibility' as const,
+      icon: command.icon,
+      keywords: command.keywords,
+      perform: () => setMotion(command.motion),
+    })),
+    ...contrastCommandRegistry.map((command) => ({
+      id: command.id,
+      label: command.label,
+      detail: command.detail,
+      group: 'Accessibility' as const,
+      icon: command.icon,
+      keywords: command.keywords,
+      perform: () => setContrast(command.contrast),
+    })),
+  ], [modifier, setContrast, setMotion, setTheme, setWorkspaceView, toggleSidebarCollapsed]);
 
   const filteredActions = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();

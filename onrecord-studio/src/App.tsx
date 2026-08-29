@@ -11,6 +11,13 @@ import { invokeCommand } from './ipc';
 import type { IngestionTelemetry } from './types';
 import { shouldReportFailure, type ReportedFailure } from './utils/repeatedFailure';
 import { resolveTheme, THEME_STORAGE_KEY } from './utils/theme';
+import {
+  CONTRAST_STORAGE_KEY,
+  MOTION_STORAGE_KEY,
+  resolveContrast,
+  resolveMotion,
+  systemAccessibilityPreferences,
+} from './utils/accessibility';
 import { useAudioAlerts } from './hooks/useAudioAlerts';
 import { workspaceCommandRegistry } from './commands/registry';
 import LicenseGate from './components/licensing/LicenseGate';
@@ -81,9 +88,12 @@ export default function App() {
 
 function LicensedWorkspace() {
   const theme = useAppStore((state) => state.theme);
+  const motion = useAppStore((state) => state.motion);
+  const contrast = useAppStore((state) => state.contrast);
   const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(() =>
     window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
   );
+  const [systemAccessibility, setSystemAccessibility] = useState(systemAccessibilityPreferences);
   const appendSyncLog = useAppStore((state) => state.appendSyncLog);
   const incrementMetric = useAppStore((state) => state.incrementMetric);
   const addBytesTransferred = useAppStore((state) => state.addBytesTransferred);
@@ -102,6 +112,8 @@ function LicensedWorkspace() {
   const { triggerFailureAlert, triggerSuccessAlert } = useAudioAlerts(audioAlertsEnabled);
 
   const resolvedTheme = resolveTheme(theme, systemTheme === 'dark');
+  const resolvedMotion = resolveMotion(motion, systemAccessibility.prefersReducedMotion);
+  const resolvedContrast = resolveContrast(contrast, systemAccessibility.prefersMoreContrast);
   const platform = getPlatform();
 
   useEffect(() => {
@@ -122,6 +134,32 @@ function LicensedWorkspace() {
     window.localStorage.setItem(THEME_STORAGE_KEY, theme);
     if (isTauri()) void setNativeTheme(theme === 'auto' ? null : theme);
   }, [resolvedTheme, theme]);
+
+  useEffect(() => {
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const contrastQuery = window.matchMedia('(prefers-contrast: more)');
+    const update = () =>
+      setSystemAccessibility({
+        prefersReducedMotion: motionQuery.matches,
+        prefersMoreContrast: contrastQuery.matches,
+      });
+    update();
+    motionQuery.addEventListener('change', update);
+    contrastQuery.addEventListener('change', update);
+    return () => {
+      motionQuery.removeEventListener('change', update);
+      contrastQuery.removeEventListener('change', update);
+    };
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.motion = resolvedMotion;
+    document.documentElement.dataset.motionPreference = motion;
+    document.documentElement.dataset.contrast = resolvedContrast;
+    document.documentElement.dataset.contrastPreference = contrast;
+    window.localStorage.setItem(MOTION_STORAGE_KEY, motion);
+    window.localStorage.setItem(CONTRAST_STORAGE_KEY, contrast);
+  }, [contrast, motion, resolvedContrast, resolvedMotion]);
 
   const refreshAnalytics = useCallback(async () => {
     try {
