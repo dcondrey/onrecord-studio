@@ -108,6 +108,19 @@ if (bundleTarget === 'universal-apple-darwin') {
   }
 }
 
+// App Store Connect rejects a package containing anything a non-root user cannot read (90255),
+// because the code signature is verified under the launching user. Staged build inputs are written
+// with restrictive modes, and Tauri copies some of them into the bundle mode and all, so this is
+// checked on the finished bundle rather than trusted from the staging step.
+for (const path of bundleEntriesIn(appPath)) {
+  const mode = lstatSync(path).mode;
+  const required = lstatSync(path).isDirectory() ? 0o005 : 0o004;
+  assert(
+    (mode & required) === required,
+    `${path} is not readable by non-root users (mode ${(mode & 0o777).toString(8)}).`,
+  );
+}
+
 const executableBytes = readFileSync(executable);
 assert(
   !executableBytes.includes(Buffer.from('sourceMappingURL=')),
@@ -171,6 +184,17 @@ function configuredBuildTarget() {
   assert(typeof script === 'string', 'package.json has no build:app-store script.');
   const flag = script.match(/--target\s+(\S+)/);
   return flag ? flag[1] : null;
+}
+
+function bundleEntriesIn(directory) {
+  const found = [];
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    if (entry.isSymbolicLink()) continue;
+    found.push(path);
+    if (entry.isDirectory()) found.push(...bundleEntriesIn(path));
+  }
+  return found;
 }
 
 function machObjectsIn(directory) {

@@ -94,7 +94,11 @@ const infoPlist = infoTemplate
 writeFileSync(join(tauriRoot, 'Entitlements.appstore.plist'), entitlements, { mode: 0o600 });
 writeFileSync(join(tauriRoot, 'Info.appstore.plist'), infoPlist, { mode: 0o600 });
 copyFileSync(profilePath, join(tauriRoot, 'AppStore.provisionprofile'));
-chmodSync(join(tauriRoot, 'AppStore.provisionprofile'), 0o600);
+// Tauri copies this file into Contents/embedded.provisionprofile preserving its mode, and App
+// Store Connect rejects a package holding any file only root can read (90255): the code signature
+// is verified as the launching user. The profile carries certificates and entitlements, no secret,
+// and ships inside every distributed copy of the app, so it is world-readable by design.
+chmodSync(join(tauriRoot, 'AppStore.provisionprofile'), 0o644);
 process.stdout.write('Materialized App Store entitlements, compliance metadata, and provisioning profile without exposing their values.\n');
 
 function read(name) {
