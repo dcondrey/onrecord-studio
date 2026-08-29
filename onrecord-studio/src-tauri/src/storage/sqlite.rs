@@ -7121,13 +7121,51 @@ mod tests {
     /// purge does not honour tells the operator a false thing about the evidence they are about to
     /// destroy. This pins them together: whichever one is edited, the other has to follow.
     ///
-    /// Proven by changing the preview's document predicate to `local_path IS NOT NULL`: the
-    /// document count then reports 1 against a purge that removes 1 only because this fixture has
-    /// exactly one evidence file, and the request assertion below is what catches a predicate
-    /// swapped between the two tables.
+    /// The fixture is deliberately asymmetric: 2 documents, 3 requests, 1 evidence file. Against a
+    /// one-of-each fixture a preview that swapped the document and request predicates, or that
+    /// returned the same count three times, would still pass.
     #[tokio::test]
     async fn a_source_purge_preview_counts_what_the_purge_removes() {
         let repository = repository_with_document().await;
+        {
+            let connection = repository.conn.lock().await;
+            for extra_request in [REQUEST_ID + 1, REQUEST_ID + 2] {
+                connection
+                    .execute(
+                        "INSERT INTO requests (
+                            id, portal_subdomain, status, created_at, updated_at, closed_at
+                         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                        params![
+                            extra_request,
+                            PORTAL_SUBDOMAIN,
+                            "closed",
+                            "2026-08-24T12:00:00Z",
+                            "2026-08-24T11:59:00Z",
+                            "2026-08-24T12:04:00Z",
+                        ],
+                    )
+                    .expect("an additional request must insert");
+            }
+            // No `local_path`: a document whose bytes were never retained is still a record the
+            // purge destroys, and it must not be counted as an evidence file.
+            connection
+                .execute(
+                    "INSERT INTO documents (
+                        id, request_id, portal_subdomain, file_name, visibility,
+                        created_at, updated_at
+                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                    params![
+                        DOCUMENT_ID + 1,
+                        REQUEST_ID,
+                        PORTAL_SUBDOMAIN,
+                        "never-downloaded.pdf",
+                        "public",
+                        "2026-08-24T12:01:00Z",
+                        "2026-08-24T12:01:00Z",
+                    ],
+                )
+                .expect("an additional document must insert");
+        }
         let extracted_text = "responsive record";
         let extracted_text_sha256 = compute_extracted_text_sha256(extracted_text);
         repository
@@ -7170,6 +7208,15 @@ mod tests {
             "the preview promised an evidence-file count the purge did not honour"
         );
         assert_eq!(preview.source_key, PORTAL_SUBDOMAIN);
+        assert_eq!(
+            (
+                preview.document_count,
+                preview.request_count,
+                preview.evidence_file_count
+            ),
+            (2, 3, 1),
+            "the fixture must stay asymmetric, or the three assertions above stop discriminating"
+        );
     }
 
     #[test]

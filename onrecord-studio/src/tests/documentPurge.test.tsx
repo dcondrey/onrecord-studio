@@ -103,8 +103,9 @@ function recordFor(requestId: number): RequestSearchResult {
   };
 }
 
-function mount(selectedRequestId: number) {
+function mount(selectedRequestId: number, syncingPortalKeys: string[] = []) {
   useAppStore.setState({
+    syncingPortalKeys,
     workspaceView: 'evidence',
     activePortalKey: null,
     searchTerm: '',
@@ -147,6 +148,20 @@ describe('document purge', () => {
     });
     await waitFor(() => expect(screen.queryByText('permit-log.pdf')).toBeNull());
     expect(screen.getByText('inspection-notes.pdf')).toBeTruthy();
+  });
+
+  // A purge while the crawl runs is a delete that undoes itself: the frontier is rebuilt per run
+  // and nothing records that the document was destroyed, so the same file comes back inside the
+  // same sync. Declining is the honest outcome; the tooltip says what to do instead.
+  it('refuses to delete a document while its source is still synchronizing', async () => {
+    mount(42, ['example-gov']);
+    const control = await screen.findByRole('button', { name: 'Delete document permit-log.pdf' });
+
+    expect(control).toHaveProperty('disabled', true);
+    expect(control.getAttribute('title')).toContain('Pause this source');
+    fireEvent.click(control);
+    expect(screen.queryByRole('heading', { name: 'Delete permit-log.pdf?' })).toBeNull();
+    expect(bridge.calls.some((call) => call.command === 'purge_document')).toBe(false);
   });
 
   // Proven by deleting the `documentOwnerRef.current?.requestId !== owner?.requestId` check from

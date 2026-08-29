@@ -30,6 +30,7 @@ export default function MainLayout() {
   const selectedRequestId = useAppStore((state) => state.selectedRequestId);
   const selectedRequestPortalKey = useAppStore((state) => state.selectedRequestPortalKey);
   const setSelectedRequest = useAppStore((state) => state.setSelectedRequest);
+  const syncingPortalKeys = useAppStore((state) => state.syncingPortalKeys);
   const [exportState, setExportState] = useState<{ key: string; isExporting: boolean; result: LegalBriefExportResult | null; error: string | null } | null>(null);
   const [documents, setDocuments] = useState<RequestDocumentSummary[]>([]);
   const [documentError, setDocumentError] = useState<string | null>(null);
@@ -305,13 +306,22 @@ export default function MainLayout() {
                               </button>
                               {/* Its own control, never a modifier on the open action, and never a
                                   swipe or a long press. Destroying a piece of evidence is not a
-                                  variation on reading it. */}
+                                  variation on reading it.
+
+                                  Refused while the source is synchronizing. Purging one document
+                                  stops nothing: the crawl that produced it is still running, holds
+                                  no record that the document was deleted, and would re-download it
+                                  within the same run. A delete that silently undoes itself is a
+                                  worse claim about evidence than one that declines. */}
                               <button
                                 type="button"
-                                title={`Delete ${document.fileName} and everything derived from it`}
+                                disabled={syncingPortalKeys.includes(document.portalKey)}
+                                title={syncingPortalKeys.includes(document.portalKey)
+                                  ? 'Pause this source before deleting a document; a running crawl would download it again'
+                                  : `Delete ${document.fileName} and everything derived from it`}
                                 aria-label={`Delete document ${document.fileName}`}
                                 onClick={() => setPendingDocumentPurge(document)}
-                                className="focus-ring grid w-8 shrink-0 place-items-center rounded-lg border border-slate-800 bg-slate-950/50 text-slate-400 transition hover:border-rose-400/30 hover:text-rose-300"
+                                className="focus-ring grid w-8 shrink-0 place-items-center rounded-lg border border-slate-800 bg-slate-950/50 text-slate-400 transition hover:border-rose-400/30 hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-800 disabled:hover:text-slate-400"
                               >
                                 <Icon name="trash" className="h-3 w-3" />
                               </button>
@@ -364,6 +374,11 @@ export default function MainLayout() {
             <div className="space-y-2 p-4 text-[10px] leading-relaxed text-slate-400">
               <p className="text-slate-300">Destroys the {formatFileSize(pendingDocumentPurge.fileSize)} file on disk, its extracted text, and every search, provenance, and integrity record derived from it.</p>
               <p>The request this document belongs to is kept, and so is every other document under it. This cannot be undone from inside the application.</p>
+              {/* No tombstone survives the delete: the crawl frontier is rebuilt per sync run and
+                  the only record that this document was ever ingested is the row being destroyed.
+                  Saying so is the difference between a deletion and a deletion the operator thinks
+                  is permanent. */}
+              <p>Synchronizing this source again can download the same file back. Remove the source to stop that.</p>
             </div>
             <div className="flex items-center justify-end gap-2 border-t border-slate-800 px-4 py-3">
               <button type="button" onClick={() => setPendingDocumentPurge(null)} className="rounded-lg px-3 py-2 text-[9px] font-semibold text-slate-400 hover:text-slate-300">Cancel</button>
