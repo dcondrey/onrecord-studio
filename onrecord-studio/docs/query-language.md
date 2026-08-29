@@ -33,6 +33,9 @@ fields produce a warning and are excluded from the free-text predicate.
 
 ## Safety boundary
 
-Natural-language interpretation, if added later, must remain reviewable; never execute an opaque
-model result without showing its filters. SQL/Lucene compatibility belongs in an import/export
-adapter, not a second execution engine.
+Natural-language interpretation must remain reviewable; never execute an opaque model result
+without showing its filters. This is no longer hypothetical: `src/query/naturalLanguage.ts` is
+implemented and `src/components/filters/SearchFilter.tsx` imports it, so the rule binds today. What
+it interprets is a deterministic scaffold over dates, status, and response terms, not a model, and
+every filter it produces is rendered as a chip before it is applied. SQL/Lucene compatibility
+belongs in an import/export adapter, not a second execution engine.

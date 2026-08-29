@@ -9,6 +9,62 @@ limit, context compaction, or a change of contributor. Search for `TODO(` and
 
 ## Session log
 
+### Continuation — 2026-08-29 unreached-surface pass
+
+Verification at the end of this pass, all run together: `cargo fmt --check`,
+`cargo clippy --lib --all-targets` (clean), `cargo test --lib` (286 passing), `npx tsc --noEmit`,
+`npx eslint src --max-warnings 0`, `npx vitest run` (93 passing), `node scripts/check-ipc-contract.mjs`
+(38 commands, 18 telemetry events, 6 verification states). The counts recorded in the older entries
+below are stale by construction: they were 217/226/229 Rust and 61/70 frontend against 30 and 27
+commands.
+
+The theme of this pass is that a command with no caller is not dormant, it is untested. Three
+defects were found by writing the first caller for one of them, and every one of them was in code
+that compiled, linted, and passed 283 tests.
+
+- [x] **A statutory extension could not be recorded at all.** `record_statutory_extension` set
+      `recorded_at` from `current_timestamp` inside `ON CONFLICT ... DO UPDATE SET`, where DuckDB
+      binds a bare identifier against the target table and refuses the whole statement, so it failed
+      on the first insert. `statutory_extensions` has exactly one production writer and the legal
+      path consumes it: `refresh_request_timeline_audit` feeds `evidence.extension` into
+      `evaluate_statutory_compliance_with_determination_at`. A request whose agency lawfully invoked
+      a CPRA extension was therefore evaluated against the initial period and could be reported as
+      exceeding a statutory deadline it had not.
+- [x] **`record_source_task_failure` had the same defect**, on the live ingestion path, which means
+      no ingestion failure was ever recorded on any build that shipped it. The guided-repair surface
+      reads that table.
+- [x] **Every stored timestamp was unparseable and in the wrong zone.** `%f` is microseconds, so
+      `'%Y-%m-%dT%H:%M:%fZ'` dropped seconds entirely and wrote microseconds into the seconds field;
+      `TRY_CAST(... AS TIMESTAMPTZ)` returns NULL for the result and `parse_from_rfc3339` rejects it.
+      Two of the affected columns, `evaluated_at` and `imported_at`, are copied verbatim into an
+      exported legal brief. Separately, `strftime` renders a TIMESTAMPTZ in the session zone while
+      the stored literal `Z` claims UTC, so every value was local wall-clock time labelled UTC. One
+      format at all 27 call sites and nine schema DEFAULTs, `TimeZone` set to UTC on the connection,
+      and a source-level test pinning both spellings.
+- [x] `get_request_statutory_extension` plus the recording surface in `LegalCompliancePanel`. The
+      write is an upsert, so a failed read renders as unavailable and withdraws the control rather
+      than offering to replace evidence it never saw. Its staleness test was proven by removing the
+      guard.
+- [x] Motion and contrast preferences, resolved like the theme and reachable from the palette.
+- [x] `start_portal_sync` and `mask_sensitive_text` unregistered.
+
+Open, and specific:
+
+- [ ] **`import_auxiliary_events` has no caller.** It is the only production writer for
+      `auxiliary_events`, which `anomaly.rs:43` and the cross-agency correlation queries read, so
+      unregistering it would leave live analysis over a table nothing can fill. It needs an import
+      surface, not removal. Its upsert carried the same `current_timestamp` defect as the two above,
+      now fixed, but it has never been executed by anything.
+- [ ] **Rows written by earlier builds keep the old timestamp format and zone.** The lost seconds
+      cannot be recovered by any backfill, which is why there is none. These columns are compared
+      lexically rather than parsed and the date and hour dominate that comparison, so
+      day-granularity filtering is unaffected; within-minute ordering is not. An old `evaluated_at`
+      exported into a brief is a malformed instant. Re-evaluating a finding rewrites it. Decide
+      whether the export should refuse to print a value it cannot parse.
+- [ ] **`start_page` and `per_page` are no longer reachable.** `start_data_source` fixes them at 1
+      and 50. Nothing called `start_portal_sync`, so nothing has lost a working feature, but a
+      source needing a non-default page window now has no way to say so.
+
 ### Continuation — 2026-08-27 release-hardening pass
 
 Before the unfinished feature surfaces were restored, the last complete verification run was
@@ -52,15 +108,17 @@ are historical evidence, not a claim about the restored worktree; verification m
 - [x] Verification after the guidance and sequencing pass: frontend lint, TypeScript, production
       build/IPC contract, and 70 unit tests were green; Rust fmt, strict clippy, all 226 unit tests,
       and doctests were green before the restoration pass began.
-- [ ] Complete and integrate the restored frontend investigation components, hooks, dialog/table
-      primitives, and terminal-visibility state. Illustrative operational text must be backed by
-      actual native state before the UI presents it as evidence.
-- [ ] Complete and integrate the restored forensic analysis modules. Placeholder
-      `NOT_IMPLEMENTED` results must remain visibly unavailable until each analyzer has bounded,
-      deterministic behavior and tests.
-- [ ] Reconcile the four restored native commands with the current IPC contract. Commands that
-      overlap newer paths must delegate to one implementation; commands with unique behavior must
-      receive a verified caller and tests.
+- [x] The restored frontend investigation components were completed in `19d6f23`. A keyword and
+      structural sweep of `src/components` on 2026-08-29 found no fabricated operational text: the
+      only module-scope arrays are a palette, two field-descriptor lists, and an enum, and the
+      three components most likely to fake data are store-backed with real empty states.
+- [x] The `NOT_IMPLEMENTED` placeholders were removed in `2add00d` and `0333c92`. Zero occurrences
+      remain in `src` or `src-tauri/src`.
+- [x] The overlapping commands were reconciled on 2026-08-29, but not by the IPC contract check,
+      which compares the two sides for drift and says nothing about reachability. Four commands
+      were registered with no caller anywhere in `src/`. `start_portal_sync` and
+      `mask_sensitive_text` were unregistered as subsumed and unused; `register_statutory_extension`
+      got a caller; `import_auxiliary_events` is still open below.
 - [x] Qualifier search no longer sends visible qualifier syntax as document text. Status, flag,
       portal, and uniquely resolvable agency qualifiers compile into the existing native fields;
       negated, duplicate, ambiguous, and not-yet-executable filters are visibly marked "not
@@ -309,10 +367,23 @@ at the line; two carry running proof-of-concept binaries.
       Socrata, GitHub, Box, Dropbox, SharePoint and OneDrive — not S3, Azure Blob, Granicus or
       CivicPlus, which is where government portals actually host their PDFs. Applying it would
       silently stop ingesting most real portals' documents.
-      Whether cross-host downloads should be blocked by default is David's call: either default
-      breaks something real. The alternatives are (a) leave permissive and record provenance,
-      (b) restrict to the source's registrable domain, which needs a public-suffix list,
-      (c) an explicit `follow_cross_host_downloads` policy flag, and a default has to be chosen.
+      **Decided 2026-08-29, reversibly, and not yet implemented.** Option (c), an explicit policy
+      flag whose default preserves today's behaviour exactly. Spelled as
+      `restrict_downloads_to_source_host: bool` rather than the permissive-sounding name, so that
+      Rust's `false` default *is* the current behaviour and no custom serde default is needed;
+      `SourceGuidance` is persisted as JSON with `#[serde(default)]` on every field
+      (`sqlite.rs:1461`), so adding it needs no schema change and no migration. Option (b) is
+      rejected for now because a registrable-domain rule needs a public-suffix list this tree does
+      not carry, and option (a) alone leaves the policy invisible. Reversing the decision is
+      deleting one field and one branch.
+
+      The implementation is not free and was not done in this pass: `guidance_allows_url`
+      (`queue.rs:5418`) takes no source URL, and `CrawlState` (`queue.rs:439`) does not hold the
+      source root, so the root has to be threaded from crawl construction (`queue.rs:~980`) through
+      all four call sites (`queue.rs:2158`, `:2345`, `:2811`, `:3608`). It needs a test proving a
+      cross-host download is admitted with the flag unset and refused with it set, and it must not
+      touch the follow-path gate at `:1583-1587`, whose
+      `is_supported_external_data_platform` list omits S3, Azure Blob, Granicus, and CivicPlus.
 - [x] In-flight extraction is no longer detached during cancellation. Source teardown signals the
       workers, joins their current task, then finalizes the run; cancelled workers bypass frontier
       refill and self-retirement so they cannot re-enter the provisioning lock held by teardown.
@@ -350,6 +421,9 @@ at the line; two carry running proof-of-concept binaries.
       removed the obsolete `SqliteRepository` alias.
 
 ### Blocked on David — needs a commit decision, not a code change
+
+Nothing here is currently blocking. The cross-host download default, the last open item in this
+section, was decided reversibly on 2026-08-29 and moved to the ingestion list above.
 
 - [x] **The earlier fresh-clone blocker no longer applies.** The previously untracked application
       files (`src-tauri/tauri.conf.json`, `src/ipc.ts`, `index.html`, `eslint.config.js`, both
@@ -438,9 +512,24 @@ cargo build of a tree a concurrent session is mid-edit in. Notes for whoever bui
 - [x] Add deterministic natural-language scaffolding for dates/status/response.
 - [x] Add a compatibility adapter that reports deferred filters.
 - [x] Show recognized qualifier chips in evidence search.
-- [ ] Add a typed `QueryAst` IPC payload to the Rust query command.
+**Ruled 2026-08-29: the native `QueryAst` waits for the search rebuild.** Building it now would
+create a third query grammar that the rebuild then deletes. Two already exist: the qualifier AST
+lives entirely in TypeScript (`src/query/types.ts:30`; zero occurrences of `QueryAst` in
+`src-tauri`) and compiles down to the six flat scalars `query_audit_records` validates
+(`commands/query.rs:12-24`), which is why portal, status, flag, and agency *are* enforced natively
+while dates, types, negation, groups, and ranges are not. Separately, `query_corpus_patterns`
+already accepts a typed structured payload with date ranges and kind sets, enforced in Rust
+(`types/corpus.rs:90-98`, `storage/corpus.rs:577-629`). Section 5 of
+`investigative-workbench-architecture.md` rules that search is rebuilt rather than extended, and
+the AST belongs to that rebuild. Whoever builds it reconciles with `query_corpus_patterns` rather
+than adding a third grammar beside it.
+
+- [ ] Add a typed `QueryAst` IPC payload to the Rust query command. *Deferred to the search
+      rebuild, per the ruling above.*
 - [ ] Resolve agency names and portal names through loaded indexes.
-- [ ] Enforce date, document, type, portal, negation, and boolean filters in Rust.
+- [ ] Enforce date, document, type, portal, negation, and boolean filters in Rust. *Portal,
+      status, flag, and agency are already enforced as scalars; the rest are deferred with the
+      AST.*
 - [ ] Add parenthesized groups, `AND`/`OR`, ranges, and parser diagnostics.
 - [ ] Add a visual filter-row editor with keyboard-accessible chips.
 - [ ] Add natural-language interpretation preview and confidence states.
@@ -455,12 +544,12 @@ cargo build of a tree a concurrent session is mid-edit in. Notes for whoever bui
 - [x] Consolidated instrument strips for overview, operations, and corpus metrics.
 - [ ] Add a first-run walkthrough that can be replayed from Help/Commands.
 - [ ] Add empty-state sample data previews without implying live records.
-- [ ] Add reduced-motion and high-contrast preference controls.
-- [ ] Run keyboard-only audit across every workspace and modal.
+- [x] Motion and contrast resolve like the theme: `system` follows the media query, an explicit choice overrides it in either direction, both stamped before first paint and reachable from the palette.
+- [ ] Run keyboard-only audit across every workspace and modal. This one needs the running app, not a test run.
 
 ## Data and safety
 
-- [ ] Keep unsupported query filters visible as warnings; never silently drop them.
+- [x] Unsupported query filters are visible as amber "not applied" chips with a count and are never silently dropped (`SearchFilter.tsx:146`).
 - [ ] Add query execution telemetry without storing sensitive query text.
 - [ ] Add cancellation/debounce behavior to the typed query IPC path.
 - [ ] Add maximum-cost guardrails for broad corpus queries.
@@ -471,5 +560,11 @@ cargo build of a tree a concurrent session is mid-edit in. Notes for whoever bui
 - [ ] Run the full Rust test suite and IPC contract check after query IPC changes.
 - [ ] Validate light/dark/automatic appearance on macOS and Windows builds.
 - [ ] Test standalone window restoration, menu shortcuts, and deep links.
-- [ ] Run accessibility contrast and focus checks at 100%, 125%, and 200% scale.
-- [ ] Package, sign, and notarize platform artifacts.
+- [ ] Run accessibility contrast and focus checks at 100%, 125%, and 200% scale. Contrast and non-colour cues were met in `2c04d1a`; the scale sweep needs the app driven and cannot be closed from a test.
+- [x] The Mac App Store chain is built and asserted: sandboxed universal bundle, provisioning
+      profile identity and expiry validated before packaging, every Mach-O checked, and the
+      installer chain verified (`d0f5cab`, `60348c9`, `56bb2c6`, `94276ac`, `09ab5a1`, `dbcb619`).
+      App Store submissions are notarized by Apple, so there is no separate notarization step.
+- [ ] Windows has no release path at all. `tauri.conf.json` sets `targets: "all"` while
+      `docs/release.md` contains no Windows signing, packaging, or appearance content. Decide
+      whether Windows ships before treating the two boxes below as in scope.
