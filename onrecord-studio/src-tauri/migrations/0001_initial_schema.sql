@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS portals (
     source_kind TEXT NOT NULL DEFAULT 'NEXT_REQUEST',
     lifecycle_state TEXT NOT NULL DEFAULT 'ACTIVE'
         CHECK (lifecycle_state IN ('ACTIVE', 'PAUSED', 'REMOVED')),
-    created_at TEXT DEFAULT strftime(current_timestamp, '%Y-%m-%dT%H:%M:%SZ')
+    created_at TEXT DEFAULT strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
 );
 
 CREATE TABLE IF NOT EXISTS portal_sync_runs (
@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS source_connector_recipes (
     reuse_approved BIGINT NOT NULL DEFAULT 0 CHECK (reuse_approved IN (0, 1)),
     crawl_policy_json TEXT NOT NULL,
     guidance_json TEXT NOT NULL,
-    updated_at TEXT NOT NULL DEFAULT strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ'),
+    updated_at TEXT NOT NULL DEFAULT strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'),
     FOREIGN KEY (source_key) REFERENCES portals(subdomain)
 );
 
@@ -78,8 +78,8 @@ CREATE TABLE IF NOT EXISTS source_ingestion_failures (
     retryable BIGINT NOT NULL DEFAULT 0 CHECK (retryable IN (0, 1)),
     repairable BIGINT NOT NULL DEFAULT 0 CHECK (repairable IN (0, 1)),
     occurrences BIGINT NOT NULL DEFAULT 1,
-    first_occurred_at TEXT NOT NULL DEFAULT strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ'),
-    last_occurred_at TEXT NOT NULL DEFAULT strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ'),
+    first_occurred_at TEXT NOT NULL DEFAULT strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'),
+    last_occurred_at TEXT NOT NULL DEFAULT strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'),
     UNIQUE (run_id, target_id, error_type),
     FOREIGN KEY (run_id) REFERENCES portal_sync_runs(run_id),
     FOREIGN KEY (source_key) REFERENCES portals(subdomain)
@@ -94,8 +94,8 @@ CREATE TABLE IF NOT EXISTS ingestion_task_frontier (
     status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'LEASED')),
     attempts BIGINT NOT NULL DEFAULT 0,
     lease_expires_at TEXT,
-    created_at TEXT NOT NULL DEFAULT strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ'),
-    updated_at TEXT NOT NULL DEFAULT strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ'),
+    created_at TEXT NOT NULL DEFAULT strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'),
+    updated_at TEXT NOT NULL DEFAULT strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'),
     UNIQUE (run_id, target_id),
     FOREIGN KEY (run_id) REFERENCES portal_sync_runs(run_id),
     FOREIGN KEY (source_key) REFERENCES portals(subdomain)
@@ -157,7 +157,7 @@ CREATE TABLE IF NOT EXISTS statutory_extensions (
     expected_determination_at TEXT NOT NULL,
     reason TEXT NOT NULL,
     notice_source TEXT NOT NULL,
-    recorded_at TEXT NOT NULL DEFAULT strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ'),
+    recorded_at TEXT NOT NULL DEFAULT strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'),
     PRIMARY KEY (request_id, portal_subdomain),
     -- Relations are validated by repository write paths; DuckDB cannot update
     -- referenced parent rows when foreign-key constraints are present.
@@ -345,7 +345,7 @@ CREATE TABLE IF NOT EXISTS auxiliary_events (
     latitude REAL,
     longitude REAL,
     source_payload_json TEXT NOT NULL,
-    imported_at TEXT NOT NULL DEFAULT strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ'),
+    imported_at TEXT NOT NULL DEFAULT strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'),
     PRIMARY KEY (source_id, external_id),
     FOREIGN KEY (source_id) REFERENCES auxiliary_data_sources(source_id),
     CHECK (latitude IS NULL OR (latitude >= -90.0 AND latitude <= 90.0)),
@@ -501,7 +501,7 @@ INSERT OR IGNORE INTO legal_statutes (
     'Determination timing authority for California public records requests; consult the official current text at the recorded source URL.',
     10, 'https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=GOV&sectionNum=7922.535.',
     'builtin-cpra-7922-535-2026', '4b81987a37b0bf933f36220dc1ab9d8b33bb734f92a6ebdb4bb1d085db8c7371',
-    '2026-01-01', NULL, strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ'), strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ')
+    '2026-01-01', NULL, strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'), strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
 );
 
 INSERT OR IGNORE INTO legal_statute_versions (

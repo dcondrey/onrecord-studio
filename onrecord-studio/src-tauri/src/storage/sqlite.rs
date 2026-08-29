@@ -31,16 +31,17 @@ use crate::types::{
     SourcePurgePreview, StatutoryExtensionReason, StatutoryExtensionRecord, TimelineAnomalyMarker,
 };
 
-/// SQL that renders the current instant as RFC 3339 in UTC.
+/// The only SQL spelling of "now" this repository may write, pinned by
+/// `tests::every_sql_timestamp_is_written_as_parseable_utc`.
 ///
-/// Three things this expression is deliberately not. It is not `current_timestamp`, which DuckDB
-/// binds as a column reference inside `ON CONFLICT ... DO UPDATE SET` and refuses. It is not
-/// rendered without `AT TIME ZONE 'UTC'`, because `strftime` formats a `TIMESTAMPTZ` in the session
-/// zone while the literal `Z` claims UTC, which stamps local wall-clock time as UTC. And its format
-/// carries `%S.%f` rather than `%f` alone: `%f` is microseconds, so `'%H:%M:%fZ'` drops seconds
-/// entirely and writes microseconds into the seconds field, producing a string that
-/// `TRY_CAST(... AS TIMESTAMPTZ)` returns NULL for and `parse_from_rfc3339` rejects.
-const UTC_RFC3339_NOW: &str = "strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')";
+/// Two mistakes it exists to keep out. `current_timestamp` is bound as a *column reference* inside
+/// `ON CONFLICT ... DO UPDATE SET`, where DuckDB then refuses to bind the whole statement; `now()`
+/// is a function call in every position. And `%f` is microseconds, not fractional seconds, so the
+/// former `'%H:%M:%fZ'` dropped seconds entirely and wrote microseconds into the seconds field,
+/// producing a string `TRY_CAST(... AS TIMESTAMPTZ)` returns NULL for and `parse_from_rfc3339`
+/// rejects. The session zone is set to UTC in [`DuckDbRepository::new`], so the literal `Z` is true.
+#[cfg(test)]
+const SQL_UTC_NOW: &str = "strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')";
 
 const MAXIMUM_DOCUMENT_CHUNK_CHARACTERS: usize = 250_000;
 const DOCUMENT_CHUNK_PII_BOUNDARY_CHARACTERS: usize = 256;
@@ -910,7 +911,7 @@ impl DuckDbRepository {
         conn.execute(
             "INSERT INTO portal_sync_runs (
                 run_id, portal_subdomain, started_at, status
-             ) VALUES (?1, ?2, strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ'), 'RUNNING')",
+             ) VALUES (?1, ?2, strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'), 'RUNNING')",
             params![run_id, portal_key],
         )
         .map_err(|error| AppError::Storage(format!("Failed to begin portal sync run: {error}")))?;
@@ -1042,7 +1043,7 @@ impl DuckDbRepository {
                         retryable = excluded.retryable,
                         repairable = excluded.repairable,
                         occurrences = source_ingestion_failures.occurrences + 1,
-                        last_occurred_at = strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ')",
+                        last_occurred_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')",
                     params![
                         run_id,
                         source_key,
@@ -1183,9 +1184,9 @@ impl DuckDbRepository {
                 .execute(
                     "UPDATE ingestion_task_frontier
                      SET status = 'PENDING', lease_expires_at = NULL,
-                         updated_at = strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ')
+                         updated_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
                      WHERE run_id = ?1 AND source_key = ?2 AND status = 'LEASED'
-                       AND lease_expires_at <= strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ')",
+                       AND lease_expires_at <= strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')",
                     params![run_id, source_key],
                 )
                 .map_err(|error| {
@@ -1222,8 +1223,8 @@ impl DuckDbRepository {
                 .execute(
                     "UPDATE ingestion_task_frontier
                      SET status = 'LEASED', attempts = attempts + 1,
-                         lease_expires_at = strftime(CAST(current_timestamp AS TIMESTAMP) + INTERVAL 10 MINUTE, '%Y-%m-%dT%H:%M:%fZ'),
-                         updated_at = strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ')
+                         lease_expires_at = strftime(now() + INTERVAL 10 MINUTE, '%Y-%m-%dT%H:%M:%S.%fZ'),
+                         updated_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
                      WHERE frontier_id = ?1 AND status = 'PENDING'",
                     params![frontier_id],
                 )
@@ -1256,8 +1257,8 @@ impl DuckDbRepository {
             .execute(
                 "UPDATE ingestion_task_frontier
                  SET status = 'LEASED',
-                     lease_expires_at = strftime(CAST(current_timestamp AS TIMESTAMP) + CAST(?2 AS INTERVAL), '%Y-%m-%dT%H:%M:%fZ'),
-                     updated_at = strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ')
+                     lease_expires_at = strftime(now() + CAST(?2 AS INTERVAL), '%Y-%m-%dT%H:%M:%S.%fZ'),
+                     updated_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
                  WHERE frontier_id = ?1 AND status = 'LEASED'",
                 params![frontier_id, delay_modifier],
             )
@@ -1332,7 +1333,7 @@ impl DuckDbRepository {
                 .execute(
                     "UPDATE portal_sync_runs
                      SET status = 'INTERRUPTED',
-                         completed_at = strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ')
+                         completed_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
                      WHERE status = 'RUNNING'",
                     [],
                 )
@@ -1407,7 +1408,7 @@ impl DuckDbRepository {
                 .execute(
                     "UPDATE ingestion_task_frontier
                      SET run_id = ?1, status = 'PENDING', lease_expires_at = NULL,
-                         updated_at = strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ')
+                         updated_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
                      WHERE source_key = ?2
                        AND run_id IN (
                            SELECT run_id FROM portal_sync_runs
@@ -1467,7 +1468,7 @@ impl DuckDbRepository {
                 source_key, root_url, recipe_version, publisher_pattern, reuse_approved,
                 crawl_policy_json, guidance_json, updated_at
              ) VALUES (?1, ?2, 2, ?3, ?4, ?5, ?6,
-                       strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ'))
+                       strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'))
              ON CONFLICT(source_key) DO UPDATE SET
                 root_url = excluded.root_url,
                 recipe_version = excluded.recipe_version,
@@ -1576,7 +1577,7 @@ impl DuckDbRepository {
             let updated = transaction
                 .execute(
                     "UPDATE portal_sync_runs SET
-                    completed_at = strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ'),
+                    completed_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'),
                     status = ?1,
                     pages_processed = ?2,
                     requests_processed = ?3,
@@ -1604,7 +1605,7 @@ impl DuckDbRepository {
             transaction
                 .execute(
                     "UPDATE portals SET
-                        last_synced_at = strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ'),
+                        last_synced_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'),
                         health_status = CASE WHEN ?2 = 'COMPLETED' THEN 'verified' ELSE 'degraded' END,
                         last_error = CASE WHEN ?2 = 'COMPLETED' THEN NULL ELSE last_error END
                      WHERE subdomain = ?1",
@@ -3128,7 +3129,7 @@ impl DuckDbRepository {
         execute_transaction(&mut conn, "manual case audit", |tx| {
             tx.execute(
             "INSERT INTO case_audits (audit_id, target_request_id, target_subdomain, auditor_notes, verified_at, verification_status)
-             VALUES (?1, ?2, ?3, ?4, strftime(current_timestamp, '%Y-%m-%dT%H:%M:%SZ'), ?5)
+             VALUES (?1, ?2, ?3, ?4, strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'), ?5)
              ON CONFLICT(audit_id) DO UPDATE SET
                 auditor_notes = excluded.auditor_notes,
                 verified_at = excluded.verified_at,
@@ -3448,7 +3449,7 @@ impl DuckDbRepository {
                     latitude = excluded.latitude,
                     longitude = excluded.longitude,
                     source_payload_json = excluded.source_payload_json,
-                    imported_at = strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ')",
+                    imported_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')",
                     params![
                         source_id,
                         event.external_id,
@@ -3930,7 +3931,7 @@ impl DuckDbRepository {
                      SET review_status = ?1,
                          reviewed_at = CASE
                             WHEN ?1 = 'OPEN' THEN NULL
-                            ELSE strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ')
+                            ELSE strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
                          END,
                          reviewer_notes = ?2
                      WHERE violation_id = ?3
@@ -4617,8 +4618,7 @@ fn upsert_statutory_extension(
 ) -> Result<(), AppError> {
     connection
         .execute(
-            &format!(
-                "INSERT INTO statutory_extensions (
+            "INSERT INTO statutory_extensions (
                 request_id, portal_subdomain, notice_at, expected_determination_at,
                 reason, notice_source
              ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
@@ -4627,8 +4627,7 @@ fn upsert_statutory_extension(
                 expected_determination_at = excluded.expected_determination_at,
                 reason = excluded.reason,
                 notice_source = excluded.notice_source,
-                recorded_at = {UTC_RFC3339_NOW}"
-            ),
+                recorded_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')",
             params![
                 request_id,
                 portal_key,
@@ -5185,7 +5184,7 @@ fn synchronize_cpra_finding(
         tx.execute(
             "UPDATE statutory_violations
              SET review_status = 'RESOLVED_BY_NEW_EVIDENCE',
-                 evaluated_at = strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ')
+                 evaluated_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
              WHERE violation_id = ?1 AND review_status = 'OPEN'",
             params![violation_id],
         )
@@ -5212,8 +5211,8 @@ fn synchronize_cpra_finding(
          ) VALUES (
             ?1, ?2, ?3, 'CPRA_7922.535', ?4, NULL, ?5, ?6, ?7, ?9,
             ?8, '[]', '[]', 'cpra-calendar-v1', 'OPEN',
-            strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ'),
-            strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ')
+            strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'),
+            strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
          )
          ON CONFLICT(violation_id) DO UPDATE SET
             matched_version_id = excluded.matched_version_id,
@@ -5445,7 +5444,7 @@ fn synchronize_policy_evidence_gaps(
     tx.execute(
         "UPDATE statutory_violations
          SET review_status = 'RESOLVED_BY_NEW_EVIDENCE',
-             evaluated_at = strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ')
+             evaluated_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
          WHERE request_id = ?1
            AND portal_subdomain = ?2
            AND classification = ?3
@@ -5555,8 +5554,8 @@ fn synchronize_policy_evidence_gaps(
                 classifier_version, review_status, first_detected_at, evaluated_at
              ) VALUES (
                 ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, NULL, ?9, ?10, ?11, ?12,
-                ?13, 'OPEN', strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ'),
-                strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ')
+                ?13, 'OPEN', strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'),
+                strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
              )
              ON CONFLICT(violation_id) DO UPDATE SET
                 calculated_variance_metric = excluded.calculated_variance_metric,
@@ -5780,7 +5779,7 @@ fn update_automatic_audit_status(tx: &Transaction<'_>, audit_id: &str) -> Result
         .execute(
             "UPDATE case_audits
              SET
-                verified_at = strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ'),
+                verified_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'),
                 verification_status = CASE
                     WHEN EXISTS (
                         SELECT 1
@@ -6455,7 +6454,7 @@ fn upsert_automatic_case_audit<T: ToSql>(
              SET target_request_id = ?2,
                  target_subdomain = ?3,
                  auditor_notes = CASE WHEN ?6 = 1 THEN ?4 ELSE auditor_notes END,
-                 verified_at = strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ'),
+                 verified_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'),
                  verification_status = CASE WHEN ?6 = 1 THEN ?5 ELSE verification_status END
              WHERE audit_id = ?1",
             params![
@@ -6472,7 +6471,7 @@ fn upsert_automatic_case_audit<T: ToSql>(
             "INSERT INTO case_audits (
                 audit_id, target_request_id, target_subdomain, auditor_notes,
                 verified_at, verification_status
-             ) VALUES (?1, ?2, ?3, ?4, strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ'), ?5)",
+             ) VALUES (?1, ?2, ?3, ?4, strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'), ?5)",
             params![audit_id, request_id, subdomain, notes, verification_status],
         )?;
     }
@@ -6769,8 +6768,8 @@ fn migrate_archived_statutory_findings(connection: &Connection) -> Result<(), Ap
                 '[]',
                 'legacy-schema-import-v1',
                 'OPEN',
-                strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ'),
-                strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ')
+                strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'),
+                strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
              FROM statutory_violations_legacy_archive AS legacy
              INNER JOIN legal_statutes
                 ON legal_statutes.statute_id = legacy.matched_statute_id",
@@ -6991,7 +6990,7 @@ mod tests {
         publisher_pattern_for_url, validate_entropy_metadata, verify_logical_relations,
         DocumentDownloadFinalization, DocumentExtractionFinalization, DuckDbRepository,
         IngestionSchedulerCounts, PortalSyncRunFinalization, ProvenanceEvidenceFile,
-        SourceLifecycleState,
+        SourceLifecycleState, SQL_UTC_NOW,
     };
 
     const MIGRATION: &str = include_str!("../../migrations/0001_initial_schema.sql");
@@ -7123,6 +7122,85 @@ mod tests {
             )
             .expect("the document count must be readable");
         assert_eq!(remaining, 0, "the document row itself must be gone");
+    }
+
+    /// `record_source_task_failure` upserts, and its `DO UPDATE SET` clause set `last_occurred_at`
+    /// from `current_timestamp`. DuckDB binds a bare identifier there against the target table, so
+    /// the statement never bound and no ingestion failure was ever recorded, on the first
+    /// occurrence or the repeat. Nothing in the guided-repair surface can work without this row, so
+    /// the assertion is both halves: the row appears, and a second failure increments it rather
+    /// than failing to bind.
+    #[tokio::test]
+    async fn a_repeated_ingestion_failure_records_once_and_counts_up() {
+        let repository = repository_with_document().await;
+        {
+            let connection = repository.conn.lock().await;
+            connection
+                .execute(
+                    "INSERT INTO portal_sync_runs (run_id, portal_subdomain, started_at, status)
+                     VALUES (?1, ?2, ?3, 'RUNNING')",
+                    params!["run-1", PORTAL_SUBDOMAIN, "2026-08-25T09:00:00Z"],
+                )
+                .expect("sync run fixture must insert");
+        }
+        let failure = AppError::Storage("evidence store unavailable".to_string());
+        for _ in 0..2 {
+            repository
+                .record_source_task_failure("run-1", PORTAL_SUBDOMAIN, "target-7", &failure)
+                .await
+                .expect("an ingestion failure must be recordable");
+        }
+
+        let connection = repository.conn.lock().await;
+        let (rows, occurrences, last_occurred_at): (i64, i64, String) = connection
+            .query_row(
+                "SELECT COUNT(*), MAX(occurrences), MAX(last_occurred_at)
+                 FROM source_ingestion_failures WHERE run_id = ?1",
+                params!["run-1"],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .expect("the failure row must be readable");
+        assert_eq!(rows, 1, "the same failure must collapse onto one row");
+        assert_eq!(occurrences, 2, "the repeat must increment the count");
+        chrono::DateTime::parse_from_rfc3339(&last_occurred_at).unwrap_or_else(|error| {
+            panic!("last_occurred_at '{last_occurred_at}' must be RFC 3339: {error}")
+        });
+    }
+
+    /// Both defects above were spelling mistakes that no type checker sees, in SQL that only a
+    /// reached call site executes. This reads the SQL as text so an unreached one cannot
+    /// reintroduce either: `current_timestamp` inside `DO UPDATE SET` refuses to bind, and the
+    /// `%f`-without-`%S` format writes microseconds into the seconds field.
+    #[test]
+    fn every_sql_timestamp_is_written_as_parseable_utc() {
+        const SOURCES: [(&str, &str); 3] = [
+            ("storage/sqlite.rs", include_str!("sqlite.rs")),
+            ("storage/corpus.rs", include_str!("corpus.rs")),
+            (
+                "migrations/0001_initial_schema.sql",
+                include_str!("../../migrations/0001_initial_schema.sql"),
+            ),
+        ];
+        // Assembled rather than written out, so that this test's own source does not match the
+        // needles it searches for in itself.
+        let seconds_dropping_format = format!("'%Y-%m-%dT%H:%M:{}fZ'", '%');
+        let unbindable_now = format!("strftime({}_timestamp", "current");
+        for (name, source) in SOURCES {
+            assert!(
+                !source.contains(&seconds_dropping_format),
+                "{name} formats a timestamp with %f and no %S, which writes microseconds into the \
+                 seconds field and yields a string RFC 3339 parsing rejects"
+            );
+            assert!(
+                !source.contains(&unbindable_now),
+                "{name} renders a timestamp from current_timestamp; use now(), which also binds \
+                 inside ON CONFLICT ... DO UPDATE SET"
+            );
+        }
+        assert!(
+            SOURCES[0].1.matches(SQL_UTC_NOW).count() > 1,
+            "the pinned spelling must be the one actually in use"
+        );
     }
 
     /// The extension write is an upsert on `(request_id, portal_subdomain)`, so the read is what
@@ -8778,7 +8856,7 @@ mod tests {
             last_error TEXT,
             last_synced_at TEXT,
             source_kind TEXT NOT NULL DEFAULT 'NEXT_REQUEST',
-            created_at TEXT DEFAULT strftime(current_timestamp, '%Y-%m-%dT%H:%M:%SZ')
+            created_at TEXT DEFAULT strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
         );";
 
         let repository =

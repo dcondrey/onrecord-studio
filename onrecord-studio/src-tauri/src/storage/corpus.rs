@@ -1582,7 +1582,7 @@ fn persist_analyzed_document(
             "INSERT INTO corpus_documents (
                 portal_key, request_id, document_id, raw_file_sha256, extracted_text_sha256,
                 character_count, simhash_hex, relationships_truncated, algorithm_version, indexed_at
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, strftime(current_timestamp, '%Y-%m-%dT%H:%M:%fZ'))
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'))
              ON CONFLICT(portal_key, document_id) DO UPDATE SET
                 request_id = excluded.request_id,
                 raw_file_sha256 = excluded.raw_file_sha256,
