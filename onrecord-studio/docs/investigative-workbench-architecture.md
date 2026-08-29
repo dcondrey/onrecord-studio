@@ -622,3 +622,59 @@ exact hash over normalized text separately, because that is what "duplicate" mea
 log. Note that the vendor default thresholds circulating for this are convention rather than
 documented: Relativity's published page describes a Minimum Similarity Percentage but states no
 default.
+
+## 14. Second-pass candidates, decided
+
+### `extractous`: real, impressive, and still rejected
+
+This one deserves a correction to section 11's flat claim that Tika cannot be used without a JVM.
+**It can, and `extractous` does it.** Apache-2.0, 335k downloads in ninety days, and its README is
+explicit: for formats not natively handled in Rust it compiles Apache Tika into native shared
+libraries with **GraalVM ahead-of-time compilation**, then links and calls them from Rust. "No local
+servers, no virtual machines, or any garbage collection." That path exists and is shipping.
+
+It is still wrong for this application, for four reasons that compound:
+
+1. **Its build script downloads prebuilt native libraries over the network.** `reqwest`, `flate2`,
+   `tar`, `zip` and `walkdir` are all *build* dependencies. That is a reproducibility and
+   supply-chain property this project should not accept, and it is invisible from the crate page.
+2. **`jni` is a normal dependency**, so JNI is still in the runtime path, calling into the GraalVM
+   isolate. The JVM is gone; the JNI boundary is not.
+3. **More signed Mach-O binaries in the bundle.** This tree has already paid for that; commit
+   `dbcb619` exists because every Mach-O in the App Store bundle has to be checked and readable.
+   Adding prebuilt third-party shared libraries to that surface is a real recurring cost.
+4. **Last release 2024-12-21**, roughly twenty months ago. It also pins `thiserror` 1 while this
+   tree is on 2.
+
+And the payoff is small: the formats it would add over PDF, Office, Excel, RTF, HTML, MSG, the
+archive family and now PST are narrow. Revisit only if a specific format this app must read has no
+Rust reader at all.
+
+### Rejected outright
+
+| crate | why |
+|---|---|
+| `exif-oxide` | **AGPL-3.0-or-later**, v0.1.0, 764 lifetime downloads. Licence alone disqualifies it for a distributed binary |
+| `sn0int` | **GPL-3.0**, and it is a network OSINT framework with a script package manager. Wrong licence, wrong shape, wrong trust model for an offline evidence tool |
+| `urx` | a CLI that pulls URLs from web archives. Network OSINT, no repository listed, 122 downloads in ninety days |
+| `osintrs` | 540 lifetime downloads, 10 recent, no repository. Abandoned |
+| `omniparse` | already rejected in section 11: license-clean and real, but a dispatch layer over `lopdf`, `calamine`, `scraper` and `zip`, all called directly here |
+| `malwaredb-types` | data types for the MalwareDB project. 375 downloads in ninety days, and nothing in it addresses a question this app asks |
+
+### Worth taking
+
+**`kamadak-exif`** for image metadata: pure Rust, BSD-2-Clause, 2.86 million downloads in ninety
+days. That is the mature default, and image EXIF is genuine evidence in a records corpus, since a
+photograph's capture time and device frequently contradict the story a document tells about it.
+`nom-exif` is the alternative worth knowing about because it also reads video and audio container
+metadata, which `kamadak-exif` does not, but its licence field is non-standard so it needs reading
+before adoption. `little_exif` is the only pure-Rust crate with EXIF *write* support, which this app
+does not need and arguably must never have, since writing metadata onto evidence is the opposite of
+the job.
+
+**The `ripgrep` library crates, `grep-searcher` and `grep-regex`**, not the `ripgrep` binary crate.
+Unlicense/MIT, BurntSushi, 5.2 million downloads in ninety days. They give line-oriented buffered
+regex search with encoding and binary detection already handled. This is not a replacement for the
+index, which answers corpus-wide questions; it is the right tool for searching *within* one
+document without a round trip through the index, and for scanning the staging directory during
+ingestion. Modest, cheap, and it removes a class of hand-rolled buffer handling.
