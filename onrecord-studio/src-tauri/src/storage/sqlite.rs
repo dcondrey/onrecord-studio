@@ -1,7 +1,7 @@
 //! Thread-safe DuckDB repository layer managing persistent storage and data indexing.
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 
 use duckdb::{params, params_from_iter, Connection, OptionalExt, Result, Row, ToSql, Transaction};
@@ -271,6 +271,9 @@ pub struct DuckDbRepository {
     /// Documents still missing from the token projection. Counted during migration and drained by
     /// the background backfill, so a search can refuse rather than under-report while it runs.
     search_index_pending: Arc<AtomicU64>,
+    /// Set when the background drain stopped on an error. The arrears then stay where they are,
+    /// and "the index is being built" would be a false statement about why a search cannot answer.
+    search_index_stalled: Arc<AtomicBool>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -400,6 +403,7 @@ impl DuckDbRepository {
             conn: Arc::new(Mutex::new(conn)),
             database_path: Arc::new(database_path),
             search_index_pending: Arc::new(AtomicU64::new(0)),
+            search_index_stalled: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -784,6 +788,12 @@ impl DuckDbRepository {
         self.search_index_pending.load(Ordering::Relaxed)
     }
 
+    /// Whether the background drain stopped short. Arrears that are stalled and arrears that are
+    /// still draining are different facts, and a reader is told which one it is.
+    pub fn search_index_stalled(&self) -> bool {
+        self.search_index_stalled.load(Ordering::Relaxed)
+    }
+
     /// Builds the token projection for documents created before the persistent index existed.
     /// Each batch is atomic and restartable, and the writer lock is released between batches so
     /// ingestion and analytics keep running while the arrears drain.
@@ -792,7 +802,13 @@ impl DuckDbRepository {
         loop {
             let processed = {
                 let mut conn = self.conn.lock().await;
-                backfill_search_token_batch(&mut conn)?
+                match backfill_search_token_batch(&mut conn) {
+                    Ok(processed) => processed,
+                    Err(error) => {
+                        self.search_index_stalled.store(true, Ordering::Relaxed);
+                        return Err(error);
+                    }
+                }
             };
             if processed == 0 {
                 self.search_index_pending.store(0, Ordering::Relaxed);
@@ -7612,6 +7628,66 @@ mod tests {
             indexed_characters,
             Some(super::SEARCH_TOKEN_MAX_INDEXED_CHARACTERS as i64),
             "the recorded prefix length is what makes the cap visible to a reader"
+        );
+    }
+
+    /// A database written before `indexed_characters` existed keeps its own
+    /// `document_search_index_state`, and `CREATE TABLE IF NOT EXISTS` leaves it alone: the
+    /// `ensure_column` shim is the only thing that can complete it. Without the column the first
+    /// projection write fails, which on an upgraded install is every search. The old shape is
+    /// built directly here because DuckDB refuses `DROP COLUMN` on a table with dependents.
+    #[tokio::test]
+    async fn a_database_without_indexed_characters_is_completed_before_the_projection_writes() {
+        let repository =
+            DuckDbRepository::new(Path::new(":memory:")).expect("DuckDB core must open");
+        {
+            let connection = repository.conn.lock().await;
+            connection
+                .execute_batch(
+                    "CREATE TABLE document_search_index_state (
+                        document_id BIGINT NOT NULL,
+                        portal_subdomain TEXT NOT NULL,
+                        index_version BIGINT NOT NULL,
+                        token_count BIGINT NOT NULL,
+                        PRIMARY KEY (document_id, portal_subdomain)
+                     );",
+                )
+                .expect("the pre-upgrade shape must be reproducible");
+        }
+        repository
+            .run_migrations(MIGRATION)
+            .await
+            .expect("migration must complete an older index state table");
+        {
+            let connection = repository.conn.lock().await;
+            connection
+                .execute(
+                    "INSERT INTO documents_fts (
+                        document_id, portal_subdomain, file_name, extracted_text
+                     ) VALUES (?1, ?2, ?3, ?4)",
+                    params![DOCUMENT_ID, PORTAL_SUBDOMAIN, "upgraded.txt", "alpha beta"],
+                )
+                .expect("document fixture must insert");
+        }
+
+        repository
+            .backfill_search_token_index()
+            .await
+            .expect("the projection must write against the completed table");
+
+        let connection = repository.conn.lock().await;
+        let indexed_characters: Option<i64> = connection
+            .query_row(
+                "SELECT indexed_characters FROM document_search_index_state
+                 WHERE document_id = ?1 AND portal_subdomain = ?2",
+                params![DOCUMENT_ID, PORTAL_SUBDOMAIN],
+                |row| row.get(0),
+            )
+            .expect("the state row must exist after the drain");
+        assert_eq!(
+            indexed_characters,
+            Some("alpha beta".chars().count() as i64),
+            "the shimmed column must hold the recorded prefix length, not be absent"
         );
     }
 
