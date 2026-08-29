@@ -67,6 +67,7 @@ const retryableCommands = new Set<NativeCommandName>([
   'get_cross_agency_correlations',
   'list_legal_authorities',
   'list_request_documents',
+  'preview_source_purge',
   'get_document_text_chunk',
   'list_document_provenance_verifications',
   'list_request_legal_findings',

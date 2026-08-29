@@ -11,7 +11,7 @@ use crate::storage::sqlite::DuckDbRepository;
 use crate::types::{
     CrawlPolicy, DocumentPurge, PastedContentInput, PortalRuntimeSnapshot, PortalSyncStart,
     RateLimitPolicy, SavedSource, SourceDiscoveryPreview, SourceGuidance, SourceIngestionStart,
-    SourceKind, SourceLifecycleState, SourcePurge, SourceRemoval,
+    SourceKind, SourceLifecycleState, SourcePurge, SourcePurgePreview, SourceRemoval,
 };
 use std::path::Path;
 use std::sync::Arc;
@@ -203,6 +203,20 @@ pub async fn remove_source(
 ) -> Result<SourceRemoval, AppError> {
     let source_key = validate_portal_key(&source_key)?;
     manager.remove_source(source_key).await
+}
+
+/// Counts what [`purge_source`] would destroy, so the confirmation can name the numbers.
+///
+/// A destructive confirmation that says only "this cannot be undone" asks the operator to approve
+/// an unknown quantity. This command exists so the dialog can say how many documents, requests,
+/// and evidence files are at stake before the operator commits to losing them.
+#[tauri::command]
+pub async fn preview_source_purge(
+    source_key: String,
+    manager: State<'_, Arc<QueueManager>>,
+) -> Result<SourcePurgePreview, AppError> {
+    let source_key = validate_portal_key(&source_key)?;
+    manager.preview_source_purge(source_key).await
 }
 
 /// Destroys a source and every document ingested under it, then removes the derived corpus rows

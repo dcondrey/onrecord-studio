@@ -167,6 +167,23 @@ pub struct SourcePurge {
     pub local_paths: Vec<String>,
 }
 
+/// What purging a source *would* destroy, counted without destroying anything.
+///
+/// The fields are counts and are named as counts. A preview field named `documentsRemoved` would
+/// claim a removal that has not happened, which is the same class of false statement as rendering
+/// an absence as a measurement. The counts are read with the predicates
+/// [`crate::storage::sqlite::Repository::purge_source`] deletes on, and a test purges immediately
+/// after previewing to prove the two agree; a confirmation that names a number the purge does not
+/// honour is worse than one that names none.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SourcePurgePreview {
+    pub source_key: String,
+    pub document_count: u64,
+    pub request_count: u64,
+    pub evidence_file_count: u64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PortalSyncStart {

@@ -70,6 +70,15 @@ export interface DocumentPurge {
 /// What purging an entire source destroyed. Counts are carried for the same reason SourceRemoval
 /// carries its retained count: a destructive action that does not say what it destroyed is as
 /// misleading as one that silently keeps what the operator asked to remove.
+/// What purging a source *would* destroy, counted without destroying anything. Named as counts,
+/// because a preview field called `documentsRemoved` would claim a removal that has not happened.
+export interface SourcePurgePreview {
+  sourceKey: string;
+  documentCount: number;
+  requestCount: number;
+  evidenceFileCount: number;
+}
+
 export interface SourcePurge {
   sourceKey: string;
   documentsRemoved: number;

@@ -12,8 +12,8 @@ pub use corpus::{get_corpus_index_status, query_corpus_patterns};
 pub use export::export_legal_brief;
 pub use ingest::{
     ingest_local_files, ingest_pasted_content, list_portal_runtimes, list_saved_portals,
-    pause_source_sync, preview_data_source, purge_document, purge_source, remove_source,
-    resume_source_sync, start_data_source, start_portal_sync,
+    pause_source_sync, preview_data_source, preview_source_purge, purge_document, purge_source,
+    remove_source, resume_source_sync, start_data_source, start_portal_sync,
 };
 pub use investigation::{
     audit_document_residual_evidence, carve_document_version_history,

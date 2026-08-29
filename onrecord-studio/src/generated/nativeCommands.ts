@@ -11,6 +11,7 @@ export interface NativeCommandMap {
   pause_source_sync: { args: { sourceKey: string }; result: boolean };
   resume_source_sync: { args: { sourceKey: string }; result: Types.SourceIngestionStart };
   remove_source: { args: { sourceKey: string }; result: Types.SourceRemoval };
+  preview_source_purge: { args: { sourceKey: string }; result: Types.SourcePurgePreview };
   purge_source: { args: { sourceKey: string }; result: Types.SourcePurge };
   purge_document: { args: { sourceKey: string; documentId: number }; result: Types.DocumentPurge };
   list_portal_runtimes: { args: NoArgs; result: Types.PortalRuntimeSnapshot[] };

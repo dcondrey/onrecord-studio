@@ -28,7 +28,7 @@ use crate::types::{
     CrawlPolicy, DocumentMetadata, DocumentPurge, FrontierExclusionCount, PastedContentInput,
     PortalApiLayout, PortalRegistration, PortalRuntimeSnapshot, PortalSyncStart, PublicRequest,
     RateLimitPolicy, SourceGuidance, SourceIngestionStart, SourceKind, SourceLifecycleState,
-    SourcePurge, SourceRemoval, StoppedHost,
+    SourcePurge, SourcePurgePreview, SourceRemoval, StoppedHost,
 };
 use chrono::{NaiveDate, Utc};
 use regex::Regex;
@@ -1520,6 +1520,28 @@ impl QueueManager {
     /// `verify_logical_relations`.
     ///
     /// The returned evidence paths are unlinked by the caller. The repository owns rows, not files.
+    /// Counts what [`Self::purge_source`] would destroy.
+    ///
+    /// Read-only, so it takes no provisioning lock and stops nothing. A crawl finishing between
+    /// the preview and the purge makes the purge destroy more than the preview named; the purge
+    /// reports what it actually destroyed, and that report is the authoritative one.
+    pub async fn preview_source_purge(
+        &self,
+        source_key: &str,
+    ) -> Result<SourcePurgePreview, AppError> {
+        if self
+            .repository
+            .source_lifecycle_state(source_key)
+            .await?
+            .is_none()
+        {
+            return Err(AppError::DataParsing(format!(
+                "No saved source is registered as '{source_key}'"
+            )));
+        }
+        self.repository.preview_source_purge(source_key).await
+    }
+
     pub async fn purge_source(&self, source_key: &str) -> Result<SourcePurge, AppError> {
         let _provisioning_guard = self.provisioning_lock.lock().await;
         if self

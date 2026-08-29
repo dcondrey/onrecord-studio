@@ -17,7 +17,7 @@ import {
 } from '../../utils/sourceGuidance';
 import Icon from '../ui/icons';
 import { Select } from '../ui/select';
-import { BUILT_IN_SOURCE_OPTIONS, type PortalRegistration, type SourceDiscoveryPreview, type SourceGuidance, type SourceKind } from '../../types';
+import { BUILT_IN_SOURCE_OPTIONS, type PortalRegistration, type SourceDiscoveryPreview, type SourceGuidance, type SourceKind, type SourcePurgePreview } from '../../types';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 
 const viewLabels = {
@@ -109,6 +109,16 @@ export default function Header() {
   // Holds the source a removal was requested for, not just a boolean, so the confirmation names
   // the source the operator actually clicked even if the selection moves under it.
   const [pendingRemoval, setPendingRemoval] = useState<PortalRegistration | null>(null);
+  // The purge confirmation is a separate piece of state from the removal confirmation, not a mode
+  // flag on one dialog. `remove_source` withdraws a source and keeps its documents; `purge_source`
+  // destroys them and deletes the registration. An operator who meant one and got the other has
+  // either kept evidence they meant to erase or erased evidence they meant to keep, so the two
+  // never share a control, a dialog, or a confirming verb.
+  const [pendingPurge, setPendingPurge] = useState<PortalRegistration | null>(null);
+  const [purgePreview, setPurgePreview] = useState<SourcePurgePreview | null>(null);
+  const [purgePreviewError, setPurgePreviewError] = useState<string | null>(null);
+  const [isPurging, setIsPurging] = useState(false);
+  const purgePreviewGate = useLatestRequestGate();
   const [pasteTitle, setPasteTitle] = useState('Pasted research material');
   const [pasteContent, setPasteContent] = useState('');
   const [repairPreview, setRepairPreview] = useState<SourceDiscoveryPreview | null>(null);
@@ -429,6 +439,61 @@ export default function Header() {
     }
   };
 
+  // The count fetch outlives the dialog it was opened for. Opening the purge confirmation for San
+  // Diego, cancelling, and opening it for Oakland would otherwise render San Diego's counts under
+  // Oakland's heading, and the operator would approve a destruction against numbers belonging to a
+  // different source. Proven by `sourcePurge.test.tsx`, which removes this guard to fail.
+  useEffect(() => {
+    if (!pendingPurge) {
+      purgePreviewGate.invalidate();
+      return;
+    }
+    const request = purgePreviewGate.begin();
+    setPurgePreview(null);
+    setPurgePreviewError(null);
+    void invokeCommand('preview_source_purge', { sourceKey: pendingPurge.portalKey })
+      .then((preview) => {
+        if (purgePreviewGate.isCurrent(request)) setPurgePreview(preview);
+      })
+      .catch((reason) => {
+        if (purgePreviewGate.isCurrent(request)) {
+          setPurgePreviewError(reason instanceof Error ? reason.message : String(reason));
+        }
+      });
+    return purgePreviewGate.invalidate;
+  }, [pendingPurge, purgePreviewGate]);
+
+  const purgeSource = async () => {
+    // The source the confirmation was opened for, for the same reason `removeSource` captures it.
+    const source = pendingPurge;
+    if (!source) return;
+    const syncRunId = syncRunIdsByPortal[source.portalKey];
+    setError(null);
+    setIsPurging(true);
+    try {
+      const purge = await invokeCommand('purge_source', { sourceKey: source.portalKey });
+      setPortalSyncState(source.portalKey, false, syncRunId);
+      removePortalFromWorkspace(source.portalKey);
+      // The counts reported here are what the purge actually destroyed, which is the
+      // authoritative figure. The preview's counts were a forecast and can differ if the crawl
+      // finalized a document between the two calls.
+      appendSyncLog(
+        `${source.displayName}: purged. ${purge.documentsRemoved.toLocaleString()} document` +
+          `${purge.documentsRemoved === 1 ? '' : 's'} and ` +
+          `${purge.requestsRemoved.toLocaleString()} request` +
+          `${purge.requestsRemoved === 1 ? '' : 's'} destroyed, ` +
+          `${purge.localPaths.length.toLocaleString()} evidence file` +
+          `${purge.localPaths.length === 1 ? '' : 's'} deleted. ` +
+          'The registration is gone, so this source can be added again from scratch.',
+      );
+      setPendingPurge(null);
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setIsPurging(false);
+    }
+  };
+
   const connectorForm = (inputId: string) => (
     <form onSubmit={(event) => void startSync(event)} className="source-composer flex min-w-0 flex-1 items-center p-1">
       <Select
@@ -530,8 +595,17 @@ export default function Header() {
           <Icon name="play" className="h-3.5 w-3.5" />
         </button>
       )}
+      {/* Two controls, because they are two operations. The withdrawal keeps the evidence and so
+          does not carry the trash glyph; the purge destroys it and does. A single button with a
+          "also delete the documents" checkbox would put the difference between keeping and
+          erasing evidence one stray click away. */}
       {activePortal && (
-        <button type="button" onClick={() => setPendingRemoval(activePortal)} title="Remove source" aria-label="Remove source" className="source-tool-button focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-400 transition hover:text-rose-300">
+        <button type="button" onClick={() => setPendingRemoval(activePortal)} title="Remove source and keep its documents" aria-label="Remove source" className="source-tool-button focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-400 transition hover:text-amber-300">
+          <Icon name="eject" className="h-3.5 w-3.5" />
+        </button>
+      )}
+      {activePortal && (
+        <button type="button" onClick={() => setPendingPurge(activePortal)} title="Delete source and every document ingested from it" aria-label="Delete source and its documents" className="source-tool-button focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-400 transition hover:text-rose-300">
           <Icon name="trash" className="h-3.5 w-3.5" />
         </button>
       )}
@@ -660,6 +734,45 @@ export default function Header() {
           <div className="flex items-center justify-end gap-2 border-t border-slate-800 px-4 py-3">
             <button type="button" onClick={() => setPendingRemoval(null)} className="rounded-lg px-3 py-2 text-[9px] font-semibold text-slate-400 hover:text-slate-300">Cancel</button>
             <button type="button" onClick={() => void removeSource()} className="focus-ring rounded-lg border border-rose-400/25 bg-rose-500/10 px-4 py-2 text-[9px] font-semibold text-rose-200">Remove and keep documents</button>
+          </div>
+        </div>
+      </div>
+    )}
+    {pendingPurge && (
+      <div className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="purge-source-title">
+        <div className="app-panel w-full max-w-md overflow-hidden shadow-2xl shadow-black/40">
+          <div className="flex items-start justify-between border-b border-slate-800 p-4">
+            <div>
+              <div className="app-eyebrow text-rose-300/70">Sources</div>
+              <h2 id="purge-source-title" className="mt-1 text-sm font-semibold text-slate-100">Delete {pendingPurge.displayName} and everything from it?</h2>
+            </div>
+            <button type="button" onClick={() => setPendingPurge(null)} aria-label="Close deletion confirmation" className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-300"><Icon name="x" /></button>
+          </div>
+          <div className="space-y-2 p-4 text-[10px] leading-relaxed text-slate-400">
+            {/* The counts are the point. "This cannot be undone" asks the operator to approve an
+                unknown quantity of evidence loss; the numbers say what is at stake. Until they
+                arrive the confirming button stays disabled rather than defaulting to zero, because
+                a zero here would read as "nothing to lose". */}
+            {purgePreviewError ? (
+              <p role="alert" className="text-rose-300">Could not count what this would destroy: {purgePreviewError}. Nothing has been deleted.</p>
+            ) : purgePreview === null ? (
+              <p>Counting what this would destroy…</p>
+            ) : (
+              <p className="text-slate-300">
+                Destroys <span className="numeric-value font-semibold text-rose-200">{purgePreview.documentCount.toLocaleString()}</span> ingested document{purgePreview.documentCount === 1 ? '' : 's'},{' '}
+                <span className="numeric-value font-semibold text-rose-200">{purgePreview.requestCount.toLocaleString()}</span> request record{purgePreview.requestCount === 1 ? '' : 's'}, and{' '}
+                <span className="numeric-value font-semibold text-rose-200">{purgePreview.evidenceFileCount.toLocaleString()}</span> downloaded evidence file{purgePreview.evidenceFileCount === 1 ? '' : 's'} on disk, along with every search, provenance, and compliance record derived from them.
+              </p>
+            )}
+            <p>This cannot be undone from inside the application. To stop synchronizing but keep the evidence, close this and use Remove source instead.</p>
+            {syncingPortalKeys.includes(pendingPurge.portalKey) && (
+              <p className="text-amber-300">This source is still synchronizing. Its crawl is stopped before anything is deleted, but a document it finalizes first is deleted too, so the final count can exceed the one above.</p>
+            )}
+            <p className="text-slate-300">The registration is deleted as well, so the source can be added again from scratch afterwards.</p>
+          </div>
+          <div className="flex items-center justify-end gap-2 border-t border-slate-800 px-4 py-3">
+            <button type="button" onClick={() => setPendingPurge(null)} className="rounded-lg px-3 py-2 text-[9px] font-semibold text-slate-400 hover:text-slate-300">Cancel</button>
+            <button type="button" disabled={purgePreview === null || isPurging} onClick={() => void purgeSource()} className="focus-ring rounded-lg border border-rose-400/40 bg-rose-500/20 px-4 py-2 text-[9px] font-semibold text-rose-100 disabled:cursor-not-allowed disabled:border-slate-800 disabled:bg-slate-900 disabled:text-slate-400">{isPurging ? 'Deleting…' : 'Delete source and documents'}</button>
           </div>
         </div>
       </div>

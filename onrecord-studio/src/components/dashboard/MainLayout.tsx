@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import SearchFilter from '../filters/SearchFilter';
 import { useAppStore } from '../../store/useAppStore';
 import { cn } from '../../utils/cn';
@@ -35,6 +35,13 @@ export default function MainLayout() {
   const [documentError, setDocumentError] = useState<string | null>(null);
   const [activeDocument, setActiveDocument] = useState<{ summary: RequestDocumentSummary; chunk: DocumentTextChunk } | null>(null);
   const [pendingEvidenceLink, setPendingEvidenceLink] = useState(readEvidenceLink);
+  // Held as the summary rather than an id, so the confirmation names the file the operator clicked
+  // even if the list refreshes under it.
+  const [pendingDocumentPurge, setPendingDocumentPurge] = useState<RequestDocumentSummary | null>(null);
+  const [isPurgingDocument, setPurgingDocument] = useState(false);
+  // The request the loaded document list belongs to. A purge started for request A that resolves
+  // after B is selected must not write A's outcome, or its error, into B's panel.
+  const documentOwnerRef = useRef<{ requestId: number; portalKey: string } | null>(null);
   const [isLegalLibraryOpen, setLegalLibraryOpen] = useState(false);
   const closeLegalLibrary = useCallback(() => setLegalLibraryOpen(false), []);
   const selected = results.find(
@@ -60,6 +67,8 @@ export default function MainLayout() {
       requestId: pendingEvidenceLink.requestId,
       portalKey: pendingEvidenceLink.portalKey,
     } : null);
+    documentOwnerRef.current = target;
+    setPendingDocumentPurge(null);
     if (!target) return documentListGate.invalidate;
     void invokeCommand('list_request_documents', {
       requestId: target.requestId,
@@ -71,6 +80,39 @@ export default function MainLayout() {
     });
     return documentListGate.invalidate;
   }, [documentListGate, documentOpenGate, pendingEvidenceLink, selected?.portalKey, selected?.requestId]);
+
+  const purgeDocument = async () => {
+    const summary = pendingDocumentPurge;
+    // The request this purge was started under, compared again on arrival before anything is
+    // written. See the note on `documentOwnerRef`.
+    const owner = documentOwnerRef.current;
+    if (!summary) return;
+    setDocumentError(null);
+    setPurgingDocument(true);
+    try {
+      const purge = await invokeCommand('purge_document', {
+        sourceKey: summary.portalKey,
+        documentId: summary.documentId,
+      });
+      if (documentOwnerRef.current?.requestId !== owner?.requestId
+        || documentOwnerRef.current?.portalKey !== owner?.portalKey) return;
+      setDocuments((current) => current.filter((document) =>
+        document.documentId !== purge.documentId || document.portalKey !== purge.sourceKey));
+      setActiveDocument((current) =>
+        current
+        && current.summary.documentId === purge.documentId
+        && current.summary.portalKey === purge.sourceKey
+          ? null
+          : current);
+      setPendingDocumentPurge(null);
+    } catch (reason) {
+      if (documentOwnerRef.current?.requestId !== owner?.requestId
+        || documentOwnerRef.current?.portalKey !== owner?.portalKey) return;
+      setDocumentError(String(reason));
+    } finally {
+      setPurgingDocument(false);
+    }
+  };
 
   useEffect(() => {
     if (!activeDocument) return;
@@ -247,20 +289,33 @@ export default function MainLayout() {
                             || document.extractionStatus === 'SALVAGED';
                           const stateLabel = formatExtractionState(document);
                           return (
-                            <button
-                              key={document.documentId}
-                              type="button"
-                              disabled={!canOpen}
-                              title={document.extractionDeferredReason ?? stateLabel}
-                              onClick={() => void openDocument(document)}
-                              className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 text-left transition hover:border-indigo-400/30 hover:bg-indigo-500/[0.05] disabled:cursor-default disabled:opacity-65 disabled:hover:border-slate-800 disabled:hover:bg-slate-950/50"
-                            >
-                              <span className="min-w-0">
-                                <span className="block truncate text-[10px] font-medium text-slate-300">{document.fileName}</span>
-                                <span className="mt-0.5 block truncate text-[8px] text-slate-400">{stateLabel}</span>
-                              </span>
-                              <span className="shrink-0 font-mono text-[8px] text-slate-400">{formatFileSize(document.fileSize)}</span>
-                            </button>
+                            <div key={document.documentId} className="flex items-stretch gap-1">
+                              <button
+                                type="button"
+                                disabled={!canOpen}
+                                title={document.extractionDeferredReason ?? stateLabel}
+                                onClick={() => void openDocument(document)}
+                                className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 text-left transition hover:border-indigo-400/30 hover:bg-indigo-500/[0.05] disabled:cursor-default disabled:opacity-65 disabled:hover:border-slate-800 disabled:hover:bg-slate-950/50"
+                              >
+                                <span className="min-w-0">
+                                  <span className="block truncate text-[10px] font-medium text-slate-300">{document.fileName}</span>
+                                  <span className="mt-0.5 block truncate text-[8px] text-slate-400">{stateLabel}</span>
+                                </span>
+                                <span className="shrink-0 font-mono text-[8px] text-slate-400">{formatFileSize(document.fileSize)}</span>
+                              </button>
+                              {/* Its own control, never a modifier on the open action, and never a
+                                  swipe or a long press. Destroying a piece of evidence is not a
+                                  variation on reading it. */}
+                              <button
+                                type="button"
+                                title={`Delete ${document.fileName} and everything derived from it`}
+                                aria-label={`Delete document ${document.fileName}`}
+                                onClick={() => setPendingDocumentPurge(document)}
+                                className="focus-ring grid w-8 shrink-0 place-items-center rounded-lg border border-slate-800 bg-slate-950/50 text-slate-400 transition hover:border-rose-400/30 hover:text-rose-300"
+                              >
+                                <Icon name="trash" className="h-3 w-3" />
+                              </button>
+                            </div>
                           );
                         })}
                       </div>
@@ -299,6 +354,24 @@ export default function MainLayout() {
           </div>
         </div>
       </div>
+      {pendingDocumentPurge && (
+        <div className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="purge-document-title">
+          <div className="app-panel w-full max-w-md overflow-hidden shadow-2xl shadow-black/40">
+            <div className="border-b border-slate-800 p-4">
+              <div className="app-eyebrow text-rose-300/70">Evidence</div>
+              <h2 id="purge-document-title" className="mt-1 break-all text-sm font-semibold text-slate-100">Delete {pendingDocumentPurge.fileName}?</h2>
+            </div>
+            <div className="space-y-2 p-4 text-[10px] leading-relaxed text-slate-400">
+              <p className="text-slate-300">Destroys the {formatFileSize(pendingDocumentPurge.fileSize)} file on disk, its extracted text, and every search, provenance, and integrity record derived from it.</p>
+              <p>The request this document belongs to is kept, and so is every other document under it. This cannot be undone from inside the application.</p>
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-slate-800 px-4 py-3">
+              <button type="button" onClick={() => setPendingDocumentPurge(null)} className="rounded-lg px-3 py-2 text-[9px] font-semibold text-slate-400 hover:text-slate-300">Cancel</button>
+              <button type="button" disabled={isPurgingDocument} onClick={() => void purgeDocument()} className="focus-ring rounded-lg border border-rose-400/40 bg-rose-500/20 px-4 py-2 text-[9px] font-semibold text-rose-100 disabled:cursor-not-allowed disabled:opacity-60">{isPurgingDocument ? 'Deleting…' : 'Delete this document'}</button>
+            </div>
+          </div>
+        </div>
+      )}
       {activeDocument && (
         <div className="app-backdrop fixed inset-0 z-50 grid place-items-center p-8 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`Document ${activeDocument.summary.fileName}`}>
           <div className={cn('relative h-[min(760px,88vh)]', isPdfDocument(activeDocument.summary) ? 'w-[min(1440px,96vw)]' : 'w-[min(1080px,92vw)]')}>

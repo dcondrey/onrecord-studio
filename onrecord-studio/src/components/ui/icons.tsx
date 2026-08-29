@@ -8,6 +8,7 @@ export type IconName =
   | 'clipboard'
   | 'database'
   | 'evidence'
+  | 'eject'
   | 'filePlus'
   | 'globe'
   | 'grid'
@@ -39,6 +40,7 @@ export default function Icon({ name, className = 'h-4 w-4', ...props }: IconProp
     collapse: <><path d="M9 18 3 12l6-6" /><path d="M21 6v12" /></>,
     database: <><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5" /><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" /></>,
     evidence: <><path d="M7 3h8l4 4v14H7z" /><path d="M15 3v5h5" /><path d="M10 12h6M10 16h6" /></>,
+    eject: <><path d="M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3" /><path d="m15 16 5-4-5-4" /><path d="M20 12H10" /></>,
     filePlus: <><path d="M6 3h8l4 4v14H6z" /><path d="M14 3v5h5M9 14h6M12 11v6" /></>,
     globe: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" /></>,
     grid: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>,

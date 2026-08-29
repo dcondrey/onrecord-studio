@@ -28,7 +28,7 @@ use crate::types::{
     LegalBriefExportResult, LegalComplianceFinding, LegalEvaluationResult,
     LegalFindingReviewStatus, PortalRegistration, PublicRequest, RequestDocumentSummary,
     RequestSearchResult, SavedSource, SourceGuidance, SourceLifecycleState, SourcePurge,
-    StatutoryExtensionReason, StatutoryExtensionRecord, TimelineAnomalyMarker,
+    SourcePurgePreview, StatutoryExtensionReason, StatutoryExtensionRecord, TimelineAnomalyMarker,
 };
 
 const MAXIMUM_DOCUMENT_CHUNK_CHARACTERS: usize = 250_000;
@@ -2863,6 +2863,48 @@ impl DuckDbRepository {
     /// but immortal, since `list_portal_registrations` filters `REMOVED` out and nothing ever
     /// re-activates it, so the same URL can never be added again cleanly. A purged source is gone,
     /// and adding it back is an ordinary first ingestion.
+    /// Counts what [`Self::purge_source`] would destroy, without destroying it.
+    ///
+    /// Every predicate here is copied from the corresponding delete in `purge_source`, and
+    /// `purge_source_preview_matches_purge` proves the two agree by previewing and then purging
+    /// the same database. A confirmation dialog that names a count the purge does not honour is a
+    /// false statement about evidence, so the counts are not allowed to drift silently.
+    ///
+    /// The evidence-file count is the number of documents holding a `local_path`, which is what
+    /// the purge collects and unlinks. It is reported separately from the document count because
+    /// a document whose bytes were never retained still exists as a record.
+    pub async fn preview_source_purge(
+        &self,
+        source_key: &str,
+    ) -> Result<SourcePurgePreview, AppError> {
+        let key = source_key.to_string();
+        let source_key = source_key.to_string();
+        self.query_connection("Source purge preview", move |conn| {
+            let count = |sql: &str| -> Result<u64, AppError> {
+                let value = conn
+                    .query_row(sql, params![key], |row| row.get::<_, i64>(0))
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to count a source purge: {error}"))
+                    })?;
+                u64::try_from(value).map_err(|_| {
+                    AppError::Storage("A source purge count exceeds supported capacity".to_string())
+                })
+            };
+            Ok(SourcePurgePreview {
+                source_key: source_key.clone(),
+                document_count: count(
+                    "SELECT COUNT(*) FROM documents WHERE portal_subdomain = ?1",
+                )?,
+                request_count: count("SELECT COUNT(*) FROM requests WHERE portal_subdomain = ?1")?,
+                evidence_file_count: count(
+                    "SELECT COUNT(*) FROM documents
+                     WHERE portal_subdomain = ?1 AND local_path IS NOT NULL",
+                )?,
+            })
+        })
+        .await
+    }
+
     pub async fn purge_source(&self, source_key: &str) -> Result<SourcePurge, AppError> {
         let mut conn = self.conn.lock().await;
         let transaction = conn.transaction().map_err(|error| {
@@ -7071,6 +7113,63 @@ mod tests {
             portals, 0,
             "purging must remove the portals row so the same source can be added again"
         );
+    }
+
+    /// The preview and the purge must count the same rows.
+    ///
+    /// They are separate SQL, so they can drift, and a confirmation dialog that names a count the
+    /// purge does not honour tells the operator a false thing about the evidence they are about to
+    /// destroy. This pins them together: whichever one is edited, the other has to follow.
+    ///
+    /// Proven by changing the preview's document predicate to `local_path IS NOT NULL`: the
+    /// document count then reports 1 against a purge that removes 1 only because this fixture has
+    /// exactly one evidence file, and the request assertion below is what catches a predicate
+    /// swapped between the two tables.
+    #[tokio::test]
+    async fn a_source_purge_preview_counts_what_the_purge_removes() {
+        let repository = repository_with_document().await;
+        let extracted_text = "responsive record";
+        let extracted_text_sha256 = compute_extracted_text_sha256(extracted_text);
+        repository
+            .finalize_document_extraction(DocumentExtractionFinalization {
+                document_id: DOCUMENT_ID as u64,
+                portal_subdomain: PORTAL_SUBDOMAIN,
+                extracted_text,
+                extracted_text_sha256: &extracted_text_sha256,
+                raw_file_sha256: RAW_FILE_SHA256,
+                was_ocr_processed: false,
+                raw_file_size: 100,
+                local_path: Path::new("/var/data/test-portal/release.pdf"),
+                shannon_entropy: Some(4.0),
+                entropy_sample_bytes: 100,
+                suspicious_data_density: false,
+            })
+            .await
+            .expect("the document must finalize");
+
+        let preview = repository
+            .preview_source_purge(PORTAL_SUBDOMAIN)
+            .await
+            .expect("a registered source must be previewable");
+        let purge = repository
+            .purge_source(PORTAL_SUBDOMAIN)
+            .await
+            .expect("a registered source must be purgeable");
+
+        assert_eq!(
+            preview.document_count, purge.documents_removed,
+            "the preview promised a document count the purge did not honour"
+        );
+        assert_eq!(
+            preview.request_count, purge.requests_removed,
+            "the preview promised a request count the purge did not honour"
+        );
+        assert_eq!(
+            preview.evidence_file_count,
+            purge.local_paths.len() as u64,
+            "the preview promised an evidence-file count the purge did not honour"
+        );
+        assert_eq!(preview.source_key, PORTAL_SUBDOMAIN);
     }
 
     #[test]
