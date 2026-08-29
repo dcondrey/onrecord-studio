@@ -7,8 +7,58 @@ import type {
   LegalEvaluationResult,
   LegalFindingReviewStatus,
   RequestSearchResult,
+  StatutoryExtensionReason,
+  StatutoryExtensionRecord,
 } from '../../types';
 import { cn } from '../../utils/cn';
+
+/// Every reason the CPRA evaluator recognizes. A reason outside this list is not a narrower
+/// extension, it is one the statute does not grant, so the select cannot offer a free-text option.
+const EXTENSION_REASONS: StatutoryExtensionReason[] = [
+  'SEPARATE_FIELD_FACILITIES',
+  'VOLUMINOUS_RECORDS',
+  'INTERAGENCY_CONSULTATION',
+  'DATA_COMPILATION',
+  'CYBERATTACK_SYSTEMS_UNAVAILABLE',
+  'DECLARED_EMERGENCY_OPERATIONAL_IMPACT',
+];
+
+interface ExtensionDraft {
+  noticeAt: string;
+  expectedDeterminationAt: string;
+  reason: StatutoryExtensionReason;
+  noticeSource: string;
+}
+
+const EMPTY_DRAFT: ExtensionDraft = {
+  noticeAt: '',
+  expectedDeterminationAt: '',
+  reason: 'VOLUMINOUS_RECORDS',
+  noticeSource: '',
+};
+
+/// `datetime-local` reads and writes local wall-clock time with no zone. The stored value is
+/// RFC 3339, so both directions convert explicitly rather than slicing the string.
+function toLocalInput(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  const offset = parsed.getTimezoneOffset() * 60_000;
+  return new Date(parsed.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function toRfc3339(value: string) {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+function draftFrom(record: StatutoryExtensionRecord): ExtensionDraft {
+  return {
+    noticeAt: toLocalInput(record.noticeAt),
+    expectedDeterminationAt: toLocalInput(record.expectedDeterminationAt),
+    reason: record.reason,
+    noticeSource: record.noticeSource,
+  };
+}
 
 interface LegalCompliancePanelProps {
   record: RequestSearchResult;
@@ -40,6 +90,44 @@ export default function LegalCompliancePanel({
   // Loading, evaluating, and reviewing all publish to the same global findings collection. One
   // gate makes the newest of those operations authoritative, including across record changes.
   const findingsGate = useLatestRequestGate();
+  // A second gate, not a second token from the first: the gate holds one counter, so beginning an
+  // extension request on it would invalidate the findings request issued beside it.
+  const extensionGate = useLatestRequestGate();
+  const [extension, setExtension] = useState<StatutoryExtensionRecord | null>(null);
+  const [extensionState, setExtensionState] = useState<'loading' | 'loaded' | 'unavailable'>(
+    'loading',
+  );
+  const [isExtensionFormOpen, setIsExtensionFormOpen] = useState(false);
+  const [extensionDraft, setExtensionDraft] = useState<ExtensionDraft>(EMPTY_DRAFT);
+  const [extensionError, setExtensionError] = useState<string | null>(null);
+  const [isSavingExtension, setIsSavingExtension] = useState(false);
+
+  useEffect(() => {
+    const request = extensionGate.begin();
+    setExtensionState('loading');
+    setExtension(null);
+    setIsExtensionFormOpen(false);
+    setExtensionDraft(EMPTY_DRAFT);
+    setExtensionError(null);
+    void invokeCommand('get_request_statutory_extension', {
+      requestId: record.requestId,
+      portalKey: record.portalKey,
+    })
+      .then((value) => {
+        if (!extensionGate.isCurrent(request)) return;
+        setExtension(value);
+        setExtensionDraft(value ? draftFrom(value) : EMPTY_DRAFT);
+        setExtensionState('loaded');
+      })
+      .catch((reason) => {
+        if (!extensionGate.isCurrent(request)) return;
+        // A failed read must not render as "no extension recorded": the recording form would then
+        // offer to write over evidence it never saw.
+        setExtensionError(String(reason));
+        setExtensionState('unavailable');
+      });
+    return extensionGate.invalidate;
+  }, [extensionGate, record.portalKey, record.requestId]);
 
   useEffect(() => {
     const request = findingsGate.begin();
@@ -97,6 +185,48 @@ export default function LegalCompliancePanel({
       setError(String(reason));
     } finally {
       if (findingsGate.isCurrent(request)) setIsEvaluating(false);
+    }
+  };
+
+  const submitExtension = async () => {
+    const noticeAt = toRfc3339(extensionDraft.noticeAt);
+    const expectedDeterminationAt = toRfc3339(extensionDraft.expectedDeterminationAt);
+    if (!noticeAt || !expectedDeterminationAt) {
+      setExtensionError('Both the notice date and the expected determination date are required.');
+      return;
+    }
+    if (!extensionDraft.noticeSource.trim()) {
+      setExtensionError('Identify the document or message the extension notice came from.');
+      return;
+    }
+    const request = extensionGate.begin();
+    setIsSavingExtension(true);
+    setExtensionError(null);
+    const recorded: StatutoryExtensionRecord = {
+      noticeAt,
+      expectedDeterminationAt,
+      reason: extensionDraft.reason,
+      noticeSource: extensionDraft.noticeSource.trim(),
+    };
+    try {
+      await invokeCommand('register_statutory_extension', {
+        requestId: record.requestId,
+        portalKey: record.portalKey,
+        extension: recorded,
+      });
+      if (!extensionGate.isCurrent(request)) return;
+      setExtension(recorded);
+      setExtensionDraft(draftFrom(recorded));
+      setExtensionState('loaded');
+      setIsExtensionFormOpen(false);
+      // An extension moves the determination deadline, so findings computed without it are stale
+      // the moment it is recorded. Re-evaluating is the point of recording one.
+      await evaluate();
+    } catch (reason) {
+      if (!extensionGate.isCurrent(request)) return;
+      setExtensionError(String(reason));
+    } finally {
+      if (extensionGate.isCurrent(request)) setIsSavingExtension(false);
     }
   };
 
@@ -164,6 +294,146 @@ export default function LegalCompliancePanel({
             {isEvaluating ? 'Evaluating…' : 'Evaluate case'}
           </button>
         </div>
+      </div>
+
+      <div className="border-b border-slate-800 px-3 py-2.5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-[8px] font-bold uppercase tracking-[0.16em] text-slate-400">
+              Statutory extension
+            </div>
+            {extensionState === 'loading' ? (
+              <p className="mt-1 text-[9px] text-slate-400">Reading recorded extension…</p>
+            ) : extensionState === 'unavailable' ? (
+              <p className="mt-1 text-[9px] leading-relaxed text-rose-200">
+                The recorded extension could not be read, so this panel cannot say whether one
+                exists. Recording is disabled rather than risk replacing evidence unseen.
+              </p>
+            ) : extension ? (
+              <p className="mt-1 text-[9px] leading-relaxed text-slate-400">
+                {humanize(extension.reason)}, noticed {extension.noticeAt}, determination expected{' '}
+                {extension.expectedDeterminationAt}. Source: {extension.noticeSource}
+              </p>
+            ) : (
+              <p className="mt-1 text-[9px] leading-relaxed text-slate-400">
+                No extension recorded. The deadline is evaluated against the initial statutory
+                period until one is.
+              </p>
+            )}
+          </div>
+          {extensionState === 'loaded' && (
+            <button
+              type="button"
+              onClick={() => {
+                setExtensionError(null);
+                setIsExtensionFormOpen((open) => !open);
+              }}
+              className="shrink-0 rounded-md border border-slate-700 px-2 py-1 text-[8px] font-semibold text-slate-400 transition hover:border-slate-500 hover:text-slate-200"
+            >
+              {isExtensionFormOpen ? 'Cancel' : extension ? 'Replace notice' : 'Record notice'}
+            </button>
+          )}
+        </div>
+
+        {isExtensionFormOpen && (
+          <div className="mt-2 rounded-md border border-slate-800 bg-slate-900/60 p-2">
+            {extension && (
+              <p className="mb-2 text-[8px] leading-relaxed text-amber-200/80">
+                A request carries one extension. Saving replaces the notice shown above.
+              </p>
+            )}
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="block text-[7px] font-semibold uppercase tracking-wider text-slate-400">
+                Notice given
+                <input
+                  type="datetime-local"
+                  value={extensionDraft.noticeAt}
+                  onChange={(event) =>
+                    setExtensionDraft((draft) => ({ ...draft, noticeAt: event.target.value }))
+                  }
+                  className="mt-1.5 w-full rounded border border-slate-800 bg-slate-950 px-2 py-1.5 text-[8px] normal-case tracking-normal text-slate-300 outline-none focus:border-indigo-400/35"
+                />
+              </label>
+              <label className="block text-[7px] font-semibold uppercase tracking-wider text-slate-400">
+                Determination expected
+                <input
+                  type="datetime-local"
+                  value={extensionDraft.expectedDeterminationAt}
+                  onChange={(event) =>
+                    setExtensionDraft((draft) => ({
+                      ...draft,
+                      expectedDeterminationAt: event.target.value,
+                    }))
+                  }
+                  className="mt-1.5 w-full rounded border border-slate-800 bg-slate-950 px-2 py-1.5 text-[8px] normal-case tracking-normal text-slate-300 outline-none focus:border-indigo-400/35"
+                />
+              </label>
+              <label className="block text-[7px] font-semibold uppercase tracking-wider text-slate-400">
+                Reason claimed
+                <select
+                  value={extensionDraft.reason}
+                  onChange={(event) =>
+                    setExtensionDraft((draft) => ({
+                      ...draft,
+                      reason: event.target.value as StatutoryExtensionReason,
+                    }))
+                  }
+                  className="mt-1.5 w-full rounded border border-slate-800 bg-slate-950 px-2 py-1.5 text-[8px] normal-case tracking-normal text-slate-300 outline-none focus:border-indigo-400/35"
+                >
+                  {EXTENSION_REASONS.map((reason) => (
+                    <option key={reason} value={reason}>
+                      {humanize(reason)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-[7px] font-semibold uppercase tracking-wider text-slate-400">
+                Notice source
+                <input
+                  type="text"
+                  value={extensionDraft.noticeSource}
+                  onChange={(event) =>
+                    setExtensionDraft((draft) => ({ ...draft, noticeSource: event.target.value }))
+                  }
+                  maxLength={4096}
+                  placeholder="Letter, email, or portal message"
+                  className="mt-1.5 w-full rounded border border-slate-800 bg-slate-950 px-2 py-1.5 text-[8px] normal-case tracking-normal text-slate-300 outline-none focus:border-indigo-400/35"
+                />
+              </label>
+            </div>
+            <p className="mt-2 text-[7px] leading-relaxed text-slate-400">
+              Recording a notice states what the agency claimed. Whether it moves the deadline is
+              the evaluator&apos;s verdict on those dates, not a consequence of recording it.
+            </p>
+            <div className="mt-2 flex justify-end gap-1.5">
+              <button
+                type="button"
+                onClick={() => setIsExtensionFormOpen(false)}
+                disabled={isSavingExtension}
+                className="rounded px-2 py-1 text-[7px] font-semibold text-slate-400 hover:text-slate-300"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void submitExtension()}
+                disabled={isSavingExtension}
+                className="rounded border border-indigo-400/25 bg-indigo-500/10 px-2 py-1 text-[7px] font-semibold text-indigo-200 disabled:cursor-wait disabled:opacity-60"
+              >
+                {isSavingExtension ? 'Saving…' : 'Save and re-evaluate'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {extensionError && (
+          <div
+            role="alert"
+            className="mt-2 rounded border border-rose-500/20 bg-rose-500/[0.05] px-2 py-1.5 text-[8px] leading-relaxed text-rose-300"
+          >
+            {extensionError}
+          </div>
+        )}
       </div>
 
       {isLoading ? (
