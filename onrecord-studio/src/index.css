@@ -205,13 +205,13 @@ select:not(:disabled) {
   }
 
   .app-eyebrow {
-    @apply font-semibold uppercase text-slate-500;
+    @apply font-semibold uppercase text-slate-400;
     font-size: 0.75rem;
     letter-spacing: 0.12em;
   }
 
   .sidebar-section-label {
-    @apply font-semibold text-slate-500;
+    @apply font-semibold text-slate-400;
     font-size: 0.75rem;
     letter-spacing: 0.015em;
   }
@@ -465,11 +465,63 @@ select:not(:disabled) {
   color: #475569;
 }
 
-[data-theme="light"] .text-slate-500,
-[data-theme="light"] .text-slate-600,
-[data-theme="light"] .text-slate-700,
+[data-theme="light"] .text-slate-400,
+[data-theme="light"] .text-slate-400,
+[data-theme="light"] .text-slate-400,
 [data-theme="light"] .text-slate-800 {
   color: #526174;
+}
+
+/* The accent utilities are picked for dark surfaces. Light appearance repaints the panels white,
+   so each accent family remaps onto the light --viz-* token, which is chosen to clear 4.5:1 on
+   white. Without this, a cyan-300 label on a repainted panel lands at 1.45:1. */
+[data-theme="light"] .text-cyan-100,
+[data-theme="light"] .text-cyan-200,
+[data-theme="light"] .text-cyan-300,
+[data-theme="light"] .text-cyan-400,
+[data-theme="light"] .text-cyan-500 {
+  color: var(--viz-cyan);
+}
+
+[data-theme="light"] .text-indigo-100,
+[data-theme="light"] .text-indigo-200,
+[data-theme="light"] .text-indigo-300,
+[data-theme="light"] .text-indigo-400,
+[data-theme="light"] .text-indigo-500 {
+  color: var(--viz-indigo);
+}
+
+[data-theme="light"] .text-fuchsia-200,
+[data-theme="light"] .text-fuchsia-300,
+[data-theme="light"] .text-fuchsia-400,
+[data-theme="light"] .text-purple-300,
+[data-theme="light"] .text-purple-400 {
+  color: var(--viz-purple);
+}
+
+[data-theme="light"] .text-amber-100,
+[data-theme="light"] .text-amber-200,
+[data-theme="light"] .text-amber-300,
+[data-theme="light"] .text-amber-400,
+[data-theme="light"] .text-amber-500 {
+  color: var(--viz-amber);
+}
+
+[data-theme="light"] .text-rose-100,
+[data-theme="light"] .text-rose-200,
+[data-theme="light"] .text-rose-300,
+[data-theme="light"] .text-rose-400,
+[data-theme="light"] .text-red-300,
+[data-theme="light"] .text-red-400 {
+  color: var(--viz-red);
+}
+
+[data-theme="light"] .text-emerald-100,
+[data-theme="light"] .text-emerald-200,
+[data-theme="light"] .text-emerald-300,
+[data-theme="light"] .text-emerald-400,
+[data-theme="light"] .text-emerald-500 {
+  color: var(--viz-emerald);
 }
 
 [data-theme="light"] .bg-slate-950 {
@@ -583,7 +635,7 @@ select:not(:disabled) {
 }
 
 [data-theme="light"] [class~="hover:text-slate-400"]:hover,
-[data-theme="light"] [class~="group-hover:text-slate-500"] {
+[data-theme="light"] [class~="group-hover:text-slate-400"] {
   color: #475569;
 }
 
@@ -659,9 +711,9 @@ select:not(:disabled) {
 
 /* Muted copy and icons meet AA on the darkest application panel. */
 [data-theme="dark"] .text-slate-400,
-[data-theme="dark"] .text-slate-500,
-[data-theme="dark"] .text-slate-600,
-[data-theme="dark"] .text-slate-700,
+[data-theme="dark"] .text-slate-400,
+[data-theme="dark"] .text-slate-400,
+[data-theme="dark"] .text-slate-400,
 [data-theme="dark"] .text-slate-800 {
   color: #a7b4c7;
 }

@@ -38,7 +38,7 @@ export default function OverviewDashboard() {
               <Icon name="sparkles" className="h-3.5 w-3.5" /> Investigative intelligence
             </div>
             <h2 className="mt-2 text-[26px] font-semibold tracking-[-0.035em] text-slate-100 sm:text-[30px]">See the story behind the records.</h2>
-            <p className="mt-1.5 max-w-3xl text-[11px] leading-relaxed text-slate-500">
+            <p className="mt-1.5 max-w-3xl text-[11px] leading-relaxed text-slate-400">
               A live view of response behavior, statutory risk, and cross-agency signals across {activePortalKey ? 'the selected jurisdiction' : 'every connected jurisdiction'}.
             </p>
           </div>
@@ -48,7 +48,7 @@ export default function OverviewDashboard() {
               // claiming "Live" over a figure that stopped updating.
               <span className="overview-freshness hidden items-center gap-2 whitespace-nowrap rounded-full border border-amber-500/30 px-3 py-1.5 text-[9px] text-amber-200/90 sm:flex" title={`Analytics refresh failed: ${analyticsError}`}><span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> {analyticsUpdatedAt ? `Stale · last updated ${formatRelativeTime(analyticsUpdatedAt)}` : 'Analytics unavailable'}</span>
             ) : analyticsUpdatedAt ? (
-              <span className="overview-freshness hidden items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-[9px] text-slate-600 sm:flex" title={`Analytics updated ${formatRelativeTime(analyticsUpdatedAt)}`}><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Live · {formatRelativeTime(analyticsUpdatedAt)}</span>
+              <span className="overview-freshness hidden items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-[9px] text-slate-400 sm:flex" title={`Analytics updated ${formatRelativeTime(analyticsUpdatedAt)}`}><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Live · {formatRelativeTime(analyticsUpdatedAt)}</span>
             ) : null}
             <button type="button" onClick={() => setWorkspaceView('evidence')} className="secondary-action focus-ring flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border px-3.5 py-2.5 text-[10px] font-semibold text-slate-300 transition hover:text-cyan-200">
               Review evidence <Icon name="arrow" className="h-3.5 w-3.5" />
@@ -115,7 +115,7 @@ function PeriodComparison({ activePortalKey }: { activePortalKey: string | null 
 
   const currentSummary = summarizePeriod(current);
   const priorSummary = summarizePeriod(prior);
-  return <section className="app-panel flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between" aria-label="Response behavior period comparison"><div><div className="app-eyebrow">Period comparison</div><p className="mt-1 text-[9px] text-slate-600">Current interval versus the immediately preceding interval, based on request creation time.</p></div><label className="secondary-action w-fit rounded-lg border px-2.5 py-1.5 text-[9px] text-slate-500">Interval <select value={days} onChange={(event) => setDays(Number(event.target.value))} className="bg-transparent font-mono text-slate-200"><option value={7}>7 days</option><option value={30}>30 days</option><option value={90}>90 days</option><option value={365}>365 days</option></select></label>{error ? <div role="alert" className="text-[9px] text-rose-300">Comparison unavailable: {error}</div> : <div className="grid flex-1 grid-cols-2 gap-2 sm:grid-cols-4"><ComparisonMetric label="Requests" current={currentSummary.requests} prior={priorSummary.requests} loading={isLoading} /><ComparisonMetric label="Closure rate" current={currentSummary.closureRate} prior={priorSummary.closureRate} percent loading={isLoading} /><ComparisonMetric label="Deadline rate" current={currentSummary.violationRate} prior={priorSummary.violationRate} percent inverse loading={isLoading} /><ComparisonMetric label="Avg. closure days" current={currentSummary.averageClosureDays} prior={priorSummary.averageClosureDays} inverse loading={isLoading} /></div>}</section>;
+  return <section className="app-panel flex flex-col gap-3 p-4 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between" aria-label="Response behavior period comparison"><div className="min-w-0"><div className="app-eyebrow">Period comparison</div><p className="mt-1 text-[9px] text-slate-400">Current interval versus the immediately preceding interval, based on request creation time.</p></div><label className="secondary-action w-fit rounded-lg border px-2.5 py-1.5 text-[9px] text-slate-400">Interval <select value={days} onChange={(event) => setDays(Number(event.target.value))} className="bg-transparent font-mono text-slate-200"><option value={7}>7 days</option><option value={30}>30 days</option><option value={90}>90 days</option><option value={365}>365 days</option></select></label>{error ? <div role="alert" className="text-[9px] text-rose-300">Comparison unavailable: {error}</div> : <div className="grid min-w-0 flex-1 basis-full gap-2 [grid-template-columns:repeat(auto-fit,minmax(7rem,1fr))] lg:basis-auto"><ComparisonMetric label="Requests" current={currentSummary.requests} prior={priorSummary.requests} loading={isLoading} /><ComparisonMetric label="Closure rate" current={currentSummary.closureRate} prior={priorSummary.closureRate} percent loading={isLoading} /><ComparisonMetric label="Deadline rate" current={currentSummary.violationRate} prior={priorSummary.violationRate} percent inverse loading={isLoading} /><ComparisonMetric label="Avg. closure days" current={currentSummary.averageClosureDays} prior={priorSummary.averageClosureDays} inverse loading={isLoading} /></div>}</section>;
 }
 
 function summarizePeriod(profiles: AgencyPerformanceProfile[]) {
@@ -131,7 +131,7 @@ function ComparisonMetric({ label, current, prior, percent = false, inverse = fa
   const delta = current === null || prior === null || prior === 0 ? null : (current - prior) / Math.abs(prior);
   const favorable = delta === null ? null : inverse ? delta <= 0 : delta >= 0;
   const format = (value: number) => percent ? `${(value * 100).toFixed(1)}%` : Number.isInteger(value) ? value.toLocaleString() : value.toFixed(1);
-  return <div className="rounded-lg border border-slate-800 bg-slate-950/35 px-3 py-2"><div className="text-[8px] text-slate-600">{label}</div><div className="mt-1 font-mono text-sm text-slate-200">{loading ? '—' : current === null ? 'Not measured' : format(current)}</div><div className={favorable === null ? 'text-[8px] text-slate-600' : favorable ? 'text-[8px] text-emerald-300' : 'text-[8px] text-amber-300'}>{loading ? 'Loading…' : delta === null ? 'No comparable prior baseline' : `${delta >= 0 ? '+' : ''}${(delta * 100).toFixed(1)}% vs prior`}</div></div>;
+  return <div className="min-w-0 rounded-lg border border-slate-800 bg-slate-950/35 px-3 py-2"><div className="truncate text-[8px] text-slate-400" title={label}>{label}</div><div className="mt-1 break-words font-mono text-sm leading-tight text-slate-200">{loading ? '—' : current === null ? 'Not measured' : format(current)}</div><div className={favorable === null ? 'text-[8px] leading-tight text-slate-400' : favorable ? 'text-[8px] leading-tight text-emerald-300' : 'text-[8px] leading-tight text-amber-300'}>{loading ? 'Loading…' : delta === null ? 'No comparable prior baseline' : `${delta >= 0 ? '+' : ''}${(delta * 100).toFixed(1)}% vs prior`}</div></div>;
 }
 
 function WorkspaceSourcesLoading() {
@@ -141,7 +141,7 @@ function WorkspaceSourcesLoading() {
         <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-700 border-t-cyan-300" aria-hidden="true" />
         <div>
           <h3 className="text-sm font-semibold text-slate-300">Loading saved sources</h3>
-          <p className="mt-1 text-[10px] text-slate-600">Checking the local workspace before showing source-specific findings.</p>
+          <p className="mt-1 text-[10px] text-slate-400">Checking the local workspace before showing source-specific findings.</p>
         </div>
       </div>
     </section>
@@ -155,7 +155,7 @@ function WorkspaceSourcesUnavailable({ detail }: { detail: string | null }) {
         <Icon name="database" className="mt-0.5 h-4 w-4 text-rose-300" />
         <div>
           <h3 className="text-sm font-semibold text-rose-100">Saved sources unavailable</h3>
-          <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+          <p className="mt-1 text-[10px] leading-relaxed text-slate-400">
             OnRecord could not load the local source catalog, so this is not a first-run workspace. Existing sources may still be present; review the activity log and retry after the storage error is resolved.
           </p>
           {detail && <p className="mt-2 font-mono text-[8px] text-rose-300/70">{detail}</p>}
@@ -184,7 +184,7 @@ function WelcomePanel() {
         <div>
           <div className="flex items-center gap-2 text-[10px] font-semibold text-cyan-300"><Icon name="database" className="h-4 w-4" /> New investigation</div>
           <h3 className="mt-2 max-w-2xl text-lg font-semibold tracking-[-0.02em] text-slate-100">Turn scattered public information into a connected evidence record.</h3>
-          <p className="mt-1.5 max-w-2xl text-[10px] leading-relaxed text-slate-500">Add a website, report library, open-data catalog, API, local file, or pasted material. OnRecord identifies the source, preserves it locally, and builds searchable intelligence as ingestion continues.</p>
+          <p className="mt-1.5 max-w-2xl text-[10px] leading-relaxed text-slate-400">Add a website, report library, open-data catalog, API, local file, or pasted material. OnRecord identifies the source, preserves it locally, and builds searchable intelligence as ingestion continues.</p>
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <button type="button" onClick={focusSourceInput} className="primary-action focus-ring flex items-center gap-2 rounded-lg px-3.5 py-2 text-[10px] font-semibold text-white">
               Add your first source <Icon name="arrow" className="h-3.5 w-3.5" />
@@ -206,7 +206,7 @@ function WelcomePanel() {
 }
 
 function SourceType({ icon, label }: { icon: 'globe' | 'filePlus' | 'clipboard'; label: string }) {
-  return <span className="source-type-chip flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[8px] font-medium text-slate-500"><Icon name={icon} className="h-3.5 w-3.5" /> {label}</span>;
+  return <span className="source-type-chip flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[8px] font-medium text-slate-400"><Icon name={icon} className="h-3.5 w-3.5" /> {label}</span>;
 }
 
 function WelcomeStep({ number, label }: { number: string; label: string }) {
@@ -252,11 +252,11 @@ function SignalSummary({ criticalDepartments, monitoredDepartments }: { critical
       <div className="grid grid-cols-2 gap-px border-b border-slate-800/70 bg-slate-800/70">
         <div className="bg-slate-900/70 p-4">
           <div className="font-mono text-2xl font-semibold text-rose-300">{analyticsError && profiles.length === 0 ? '—' : criticalDepartments}</div>
-          <div className="mt-1 text-[8px] uppercase tracking-wider text-slate-600">Critical outliers</div>
+          <div className="mt-1 text-[8px] uppercase tracking-wider text-slate-400">Critical outliers</div>
         </div>
         <div className="bg-slate-900/70 p-4">
           <div className="font-mono text-2xl font-semibold text-cyan-300">{analyticsError && profiles.length === 0 ? '—' : monitoredDepartments}</div>
-          <div className="mt-1 text-[8px] uppercase tracking-wider text-slate-600">Departments mapped</div>
+          <div className="mt-1 text-[8px] uppercase tracking-wider text-slate-400">Departments mapped</div>
         </div>
       </div>
       <div className="min-h-0 flex-1 p-4">
@@ -265,9 +265,9 @@ function SignalSummary({ criticalDepartments, monitoredDepartments }: { critical
         ) : priority.length === 0 ? (
           <div className="grid h-full min-h-40 place-items-center rounded-xl border border-dashed border-slate-800 bg-slate-950/25 p-4 text-center">
             <div>
-              <Icon name="shield" className="mx-auto h-5 w-5 text-slate-700" />
-              <p className="mt-2 text-[10px] font-medium text-slate-500">No risk signals to summarize yet</p>
-              <p className="mt-1 text-[9px] leading-relaxed text-slate-700">The brief updates as agency profiles are calculated.</p>
+              <Icon name="shield" className="mx-auto h-5 w-5 text-slate-400" />
+              <p className="mt-2 text-[10px] font-medium text-slate-400">No risk signals to summarize yet</p>
+              <p className="mt-1 text-[9px] leading-relaxed text-slate-400">The brief updates as agency profiles are calculated.</p>
             </div>
           </div>
         ) : (
@@ -277,9 +277,9 @@ function SignalSummary({ criticalDepartments, monitoredDepartments }: { critical
                 <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-amber-400/[0.08] font-mono text-[10px] font-semibold text-amber-300">{profile.statutoryViolationCount}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[10px] font-medium text-slate-300">{profile.agencyName}</span>
-                  <span className="mt-0.5 block text-[8px] text-slate-600">{profile.suspiciousFastClosureCount} rapid closures · z {profile.performanceZScore === null ? 'not computed' : profile.performanceZScore.toFixed(1)}</span>
+                  <span className="mt-0.5 block text-[8px] text-slate-400">{profile.suspiciousFastClosureCount} rapid closures · z {profile.performanceZScore === null ? 'not computed' : profile.performanceZScore.toFixed(1)}</span>
                 </span>
-                <Icon name="chevron" className="h-3 w-3 text-slate-700 transition group-hover:translate-x-0.5 group-hover:text-amber-300" />
+                <Icon name="chevron" className="h-3 w-3 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-amber-300" />
               </button>
             ))}
           </div>

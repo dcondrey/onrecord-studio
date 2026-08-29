@@ -98,17 +98,17 @@ export default function MetricsGrid() {
           <span className={`instrument-accent absolute left-0 top-5 h-8 w-0.5 rounded-full ${card.bar}`} aria-hidden="true" />
           <div className="relative flex items-center justify-between gap-3">
             <div className="app-eyebrow min-w-0 leading-snug">{card.label}</div>
-            <div className="metric-icon grid h-8 w-8 shrink-0 place-items-center rounded-[10px] border text-slate-500">
+            <div className="metric-icon grid h-8 w-8 shrink-0 place-items-center rounded-[10px] border text-slate-400">
               <Icon name={card.icon} className="h-[17px] w-[17px]" />
             </div>
           </div>
           <div className={`numeric-value relative mt-3 text-[28px] font-semibold leading-none tracking-[-0.045em] ${card.accent}`}>{card.value}</div>
-          <div className="relative mt-2 min-h-9 text-[9px] leading-snug text-slate-600">{card.detail}</div>
+          <div className="relative mt-2 min-h-9 text-[9px] leading-snug text-slate-400">{card.detail}</div>
           <div className="relative mt-3 flex items-center gap-2">
             <div className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-800/80" role="progressbar" aria-label={`${card.label} ratio`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(card.ratio * 100)}>
               <div className={`h-full min-w-[4px] rounded-full transition-[width] duration-500 ${card.bar}`} style={{ width: `${Math.min(100, Math.max(0, card.ratio * 100))}%` }} />
             </div>
-            <span className="numeric-value w-10 text-right text-[11px] text-slate-500">{formatPercent(card.ratio)}</span>
+            <span className="numeric-value w-10 text-right text-[11px] text-slate-400">{formatPercent(card.ratio)}</span>
           </div>
         </button>
       ))}

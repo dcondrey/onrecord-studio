@@ -50,7 +50,7 @@ export default function LicenseGate({ status, refreshing, error, onRefresh }: Li
         >
           {loading || refreshing ? 'Checking purchase…' : 'Verify purchase again'}
         </button>
-        <p className="mt-4 text-center text-[11px] leading-4 text-slate-500">
+        <p className="mt-4 text-center text-[11px] leading-4 text-slate-400">
           Workspace commands and local evidence remain locked until StoreKit verifies the paid app transaction.
         </p>
       </section>

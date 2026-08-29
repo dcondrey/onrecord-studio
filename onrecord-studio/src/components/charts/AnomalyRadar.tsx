@@ -95,7 +95,7 @@ export default function AnomalyRadar() {
       let agencyCursor = portalStart;
       agencies
         .sort((left, right) => left.agencyName.localeCompare(right.agencyName))
-        .forEach((profile, agencyIndex) => {
+        .forEach((profile) => {
           const sweep = (weight(profile) / globalTotal) * Math.PI * 2;
           const severity = Math.min(
             1,
@@ -103,7 +103,6 @@ export default function AnomalyRadar() {
               + profile.suspiciousFastClosureCount / Math.max(1, profile.totalRequestsProcessed),
           );
           const base = palette[portalIndex % palette.length];
-          const alert = agencyIndex % 2 ? 'var(--viz-amber)' : 'var(--viz-red)';
           result.push({
             key: `${portalKey}-${profile.agencyId}`,
             label: profile.agencyName,
@@ -113,7 +112,10 @@ export default function AnomalyRadar() {
             endAngle: agencyCursor + sweep - 0.01,
             innerRadius: 69,
             outerRadius: 104,
-            color: severity > 0.2 ? alert : base,
+            // Alarm colour follows the severity, not the agency's position in the list: parity
+            // gave two agencies with identical deviation different colours, which reads as a
+            // difference in the evidence.
+            color: severity >= 0.5 ? 'var(--viz-red)' : severity > 0.2 ? 'var(--viz-amber)' : base,
             profile,
           });
           agencyCursor += sweep;
@@ -135,7 +137,7 @@ export default function AnomalyRadar() {
       <section className="app-panel flex min-h-[360px] flex-col overflow-hidden p-5">
         <div>
           <div className="app-eyebrow">Department deviation sunburst</div>
-          <div className="mt-1 text-[10px] text-slate-500">Portal ring → department ring. Select a slice to inspect evidence.</div>
+          <div className="mt-1 text-[10px] text-slate-400">Portal ring → department ring. Select a slice to inspect evidence.</div>
         </div>
         {analyticsError ? (
           <AnalyticsUnavailable className="mt-4 flex-1" heading="Deviation map unavailable" />
@@ -151,7 +153,7 @@ export default function AnomalyRadar() {
           </svg>
           <div className="chart-ready-card absolute max-w-[230px] rounded-xl border px-4 py-3 text-center backdrop-blur-xl">
             <div className="text-[10px] font-semibold text-slate-300">Relationship map ready</div>
-            <div className="mt-1 text-[9px] leading-relaxed text-slate-600">Agency density will resolve into selectable source and department rings.</div>
+            <div className="mt-1 text-[9px] leading-relaxed text-slate-400">Agency density will resolve into selectable source and department rings.</div>
           </div>
         </div>
         )}
@@ -164,11 +166,11 @@ export default function AnomalyRadar() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="app-eyebrow">Department deviation sunburst</div>
-          <div className="mt-1 text-[10px] text-slate-500">Portal ring → department ring. Select a slice to inspect evidence.</div>
+          <div className="mt-1 text-[10px] text-slate-400">Portal ring → department ring. Select a slice to inspect evidence.</div>
         </div>
         <div className="flex items-center gap-1.5">
-          <label className="rounded border border-slate-800 bg-slate-900/60 px-2 py-1 font-mono text-[8px] text-slate-500">Slice by <select value={weightMode} onChange={(event) => setWeightMode(event.target.value as 'volume' | 'severity')} className="bg-transparent text-slate-300"><option value="volume">request volume</option><option value="severity">anomaly rate</option></select></label>
-          <div className="rounded border border-slate-800 bg-slate-900/60 px-2 py-1 font-mono text-[9px] text-slate-500">{profiles.length} departments</div>
+          <label className="rounded border border-slate-800 bg-slate-900/60 px-2 py-1 font-mono text-[8px] text-slate-400">Slice by <select value={weightMode} onChange={(event) => setWeightMode(event.target.value as 'volume' | 'severity')} className="bg-transparent text-slate-300"><option value="volume">request volume</option><option value="severity">anomaly rate</option></select></label>
+          <div className="rounded border border-slate-800 bg-slate-900/60 px-2 py-1 font-mono text-[9px] text-slate-400">{profiles.length} departments</div>
         </div>
       </div>
       <div className="grid flex-1 grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_160px]">
@@ -207,7 +209,7 @@ export default function AnomalyRadar() {
               <Metric label="Fast close" value={focused.profile.suspiciousFastClosureCount} alert={focused.profile.suspiciousFastClosureCount > 0} />
             </>
           ) : (
-            <div className="leading-relaxed text-slate-500">Inner slices represent isolated portal partitions.</div>
+            <div className="leading-relaxed text-slate-400">Inner slices represent isolated portal partitions.</div>
           )}
         </div>
       </div>
@@ -218,8 +220,20 @@ export default function AnomalyRadar() {
 function Metric({ label, value, alert = false }: { label: string; value: string | number; alert?: boolean }) {
   return (
     <div className="flex justify-between gap-2 border-b border-slate-900 pb-1">
-      <span className="text-slate-600">{label}</span>
-      <span className={alert ? 'text-amber-400' : 'text-slate-400'}>{value}</span>
+      <span className="text-slate-400">{label}</span>
+      <span className={alert ? 'flex items-center gap-1 text-amber-400' : 'text-slate-400'}>
+        {alert && <FlagMark label="Above threshold" />}
+        {value}
+      </span>
     </div>
+  );
+}
+
+// A triangle beside a flagged value, so the flag survives when amber and slate read alike.
+function FlagMark({ label }: { label: string }) {
+  return (
+    <svg viewBox="-6 -6 12 12" className="h-2 w-2 shrink-0" role="img" aria-label={label}>
+      <polygon points="0,-5 4.6,3.9 -4.6,3.9" fill="currentColor" />
+    </svg>
   );
 }

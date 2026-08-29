@@ -157,7 +157,7 @@ export default function MainLayout() {
           <div className="app-eyebrow flex items-center gap-2 text-indigo-300/60"><Icon name="evidence" className="h-3.5 w-3.5" /> Evidence review</div>
           <h2 className="mt-1.5 text-[26px] font-semibold tracking-[-0.035em] text-slate-100 sm:text-[30px]">Search, inspect, and build the record.</h2>
         </div>
-        <div className="hidden items-center gap-2 text-[9px] text-slate-600 sm:flex"><Icon name="shield" className="h-3.5 w-3.5 text-emerald-400/60" /> Sensitive fields are masked locally</div>
+        <div className="hidden items-center gap-2 text-[9px] text-slate-400 sm:flex"><Icon name="shield" className="h-3.5 w-3.5 text-emerald-400/60" /> Sensitive fields are masked locally</div>
       </div>
       <SearchFilter />
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -166,11 +166,11 @@ export default function MainLayout() {
             <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
               <div>
                 <h2 className="text-xs font-semibold text-slate-200">Evidence workbench</h2>
-                <p className="mt-0.5 text-[9px] text-slate-600">Request metadata is PII-masked before it reaches this view.</p>
+                <p className="mt-0.5 text-[9px] text-slate-400">Request metadata is PII-masked before it reaches this view.</p>
               </div>
               <div className="flex items-center gap-2">
                 <button type="button" onClick={() => setLegalLibraryOpen(true)} className="rounded border border-indigo-400/20 bg-indigo-500/[0.07] px-2 py-1 text-[9px] font-semibold text-indigo-200/80 transition hover:border-indigo-400/35 hover:bg-indigo-500/10">Legal authority library</button>
-                <span className="rounded border border-slate-800 bg-slate-950 px-2 py-1 font-mono text-[9px] text-slate-500">{results.length.toLocaleString()} records</span>
+                <span className="rounded border border-slate-800 bg-slate-950 px-2 py-1 font-mono text-[9px] text-slate-400">{results.length.toLocaleString()} records</span>
               </div>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto">
@@ -192,19 +192,19 @@ export default function MainLayout() {
                       >
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="font-mono text-[9px] text-slate-600">{result.portalKey} / {result.requestId}</span>
+                            <span className="font-mono text-[9px] text-slate-400">{result.portalKey} / {result.requestId}</span>
                             <StatusBadge status={result.status} />
                           </div>
                           <div className="mt-1 truncate text-xs font-medium text-slate-200">{result.title || 'Untitled public-records request'}</div>
-                          <div className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-slate-500">{result.descriptionPreview || 'No public description supplied.'}</div>
+                          <div className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-slate-400">{result.descriptionPreview || 'No public description supplied.'}</div>
                           {result.integrityFlags.length > 0 && (
                             <div className="mt-2 flex flex-wrap gap-1">
                               {result.integrityFlags.slice(0, 4).map((flag) => <PolicyBadge key={flag} flag={flag} />)}
                             </div>
                           )}
                         </div>
-                        <div className="text-right font-mono text-[9px] text-slate-600">
-                          <div className="truncate text-slate-500">{result.agencyName}</div>
+                        <div className="text-right font-mono text-[9px] text-slate-400">
+                          <div className="truncate text-slate-400">{result.agencyName}</div>
                           <div className="mt-2">{formatDate(result.createdAt)}</div>
                           <div className="mt-1">{result.documentCount} document{result.documentCount === 1 ? '' : 's'}</div>
                         </div>
@@ -218,13 +218,13 @@ export default function MainLayout() {
 
           <div className="grid min-h-0 grid-rows-[auto_minmax(220px,1fr)] gap-4">
             <section className="app-panel p-4">
-              <div className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-600">Case context</div>
+              <div className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400">Case context</div>
               {selected ? (
                 <div className="mt-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <h2 className="text-sm font-semibold leading-snug text-slate-100">{selected.title || 'Untitled request'}</h2>
-                      <p className="mt-1 text-[10px] text-slate-500">{selected.agencyName} · {selected.portalKey}</p>
+                      <p className="mt-1 text-[10px] text-slate-400">{selected.agencyName} · {selected.portalKey}</p>
                     </div>
                     <StatusBadge status={selected.status} />
                   </div>
@@ -240,7 +240,7 @@ export default function MainLayout() {
                   <LegalCompliancePanel record={selected} onOpenLibrary={() => setLegalLibraryOpen(true)} />
                   {documents.length > 0 && (
                     <div className="mt-3">
-                      <div className="text-[8px] font-semibold uppercase tracking-wider text-slate-600">Public documents</div>
+                      <div className="text-[8px] font-semibold uppercase tracking-wider text-slate-400">Public documents</div>
                       <div className="mt-1.5 max-h-64 space-y-1.5 overflow-y-auto pr-1">
                         {documents.map((document) => {
                           const canOpen = document.extractionStatus === 'SEARCHABLE'
@@ -257,9 +257,9 @@ export default function MainLayout() {
                             >
                               <span className="min-w-0">
                                 <span className="block truncate text-[10px] font-medium text-slate-300">{document.fileName}</span>
-                                <span className="mt-0.5 block truncate text-[8px] text-slate-600">{stateLabel}</span>
+                                <span className="mt-0.5 block truncate text-[8px] text-slate-400">{stateLabel}</span>
                               </span>
-                              <span className="shrink-0 font-mono text-[8px] text-slate-600">{formatFileSize(document.fileSize)}</span>
+                              <span className="shrink-0 font-mono text-[8px] text-slate-400">{formatFileSize(document.fileSize)}</span>
                             </button>
                           );
                         })}
@@ -291,7 +291,7 @@ export default function MainLayout() {
                   )}
                 </div>
               ) : (
-                <div className="mt-3 rounded-lg border border-dashed border-slate-800 px-4 py-6 text-center text-[10px] leading-relaxed text-slate-600">Select a record to inspect its evidence summary and compliance markers.</div>
+                <div className="mt-3 rounded-lg border border-dashed border-slate-800 px-4 py-6 text-center text-[10px] leading-relaxed text-slate-400">Select a record to inspect its evidence summary and compliance markers.</div>
               )}
             </section>
 
@@ -354,11 +354,11 @@ function EmptyResults({ error }: { error: string | null }) {
   return (
     <div className="grid h-full min-h-72 place-items-center p-8 text-center">
       <div className="max-w-xs">
-        <div className="mx-auto grid h-9 w-9 place-items-center rounded-lg border border-slate-800 bg-slate-950 text-slate-600">
+        <div className="mx-auto grid h-9 w-9 place-items-center rounded-lg border border-slate-800 bg-slate-950 text-slate-400">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5h18M5.25 3.75h13.5A2.25 2.25 0 0 1 21 6v12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 18V6a2.25 2.25 0 0 1 2.25-2.25Z" /></svg>
         </div>
         <h2 className="mt-3 text-xs font-semibold text-slate-400">{error ? 'Search unavailable' : 'No matching evidence'}</h2>
-        <p className="mt-1 text-[10px] leading-relaxed text-slate-600">
+        <p className="mt-1 text-[10px] leading-relaxed text-slate-400">
           {error
             ? 'The query did not complete, so there is no result set to interpret. Retry before drawing a conclusion from these filters.'
             : 'Add or synchronize a source, or broaden the active department, status, and policy filters.'}
@@ -378,7 +378,7 @@ function PolicyBadge({ flag }: { flag: string }) {
 }
 
 function CaseField({ label, value }: { label: string; value: string }) {
-  return <div><dt className="text-[8px] font-semibold uppercase tracking-wider text-slate-600">{label}</dt><dd className="mt-1 font-mono text-slate-400">{value}</dd></div>;
+  return <div><dt className="text-[8px] font-semibold uppercase tracking-wider text-slate-400">{label}</dt><dd className="mt-1 font-mono text-slate-400">{value}</dd></div>;
 }
 
 function formatDate(value: string) {

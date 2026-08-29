@@ -63,12 +63,12 @@ export default function TemporalMap() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="app-eyebrow">{windowHours}-hour signal density</div>
-          <div className="mt-1 text-[10px] text-slate-500">311 activity preceding enforcement-linked requests.</div>
+          <div className="mt-1 text-[10px] text-slate-400">311 activity preceding enforcement-linked requests.</div>
         </div>
         <div className="flex flex-wrap justify-end gap-1.5">
-          <label className="rounded-lg border border-slate-800 bg-slate-950/50 px-2 py-1 font-mono text-[8px] text-slate-500">Window <select value={windowHours} onChange={(event) => setWindowHours(Number(event.target.value))} className="bg-transparent text-slate-300"><option value={6}>6h</option><option value={12}>12h</option><option value={24}>24h</option><option value={48}>48h</option><option value={72}>72h</option><option value={168}>7d</option></select></label>
-          <label className="max-w-40 rounded-lg border border-slate-800 bg-slate-950/50 px-2 py-1 font-mono text-[8px] text-slate-500">Area <select value={neighborhood} onChange={(event) => setNeighborhood(event.target.value)} className="max-w-28 bg-transparent text-slate-300"><option value="">All</option>{neighborhoods.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-          <div className="rounded-lg border border-slate-800 bg-slate-950/50 px-2.5 py-1.5 font-mono text-[8px] text-slate-600">{isLoading ? 'Loading…' : `${cells.length} clusters`}</div>
+          <label className="rounded-lg border border-slate-800 bg-slate-950/50 px-2 py-1 font-mono text-[8px] text-slate-400">Window <select value={windowHours} onChange={(event) => setWindowHours(Number(event.target.value))} className="bg-transparent text-slate-300"><option value={6}>6h</option><option value={12}>12h</option><option value={24}>24h</option><option value={48}>48h</option><option value={72}>72h</option><option value={168}>7d</option></select></label>
+          <label className="max-w-40 rounded-lg border border-slate-800 bg-slate-950/50 px-2 py-1 font-mono text-[8px] text-slate-400">Area <select value={neighborhood} onChange={(event) => setNeighborhood(event.target.value)} className="max-w-28 bg-transparent text-slate-300"><option value="">All</option>{neighborhoods.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+          <div className="rounded-lg border border-slate-800 bg-slate-950/50 px-2.5 py-1.5 font-mono text-[8px] text-slate-400">{isLoading ? 'Loading…' : `${cells.length} clusters`}</div>
         </div>
       </div>
       {cells.length === 0 && (windowError || analyticsError) ? (
@@ -83,7 +83,7 @@ export default function TemporalMap() {
           <div className="absolute inset-0 grid place-items-center p-6 text-center">
             <div className="chart-ready-card max-w-xs rounded-xl border px-4 py-3 backdrop-blur-xl">
               <div className="text-[10px] font-semibold text-slate-300">Temporal correlation ready</div>
-              <div className="mt-1 text-[9px] leading-relaxed text-slate-600">Add neighborhood and timestamp data to reveal activity clusters around public-record events.</div>
+              <div className="mt-1 text-[9px] leading-relaxed text-slate-400">Add neighborhood and timestamp data to reveal activity clusters around public-record events.</div>
             </div>
           </div>
         </div>
@@ -106,7 +106,7 @@ export default function TemporalMap() {
                 <span className="absolute bottom-0 left-0 h-0.5 bg-cyan-400/70" style={{ width: `${Math.max(8, intensity * 100)}%` }} />
                 <div className="truncate text-[10px] font-semibold text-slate-300">{cell.neighborhoodBlock}</div>
                 <div className="mt-2 font-mono text-lg font-bold text-cyan-300">{cell.complaintCount}</div>
-                <div className="mt-1 truncate font-mono text-[8px] text-slate-500">Request {cell.requestId} · {cell.keywordSignalCount} signals</div>
+                <div className="mt-1 truncate font-mono text-[8px] text-slate-400">Request {cell.requestId} · {cell.keywordSignalCount} signals</div>
               </button>
             );
           })}

@@ -183,7 +183,7 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
       <div className="flex items-center justify-between gap-4 border-b border-slate-800 bg-slate-900/40 px-4 py-3">
         <div className="min-w-0">
           <div className="truncate text-xs font-semibold text-slate-200">{fileName}</div>
-          <div className="mt-1 font-mono text-[9px] text-slate-600">{portalKey} / document {documentId} · {fileSizeFormatted}</div>
+          <div className="mt-1 font-mono text-[9px] text-slate-400">{portalKey} / document {documentId} · {fileSizeFormatted}</div>
         </div>
         <div className="flex items-center gap-2">
           <button type="button" onClick={() => void inspectResidualEvidence()} disabled={isAuditingResiduals} className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-2.5 py-1 text-[9px] font-medium text-cyan-300 transition hover:border-cyan-300/40 disabled:cursor-wait disabled:opacity-60">
@@ -205,7 +205,7 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
           <ProvenanceShield isValidating={isValidating} result={activeManifest} error={provenanceError} />
         </div>
       </div>
-      <div className="flex items-center justify-between border-b border-slate-900 px-4 py-2 text-[9px] text-slate-600">
+      <div className="flex items-center justify-between border-b border-slate-900 px-4 py-2 text-[9px] text-slate-400">
         <span>Local extracted-text view</span>
         <div className="flex items-center gap-3">
           {textPositionLabel && <span>{textPositionLabel}</span>}
@@ -216,9 +216,9 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-900 px-4 py-2 text-[9px]">
         <label className="relative min-w-[220px] flex-1">
           <span className="sr-only">Search within this extracted-text chunk</span>
-          <input value={documentSearch} onChange={(event) => setDocumentSearch(event.target.value)} placeholder="Find in extracted text" className="focus-ring h-8 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 text-[10px] text-slate-200 placeholder:text-slate-700" />
+          <input value={documentSearch} onChange={(event) => setDocumentSearch(event.target.value)} placeholder="Find in extracted text" className="focus-ring h-8 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 text-[10px] text-slate-200 placeholder:text-slate-400" />
         </label>
-        <span className="min-w-16 text-center font-mono text-slate-500">{searchMatches.length === 0 ? '0 matches' : `${activeMatch + 1}/${searchMatches.length}`}</span>
+        <span className="min-w-16 text-center font-mono text-slate-400">{searchMatches.length === 0 ? '0 matches' : `${activeMatch + 1}/${searchMatches.length}`}</span>
         <button type="button" onClick={() => moveToMatch(-1)} disabled={searchMatches.length === 0} className="rounded border border-slate-800 px-2 py-1 text-slate-400 disabled:opacity-40">Previous</button>
         <button type="button" onClick={() => moveToMatch(1)} disabled={searchMatches.length === 0} className="rounded border border-slate-800 px-2 py-1 text-slate-400 disabled:opacity-40">Next</button>
         <button type="button" onClick={() => void shareEvidenceLocation()} className="rounded border border-indigo-400/25 bg-indigo-500/10 px-2 py-1 text-indigo-300">Copy evidence link</button>
@@ -234,7 +234,7 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
       <div className="min-h-0 flex-1 overflow-y-auto p-5 font-mono text-xs leading-relaxed text-slate-300 selection:bg-indigo-500/30">
         <HighlightedTextPage text={textContent} query={documentSearch} page={textPage} activeMatchIndex={selectedMatch} />
       </div>
-      {pageCount > 1 && <div className="flex items-center justify-center gap-3 border-t border-slate-900 px-4 py-2 text-[9px] text-slate-500"><button type="button" disabled={textPage === 0} onClick={() => setTextPage((page) => Math.max(0, page - 1))} className="rounded border border-slate-800 px-2 py-1 disabled:opacity-40">Previous text page</button><span className="font-mono">{textPage + 1}/{pageCount}</span><button type="button" disabled={textPage + 1 >= pageCount} onClick={() => setTextPage((page) => Math.min(pageCount - 1, page + 1))} className="rounded border border-slate-800 px-2 py-1 disabled:opacity-40">Next text page</button></div>}
+      {pageCount > 1 && <div className="flex items-center justify-center gap-3 border-t border-slate-900 px-4 py-2 text-[9px] text-slate-400"><button type="button" disabled={textPage === 0} onClick={() => setTextPage((page) => Math.max(0, page - 1))} className="rounded border border-slate-800 px-2 py-1 disabled:opacity-40">Previous text page</button><span className="font-mono">{textPage + 1}/{pageCount}</span><button type="button" disabled={textPage + 1 >= pageCount} onClick={() => setTextPage((page) => Math.min(pageCount - 1, page + 1))} className="rounded border border-slate-800 px-2 py-1 disabled:opacity-40">Next text page</button></div>}
     </section>
   );
 }
@@ -248,7 +248,7 @@ function ProvenanceGraphPanel({ graph }: { graph: import('../../types').Provenan
       <div className="mt-2 grid gap-3 border-t border-slate-800 pt-2 lg:grid-cols-2">
         <div>
           <div className="text-[9px] font-semibold text-slate-400">Claims</div>
-          <ul className="mt-1 space-y-1 text-[9px] text-slate-500">
+          <ul className="mt-1 space-y-1 text-[9px] text-slate-400">
             {graph.claims.map((claim) => (
               <li key={claim.manifestLabel} className="rounded border border-slate-800 bg-slate-950/60 px-2 py-1.5">
                 <div className="font-mono text-slate-300">{claim.manifestLabel}{claim.isActive ? ' · active' : ''}</div>
@@ -261,9 +261,9 @@ function ProvenanceGraphPanel({ graph }: { graph: import('../../types').Provenan
         <div>
           <div className="text-[9px] font-semibold text-slate-400">Ingredient relationships</div>
           {graph.ingredients.length === 0 ? (
-            <p className="mt-1 text-[9px] text-slate-600">The manifest declares no ingredient relationships.</p>
+            <p className="mt-1 text-[9px] text-slate-400">The manifest declares no ingredient relationships.</p>
           ) : (
-            <ul className="mt-1 space-y-1 text-[9px] text-slate-500">
+            <ul className="mt-1 space-y-1 text-[9px] text-slate-400">
               {graph.ingredients.map((ingredient, index) => (
                 <li key={`${ingredient.sourceManifestLabel}-${ingredient.targetManifestLabel ?? ingredient.instanceId ?? index}`} className="rounded border border-slate-800 bg-slate-950/60 px-2 py-1.5">
                   <span className="font-mono text-slate-300">{ingredient.sourceManifestLabel}</span>
@@ -276,7 +276,7 @@ function ProvenanceGraphPanel({ graph }: { graph: import('../../types').Provenan
           )}
         </div>
       </div>
-      <ul className="mt-2 space-y-0.5 text-[9px] text-slate-500">
+      <ul className="mt-2 space-y-0.5 text-[9px] text-slate-400">
         {graph.certificateChainDiagnostics.map((diagnostic) => <li key={diagnostic}>{diagnostic}</li>)}
         {graph.validationStatuses.map((status) => <li key={status} className="text-amber-300">{status}</li>)}
         {graph.truncated && <li className="text-amber-300">The embedded graph exceeded safety bounds; this view is incomplete.</li>}
@@ -331,10 +331,10 @@ function ResidualEvidencePanel({ bundle, error }: { bundle: EvidenceBundle | nul
       <div className="flex flex-wrap items-center gap-2 text-[9px]">
         <span className="font-semibold text-cyan-300">Residual evidence audit</span>
         <span className={bundle.coverageComplete ? 'text-emerald-300' : 'text-amber-300'}>{bundle.coverageComplete ? 'Supported collector coverage complete' : 'Coverage incomplete'}</span>
-        <span className="text-slate-500">{bundle.findings.length.toLocaleString()} finding{bundle.findings.length === 1 ? '' : 's'}</span>
+        <span className="text-slate-400">{bundle.findings.length.toLocaleString()} finding{bundle.findings.length === 1 ? '' : 's'}</span>
       </div>
       {bundle.warnings.length > 0 && <ul className="mt-2 space-y-1 text-[9px] text-amber-200/80">{bundle.warnings.map((warning) => <li key={warning}>{humanizeEvidenceKind(warning)}</li>)}</ul>}
-      {bundle.findings.length === 0 && <p className="mt-2 text-[9px] text-slate-500">No evidence was reported by the collectors that ran. An incomplete audit is not a negative finding.</p>}
+      {bundle.findings.length === 0 && <p className="mt-2 text-[9px] text-slate-400">No evidence was reported by the collectors that ran. An incomplete audit is not a negative finding.</p>}
       <div className="mt-2 space-y-2">
         {bundle.findings.map((finding, index) => <ResidualFinding key={`${finding.kind}-${finding.valueSha256 ?? index}-${index}`} finding={finding} />)}
       </div>
@@ -354,13 +354,13 @@ function ResidualFinding({ finding }: { finding: ForensicFinding }) {
     <article className="rounded-lg border border-slate-800 bg-slate-950/70 p-2.5">
       <div className="flex flex-wrap items-center gap-2 text-[8px] uppercase tracking-wider">
         <span className="font-semibold text-slate-300">{humanizeEvidenceKind(finding.kind)}</span>
-        <span className="rounded border border-slate-700 px-1.5 py-0.5 text-slate-500">{finding.class}</span>
-        <span className="rounded border border-slate-700 px-1.5 py-0.5 text-slate-500">{finding.confidence}</span>
+        <span className="rounded border border-slate-700 px-1.5 py-0.5 text-slate-400">{finding.class}</span>
+        <span className="rounded border border-slate-700 px-1.5 py-0.5 text-slate-400">{finding.confidence}</span>
       </div>
-      {location && <div className="mt-1 break-all font-mono text-[8px] text-slate-600">{location}</div>}
+      {location && <div className="mt-1 break-all font-mono text-[8px] text-slate-400">{location}</div>}
       {finding.maskedPreview && <pre className="mt-2 max-h-24 overflow-auto whitespace-pre-wrap rounded border border-slate-800 p-2 font-mono text-[9px] text-slate-400">{finding.maskedPreview}</pre>}
-      <p className="mt-2 text-[9px] leading-relaxed text-slate-500">{finding.explanation}</p>
-      {finding.valueSha256 && <div className="mt-1 break-all font-mono text-[8px] text-slate-700">SHA-256 {finding.valueSha256}</div>}
+      <p className="mt-2 text-[9px] leading-relaxed text-slate-400">{finding.explanation}</p>
+      {finding.valueSha256 && <div className="mt-1 break-all font-mono text-[8px] text-slate-400">SHA-256 {finding.valueSha256}</div>}
     </article>
   );
 }
@@ -376,19 +376,19 @@ function RevisionRecoveryPanel({ profile, error }: { profile: RecoveredVersionPr
   if (!profile) return null;
   return (
     <div className="max-h-60 overflow-y-auto border-b border-indigo-400/15 bg-indigo-500/[0.04] px-4 py-3">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[9px] text-slate-500">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[9px] text-slate-400">
         <span className="font-semibold text-indigo-300">Incremental revision inspection</span>
         <span>{profile.historicalVersionsFound} prior revision{profile.historicalVersionsFound === 1 ? '' : 's'} detected</span>
         <span>{profile.recoveredTextSegments.length} recoverable text layer{profile.recoveredTextSegments.length === 1 ? '' : 's'}</span>
         <span className="font-mono">SHA-256 {profile.sourceSha256.slice(0, 12)}…</span>
       </div>
-      {profile.historicalVersionsFound === 0 && <p className="mt-2 text-[9px] text-slate-500">No earlier incremental-save boundary was present. This does not rule out edits made before the current file was created.</p>}
+      {profile.historicalVersionsFound === 0 && <p className="mt-2 text-[9px] text-slate-400">No earlier incremental-save boundary was present. This does not rule out edits made before the current file was created.</p>}
       {profile.analysisTruncated && <p className="mt-2 text-[9px] text-amber-300">The bounded inspection reached a safety limit; the results are incomplete.</p>}
       {profile.warnings.length > 0 && <ul className="mt-2 space-y-1 text-[9px] text-amber-200/80">{profile.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
       {profile.revisionDiagnostics.map((diagnostic) => (
         <details key={`diagnostic-${diagnostic.revisionNumber}-${diagnostic.snapshotEndOffset}`} className="mt-2 rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2">
           <summary className="cursor-pointer text-[9px] font-medium text-slate-300">Revision {diagnostic.revisionNumber} structure · {diagnostic.objectCount.toLocaleString()} objects · {diagnostic.pageCount.toLocaleString()} pages · {diagnostic.pageExtractionFailureCount.toLocaleString()} page errors</summary>
-          <dl className="mt-2 grid grid-cols-2 gap-2 border-t border-slate-800 pt-2 text-[9px] text-slate-500">
+          <dl className="mt-2 grid grid-cols-2 gap-2 border-t border-slate-800 pt-2 text-[9px] text-slate-400">
             <div><dt>Xref</dt><dd className="font-mono text-slate-300">{diagnostic.crossReferenceType ?? 'unparsed'} at {diagnostic.xrefStartOffset?.toLocaleString() ?? 'unknown'}</dd></div>
             <div><dt>Previous xref</dt><dd className="font-mono text-slate-300">{diagnostic.declaredPreviousXrefOffset?.toLocaleString() ?? 'none declared'}</dd></div>
             <div><dt>Nonzero generations</dt><dd className="font-mono text-slate-300">{diagnostic.nonzeroGenerationObjectCount.toLocaleString()}</dd></div>
@@ -437,7 +437,7 @@ const SIGNATURE_INVALID_BADGE = { label: 'Manifest signature invalid', detail: '
 const UNRECOGNIZED_BADGE = { label: 'Unrecognized confidence state', detail: 'The backend reported a confidence level this build does not know how to present. Treat the result as unclassified.', className: 'border-fuchsia-400/30 bg-fuchsia-500/10 font-semibold text-fuchsia-300' };
 
 function ProvenanceShield({ isValidating, result, error }: { isValidating: boolean; result: ReturnType<typeof useC2PA>['activeManifest']; error: string | null }) {
-  if (isValidating) return <span className="rounded-full border border-slate-700 px-2.5 py-1 text-[9px] text-slate-500">Verifying…</span>;
+  if (isValidating) return <span className="rounded-full border border-slate-700 px-2.5 py-1 text-[9px] text-slate-400">Verifying…</span>;
   if (!result) return <span title={error ?? 'No verification has been run for this document.'} className="rounded-full border border-slate-700 bg-slate-800/40 px-2.5 py-1 text-[9px] font-medium text-slate-400">Provenance not checked</span>;
   const badge: { label: string; detail: string; className: string } | undefined = PROVENANCE_BADGES[result.provenanceConfidence];
   // An invalid manifest never lowers what the digest earned, so the backend keeps the rung and
@@ -498,10 +498,10 @@ function VerificationHistoryPanel({ records, isLoading, error }: { records: Prov
     return <div role="alert" className="border-b border-rose-500/20 bg-rose-500/[0.06] px-4 py-2 text-[9px] leading-relaxed text-rose-300">Verification log unavailable: {error}</div>;
   }
   if (isLoading || !records) {
-    return <div className="border-b border-slate-800 bg-slate-900/30 px-4 py-2 text-[9px] text-slate-500">Reading verification log…</div>;
+    return <div className="border-b border-slate-800 bg-slate-900/30 px-4 py-2 text-[9px] text-slate-400">Reading verification log…</div>;
   }
   if (records.length === 0) {
-    return <div className="border-b border-slate-800 bg-slate-900/30 px-4 py-2 text-[9px] text-slate-500">No verification has been recorded for this document. The absence of a log entry is not a verification result.</div>;
+    return <div className="border-b border-slate-800 bg-slate-900/30 px-4 py-2 text-[9px] text-slate-400">No verification has been recorded for this document. The absence of a log entry is not a verification result.</div>;
   }
   return (
     <div className="max-h-60 overflow-y-auto border-b border-slate-800 bg-slate-900/30 px-4 py-3">
@@ -512,14 +512,14 @@ function VerificationHistoryPanel({ records, isLoading, error }: { records: Prov
           return (
             <li key={record.verificationId} className="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <time dateTime={record.verifiedAt} title={record.verifiedAt} className="font-mono text-[9px] text-slate-500">{formatVerifiedAt(record.verifiedAt)}</time>
+                <time dateTime={record.verifiedAt} title={record.verifiedAt} className="font-mono text-[9px] text-slate-400">{formatVerifiedAt(record.verifiedAt)}</time>
                 <span title={badge.detail} className={`rounded-full border px-2 py-0.5 text-[9px] ${badge.className}`}>{badge.label}</span>
                 {record.signatureVerification === 'INVALID' && <span className="rounded-full border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 text-[9px] font-semibold text-rose-300">Signature invalid</span>}
                 {record.signatureVerification === 'VALID' && <span className="rounded-full border border-emerald-400/25 bg-emerald-500/[0.07] px-2 py-0.5 text-[9px] font-medium text-emerald-200">Signature valid</span>}
                 {record.textProjectionMatches === false && <span className="rounded-full border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 text-[9px] font-semibold text-rose-300">Quoted text drifted</span>}
                 {record.evidenceFilePresent === false && <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-0.5 text-[9px] font-medium text-amber-300">No evidence file</span>}
               </div>
-              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[9px] text-slate-600">
+              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[9px] text-slate-400">
                 <span>computed {record.computedSha256 ? `${record.computedSha256.slice(0, 12)}…` : '—'}</span>
                 <span>recorded {record.expectedSha256 ? `${record.expectedSha256.slice(0, 12)}…` : '—'}</span>
                 {/* 'NONE' printed bare would sit beside two digest facts and read as a truncated value. */}

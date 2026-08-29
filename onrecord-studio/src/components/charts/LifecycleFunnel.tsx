@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import AnalyticsUnavailable from './AnalyticsUnavailable';
+import { cn } from '../../utils/cn';
 
 export default function LifecycleFunnel() {
   const profiles = useAppStore((state) => state.agencyProfiles);
@@ -27,7 +28,7 @@ export default function LifecycleFunnel() {
   return (
     <section className="app-panel min-h-[360px] overflow-hidden p-5">
       <div className="app-eyebrow">Evidence lifecycle</div>
-      <div className="mt-1 text-[10px] text-slate-500">Select a stage to open its matching records. Multiple predicates use AND semantics.</div>
+      <div className="mt-1 text-[10px] text-slate-400">Select a stage to open its matching records. Multiple predicates use AND semantics.</div>
       {!hasData && analyticsError ? (
         <AnalyticsUnavailable className="mt-6" heading="Lifecycle counts unavailable" />
       ) : (
@@ -46,9 +47,12 @@ export default function LifecycleFunnel() {
             >
               <div className="mb-1 flex items-center justify-between font-mono text-[10px]">
                 <span className="text-slate-400 transition-colors group-hover:text-slate-200">{stage.label}</span>
-                <span className={stage.policy ? 'text-amber-300' : 'text-slate-500'}>{stage.value.toLocaleString()}</span>
+                <span className={cn('flex items-center gap-1', stage.policy ? 'text-amber-300' : 'text-slate-400')}>
+                  {stage.policy && <FlagMark label="Policy flagged" />}
+                  {stage.value.toLocaleString()}
+                </span>
               </div>
-              <div className="mb-1 text-[8px] text-slate-600">{stage.predicate}</div>
+              <div className="mb-1 text-[8px] text-slate-400">{stage.predicate}</div>
               <div className="h-8 overflow-hidden rounded-lg border border-slate-800/90 bg-slate-950/60 p-1">
                 {hasData && (
                   <div
@@ -65,5 +69,14 @@ export default function LifecycleFunnel() {
       </div>
       )}
     </section>
+  );
+}
+
+// A triangle beside a flagged value, so the flag survives when amber and slate read alike.
+function FlagMark({ label }: { label: string }) {
+  return (
+    <svg viewBox="-6 -6 12 12" className="h-2 w-2 shrink-0" role="img" aria-label={label}>
+      <polygon points="0,-5 4.6,3.9 -4.6,3.9" fill="currentColor" />
+    </svg>
   );
 }

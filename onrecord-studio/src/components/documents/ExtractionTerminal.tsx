@@ -1,5 +1,6 @@
 import { useAppStore } from '../../store/useAppStore';
 import { cn } from '../../utils/cn';
+import StatusDot from '../ui/statusDot';
 
 export default function ExtractionTerminal() {
   const syncLogs = useAppStore((state) => state.syncLogs);
@@ -16,15 +17,20 @@ export default function ExtractionTerminal() {
           <span aria-hidden="true">{isOpen ? '−' : '+'}</span>
         </button>
         <div className="flex items-center gap-3">
-          {syncLogs.length > 0 && <button type="button" onClick={clear} className="focus-ring rounded px-1.5 py-1 text-[8px] text-slate-500 hover:text-slate-300">Clear session telemetry</button>}
-          <span className={cn('h-1.5 w-1.5 rounded-full', isSyncing ? 'status-pulse bg-cyan-400' : 'bg-slate-700')} aria-label={isSyncing ? 'Synchronization active' : 'Synchronization idle'} />
+          {syncLogs.length > 0 && <button type="button" onClick={clear} className="focus-ring rounded px-1.5 py-1 text-[8px] text-slate-400 hover:text-slate-300">Clear session telemetry</button>}
+          <StatusDot state={isSyncing ? 'active' : 'idle'} label={isSyncing ? 'Synchronization active' : 'Synchronization idle'} className={isSyncing ? 'status-pulse rounded-full' : undefined} />
         </div>
       </div>
       {isOpen && (
         <div className="min-h-0 flex-1 overflow-y-auto p-3 text-slate-400" aria-live="polite">
           {syncLogs.length === 0
-            ? <div className="p-2 text-slate-700">No ingestion activity has been recorded in this session.</div>
-            : syncLogs.map((log, index) => <div key={`${index}-${log}`} className={cn('border-l py-1 pl-2.5', isErrorLog(log) ? 'border-rose-500/50 text-rose-300/80' : 'border-slate-800 text-slate-500')}>{log}</div>)}
+            ? <div className="p-2 text-slate-400">No ingestion activity has been recorded in this session.</div>
+            : syncLogs.map((log, index) => (
+              <div key={`${index}-${log}`} className={cn('flex items-start gap-1.5 border-l py-1 pl-2.5', isErrorLog(log) ? 'border-rose-500/50 text-rose-300/80' : 'border-slate-800 text-slate-400')}>
+                {isErrorLog(log) && <StatusDot state="error" label="Error" className="mt-1" />}
+                <span className="min-w-0 flex-1">{log}</span>
+              </div>
+            ))}
         </div>
       )}
     </section>

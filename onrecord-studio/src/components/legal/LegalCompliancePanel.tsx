@@ -140,10 +140,10 @@ export default function LegalCompliancePanel({
     <section className="mt-3 overflow-hidden rounded-lg border border-slate-800 bg-slate-950/55">
       <div className="flex items-start justify-between gap-3 border-b border-slate-800 px-3 py-2.5">
         <div>
-          <div className="text-[8px] font-bold uppercase tracking-[0.16em] text-slate-500">
+          <div className="text-[8px] font-bold uppercase tracking-[0.16em] text-slate-400">
             Legal compliance
           </div>
-          <p className="mt-1 text-[9px] leading-relaxed text-slate-600">
+          <p className="mt-1 text-[9px] leading-relaxed text-slate-400">
             Deterministic deadline checks and versioned policy evidence rules
           </p>
         </div>
@@ -167,18 +167,18 @@ export default function LegalCompliancePanel({
       </div>
 
       {isLoading ? (
-        <div className="px-3 py-4 text-[9px] text-slate-600">Loading legal findings…</div>
+        <div className="px-3 py-4 text-[9px] text-slate-400">Loading legal findings…</div>
       ) : error && activeFindings.length === 0 ? (
         <div className="px-3 py-4">
           <div className="text-[10px] font-medium text-rose-200">Legal findings unavailable</div>
-          <p className="mt-1 text-[9px] leading-relaxed text-slate-600">
+          <p className="mt-1 text-[9px] leading-relaxed text-slate-400">
             The findings query did not complete, so this panel cannot report whether active findings exist.
           </p>
         </div>
       ) : activeFindings.length === 0 ? (
         <div className="px-3 py-4">
           <div className="text-[10px] font-medium text-slate-400">No active findings recorded</div>
-          <p className="mt-1 text-[9px] leading-relaxed text-slate-600">
+          <p className="mt-1 text-[9px] leading-relaxed text-slate-400">
             Run an evaluation after public documents are indexed. Incomplete evidence sets are
             deferred rather than classified.
           </p>
@@ -205,11 +205,11 @@ export default function LegalCompliancePanel({
                   {finding.reviewStatus}
                 </span>
               </div>
-              <div className="mt-1 text-[9px] text-slate-500">{finding.statuteCitation}</div>
+              <div className="mt-1 text-[9px] text-slate-400">{finding.statuteCitation}</div>
               <p className="mt-2 text-[9px] leading-relaxed text-slate-400">
                 {finding.evidenceSummary}
               </p>
-              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[7px] text-slate-600">
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[7px] text-slate-400">
                 <span>{(finding.confidenceBasisPoints / 100).toFixed(2)}% rule confidence</span>
                 {finding.varianceDays !== null && <span>{finding.varianceDays} days overdue</span>}
                 {finding.supportingDocumentIds.length > 0 && (
@@ -221,7 +221,7 @@ export default function LegalCompliancePanel({
                   {finding.missingEvidencePhrases.slice(0, 4).map((phrase) => (
                     <span
                       key={phrase}
-                      className="rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 text-[7px] text-slate-500"
+                      className="rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 text-[7px] text-slate-400"
                     >
                       Missing: {phrase}
                     </span>
@@ -232,7 +232,7 @@ export default function LegalCompliancePanel({
                 <button type="button" onClick={() => setSelectedFindingId(finding.violationId)} className="rounded border border-indigo-400/25 bg-indigo-500/[0.06] px-2 py-1 text-[7px] font-semibold text-indigo-200 transition hover:bg-indigo-500/10">
                   Compare authority & evidence
                 </button>
-                <button type="button" onClick={() => filterByFinding(finding)} className="rounded border border-slate-700 px-2 py-1 text-[7px] font-semibold text-slate-500 transition hover:border-slate-500 hover:text-slate-300">
+                <button type="button" onClick={() => filterByFinding(finding)} className="rounded border border-slate-700 px-2 py-1 text-[7px] font-semibold text-slate-400 transition hover:border-slate-500 hover:text-slate-300">
                   Filter workbench
                 </button>
                 {finding.reviewStatus === 'OPEN' ? (
@@ -240,24 +240,24 @@ export default function LegalCompliancePanel({
                     <button type="button" onClick={() => beginReview(finding, 'CONFIRMED')} className="rounded border border-emerald-500/25 bg-emerald-500/[0.06] px-2 py-1 text-[7px] font-semibold text-emerald-300 transition hover:bg-emerald-500/10">
                       Confirm finding
                     </button>
-                    <button type="button" onClick={() => beginReview(finding, 'DISMISSED')} className="rounded border border-slate-700 px-2 py-1 text-[7px] font-semibold text-slate-500 transition hover:border-rose-400/30 hover:text-rose-300">
+                    <button type="button" onClick={() => beginReview(finding, 'DISMISSED')} className="rounded border border-slate-700 px-2 py-1 text-[7px] font-semibold text-slate-400 transition hover:border-rose-400/30 hover:text-rose-300">
                       Dismiss
                     </button>
                   </>
                 ) : (
-                  <button type="button" onClick={() => beginReview(finding, 'OPEN')} className="rounded border border-slate-700 px-2 py-1 text-[7px] font-semibold text-slate-500 transition hover:border-slate-500 hover:text-slate-300">
+                  <button type="button" onClick={() => beginReview(finding, 'OPEN')} className="rounded border border-slate-700 px-2 py-1 text-[7px] font-semibold text-slate-400 transition hover:border-slate-500 hover:text-slate-300">
                     Reopen review
                   </button>
                 )}
               </div>
               {pendingReview?.violationId === finding.violationId && (
                 <div className="mt-2 rounded-md border border-slate-800 bg-slate-900/60 p-2">
-                  <label className="block text-[7px] font-semibold uppercase tracking-wider text-slate-600">
+                  <label className="block text-[7px] font-semibold uppercase tracking-wider text-slate-400">
                     Reviewer note
                     <textarea value={reviewerNotes} onChange={(event) => setReviewerNotes(event.target.value)} maxLength={8192} rows={2} className="mt-1.5 w-full resize-y rounded border border-slate-800 bg-slate-950 px-2 py-1.5 text-[8px] normal-case tracking-normal text-slate-300 outline-none focus:border-indigo-400/35" />
                   </label>
                   <div className="mt-2 flex justify-end gap-1.5">
-                    <button type="button" onClick={() => setPendingReview(null)} disabled={isReviewing} className="rounded px-2 py-1 text-[7px] font-semibold text-slate-500 hover:text-slate-300">Cancel</button>
+                    <button type="button" onClick={() => setPendingReview(null)} disabled={isReviewing} className="rounded px-2 py-1 text-[7px] font-semibold text-slate-400 hover:text-slate-300">Cancel</button>
                     <button type="button" onClick={() => void submitReview()} disabled={isReviewing} className="rounded border border-indigo-400/25 bg-indigo-500/10 px-2 py-1 text-[7px] font-semibold text-indigo-200 disabled:cursor-wait disabled:opacity-60">
                       {isReviewing ? 'Saving…' : `Save as ${humanize(pendingReview.status)}`}
                     </button>
@@ -269,7 +269,7 @@ export default function LegalCompliancePanel({
         </div>
       )}
 
-      {selectedFinding && <div className="grid gap-px border-t border-slate-800 bg-slate-800 md:grid-cols-2"><section className="bg-slate-950 p-3" aria-label="Authority citation"><div className="text-[8px] font-bold uppercase tracking-wider text-indigo-300/70">Authority citation</div><div className="mt-2 text-[10px] font-semibold text-slate-200">{selectedFinding.statuteCitation}</div><p className="mt-1 text-[9px] text-slate-500">{selectedFinding.authorityTitle}</p><dl className="mt-2 space-y-1 font-mono text-[7px] text-slate-600"><div><dt className="inline">Version </dt><dd className="inline text-slate-400">{selectedFinding.matchedVersionId}</dd></div>{selectedFinding.mandateTitle && <div><dt className="inline">Rule </dt><dd className="inline text-slate-400">{selectedFinding.mandateTitle}</dd></div>}</dl>{selectedAuthority?.canonicalSourceUri && <a href={selectedAuthority.canonicalSourceUri} target="_blank" rel="noreferrer" className="mt-2 block break-all text-[8px] text-cyan-300 underline">Open official source</a>}</section><section className="bg-slate-950 p-3" aria-label="Finding evidence excerpt"><div className="flex items-center justify-between"><div className="text-[8px] font-bold uppercase tracking-wider text-amber-300/70">Case evidence</div><button type="button" onClick={() => setSelectedFindingId(null)} className="text-[8px] text-slate-600 hover:text-slate-300">Close</button></div><p className="mt-2 whitespace-pre-wrap text-[9px] leading-relaxed text-slate-300">{selectedFinding.evidenceSummary}</p><div className="mt-2 font-mono text-[7px] text-slate-600">Supporting documents: {selectedFinding.supportingDocumentIds.length ? selectedFinding.supportingDocumentIds.join(', ') : 'none recorded'}</div>{selectedFinding.missingEvidencePhrases.length > 0 && <div className="mt-2 text-[8px] text-amber-200/70">Missing required evidence: {selectedFinding.missingEvidencePhrases.join('; ')}</div>}</section></div>}
+      {selectedFinding && <div className="grid gap-px border-t border-slate-800 bg-slate-800 md:grid-cols-2"><section className="bg-slate-950 p-3" aria-label="Authority citation"><div className="text-[8px] font-bold uppercase tracking-wider text-indigo-300/70">Authority citation</div><div className="mt-2 text-[10px] font-semibold text-slate-200">{selectedFinding.statuteCitation}</div><p className="mt-1 text-[9px] text-slate-400">{selectedFinding.authorityTitle}</p><dl className="mt-2 space-y-1 font-mono text-[7px] text-slate-400"><div><dt className="inline">Version </dt><dd className="inline text-slate-400">{selectedFinding.matchedVersionId}</dd></div>{selectedFinding.mandateTitle && <div><dt className="inline">Rule </dt><dd className="inline text-slate-400">{selectedFinding.mandateTitle}</dd></div>}</dl>{selectedAuthority?.canonicalSourceUri && <a href={selectedAuthority.canonicalSourceUri} target="_blank" rel="noreferrer" className="mt-2 block break-all text-[8px] text-cyan-300 underline">Open official source</a>}</section><section className="bg-slate-950 p-3" aria-label="Finding evidence excerpt"><div className="flex items-center justify-between"><div className="text-[8px] font-bold uppercase tracking-wider text-amber-300/70">Case evidence</div><button type="button" onClick={() => setSelectedFindingId(null)} className="text-[8px] text-slate-400 hover:text-slate-300">Close</button></div><p className="mt-2 whitespace-pre-wrap text-[9px] leading-relaxed text-slate-300">{selectedFinding.evidenceSummary}</p><div className="mt-2 font-mono text-[7px] text-slate-400">Supporting documents: {selectedFinding.supportingDocumentIds.length ? selectedFinding.supportingDocumentIds.join(', ') : 'none recorded'}</div>{selectedFinding.missingEvidencePhrases.length > 0 && <div className="mt-2 text-[8px] text-amber-200/70">Missing required evidence: {selectedFinding.missingEvidencePhrases.join('; ')}</div>}</section></div>}
 
       {evaluation && (
         <div

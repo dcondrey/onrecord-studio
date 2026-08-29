@@ -94,7 +94,7 @@ export default function SearchFilter() {
       <div className="app-panel flex flex-wrap items-center gap-2 p-2">
         <div className="relative min-w-[240px] flex-1">
           <label htmlFor="evidence-search" className="sr-only">Search requests and extracted documents</label>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true">
             <circle cx="11" cy="11" r="7" /><path strokeLinecap="round" d="m20 20-4-4" />
           </svg>
           <input
@@ -103,7 +103,7 @@ export default function SearchFilter() {
             value={inputValue}
             onChange={(event) => updateTerm(event.target.value)}
             placeholder="Search request metadata and extracted text"
-            className="focus-ring h-10 w-full rounded-xl border border-transparent bg-slate-950/65 pl-9 pr-10 text-[11px] text-slate-100 transition placeholder:text-slate-600 focus:border-indigo-400/50"
+            className="focus-ring h-10 w-full rounded-xl border border-transparent bg-slate-950/65 pl-9 pr-10 text-[11px] text-slate-100 transition placeholder:text-slate-400 focus:border-indigo-400/50"
           />
           {isSearching && <span className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin rounded-full border-2 border-slate-700 border-t-indigo-400" aria-label="Searching" />}
         </div>
@@ -128,7 +128,7 @@ export default function SearchFilter() {
         )}
         <div className="ml-auto hidden shrink-0 border-l border-slate-800 px-2 text-right sm:block">
           <div className="font-mono text-[11px] font-semibold text-slate-300">{isSearching ? '—' : resultCount.toLocaleString()}</div>
-          <div className="text-[7px] uppercase tracking-wider text-slate-700">matches</div>
+          <div className="text-[7px] uppercase tracking-wider text-slate-400">matches</div>
         </div>
       </div>
       <div className="mt-1.5 flex min-h-4 items-center gap-2 px-2 text-[8px]">
@@ -136,7 +136,7 @@ export default function SearchFilter() {
           type="button"
           aria-pressed={interpretPlainLanguage}
           onClick={() => setInterpretPlainLanguage((enabled) => !enabled)}
-          className={interpretPlainLanguage ? 'rounded-full border border-indigo-400/30 bg-indigo-500/10 px-2 py-0.5 font-semibold text-indigo-200' : 'rounded-full border border-slate-800 px-2 py-0.5 font-semibold text-slate-500 hover:text-slate-300'}
+          className={interpretPlainLanguage ? 'rounded-full border border-indigo-400/30 bg-indigo-500/10 px-2 py-0.5 font-semibold text-indigo-200' : 'rounded-full border border-slate-800 px-2 py-0.5 font-semibold text-slate-400 hover:text-slate-300'}
         >
           Plain-language interpretation {interpretPlainLanguage ? 'on' : 'off'}
         </button>
@@ -166,7 +166,7 @@ export default function SearchFilter() {
             Search unavailable; {resultCount > 0 ? `showing ${resultCount.toLocaleString()} results from the last successful query` : 'no result set is available'}: {error}
           </span>
         )}
-        {!error && parsedQuery.filters.length === 0 && <span className="text-slate-600">Search remains available while ingestion is active.</span>}
+        {!error && parsedQuery.filters.length === 0 && <span className="text-slate-400">Search remains available while ingestion is active.</span>}
       </div>
     </section>
   );

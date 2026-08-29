@@ -223,13 +223,13 @@ export default function PatternExplorer() {
             <h2 className="mt-2 text-[26px] font-semibold tracking-[-0.035em] text-slate-100 sm:text-[30px]">
               Connections backed by source evidence.
             </h2>
-            <p className="mt-1 max-w-3xl text-[10px] leading-relaxed text-slate-500">
+            <p className="mt-1 max-w-3xl text-[10px] leading-relaxed text-slate-400">
               Deterministic fingerprints, normalized authorities, recurring language, and dates are
               matched across extracted files. Every signal links back to a document and source offset.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-[9px] text-slate-500">
+            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-[9px] text-slate-400">
               Minimum evidence
               <select
                 value={minimumEvidenceCount}
@@ -239,7 +239,7 @@ export default function PatternExplorer() {
                 {[2, 3, 5, 10].map((value) => <option key={value} value={value}>{value}</option>)}
               </select>
             </label>
-            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-[9px] text-slate-500">
+            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-[9px] text-slate-400">
               Confidence
               <select
                 value={minimumConfidence}
@@ -253,15 +253,15 @@ export default function PatternExplorer() {
                 <option value={9500}>95%+</option>
               </select>
             </label>
-            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-[9px] text-slate-500">
+            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-[9px] text-slate-400">
               Indexed after
               <input type="datetime-local" value={indexedFrom} max={indexedTo || undefined} onChange={(event) => setIndexedFrom(event.target.value)} className="bg-transparent font-mono text-slate-200 outline-none" />
             </label>
-            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-[9px] text-slate-500">
+            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-[9px] text-slate-400">
               Indexed before
               <input type="datetime-local" value={indexedTo} min={indexedFrom || undefined} onChange={(event) => setIndexedTo(event.target.value)} className="bg-transparent font-mono text-slate-200 outline-none" />
             </label>
-            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-[9px] text-slate-500">
+            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-[9px] text-slate-400">
               Required terms
               <input
                 value={requiredTerms}
@@ -287,7 +287,7 @@ export default function PatternExplorer() {
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="app-eyebrow">Reusable investigation recipe</div>
-              <p className="mt-1 text-[9px] text-slate-600">
+              <p className="mt-1 text-[9px] text-slate-400">
                 Preview the exact controls above before saving. Recipes stay on this device and never alter source evidence.
               </p>
             </div>
@@ -317,7 +317,7 @@ export default function PatternExplorer() {
                   <button type="button" onClick={() => loadRecipe(recipe)} className="focus-ring px-3 py-2 text-[9px] text-slate-300 hover:text-cyan-200">
                     {recipe.name}
                   </button>
-                  <button type="button" onClick={() => deleteRecipe(recipe.id)} aria-label={`Delete ${recipe.name}`} className="focus-ring border-l border-slate-800 px-2 py-2 text-slate-600 hover:text-rose-300">
+                  <button type="button" onClick={() => deleteRecipe(recipe.id)} aria-label={`Delete ${recipe.name}`} className="focus-ring border-l border-slate-800 px-2 py-2 text-slate-400 hover:text-rose-300">
                     <Icon name="x" className="h-3 w-3" />
                   </button>
                 </div>
@@ -385,7 +385,7 @@ export default function PatternExplorer() {
                     </span>
                   </div>
                   <h3 className="mt-2 text-[11px] font-semibold leading-snug text-slate-200">{pattern.title}</h3>
-                  <p className="mt-1 line-clamp-2 text-[9px] leading-relaxed text-slate-600">{pattern.explanation}</p>
+                  <p className="mt-1 line-clamp-2 text-[9px] leading-relaxed text-slate-400">{pattern.explanation}</p>
                 </button>
               ))}
             </div>
@@ -397,13 +397,13 @@ export default function PatternExplorer() {
                 <div className="border-b border-slate-800 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="app-eyebrow text-indigo-300/70">{patternLabels[selectedPattern.kind]}</span>
-                    <span className="font-mono text-[8px] text-slate-600">{selectedPattern.algorithmVersion}</span>
+                    <span className="font-mono text-[8px] text-slate-400">{selectedPattern.algorithmVersion}</span>
                   </div>
                   <h2 className="mt-2 text-base font-semibold text-slate-100">{selectedPattern.title}</h2>
-                  <p className="mt-1 text-[10px] leading-relaxed text-slate-500">{selectedPattern.explanation}</p>
+                  <p className="mt-1 text-[10px] leading-relaxed text-slate-400">{selectedPattern.explanation}</p>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto p-4">
-                  <div className="mb-2 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-600">Source evidence</div>
+                  <div className="mb-2 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-400">Source evidence</div>
                   <div className="space-y-2">
                     {selectedPattern.evidence.map((evidence) => {
                       const key = `${evidence.portalKey}:${evidence.documentId}:${evidence.characterStart ?? 'document'}`;
@@ -422,8 +422,8 @@ export default function PatternExplorer() {
                               {excerptLoadingKey === key ? 'Loading…' : 'Open excerpt'}
                             </span>
                           </div>
-                          <p className="mt-1.5 text-[9px] text-slate-500">{evidence.evidenceLabel}</p>
-                          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[8px] text-slate-700">
+                          <p className="mt-1.5 text-[9px] text-slate-400">{evidence.evidenceLabel}</p>
+                          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[8px] text-slate-400">
                             {evidence.characterStart !== null && <span>chars {evidence.characterStart}–{evidence.characterEnd}</span>}
                             <span title={evidence.contentSha256}>sha256 {evidence.contentSha256.slice(0, 16)}…</span>
                           </div>
@@ -436,18 +436,18 @@ export default function PatternExplorer() {
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="text-[9px] font-semibold text-cyan-200">Masked source excerpt</div>
-                          <div className="mt-0.5 font-mono text-[8px] text-slate-600">
+                          <div className="mt-0.5 font-mono text-[8px] text-slate-400">
                             {excerpt.chunk.portalKey} / document {excerpt.chunk.documentId} · offset {excerpt.chunk.characterOffset}
                           </div>
                         </div>
-                        <button type="button" onClick={() => setExcerpt(null)} aria-label="Close excerpt" className="text-slate-600 hover:text-slate-300">
+                        <button type="button" onClick={() => setExcerpt(null)} aria-label="Close excerpt" className="text-slate-400 hover:text-slate-300">
                           <Icon name="x" className="h-3.5 w-3.5" />
                         </button>
                       </div>
                       <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono text-[9px] leading-relaxed text-slate-400">
                         {excerpt.chunk.maskedText}
                       </pre>
-                      <div className="mt-2 text-[8px] text-slate-700">
+                      <div className="mt-2 text-[8px] text-slate-400">
                         {excerpt.chunk.maskedFindingCount} sensitive value{excerpt.chunk.maskedFindingCount === 1 ? '' : 's'} masked locally.
                       </div>
                     </div>
@@ -491,7 +491,7 @@ function FilterButton({ selected, onClick, children }: { selected: boolean; onCl
         'focus-ring flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[9px] font-medium transition',
         selected
           ? 'border-cyan-400/25 bg-cyan-400/[0.08] text-cyan-200'
-          : 'border-slate-800 bg-slate-950/35 text-slate-500 hover:text-slate-300',
+          : 'border-slate-800 bg-slate-950/35 text-slate-400 hover:text-slate-300',
       )}
     >
       {children}
@@ -504,7 +504,7 @@ function EmptyState({ title }: { title: string }) {
     <div className="data-grid grid min-h-48 place-items-center p-8 text-center">
       <div className="chart-ready-card rounded-xl border px-5 py-4 backdrop-blur-xl">
         <Icon name="sparkles" className="mx-auto h-5 w-5 text-cyan-300/70" />
-        <p className="mt-3 text-[10px] font-medium text-slate-500">{title}</p>
+        <p className="mt-3 text-[10px] font-medium text-slate-400">{title}</p>
       </div>
     </div>
   );

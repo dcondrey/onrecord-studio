@@ -1,9 +1,11 @@
-import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type SVGProps } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import type { AgencyPerformanceProfile } from '../../types';
 import { cn } from '../../utils/cn';
 import Icon from '../ui/icons';
 import AnalyticsUnavailable from './AnalyticsUnavailable';
+
+type Severity = 'typical' | 'elevated' | 'critical';
 
 const WIDTH = 700;
 const HEIGHT = 320;
@@ -94,15 +96,15 @@ export default function PerformanceScatter() {
         <div>
           <div className="app-eyebrow">Department performance map</div>
           <h2 className="mt-1 text-[13px] font-semibold text-slate-200">Response time vs. statistical deviation</h2>
-          <p className="mt-1 text-[10px] text-slate-600">Bubble size represents audited request volume. Select a department to inspect its evidence.</p>
+          <p className="mt-1 text-[10px] text-slate-400">Bubble size represents audited request volume. Select a department to inspect its evidence.</p>
         </div>
         <div className="hidden flex-wrap items-center justify-end gap-2 sm:flex">
           {dayRange && <button type="button" onClick={() => setDayRange(null)} className="rounded-lg border border-slate-800 bg-slate-950/40 px-2 py-1.5 text-[8px] text-slate-400">Reset zoom</button>}
           <button type="button" onClick={exportSvg} className="rounded-lg border border-slate-800 bg-slate-950/40 px-2 py-1.5 text-[8px] text-slate-400">Export SVG</button>
-          <div className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2 text-[8px] text-slate-500">
-          <LegendDot color="bg-cyan-400" label="Typical" />
-          <LegendDot color="bg-amber-400" label="Elevated" />
-          <LegendDot color="bg-rose-400" label="Critical" />
+          <div className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2 text-[8px] text-slate-400">
+          <LegendDot severity="typical" label="Typical" />
+          <LegendDot severity="elevated" label="Elevated" />
+          <LegendDot severity="critical" label="Critical" />
           </div>
         </div>
       </div>
@@ -118,12 +120,12 @@ export default function PerformanceScatter() {
               // Saying so beats silently dropping them: an agency with no recorded closure cannot
               // be placed on either axis, and it must not be implied to be missing for any other
               // reason.
-              <p className="mb-2 text-[9px] text-slate-500">
+              <p className="mb-2 text-[9px] text-slate-400">
                 {unmeasuredCount} department{unmeasuredCount === 1 ? '' : 's'} not plotted: no closure has been recorded, so there is no closure time or deviation to place.
               </p>
             )}
             {visiblePoints.length > renderedPoints.length && <p className="mb-1 text-[8px] text-amber-300/70">Showing the 800 highest-volume departments in this viewport; narrow the day range to inspect the remainder.</p>}
-            <p className="mb-1 text-[8px] text-slate-600">Drag horizontally across the plot to zoom the closure-time axis.</p>
+            <p className="mb-1 text-[8px] text-slate-400">Drag horizontally across the plot to zoom the closure-time axis.</p>
             <svg ref={svgRef} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="h-full min-h-[280px] w-full" role="img" aria-label="Scatter plot of agency average closure time and performance z-score">
               <defs>
                 <filter id="pointGlow" x="-100%" y="-100%" width="300%" height="300%">
@@ -155,7 +157,7 @@ export default function PerformanceScatter() {
               {brush && <rect x={Math.min(brush.start, brush.current)} y={MARGIN.top} width={Math.abs(brush.current - brush.start)} height={plotHeight} fill="var(--viz-cyan)" fillOpacity="0.12" stroke="var(--viz-cyan)" strokeDasharray="4 3" pointerEvents="none" />}
               {renderedPoints.map((profile) => {
                 const severity = severityFor(profile);
-                const color = severity === 'critical' ? 'var(--viz-red)' : severity === 'elevated' ? 'var(--viz-amber)' : 'var(--viz-cyan)';
+                const color = severityColor(severity);
                 const radius = 5 + Math.sqrt(profile.totalRequestsProcessed / maxRequests) * 12;
                 const active = focused?.agencyId === profile.agencyId && focused.portalSubdomain === profile.portalSubdomain;
                 return (
@@ -163,7 +165,7 @@ export default function PerformanceScatter() {
                     key={`${profile.portalSubdomain}-${profile.agencyId}`}
                     role="button"
                     tabIndex={0}
-                    aria-label={`${profile.agencyName}, ${profile.averageClosureDays.toFixed(1)} average days, z-score ${profile.performanceZScore.toFixed(2)}`}
+                    aria-label={`${profile.agencyName}, ${severity}, ${profile.averageClosureDays.toFixed(1)} average days, z-score ${profile.performanceZScore.toFixed(2)}`}
                     className="cursor-pointer outline-none"
                     onMouseEnter={() => setFocused(profile)}
                     onMouseLeave={() => setFocused(null)}
@@ -175,7 +177,7 @@ export default function PerformanceScatter() {
                     }}
                   >
                     <circle cx={x(profile.averageClosureDays)} cy={y(profile.performanceZScore)} r={radius + 5} fill={color} opacity={active ? 0.14 : 0.04} />
-                    <circle cx={x(profile.averageClosureDays)} cy={y(profile.performanceZScore)} r={radius} fill={color} fillOpacity={active ? 0.9 : 0.62} stroke={color} strokeWidth={active ? 2 : 1} filter={active ? 'url(#pointGlow)' : undefined} />
+                    <SeverityMark severity={severity} cx={x(profile.averageClosureDays)} cy={y(profile.performanceZScore)} radius={radius} fill={color} fillOpacity={active ? 0.9 : 0.62} stroke={color} strokeWidth={active ? 2 : 1} filter={active ? 'url(#pointGlow)' : undefined} />
                     {active && (
                       <text x={x(profile.averageClosureDays)} y={y(profile.performanceZScore) - radius - 8} fill="var(--text-primary)" fontSize="11" fontWeight="600" textAnchor="middle">
                         {shorten(profile.agencyName, 28)}
@@ -190,7 +192,7 @@ export default function PerformanceScatter() {
           <aside className="min-h-0 p-4">
             <div className="flex items-center justify-between">
               <div className="app-eyebrow">Priority review</div>
-              <span className="font-mono text-[8px] text-slate-600">Top {Math.min(5, data.length)}</span>
+              <span className="font-mono text-[8px] text-slate-400">Top {Math.min(5, data.length)}</span>
             </div>
             <div className="mt-3 space-y-1.5">
               {data.slice(0, 5).map((profile, index) => (
@@ -205,12 +207,15 @@ export default function PerformanceScatter() {
                     focused?.agencyId === profile.agencyId ? 'border-slate-700 bg-slate-800/55' : 'border-transparent hover:border-slate-800 hover:bg-slate-900/70',
                   )}
                 >
-                  <span className="font-mono text-[9px] text-slate-700">{String(index + 1).padStart(2, '0')}</span>
+                  <span className="font-mono text-[9px] text-slate-400">{String(index + 1).padStart(2, '0')}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[10px] font-medium text-slate-300">{profile.agencyName}</span>
-                    <span className="mt-0.5 block text-[8px] text-slate-600">{profile.totalRequestsProcessed.toLocaleString()} requests · {profile.averageClosureDays === null ? 'no closures recorded' : `${profile.averageClosureDays.toFixed(1)}d avg.`}</span>
+                    <span className="mt-0.5 block text-[8px] text-slate-400">{profile.totalRequestsProcessed.toLocaleString()} requests · {profile.averageClosureDays === null ? 'no closures recorded' : `${profile.averageClosureDays.toFixed(1)}d avg.`}</span>
                   </span>
-                  <span className={cn('font-mono text-[10px] font-semibold', severityFor(profile) === 'critical' ? 'text-rose-300' : severityFor(profile) === 'elevated' ? 'text-amber-300' : 'text-cyan-300')}>
+                  <span className={cn('flex items-center gap-1.5 font-mono text-[10px] font-semibold', severityFor(profile) === 'critical' ? 'text-rose-300' : severityFor(profile) === 'elevated' ? 'text-amber-300' : 'text-cyan-300')}>
+                    <svg viewBox="-6 -6 12 12" className="h-2 w-2 shrink-0" role="img" aria-label={`${severityFor(profile)} band`}>
+                      <SeverityMark severity={severityFor(profile)} cx={0} cy={0} radius={4.5} fill="currentColor" fillOpacity={0.85} stroke="currentColor" strokeWidth={1} />
+                    </svg>
                     {profile.performanceZScore === null ? '—' : `${profile.performanceZScore >= 0 ? '+' : ''}${profile.performanceZScore.toFixed(1)}`}
                   </span>
                 </button>
@@ -266,15 +271,38 @@ function ChartEmptyState() {
             <Icon name="activity" className="h-3.5 w-3.5" /> Analytics canvas ready
           </div>
           <h3 className="mt-3 text-[13px] font-semibold text-slate-200">Patterns become visible as evidence arrives.</h3>
-          <p className="mt-1.5 text-[10px] leading-relaxed text-slate-600">Response time, request volume, and statistical deviation will resolve into an interactive department map.</p>
+          <p className="mt-1.5 text-[10px] leading-relaxed text-slate-400">Response time, request volume, and statistical deviation will resolve into an interactive department map.</p>
         </div>
       </div>
     </div>
   );
 }
 
-function LegendDot({ color, label }: { color: string; label: string }) {
-  return <span className="flex items-center gap-1.5"><span className={`h-1.5 w-1.5 rounded-full ${color}`} />{label}</span>;
+function LegendDot({ severity, label }: { severity: Severity; label: string }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <svg viewBox="-6 -6 12 12" className="h-2.5 w-2.5" aria-hidden="true">
+        <SeverityMark severity={severity} cx={0} cy={0} radius={4.5} fill={severityColor(severity)} fillOpacity={0.85} stroke={severityColor(severity)} strokeWidth={1} />
+      </svg>
+      {label}
+    </span>
+  );
+}
+
+// Each band carries its own outline, so the map stays readable when the three accent colors are
+// indistinguishable to the reader: circle for typical, triangle for elevated, diamond for critical.
+function SeverityMark({ severity, cx, cy, radius, ...visual }: { severity: Severity; cx: number; cy: number; radius: number } & Omit<SVGProps<SVGGeometryElement>, 'ref'>) {
+  if (severity === 'critical') {
+    return <polygon points={`${cx},${cy - radius} ${cx + radius},${cy} ${cx},${cy + radius} ${cx - radius},${cy}`} {...visual} />;
+  }
+  if (severity === 'elevated') {
+    return <polygon points={`${cx},${cy - radius} ${cx + radius * 0.92},${cy + radius * 0.78} ${cx - radius * 0.92},${cy + radius * 0.78}`} {...visual} />;
+  }
+  return <circle cx={cx} cy={cy} r={radius} {...visual} />;
+}
+
+function severityColor(severity: Severity) {
+  return severity === 'critical' ? 'var(--viz-red)' : severity === 'elevated' ? 'var(--viz-amber)' : 'var(--viz-cyan)';
 }
 
 function severityFor(profile: AgencyPerformanceProfile) {

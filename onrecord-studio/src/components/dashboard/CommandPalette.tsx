@@ -163,13 +163,14 @@ export default function CommandPalette() {
       <section className="command-dialog app-panel h-fit w-full max-w-[620px] overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="command-palette-title">
         <h2 id="command-palette-title" className="sr-only">Command palette</h2>
         <div className="command-search flex items-center gap-3 border-b border-slate-800/70 px-4">
-          <Icon name="search" className="h-[18px] w-[18px] shrink-0 text-slate-500" />
+          <Icon name="search" className="h-[18px] w-[18px] shrink-0 text-slate-400" />
           <input
             ref={inputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search commands, views, and settings"
-            className="h-14 min-w-0 flex-1 border-0 bg-transparent text-[14px] text-slate-100 outline-none placeholder:text-slate-600"
+            aria-label="Search commands, views, and settings"
+            className="h-14 min-w-0 flex-1 border-0 bg-transparent text-[14px] text-slate-100 outline-none placeholder:text-slate-400"
             role="combobox"
             aria-expanded="true"
             aria-controls="command-results"
@@ -183,9 +184,9 @@ export default function CommandPalette() {
         <div id="command-results" className="max-h-[min(480px,62vh)] overflow-y-auto p-2" role="listbox">
           {filteredActions.length === 0 ? (
             <div className="px-4 py-10 text-center">
-              <Icon name="search" className="mx-auto h-5 w-5 text-slate-500" />
+              <Icon name="search" className="mx-auto h-5 w-5 text-slate-400" />
               <p className="mt-3 text-[13px] font-medium text-slate-300">No matching commands</p>
-              <p className="mt-1 text-[12px] text-slate-600">Try a workspace name, “source,” or “appearance.”</p>
+              <p className="mt-1 text-[12px] text-slate-400">Try a workspace name, “source,” or “appearance.”</p>
             </div>
           ) : filteredActions.map((action, index) => {
             const showGroup = index === 0 || filteredActions[index - 1].group !== action.group;
@@ -212,7 +213,7 @@ export default function CommandPalette() {
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[13px] font-medium">{action.label}</span>
-                    <span className="mt-0.5 block truncate text-[12px] text-slate-600">{action.detail}</span>
+                    <span className="mt-0.5 block truncate text-[12px] text-slate-400">{action.detail}</span>
                   </span>
                   {action.shortcut && <Keycap>{action.shortcut}</Keycap>}
                 </button>
@@ -220,7 +221,7 @@ export default function CommandPalette() {
             );
           })}
         </div>
-        <footer className="flex items-center justify-between border-t border-slate-800/70 px-4 py-2.5 text-[12px] text-slate-600">
+        <footer className="flex items-center justify-between border-t border-slate-800/70 px-4 py-2.5 text-[12px] text-slate-400">
           <span>OnRecord commands</span>
           <span className="flex items-center gap-2"><Keycap>↑↓</Keycap> Navigate <Keycap>↵</Keycap> Open</span>
         </footer>
@@ -230,7 +231,7 @@ export default function CommandPalette() {
 }
 
 function Keycap({ children }: { children: string }) {
-  return <kbd className="keycap shrink-0 rounded-md border px-1.5 py-0.5 font-sans text-[11px] font-medium text-slate-500">{children}</kbd>;
+  return <kbd className="keycap shrink-0 rounded-md border px-1.5 py-0.5 font-sans text-[11px] font-medium text-slate-400">{children}</kbd>;
 }
 
 function focusSourceComposer() {
