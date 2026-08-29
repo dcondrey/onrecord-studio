@@ -498,14 +498,38 @@ the pure-Rust constraint may have been excluding it by accident. Plan: `ocrs` as
 default, Vision behind a macOS feature flag, and **record which engine produced the text on the
 finding**, the way Datashare records `extractor` and `extractorLanguage` on every named entity.
 
-### The format gap to budget for
+### PST, which is not a gap after all
 
-**PST and OST have no mature pure-Rust reader, and agencies produce PST.** This is the single
-biggest format hole in the stack for FOIA work. `mail-parser` handles `.eml` and MIME only;
-`msg_parser` already covers single-message `.msg` exports; mbox is a trivial split on `^From `
-lines with `>From` unescaping before handing each message to `mail-parser`. PST means writing a
-reader against the open [MS-PST] specification or requiring pre-conversion. Do not assume a crate
-will appear.
+I initially recorded PST and OST as the biggest format hole in the stack, on the basis that no
+mature pure-Rust reader existed. **That was wrong.**
+
+**`outlook-pst` is `microsoft/outlook-pst-rs`: a clean-room MS-PST implementation, MIT licensed,
+maintained by Microsoft.** Its README states the goal plainly, a cross-platform reference
+implementation compatible with the `mspst32.dll` Outlook MAPI store provider, with portability
+across operating systems and architectures as a top priority. Latest 1.2.0, released 2026-03-17,
+123k lifetime downloads with 79k in the last ninety days, so it is on a steep upward curve.
+
+Its entire non-dev dependency list is **`byteorder`, `thiserror` and `tracing`**. Three pure-Rust
+crates, and `thiserror` 2 is already in this tree. There is no C, no FFI, no build script pulling a
+native library. This is as clean as a format reader gets, and it is a better position than the app
+is in for several formats it already supports.
+
+Its dev-dependencies are informative about the surface: `compressed-rtf` and `codepage-strings`
+appear there, so the reader hands back raw message bodies and the caller decodes compressed RTF and
+legacy codepages. Budget for those two crates alongside it. There is also a `ratatui` PST browser
+in the examples, which is a usable reference for the folder-and-message traversal API.
+
+**Adopt `outlook-pst`.** With `mail-parser` for `.eml` and MIME, the existing `msg_parser` for
+single-message `.msg` exports, and an mbox split on `^From ` lines, that closes the email format
+matrix for FOIA production.
+
+Three name collisions on crates.io to avoid, because two of them look right and are not:
+
+| crate | what it actually is |
+|---|---|
+| `outlook-pst-rw` | a real fork of the Microsoft crate by a third party adding create and incremental append, MIT, identical dependency list. Only needed if this app ever *writes* PST, which it does not. First published 2026-08-09, 625 downloads |
+| `pst-rs` | **AGPL-3.0-or-later**, and version 0.0.1 describes itself as a "crates.io reservation" with 26 lifetime downloads. A placeholder, and the licence disqualifies it regardless |
+| `pff`, `pst` | neither is what the name suggests. `pff` is an Nginx log parser that blocks patterns on the PF firewall; `pst` publishes posts to Micro.blog. There is no `libpff-sys` or `pff-sys` on crates.io at all |
 
 ## 12. Document model, adopted from Docling
 
