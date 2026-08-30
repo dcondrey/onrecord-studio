@@ -350,6 +350,21 @@ mod persisted_document {
     }
 }
 
+/// Whether a pool start may re-seed a request index the previous run was part-way through.
+///
+/// `OperatorRequested` is the answer for every start an operator performed: they chose the page
+/// window that this start seeds, and an inherited frontier does not outrank what they just asked
+/// for. `ContinueInterruptedWalk` is the answer for a resume, which is a continuation of an
+/// earlier start and not a new instruction: a source paused at page 900 already carries page 901
+/// in its durable frontier, so seeding its configured start page there re-fetches every page in
+/// between. Deduplication makes that correct and not free -- 900 requests against a portal that
+/// rate-limits.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum PoolSeedPolicy {
+    OperatorRequested,
+    ContinueInterruptedWalk,
+}
+
 struct ScheduledTask {
     task: IngestionTask,
     frontier_id: Option<i64>,
@@ -420,6 +435,16 @@ impl IngestionTask {
                 stable_source_identifier(source_path)
             ),
         }
+    }
+
+    /// The prefix every `FetchMetadataPage` target identifier for `source_key` carries.
+    ///
+    /// Written here rather than at the call site that queries the frontier, because it is the
+    /// same construction `target_id` performs and the two must not drift: a resume decides
+    /// whether to re-seed its request index by asking whether a row with this prefix survived,
+    /// and a prefix that no longer matched would silently re-seed every time.
+    fn metadata_page_target_prefix(source_key: &str) -> String {
+        format!("{source_key}-page-")
     }
 
     /// The remote URL this task will contact, when it contacts one. Used to attribute a host stop
@@ -809,6 +834,7 @@ impl QueueManager {
             }],
             CrawlPolicy::default(),
             SourceGuidance::default(),
+            PoolSeedPolicy::OperatorRequested,
         )
         .await
     }
@@ -832,6 +858,7 @@ impl QueueManager {
             initial_tasks,
             crawl_policy,
             guidance,
+            PoolSeedPolicy::ContinueInterruptedWalk,
         )
         .await
     }
@@ -843,6 +870,7 @@ impl QueueManager {
         initial_tasks: Vec<IngestionTask>,
         crawl_policy: CrawlPolicy,
         guidance: SourceGuidance,
+        seed_policy: PoolSeedPolicy,
     ) -> Result<String, AppError> {
         validate_crawl_policy(&crawl_policy)?;
         // At capacity, this parks rather than refusing: it releases `provisioning_lock` and
@@ -958,6 +986,30 @@ impl QueueManager {
                     "Recovered resource counter exceeds platform capacity".to_string(),
                 )
             })?;
+        // Whether the adopted frontier still owes this source a request-index page, which is what
+        // an interrupted walk looks like on disk: pagination enqueues page N+1 in the same durable
+        // batch as page N's documents, and page N's row is deleted only after that batch is
+        // written, so a surviving page row means the walk stopped part-way. Asked on every start
+        // rather than only on a resume, so the condition is not written twice; `pool_seed_tasks`
+        // owns what a start does with the answer.
+        let walk_interrupted = if adopted_frontier_tasks > 0 {
+            let prefix = IngestionTask::metadata_page_target_prefix(&portal.portal_key);
+            match self
+                .repository
+                .frontier_holds_target_prefix(&sync_run_id, &portal.portal_key, &prefix)
+                .await
+            {
+                Ok(interrupted) => interrupted,
+                Err(error) => {
+                    self.cancel_task_pool_start(&sync_run_id, &portal.portal_key)
+                        .await;
+                    return Err(error);
+                }
+            }
+        } else {
+            false
+        };
+        let initial_tasks = pool_seed_tasks(initial_tasks, seed_policy, walk_interrupted);
         if initial_tasks.is_empty() && adopted_frontier_tasks == 0 {
             self.cancel_task_pool_start(&sync_run_id, &portal.portal_key)
                 .await;
@@ -1166,6 +1218,7 @@ impl QueueManager {
                 initial_tasks,
                 crawl_policy,
                 guidance,
+                PoolSeedPolicy::OperatorRequested,
             )
             .await?;
         Ok(SourceIngestionStart {
@@ -1355,6 +1408,7 @@ impl QueueManager {
                 initial_tasks,
                 CrawlPolicy::default(),
                 SourceGuidance::default(),
+                PoolSeedPolicy::OperatorRequested,
             )
             .await?;
         Ok(SourceIngestionStart {
@@ -1436,6 +1490,7 @@ impl QueueManager {
                 }],
                 CrawlPolicy::default(),
                 SourceGuidance::default(),
+                PoolSeedPolicy::OperatorRequested,
             )
             .await?;
         Ok(SourceIngestionStart {
@@ -4876,6 +4931,37 @@ fn decrement_atomic(value: &AtomicUsize) {
     });
 }
 
+/// The seed a pool start actually enqueues, once the adopted frontier has been consulted.
+///
+/// Dropping the request-index seed is confined to a resume, which is the continuation of an
+/// earlier start rather than a new instruction. A source paused at page 900 already carries page
+/// 901 in its frontier, so seeding its configured start page re-fetches all 900 pages in between;
+/// deduplication makes that correct but not free, and the cost lands on a portal that rate-limits.
+///
+/// The seed stands in the two cases that are not that one. An operator-requested start is an
+/// instruction: they chose the page window on this start, and an inherited frontier does not
+/// outrank it. And a walk that ran to the end leaves no page row at all, so `walk_interrupted` is
+/// false there and the source re-enters at its start page, which is how records filed since the
+/// last run are found. Recording a high-water page instead would have ended that: page numbers
+/// here are positions in whatever order the portal returns, not cursors, and seeding past the last
+/// page walked means never looking at the first page again.
+///
+/// Only the request-index seed is dropped. A crawl seed is left alone deliberately; a crawl's
+/// visited set is rebuilt per pool and its re-walk is a separate, unclosed question.
+fn pool_seed_tasks(
+    initial_tasks: Vec<IngestionTask>,
+    seed_policy: PoolSeedPolicy,
+    walk_interrupted: bool,
+) -> Vec<IngestionTask> {
+    if seed_policy == PoolSeedPolicy::OperatorRequested || !walk_interrupted {
+        return initial_tasks;
+    }
+    initial_tasks
+        .into_iter()
+        .filter(|task| !matches!(task, IngestionTask::FetchMetadataPage { .. }))
+        .collect()
+}
+
 /// The seed a resume adds alongside whatever the durable frontier already holds.
 ///
 /// Split out so the window a resume applies is provable without provisioning a pool: the seed is
@@ -5996,10 +6082,12 @@ mod tests {
         ));
     }
 
-    // `start_task_pool` enqueues the resume seed unconditionally, alongside every adopted frontier
-    // row, so the seed is what decides where a resumed portal re-enters its request index. Before
-    // the window was persisted this was hardcoded to page 1 at size 50, which meant an operator who
-    // started at page 400 got the first 399 pages crawled on the next launch.
+    // The seed is what decides where a resumed portal re-enters its request index whenever one is
+    // enqueued at all: `start_task_pool` drops it only when the adopted frontier proves the walk
+    // was interrupted mid-pagination (see `pool_seed_tasks`), and otherwise adds it alongside
+    // every adopted row. Before the window was persisted this was hardcoded to page 1 at size 50,
+    // which meant an operator who started at page 400 got the first 399 pages crawled on the next
+    // launch.
     #[test]
     fn a_resumed_portal_seeds_the_page_window_the_operator_saved() {
         let source = PortalRegistration {
@@ -6048,6 +6136,89 @@ mod tests {
                 }]
             ),
             "a source with no saved window must resume exactly as it did before, got: {unset:?}"
+        );
+    }
+
+    // REGRESSION(queue): a resume enqueued its start-page seed alongside the adopted frontier
+    // unconditionally, so a NextRequest source paused at page 900 re-fetched pages 1..900 on every
+    // launch while page 901 sat pending in its own frontier. Proven by removing the
+    // `walk_interrupted` arm from `pool_seed_tasks` and confirming the first case below fails.
+    //
+    // The two cases that keep the seed are the point of the fix as much as the case that drops it:
+    // an operator start is an instruction, and a walk with no surviving page row finished, so
+    // re-entering at the start page is the only way it ever sees records filed since.
+    #[test]
+    fn a_resume_defers_to_an_interrupted_walk_and_re_seeds_every_other_start() {
+        let seed = || {
+            vec![
+                IngestionTask::FetchMetadataPage {
+                    subdomain: "records".to_string(),
+                    page: 400,
+                    per_page: 25,
+                },
+                IngestionTask::CrawlPublicResource {
+                    subdomain: "records".to_string(),
+                    url: "https://records.example.test".to_string(),
+                    depth: 0,
+                },
+            ]
+        };
+
+        let resumed = pool_seed_tasks(seed(), PoolSeedPolicy::ContinueInterruptedWalk, true);
+        assert!(
+            !resumed
+                .iter()
+                .any(|task| matches!(task, IngestionTask::FetchMetadataPage { .. })),
+            "a resume whose frontier still owes a page must not re-seed the index: {resumed:?}"
+        );
+        assert_eq!(
+            resumed.len(),
+            1,
+            "only the request-index seed is dropped; a crawl seed is a separate question: {resumed:?}"
+        );
+
+        assert_eq!(
+            pool_seed_tasks(seed(), PoolSeedPolicy::ContinueInterruptedWalk, false).len(),
+            2,
+            "a walk that left no page row finished, and a resume must re-enter at its start page"
+        );
+        assert_eq!(
+            pool_seed_tasks(seed(), PoolSeedPolicy::OperatorRequested, true).len(),
+            2,
+            "an operator who just chose a start page outranks an inherited frontier"
+        );
+    }
+
+    // The prefix and the identifier are two constructions of the same string, and the frontier
+    // query that decides the above matches rows by it. A drift between them would not fail any
+    // test that only exercised `pool_seed_tasks`: the query would simply never match, and every
+    // resume would silently re-seed again.
+    #[test]
+    fn the_metadata_page_prefix_matches_the_identifier_such_a_task_is_stored_under() {
+        let prefix = IngestionTask::metadata_page_target_prefix("records");
+        let page = IngestionTask::FetchMetadataPage {
+            subdomain: "records".to_string(),
+            page: 901,
+            per_page: 50,
+        };
+        assert!(
+            page.target_id().starts_with(&prefix),
+            "a stored page task must be findable by the prefix, got '{}' against '{prefix}'",
+            page.target_id()
+        );
+        assert!(
+            !IngestionTask::CrawlPublicResource {
+                subdomain: "records".to_string(),
+                url: "https://records.example.test".to_string(),
+                depth: 0,
+            }
+            .target_id()
+            .starts_with(&prefix),
+            "no other task kind may answer for the request index"
+        );
+        assert!(
+            !IngestionTask::metadata_page_target_prefix("records-2").starts_with(&prefix),
+            "one source key must not carry another's prefix"
         );
     }
 

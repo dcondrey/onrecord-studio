@@ -173,13 +173,33 @@ that compiled, linted, and passed 283 tests.
       start the operator did not ask for it on is a decision about what a re-add means, and it is
       not this change.
 
+- [x] **A NextRequest resume re-fetches its start page every time.** A resume no longer seeds the
+      request index when the frontier it adopted still owes a page. Pagination enqueues page N+1
+      in the same durable batch as page N's documents, and page N's row is deleted only after that
+      batch is written, so a surviving page row is what an interrupted walk looks like on disk. A
+      source paused at page 900 carries page 901 and resumes there.
+
+      Not the high-water mark this entry proposed. `fetch_requests` sends no sort parameter, so a
+      page number is a position in whatever order the portal returns and not a cursor; persisting
+      one and seeding past it would also mean a source that finished its walk never looked at its
+      first page again, which is the only way records filed since the last run are found. The
+      frontier already holds the fact, and holds it as work rather than as a guess.
+
+      Two starts deliberately keep the seed. An operator-requested start is an instruction, and
+      the window they just chose outranks an inherited frontier. A walk that ran to the end leaves
+      no page row, so the resume re-enters at its start page exactly as before. `PoolSeedPolicy`
+      is what separates the two, and `pool_seed_tasks` decides without provisioning a pool; the
+      prefix the frontier is queried by is built beside `IngestionTask::target_id`, because a
+      drift between them would fail no test of the decision and would silently re-seed forever.
+
 Open, and specific:
 
-- [ ] **A NextRequest resume re-fetches its start page every time.** The seed is additive to the
-      adopted frontier by design, so a source paused at page 900 re-enters at its configured start
-      page rather than where it stopped. Deduplication makes this correct but not free. Closing it
-      means recording the frontier's high-water mark per source and seeding from that instead,
-      which is a change to what a resume means and not to what an operator can set.
+- [ ] **A crawl resume re-walks from its seed URL.** The same seed additivity, on the non-
+      NextRequest arm of `resume_initial_tasks`: a resumed crawl re-enqueues its root at depth 0,
+      and `visited_urls` is a fresh set per pool, so pages already walked are re-fetched. Unlike
+      the request index there is no single durable row that means "this walk was interrupted" --
+      a crawl frontier holds many pages at once -- so closing it is a question about what a crawl
+      resume owes, not the same fix applied to a second branch.
 
 ### Continuation — 2026-08-27 release-hardening pass
 

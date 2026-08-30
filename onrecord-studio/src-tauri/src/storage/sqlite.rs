@@ -1538,6 +1538,41 @@ impl DuckDbRepository {
         })
     }
 
+    /// Whether `run_id` still holds a frontier row for this source whose target identifier begins
+    /// with `target_prefix`.
+    ///
+    /// Written as a prefix test rather than a task-kind column because the frontier stores a task
+    /// as its encoded payload and its target identifier, and nothing else; the identifier is the
+    /// only thing about a row that is queryable. `starts_with` and not `LIKE`: a source key is
+    /// operator-derived and `%` or `_` inside one would be a wildcard under `LIKE` and match rows
+    /// belonging to a different prefix.
+    ///
+    /// Every status counts. A page task that is leased, deferred for retry, or pending is equally
+    /// work this run still owes, and the caller is asking whether the walk was interrupted, not
+    /// what state its last task happened to be parked in.
+    pub async fn frontier_holds_target_prefix(
+        &self,
+        run_id: &str,
+        source_key: &str,
+        target_prefix: &str,
+    ) -> Result<bool, AppError> {
+        let conn = self.conn.lock().await;
+        conn.query_row(
+            "SELECT EXISTS (
+                 SELECT 1 FROM ingestion_task_frontier
+                 WHERE run_id = ?1 AND source_key = ?2
+                   AND starts_with(target_id, ?3)
+             )",
+            params![run_id, source_key, target_prefix],
+            |row| row.get::<_, bool>(0),
+        )
+        .map_err(|error| {
+            AppError::Storage(format!(
+                "Failed to read the ingestion frontier for source '{source_key}': {error}"
+            ))
+        })
+    }
+
     /// Records the crawl policy and repair guidance an operator supplied for one source.
     ///
     /// Takes the registration rather than a key and a URL for the reason
@@ -9714,6 +9749,68 @@ mod tests {
             .unwrap();
         assert_eq!(first.full_text, "First text");
         assert_eq!(first.version.effective_from.as_deref(), Some("2026-01-01"));
+    }
+
+    // The resume path asks this query whether a source's request-index walk was interrupted, and
+    // acts on the answer by not re-seeding the index. A false negative silently restores the
+    // every-launch re-fetch it exists to close, and a false positive strands a source that had no
+    // pending page, so both directions are pinned here. `%` in a source key is deliberate: under
+    // `LIKE` it would be a wildcard and this row would answer for a prefix it does not carry.
+    #[tokio::test]
+    async fn the_frontier_reports_a_surviving_page_task_by_prefix_only() {
+        let repository = repository_with_document().await;
+        repository
+            .begin_portal_sync_run("run-prefix", PORTAL_SUBDOMAIN)
+            .await
+            .expect("sync run should begin");
+        assert!(!repository
+            .frontier_holds_target_prefix("run-prefix", PORTAL_SUBDOMAIN, "test-portal-page-")
+            .await
+            .expect("an empty frontier should answer"));
+
+        repository
+            .persist_ingestion_frontier_task(
+                "run-prefix",
+                PORTAL_SUBDOMAIN,
+                "test-portal-document-77",
+                r#"{"taskKind":"downloadBinaryPayload"}"#,
+            )
+            .await
+            .expect("a document task should persist");
+        assert!(!repository
+            .frontier_holds_target_prefix("run-prefix", PORTAL_SUBDOMAIN, "test-portal-page-")
+            .await
+            .expect("a document-only frontier should answer"),
+            "pending downloads are not an interrupted walk; the walk ended and its documents did not"
+        );
+
+        repository
+            .persist_ingestion_frontier_task(
+                "run-prefix",
+                PORTAL_SUBDOMAIN,
+                "test-portal-page-901",
+                r#"{"taskKind":"fetchMetadataPage"}"#,
+            )
+            .await
+            .expect("a page task should persist");
+        assert!(repository
+            .frontier_holds_target_prefix("run-prefix", PORTAL_SUBDOMAIN, "test-portal-page-")
+            .await
+            .expect("a page-bearing frontier should answer"));
+        assert!(
+            !repository
+                .frontier_holds_target_prefix("another-run", PORTAL_SUBDOMAIN, "test-portal-page-")
+                .await
+                .expect("a foreign run should answer"),
+            "a row belongs to the run that owns it, and adoption is what moves it"
+        );
+        assert!(
+            !repository
+                .frontier_holds_target_prefix("run-prefix", PORTAL_SUBDOMAIN, "%-page-")
+                .await
+                .expect("a wildcard-shaped prefix should answer"),
+            "the match is a prefix and not a pattern"
+        );
     }
 
     #[tokio::test]
