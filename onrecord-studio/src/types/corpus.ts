@@ -50,3 +50,46 @@ export interface CorpusIndexStatus {
   availableWriteCapacity: number;
   algorithmVersion: string;
 }
+
+export type CorpusEntityKind =
+  | 'STATUTE'
+  | 'DATE'
+  | 'EMAIL_DOMAIN'
+  | 'EMAIL_ADDRESS'
+  | 'URL_HOST'
+  | 'ACRONYM'
+  | 'ORGANIZATION'
+  | 'MONEY';
+
+/** How hard the extractor that produced a mention verified the string it matched. */
+export type EntityValidationGrade =
+  | 'CHECK_DIGIT_PASSED'
+  | 'FORMAT_VALIDATED'
+  | 'PATTERN_ONLY'
+  | 'GAZETTEER_HIT';
+
+/** How an edge came to exist. A computed edge must never be drawn as an observed one. */
+export type RelationshipBasis = 'OBSERVED' | 'COMPUTED' | 'ASSERTED';
+
+export interface CorpusEntityNode {
+  entityId: string;
+  kind: CorpusEntityKind;
+  displayValue: string;
+  documentCount: number;
+  /** The weakest grade among this entity's mentions, not the best. */
+  validationGrade: EntityValidationGrade;
+}
+
+export interface CorpusEntityEdge {
+  neighbor: CorpusEntityNode;
+  basis: RelationshipBasis;
+  sharedDocumentCount: number;
+  confidenceBasisPoints: number;
+}
+
+export interface CorpusEntityNeighborhood {
+  center: CorpusEntityNode;
+  edges: CorpusEntityEdge[];
+  /** The neighbour list hit its limit. A sparse entity and a cut one are different claims. */
+  truncated: boolean;
+}

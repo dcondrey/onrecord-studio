@@ -225,7 +225,42 @@ that compiled, linted, and passed 283 tests.
       literal number would surface in the pattern explorer exactly what every other reader masks.
       That is a decision about the masking seam, not an extractor to write.
 
+- [x] **The entity graph exists.** Step 3 and step 4 of
+      `investigative-workbench-architecture.md` section 7, at their smallest honest size and with
+      no schema change: the edges were already stored, and `basis` now travels with them.
+      `list_top_corpus_entities` ranks by distinct-document count rather than mention count, because
+      an entity repeated forty times inside one letter is a feature of that letter while one
+      appearing in forty documents is a thread through the corpus. `get_corpus_entity_neighborhood`
+      returns one entity's neighbours ranked by shared documents, asking for one row beyond the
+      limit so `truncated` states a fact: a sparse entity and a cut list are different claims and
+      the list alone cannot tell them apart.
+
+      `EntityGraph.tsx` draws it in hand-rolled SVG, per section 9's refusal of a chart dependency.
+      A computed arc is dashed and an unverified node's outline is dashed, so co-occurrence cannot
+      read as an observed relationship and a `PATTERN_ONLY` lead cannot read as a parsed value.
+      Layout is radial and deterministic rather than force-simulated: every arc in an ego network
+      shares one endpoint, so a force run resolves label collisions and produces distances that
+      mean nothing, while radius here reads shared documents.
+
+      An entity's `validation_grade` is the weakest among its mentions, not the best. An entity is
+      only as verified as its least-verified mention, and reporting the strongest would let one
+      lucky match speak for the rest. An unrecognized stored `basis` reads as `COMPUTED`, the
+      weakest of the three: a row this build does not understand must never be promoted to
+      `OBSERVED`, which is the only value that lets an edge speak as strongly as the document.
+
+      The neighbourhood fetch is gated on the entity it was requested for. Proven by removing the
+      gate: the superseded result renders its neighbours around the entity the investigator had
+      already clicked away from, under that entity's name.
+
 Open, and specific:
+
+- [ ] **The graph draws one edge kind, and it is the derived one.** Every arc is
+      `CO_OCCURS_IN_SEGMENT`, so the graph shows what the corpus computed and nothing it observed.
+      Email threading (`In-Reply-To` against an ingested `Message-ID`) and archive containment are
+      both read straight out of the bytes and are named in section 7 step 3 as the ones to do
+      first. The `basis` column and the reader that distinguishes it are already in place; what is
+      missing is an extractor that writes `OBSERVED` and a second `relationship_kind`, which the
+      CHECK makes another corpus schema bump.
 
 - [ ] **A crawl resume re-walks from its seed URL.** The same seed additivity, on the non-
       NextRequest arm of `resume_initial_tasks`: a resumed crawl re-enqueues its root at depth 0,

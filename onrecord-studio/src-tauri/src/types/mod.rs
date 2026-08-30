@@ -19,7 +19,8 @@ pub use c2pa::{
     SignatureVerificationState,
 };
 pub use corpus::{
-    CorpusEntityKind, CorpusEvidenceReference, CorpusIndexStatus, CorpusPattern, CorpusPatternKind,
+    CorpusEntityEdge, CorpusEntityKind, CorpusEntityNeighborhood, CorpusEntityNode,
+    CorpusEvidenceReference, CorpusIndexStatus, CorpusPattern, CorpusPatternKind,
     CorpusPatternQuery, EntityResolutionBasis, EntityValidationGrade, RelationshipBasis,
 };
 pub use investigation::{

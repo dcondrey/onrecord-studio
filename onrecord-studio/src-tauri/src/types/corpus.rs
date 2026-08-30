@@ -214,3 +214,46 @@ pub struct CorpusIndexStatus {
     pub available_write_capacity: usize,
     pub algorithm_version: String,
 }
+
+/// One node, as the graph draws it.
+///
+/// `document_count` is the number of distinct documents the entity was mentioned in, which is what
+/// makes a node worth looking at; `validation_grade` is the weakest grade among those mentions, so
+/// a node the extractors never verified cannot render as one they did.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CorpusEntityNode {
+    pub entity_id: String,
+    pub kind: CorpusEntityKind,
+    pub display_value: String,
+    pub document_count: u64,
+    pub validation_grade: EntityValidationGrade,
+}
+
+/// One arc, and what it is allowed to claim.
+///
+/// `shared_document_count` is the count of distinct documents in which the two entities appeared
+/// in the same segment. `basis` is `COMPUTED` for every edge the app writes today, and it travels
+/// with the edge rather than being assumed by the reader, because an observed edge and a derived
+/// one must not be drawn alike.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CorpusEntityEdge {
+    pub neighbor: CorpusEntityNode,
+    pub basis: RelationshipBasis,
+    pub shared_document_count: u64,
+    pub confidence_basis_points: u16,
+}
+
+/// The subgraph around one entity.
+///
+/// `truncated` says the neighbour list hit its limit, so a reader can tell a sparse entity from a
+/// busy one whose arcs were cut. An absent flag would make those two look the same, which is the
+/// same failure as a missing truncation row on an entity kind.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CorpusEntityNeighborhood {
+    pub center: CorpusEntityNode,
+    pub edges: Vec<CorpusEntityEdge>,
+    pub truncated: bool,
+}

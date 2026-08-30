@@ -50,6 +50,8 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::ingest::ingest_pasted_content,
         commands::corpus::query_corpus_patterns,
         commands::corpus::get_corpus_index_status,
+        commands::corpus::list_top_corpus_entities,
+        commands::corpus::get_corpus_entity_neighborhood,
         commands::query::query_audit_records,
         commands::export::export_legal_brief,
         commands::investigation::get_agency_performance_profiles,

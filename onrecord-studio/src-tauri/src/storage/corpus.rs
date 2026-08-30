@@ -3,7 +3,8 @@
 use crate::error::AppError;
 use crate::integrity::digest_hex;
 use crate::types::{
-    CorpusEntityKind, CorpusEvidenceReference, CorpusIndexStatus, CorpusPattern, CorpusPatternKind,
+    CorpusEntityEdge, CorpusEntityKind, CorpusEntityNeighborhood, CorpusEntityNode,
+    CorpusEvidenceReference, CorpusIndexStatus, CorpusPattern, CorpusPatternKind,
     CorpusPatternQuery, EntityResolutionBasis, EntityValidationGrade, RelationshipBasis,
 };
 use duckdb::{params, Connection, OptionalExt, Transaction};
@@ -435,6 +436,141 @@ impl CorpusIndex {
         validate_pattern_query(&query)?;
         self.read("Corpus pattern query", move |connection| {
             load_patterns(connection, &query)
+        })
+        .await
+    }
+
+    /// The entities worth starting a graph from: those mentioned in the most documents.
+    ///
+    /// Ranked by distinct-document count and not by mention count. An entity repeated forty times
+    /// inside one letter is a feature of that letter; one that appears in forty documents is a
+    /// thread through the corpus, and only the second is a lead.
+    pub async fn top_entities(&self, limit: usize) -> Result<Vec<CorpusEntityNode>, AppError> {
+        let limit = bounded_graph_limit(limit)?;
+        self.read("Corpus entity ranking", move |connection| {
+            let mut statement = connection
+                .prepare(
+                    "SELECT entity.entity_id, entity.entity_kind, entity.display_value,
+                            counts.document_count, MAX(GRADE_RANK) AS weakest_grade
+                     FROM corpus_entities entity
+                     JOIN corpus_entity_document_counts counts
+                        ON counts.entity_id = entity.entity_id
+                     JOIN corpus_entity_mentions mention ON mention.entity_id = entity.entity_id
+                     GROUP BY entity.entity_id, entity.entity_kind, entity.display_value,
+                              counts.document_count
+                     ORDER BY counts.document_count DESC, entity.display_value ASC
+                     LIMIT ?1"
+                        .replace("GRADE_RANK", GRADE_RANK_SQL)
+                        .as_str(),
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to prepare the entity ranking: {error}"))
+                })?;
+            let nodes = statement
+                .query_map([limit as i64], read_entity_node)
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to query the entity ranking: {error}"))
+                })?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to read the entity ranking: {error}"))
+                })?;
+            Ok(nodes)
+        })
+        .await
+    }
+
+    /// The subgraph around one entity: its neighbours, ranked by how many documents each shares
+    /// with it.
+    ///
+    /// One extra row is asked for beyond `limit` so `truncated` states a fact rather than a
+    /// suspicion. A neighbour list cut at the limit and one that simply ended there are different
+    /// claims about the corpus, and a reader cannot tell them apart from the list alone.
+    pub async fn entity_neighborhood(
+        &self,
+        entity_id: String,
+        limit: usize,
+    ) -> Result<Option<CorpusEntityNeighborhood>, AppError> {
+        let limit = bounded_graph_limit(limit)?;
+        self.read("Corpus entity neighborhood", move |connection| {
+            let center = connection
+                .query_row(
+                    "SELECT entity.entity_id, entity.entity_kind, entity.display_value,
+                            counts.document_count, MAX(GRADE_RANK)
+                     FROM corpus_entities entity
+                     JOIN corpus_entity_document_counts counts
+                        ON counts.entity_id = entity.entity_id
+                     JOIN corpus_entity_mentions mention ON mention.entity_id = entity.entity_id
+                     WHERE entity.entity_id = ?1
+                     GROUP BY entity.entity_id, entity.entity_kind, entity.display_value,
+                              counts.document_count"
+                        .replace("GRADE_RANK", GRADE_RANK_SQL)
+                        .as_str(),
+                    [&entity_id],
+                    read_entity_node,
+                )
+                .optional()
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to load the graph centre: {error}"))
+                })?;
+            let Some(center) = center else {
+                return Ok(None);
+            };
+
+            // The edge table stores each pair once, ordered by identifier, so a neighbour may sit
+            // on either side. `CASE` picks the other end rather than the query being run twice and
+            // the halves merged, which would double-count a pair that reached the limit.
+            let mut statement = connection
+                .prepare(
+                    "SELECT neighbor.entity_id, neighbor.entity_kind, neighbor.display_value,
+                            counts.document_count, MAX(GRADE_RANK),
+                            COUNT(DISTINCT edge.portal_key || \'|\' || edge.document_id),
+                            MIN(edge.confidence_basis_points), MIN(edge.basis)
+                     FROM corpus_entity_relationships edge
+                     JOIN corpus_entities neighbor
+                        ON neighbor.entity_id = CASE
+                               WHEN edge.left_entity_id = ?1 THEN edge.right_entity_id
+                               ELSE edge.left_entity_id
+                           END
+                     JOIN corpus_entity_document_counts counts
+                        ON counts.entity_id = neighbor.entity_id
+                     JOIN corpus_entity_mentions mention ON mention.entity_id = neighbor.entity_id
+                     WHERE edge.left_entity_id = ?1 OR edge.right_entity_id = ?1
+                     GROUP BY neighbor.entity_id, neighbor.entity_kind, neighbor.display_value,
+                              counts.document_count
+                     ORDER BY 6 DESC, neighbor.display_value ASC
+                     LIMIT ?2"
+                        .replace("GRADE_RANK", GRADE_RANK_SQL)
+                        .as_str(),
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!(
+                        "Failed to prepare the entity neighborhood: {error}"
+                    ))
+                })?;
+            let mut edges = statement
+                .query_map([&entity_id, &(limit + 1).to_string()], |row| {
+                    Ok(CorpusEntityEdge {
+                        neighbor: read_entity_node(row)?,
+                        shared_document_count: row.get::<_, i64>(5)?.max(0) as u64,
+                        confidence_basis_points: row.get::<_, i64>(6)?.clamp(0, 10_000) as u16,
+                        basis: relationship_basis_from_str(&row.get::<_, String>(7)?),
+                    })
+                })
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to query the entity neighborhood: {error}"))
+                })?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to read the entity neighborhood: {error}"))
+                })?;
+            let truncated = edges.len() > limit;
+            edges.truncate(limit);
+            Ok(Some(CorpusEntityNeighborhood {
+                center,
+                edges,
+                truncated,
+            }))
         })
         .await
     }
@@ -3092,6 +3228,66 @@ fn parse_simhash(value: String) -> duckdb::Result<u64> {
     })
 }
 
+/// Ranks a validation grade so SQL can take the weakest one an entity's mentions carry. Higher is
+/// weaker, so `MAX` is the weakest: an entity is only as verified as its least-verified mention,
+/// and reporting the best one would let a single lucky match speak for the rest.
+const GRADE_RANK_SQL: &str = "CASE mention.validation_grade
+        WHEN 'CHECK_DIGIT_PASSED' THEN 0
+        WHEN 'FORMAT_VALIDATED' THEN 1
+        WHEN 'GAZETTEER_HIT' THEN 2
+        ELSE 3
+    END";
+
+fn grade_from_rank(rank: i64) -> EntityValidationGrade {
+    match rank {
+        0 => EntityValidationGrade::CheckDigitPassed,
+        1 => EntityValidationGrade::FormatValidated,
+        2 => EntityValidationGrade::GazetteerHit,
+        _ => EntityValidationGrade::PatternOnly,
+    }
+}
+
+/// An unrecognized stored basis reads as `Computed`, the weakest of the three. A row this build
+/// does not understand must not be promoted to `Observed`, which is the only value that would let
+/// an edge speak as strongly as the document.
+fn relationship_basis_from_str(value: &str) -> RelationshipBasis {
+    match value {
+        "OBSERVED" => RelationshipBasis::Observed,
+        "ASSERTED" => RelationshipBasis::Asserted,
+        _ => RelationshipBasis::Computed,
+    }
+}
+
+fn entity_kind_from_str(value: &str) -> Option<CorpusEntityKind> {
+    ENTITY_KINDS.into_iter().find(|kind| kind.as_str() == value)
+}
+
+/// Reads the five leading columns every graph query selects in the same order.
+fn read_entity_node(row: &duckdb::Row<'_>) -> duckdb::Result<CorpusEntityNode> {
+    let kind_value: String = row.get(1)?;
+    Ok(CorpusEntityNode {
+        entity_id: row.get(0)?,
+        // A stored kind this build does not know cannot be rendered, and guessing one would put a
+        // node on the graph under a label the corpus never wrote. The schema CHECK makes it
+        // unreachable; the fallback keeps it from being a panic if that ever stops being true.
+        kind: entity_kind_from_str(&kind_value).unwrap_or(CorpusEntityKind::Acronym),
+        display_value: row.get(2)?,
+        document_count: row.get::<_, i64>(3)?.max(0) as u64,
+        validation_grade: grade_from_rank(row.get::<_, i64>(4)?),
+    })
+}
+
+/// Graph reads are bounded the way every other read here is. 200 is the ceiling because a node-link
+/// picture past a couple of hundred arcs is a hairball an investigator cannot read anyway.
+fn bounded_graph_limit(limit: usize) -> Result<usize, AppError> {
+    if limit == 0 || limit > 200 {
+        return Err(AppError::DataParsing(
+            "A graph query must request between 1 and 200 entities".to_string(),
+        ));
+    }
+    Ok(limit)
+}
+
 fn stable_id(value: &str) -> String {
     digest_hex(Sha256::digest(value.as_bytes()))
 }
@@ -3687,6 +3883,103 @@ mod tests {
             .collect::<Result<Vec<_>, _>>()
             .expect("the basis rows must read");
         assert_eq!(bases, vec!["COMPUTED".to_string()]);
+    }
+
+    /// The graph reads, over a corpus where the answer is countable by hand.
+    ///
+    /// Both documents mention the Housing Authority and `rtfhsd.org`; only the first mentions the
+    /// amount. So the domain shares two documents with the authority and the amount shares one,
+    /// and the ranking has to put the domain first. A neighbourhood that merely returned every
+    /// co-occurring entity in arbitrary order would pass a smoke test and be useless to read.
+    #[tokio::test]
+    async fn the_entity_graph_ranks_neighbours_by_shared_documents_and_states_its_edge_basis() {
+        let directory = tempdir().expect("temp dir must be created");
+        let index = CorpusIndex::open(directory.path().join("corpus.db")).expect("index must open");
+        index
+            .index_document(input(
+                20,
+                "The Housing Authority published records at https://rtfhsd.org/reports \
+                 and paid $1,234.56.",
+            ))
+            .await
+            .expect("the first document must index");
+        index
+            .index_document(input(
+                21,
+                "The Housing Authority updated https://rtfhsd.org/reports again.",
+            ))
+            .await
+            .expect("the second document must index");
+
+        let top = index.top_entities(24).await.expect("the ranking must read");
+        let authority = top
+            .iter()
+            .find(|node| {
+                node.display_value
+                    .to_lowercase()
+                    .contains("housing authority")
+            })
+            .expect("the authority must rank");
+        assert_eq!(authority.document_count, 2);
+        assert_eq!(
+            authority.validation_grade,
+            EntityValidationGrade::GazetteerHit,
+            "an organization is admitted by a word list, and the node must say so",
+        );
+
+        let neighborhood = index
+            .entity_neighborhood(authority.entity_id.clone(), 24)
+            .await
+            .expect("the neighbourhood must read")
+            .expect("the centre exists");
+        assert!(!neighborhood.truncated);
+        let shared = |value: &str| {
+            neighborhood
+                .edges
+                .iter()
+                .find(|edge| edge.neighbor.display_value.contains(value))
+                .map(|edge| edge.shared_document_count)
+        };
+        assert_eq!(shared("rtfhsd.org"), Some(2));
+        assert_eq!(shared("1,234.56"), Some(1));
+        assert!(
+            neighborhood
+                .edges
+                .iter()
+                .all(|edge| edge.basis == RelationshipBasis::Computed),
+            "co-occurrence is derived, and every edge must say that rather than leave it assumed",
+        );
+        let ranks: Vec<u64> = neighborhood
+            .edges
+            .iter()
+            .map(|edge| edge.shared_document_count)
+            .collect();
+        assert!(
+            ranks.windows(2).all(|pair| pair[0] >= pair[1]),
+            "neighbours must arrive ranked, because the layout reads the order: {ranks:?}",
+        );
+
+        // A truncated list and a short one are different claims about the corpus.
+        let cut = index
+            .entity_neighborhood(authority.entity_id.clone(), 1)
+            .await
+            .expect("the bounded neighbourhood must read")
+            .expect("the centre exists");
+        assert_eq!(cut.edges.len(), 1);
+        assert!(cut.truncated);
+
+        assert!(index
+            .entity_neighborhood("no-such-entity".to_string(), 8)
+            .await
+            .expect("an unknown identifier is a real answer, not a failure")
+            .is_none(),);
+        assert!(
+            index
+                .entity_neighborhood(authority.entity_id.clone(), 0)
+                .await
+                .is_err(),
+            "an unbounded graph read is not a query",
+        );
     }
 
     /// A portal document identifier does not fit in 32 bits, and DuckDB's `INTEGER` is 32 bits.

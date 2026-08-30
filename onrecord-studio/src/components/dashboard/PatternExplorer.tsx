@@ -19,6 +19,7 @@ import {
   type PatternRecipe,
 } from '../../utils/patternRecipes';
 import Icon from '../ui/icons';
+import EntityGraph from './EntityGraph';
 
 const patternLabels: Record<CorpusPatternKind, string> = {
   EXACT_DUPLICATE: 'Exact copies',
@@ -333,6 +334,8 @@ export default function PatternExplorer() {
           <IndexMetric label="Relationships" value={status?.indexedRelationshipCount} />
           <IndexMetric label="Writer queue" value={status?.availableWriteCapacity} suffix=" free" />
         </div>
+
+        <EntityGraph />
 
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Pattern type">
           <FilterButton selected={kindFilter === 'ALL'} onClick={() => setKindFilter('ALL')}>

@@ -21,6 +21,8 @@ export interface NativeCommandMap {
   ingest_pasted_content: { args: { input: Types.PastedContentInput }; result: Types.SourceIngestionStart };
   query_corpus_patterns: { args: { query?: Types.CorpusPatternQuery | null }; result: Types.CorpusPattern[] };
   get_corpus_index_status: { args: NoArgs; result: Types.CorpusIndexStatus };
+  list_top_corpus_entities: { args: { limit?: number | null }; result: Types.CorpusEntityNode[] };
+  get_corpus_entity_neighborhood: { args: { entityId: string; limit?: number | null }; result: Types.CorpusEntityNeighborhood | null };
   query_audit_records: { args: { searchTerm: string; portalKey?: string | null; agencyId?: number | null; status?: string | null; policyDeviation?: string | null; limit?: number | null }; result: Types.RequestSearchResult[] };
   export_legal_brief: { args: { requestId: number; portalKey: string; targetPath?: string | null; authorName?: string | null }; result: Types.LegalBriefExportResult };
   get_agency_performance_profiles: { args: { config?: Types.AnalysisConfig | null }; result: Types.AgencyPerformanceProfile[] };
