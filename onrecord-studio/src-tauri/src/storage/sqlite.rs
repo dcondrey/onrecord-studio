@@ -1530,10 +1530,17 @@ impl DuckDbRepository {
         execute_transaction(&mut conn, "source connector recipe", |transaction| {
             // `root_url` is UNIQUE and the upsert below targets `source_key`, so a row holding
             // this URL under a *different* key fails the insert and takes the source start down
-            // with it. The key is a digest over the source kind and the final URL, so a
-            // reclassified source at an unchanged URL produces exactly that pair. The superseded
-            // row is the one to lose -- but only if the row replacing it is actually written,
-            // which is why the two statements share a transaction rather than running in order.
+            // with it. Two keys can reach one URL: the public-source key is a digest over the
+            // source kind and the final URL, so a reclassified source at an unchanged URL
+            // produces the pair, and `portals.base_url` is not UNIQUE, so a URL that later
+            // discovers as NextRequest registers a second key beside the first.
+            //
+            // The row being written is the one the operator is starting now, so the other is the
+            // one to lose. That does cost a still-registered source at the same URL its stored
+            // guidance, which is the lesser of the two: the alternative is that the start the
+            // operator asked for fails outright. It is lost only if the row replacing it is
+            // actually written, which is why the two statements share a transaction rather than
+            // running in order.
             transaction
                 .execute(
                     "DELETE FROM source_connector_recipes
@@ -1665,7 +1672,7 @@ impl DuckDbRepository {
     ) -> Result<Option<SourceConnectorRecipe>, AppError> {
         self.load_connector_recipe(
             RecipeOwnRow::SourceKey,
-            portal.portal_key.clone(),
+            [portal.portal_key.clone(), portal.portal_key.clone()],
             publisher_pattern_for_url(&portal.canonical_url),
         )
         .await
@@ -1673,8 +1680,15 @@ impl DuckDbRepository {
 
     /// Resolves a recipe from a URL alone, for the one caller that has no source key yet:
     /// `start_data_source` reads the recipe *before* discovery, because the guidance it holds is
-    /// an input to discovery. The argument is normalized the way a submitted URL is on the way
-    /// in, so a pasted bare host finds the row stored under the canonical `Url::to_string`.
+    /// an input to discovery.
+    ///
+    /// Both the argument as typed and its normalized form are matched, and that is not belt and
+    /// braces. Normalization is what lets a pasted bare host find a row stored under the canonical
+    /// `Url::to_string`, but it is not idempotent against what is already stored: rows written
+    /// before the writer was canonicalized hold the raw pasted string, and normalizing the query
+    /// alone would have stopped finding them. That is the one path a guided-repair recipe still
+    /// worked on, so matching only the normalized form would have closed two misses and opened a
+    /// third.
     ///
     /// A source whose URL redirects still cannot be found this way. The final URL is not knowable
     /// before the fetch, so nothing stored could close that; it is recorded in the roadmap rather
@@ -1683,12 +1697,17 @@ impl DuckDbRepository {
         &self,
         root_url: &str,
     ) -> Result<Option<SourceConnectorRecipe>, AppError> {
-        let lookup_url = normalize_submitted_url(root_url)
+        let submitted = root_url.trim().to_string();
+        let normalized = normalize_submitted_url(&submitted)
             .map(|url| url.to_string())
-            .unwrap_or_else(|_| root_url.to_string());
-        let publisher_pattern = publisher_pattern_for_url(&lookup_url);
-        self.load_connector_recipe(RecipeOwnRow::RootUrl, lookup_url, publisher_pattern)
-            .await
+            .unwrap_or_else(|_| submitted.clone());
+        let publisher_pattern = publisher_pattern_for_url(&normalized);
+        self.load_connector_recipe(
+            RecipeOwnRow::RootUrl,
+            [normalized, submitted],
+            publisher_pattern,
+        )
+        .await
     }
 
     /// Reads the source's own row and any publisher recipe approved for reuse, and resolves the
@@ -1703,7 +1722,7 @@ impl DuckDbRepository {
     async fn load_connector_recipe(
         &self,
         own_row: RecipeOwnRow,
-        own_value: String,
+        own_values: [String; 2],
         publisher_pattern: Option<String>,
     ) -> Result<Option<SourceConnectorRecipe>, AppError> {
         // Not interpolated from anything a caller supplies: `RecipeOwnRow` names one of two
@@ -1712,12 +1731,17 @@ impl DuckDbRepository {
         let statement_sql = format!(
             "SELECT {own_column}, crawl_policy_json, guidance_json, metadata_page_window_json
              FROM source_connector_recipes
-             WHERE {own_column} = ?1
+             WHERE {own_column} IN (?1, ?3)
                 OR (reuse_approved = 1 AND publisher_pattern = ?2)
-             ORDER BY CASE WHEN {own_column} = ?1 THEN 0 ELSE 1 END, updated_at DESC
-             LIMIT 2"
+             ORDER BY CASE WHEN {own_column} = ?1 THEN 0
+                           WHEN {own_column} = ?3 THEN 1
+                           ELSE 2 END,
+                      updated_at DESC
+             LIMIT 3"
         );
+        let [own_value, own_alternate] = own_values;
         let query_value = own_value.clone();
+        let query_alternate = own_alternate.clone();
         let encoded = self
             .query_connection("Source connector recipe query", move |connection| {
                 let mut statement = connection.prepare(&statement_sql).map_err(|error| {
@@ -1726,14 +1750,17 @@ impl DuckDbRepository {
                     ))
                 })?;
                 let rows = statement
-                    .query_map(params![query_value, publisher_pattern], |row| {
-                        Ok((
-                            row.get::<_, String>(0)?,
-                            row.get::<_, String>(1)?,
-                            row.get::<_, String>(2)?,
-                            row.get::<_, Option<String>>(3)?,
-                        ))
-                    })
+                    .query_map(
+                        params![query_value, publisher_pattern, query_alternate],
+                        |row| {
+                            Ok((
+                                row.get::<_, String>(0)?,
+                                row.get::<_, String>(1)?,
+                                row.get::<_, String>(2)?,
+                                row.get::<_, Option<String>>(3)?,
+                            ))
+                        },
+                    )
                     .map_err(|error| {
                         AppError::Storage(format!(
                             "Failed to query source connector recipe: {error}"
@@ -1768,9 +1795,12 @@ impl DuckDbRepository {
                 .transpose()?;
             decoded.push((row_identity, crawl_policy, guidance, metadata_page_window));
         }
+        // Either form identifies the caller's own row, for the reason the URL reader documents.
+        // No caller reads a window off a row matched by the raw form today, but leaving the two
+        // arms to disagree is how the mismatch this whole change repairs got in.
         let metadata_page_window = decoded
             .iter()
-            .find(|(row_identity, ..)| *row_identity == own_value)
+            .find(|(row_identity, ..)| *row_identity == own_value || *row_identity == own_alternate)
             .and_then(|(.., window)| *window);
         let (crawl_policy, guidance) = decoded
             .iter()
@@ -7455,6 +7485,16 @@ mod tests {
             )
             .expect("the legacy row must insert");
         }
+
+        let readded = repository
+            .load_source_connector_recipe(pasted)
+            .await
+            .expect("the recipe must load")
+            .expect("a re-add must still find the row it found before the lookup normalized");
+        assert_eq!(
+            readded.guidance, guidance,
+            "normalizing the lookup must not un-match the raw form a legacy row is stored under"
+        );
 
         let resumed = repository
             .load_source_connector_recipe_for_source(&registration)

@@ -120,16 +120,25 @@ that compiled, linted, and passed 283 tests.
       submitted URL is normalized on the way in, so a pasted bare host finds the canonical row. The
       writer takes the `PortalRegistration`, which also repairs `publisher_pattern`: it was parsed
       out of the pasted string, so a paste with no scheme silently stored no pattern and withdrew
-      the source from publisher reuse. Three proofs by removal: the legacy row read through the
+      the source from publisher reuse. The URL reader matches the argument as typed *and*
+      normalized, because normalization is not idempotent against what is already stored: rows
+      written before this hold the raw pasted string, and normalizing the query alone would have
+      stopped finding them, closing two misses and opening a third on the one path that worked. Three proofs by removal: the legacy row read through the
       resume path, the two pasted forms read through the re-add path, the reclassified source, and
-      the failed write that must not destroy the recipe it would have replaced.
+      the failed write that must not destroy the recipe it would have replaced. The re-add
+      assertion on the legacy row is what caught the normalization regression, which the two tests
+      written first could not see: one read a legacy row only by key, the other read pasted forms
+      only against a canonically stored row.
 - [x] **A source that reclassified at an unchanged URL failed its own start.** `root_url` is
       `UNIQUE` while both recipe writers upsert on `source_key`, and the key is a digest over the
       source kind and the final URL, so a page that begins advertising a different connector
-      produces a new key at the same URL and an insert that collides. Both writers now drop a row
-      holding their URL under a superseded key, in the same transaction as the write that replaces
-      it: a delete that ran on its own would leave a source with no recipe at all whenever the
-      write behind it failed. It had been judged low and left, on the grounds
+      produces a new key at the same URL and an insert that collides. `portals.base_url` is not
+      UNIQUE either, so a URL that later discovers as NextRequest registers a second key beside the
+      first and reaches the same collision. Both writers now drop the row holding their URL under
+      the other key, in the same transaction as the write that replaces it: a delete that ran on
+      its own would leave a source with no recipe at all whenever the write behind it failed. A
+      still-registered source at that URL does lose its stored guidance, which is the lesser cost;
+      the alternative is that the start the operator asked for fails outright. It had been judged low and left, on the grounds
       that the key derives from the host; it derives from the source kind as well, and keying the
       row on `canonical_url` made the collision reachable enough to close here.
 
