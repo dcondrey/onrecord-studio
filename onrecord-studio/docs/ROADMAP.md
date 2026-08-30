@@ -47,20 +47,31 @@ that compiled, linted, and passed 283 tests.
       guard.
 - [x] Motion and contrast preferences, resolved like the theme and reachable from the palette.
 - [x] `start_portal_sync` and `mask_sensitive_text` unregistered.
+- [x] **`import_auxiliary_events` has a caller.** It was the only production writer for
+      `auxiliary_events`, which `anomaly.rs:43` and the cross-agency correlation queries read, so
+      unregistering it would have left live analysis over a table nothing could fill. The surface is
+      `AuxiliaryEventImport`, opened from the temporal correlation panel whose empty state was
+      already inviting the data: a CSV or JSON export, header-detected column mapping the operator
+      can correct, a preview naming every row that will not land and why, and the whole original row
+      kept as `sourcePayload`. Rows the backend would drop as `rejectedCount` are refused and
+      explained before the import commits, not counted afterwards. A successful import raises
+      `analyticsRefreshRequests` so the aggregates re-run rather than continuing to report a
+      coverage answer the database no longer supports.
+- [x] **Rows written by earlier builds keep the old timestamp format and zone.** The lost seconds
+      cannot be recovered by any backfill, which is why there is none. These columns are compared
+      lexically rather than parsed and the date and hour dominate that comparison, so
+      day-granularity filtering is unaffected; within-minute ordering is not.
+      **Decided 2026-08-29: the export neither refuses nor prints a malformed instant as one.**
+      Refusing would withhold a whole legitimate brief over one permanently unfixable legacy row;
+      printing verbatim states a time the record never established. `evaluated_at` and `imported_at`
+      in the signed package are now `RecordedInstant`, an `INSTANT`/`UNPARSEABLE` tagged form that
+      carries the recorded text either way, on the same rule as `RecordedDigestSource::None` and the
+      nullable `documents.shannon_entropy`. The package schema is `onrecord-evidence-package-v2`;
+      nothing in the tree consumed v1, and the human-readable brief never printed either column.
+      Reversing the decision is deleting one enum and two call sites.
 
 Open, and specific:
 
-- [ ] **`import_auxiliary_events` has no caller.** It is the only production writer for
-      `auxiliary_events`, which `anomaly.rs:43` and the cross-agency correlation queries read, so
-      unregistering it would leave live analysis over a table nothing can fill. It needs an import
-      surface, not removal. Its upsert carried the same `current_timestamp` defect as the two above,
-      now fixed, but it has never been executed by anything.
-- [ ] **Rows written by earlier builds keep the old timestamp format and zone.** The lost seconds
-      cannot be recovered by any backfill, which is why there is none. These columns are compared
-      lexically rather than parsed and the date and hour dominate that comparison, so
-      day-granularity filtering is unaffected; within-minute ordering is not. An old `evaluated_at`
-      exported into a brief is a malformed instant. Re-evaluating a finding rewrites it. Decide
-      whether the export should refuse to print a value it cannot parse.
 - [ ] **`start_page` and `per_page` are no longer reachable.** `start_data_source` fixes them at 1
       and 50. Nothing called `start_portal_sync`, so nothing has lost a working feature, but a
       source needing a non-default page window now has no way to say so.
@@ -118,7 +129,7 @@ are historical evidence, not a claim about the restored worktree; verification m
       which compares the two sides for drift and says nothing about reachability. Four commands
       were registered with no caller anywhere in `src/`. `start_portal_sync` and
       `mask_sensitive_text` were unregistered as subsumed and unused; `register_statutory_extension`
-      got a caller; `import_auxiliary_events` is still open below.
+      got a caller; `import_auxiliary_events` got its import surface on 2026-08-29.
 - [x] Qualifier search no longer sends visible qualifier syntax as document text. Status, flag,
       portal, and uniquely resolvable agency qualifiers compile into the existing native fields;
       negated, duplicate, ambiguous, and not-yet-executable filters are visibly marked "not
@@ -356,34 +367,23 @@ Three audits ran this session. Their surviving findings, highest severity first.
 at the line; two carry running proof-of-concept binaries.
 
 **Ingestion and parsers**
-- [ ] `queue.rs:1546` / `:2418` — **this finding was wrong as written; re-audited, see below.**
-      The claim was that the host allowlist is "never applied" on the download and JSON-derived-link
-      paths. It is applied: `guidance_allows_url` (`queue.rs:3903`) does enforce `allowed_hostnames`
-      whenever an operator configures it. What is true is that the list is empty by default, so by
-      default a crawled page can steer a download to any host.
-      The proposed fix — copy the follow-path gate at `:1583-1587` — must not be applied. That gate
-      is `source_host_matches || guidance_explicitly_allows_host || is_supported_external_data_platform`,
-      and `is_supported_external_data_platform` (`queue.rs:3959`) lists ArcGIS, Tableau, Google,
-      Socrata, GitHub, Box, Dropbox, SharePoint and OneDrive — not S3, Azure Blob, Granicus or
-      CivicPlus, which is where government portals actually host their PDFs. Applying it would
-      silently stop ingesting most real portals' documents.
-      **Decided 2026-08-29, reversibly, and not yet implemented.** Option (c), an explicit policy
-      flag whose default preserves today's behaviour exactly. Spelled as
-      `restrict_downloads_to_source_host: bool` rather than the permissive-sounding name, so that
-      Rust's `false` default *is* the current behaviour and no custom serde default is needed;
-      `SourceGuidance` is persisted as JSON with `#[serde(default)]` on every field
-      (`sqlite.rs:1461`), so adding it needs no schema change and no migration. Option (b) is
-      rejected for now because a registrable-domain rule needs a public-suffix list this tree does
-      not carry, and option (a) alone leaves the policy invisible. Reversing the decision is
-      deleting one field and one branch.
-
-      The implementation is not free and was not done in this pass: `guidance_allows_url`
-      (`queue.rs:5418`) takes no source URL, and `CrawlState` (`queue.rs:439`) does not hold the
-      source root, so the root has to be threaded from crawl construction (`queue.rs:~980`) through
-      all four call sites (`queue.rs:2158`, `:2345`, `:2811`, `:3608`). It needs a test proving a
-      cross-host download is admitted with the flag unset and refused with it set, and it must not
-      touch the follow-path gate at `:1583-1587`, whose
-      `is_supported_external_data_platform` list omits S3, Azure Blob, Granicus, and CivicPlus.
+- [x] `SourceGuidance.restrict_downloads_to_source_host` implements the 2026-08-29 decision. The
+      earlier finding, that the host allowlist is "never applied" on the download and
+      JSON-derived-link paths, was wrong: `guidance_allows_url` does enforce `allowed_hostnames`
+      whenever an operator configures one. What was true is that the list is empty by default, so a
+      crawled page could steer a download to any host with no way for a source to say otherwise.
+      The proposed fix, copying the follow-path gate, was rejected and stays rejected: that gate's
+      `is_supported_external_data_platform` lists ArcGIS, Tableau, Google, Socrata, GitHub, Box,
+      Dropbox, SharePoint and OneDrive, not S3, Azure Blob, Granicus or CivicPlus, which is where
+      government portals actually host their PDFs.
+      The flag is spelled restrictively so Rust's `false` *is* today's behaviour;
+      `SourceGuidance` is whole-struct JSON with `#[serde(default)]`, so no migration was needed.
+      The threading described here was not: `context.portal.canonical_url` is already in scope at
+      every call site, and the check belongs in `prepare_discovered_download`, the one place a
+      remote URL becomes a fetch task, rather than in the predicate shared with the follow path.
+      Refusals are counted under their own `off-source-host-download` rule, the source root and the
+      explicit `allowed_hostnames` both stay admitted, and three tests pin the default, the
+      restriction, and that link-following is unchanged.
 - [x] In-flight extraction is no longer detached during cancellation. Source teardown signals the
       workers, joins their current task, then finalizes the run; cancelled workers bypass frontier
       refill and self-retirement so they cannot re-enter the provisioning lock held by teardown.
@@ -422,8 +422,8 @@ at the line; two carry running proof-of-concept binaries.
 
 ### Blocked on David — needs a commit decision, not a code change
 
-Nothing here is currently blocking. The cross-host download default, the last open item in this
-section, was decided reversibly on 2026-08-29 and moved to the ingestion list above.
+Nothing here is currently blocking. The cross-host download default was decided reversibly on
+2026-08-29 and is implemented; see the ingestion list above.
 
 - [x] **The earlier fresh-clone blocker no longer applies.** The previously untracked application
       files (`src-tauri/tauri.conf.json`, `src/ipc.ts`, `index.html`, `eslint.config.js`, both

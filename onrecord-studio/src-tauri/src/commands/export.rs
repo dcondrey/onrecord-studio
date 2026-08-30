@@ -19,7 +19,7 @@ use uuid::Uuid;
 const REPORT_TEMPLATE: &str = include_str!("../../../templates/report_template.md");
 const MAXIMUM_REPORT_BYTES: usize = 32 * 1024 * 1024;
 const MAXIMUM_EVIDENCE_PACKAGE_BYTES: usize = 64 * 1024 * 1024;
-const EVIDENCE_PACKAGE_SCHEMA: &str = "onrecord-evidence-package-v1";
+const EVIDENCE_PACKAGE_SCHEMA: &str = "onrecord-evidence-package-v2";
 const SIGNATURE_ALGORITHM: &str = "Ed25519";
 const SIGNING_KEY_FILE: &str = ".onrecord-export-signing-key-v1";
 
@@ -56,6 +56,37 @@ struct PackagedSourceDocument {
     extracted_text_sha256: Option<String>,
 }
 
+/// A timestamp copied out of storage into a signed package.
+///
+/// Builds before 929af7a wrote `evaluated_at` and `imported_at` through a `strftime` format whose
+/// `%f` meant microseconds, so the stored strings carry no seconds field at all
+/// (`2026-08-29T14:14:190749Z`). The seconds are gone and no backfill can recover them. Copying
+/// such a string into the instant position of a signed package states a time the record never
+/// established, which is the same false claim about evidence that `RecordedDigestSource::None` and
+/// the nullable `documents.shannon_entropy` exist to prevent: absence and measurement do not share
+/// a representation. Refusing the export instead would withhold a whole legitimate brief over a
+/// legacy row, so the package says which of the two it holds and preserves the recorded text
+/// either way.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE", tag = "kind")]
+enum RecordedInstant {
+    /// The stored value parsed as an RFC 3339 instant. Carried verbatim, not reformatted, so the
+    /// package reproduces what storage holds.
+    Instant { value: String },
+    /// The stored value is not an instant. `recorded` is what the row actually carries.
+    Unparseable { recorded: String },
+}
+
+impl RecordedInstant {
+    fn from_stored(value: String) -> Self {
+        if chrono::DateTime::parse_from_rfc3339(&value).is_ok() {
+            Self::Instant { value }
+        } else {
+            Self::Unparseable { recorded: value }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 struct PackagedLegalAuthority {
@@ -67,7 +98,7 @@ struct PackagedLegalAuthority {
     effective_from: Option<String>,
     effective_to: Option<String>,
     source_uri: Option<String>,
-    imported_at: String,
+    imported_at: RecordedInstant,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -80,7 +111,7 @@ struct PackagedLegalFinding {
     confidence_basis_points: u16,
     supporting_document_ids: Vec<u64>,
     review_status: String,
-    evaluated_at: String,
+    evaluated_at: RecordedInstant,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -238,7 +269,7 @@ pub async fn export_legal_brief(
                     confidence_basis_points: finding.confidence_basis_points,
                     supporting_document_ids: finding.supporting_document_ids.clone(),
                     review_status: finding.review_status.clone(),
-                    evaluated_at: finding.evaluated_at.clone(),
+                    evaluated_at: RecordedInstant::from_stored(finding.evaluated_at.clone()),
                 })
                 .collect(),
             violation_markers: markers.clone(),
@@ -328,7 +359,7 @@ async fn load_referenced_legal_authorities(
             effective_from: detail.version.effective_from,
             effective_to: detail.version.effective_to,
             source_uri: detail.version.source_uri,
-            imported_at: detail.version.imported_at,
+            imported_at: RecordedInstant::from_stored(detail.version.imported_at),
         });
     }
     Ok(authorities)
@@ -872,6 +903,36 @@ mod tests {
             .violation_markers
             .push("TAMPERED".to_string());
         assert!(!verifies(&package));
+    }
+
+    // REGRESSION(export): a legal brief copied `evaluated_at` and `imported_at` verbatim, so a row
+    // written before 929af7a put `2026-08-29T14:14:190749Z` into the instant position of a signed
+    // package and it read as a time the record never established. Proven by replacing
+    // `RecordedInstant::from_stored` with `RecordedInstant::Instant { value }`: the malformed cases
+    // below then serialize as `INSTANT`.
+    #[test]
+    fn a_stored_timestamp_that_is_not_an_instant_is_packaged_as_unparseable() {
+        // The exact shape `%Y-%m-%dT%H:%M:%fZ` produced: no seconds field, microseconds in its place.
+        let malformed = "2026-08-29T14:14:190749Z".to_string();
+        assert_eq!(
+            RecordedInstant::from_stored(malformed.clone()),
+            RecordedInstant::Unparseable {
+                recorded: malformed.clone()
+            },
+            "the seconds are unrecoverable, so this is not an instant"
+        );
+        assert_eq!(
+            serde_json::to_value(RecordedInstant::from_stored(malformed.clone())).unwrap(),
+            serde_json::json!({ "kind": "UNPARSEABLE", "recorded": malformed }),
+            "a reader must be able to tell the two apart without reparsing"
+        );
+
+        let recorded = "2026-08-29T14:14:19.074900Z".to_string();
+        assert_eq!(
+            serde_json::to_value(RecordedInstant::from_stored(recorded.clone())).unwrap(),
+            serde_json::json!({ "kind": "INSTANT", "value": recorded }),
+            "a parseable value is carried verbatim, not reformatted"
+        );
     }
 
     #[tokio::test]
