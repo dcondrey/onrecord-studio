@@ -72,6 +72,12 @@ interface AppState {
   analyticsUpdatedAt: string | null;
   /** Set when the last analytics refresh failed, so panels can say so instead of reporting an empty result as a finding. */
   analyticsError: string | null;
+  /**
+   * Incremented by any surface that writes data the analytics aggregates read, so the single
+   * refresh that owns those queries re-runs. A panel left on a pre-write aggregate reports a
+   * coverage answer the database no longer supports.
+   */
+  analyticsRefreshRequests: number;
   legalAuthorities: LegalAuthoritySummary[];
   activeLegalFindings: LegalComplianceFinding[];
   legalDataUpdatedAt: string | null;
@@ -116,6 +122,7 @@ interface AppState {
     correlations: CrossAgencyCorrelation[],
   ) => void;
   setAnalyticsError: (message: string | null) => void;
+  requestAnalyticsRefresh: () => void;
   setLegalAuthorities: (authorities: LegalAuthoritySummary[]) => void;
   setActiveLegalFindings: (findings: LegalComplianceFinding[]) => void;
   setSearchFilters: (
@@ -163,6 +170,7 @@ export const useAppStore = create<AppState>((set) => ({
   crossAgencyCorrelations: [],
   analyticsUpdatedAt: null,
   analyticsError: null,
+  analyticsRefreshRequests: 0,
   legalAuthorities: [],
   activeLegalFindings: [],
   legalDataUpdatedAt: null,
@@ -319,6 +327,8 @@ export const useAppStore = create<AppState>((set) => ({
       analyticsError: null,
     }),
   setAnalyticsError: (analyticsError) => set({ analyticsError }),
+  requestAnalyticsRefresh: () =>
+    set((state) => ({ analyticsRefreshRequests: state.analyticsRefreshRequests + 1 })),
   setLegalAuthorities: (legalAuthorities) =>
     set({
       legalAuthorities: [...legalAuthorities].sort((left, right) =>

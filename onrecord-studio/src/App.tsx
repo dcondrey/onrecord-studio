@@ -105,6 +105,7 @@ function LicensedWorkspace() {
   const setPortalSyncState = useAppStore((state) => state.setPortalSyncState);
   const setAnalyticsData = useAppStore((state) => state.setAnalyticsData);
   const setAnalyticsError = useAppStore((state) => state.setAnalyticsError);
+  const analyticsRefreshRequests = useAppStore((state) => state.analyticsRefreshRequests);
   const setPendingSourceRepair = useAppStore((state) => state.setPendingSourceRepair);
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
   const runtimeRefreshFailure = useRef<ReportedFailure | null>(null);
@@ -244,6 +245,13 @@ function LicensedWorkspace() {
       active = false;
     };
   }, [appendSyncLog, refreshAnalytics, refreshRuntimes, setOcrCapability, setPortals, setWorkspaceInitialization]);
+
+  // A surface that writes what the aggregates read asks for this rather than re-running the
+  // queries itself, so the analytics refresh stays owned in one place.
+  useEffect(() => {
+    if (analyticsRefreshRequests === 0) return;
+    void refreshAnalytics();
+  }, [analyticsRefreshRequests, refreshAnalytics]);
 
   useEffect(() => {
     const reconcile = () => void refreshRuntimes();
