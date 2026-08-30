@@ -6,9 +6,11 @@ pub enum CorpusEntityKind {
     Statute,
     Date,
     EmailDomain,
+    EmailAddress,
     UrlHost,
     Acronym,
     Organization,
+    Money,
 }
 
 impl CorpusEntityKind {
@@ -17,9 +19,95 @@ impl CorpusEntityKind {
             Self::Statute => "STATUTE",
             Self::Date => "DATE",
             Self::EmailDomain => "EMAIL_DOMAIN",
+            Self::EmailAddress => "EMAIL_ADDRESS",
             Self::UrlHost => "URL_HOST",
             Self::Acronym => "ACRONYM",
             Self::Organization => "ORGANIZATION",
+            Self::Money => "MONEY",
+        }
+    }
+}
+
+/// How hard a mention's extractor actually verified the string it matched.
+///
+/// A confidence number cannot carry this. 9,000 basis points on a pattern that merely looked
+/// right and 9,000 on one whose check digit was recomputed are the same number and are not the
+/// same claim, and an investigative finding built on the second survives a challenge the first
+/// does not. Per `docs/investigative-workbench-architecture.md` section 4: a `PatternOnly` hit is
+/// a lead, never a finding, and the reader must not present it as one.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum EntityValidationGrade {
+    /// A check digit or equivalent arithmetic constraint was recomputed and matched.
+    CheckDigitPassed,
+    /// The string was parsed by a real parser, or satisfies a structural rule that random text
+    /// does not: a URL that `Url::parse` accepted, a calendar date whose month and day are in
+    /// range, a currency amount with a well-formed minor unit.
+    FormatValidated,
+    /// The shape matched and nothing verified it. A lead.
+    PatternOnly,
+    /// The string was matched against a maintained word list rather than validated.
+    GazetteerHit,
+}
+
+impl EntityValidationGrade {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::CheckDigitPassed => "CHECK_DIGIT_PASSED",
+            Self::FormatValidated => "FORMAT_VALIDATED",
+            Self::PatternOnly => "PATTERN_ONLY",
+            Self::GazetteerHit => "GAZETTEER_HIT",
+        }
+    }
+}
+
+/// Why two mentions were treated as the same entity.
+///
+/// Merging is inference and the merge basis has to survive with the merge, so an investigator can
+/// see which nodes the app decided were one thing and on what grounds. Only
+/// `ExactNormalizedMatch` is produced today: every merge is a byte-identical normalized value, and
+/// nothing looser is applied silently. The other two exist because the column that records them
+/// has to be in the schema before a proposal path can write one, and adding it later is another
+/// corpus rebuild.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum EntityResolutionBasis {
+    ExactNormalizedMatch,
+    HeuristicSimilarity,
+    InvestigatorConfirmed,
+}
+
+impl EntityResolutionBasis {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ExactNormalizedMatch => "EXACT_NORMALIZED_MATCH",
+            Self::HeuristicSimilarity => "HEURISTIC_SIMILARITY",
+            Self::InvestigatorConfirmed => "INVESTIGATOR_CONFIRMED",
+        }
+    }
+}
+
+/// How an edge came to exist, per `docs/investigative-workbench-architecture.md` section 3.
+///
+/// `Observed` is read out of the bytes and is as strong as the document. `Computed` is a
+/// derivation the app performed and can re-derive: co-occurrence is this, and calling it anything
+/// else would be a claim about the world that the corpus never made. `Asserted` is drawn by an
+/// investigator. A reader that renders the three alike is the same failure as a proxy date
+/// presented as a sourced determination, which `analysis/statute.rs` already refuses.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum RelationshipBasis {
+    Observed,
+    Computed,
+    Asserted,
+}
+
+impl RelationshipBasis {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Observed => "OBSERVED",
+            Self::Computed => "COMPUTED",
+            Self::Asserted => "ASSERTED",
         }
     }
 }

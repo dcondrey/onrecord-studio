@@ -20,7 +20,7 @@ pub use c2pa::{
 };
 pub use corpus::{
     CorpusEntityKind, CorpusEvidenceReference, CorpusIndexStatus, CorpusPattern, CorpusPatternKind,
-    CorpusPatternQuery,
+    CorpusPatternQuery, EntityResolutionBasis, EntityValidationGrade, RelationshipBasis,
 };
 pub use investigation::{
     AuxiliaryEventInput, AuxiliaryImportResult, AuxiliaryStreamKind, CrossAgencyCorrelation,

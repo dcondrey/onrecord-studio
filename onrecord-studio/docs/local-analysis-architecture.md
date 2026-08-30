@@ -80,10 +80,22 @@ Top `ORGANIZATION` values by mention count show the failure directly:
 | `RFP – Goods, Services, & Consultants Revised: November` | 85 |
 | `City,  \nContractor` | 79 |
 
-Two distinct problems. Month names are being consumed as title tokens by
-`extract_organizations_and_acronyms`, so the date gap and the organization gap are partly the same
-bug. And `The City` at 170 mentions against `City of San Diego` at 198 is an entity-resolution
-case, not an extraction case.
+Two distinct problems.
+
+**Month names consumed as title tokens — closed 2026-08-30.** A calendar word may no longer end an
+organization run, so `Agency Agreement Revised: March` stops at `Revised`. Written as a terminator
+rather than as an exclusion from `is_title_token`: excluding calendar words outright also closes
+this case, and quietly starts `May Department Stores` at `Department` and `Friday Harbor Port
+District` at `Harbor`. A name missing its first word is wrong, not short. Both directions are
+proven by removal — dropping the terminator brings the month back, and swapping it for the blanket
+exclusion yields `department stores`.
+
+**`The City` at 170 mentions against `City of San Diego` at 198 — still open.** This is an
+entity-resolution case, not an extraction case. The schema can now express the answer:
+`corpus_entities.resolution_basis` (corpus schema 7) records why mentions were merged, and every
+row written today is `EXACT_NORMALIZED_MATCH`. Nothing looser is applied, and per
+`investigative-workbench-architecture.md` section 4 nothing looser may be applied silently: a
+heuristic merge is proposed, recorded as `HEURISTIC_SIMILARITY`, and splittable.
 
 ## 4. The redaction detector is not ready to run at ingest
 

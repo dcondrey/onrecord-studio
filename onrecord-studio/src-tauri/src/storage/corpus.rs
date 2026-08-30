@@ -4,7 +4,7 @@ use crate::error::AppError;
 use crate::integrity::digest_hex;
 use crate::types::{
     CorpusEntityKind, CorpusEvidenceReference, CorpusIndexStatus, CorpusPattern, CorpusPatternKind,
-    CorpusPatternQuery,
+    CorpusPatternQuery, EntityResolutionBasis, EntityValidationGrade, RelationshipBasis,
 };
 use duckdb::{params, Connection, OptionalExt, Transaction};
 use sha2::{Digest, Sha256};
@@ -30,7 +30,11 @@ const CORPUS_ALGORITHM_VERSION: &str = "deterministic-corpus-v3";
 /// calculate within their requested slice.
 /// 6: canonical entity kinds are schema-constrained and same-segment entity relationships retain
 /// their source mention offsets for cross-format relationship patterns.
-const CORPUS_SCHEMA_VERSION: i64 = 6;
+/// 7: every mention records the extractor that produced it and how hard that extractor verified
+/// the string (`EntityValidationGrade`), every entity records why its mentions were merged
+/// (`EntityResolutionBasis`), every edge records how it came to exist (`RelationshipBasis`), and
+/// `EMAIL_ADDRESS` and `MONEY` join the entity kinds.
+const CORPUS_SCHEMA_VERSION: i64 = 7;
 
 const WRITER_QUEUE_CAPACITY: usize = 64;
 const MAXIMUM_CONCURRENT_ANALYSES: usize = 4;
@@ -49,13 +53,15 @@ const MAXIMUM_ENTITIES_PER_KIND: usize = 4_000;
 /// Every `kind` value ever passed to `push_entity`/`push_entity_with_display`. Used to seed the
 /// truncation map so a document's row set always states "not truncated" rather than omitting a kind
 /// that simply had nothing in it.
-const ENTITY_KINDS: [CorpusEntityKind; 6] = [
+const ENTITY_KINDS: [CorpusEntityKind; 8] = [
     CorpusEntityKind::Statute,
     CorpusEntityKind::Date,
     CorpusEntityKind::EmailDomain,
+    CorpusEntityKind::EmailAddress,
     CorpusEntityKind::UrlHost,
     CorpusEntityKind::Acronym,
     CorpusEntityKind::Organization,
+    CorpusEntityKind::Money,
 ];
 const MAXIMUM_TOKEN_CHARACTERS: usize = 96;
 const MAXIMUM_RELATIONSHIPS_PER_DOCUMENT: usize = 20_000;
@@ -147,6 +153,84 @@ struct AnalyzedSegment {
     simhash: u64,
 }
 
+/// Which extractor produced a mention, at which version, and how hard it verified the string.
+///
+/// Carried as one value rather than three arguments so an extractor cannot be given another's id
+/// or claim a grade its code does not earn: the stamp is a constant declared beside the extractor
+/// and passed through untouched. `version` is bumped whenever an extractor's matching changes, so
+/// a stored mention says which behaviour produced it even after the code has moved on.
+#[derive(Clone, Copy)]
+struct ExtractorStamp {
+    id: &'static str,
+    version: u32,
+    grade: EntityValidationGrade,
+}
+
+/// `section 1798.30` matched a keyword and a token containing a digit. Nothing confirmed that the
+/// number is a statute, so it is a lead.
+const STATUTE_SECTION_EXTRACTOR: ExtractorStamp = ExtractorStamp {
+    id: "statute.section-keyword",
+    version: 1,
+    grade: EntityValidationGrade::PatternOnly,
+};
+
+/// `5 U.S.C. 552` is a five-token citation whose shape no ordinary prose produces.
+const STATUTE_USC_EXTRACTOR: ExtractorStamp = ExtractorStamp {
+    id: "statute.usc-citation",
+    version: 1,
+    grade: EntityValidationGrade::FormatValidated,
+};
+
+/// Every date matcher validates the calendar: a month name or number in range, a day in range for
+/// that month, and a normalization to `%Y-%m-%d` that fails rather than guesses.
+const DATE_EXTRACTOR: ExtractorStamp = ExtractorStamp {
+    id: "date.calendar",
+    version: 1,
+    grade: EntityValidationGrade::FormatValidated,
+};
+
+const EMAIL_DOMAIN_EXTRACTOR: ExtractorStamp = ExtractorStamp {
+    id: "email.domain",
+    version: 1,
+    grade: EntityValidationGrade::FormatValidated,
+};
+
+const EMAIL_ADDRESS_EXTRACTOR: ExtractorStamp = ExtractorStamp {
+    id: "email.address",
+    version: 1,
+    grade: EntityValidationGrade::FormatValidated,
+};
+
+/// The host is whatever `reqwest::Url::parse` accepted, which is a real parser and not a shape.
+const URL_HOST_EXTRACTOR: ExtractorStamp = ExtractorStamp {
+    id: "url.host",
+    version: 1,
+    grade: EntityValidationGrade::FormatValidated,
+};
+
+/// An all-uppercase run of 2 to 12 letters. `EPA` and `TODO` are indistinguishable to it.
+const ACRONYM_EXTRACTOR: ExtractorStamp = ExtractorStamp {
+    id: "acronym.uppercase-run",
+    version: 1,
+    grade: EntityValidationGrade::PatternOnly,
+};
+
+/// A title-case run containing a word from the organization gazetteer. The gazetteer is what
+/// admits it, so that is what the grade says.
+const ORGANIZATION_EXTRACTOR: ExtractorStamp = ExtractorStamp {
+    id: "organization.gazetteer-run",
+    version: 1,
+    grade: EntityValidationGrade::GazetteerHit,
+};
+
+/// A currency symbol followed by a well-formed amount, with the minor unit checked to two digits
+/// when a decimal point is present and the thousands groups checked to three.
+const MONEY_EXTRACTOR: ExtractorStamp = ExtractorStamp {
+    id: "money.currency-amount",
+    version: 1,
+    grade: EntityValidationGrade::FormatValidated,
+};
+
 struct AnalyzedEntity {
     kind: CorpusEntityKind,
     normalized_value: String,
@@ -155,6 +239,7 @@ struct AnalyzedEntity {
     character_end: usize,
     segment_index: usize,
     confidence_basis_points: u16,
+    extractor: ExtractorStamp,
 }
 
 struct AnalyzedRelationship {
@@ -908,6 +993,7 @@ fn extract_entities(
                     token.character_start,
                     value.character_end,
                     8_500,
+                    STATUTE_SECTION_EXTRACTOR,
                 );
             }
         }
@@ -934,6 +1020,7 @@ fn extract_entities(
                 token.character_start,
                 last.character_end,
                 9_500,
+                STATUTE_USC_EXTRACTOR,
             );
         }
     }
@@ -941,6 +1028,7 @@ fn extract_entities(
     extract_email_domains(text, segments, &mut entities, &mut budget);
     extract_url_hosts(text, segments, &mut entities, &mut budget);
     extract_organizations_and_acronyms(text, tokens, segments, &mut entities, &mut budget);
+    extract_money(text, segments, &mut entities, &mut budget);
     entities.sort_by(|left, right| {
         left.character_start
             .cmp(&right.character_start)
@@ -967,6 +1055,7 @@ fn push_entity(
     character_start: usize,
     character_end: usize,
     confidence_basis_points: u16,
+    extractor: ExtractorStamp,
 ) {
     let display_value = text
         .get(byte_start..byte_end)
@@ -984,6 +1073,7 @@ fn push_entity(
         character_start,
         character_end,
         confidence_basis_points,
+        extractor,
     );
 }
 
@@ -998,6 +1088,7 @@ fn push_entity_with_display(
     character_start: usize,
     character_end: usize,
     confidence_basis_points: u16,
+    extractor: ExtractorStamp,
 ) {
     if budget.is_full(kind) {
         return;
@@ -1023,6 +1114,7 @@ fn push_entity_with_display(
         character_end,
         segment_index,
         confidence_basis_points,
+        extractor,
     });
 }
 
@@ -1119,6 +1211,7 @@ fn extract_dates(
                         character_index,
                         character_index + matched.length,
                         matched.confidence_basis_points,
+                        DATE_EXTRACTOR,
                     );
                     byte_index += matched.length;
                     character_index += matched.length;
@@ -1343,6 +1436,8 @@ fn extract_email_domains(
             {
                 let local_characters = text[start..byte_index].chars().count();
                 let domain_characters = text[byte_index + 1..end].chars().count();
+                let address_start = character_index.saturating_sub(local_characters);
+                let address_end = character_index + 1 + domain_characters;
                 push_entity_with_display(
                     entities,
                     budget,
@@ -1350,10 +1445,34 @@ fn extract_email_domains(
                     CorpusEntityKind::EmailDomain,
                     domain.clone(),
                     format!("@{domain}"),
-                    character_index.saturating_sub(local_characters),
-                    character_index + 1 + domain_characters,
+                    address_start,
+                    address_end,
                     9_000,
+                    EMAIL_DOMAIN_EXTRACTOR,
                 );
+                // The whole address, from the same scan and over the same span. Written here
+                // rather than in a second extractor so the two can never disagree about where the
+                // address is: the domain's span already covered the local part, which was read
+                // and then discarded. A correspondent is the unit an investigation follows, and a
+                // domain cannot distinguish two people at one agency.
+                let local = text[start..byte_index].to_ascii_lowercase();
+                if is_plausible_email_local(&local) {
+                    push_entity_with_display(
+                        entities,
+                        budget,
+                        segments,
+                        CorpusEntityKind::EmailAddress,
+                        format!("{local}@{domain}"),
+                        // Identity is the normalized form; what is shown is what the document
+                        // said. Displaying the normalization would quietly restate a correspondent
+                        // the page wrote differently.
+                        text[start..end].to_string(),
+                        address_start,
+                        address_end,
+                        9_000,
+                        EMAIL_ADDRESS_EXTRACTOR,
+                    );
+                }
             }
         }
         let character_bytes = text[byte_index..]
@@ -1364,6 +1483,147 @@ fn extract_email_domains(
         byte_index += character_bytes;
         character_index += 1;
     }
+}
+
+/// A local part that is addressable rather than merely a run of legal bytes. RFC 5321 caps it at
+/// 64 characters, and a leading or trailing dot, or a doubled dot, is not deliverable. Rejecting
+/// these keeps a truncated or run-together match from becoming a correspondent node.
+fn is_plausible_email_local(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 64
+        && !value.starts_with('.')
+        && !value.ends_with('.')
+        && !value.contains("..")
+        && value
+            .chars()
+            .any(|character| character.is_ascii_alphanumeric())
+}
+
+/// Currency amounts, normalized to `usd <integer>.<cents>`.
+///
+/// Validating rather than matching: thousands groups must be exactly three digits after the
+/// first, and a decimal point must be followed by exactly two. `$1,00,000` and `$12.3` are
+/// rejected, because a figure that does not parse is not a figure an investigator should be handed
+/// as one. Only `$` is recognized; a second symbol means a second currency in the normalized
+/// value, and guessing which dollar `$` means is not something the bytes support.
+fn extract_money(
+    text: &str,
+    segments: &[AnalyzedSegment],
+    entities: &mut Vec<AnalyzedEntity>,
+    budget: &mut EntityBudget,
+) {
+    let bytes = text.as_bytes();
+    let mut byte_index = 0_usize;
+    let mut character_index = 0_usize;
+    while byte_index < bytes.len() && !budget.is_full(CorpusEntityKind::Money) {
+        if bytes[byte_index] == b'$' {
+            if let Some(amount) = match_currency_amount(&text[byte_index + 1..]) {
+                // Every byte consumed is ASCII, so the character length equals the byte length.
+                let length = amount.length + 1;
+                push_entity_with_display(
+                    entities,
+                    budget,
+                    segments,
+                    CorpusEntityKind::Money,
+                    format!("usd {}", amount.normalized),
+                    text[byte_index..byte_index + length].to_string(),
+                    character_index,
+                    character_index + length,
+                    9_500,
+                    MONEY_EXTRACTOR,
+                );
+                byte_index += length;
+                character_index += length;
+                continue;
+            }
+        }
+        let character_bytes = text[byte_index..]
+            .chars()
+            .next()
+            .map(char::len_utf8)
+            .unwrap_or(1);
+        byte_index += character_bytes;
+        character_index += 1;
+    }
+}
+
+struct MatchedAmount {
+    normalized: String,
+    length: usize,
+}
+
+/// Reads `1,234.56` / `1234` / `1,234` from the front of `value`, returning the canonical
+/// `<integer>.<cents>` form and how many bytes it consumed. `None` when the shape does not hold.
+fn match_currency_amount(value: &str) -> Option<MatchedAmount> {
+    let bytes = value.as_bytes();
+    let mut index = 0_usize;
+    while bytes.get(index) == Some(&b' ') {
+        index += 1;
+        if index > 1 {
+            return None;
+        }
+    }
+    let integer_start = index;
+    let mut digits = String::new();
+    let mut group = String::new();
+    let mut first_group = true;
+    loop {
+        let run_start = index;
+        while bytes.get(index).is_some_and(u8::is_ascii_digit) {
+            group.push(bytes[index] as char);
+            index += 1;
+        }
+        let run_length = index - run_start;
+        if run_length == 0 {
+            return None;
+        }
+        if first_group {
+            // A first group longer than three digits cannot be followed by a thousands group:
+            // `$1234,567` is malformed, not 1,234,567. The comma has to actually introduce a
+            // group, so a trailing sentence comma (`$2000, with`) is punctuation and not part of
+            // the figure.
+            if run_length > 3
+                && bytes.get(index) == Some(&b',')
+                && bytes.get(index + 1).is_some_and(u8::is_ascii_digit)
+            {
+                return None;
+            }
+            first_group = false;
+        } else if run_length != 3 {
+            return None;
+        }
+        digits.push_str(&group);
+        group.clear();
+        if bytes.get(index) == Some(&b',') && bytes.get(index + 1).is_some_and(u8::is_ascii_digit) {
+            index += 1;
+            continue;
+        }
+        break;
+    }
+    if index == integer_start || digits.len() > 18 {
+        return None;
+    }
+    let mut cents = String::from("00");
+    if bytes.get(index) == Some(&b'.') {
+        let fraction_start = index + 1;
+        let mut fraction_end = fraction_start;
+        while bytes.get(fraction_end).is_some_and(u8::is_ascii_digit) {
+            fraction_end += 1;
+        }
+        // Exactly two digits, and nothing that looks like a third: `$12.345` is not a dollar
+        // amount and treating it as `$12.34` would invent a figure.
+        if fraction_end - fraction_start != 2 {
+            return None;
+        }
+        cents = value[fraction_start..fraction_end].to_string();
+        index = fraction_end;
+    }
+    let integer = digits.trim_start_matches('0');
+    let integer = if integer.is_empty() { "0" } else { integer };
+    Some(MatchedAmount {
+        normalized: format!("{integer}.{cents}"),
+        length: index,
+    })
 }
 
 fn is_email_local_byte(value: u8) -> bool {
@@ -1410,6 +1670,7 @@ fn extract_url_hosts(
                         character_index,
                         character_index + character_count,
                         9_500,
+                        URL_HOST_EXTRACTOR,
                     );
                     byte_index = end;
                     character_index += character_count;
@@ -1462,6 +1723,7 @@ fn extract_organizations_and_acronyms(
                 token.character_start,
                 token.character_end,
                 7_500,
+                ACRONYM_EXTRACTOR,
             );
         }
     }
@@ -1484,7 +1746,11 @@ fn extract_organizations_and_acronyms(
             } else if !is_name_connector(&token.normalized) {
                 break;
             }
-            if has_organization_signal && end > start && !is_name_connector(&token.normalized) {
+            if has_organization_signal
+                && end > start
+                && !is_name_connector(&token.normalized)
+                && !is_calendar_word(&token.normalized)
+            {
                 best_end = Some(end + 1);
             }
             end += 1;
@@ -1509,6 +1775,7 @@ fn extract_organizations_and_acronyms(
                 first.character_start,
                 last.character_end,
                 7_000,
+                ORGANIZATION_EXTRACTOR,
             );
             start = end;
         } else {
@@ -1522,6 +1789,41 @@ fn is_title_token(text: &str, token: &Token) -> bool {
         .chars()
         .next()
         .is_some_and(char::is_uppercase)
+}
+
+/// Whether a token may be the last one in an organization run.
+///
+/// A month or a weekday is capitalized in ordinary prose and carries no organizational meaning, so
+/// `Agency Agreement Revised: March` extracted as one organization ending in a month
+/// (docs/local-analysis-architecture.md section 3). The rule is a terminator and deliberately not
+/// an exclusion from `is_title_token`: excluding calendar words outright would start
+/// `May Department Stores` and `Friday Harbor Port District` one token late, which is a wrong name
+/// rather than a shorter one. A calendar word inside a run that continues past it is kept for the
+/// same reason.
+fn is_calendar_word(value: &str) -> bool {
+    MONTH_NAMES.iter().any(|(name, _)| *name == value)
+        || matches!(
+            value,
+            "jan"
+                | "feb"
+                | "mar"
+                | "apr"
+                | "jun"
+                | "jul"
+                | "aug"
+                | "sep"
+                | "sept"
+                | "oct"
+                | "nov"
+                | "dec"
+                | "monday"
+                | "tuesday"
+                | "wednesday"
+                | "thursday"
+                | "friday"
+                | "saturday"
+                | "sunday"
+        )
 }
 
 fn is_name_connector(value: &str) -> bool {
@@ -1893,8 +2195,9 @@ fn insert_entities(
 ) -> Result<(), AppError> {
     let mut entity_statement = transaction
         .prepare_cached(
-            "INSERT INTO corpus_entities (entity_id, entity_kind, normalized_value, display_value)
-             VALUES (?1, ?2, ?3, ?4)
+            "INSERT INTO corpus_entities (
+                entity_id, entity_kind, normalized_value, display_value, resolution_basis
+             ) VALUES (?1, ?2, ?3, ?4, ?5)
              ON CONFLICT(entity_id) DO UPDATE SET display_value = excluded.display_value",
         )
         .map_err(|error| {
@@ -1904,8 +2207,9 @@ fn insert_entities(
         .prepare_cached(
             "INSERT INTO corpus_entity_mentions (
                 portal_key, document_id, entity_id, segment_index, character_start,
-                character_end, confidence_basis_points
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                character_end, confidence_basis_points, extractor_id, extractor_version,
+                validation_grade
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         )
         .map_err(|error| {
             AppError::Storage(format!("Failed to prepare entity mentions: {error}"))
@@ -1922,6 +2226,10 @@ fn insert_entities(
                 entity.kind.as_str(),
                 entity.normalized_value,
                 entity.display_value,
+                // The only merge this app performs is a byte-identical normalized value, which is
+                // exactly what `entity_id` is derived from. Anything looser has to be proposed and
+                // written with its own basis, never inferred from a row that predates it.
+                EntityResolutionBasis::ExactNormalizedMatch.as_str(),
             ])
             .map_err(|error| {
                 AppError::Storage(format!("Failed to persist corpus entity: {error}"))
@@ -1935,6 +2243,9 @@ fn insert_entities(
                 entity.character_start,
                 entity.character_end,
                 entity.confidence_basis_points,
+                entity.extractor.id,
+                entity.extractor.version,
+                entity.extractor.grade.as_str(),
             ])
             .map_err(|error| {
                 AppError::Storage(format!("Failed to persist entity mention: {error}"))
@@ -1951,8 +2262,8 @@ fn insert_relationships(
         .prepare_cached(
             "INSERT INTO corpus_entity_relationships (
                 portal_key, document_id, left_entity_id, right_entity_id, relationship_kind,
-                segment_index, character_start, character_end, confidence_basis_points
-             ) VALUES (?1, ?2, ?3, ?4, 'CO_OCCURS_IN_SEGMENT', ?5, ?6, ?7, ?8)",
+                basis, segment_index, character_start, character_end, confidence_basis_points
+             ) VALUES (?1, ?2, ?3, ?4, 'CO_OCCURS_IN_SEGMENT', ?5, ?6, ?7, ?8, ?9)",
         )
         .map_err(|error| {
             AppError::Storage(format!("Failed to prepare entity relationships: {error}"))
@@ -1964,6 +2275,9 @@ fn insert_relationships(
                 document.document_id,
                 relationship.left_entity_id,
                 relationship.right_entity_id,
+                // Co-occurrence is a derivation this app performed and can re-derive. Calling it
+                // observed would make a claim the documents never made.
+                RelationshipBasis::Computed.as_str(),
                 relationship.segment_index,
                 relationship.character_start,
                 relationship.character_end,
@@ -2891,10 +3205,21 @@ ON corpus_term_postings(term, portal_key, document_id);
 CREATE TABLE IF NOT EXISTS corpus_entities (
     entity_id TEXT PRIMARY KEY,
     entity_kind TEXT NOT NULL CHECK (
-        entity_kind IN ('STATUTE', 'DATE', 'EMAIL_DOMAIN', 'URL_HOST', 'ACRONYM', 'ORGANIZATION')
+        entity_kind IN (
+            'STATUTE', 'DATE', 'EMAIL_DOMAIN', 'EMAIL_ADDRESS', 'URL_HOST', 'ACRONYM',
+            'ORGANIZATION', 'MONEY'
+        )
     ),
     normalized_value TEXT NOT NULL,
     display_value TEXT NOT NULL,
+    -- Why the mentions behind this row were treated as one thing. Every row written today is an
+    -- EXACT_NORMALIZED_MATCH, because that is the only merge the app performs; the column exists
+    -- so a looser merge can never arrive without saying it is one.
+    resolution_basis TEXT NOT NULL CHECK (
+        resolution_basis IN (
+            'EXACT_NORMALIZED_MATCH', 'HEURISTIC_SIMILARITY', 'INVESTIGATOR_CONFIRMED'
+        )
+    ),
     UNIQUE (entity_kind, normalized_value)
 );
 
@@ -2906,6 +3231,16 @@ CREATE TABLE IF NOT EXISTS corpus_entity_mentions (
     character_start BIGINT NOT NULL,
     character_end BIGINT NOT NULL,
     confidence_basis_points BIGINT NOT NULL,
+    -- Which extractor read this span, at which version, and how hard it verified what it read.
+    -- A confidence number alone cannot separate a recomputed check digit from a shape that merely
+    -- looked right, and the two are not the same claim about the bytes.
+    extractor_id TEXT NOT NULL,
+    extractor_version BIGINT NOT NULL CHECK (extractor_version > 0),
+    validation_grade TEXT NOT NULL CHECK (
+        validation_grade IN (
+            'CHECK_DIGIT_PASSED', 'FORMAT_VALIDATED', 'PATTERN_ONLY', 'GAZETTEER_HIT'
+        )
+    ),
     PRIMARY KEY (portal_key, document_id, entity_id, character_start),
     FOREIGN KEY (portal_key, document_id)
         REFERENCES corpus_documents(portal_key, document_id),
@@ -2927,6 +3262,12 @@ CREATE TABLE IF NOT EXISTS corpus_entity_relationships (
     left_entity_id TEXT NOT NULL,
     right_entity_id TEXT NOT NULL,
     relationship_kind TEXT NOT NULL CHECK (relationship_kind = 'CO_OCCURS_IN_SEGMENT'),
+    -- How this edge came to exist. Co-occurrence is COMPUTED and nothing else: the app derived it
+    -- and can re-derive it, and it is not a statement that the two entities are related in the
+    -- world. An observed edge (a message reply-to, an archive membership) and an investigator's
+    -- asserted edge get the same column rather than a separate table, so no reader can draw one
+    -- without knowing which it has.
+    basis TEXT NOT NULL CHECK (basis IN ('OBSERVED', 'COMPUTED', 'ASSERTED')),
     segment_index BIGINT NOT NULL,
     character_start BIGINT NOT NULL,
     character_end BIGINT NOT NULL,
@@ -3090,6 +3431,68 @@ mod tests {
         }
     }
 
+    /// The version-mismatch path specifically, which the fixture above does not exercise: that one
+    /// builds a file with no marker table at all, and this change is a bump from a marker that is
+    /// present and simply older.
+    ///
+    /// The old `corpus_entities` has no `resolution_basis` and a six-value `entity_kind` CHECK,
+    /// so every write this build performs would fail against it and `EMAIL_ADDRESS` could not be
+    /// stored at all. Nothing migrates it: the corpus is a projection of the core database, so the
+    /// file is discarded and reconciliation refills it.
+    #[tokio::test]
+    async fn a_corpus_index_stamped_with_the_previous_schema_version_is_discarded() {
+        let directory = tempdir().expect("temp dir must be created");
+        let path = directory.path().join("corpus.db");
+        {
+            let previous = Connection::open(&path).expect("the previous-version fixture must open");
+            previous
+                .execute_batch(
+                    "CREATE TABLE corpus_schema_version (
+                        singleton BOOLEAN PRIMARY KEY,
+                        version BIGINT NOT NULL
+                     );
+                     INSERT INTO corpus_schema_version (singleton, version) VALUES (TRUE, 6);
+                     CREATE TABLE corpus_entities (
+                        entity_id TEXT PRIMARY KEY,
+                        entity_kind TEXT NOT NULL CHECK (
+                            entity_kind IN (
+                                'STATUTE', 'DATE', 'EMAIL_DOMAIN', 'URL_HOST', 'ACRONYM',
+                                'ORGANIZATION'
+                            )
+                        ),
+                        normalized_value TEXT NOT NULL,
+                        display_value TEXT NOT NULL,
+                        UNIQUE (entity_kind, normalized_value)
+                     );
+                     INSERT INTO corpus_entities
+                     VALUES ('stale', 'ACRONYM', 'rtfh', 'RTFH');",
+                )
+                .expect("the previous-version schema must apply");
+        }
+
+        let index = CorpusIndex::open(&path)
+            .expect("a corpus stamped with the previous version must be rebuilt, not fail to open");
+        let status = index.status().await.expect("status must read");
+        assert_eq!(status.indexed_document_count, 0);
+
+        let connection = Connection::open(&path).expect("the rebuilt index must open");
+        let stale_rows: i64 = connection
+            .query_row("SELECT COUNT(*) FROM corpus_entities", [], |row| row.get(0))
+            .expect("the rebuilt entities table must be queryable");
+        assert_eq!(
+            stale_rows, 0,
+            "a row written under the old shape carries no resolution basis and must not survive",
+        );
+        let stamped: i64 = connection
+            .query_row(
+                "SELECT version FROM corpus_schema_version WHERE singleton",
+                [],
+                |row| row.get(0),
+            )
+            .expect("the rebuilt index must be stamped");
+        assert_eq!(stamped, CORPUS_SCHEMA_VERSION);
+    }
+
     /// An index written under an older schema must not make the application unlaunchable.
     ///
     /// DuckDB binds a foreign key against the catalog it already holds, even under
@@ -3195,6 +3598,95 @@ mod tests {
             2,
             "a read happened before this write, and the write must still be visible"
         );
+    }
+
+    /// The persisted path, which analysis tests do not reach.
+    ///
+    /// `analyze_document` is pure and returns a struct; the schema is only exercised when
+    /// `insert_entities` runs. A typo in the widened `entity_kind` CHECK list, or a misaligned
+    /// bound parameter in the mention insert that grew from seven columns to ten, fails at real
+    /// ingestion and passes every in-memory test. So this indexes one document carrying both new
+    /// kinds and reads the rows back out of the file.
+    #[tokio::test]
+    async fn the_new_entity_kinds_and_the_extraction_seam_survive_a_real_write() {
+        let directory = tempdir().expect("temp dir must be created");
+        let path = directory.path().join("corpus.db");
+        let index = CorpusIndex::open(&path).expect("the index must open");
+        index
+            .index_document(input(
+                12,
+                "Analyst.One@rtfhsd.org confirmed the Housing Authority paid $1,234.56 on \
+                 2026-08-24 under https://rtfhsd.org/reports.",
+            ))
+            .await
+            .expect("a document carrying the new kinds must index");
+        assert_eq!(
+            index
+                .status()
+                .await
+                .expect("status must read")
+                .indexed_document_count,
+            1
+        );
+
+        let connection = Connection::open(&path).expect("the written index must open");
+        let mut statement = connection
+            .prepare(
+                "SELECT entity.entity_kind, entity.normalized_value, entity.resolution_basis,
+                        mention.extractor_id, mention.extractor_version, mention.validation_grade
+                 FROM corpus_entity_mentions mention
+                 JOIN corpus_entities entity ON entity.entity_id = mention.entity_id
+                 WHERE entity.entity_kind IN ('EMAIL_ADDRESS', 'MONEY')
+                 ORDER BY entity.entity_kind",
+            )
+            .expect("the seam columns must be queryable");
+        let rows = statement
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, i64>(4)?,
+                    row.get::<_, String>(5)?,
+                ))
+            })
+            .expect("the seam query must run")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("the seam rows must read");
+
+        assert_eq!(
+            rows,
+            vec![
+                (
+                    "EMAIL_ADDRESS".to_string(),
+                    "analyst.one@rtfhsd.org".to_string(),
+                    "EXACT_NORMALIZED_MATCH".to_string(),
+                    "email.address".to_string(),
+                    1,
+                    "FORMAT_VALIDATED".to_string(),
+                ),
+                (
+                    "MONEY".to_string(),
+                    "usd 1234.56".to_string(),
+                    "EXACT_NORMALIZED_MATCH".to_string(),
+                    "money.currency-amount".to_string(),
+                    1,
+                    "FORMAT_VALIDATED".to_string(),
+                ),
+            ],
+        );
+
+        // Co-occurrence is a derivation, and the column that says so has to hold that and nothing
+        // else until an observed edge kind exists to write.
+        let bases: Vec<String> = connection
+            .prepare("SELECT DISTINCT basis FROM corpus_entity_relationships")
+            .expect("the edge basis must be queryable")
+            .query_map([], |row| row.get(0))
+            .expect("the basis query must run")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("the basis rows must read");
+        assert_eq!(bases, vec!["COMPUTED".to_string()]);
     }
 
     /// A portal document identifier does not fit in 32 bits, and DuckDB's `INTEGER` is 32 bits.
@@ -3339,6 +3831,172 @@ mod offset_tests {
             .filter(|word| !word.is_empty())
             .map(str::to_lowercase)
             .collect()
+    }
+
+    fn values_of(text: &str, kind: CorpusEntityKind) -> Vec<String> {
+        let mut values = analyze_document(input(9, text))
+            .expect("analysis should succeed")
+            .entities
+            .into_iter()
+            .filter(|entity| entity.kind == kind)
+            .map(|entity| entity.normalized_value)
+            .collect::<Vec<_>>();
+        values.sort();
+        values
+    }
+
+    // A currency amount is a figure an investigator may quote, so the extractor validates the
+    // shape instead of matching it. Each rejection below is a figure that would otherwise be
+    // invented: `$1,00,000` has a malformed group and is not 100,000, `$12.3` and `$12.345` are
+    // not dollar amounts, and reading either as `$12.34` would hand over a number the bytes never
+    // contained.
+    #[test]
+    fn currency_amounts_are_validated_rather_than_merely_matched() {
+        assert_eq!(
+            values_of(
+                "The invoice totaled $1,234.56 and the retainer $2000, with $0.75 in fees.",
+                CorpusEntityKind::Money,
+            ),
+            vec![
+                "usd 0.75".to_string(),
+                "usd 1234.56".to_string(),
+                "usd 2000.00".to_string(),
+            ],
+        );
+
+        // One space between the symbol and the figure is ordinary formatting and is read. Two is
+        // not: at that point the symbol and the number are separate things on the page, and
+        // joining them would attach a currency to a figure that never carried one.
+        assert_eq!(
+            values_of("A total of $ 1,000 was paid.", CorpusEntityKind::Money),
+            vec!["usd 1000.00".to_string()],
+        );
+
+        for rejected in [
+            "$1,00,000 was transferred",
+            "$12.3 per unit",
+            "$12.345 per unit",
+            "$  1234 with a wide gap",
+            "$, nothing at all",
+        ] {
+            assert!(
+                values_of(rejected, CorpusEntityKind::Money).is_empty(),
+                "'{rejected}' is not a currency amount and must not be read as one",
+            );
+        }
+    }
+
+    // The domain was already extracted and the local part was already read to find its start, then
+    // discarded. A domain cannot tell two correspondents at one agency apart, which is the
+    // distinction an investigation actually follows.
+    #[test]
+    fn an_email_address_is_extracted_over_the_same_span_as_its_domain() {
+        let text = "Write to Analyst.One@rtfhsd.org, not to ..bad@rtfhsd.org.";
+        let analyzed = analyze_document(input(10, text)).expect("analysis should succeed");
+        let address = analyzed
+            .entities
+            .iter()
+            .find(|entity| entity.kind == CorpusEntityKind::EmailAddress)
+            .expect("the address must be extracted");
+        let domain = analyzed
+            .entities
+            .iter()
+            .find(|entity| entity.kind == CorpusEntityKind::EmailDomain)
+            .expect("the domain must still be extracted");
+
+        assert_eq!(address.normalized_value, "analyst.one@rtfhsd.org");
+        assert_eq!(
+            address.display_value, "Analyst.One@rtfhsd.org",
+            "identity is normalized; what is shown is what the document wrote",
+        );
+        assert_eq!(
+            (address.character_start, address.character_end),
+            (domain.character_start, domain.character_end),
+            "the two are read from one scan and must not disagree about where the address is",
+        );
+        assert_eq!(
+            analyzed
+                .entities
+                .iter()
+                .filter(|entity| entity.kind == CorpusEntityKind::EmailAddress)
+                .count(),
+            1,
+            "a local part starting with a dot is not deliverable and is not a correspondent",
+        );
+    }
+
+    // REGRESSION(corpus): a month is capitalized in ordinary prose, so an organization run walked
+    // straight through one and `Agency Agreement Revised March` became an organization
+    // (docs/local-analysis-architecture.md section 3). Proven by removing the `is_calendar_word`
+    // arm from the `best_end` condition and confirming the month reappears in the extracted value.
+    //
+    // The second case is why the rule terminates a run rather than excluding calendar words from
+    // `is_title_token`: the blanket exclusion also passes the first assertion, and quietly starts
+    // `May Department Stores` at `Department`. A name missing its first word is wrong, not short.
+    #[test]
+    fn an_organization_run_stops_at_a_month() {
+        let organizations = values_of(
+            "The Housing Authority Agreement Revised March was filed.",
+            CorpusEntityKind::Organization,
+        );
+        assert!(
+            organizations.iter().all(|value| !value.contains("march")),
+            "a month is not part of an organization name: {organizations:?}",
+        );
+        assert!(
+            organizations
+                .iter()
+                .any(|value| value.contains("housing authority")),
+            "the organization itself must survive the exclusion: {organizations:?}",
+        );
+
+        let leading = values_of(
+            "A claim against May Department Stores was filed.",
+            CorpusEntityKind::Organization,
+        );
+        assert!(
+            leading
+                .iter()
+                .any(|value| value.starts_with("may department")),
+            "a calendar word inside a run that continues is part of the name: {leading:?}",
+        );
+    }
+
+    // A confidence number cannot say whether anything verified the match. These two entities carry
+    // adjacent confidences and are not the same kind of claim: the host was parsed by `Url::parse`,
+    // the acronym is an uppercase run that `TODO` would satisfy just as well. The seam exists so a
+    // reader can tell them apart, and so a model-inferred mention can never arrive without saying
+    // what it is.
+    #[test]
+    fn a_mention_records_which_extractor_read_it_and_how_hard_it_verified() {
+        let analyzed = analyze_document(input(
+            11,
+            "The RTFH published https://rtfhsd.org/reports for review.",
+        ))
+        .expect("analysis should succeed");
+        let grade_for = |kind: CorpusEntityKind| {
+            analyzed
+                .entities
+                .iter()
+                .find(|entity| entity.kind == kind)
+                .map(|entity| (entity.extractor.id, entity.extractor.grade))
+        };
+
+        assert_eq!(
+            grade_for(CorpusEntityKind::UrlHost),
+            Some(("url.host", EntityValidationGrade::FormatValidated)),
+        );
+        assert_eq!(
+            grade_for(CorpusEntityKind::Acronym),
+            Some(("acronym.uppercase-run", EntityValidationGrade::PatternOnly)),
+        );
+        assert!(
+            analyzed
+                .entities
+                .iter()
+                .all(|entity| entity.extractor.version > 0),
+            "a stored mention must name the extractor version that produced it",
+        );
     }
 
     // INVARIANT(corpus): `character_start`/`character_end` are Unicode scalar offsets into the
@@ -3537,6 +4195,7 @@ mod offset_tests {
                 start,
                 end,
                 1,
+                ORGANIZATION_EXTRACTOR,
             );
             entities[0].segment_index
         };
@@ -3565,6 +4224,7 @@ mod offset_tests {
             10,
             20,
             1,
+            ORGANIZATION_EXTRACTOR,
         );
         assert_eq!(entities[0].segment_index, 0);
     }

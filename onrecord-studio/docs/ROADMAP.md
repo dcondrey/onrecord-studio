@@ -192,6 +192,39 @@ that compiled, linted, and passed 283 tests.
       prefix the frontier is queried by is built beside `IngestionTask::target_id`, because a
       drift between them would fail no test of the decision and would silently re-seed forever.
 
+- [x] **Entity extraction states what verified it, and two validating extractors were added.**
+      Corpus schema 6 to 7, which discards and rebuilds the corpus index by design; it is a
+      projection of the core database and reconciliation refills it. A test builds a file stamped
+      version 6 with the old `corpus_entities` shape and proves it is discarded rather than fatal,
+      because the fixture that already covered this built a file with no version marker at all and
+      so never exercised the mismatch path.
+
+      Every mention now records `extractor_id`, `extractor_version`, and an `EntityValidationGrade`.
+      A confidence number could not carry this: 9,000 basis points on a host that `Url::parse`
+      accepted and 9,000 on an uppercase run that `TODO` satisfies just as well are the same number
+      and are not the same claim. Every entity records an `EntityResolutionBasis`, and every edge a
+      `RelationshipBasis` — co-occurrence is `COMPUTED`, because the app derived it and can
+      re-derive it, and calling it observed would assert something the documents never said. Only
+      `EXACT_NORMALIZED_MATCH` is written today; the columns exist so a looser merge or a
+      model-inferred mention cannot arrive later without saying what it is, and adding them then
+      would be a second rebuild.
+
+      `EMAIL_ADDRESS` is extracted from the same scan as `EMAIL_DOMAIN` and over the same span, so
+      the two can never disagree about where the address is — the local part was already read to
+      find the domain's start and was then discarded, and a domain cannot tell two correspondents
+      at one agency apart. `MONEY` validates rather than matches: `$1,00,000`, `$12.3` and
+      `$12.345` are rejected, because reading the last as `$12.34` would hand an investigator a
+      figure the bytes never contained.
+
+      `ORGANIZATION` no longer ends a run on a month or weekday. The rule terminates the run
+      rather than excluding calendar words from `is_title_token`, because the blanket exclusion
+      closes the same case and starts `May Department Stores` at `Department`.
+
+      Not added: `PHONE`. `storage/pii.rs` already detects phone numbers and the app masks them in
+      search results, titles, document text, and exports. An entity whose `display_value` is the
+      literal number would surface in the pattern explorer exactly what every other reader masks.
+      That is a decision about the masking seam, not an extractor to write.
+
 Open, and specific:
 
 - [ ] **A crawl resume re-walks from its seed URL.** The same seed additivity, on the non-
