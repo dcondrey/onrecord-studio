@@ -383,7 +383,9 @@ at the line; two carry running proof-of-concept binaries.
       remote URL becomes a fetch task, rather than in the predicate shared with the follow path.
       Refusals are counted under their own `off-source-host-download` rule, the source root and the
       explicit `allowed_hostnames` both stay admitted, and three tests pin the default, the
-      restriction, and that link-following is unchanged.
+      restriction, and that link-following is unchanged. The flag is set per source from the guided
+      repair dialog's scoping rules; a policy no operator can reach is the same defect as a command
+      with no caller.
 - [x] In-flight extraction is no longer detached during cancellation. Source teardown signals the
       workers, joins their current task, then finalizes the run; cancelled workers bypass frontier
       refill and self-retirement so they cannot re-enter the provisioning lock held by teardown.

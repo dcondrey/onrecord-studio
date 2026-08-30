@@ -12,6 +12,8 @@ describe('source guidance parsing', () => {
     expect(result).toEqual({
       ok: true,
       filters: {
+        // The permissive default: today's crawl behaviour, unchanged.
+        restrictDownloadsToSourceHost: false,
         includeFilenameGlobs: [],
         excludeFilenameGlobs: [],
         includeFilenamePatterns: [],
@@ -29,6 +31,15 @@ describe('source guidance parsing', () => {
       },
     });
     expect(guidanceFiltersAreCustom(DEFAULT_GUIDANCE_FILTER_DRAFT)).toBe(false);
+  });
+
+  // The flag is a policy switch rather than a rule to parse, so it is the one draft field that
+  // could reach the backend unchanged from its default without anyone noticing.
+  it('carries the cross-host download restriction through as a custom setting', () => {
+    const draft = { ...DEFAULT_GUIDANCE_FILTER_DRAFT, restrictDownloadsToSourceHost: true };
+    const result = parseGuidanceFilters(draft);
+    expect(result.ok && result.filters.restrictDownloadsToSourceHost).toBe(true);
+    expect(guidanceFiltersAreCustom(draft)).toBe(true);
   });
 
   it('parses lists, byte bounds, and an ordered date range', () => {

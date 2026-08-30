@@ -48,7 +48,11 @@ const crawlNumberFields: CrawlNumberField[] = [
 interface GuidanceListField {
   field: Exclude<
     keyof GuidanceFilterDraft,
-    'minimumFileSizeBytes' | 'maximumFileSizeBytes' | 'documentDateFrom' | 'documentDateTo'
+    | 'minimumFileSizeBytes'
+    | 'maximumFileSizeBytes'
+    | 'documentDateFrom'
+    | 'documentDateTo'
+    | 'restrictDownloadsToSourceHost'
   >;
   label: string;
   hint: string;
@@ -958,6 +962,22 @@ export default function Header() {
                     </label>
                   ))}
                 </div>
+                <label className="flex items-start gap-2.5 rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-[9px] font-semibold text-slate-400">
+                  <input
+                    type="checkbox"
+                    checked={guidanceDraft.restrictDownloadsToSourceHost}
+                    onChange={(event) => updateGuidanceDraft({ restrictDownloadsToSourceHost: event.target.checked })}
+                    className="focus-ring mt-0.5 h-3.5 w-3.5 shrink-0"
+                  />
+                  <span>
+                    Download only from this source&apos;s own host
+                    <span className="mt-1 block text-[8px] font-normal leading-relaxed text-slate-400">
+                      Off by default. Many government portals serve their documents from S3, Azure Blob, Granicus or
+                      CivicPlus, and turning this on refuses those. Hosts listed in the source&apos;s allowed hostnames stay
+                      permitted, and which links get followed is unaffected either way.
+                    </span>
+                  </span>
+                </label>
                 {!guidanceFilters.ok && <p role="alert" className="text-[9px] text-rose-300">{guidanceFilters.problem}</p>}
                 <div className="flex justify-end">
                   <button

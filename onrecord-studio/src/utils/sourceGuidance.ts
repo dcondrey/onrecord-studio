@@ -5,8 +5,12 @@
 
 import type { SourceGuidance } from '../types';
 
-/** Held as raw strings while the dialog is open; each list field is comma- or newline-separated. */
+/**
+ * Held as raw strings while the dialog is open; each list field is comma- or newline-separated.
+ * `restrictDownloadsToSourceHost` is the one boolean: it is a policy switch, not a rule to parse.
+ */
 export interface GuidanceFilterDraft {
+  restrictDownloadsToSourceHost: boolean;
   includeFilenameGlobs: string;
   excludeFilenameGlobs: string;
   includeFilenamePatterns: string;
@@ -24,6 +28,8 @@ export interface GuidanceFilterDraft {
 }
 
 export const DEFAULT_GUIDANCE_FILTER_DRAFT: GuidanceFilterDraft = {
+  // False is today's crawl behaviour. See the field's doc comment in src-tauri/src/types/source.rs.
+  restrictDownloadsToSourceHost: false,
   includeFilenameGlobs: '',
   excludeFilenameGlobs: '',
   includeFilenamePatterns: '',
@@ -42,6 +48,7 @@ export const DEFAULT_GUIDANCE_FILTER_DRAFT: GuidanceFilterDraft = {
 
 type GuidanceFilterFields = Pick<
   SourceGuidance,
+  | 'restrictDownloadsToSourceHost'
   | 'includeFilenameGlobs'
   | 'excludeFilenameGlobs'
   | 'includeFilenamePatterns'
@@ -201,6 +208,7 @@ export function parseGuidanceFilters(draft: GuidanceFilterDraft): GuidanceFilter
   return {
     ok: true,
     filters: {
+      restrictDownloadsToSourceHost: draft.restrictDownloadsToSourceHost,
       includeFilenameGlobs: includeFilenameGlobs.value,
       excludeFilenameGlobs: excludeFilenameGlobs.value,
       includeFilenamePatterns: includeFilenamePatterns.value,
