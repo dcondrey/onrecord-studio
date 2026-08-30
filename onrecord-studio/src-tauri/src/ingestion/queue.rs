@@ -25,10 +25,10 @@ use crate::storage::sqlite::{
     PortalSyncRunFinalization,
 };
 use crate::types::{
-    CrawlPolicy, DocumentMetadata, DocumentPurge, FrontierExclusionCount, PastedContentInput,
-    PortalApiLayout, PortalRegistration, PortalRuntimeSnapshot, PortalSyncStart, PublicRequest,
-    RateLimitPolicy, SourceGuidance, SourceIngestionStart, SourceKind, SourceLifecycleState,
-    SourcePurge, SourcePurgePreview, SourceRemoval, StoppedHost,
+    CrawlPolicy, DocumentMetadata, DocumentPurge, FrontierExclusionCount, MetadataPageWindow,
+    PastedContentInput, PortalApiLayout, PortalRegistration, PortalRuntimeSnapshot,
+    PortalSyncStart, PublicRequest, RateLimitPolicy, SourceGuidance, SourceIngestionStart,
+    SourceKind, SourceLifecycleState, SourcePurge, SourcePurgePreview, SourceRemoval, StoppedHost,
 };
 use chrono::{NaiveDate, Utc};
 use regex::Regex;
@@ -759,11 +759,10 @@ impl QueueManager {
     pub async fn discover_and_start(
         &self,
         portal_url: &str,
-        start_page: usize,
-        per_page: usize,
+        window: MetadataPageWindow,
         rate_limit_policy: RateLimitPolicy,
     ) -> Result<PortalSyncStart, AppError> {
-        validate_page_parameters(start_page, per_page)?;
+        validate_page_parameters(window.start_page, window.page_size)?;
         let portal = self.client.discover_portal(portal_url).await?;
         let _ = self
             .progress_sender
@@ -771,8 +770,20 @@ impl QueueManager {
                 portal: portal.clone(),
             })
             .await;
+        // Persisted before the pool starts, and only when the operator moved off the built-in
+        // window, so a resume seeds the slice they chose instead of silently reverting to 1 and
+        // 50. The registration is written first because the recipe row has a foreign key to it;
+        // this mirrors what the public-source path does with a non-default crawl recipe.
+        if window != MetadataPageWindow::default() {
+            self.repository
+                .insert_or_update_portal_registration(&portal)
+                .await?;
+            self.repository
+                .save_source_metadata_page_window(&portal.portal_key, portal_url, window)
+                .await?;
+        }
         let sync_run_id = self
-            .start_verified_portal(portal.clone(), start_page, per_page, rate_limit_policy)
+            .start_verified_portal(portal.clone(), window, rate_limit_policy)
             .await?;
         Ok(PortalSyncStart {
             portal,
@@ -783,19 +794,18 @@ impl QueueManager {
     pub async fn start_verified_portal(
         &self,
         portal: PortalRegistration,
-        start_page: usize,
-        per_page: usize,
+        window: MetadataPageWindow,
         rate_limit_policy: RateLimitPolicy,
     ) -> Result<String, AppError> {
-        validate_page_parameters(start_page, per_page)?;
+        validate_page_parameters(window.start_page, window.page_size)?;
         let portal_key = portal.portal_key.clone();
         self.start_task_pool(
             portal,
             rate_limit_policy,
             vec![IngestionTask::FetchMetadataPage {
                 subdomain: portal_key,
-                page: start_page,
-                per_page,
+                page: window.start_page,
+                per_page: window.page_size,
             }],
             CrawlPolicy::default(),
             SourceGuidance::default(),
@@ -803,25 +813,19 @@ impl QueueManager {
         .await
     }
 
+    /// `window` is the page window recorded for this source, or `None` when none was recorded and
+    /// the built-in window applies. A resume that ignored it would re-seed page 1 at size 50 and
+    /// walk the range the operator deliberately started past.
     pub async fn resume_registered_source(
         &self,
         source: PortalRegistration,
         crawl_policy: CrawlPolicy,
         guidance: SourceGuidance,
+        window: Option<MetadataPageWindow>,
     ) -> Result<String, AppError> {
-        let initial_tasks = match source.source_kind {
-            SourceKind::NextRequest => vec![IngestionTask::FetchMetadataPage {
-                subdomain: source.portal_key.clone(),
-                page: 1,
-                per_page: 50,
-            }],
-            SourceKind::LocalFile | SourceKind::PastedContent => Vec::new(),
-            _ => vec![IngestionTask::CrawlPublicResource {
-                subdomain: source.portal_key.clone(),
-                url: source.canonical_url.clone(),
-                depth: 0,
-            }],
-        };
+        let window = window.unwrap_or_default();
+        validate_page_parameters(window.start_page, window.page_size)?;
+        let initial_tasks = resume_initial_tasks(&source, window);
         self.start_task_pool(
             source,
             RateLimitPolicy::default(),
@@ -4877,6 +4881,30 @@ fn decrement_atomic(value: &AtomicUsize) {
     });
 }
 
+/// The seed a resume adds alongside whatever the durable frontier already holds.
+///
+/// Split out so the window a resume applies is provable without provisioning a pool: the seed is
+/// enqueued unconditionally by `start_task_pool`, so a resume that ignored the operator's saved
+/// window would re-fetch page 1 at size 50 and walk the range they started past.
+fn resume_initial_tasks(
+    source: &PortalRegistration,
+    window: MetadataPageWindow,
+) -> Vec<IngestionTask> {
+    match source.source_kind {
+        SourceKind::NextRequest => vec![IngestionTask::FetchMetadataPage {
+            subdomain: source.portal_key.clone(),
+            page: window.start_page,
+            per_page: window.page_size,
+        }],
+        SourceKind::LocalFile | SourceKind::PastedContent => Vec::new(),
+        _ => vec![IngestionTask::CrawlPublicResource {
+            subdomain: source.portal_key.clone(),
+            url: source.canonical_url.clone(),
+            depth: 0,
+        }],
+    }
+}
+
 fn validate_page_parameters(page: usize, per_page: usize) -> Result<(), AppError> {
     if page == 0 || page > MAXIMUM_METADATA_PAGE {
         return Err(AppError::DataParsing(format!(
@@ -5973,6 +6001,61 @@ mod tests {
         ));
     }
 
+    // `start_task_pool` enqueues the resume seed unconditionally, alongside every adopted frontier
+    // row, so the seed is what decides where a resumed portal re-enters its request index. Before
+    // the window was persisted this was hardcoded to page 1 at size 50, which meant an operator who
+    // started at page 400 got the first 399 pages crawled on the next launch.
+    #[test]
+    fn a_resumed_portal_seeds_the_page_window_the_operator_saved() {
+        let source = PortalRegistration {
+            portal_key: "records".to_string(),
+            display_name: "Records".to_string(),
+            canonical_url: "https://records.example.test".to_string(),
+            origin_url: "https://records.example.test".to_string(),
+            api_layout: PortalApiLayout {
+                requests_endpoint: "https://records.example.test/client/requests".to_string(),
+                requests_pointer: "/requests".to_string(),
+                metadata_pointer: None,
+                page_parameter: "page".to_string(),
+                page_size_parameter: "per_page".to_string(),
+            },
+            verified_at: "2026-08-29T00:00:00Z".to_string(),
+            source_kind: SourceKind::NextRequest,
+        };
+
+        let saved = resume_initial_tasks(
+            &source,
+            MetadataPageWindow {
+                start_page: 400,
+                page_size: 25,
+            },
+        );
+        assert!(
+            matches!(
+                saved.as_slice(),
+                [IngestionTask::FetchMetadataPage {
+                    page: 400,
+                    per_page: 25,
+                    ..
+                }]
+            ),
+            "a resume must re-enter at the saved window, got: {saved:?}"
+        );
+
+        let unset = resume_initial_tasks(&source, MetadataPageWindow::default());
+        assert!(
+            matches!(
+                unset.as_slice(),
+                [IngestionTask::FetchMetadataPage {
+                    page: 1,
+                    per_page: 50,
+                    ..
+                }]
+            ),
+            "a source with no saved window must resume exactly as it did before, got: {unset:?}"
+        );
+    }
+
     async fn manager_with_source(
         directory: &tempfile::TempDir,
     ) -> (
@@ -6197,7 +6280,11 @@ mod tests {
         let parked_second = second.clone();
         let parked = tokio::spawn(async move {
             parked_manager
-                .start_verified_portal(parked_second, 1, 50, RateLimitPolicy::default())
+                .start_verified_portal(
+                    parked_second,
+                    MetadataPageWindow::default(),
+                    RateLimitPolicy::default(),
+                )
                 .await
         });
 

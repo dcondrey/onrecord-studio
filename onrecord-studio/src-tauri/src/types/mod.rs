@@ -45,6 +45,6 @@ pub use portal::{
     SourceLifecycleState, SourcePurge, SourcePurgePreview, SourceRemoval, StoppedHost,
 };
 pub use source::{
-    CrawlPolicy, DiscoveredSourceLink, PastedContentInput, SourceDiscoveryPreview, SourceGuidance,
-    SourceIngestionStart,
+    CrawlPolicy, DiscoveredSourceLink, MetadataPageWindow, PastedContentInput,
+    SourceDiscoveryPreview, SourceGuidance, SourceIngestionStart,
 };

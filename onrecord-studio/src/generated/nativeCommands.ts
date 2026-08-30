@@ -16,7 +16,7 @@ export interface NativeCommandMap {
   list_portal_runtimes: { args: NoArgs; result: Types.PortalRuntimeSnapshot[] };
   list_saved_portals: { args: NoArgs; result: Types.SavedSource[] };
   preview_data_source: { args: { url: string; guidance?: Types.SourceGuidance | null }; result: Types.SourceDiscoveryPreview };
-  start_data_source: { args: { url: string; crawlPolicy?: Types.CrawlPolicy | null; guidance?: Types.SourceGuidance | null; rateLimitPolicy?: Types.RateLimitPolicy | null }; result: Types.SourceIngestionStart };
+  start_data_source: { args: { url: string; crawlPolicy?: Types.CrawlPolicy | null; guidance?: Types.SourceGuidance | null; rateLimitPolicy?: Types.RateLimitPolicy | null; metadataPageWindow?: Types.MetadataPageWindow | null }; result: Types.SourceIngestionStart };
   ingest_local_files: { args: { paths: string[] }; result: Types.SourceIngestionStart };
   ingest_pasted_content: { args: { input: Types.PastedContentInput }; result: Types.SourceIngestionStart };
   query_corpus_patterns: { args: { query?: Types.CorpusPatternQuery | null }; result: Types.CorpusPattern[] };

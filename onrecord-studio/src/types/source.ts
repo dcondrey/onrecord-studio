@@ -7,6 +7,16 @@ export interface CrawlPolicy {
   followSupportedExternalPlatforms: boolean;
 }
 
+/**
+ * Which slice of a portal's metadata API a synchronization starts from. Only the NextRequest API
+ * path reads it; a crawled website or catalog has no page window. Mirrors
+ * `MetadataPageWindow::default()` in src-tauri/src/types/source.rs.
+ */
+export interface MetadataPageWindow {
+  startPage: number;
+  pageSize: number;
+}
+
 export interface SourceGuidance {
   reuseForPublisherPattern?: boolean;
   additionalSeedUrls: string[];

@@ -12,8 +12,8 @@ limit, context compaction, or a change of contributor. Search for `TODO(` and
 ### Continuation — 2026-08-29 unreached-surface pass
 
 Verification at the end of this pass, all run together: `cargo fmt --check`,
-`cargo clippy --lib --all-targets` (clean), `cargo test --lib` (288 passing), `npx tsc --noEmit`,
-`npx eslint src --max-warnings 0`, `npx vitest run` (93 passing), `node scripts/check-ipc-contract.mjs`
+`cargo clippy --lib --all-targets` (clean), `cargo test --lib` (296 passing), `npx tsc --noEmit`,
+`npx eslint src --max-warnings 0`, `npx vitest run` (99 passing), `node scripts/check-ipc-contract.mjs`
 (38 commands, 18 telemetry events, 6 verification states). The counts recorded in the older entries
 below are stale by construction: they were 217/226/229 Rust and 61/70 frontend against 30 and 27
 commands.
@@ -69,12 +69,31 @@ that compiled, linted, and passed 283 tests.
       nullable `documents.shannon_entropy`. The package schema is `onrecord-evidence-package-v2`;
       nothing in the tree consumed v1, and the human-readable brief never printed either column.
       Reversing the decision is deleting one enum and two call sites.
+- [x] **`start_page` and `per_page` are reachable again, and now survive a resume.**
+      `start_data_source` fixed them at 1 and 50 once `start_portal_sync` was unregistered, so a
+      source needing a different slice of a portal's request index had no way to say so. They are
+      one `MetadataPageWindow` on the command, set from the crawl settings dialog, bounded in the
+      dialog against `validate_page_parameters` and re-checked in Rust. Writing the setter exposed
+      the reason it matters: `start_task_pool` enqueues a resume's seed unconditionally alongside
+      the adopted frontier, and `resume_registered_source` hardcoded page 1 at size 50, so an
+      operator starting at page 400 would have had the first 399 pages crawled on the next launch
+      and on every startup recovery. The window is therefore persisted on
+      `source_connector_recipes` and read back by both resume paths. The column is nullable with no
+      DEFAULT because 1 and 50 are legal choices: NULL says the operator never chose, which is not
+      the same statement as choosing the built-in window, and a recipe row that predates the column
+      must keep saying the first thing. `used_saved_guidance` is now derived from the recipe's
+      contents rather than from a row existing, or a window-only row would have claimed guidance
+      was applied that never was. Four proofs by removal: the resume seed, the two writers not
+      overwriting each other, the pre-column row reading as absent, and the untouched dialog
+      sending `null`.
 
 Open, and specific:
 
-- [ ] **`start_page` and `per_page` are no longer reachable.** `start_data_source` fixes them at 1
-      and 50. Nothing called `start_portal_sync`, so nothing has lost a working feature, but a
-      source needing a non-default page window now has no way to say so.
+- [ ] **A NextRequest resume re-fetches its start page every time.** The seed is additive to the
+      adopted frontier by design, so a source paused at page 900 re-enters at its configured start
+      page rather than where it stopped. Deduplication makes this correct but not free. Closing it
+      means recording the frontier's high-water mark per source and seeding from that instead,
+      which is a change to what a resume means and not to what an operator can set.
 
 ### Continuation — 2026-08-27 release-hardening pass
 

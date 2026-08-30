@@ -64,6 +64,10 @@ CREATE TABLE IF NOT EXISTS source_connector_recipes (
     reuse_approved BIGINT NOT NULL DEFAULT 0 CHECK (reuse_approved IN (0, 1)),
     crawl_policy_json TEXT NOT NULL,
     guidance_json TEXT NOT NULL,
+    -- Nullable with no DEFAULT on purpose: 1 and 50 are legal window values, so a DEFAULT of the
+    -- built-in window could not be told apart from an operator who chose it. NULL says the
+    -- operator never set one, which is what resolves to the built-in window at start and resume.
+    metadata_page_window_json TEXT,
     updated_at TEXT NOT NULL DEFAULT strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'),
     FOREIGN KEY (source_key) REFERENCES portals(subdomain)
 );

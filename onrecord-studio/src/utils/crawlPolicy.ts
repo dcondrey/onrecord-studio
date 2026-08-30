@@ -4,7 +4,7 @@
 // `validate_policy` (src-tauri/src/ingestion/limiter.rs). They exist so a typo is rejected in the
 // dialog instead of after a round trip; the backend remains the authority.
 
-import type { CrawlPolicy, RateLimitPolicy } from '../types';
+import type { CrawlPolicy, MetadataPageWindow, RateLimitPolicy } from '../types';
 
 /** Mirrors `CrawlPolicy::default()` in src-tauri/src/types/source.rs. */
 export const DEFAULT_CRAWL_POLICY: CrawlPolicy = {
@@ -20,6 +20,12 @@ export const DEFAULT_RATE_LIMIT_POLICY: RateLimitPolicy = {
   refillTokensPerSecond: 1,
 };
 
+/** Mirrors `MetadataPageWindow::default()` in src-tauri/src/types/source.rs. */
+export const DEFAULT_METADATA_PAGE_WINDOW: MetadataPageWindow = {
+  startPage: 1,
+  pageSize: 50,
+};
+
 /**
  * Settings are held as raw strings while the dialog is open. A half-typed field is an empty
  * string, not `NaN`, so serde never sees a number the user did not finish entering.
@@ -31,6 +37,8 @@ export interface CrawlSettingsDraft {
   followSupportedExternalPlatforms: boolean;
   burstCapacity: string;
   refillTokensPerSecond: string;
+  metadataStartPage: string;
+  metadataPageSize: string;
 }
 
 export const DEFAULT_CRAWL_SETTINGS_DRAFT: CrawlSettingsDraft = {
@@ -40,10 +48,17 @@ export const DEFAULT_CRAWL_SETTINGS_DRAFT: CrawlSettingsDraft = {
   followSupportedExternalPlatforms: DEFAULT_CRAWL_POLICY.followSupportedExternalPlatforms,
   burstCapacity: String(DEFAULT_RATE_LIMIT_POLICY.burstCapacity),
   refillTokensPerSecond: String(DEFAULT_RATE_LIMIT_POLICY.refillTokensPerSecond),
+  metadataStartPage: String(DEFAULT_METADATA_PAGE_WINDOW.startPage),
+  metadataPageSize: String(DEFAULT_METADATA_PAGE_WINDOW.pageSize),
 };
 
 export type CrawlSettingsResult =
-  | { ok: true; crawlPolicy: CrawlPolicy; rateLimitPolicy: RateLimitPolicy }
+  | {
+      ok: true;
+      crawlPolicy: CrawlPolicy;
+      rateLimitPolicy: RateLimitPolicy;
+      metadataPageWindow: MetadataPageWindow;
+    }
   | { ok: false; problem: string };
 
 type NumberField = { ok: true; value: number } | { ok: false; problem: string };
@@ -82,6 +97,12 @@ export function parseCrawlSettings(draft: CrawlSettingsDraft): CrawlSettingsResu
   ) {
     return { ok: false, problem: 'Requests per second must be between 0.001 and 100.' };
   }
+  // Bounds are `validate_page_parameters` (src-tauri/src/ingestion/queue.rs): MAXIMUM_METADATA_PAGE
+  // is 50_000 and the page size is capped at 100 by the portal API itself.
+  const startPage = parseWholeNumber(draft.metadataStartPage, 'Metadata start page', 1, 50_000);
+  if (!startPage.ok) return startPage;
+  const pageSize = parseWholeNumber(draft.metadataPageSize, 'Metadata page size', 1, 100);
+  if (!pageSize.ok) return pageSize;
   return {
     ok: true,
     crawlPolicy: {
@@ -91,7 +112,22 @@ export function parseCrawlSettings(draft: CrawlSettingsDraft): CrawlSettingsResu
       followSupportedExternalPlatforms: draft.followSupportedExternalPlatforms,
     },
     rateLimitPolicy: { burstCapacity: burst.value, refillTokensPerSecond: refill },
+    metadataPageWindow: { startPage: startPage.value, pageSize: pageSize.value },
   };
+}
+
+/**
+ * `start_data_source` persists a connector recipe row for any window it is handed that differs
+ * from the built-in one (src-tauri/src/ingestion/queue.rs). An untouched dialog must therefore
+ * send `null`, so a source the operator never configured stores no choice it did not make.
+ */
+export function metadataPageWindowOverride(
+  window: MetadataPageWindow,
+): MetadataPageWindow | null {
+  const isDefault =
+    window.startPage === DEFAULT_METADATA_PAGE_WINDOW.startPage &&
+    window.pageSize === DEFAULT_METADATA_PAGE_WINDOW.pageSize;
+  return isDefault ? null : window;
 }
 
 /**

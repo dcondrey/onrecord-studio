@@ -26,10 +26,34 @@ use crate::types::{
     DocumentTextChunk, LegalAuthorityImport, LegalAuthorityImportResult, LegalAuthorityKind,
     LegalAuthoritySummary, LegalAuthorityVersionDetail, LegalAuthorityVersionSummary,
     LegalBriefExportResult, LegalComplianceFinding, LegalEvaluationResult,
-    LegalFindingReviewStatus, PortalRegistration, PublicRequest, RequestDocumentSummary,
-    RequestSearchResult, SavedSource, SourceGuidance, SourceLifecycleState, SourcePurge,
-    SourcePurgePreview, StatutoryExtensionReason, StatutoryExtensionRecord, TimelineAnomalyMarker,
+    LegalFindingReviewStatus, MetadataPageWindow, PortalRegistration, PublicRequest,
+    RequestDocumentSummary, RequestSearchResult, SavedSource, SourceGuidance, SourceLifecycleState,
+    SourcePurge, SourcePurgePreview, StatutoryExtensionReason, StatutoryExtensionRecord,
+    TimelineAnomalyMarker,
 };
+
+/// Everything a saved source remembers about how to synchronize it.
+///
+/// `metadata_page_window` is `Option` because absence is a fact here: a recipe row written before
+/// the column existed, or by the crawl path which has no page window, recorded no operator choice.
+/// The built-in window then applies, and that is not the same statement as an operator having
+/// picked page 1 at size 50.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceConnectorRecipe {
+    pub crawl_policy: CrawlPolicy,
+    pub guidance: SourceGuidance,
+    pub metadata_page_window: Option<MetadataPageWindow>,
+}
+
+impl SourceConnectorRecipe {
+    /// Whether this row actually carries a saved connector recipe, as opposed to existing only to
+    /// hold a page window. `SourceIngestionStart::used_saved_guidance` is a claim to the operator
+    /// that saved guidance was applied, so it must be derived from the guidance, not from the
+    /// presence of a row.
+    pub fn carries_guidance(&self) -> bool {
+        self.guidance != SourceGuidance::default() || self.crawl_policy != CrawlPolicy::default()
+    }
+}
 
 /// The only SQL spelling of "now" this repository may write, pinned by
 /// `tests::every_sql_timestamp_is_written_as_parseable_utc`.
@@ -630,6 +654,15 @@ impl DuckDbRepository {
             "source_connector_recipes",
             "reuse_approved",
             "BIGINT DEFAULT 0",
+        )?;
+        // No DEFAULT: a recipe written before this column existed recorded no window, and NULL is
+        // the only honest way to say that. 1 and 50 are legal windows, so defaulting to them would
+        // make "never chosen" indistinguishable from "chosen to be the same as the built-in".
+        ensure_column(
+            &conn,
+            "source_connector_recipes",
+            "metadata_page_window_json",
+            "TEXT",
         )?;
         // These admission counters bound an interrupted crawl across process restarts. Older runs
         // predate durable counting, so zero is the only evidence-backed backfill available.
@@ -1492,17 +1525,66 @@ impl DuckDbRepository {
         Ok(())
     }
 
+    /// Records the metadata page window an operator chose for a portal's API path.
+    ///
+    /// Deliberately not folded into [`Self::save_source_connector_recipe`]: that writer owns the
+    /// crawl policy and the repair guidance, and a NextRequest source has neither, so reusing it
+    /// would overwrite a stored recipe with defaults. On conflict this touches one column and
+    /// leaves the rest of the row as it was.
+    pub async fn save_source_metadata_page_window(
+        &self,
+        source_key: &str,
+        root_url: &str,
+        window: MetadataPageWindow,
+    ) -> Result<(), AppError> {
+        let window_json = serde_json::to_string(&window).map_err(|error| {
+            AppError::DataParsing(format!("Failed to encode metadata page window: {error}"))
+        })?;
+        let crawl_policy_json =
+            serde_json::to_string(&CrawlPolicy::default()).map_err(|error| {
+                AppError::DataParsing(format!("Failed to encode source crawl policy: {error}"))
+            })?;
+        let guidance_json = serde_json::to_string(&SourceGuidance::default()).map_err(|error| {
+            AppError::DataParsing(format!("Failed to encode source repair guidance: {error}"))
+        })?;
+        let publisher_pattern = publisher_pattern_for_url(root_url);
+        let conn = self.conn.lock().await;
+        conn.execute(
+            "INSERT INTO source_connector_recipes (
+                source_key, root_url, recipe_version, publisher_pattern, reuse_approved,
+                crawl_policy_json, guidance_json, metadata_page_window_json, updated_at
+             ) VALUES (?1, ?2, 2, ?3, 0, ?4, ?5, ?6,
+                       strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'))
+             ON CONFLICT(source_key) DO UPDATE SET
+                root_url = excluded.root_url,
+                metadata_page_window_json = excluded.metadata_page_window_json,
+                updated_at = excluded.updated_at",
+            params![
+                source_key,
+                root_url,
+                publisher_pattern,
+                crawl_policy_json,
+                guidance_json,
+                window_json
+            ],
+        )
+        .map_err(|error| {
+            AppError::Storage(format!("Failed to save metadata page window: {error}"))
+        })?;
+        Ok(())
+    }
+
     pub async fn load_source_connector_recipe(
         &self,
         root_url: &str,
-    ) -> Result<Option<(CrawlPolicy, SourceGuidance)>, AppError> {
+    ) -> Result<Option<SourceConnectorRecipe>, AppError> {
         let root_url = root_url.to_string();
         let publisher_pattern = publisher_pattern_for_url(&root_url);
         let encoded = self
             .query_connection("Source connector recipe query", move |connection| {
                 let mut statement = connection
                     .prepare(
-                        "SELECT crawl_policy_json, guidance_json
+                        "SELECT crawl_policy_json, guidance_json, metadata_page_window_json
                          FROM source_connector_recipes
                          WHERE root_url = ?1
                             OR (reuse_approved = 1 AND publisher_pattern = ?2)
@@ -1527,10 +1609,14 @@ impl DuckDbRepository {
                 else {
                     return Ok(None);
                 };
-                Ok(Some((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+                Ok(Some((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                )))
             })
             .await?;
-        let Some((crawl_policy_json, guidance_json)) = encoded else {
+        let Some((crawl_policy_json, guidance_json, metadata_page_window_json)) = encoded else {
             return Ok(None);
         };
         let crawl_policy = serde_json::from_str(&crawl_policy_json).map_err(|error| {
@@ -1539,7 +1625,18 @@ impl DuckDbRepository {
         let guidance = serde_json::from_str(&guidance_json).map_err(|error| {
             AppError::Storage(format!("Stored source repair guidance is invalid: {error}"))
         })?;
-        Ok(Some((crawl_policy, guidance)))
+        let metadata_page_window = metadata_page_window_json
+            .map(|encoded| {
+                serde_json::from_str::<MetadataPageWindow>(&encoded).map_err(|error| {
+                    AppError::Storage(format!("Stored metadata page window is invalid: {error}"))
+                })
+            })
+            .transpose()?;
+        Ok(Some(SourceConnectorRecipe {
+            crawl_policy,
+            guidance,
+            metadata_page_window,
+        }))
     }
 
     pub async fn finish_portal_sync_run(
@@ -6983,7 +7080,10 @@ mod tests {
     use duckdb::params;
 
     use crate::error::AppError;
-    use crate::types::{PublicRequest, StatutoryExtensionReason, StatutoryExtensionRecord};
+    use crate::types::{
+        CrawlPolicy, MetadataPageWindow, PublicRequest, SourceGuidance, StatutoryExtensionReason,
+        StatutoryExtensionRecord,
+    };
 
     use super::{
         compute_extracted_text_sha256, cpra_calendar_confidence_basis_points,
@@ -6999,6 +7099,185 @@ mod tests {
     const DOCUMENT_ID: i64 = 73;
     const RAW_FILE_SHA256: &str =
         "1111111111111111111111111111111111111111111111111111111111111111";
+
+    const RECIPE_ROOT_URL: &str = "https://records.example.test";
+
+    async fn repository_with_registered_portal() -> DuckDbRepository {
+        let repository =
+            DuckDbRepository::new(Path::new(":memory:")).expect("DuckDB core must open");
+        repository
+            .run_migrations(MIGRATION)
+            .await
+            .expect("test migration must succeed");
+        {
+            let connection = repository.conn.lock().await;
+            connection
+                .execute(
+                    "INSERT INTO portals (subdomain, display_name, base_url, origin_url)
+                     VALUES (?1, 'Records', ?2, ?2)",
+                    params![PORTAL_SUBDOMAIN, RECIPE_ROOT_URL],
+                )
+                .expect("portal registration must insert");
+        }
+        repository
+    }
+
+    /// The page window and the connector recipe share a row and have separate writers, which is
+    /// the whole reason this can go wrong: an upsert that names every column would silently
+    /// replace whichever of the two it does not know about. The NextRequest path saves only a
+    /// window and the crawl path saves only a recipe, so each must leave the other's evidence of
+    /// what the operator chose exactly as it found it, in both orders.
+    #[tokio::test]
+    async fn a_page_window_and_a_connector_recipe_do_not_overwrite_each_other() {
+        let guidance = SourceGuidance {
+            allowed_hostnames: vec!["assets.example.test".to_string()],
+            ..SourceGuidance::default()
+        };
+        let window = MetadataPageWindow {
+            start_page: 400,
+            page_size: 25,
+        };
+
+        for window_first in [true, false] {
+            let repository = repository_with_registered_portal().await;
+            let save_window = |repository: DuckDbRepository| async move {
+                repository
+                    .save_source_metadata_page_window(PORTAL_SUBDOMAIN, RECIPE_ROOT_URL, window)
+                    .await
+                    .expect("the page window must save")
+            };
+            let save_recipe = |repository: DuckDbRepository, guidance: SourceGuidance| async move {
+                repository
+                    .save_source_connector_recipe(
+                        PORTAL_SUBDOMAIN,
+                        RECIPE_ROOT_URL,
+                        &CrawlPolicy::default(),
+                        &guidance,
+                    )
+                    .await
+                    .expect("the connector recipe must save")
+            };
+            if window_first {
+                save_window(repository.clone()).await;
+                save_recipe(repository.clone(), guidance.clone()).await;
+            } else {
+                save_recipe(repository.clone(), guidance.clone()).await;
+                save_window(repository.clone()).await;
+            }
+
+            let loaded = repository
+                .load_source_connector_recipe(RECIPE_ROOT_URL)
+                .await
+                .expect("the recipe must load")
+                .expect("a row was written");
+            assert_eq!(
+                loaded.metadata_page_window,
+                Some(window),
+                "the saved page window must survive a recipe write (window first: {window_first})"
+            );
+            assert_eq!(
+                loaded.guidance, guidance,
+                "the saved guidance must survive a page window write (window first: {window_first})"
+            );
+            assert!(loaded.carries_guidance());
+        }
+    }
+
+    /// A row that exists only to hold a page window must not be reported as saved guidance.
+    /// `SourceIngestionStart::used_saved_guidance` is a statement to the operator about how the
+    /// source was ingested, and deriving it from the row existing would make it a false one.
+    #[tokio::test]
+    async fn a_window_only_row_does_not_claim_saved_guidance() {
+        let repository = repository_with_registered_portal().await;
+        repository
+            .save_source_metadata_page_window(
+                PORTAL_SUBDOMAIN,
+                RECIPE_ROOT_URL,
+                MetadataPageWindow {
+                    start_page: 7,
+                    page_size: 10,
+                },
+            )
+            .await
+            .expect("the page window must save");
+
+        let loaded = repository
+            .load_source_connector_recipe(RECIPE_ROOT_URL)
+            .await
+            .expect("the recipe must load")
+            .expect("a row was written");
+        assert!(
+            !loaded.carries_guidance(),
+            "a window-only row carries no guidance, got {loaded:?}"
+        );
+    }
+
+    /// Builds the pre-column table shape directly rather than stripping the column from a current
+    /// database, because a stripped column is not what an upgraded installation actually holds.
+    /// The recorded absence must stay an absence: reading it as page 1 at size 50 would report a
+    /// window the operator never chose, and 1 and 50 are legal windows an operator could choose.
+    #[tokio::test]
+    async fn a_recipe_written_before_the_page_window_column_reads_as_no_window() {
+        let repository =
+            DuckDbRepository::new(Path::new(":memory:")).expect("DuckDB core must open");
+        {
+            let connection = repository.conn.lock().await;
+            connection
+                .execute_batch(
+                    "CREATE TABLE portals (
+                        subdomain TEXT PRIMARY KEY,
+                        display_name TEXT NOT NULL,
+                        base_url TEXT NOT NULL
+                     );
+                     CREATE TABLE source_connector_recipes (
+                        source_key TEXT PRIMARY KEY,
+                        root_url TEXT NOT NULL UNIQUE,
+                        recipe_version BIGINT NOT NULL DEFAULT 2,
+                        crawl_policy_json TEXT NOT NULL,
+                        guidance_json TEXT NOT NULL,
+                        updated_at TEXT NOT NULL DEFAULT '2026-01-01T00:00:00.000000Z',
+                        FOREIGN KEY (source_key) REFERENCES portals(subdomain)
+                     );",
+                )
+                .expect("the pre-column shape must be reproducible");
+            connection
+                .execute(
+                    "INSERT INTO portals (subdomain, display_name, base_url)
+                     VALUES (?1, 'Records', ?2)",
+                    params![PORTAL_SUBDOMAIN, RECIPE_ROOT_URL],
+                )
+                .expect("the legacy portal row must insert");
+            connection
+                .execute(
+                    "INSERT INTO source_connector_recipes
+                        (source_key, root_url, crawl_policy_json, guidance_json)
+                     VALUES (?1, ?2, ?3, ?4)",
+                    params![
+                        PORTAL_SUBDOMAIN,
+                        RECIPE_ROOT_URL,
+                        serde_json::to_string(&CrawlPolicy::default()).expect("policy encodes"),
+                        serde_json::to_string(&SourceGuidance::default())
+                            .expect("guidance encodes")
+                    ],
+                )
+                .expect("the legacy recipe row must insert");
+        }
+
+        repository
+            .run_migrations(MIGRATION)
+            .await
+            .expect("an upgraded core must migrate");
+
+        let loaded = repository
+            .load_source_connector_recipe(RECIPE_ROOT_URL)
+            .await
+            .expect("the upgraded recipe must load")
+            .expect("the legacy row survives the upgrade");
+        assert_eq!(
+            loaded.metadata_page_window, None,
+            "a recipe that predates the column recorded no window, got {loaded:?}"
+        );
+    }
 
     async fn repository_with_document() -> DuckDbRepository {
         file_repository_with_document(Path::new(":memory:")).await

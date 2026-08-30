@@ -7,11 +7,11 @@ use crate::ingestion::client::{ApiClient, HttpClientConfig};
 use crate::ingestion::limiter::RateLimiter;
 use crate::ingestion::queue::{ingestion_telemetry_envelope, IngestionProgress, QueueManager};
 use crate::storage::corpus::CorpusIndex;
-use crate::storage::sqlite::DuckDbRepository;
+use crate::storage::sqlite::{DuckDbRepository, SourceConnectorRecipe};
 use crate::types::{
-    CrawlPolicy, DocumentPurge, PastedContentInput, PortalRuntimeSnapshot, RateLimitPolicy,
-    SavedSource, SourceDiscoveryPreview, SourceGuidance, SourceIngestionStart, SourceKind,
-    SourceLifecycleState, SourcePurge, SourcePurgePreview, SourceRemoval,
+    CrawlPolicy, DocumentPurge, MetadataPageWindow, PastedContentInput, PortalRuntimeSnapshot,
+    RateLimitPolicy, SavedSource, SourceDiscoveryPreview, SourceGuidance, SourceIngestionStart,
+    SourceKind, SourceLifecycleState, SourcePurge, SourcePurgePreview, SourceRemoval,
 };
 use std::path::Path;
 use std::sync::Arc;
@@ -57,19 +57,25 @@ pub async fn preview_data_source(
     manager.preview_public_source(url, guidance).await
 }
 
+/// `metadata_page_window` selects which slice of a portal's metadata API the synchronization
+/// starts from. It reaches only the NextRequest path below; a source that falls through to the
+/// public-crawl path has no metadata API, so the window is dropped rather than stored against a
+/// source that could never use it.
 #[tauri::command]
 pub async fn start_data_source(
     url: String,
     crawl_policy: Option<CrawlPolicy>,
     guidance: Option<SourceGuidance>,
     rate_limit_policy: Option<RateLimitPolicy>,
+    metadata_page_window: Option<MetadataPageWindow>,
     manager: State<'_, Arc<QueueManager>>,
     repository: State<'_, DuckDbRepository>,
 ) -> Result<SourceIngestionStart, AppError> {
     let url = required_text(&url, "Data source URL", 4_096)?;
     let rate_limit_policy = rate_limit_policy.unwrap_or_default();
+    let metadata_page_window = metadata_page_window.unwrap_or_default();
     match manager
-        .discover_and_start(url, 1, 50, rate_limit_policy)
+        .discover_and_start(url, metadata_page_window, rate_limit_policy)
         .await
     {
         Ok(start) => Ok(SourceIngestionStart {
@@ -85,13 +91,19 @@ pub async fn start_data_source(
             } else {
                 repository.load_source_connector_recipe(url).await?
             };
-            let used_saved_guidance = saved_recipe.is_some();
-            let (crawl_policy, guidance) = saved_recipe.unwrap_or_else(|| {
-                (
+            // Derived from the recipe's contents, not from the row existing: a row may exist
+            // only to hold a metadata page window, and claiming saved guidance was applied when
+            // none was is a false statement about how the source was ingested.
+            let used_saved_guidance = saved_recipe
+                .as_ref()
+                .is_some_and(SourceConnectorRecipe::carries_guidance);
+            let (crawl_policy, guidance) = match saved_recipe {
+                Some(recipe) if recipe.carries_guidance() => (recipe.crawl_policy, recipe.guidance),
+                _ => (
                     crawl_policy.unwrap_or_default(),
                     guidance.unwrap_or_default(),
-                )
-            });
+                ),
+            };
             let mut start = manager
                 .discover_and_start_public_source(
                     url,
@@ -161,11 +173,25 @@ pub async fn resume_source_sync(
     let saved_recipe = repository
         .load_source_connector_recipe(&saved.registration.canonical_url)
         .await?;
-    let used_saved_guidance = saved_recipe.is_some();
-    let (crawl_policy, guidance) = saved_recipe.unwrap_or_default();
+    let used_saved_guidance = saved_recipe
+        .as_ref()
+        .is_some_and(SourceConnectorRecipe::carries_guidance);
+    let (crawl_policy, guidance, metadata_page_window) = match saved_recipe {
+        Some(recipe) => (
+            recipe.crawl_policy,
+            recipe.guidance,
+            recipe.metadata_page_window,
+        ),
+        None => (CrawlPolicy::default(), SourceGuidance::default(), None),
+    };
     let detected_kind = saved.registration.source_kind;
     let sync_run_id = manager
-        .resume_registered_source(saved.registration.clone(), crawl_policy, guidance)
+        .resume_registered_source(
+            saved.registration.clone(),
+            crawl_policy,
+            guidance,
+            metadata_page_window,
+        )
         .await?;
     Ok(SourceIngestionStart {
         source: saved.registration,
@@ -343,7 +369,14 @@ pub async fn initialize_queue_runtime<R: Runtime, P: AsRef<Path>>(
                     continue;
                 }
             };
-            let (crawl_policy, guidance) = saved_recipe.unwrap_or_default();
+            let (crawl_policy, guidance, metadata_page_window) = match saved_recipe {
+                Some(recipe) => (
+                    recipe.crawl_policy,
+                    recipe.guidance,
+                    recipe.metadata_page_window,
+                ),
+                None => (CrawlPolicy::default(), SourceGuidance::default(), None),
+            };
             let mut capacity_attempts = 0_usize;
             loop {
                 match recovery_manager
@@ -351,6 +384,7 @@ pub async fn initialize_queue_runtime<R: Runtime, P: AsRef<Path>>(
                         source.clone(),
                         crawl_policy.clone(),
                         guidance.clone(),
+                        metadata_page_window,
                     )
                     .await
                 {

@@ -5,6 +5,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { cn } from '../../utils/cn';
 import {
   crawlPolicyOverride,
+  metadataPageWindowOverride,
   DEFAULT_CRAWL_SETTINGS_DRAFT,
   parseCrawlSettings,
   type CrawlSettingsDraft,
@@ -43,6 +44,12 @@ const crawlNumberFields: CrawlNumberField[] = [
   { field: 'maximumResources', label: 'Document limit', hint: 'Documents queued per source before the crawl stops.', min: 1, max: 1_000_000, step: 1 },
   { field: 'burstCapacity', label: 'Burst capacity', hint: 'Requests allowed back to back before pacing applies.', min: 1, max: 100, step: 1 },
   { field: 'refillTokensPerSecond', label: 'Requests per second', hint: 'Sustained request rate. Fractional values are allowed.', min: 0.001, max: 100, step: 0.1 },
+];
+
+// Only a portal with a metadata API reads these; a crawled site or catalog ignores them.
+const metadataPageFields: CrawlNumberField[] = [
+  { field: 'metadataStartPage', label: 'Metadata start page', hint: 'First page of the request index to fetch. Earlier pages are not read.', min: 1, max: 50_000, step: 1 },
+  { field: 'metadataPageSize', label: 'Metadata page size', hint: 'Requests fetched per index page.', min: 1, max: 100, step: 1 },
 ];
 
 interface GuidanceListField {
@@ -242,6 +249,7 @@ export default function Header() {
         crawlPolicy: crawlPolicyOverride(settings.crawlPolicy),
         guidance: null,
         rateLimitPolicy: settings.rateLimitPolicy,
+        metadataPageWindow: metadataPageWindowOverride(settings.metadataPageWindow),
       });
       if (!sourceRequestGate.isCurrent(request)) return;
       registerSourceStart(source, syncRunId, detectedKind);
@@ -347,6 +355,7 @@ export default function Header() {
         crawlPolicy: crawlPolicyOverride(settings.crawlPolicy),
         guidance: buildRepairGuidance(filters.filters, [repairSeedUrl.trim()], repairLinkSelector, repairDownloadSelector, reuseRepairForPublisher),
         rateLimitPolicy: settings.rateLimitPolicy,
+        metadataPageWindow: metadataPageWindowOverride(settings.metadataPageWindow),
       });
       if (!sourceRequestGate.isCurrent(request)) return;
       registerSourceStart(source, syncRunId, detectedKind);
@@ -823,7 +832,7 @@ export default function Header() {
             <div>
               <div className="app-eyebrow text-cyan-300/70">Acquisition</div>
               <h2 id="crawl-settings-title" className="mt-1 text-sm font-semibold text-slate-100">Crawl settings</h2>
-              <p className="mt-1 max-w-xl text-[9px] leading-relaxed text-slate-400">Applied to the next source you add, and saved with that source when it differs from the defaults. Crawl limits govern crawled websites and catalogs; request pacing governs every network source.</p>
+              <p className="mt-1 max-w-xl text-[9px] leading-relaxed text-slate-400">Applied to the next source you add, and saved with that source when it differs from the defaults. Crawl limits govern crawled websites and catalogs; request pacing governs every network source; the metadata page window governs portals with a request API, and a non-default window is remembered so a resume continues from it.</p>
             </div>
             <button type="button" onClick={() => setCrawlSettingsOpen(false)} aria-label="Close crawl settings" className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-300"><Icon name="x" /></button>
           </div>
@@ -858,6 +867,24 @@ export default function Header() {
                 <span className="mt-1 block text-[8px] leading-relaxed text-slate-400">Follows links off the source host into recognized document platforms such as hosted folders and drives.</span>
               </span>
             </label>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {metadataPageFields.map(({ field, label, hint, min, max, step }) => (
+                <label key={field} className="block text-[9px] font-semibold text-slate-400">
+                  {label}
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={min}
+                    max={max}
+                    step={step}
+                    value={crawlDraft[field]}
+                    onChange={(event) => updateCrawlDraft({ [field]: event.target.value })}
+                    className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 font-mono text-[11px] text-slate-200"
+                  />
+                  <span className="mt-1 block text-[8px] font-normal leading-relaxed text-slate-400">{hint}</span>
+                </label>
+              ))}
+            </div>
             {!crawlSettings.ok && <p role="alert" className="text-[9px] text-rose-300">{crawlSettings.problem}</p>}
           </div>
           <div className="flex items-center justify-between border-t border-slate-800 px-4 py-3">

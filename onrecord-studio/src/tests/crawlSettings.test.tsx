@@ -73,6 +73,39 @@ describe('crawl settings', () => {
     expect(call.command).toBe('start_data_source');
     expect(call.args.crawlPolicy).toBeNull();
     expect(call.args.rateLimitPolicy).toEqual(DEFAULT_RATE_LIMIT);
+    expect(call.args.metadataPageWindow).toBeNull();
+  });
+
+  // The page window is persisted against the source whenever it differs from the built-in one, so
+  // an untouched dialog sending a default-valued object would record a choice nobody made. It also
+  // travels separately from the crawl policy, which is the pairing this asserts in both directions.
+  it('sends the metadata page window only once it is moved off the built-in one', async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Crawl settings' }));
+    fireEvent.change(screen.getByLabelText(/Metadata start page/), { target: { value: '400' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+
+    const call = await startSource('https://example.gov/records');
+    expect(call.args.metadataPageWindow).toEqual({ startPage: 400, pageSize: 50 });
+    expect(call.args.crawlPolicy).toBeNull();
+  });
+
+  it('refuses a page size the portal API cannot serve instead of sending it', async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Crawl settings' }));
+    fireEvent.change(screen.getByLabelText(/Metadata page size/), { target: { value: '101' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Close crawl settings' }));
+
+    fireEvent.change(screen.getByLabelText('Public data source URL'), {
+      target: { value: 'https://example.gov/records' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(bridge.calls).toHaveLength(0);
+    const alerts = await screen.findAllByRole('alert');
+    expect(
+      alerts.some((alert) =>
+        alert.textContent?.includes('Metadata page size must be between 1 and 100.'),
+      ),
+    ).toBe(true);
   });
 
   it('sends the full policy once a limit is customized', async () => {
