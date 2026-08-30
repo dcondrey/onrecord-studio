@@ -779,7 +779,7 @@ impl QueueManager {
                 .insert_or_update_portal_registration(&portal)
                 .await?;
             self.repository
-                .save_source_metadata_page_window(&portal.portal_key, portal_url, window)
+                .save_source_metadata_page_window(&portal, window)
                 .await?;
         }
         let sync_run_id = self

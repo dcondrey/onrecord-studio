@@ -12,7 +12,7 @@ limit, context compaction, or a change of contributor. Search for `TODO(` and
 ### Continuation — 2026-08-29 unreached-surface pass
 
 Verification at the end of this pass, all run together: `cargo fmt --check`,
-`cargo clippy --lib --all-targets` (clean), `cargo test --lib` (296 passing), `npx tsc --noEmit`,
+`cargo clippy --lib --all-targets` (clean), `cargo test --lib` (298 passing), `npx tsc --noEmit`,
 `npx eslint src --max-warnings 0`, `npx vitest run` (99 passing), `node scripts/check-ipc-contract.mjs`
 (38 commands, 18 telemetry events, 6 verification states). The counts recorded in the older entries
 below are stale by construction: they were 217/226/229 Rust and 61/70 frontend against 30 and 27
@@ -86,8 +86,36 @@ that compiled, linted, and passed 283 tests.
       was applied that never was. Four proofs by removal: the resume seed, the two writers not
       overwriting each other, the pre-column row reading as absent, and the untouched dialog
       sending `null`.
+- [x] **The window was keyed on the operator's pasted URL and read back by the canonical one, so
+      no resume could ever find it.** An adversarial review of the commit above found this in three
+      independent dimensions. `canonical_url` is `Url::to_string()`, which supplies the path a
+      pasted bare host omits, so `https://city.nextrequest.com` is stored and
+      `https://city.nextrequest.com/` is queried, and both resume paths fell straight back to 1 and
+      50: the exact revert the feature exists to prevent, now silent. Every one of the four tests
+      missed it because each used the same literal on both sides. The writer now takes the
+      `PortalRegistration` rather than a key and a URL, so the pasted string is not in reach.
+      **The same mismatch is still live for guided-repair recipes**, below.
+- [x] **A window-only row silently withdrew an approved publisher recipe.**
+      `load_source_connector_recipe` took the highest-ranked row whole, and a NextRequest source
+      that set a window now has a row of its own carrying default policy and guidance. A source
+      running under a recipe its operator approved for reuse would have dropped to the built-in
+      crawl policy the moment a window was set, with nothing said. The loader now reads both
+      candidates and takes the guidance from whichever row carries any, while taking the window
+      only from an exact `root_url` match: a window says where in one portal's request index to
+      start, which is not a fact about a sibling that shares a publisher.
 
 Open, and specific:
+
+- [ ] **A guided-repair recipe has the same raw-versus-canonical key mismatch.**
+      `discover_and_start_public_source` saves it under `source_url`, the pasted string
+      (`queue.rs`), while `resume_source_sync` and startup recovery read by `canonical_url`
+      (`commands/ingest.rs`). So an operator's guidance applies when the source is re-added and
+      stops applying on every resume and every launch, and `used_saved_guidance` reports it
+      accurately in one case and not the other. This predates the page-window work and was not
+      fixed with it because the two readers disagree on purpose today: `start_data_source` looks up
+      by the pasted URL, so moving the write key alone would trade one silent miss for another.
+      Closing it means canonicalizing at both writers and both readers, and deciding what happens
+      to rows already written under a pasted URL.
 
 - [ ] **A NextRequest resume re-fetches its start page every time.** The seed is additive to the
       adopted frontier by design, so a source paused at page 900 re-enters at its configured start

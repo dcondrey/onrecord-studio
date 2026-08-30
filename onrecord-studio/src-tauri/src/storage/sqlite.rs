@@ -1531,12 +1531,19 @@ impl DuckDbRepository {
     /// crawl policy and the repair guidance, and a NextRequest source has neither, so reusing it
     /// would overwrite a stored recipe with defaults. On conflict this touches one column and
     /// leaves the rest of the row as it was.
+    /// Takes the registration rather than a key and a URL so the row is keyed on
+    /// `canonical_url` by construction. The operator's pasted string is not that URL:
+    /// `Url::to_string` adds the path a bare host omits, so a window written under
+    /// `https://city.nextrequest.com` could never be found by the resume paths, which look the
+    /// recipe up by the registration's `https://city.nextrequest.com/`. Passing the two apart
+    /// made that mistake expressible; this signature does not.
     pub async fn save_source_metadata_page_window(
         &self,
-        source_key: &str,
-        root_url: &str,
+        portal: &PortalRegistration,
         window: MetadataPageWindow,
     ) -> Result<(), AppError> {
+        let source_key = portal.portal_key.as_str();
+        let root_url = portal.canonical_url.as_str();
         let window_json = serde_json::to_string(&window).map_err(|error| {
             AppError::DataParsing(format!("Failed to encode metadata page window: {error}"))
         })?;
@@ -1574,64 +1581,96 @@ impl DuckDbRepository {
         Ok(())
     }
 
+    /// Resolves what a source should be synchronized with, from its own row and from any recipe
+    /// its publisher approved for reuse.
+    ///
+    /// The two are read separately because they are separately owned. A NextRequest source that
+    /// only ever set a page window has a row carrying default policy and guidance, and letting
+    /// that row win outright would silently withdraw an approved publisher recipe the source was
+    /// running under until the window was set. Conversely the page window is never taken from a
+    /// reused row: a window says where in *this* portal's request index to start, which is not a
+    /// fact about a sibling source that happens to share a publisher.
     pub async fn load_source_connector_recipe(
         &self,
         root_url: &str,
     ) -> Result<Option<SourceConnectorRecipe>, AppError> {
         let root_url = root_url.to_string();
         let publisher_pattern = publisher_pattern_for_url(&root_url);
+        let lookup_url = root_url.clone();
         let encoded = self
             .query_connection("Source connector recipe query", move |connection| {
                 let mut statement = connection
                     .prepare(
-                        "SELECT crawl_policy_json, guidance_json, metadata_page_window_json
+                        "SELECT root_url, crawl_policy_json, guidance_json,
+                                metadata_page_window_json
                          FROM source_connector_recipes
                          WHERE root_url = ?1
                             OR (reuse_approved = 1 AND publisher_pattern = ?2)
                          ORDER BY CASE WHEN root_url = ?1 THEN 0 ELSE 1 END, updated_at DESC
-                         LIMIT 1",
+                         LIMIT 2",
                     )
                     .map_err(|error| {
                         AppError::Storage(format!(
                             "Failed to prepare source connector recipe: {error}"
                         ))
                     })?;
-                let mut rows = statement
-                    .query(params![root_url, publisher_pattern])
+                let rows = statement
+                    .query_map(params![lookup_url, publisher_pattern], |row| {
+                        Ok((
+                            row.get::<_, String>(0)?,
+                            row.get::<_, String>(1)?,
+                            row.get::<_, String>(2)?,
+                            row.get::<_, Option<String>>(3)?,
+                        ))
+                    })
                     .map_err(|error| {
                         AppError::Storage(format!(
                             "Failed to query source connector recipe: {error}"
                         ))
                     })?;
-                let Some(row) = rows.next().map_err(|error| {
+                rows.collect::<duckdb::Result<Vec<_>>>().map_err(|error| {
                     AppError::Storage(format!("Failed to read source connector recipe: {error}"))
-                })?
-                else {
-                    return Ok(None);
-                };
-                Ok(Some((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, Option<String>>(2)?,
-                )))
-            })
-            .await?;
-        let Some((crawl_policy_json, guidance_json, metadata_page_window_json)) = encoded else {
-            return Ok(None);
-        };
-        let crawl_policy = serde_json::from_str(&crawl_policy_json).map_err(|error| {
-            AppError::Storage(format!("Stored source crawl policy is invalid: {error}"))
-        })?;
-        let guidance = serde_json::from_str(&guidance_json).map_err(|error| {
-            AppError::Storage(format!("Stored source repair guidance is invalid: {error}"))
-        })?;
-        let metadata_page_window = metadata_page_window_json
-            .map(|encoded| {
-                serde_json::from_str::<MetadataPageWindow>(&encoded).map_err(|error| {
-                    AppError::Storage(format!("Stored metadata page window is invalid: {error}"))
                 })
             })
-            .transpose()?;
+            .await?;
+        if encoded.is_empty() {
+            return Ok(None);
+        }
+        let mut decoded = Vec::with_capacity(encoded.len());
+        for (row_url, crawl_policy_json, guidance_json, metadata_page_window_json) in encoded {
+            let crawl_policy: CrawlPolicy =
+                serde_json::from_str(&crawl_policy_json).map_err(|error| {
+                    AppError::Storage(format!("Stored source crawl policy is invalid: {error}"))
+                })?;
+            let guidance: SourceGuidance =
+                serde_json::from_str(&guidance_json).map_err(|error| {
+                    AppError::Storage(format!("Stored source repair guidance is invalid: {error}"))
+                })?;
+            let metadata_page_window = metadata_page_window_json
+                .map(|encoded| {
+                    serde_json::from_str::<MetadataPageWindow>(&encoded).map_err(|error| {
+                        AppError::Storage(format!(
+                            "Stored metadata page window is invalid: {error}"
+                        ))
+                    })
+                })
+                .transpose()?;
+            decoded.push((row_url, crawl_policy, guidance, metadata_page_window));
+        }
+        let metadata_page_window = decoded
+            .iter()
+            .find(|(row_url, ..)| *row_url == root_url)
+            .and_then(|(.., window)| *window);
+        let (crawl_policy, guidance) = decoded
+            .iter()
+            .find(|(_, crawl_policy, guidance, _)| {
+                *guidance != SourceGuidance::default() || *crawl_policy != CrawlPolicy::default()
+            })
+            .map(|(_, crawl_policy, guidance, _)| (crawl_policy.clone(), guidance.clone()))
+            .unwrap_or_else(|| {
+                let (_, crawl_policy, guidance, _) = &decoded[0];
+                (crawl_policy.clone(), guidance.clone())
+            });
         Ok(Some(SourceConnectorRecipe {
             crawl_policy,
             guidance,
@@ -7081,8 +7120,8 @@ mod tests {
 
     use crate::error::AppError;
     use crate::types::{
-        CrawlPolicy, MetadataPageWindow, PublicRequest, SourceGuidance, StatutoryExtensionReason,
-        StatutoryExtensionRecord,
+        CrawlPolicy, MetadataPageWindow, PortalRegistration, PublicRequest, SourceGuidance,
+        StatutoryExtensionReason, StatutoryExtensionRecord,
     };
 
     use super::{
@@ -7100,26 +7139,41 @@ mod tests {
     const RAW_FILE_SHA256: &str =
         "1111111111111111111111111111111111111111111111111111111111111111";
 
-    const RECIPE_ROOT_URL: &str = "https://records.example.test";
+    // Note the trailing slash. `canonical_url` is `Url::to_string()`, so this is the shape a
+    // registration actually holds, and it is not the shape an operator pastes.
+    const RECIPE_ROOT_URL: &str = "https://records.example.test/";
 
-    async fn repository_with_registered_portal() -> DuckDbRepository {
+    fn test_registration(portal_key: &str, canonical_url: &str) -> PortalRegistration {
+        PortalRegistration {
+            portal_key: portal_key.to_string(),
+            display_name: "Records".to_string(),
+            canonical_url: canonical_url.to_string(),
+            origin_url: canonical_url.to_string(),
+            api_layout: crate::types::PortalApiLayout {
+                requests_endpoint: format!("{canonical_url}client/requests"),
+                requests_pointer: "/requests".to_string(),
+                metadata_pointer: None,
+                page_parameter: "page".to_string(),
+                page_size_parameter: "per_page".to_string(),
+            },
+            verified_at: "2026-08-29T00:00:00Z".to_string(),
+            source_kind: crate::types::SourceKind::NextRequest,
+        }
+    }
+
+    async fn repository_with_registered_portal() -> (DuckDbRepository, PortalRegistration) {
         let repository =
             DuckDbRepository::new(Path::new(":memory:")).expect("DuckDB core must open");
         repository
             .run_migrations(MIGRATION)
             .await
             .expect("test migration must succeed");
-        {
-            let connection = repository.conn.lock().await;
-            connection
-                .execute(
-                    "INSERT INTO portals (subdomain, display_name, base_url, origin_url)
-                     VALUES (?1, 'Records', ?2, ?2)",
-                    params![PORTAL_SUBDOMAIN, RECIPE_ROOT_URL],
-                )
-                .expect("portal registration must insert");
-        }
+        let registration = test_registration(PORTAL_SUBDOMAIN, RECIPE_ROOT_URL);
         repository
+            .insert_or_update_portal_registration(&registration)
+            .await
+            .expect("portal registration must persist");
+        (repository, registration)
     }
 
     /// The page window and the connector recipe share a row and have separate writers, which is
@@ -7139,10 +7193,10 @@ mod tests {
         };
 
         for window_first in [true, false] {
-            let repository = repository_with_registered_portal().await;
-            let save_window = |repository: DuckDbRepository| async move {
+            let (repository, registration) = repository_with_registered_portal().await;
+            let save_window = |repository: DuckDbRepository, registration: PortalRegistration| async move {
                 repository
-                    .save_source_metadata_page_window(PORTAL_SUBDOMAIN, RECIPE_ROOT_URL, window)
+                    .save_source_metadata_page_window(&registration, window)
                     .await
                     .expect("the page window must save")
             };
@@ -7158,11 +7212,11 @@ mod tests {
                     .expect("the connector recipe must save")
             };
             if window_first {
-                save_window(repository.clone()).await;
+                save_window(repository.clone(), registration.clone()).await;
                 save_recipe(repository.clone(), guidance.clone()).await;
             } else {
                 save_recipe(repository.clone(), guidance.clone()).await;
-                save_window(repository.clone()).await;
+                save_window(repository.clone(), registration.clone()).await;
             }
 
             let loaded = repository
@@ -7188,11 +7242,10 @@ mod tests {
     /// source was ingested, and deriving it from the row existing would make it a false one.
     #[tokio::test]
     async fn a_window_only_row_does_not_claim_saved_guidance() {
-        let repository = repository_with_registered_portal().await;
+        let (repository, _registration) = repository_with_registered_portal().await;
         repository
             .save_source_metadata_page_window(
-                PORTAL_SUBDOMAIN,
-                RECIPE_ROOT_URL,
+                &test_registration(PORTAL_SUBDOMAIN, RECIPE_ROOT_URL),
                 MetadataPageWindow {
                     start_page: 7,
                     page_size: 10,
@@ -7209,6 +7262,105 @@ mod tests {
         assert!(
             !loaded.carries_guidance(),
             "a window-only row carries no guidance, got {loaded:?}"
+        );
+    }
+
+    /// A page window is looked up by the registration's canonical URL on every resume, and
+    /// `canonical_url` is `Url::to_string()`, which supplies the path a pasted bare host omits. A
+    /// window keyed on the pasted string is therefore a window no resume can ever find, which
+    /// silently reinstates the exact revert-to-1/50 this feature exists to prevent. The writer
+    /// takes the registration so the pasted string is not in reach; this pins the effect.
+    #[tokio::test]
+    async fn a_page_window_is_keyed_on_the_url_the_resume_paths_look_it_up_by() {
+        let (repository, registration) = repository_with_registered_portal().await;
+        let pasted = RECIPE_ROOT_URL
+            .strip_suffix('/')
+            .expect("the canonical form carries the path a paste omits");
+        repository
+            .save_source_metadata_page_window(
+                &registration,
+                MetadataPageWindow {
+                    start_page: 400,
+                    page_size: 25,
+                },
+            )
+            .await
+            .expect("the page window must save");
+
+        let by_canonical = repository
+            .load_source_connector_recipe(&registration.canonical_url)
+            .await
+            .expect("the recipe must load")
+            .expect("the row the resume paths read must exist");
+        assert_eq!(
+            by_canonical.metadata_page_window,
+            Some(MetadataPageWindow {
+                start_page: 400,
+                page_size: 25
+            }),
+            "a resume looks the recipe up by canonical_url and must find the saved window"
+        );
+        assert_ne!(
+            pasted, registration.canonical_url,
+            "the pasted form and the canonical form must actually differ, or this proves nothing"
+        );
+    }
+
+    /// A source running under a publisher recipe its operator approved for reuse has no row of its
+    /// own. Setting a page window gives it one, carrying default policy and guidance because a
+    /// NextRequest source has neither. That row must not be read as the operator withdrawing the
+    /// approved recipe, and its window must not travel back out to the siblings that share the
+    /// publisher: a window says where in *this* portal's index to start.
+    #[tokio::test]
+    async fn a_page_window_neither_withdraws_an_approved_publisher_recipe_nor_leaks_to_a_sibling() {
+        let (repository, registration) = repository_with_registered_portal().await;
+        let sibling = test_registration("records-archive", "https://records.example.test/archive");
+        repository
+            .insert_or_update_portal_registration(&sibling)
+            .await
+            .expect("the sibling registration must persist");
+        let approved = SourceGuidance {
+            reuse_for_publisher_pattern: true,
+            allowed_hostnames: vec!["assets.example.test".to_string()],
+            ..SourceGuidance::default()
+        };
+        repository
+            .save_source_connector_recipe(
+                &sibling.portal_key,
+                &sibling.canonical_url,
+                &CrawlPolicy::default(),
+                &approved,
+            )
+            .await
+            .expect("the approved publisher recipe must save");
+        let window = MetadataPageWindow {
+            start_page: 400,
+            page_size: 25,
+        };
+        repository
+            .save_source_metadata_page_window(&registration, window)
+            .await
+            .expect("the page window must save");
+
+        let loaded = repository
+            .load_source_connector_recipe(&registration.canonical_url)
+            .await
+            .expect("the recipe must load")
+            .expect("a row exists for this source");
+        assert_eq!(
+            loaded.guidance, approved,
+            "setting a page window must not withdraw the approved publisher recipe"
+        );
+        assert_eq!(loaded.metadata_page_window, Some(window));
+
+        let inherited = repository
+            .load_source_connector_recipe(&sibling.canonical_url)
+            .await
+            .expect("the sibling recipe must load")
+            .expect("the sibling has its own row");
+        assert_eq!(
+            inherited.metadata_page_window, None,
+            "a page window belongs to one portal's request index, not to a shared publisher"
         );
     }
 
