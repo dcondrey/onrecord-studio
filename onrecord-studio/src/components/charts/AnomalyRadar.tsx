@@ -152,8 +152,8 @@ export default function AnomalyRadar() {
             <circle cx="120" cy="120" r="4" fill="var(--viz-cyan)" opacity="0.8" />
           </svg>
           <div className="chart-ready-card absolute max-w-[230px] rounded-xl border px-4 py-3 text-center backdrop-blur-xl">
-            <div className="text-[10px] font-semibold text-slate-300">Relationship map ready</div>
-            <div className="mt-1 text-[9px] leading-relaxed text-slate-400">Agency density will resolve into selectable source and department rings.</div>
+            <div className="text-[10px] font-semibold text-slate-300">No departments profiled yet</div>
+            <div className="mt-1 text-[9px] leading-relaxed text-slate-400">This panel draws one ring per source and one slice per department, from the agency performance profiles. None have been computed, so there is nothing here to read.</div>
           </div>
         </div>
         )}

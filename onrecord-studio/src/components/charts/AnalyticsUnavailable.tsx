@@ -11,10 +11,17 @@ interface AnalyticsUnavailableProps {
  * fall back to.
  *
  * The distinction matters more here than in an ordinary dashboard. "No fast-drop signals
- * detected" and "Relationship map ready" are findings: they tell an investigator that the
+ * detected" and "No departments profiled yet" are findings: they tell an investigator that the
  * corpus was examined and nothing was there. When the query never ran, the panel has no
  * evidence for either claim, and presenting one is the same failure as a false negative in the
  * analysis itself.
+ *
+ * An empty state must also not describe a capability that does not exist. This panel's empty
+ * state read "Relationship map ready" until 2026-08-30, promising an entity relationship map
+ * that is unbuilt (docs/investigative-workbench-architecture.md section 7, step 4) from a panel
+ * that has never drawn one -- it renders agency performance profiles. A caption is the only
+ * thing an operator has to go on when the picture is blank, and one that names a feature the
+ * app does not have is a false statement about the evidence, not decoration.
  */
 export default function AnalyticsUnavailable({ heading, detail, className }: AnalyticsUnavailableProps) {
   return (
