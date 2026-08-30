@@ -1526,22 +1526,28 @@ impl DuckDbRepository {
             AppError::DataParsing(format!("Failed to encode source repair guidance: {error}"))
         })?;
         let publisher_pattern = publisher_pattern_for_url(root_url);
-        let conn = self.conn.lock().await;
-        // `root_url` is UNIQUE and the upsert below targets `source_key`, so a row holding this
-        // URL under a *different* key would fail the insert and take the start down with it. The
-        // key is a digest over the source kind and the final URL, so a reclassified source at an
-        // unchanged URL produces exactly that pair. The stale row is the one to lose.
-        conn.execute(
-            "DELETE FROM source_connector_recipes WHERE root_url = ?1 AND source_key <> ?2",
-            params![root_url, source_key],
-        )
-        .map_err(|error| {
-            AppError::Storage(format!(
-                "Failed to clear a superseded source connector recipe: {error}"
-            ))
-        })?;
-        conn.execute(
-            "INSERT INTO source_connector_recipes (
+        let mut conn = self.conn.lock().await;
+        execute_transaction(&mut conn, "source connector recipe", |transaction| {
+            // `root_url` is UNIQUE and the upsert below targets `source_key`, so a row holding
+            // this URL under a *different* key fails the insert and takes the source start down
+            // with it. The key is a digest over the source kind and the final URL, so a
+            // reclassified source at an unchanged URL produces exactly that pair. The superseded
+            // row is the one to lose -- but only if the row replacing it is actually written,
+            // which is why the two statements share a transaction rather than running in order.
+            transaction
+                .execute(
+                    "DELETE FROM source_connector_recipes
+                     WHERE root_url = ?1 AND source_key <> ?2",
+                    params![root_url, source_key],
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!(
+                        "Failed to clear a superseded source connector recipe: {error}"
+                    ))
+                })?;
+            transaction
+                .execute(
+                    "INSERT INTO source_connector_recipes (
                 source_key, root_url, recipe_version, publisher_pattern, reuse_approved,
                 crawl_policy_json, guidance_json, updated_at
              ) VALUES (?1, ?2, 2, ?3, ?4, ?5, ?6,
@@ -1554,19 +1560,20 @@ impl DuckDbRepository {
                 crawl_policy_json = excluded.crawl_policy_json,
                 guidance_json = excluded.guidance_json,
                 updated_at = excluded.updated_at",
-            params![
-                source_key,
-                root_url,
-                publisher_pattern,
-                guidance.reuse_for_publisher_pattern,
-                crawl_policy_json,
-                guidance_json
-            ],
-        )
-        .map_err(|error| {
-            AppError::Storage(format!("Failed to save source connector recipe: {error}"))
-        })?;
-        Ok(())
+                    params![
+                        source_key,
+                        root_url,
+                        publisher_pattern,
+                        guidance.reuse_for_publisher_pattern,
+                        crawl_policy_json,
+                        guidance_json
+                    ],
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to save source connector recipe: {error}"))
+                })?;
+            Ok(())
+        })
     }
 
     /// Records the metadata page window an operator chose for a portal's API path.
@@ -1599,18 +1606,24 @@ impl DuckDbRepository {
             AppError::DataParsing(format!("Failed to encode source repair guidance: {error}"))
         })?;
         let publisher_pattern = publisher_pattern_for_url(root_url);
-        let conn = self.conn.lock().await;
-        conn.execute(
-            "DELETE FROM source_connector_recipes WHERE root_url = ?1 AND source_key <> ?2",
-            params![root_url, source_key],
-        )
-        .map_err(|error| {
-            AppError::Storage(format!(
-                "Failed to clear a superseded source connector recipe: {error}"
-            ))
-        })?;
-        conn.execute(
-            "INSERT INTO source_connector_recipes (
+        let mut conn = self.conn.lock().await;
+        execute_transaction(&mut conn, "source metadata page window", |transaction| {
+            // Same `root_url` collision the recipe writer clears, for the same reason, under the
+            // same transaction.
+            transaction
+                .execute(
+                    "DELETE FROM source_connector_recipes
+                     WHERE root_url = ?1 AND source_key <> ?2",
+                    params![root_url, source_key],
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!(
+                        "Failed to clear a superseded source connector recipe: {error}"
+                    ))
+                })?;
+            transaction
+                .execute(
+                    "INSERT INTO source_connector_recipes (
                 source_key, root_url, recipe_version, publisher_pattern, reuse_approved,
                 crawl_policy_json, guidance_json, metadata_page_window_json, updated_at
              ) VALUES (?1, ?2, 2, ?3, 0, ?4, ?5, ?6,
@@ -1619,19 +1632,20 @@ impl DuckDbRepository {
                 root_url = excluded.root_url,
                 metadata_page_window_json = excluded.metadata_page_window_json,
                 updated_at = excluded.updated_at",
-            params![
-                source_key,
-                root_url,
-                publisher_pattern,
-                crawl_policy_json,
-                guidance_json,
-                window_json
-            ],
-        )
-        .map_err(|error| {
-            AppError::Storage(format!("Failed to save metadata page window: {error}"))
-        })?;
-        Ok(())
+                    params![
+                        source_key,
+                        root_url,
+                        publisher_pattern,
+                        crawl_policy_json,
+                        guidance_json,
+                        window_json
+                    ],
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to save metadata page window: {error}"))
+                })?;
+            Ok(())
+        })
     }
 
     /// Resolves a source's recipe by its primary key.
@@ -7532,6 +7546,42 @@ mod tests {
                 .expect("the superseded lookup must not error")
                 .is_none_or(|recipe| !recipe.carries_guidance()),
             "the superseded row must not survive holding the URL"
+        );
+    }
+
+    /// The clearing delete and the upsert that replaces the row it removed share a transaction, so
+    /// a failed write cannot leave the source with no recipe at all. An unregistered key violates
+    /// the foreign key on `source_key`, which is a write that fails after the delete has run.
+    #[tokio::test]
+    async fn a_failed_recipe_write_does_not_destroy_the_recipe_it_would_have_replaced() {
+        let (repository, registration) = repository_with_registered_portal().await;
+        let guidance = SourceGuidance {
+            allowed_hostnames: vec!["assets.example.test".to_string()],
+            ..SourceGuidance::default()
+        };
+        repository
+            .save_source_connector_recipe(&registration, &CrawlPolicy::default(), &guidance)
+            .await
+            .expect("the standing recipe must save");
+        let unregistered = test_registration("source-unregistered", RECIPE_ROOT_URL);
+
+        repository
+            .save_source_connector_recipe(
+                &unregistered,
+                &CrawlPolicy::default(),
+                &SourceGuidance::default(),
+            )
+            .await
+            .expect_err("a recipe for an unregistered source must not be accepted");
+
+        let standing = repository
+            .load_source_connector_recipe_for_source(&registration)
+            .await
+            .expect("the recipe must load")
+            .expect("the standing row must survive a write that failed");
+        assert_eq!(
+            standing.guidance, guidance,
+            "a failed write must not leave the source running under no guidance at all"
         );
     }
 

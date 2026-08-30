@@ -12,7 +12,7 @@ limit, context compaction, or a change of contributor. Search for `TODO(` and
 ### Continuation — 2026-08-29 unreached-surface pass
 
 Verification at the end of this pass, all run together: `cargo fmt --check`,
-`cargo clippy --lib --all-targets` (clean), `cargo test --lib` (301 passing), `npx tsc --noEmit`,
+`cargo clippy --lib --all-targets` (clean), `cargo test --lib` (302 passing), `npx tsc --noEmit`,
 `npx eslint src --max-warnings 0`, `npx vitest run` (99 passing), `node scripts/check-ipc-contract.mjs`
 (38 commands, 18 telemetry events, 6 verification states). The counts recorded in the older entries
 below are stale by construction: they were 217/226/229 Rust and 61/70 frontend against 30 and 27
@@ -121,12 +121,15 @@ that compiled, linted, and passed 283 tests.
       writer takes the `PortalRegistration`, which also repairs `publisher_pattern`: it was parsed
       out of the pasted string, so a paste with no scheme silently stored no pattern and withdrew
       the source from publisher reuse. Three proofs by removal: the legacy row read through the
-      resume path, the two pasted forms read through the re-add path, and the reclassified source.
+      resume path, the two pasted forms read through the re-add path, the reclassified source, and
+      the failed write that must not destroy the recipe it would have replaced.
 - [x] **A source that reclassified at an unchanged URL failed its own start.** `root_url` is
       `UNIQUE` while both recipe writers upsert on `source_key`, and the key is a digest over the
       source kind and the final URL, so a page that begins advertising a different connector
       produces a new key at the same URL and an insert that collides. Both writers now drop a row
-      holding their URL under a superseded key. It had been judged low and left, on the grounds
+      holding their URL under a superseded key, in the same transaction as the write that replaces
+      it: a delete that ran on its own would leave a source with no recipe at all whenever the
+      write behind it failed. It had been judged low and left, on the grounds
       that the key derives from the host; it derives from the source kind as well, and keying the
       row on `canonical_url` made the collision reachable enough to close here.
 
