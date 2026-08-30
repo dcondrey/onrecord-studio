@@ -12,7 +12,7 @@ limit, context compaction, or a change of contributor. Search for `TODO(` and
 ### Continuation — 2026-08-29 unreached-surface pass
 
 Verification at the end of this pass, all run together: `cargo fmt --check`,
-`cargo clippy --lib --all-targets` (clean), `cargo test --lib` (298 passing), `npx tsc --noEmit`,
+`cargo clippy --lib --all-targets` (clean), `cargo test --lib` (301 passing), `npx tsc --noEmit`,
 `npx eslint src --max-warnings 0`, `npx vitest run` (99 passing), `node scripts/check-ipc-contract.mjs`
 (38 commands, 18 telemetry events, 6 verification states). The counts recorded in the older entries
 below are stale by construction: they were 217/226/229 Rust and 61/70 frontend against 30 and 27
@@ -94,7 +94,7 @@ that compiled, linted, and passed 283 tests.
       50: the exact revert the feature exists to prevent, now silent. Every one of the four tests
       missed it because each used the same literal on both sides. The writer now takes the
       `PortalRegistration` rather than a key and a URL, so the pasted string is not in reach.
-      **The same mismatch is still live for guided-repair recipes**, below.
+      The same mismatch on guided-repair recipes is closed below.
 - [x] **A window-only row silently withdrew an approved publisher recipe.**
       `load_source_connector_recipe` took the highest-ranked row whole, and a NextRequest source
       that set a window now has a row of its own carrying default policy and guidance. A source
@@ -104,18 +104,41 @@ that compiled, linted, and passed 283 tests.
       only from an exact `root_url` match: a window says where in one portal's request index to
       start, which is not a fact about a sibling that shares a publisher.
 
+- [x] **A guided-repair recipe had the same raw-versus-canonical key mismatch, and had it longer.**
+      `discover_and_start_public_source` saved it under the pasted string while `resume_source_sync`
+      and startup recovery read by `canonical_url`, so an operator's guidance applied when the
+      source was re-added and stopped applying on every resume and every launch, with
+      `used_saved_guidance` reporting it accurately in the first case and not the others. Moving the
+      write key alone would only have traded one silent miss for another: `start_data_source` reads
+      the recipe *before* discovery, because the guidance it holds is an input to discovery, so a
+      pasted URL is genuinely all it has.
+
+      So the two readers were separated rather than reconciled. The resume paths hold the
+      registration and now match `source_key`, the primary key, which has always been written and
+      read the same way; that finds rows already stored under a pasted URL, so nothing needed
+      rewriting. The URL reader stays for `start_data_source` and normalizes its argument the way a
+      submitted URL is normalized on the way in, so a pasted bare host finds the canonical row. The
+      writer takes the `PortalRegistration`, which also repairs `publisher_pattern`: it was parsed
+      out of the pasted string, so a paste with no scheme silently stored no pattern and withdrew
+      the source from publisher reuse. Three proofs by removal: the legacy row read through the
+      resume path, the two pasted forms read through the re-add path, and the reclassified source.
+- [x] **A source that reclassified at an unchanged URL failed its own start.** `root_url` is
+      `UNIQUE` while both recipe writers upsert on `source_key`, and the key is a digest over the
+      source kind and the final URL, so a page that begins advertising a different connector
+      produces a new key at the same URL and an insert that collides. Both writers now drop a row
+      holding their URL under a superseded key. It had been judged low and left, on the grounds
+      that the key derives from the host; it derives from the source kind as well, and keying the
+      row on `canonical_url` made the collision reachable enough to close here.
+
 Open, and specific:
 
-- [ ] **A guided-repair recipe has the same raw-versus-canonical key mismatch.**
-      `discover_and_start_public_source` saves it under `source_url`, the pasted string
-      (`queue.rs`), while `resume_source_sync` and startup recovery read by `canonical_url`
-      (`commands/ingest.rs`). So an operator's guidance applies when the source is re-added and
-      stops applying on every resume and every launch, and `used_saved_guidance` reports it
-      accurately in one case and not the other. This predates the page-window work and was not
-      fixed with it because the two readers disagree on purpose today: `start_data_source` looks up
-      by the pasted URL, so moving the write key alone would trade one silent miss for another.
-      Closing it means canonicalizing at both writers and both readers, and deciding what happens
-      to rows already written under a pasted URL.
+- [ ] **A recipe cannot be found from a URL that redirects.** `start_data_source` reads the recipe
+      before discovery has run, so it has only the string the operator typed, while the row is keyed
+      on `canonical_url`, which is the URL after redirects. Normalization closes the bare-host and
+      trailing-slash difference; it cannot close this one, because the final URL is not knowable
+      before the fetch. The effect is bounded: guidance is missed on re-add only, and the resume
+      paths find the row by key regardless. Closing it means storing the submitted URL alongside the
+      canonical one as a second lookup key.
 
 - [ ] **A NextRequest resume re-fetches its start page every time.** The seed is additive to the
       adopted frontier by design, so a source paused at page 900 re-enters at its configured start

@@ -1156,12 +1156,7 @@ impl QueueManager {
                 .insert_or_update_portal_registration(&source)
                 .await?;
             self.repository
-                .save_source_connector_recipe(
-                    &source.portal_key,
-                    source_url,
-                    &crawl_policy,
-                    &guidance,
-                )
+                .save_source_connector_recipe(&source, &crawl_policy, &guidance)
                 .await?;
         }
         let sync_run_id = self

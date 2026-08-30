@@ -2154,7 +2154,7 @@ fn hex_nibble(value: u8) -> Option<u8> {
     }
 }
 
-fn normalize_submitted_url(value: &str) -> Result<Url, AppError> {
+pub(crate) fn normalize_submitted_url(value: &str) -> Result<Url, AppError> {
     let value = value.trim();
     if value.is_empty() || value.len() > 2_048 {
         return Err(AppError::PortalDiscovery(

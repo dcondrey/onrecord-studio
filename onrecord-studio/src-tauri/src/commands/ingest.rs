@@ -171,7 +171,7 @@ pub async fn resume_source_sync(
         .set_source_lifecycle_state(source_key, SourceLifecycleState::Active)
         .await?;
     let saved_recipe = repository
-        .load_source_connector_recipe(&saved.registration.canonical_url)
+        .load_source_connector_recipe_for_source(&saved.registration)
         .await?;
     let used_saved_guidance = saved_recipe
         .as_ref()
@@ -353,7 +353,7 @@ pub async fn initialize_queue_runtime<R: Runtime, P: AsRef<Path>>(
                 continue;
             };
             let saved_recipe = match recovery_repository
-                .load_source_connector_recipe(&source.canonical_url)
+                .load_source_connector_recipe_for_source(&source)
                 .await
             {
                 Ok(recipe) => recipe,
