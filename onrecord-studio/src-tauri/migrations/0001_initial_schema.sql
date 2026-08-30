@@ -59,6 +59,14 @@ CREATE TABLE IF NOT EXISTS portal_sync_runs (
 CREATE TABLE IF NOT EXISTS source_connector_recipes (
     source_key TEXT PRIMARY KEY,
     root_url TEXT NOT NULL UNIQUE,
+    -- The URL the operator submitted, normalized but not resolved. It differs from `root_url`
+    -- exactly when the submission redirected, and it is the only key `start_data_source` can
+    -- offer, because that reader runs before the fetch that would reveal the final URL.
+    -- Nullable with no DEFAULT: a row written before this column recorded no submission, and
+    -- NULL is the only way to say that. Deliberately not UNIQUE -- one pasted string may
+    -- legitimately have resolved to different canonical URLs over time, and the reader takes the
+    -- most recently updated match.
+    submitted_url TEXT,
     recipe_version BIGINT NOT NULL DEFAULT 2,
     publisher_pattern TEXT,
     reuse_approved BIGINT NOT NULL DEFAULT 0 CHECK (reuse_approved IN (0, 1)),

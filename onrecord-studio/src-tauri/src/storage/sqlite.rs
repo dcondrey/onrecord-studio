@@ -101,6 +101,11 @@ enum RecipeOwnRow {
     RootUrl,
 }
 
+/// The rank a row gets when it matched only the publisher-reuse arm, and so is not the caller's
+/// own row. Kept as a constant because the SQL that assigns it and the resolution that reads it
+/// are written apart.
+const PUBLISHER_REUSE_RANK: i64 = 2;
+
 impl RecipeOwnRow {
     fn column(self) -> &'static str {
         match self {
@@ -108,6 +113,31 @@ impl RecipeOwnRow {
             Self::RootUrl => "root_url",
         }
     }
+
+    /// The second column, if any, on which this variant may recognize its own row.
+    ///
+    /// Only the URL variant has one. `submitted_url` records what the operator typed before
+    /// discovery resolved it, which is the only thing `start_data_source` can match on a source
+    /// whose URL redirects. A key lookup has the key and must not consult it: a submitted string
+    /// is not a source key and matching one would attach another source's recipe.
+    fn alternate_column(self) -> Option<&'static str> {
+        match self {
+            Self::SourceKey => None,
+            Self::RootUrl => Some("submitted_url"),
+        }
+    }
+}
+
+/// The operator's submitted URL in the one form the writers and the URL reader agree on.
+///
+/// Normalization fills in a missing scheme and drops a fragment. It does not resolve redirects,
+/// which is exactly why this value is stored beside `root_url` rather than in place of it: the
+/// final URL is not knowable until the fetch, and `start_data_source` reads the recipe before it.
+fn normalized_submitted_url(value: &str) -> String {
+    let trimmed = value.trim();
+    normalize_submitted_url(trimmed)
+        .map(|url| url.to_string())
+        .unwrap_or_else(|_| trimmed.to_string())
 }
 
 fn publisher_pattern_for_url(value: &str) -> Option<String> {
@@ -671,6 +701,11 @@ impl DuckDbRepository {
             "publisher_pattern",
             "TEXT",
         )?;
+        // No DEFAULT, for the reason the fresh schema gives: a recipe written before this column
+        // recorded no submitted URL, and no string stands in for one. It cannot be backfilled
+        // from `root_url` either -- that is the URL *after* redirects, so copying it would assert
+        // the submission did not redirect, which is the one case this column exists to record.
+        ensure_column(&conn, "source_connector_recipes", "submitted_url", "TEXT")?;
         ensure_column(
             &conn,
             "source_connector_recipes",
@@ -1511,14 +1546,21 @@ impl DuckDbRepository {
     /// recipe written under a pasted bare host was invisible to every resume, and a recipe
     /// written under a pasted string with no scheme also lost its `publisher_pattern`, because
     /// that is parsed out of the same value. Both are unreachable from this signature.
+    ///
+    /// `submitted_url` is the string the operator actually gave, recorded because it is the only
+    /// key `start_data_source` has: that reader runs before discovery, so on a source whose URL
+    /// redirects it can never produce `canonical_url`. Stored normalized; see
+    /// [`normalized_submitted_url`].
     pub async fn save_source_connector_recipe(
         &self,
         portal: &PortalRegistration,
+        submitted_url: &str,
         crawl_policy: &CrawlPolicy,
         guidance: &SourceGuidance,
     ) -> Result<(), AppError> {
         let source_key = portal.portal_key.as_str();
         let root_url = portal.canonical_url.as_str();
+        let submitted_url = normalized_submitted_url(submitted_url);
         let crawl_policy_json = serde_json::to_string(crawl_policy).map_err(|error| {
             AppError::DataParsing(format!("Failed to encode source crawl policy: {error}"))
         })?;
@@ -1541,6 +1583,10 @@ impl DuckDbRepository {
             // operator asked for fails outright. It is lost only if the row replacing it is
             // actually written, which is why the two statements share a transaction rather than
             // running in order.
+            //
+            // `submitted_url` is deliberately not cleared the same way. It carries no UNIQUE, so
+            // no insert can collide on it, and dropping another source's row for sharing a pasted
+            // string would destroy that source's guidance to satisfy nothing.
             transaction
                 .execute(
                     "DELETE FROM source_connector_recipes
@@ -1555,12 +1601,13 @@ impl DuckDbRepository {
             transaction
                 .execute(
                     "INSERT INTO source_connector_recipes (
-                source_key, root_url, recipe_version, publisher_pattern, reuse_approved,
-                crawl_policy_json, guidance_json, updated_at
-             ) VALUES (?1, ?2, 2, ?3, ?4, ?5, ?6,
+                source_key, root_url, submitted_url, recipe_version, publisher_pattern,
+                reuse_approved, crawl_policy_json, guidance_json, updated_at
+             ) VALUES (?1, ?2, ?3, 2, ?4, ?5, ?6, ?7,
                        strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'))
              ON CONFLICT(source_key) DO UPDATE SET
                 root_url = excluded.root_url,
+                submitted_url = excluded.submitted_url,
                 recipe_version = excluded.recipe_version,
                 publisher_pattern = excluded.publisher_pattern,
                 reuse_approved = excluded.reuse_approved,
@@ -1570,6 +1617,7 @@ impl DuckDbRepository {
                     params![
                         source_key,
                         root_url,
+                        submitted_url,
                         publisher_pattern,
                         guidance.reuse_for_publisher_pattern,
                         crawl_policy_json,
@@ -1587,21 +1635,28 @@ impl DuckDbRepository {
     ///
     /// Deliberately not folded into [`Self::save_source_connector_recipe`]: that writer owns the
     /// crawl policy and the repair guidance, and a NextRequest source has neither, so reusing it
-    /// would overwrite a stored recipe with defaults. On conflict this touches one column and
-    /// leaves the rest of the row as it was.
+    /// would overwrite a stored recipe with defaults. On conflict this touches the window and the
+    /// two URLs that address the row, and leaves the rest of it as it was.
     /// Takes the registration rather than a key and a URL so the row is keyed on
     /// `canonical_url` by construction. The operator's pasted string is not that URL:
     /// `Url::to_string` adds the path a bare host omits, so a window written under
     /// `https://city.nextrequest.com` could never be found by the resume paths, which look the
     /// recipe up by the registration's `https://city.nextrequest.com/`. Passing the two apart
     /// made that mistake expressible; this signature does not.
+    ///
+    /// `submitted_url` is recorded for the reason [`Self::save_source_connector_recipe`] gives.
+    /// Both writers record it or neither does: a NextRequest source that only ever set a page
+    /// window would otherwise be the one shape the URL reader still could not find after a
+    /// redirect.
     pub async fn save_source_metadata_page_window(
         &self,
         portal: &PortalRegistration,
+        submitted_url: &str,
         window: MetadataPageWindow,
     ) -> Result<(), AppError> {
         let source_key = portal.portal_key.as_str();
         let root_url = portal.canonical_url.as_str();
+        let submitted_url = normalized_submitted_url(submitted_url);
         let window_json = serde_json::to_string(&window).map_err(|error| {
             AppError::DataParsing(format!("Failed to encode metadata page window: {error}"))
         })?;
@@ -1631,17 +1686,20 @@ impl DuckDbRepository {
             transaction
                 .execute(
                     "INSERT INTO source_connector_recipes (
-                source_key, root_url, recipe_version, publisher_pattern, reuse_approved,
-                crawl_policy_json, guidance_json, metadata_page_window_json, updated_at
-             ) VALUES (?1, ?2, 2, ?3, 0, ?4, ?5, ?6,
+                source_key, root_url, submitted_url, recipe_version, publisher_pattern,
+                reuse_approved, crawl_policy_json, guidance_json, metadata_page_window_json,
+                updated_at
+             ) VALUES (?1, ?2, ?3, 2, ?4, 0, ?5, ?6, ?7,
                        strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'))
              ON CONFLICT(source_key) DO UPDATE SET
                 root_url = excluded.root_url,
+                submitted_url = excluded.submitted_url,
                 metadata_page_window_json = excluded.metadata_page_window_json,
                 updated_at = excluded.updated_at",
                     params![
                         source_key,
                         root_url,
+                        submitted_url,
                         publisher_pattern,
                         crawl_policy_json,
                         guidance_json,
@@ -1690,17 +1748,17 @@ impl DuckDbRepository {
     /// worked on, so matching only the normalized form would have closed two misses and opened a
     /// third.
     ///
-    /// A source whose URL redirects still cannot be found this way. The final URL is not knowable
-    /// before the fetch, so nothing stored could close that; it is recorded in the roadmap rather
-    /// than papered over here.
+    /// A source whose URL redirects is found through `submitted_url`, which both writers record
+    /// as the operator gave it. The final URL is still not knowable before the fetch, so the
+    /// recipe is not reachable through `root_url` at all on that source; the stored submission is
+    /// what closes it. That column is absent on rows written before it existed, and those rows
+    /// stay reachable through `root_url` exactly as they were.
     pub async fn load_source_connector_recipe(
         &self,
         root_url: &str,
     ) -> Result<Option<SourceConnectorRecipe>, AppError> {
         let submitted = root_url.trim().to_string();
-        let normalized = normalize_submitted_url(&submitted)
-            .map(|url| url.to_string())
-            .unwrap_or_else(|_| submitted.clone());
+        let normalized = normalized_submitted_url(&submitted);
         let publisher_pattern = publisher_pattern_for_url(&normalized);
         self.load_connector_recipe(
             RecipeOwnRow::RootUrl,
@@ -1725,23 +1783,45 @@ impl DuckDbRepository {
         own_values: [String; 2],
         publisher_pattern: Option<String>,
     ) -> Result<Option<SourceConnectorRecipe>, AppError> {
-        // Not interpolated from anything a caller supplies: `RecipeOwnRow` names one of two
-        // columns in this file's own schema.
+        // Not interpolated from anything a caller supplies: `RecipeOwnRow` names columns in this
+        // file's own schema.
         let own_column = own_row.column();
+        // Both query forms are matched against both columns, and that is not belt and braces.
+        // Normalization is what lets a pasted bare host find a row stored under the canonical
+        // `Url::to_string`, but it is not idempotent against what is already stored: rows written
+        // before the writer was canonicalized hold the raw pasted string, and matching only the
+        // normalized form would stop finding them.
+        let own_match = format!("{own_column} IN (?1, ?3)");
+        let alternate_match = own_row
+            .alternate_column()
+            .map(|column| format!("{column} IN (?1, ?3)"));
+        // The rank is selected rather than re-derived from a returned column value, because a row
+        // matched on `submitted_url` carries a `root_url` that equals neither query form. Reading
+        // identity back off the column would find such a row's recipe and silently miss its page
+        // window, which is the same two-arms-disagree failure this lookup was last repaired for.
+        let (own_rank, own_where) = match &alternate_match {
+            Some(alternate) => (
+                format!("CASE WHEN {own_match} THEN 0 WHEN {alternate} THEN 1 ELSE 2 END"),
+                format!("{own_match} OR {alternate}"),
+            ),
+            None => (
+                format!("CASE WHEN {own_match} THEN 0 ELSE 2 END"),
+                own_match.clone(),
+            ),
+        };
+        // No LIMIT. `submitted_url` is not UNIQUE and the publisher arm matches a whole host, so
+        // any bound small enough to be worth stating could truncate the reuse row that carries the
+        // guidance before the resolution below ever sees it. The table holds one row per
+        // registered source.
         let statement_sql = format!(
-            "SELECT {own_column}, crawl_policy_json, guidance_json, metadata_page_window_json
+            "SELECT CAST({own_rank} AS BIGINT) AS own_rank,
+                    crawl_policy_json, guidance_json, metadata_page_window_json
              FROM source_connector_recipes
-             WHERE {own_column} IN (?1, ?3)
+             WHERE {own_where}
                 OR (reuse_approved = 1 AND publisher_pattern = ?2)
-             ORDER BY CASE WHEN {own_column} = ?1 THEN 0
-                           WHEN {own_column} = ?3 THEN 1
-                           ELSE 2 END,
-                      updated_at DESC
-             LIMIT 3"
+             ORDER BY own_rank, updated_at DESC"
         );
-        let [own_value, own_alternate] = own_values;
-        let query_value = own_value.clone();
-        let query_alternate = own_alternate.clone();
+        let [query_value, query_alternate] = own_values;
         let encoded = self
             .query_connection("Source connector recipe query", move |connection| {
                 let mut statement = connection.prepare(&statement_sql).map_err(|error| {
@@ -1754,7 +1834,7 @@ impl DuckDbRepository {
                         params![query_value, publisher_pattern, query_alternate],
                         |row| {
                             Ok((
-                                row.get::<_, String>(0)?,
+                                row.get::<_, i64>(0)?,
                                 row.get::<_, String>(1)?,
                                 row.get::<_, String>(2)?,
                                 row.get::<_, Option<String>>(3)?,
@@ -1775,7 +1855,7 @@ impl DuckDbRepository {
             return Ok(None);
         }
         let mut decoded = Vec::with_capacity(encoded.len());
-        for (row_identity, crawl_policy_json, guidance_json, metadata_page_window_json) in encoded {
+        for (own_rank, crawl_policy_json, guidance_json, metadata_page_window_json) in encoded {
             let crawl_policy: CrawlPolicy =
                 serde_json::from_str(&crawl_policy_json).map_err(|error| {
                     AppError::Storage(format!("Stored source crawl policy is invalid: {error}"))
@@ -1793,14 +1873,14 @@ impl DuckDbRepository {
                     })
                 })
                 .transpose()?;
-            decoded.push((row_identity, crawl_policy, guidance, metadata_page_window));
+            decoded.push((own_rank, crawl_policy, guidance, metadata_page_window));
         }
-        // Either form identifies the caller's own row, for the reason the URL reader documents.
-        // No caller reads a window off a row matched by the raw form today, but leaving the two
-        // arms to disagree is how the mismatch this whole change repairs got in.
+        // A window says where in *this* source's request index to start, so it is read only off a
+        // row the query recognized as the caller's own -- by either URL column, in either form.
+        // A reused publisher row ranks last and never supplies one.
         let metadata_page_window = decoded
             .iter()
-            .find(|(row_identity, ..)| *row_identity == own_value || *row_identity == own_alternate)
+            .find(|(own_rank, ..)| *own_rank < PUBLISHER_REUSE_RANK)
             .and_then(|(.., window)| *window);
         let (crawl_policy, guidance) = decoded
             .iter()
@@ -7267,10 +7347,10 @@ mod tests {
 
     use super::{
         compute_extracted_text_sha256, cpra_calendar_confidence_basis_points,
-        publisher_pattern_for_url, validate_entropy_metadata, verify_logical_relations,
-        DocumentDownloadFinalization, DocumentExtractionFinalization, DuckDbRepository,
-        IngestionSchedulerCounts, PortalSyncRunFinalization, ProvenanceEvidenceFile,
-        SourceLifecycleState, SQL_UTC_NOW,
+        normalized_submitted_url, publisher_pattern_for_url, validate_entropy_metadata,
+        verify_logical_relations, DocumentDownloadFinalization, DocumentExtractionFinalization,
+        DuckDbRepository, IngestionSchedulerCounts, PortalSyncRunFinalization,
+        ProvenanceEvidenceFile, SourceLifecycleState, SQL_UTC_NOW,
     };
 
     const MIGRATION: &str = include_str!("../../migrations/0001_initial_schema.sql");
@@ -7337,7 +7417,11 @@ mod tests {
             let (repository, registration) = repository_with_registered_portal().await;
             let save_window = |repository: DuckDbRepository, registration: PortalRegistration| async move {
                 repository
-                    .save_source_metadata_page_window(&registration, window)
+                    .save_source_metadata_page_window(
+                        &registration,
+                        &registration.canonical_url.clone(),
+                        window,
+                    )
                     .await
                     .expect("the page window must save")
             };
@@ -7345,7 +7429,12 @@ mod tests {
                                registration: PortalRegistration,
                                guidance: SourceGuidance| async move {
                 repository
-                    .save_source_connector_recipe(&registration, &CrawlPolicy::default(), &guidance)
+                    .save_source_connector_recipe(
+                        &registration,
+                        &registration.canonical_url.clone(),
+                        &CrawlPolicy::default(),
+                        &guidance,
+                    )
                     .await
                     .expect("the connector recipe must save")
             };
@@ -7384,6 +7473,7 @@ mod tests {
         repository
             .save_source_metadata_page_window(
                 &test_registration(PORTAL_SUBDOMAIN, RECIPE_ROOT_URL),
+                RECIPE_ROOT_URL,
                 MetadataPageWindow {
                     start_page: 7,
                     page_size: 10,
@@ -7417,6 +7507,7 @@ mod tests {
         repository
             .save_source_metadata_page_window(
                 &registration,
+                &registration.canonical_url,
                 MetadataPageWindow {
                     start_page: 400,
                     page_size: 25,
@@ -7519,7 +7610,12 @@ mod tests {
             ..SourceGuidance::default()
         };
         repository
-            .save_source_connector_recipe(&registration, &CrawlPolicy::default(), &guidance)
+            .save_source_connector_recipe(
+                &registration,
+                &registration.canonical_url,
+                &CrawlPolicy::default(),
+                &guidance,
+            )
             .await
             .expect("the connector recipe must save");
 
@@ -7540,6 +7636,123 @@ mod tests {
         }
     }
 
+    /// The one URL difference normalization cannot close. `start_data_source` reads the recipe
+    /// before discovery, so on a source that redirects it holds the string the operator typed
+    /// while the row is keyed on the URL the fetch resolved to. No rule applied to the submission
+    /// can produce the destination, which is why the submission is stored beside it rather than
+    /// derived at read time.
+    ///
+    /// The two URLs deliberately differ by host as well as path, so the publisher-reuse arm
+    /// cannot be what finds the row. And the window is asserted, not just the guidance: a row
+    /// matched on `submitted_url` carries a `root_url` matching neither query form, so a lookup
+    /// that recognized its own row by the returned value would return the recipe and drop the
+    /// window.
+    #[tokio::test]
+    async fn a_recipe_is_found_from_the_url_that_redirected_to_the_one_it_is_keyed_on() {
+        let (repository, registration) = repository_with_registered_portal().await;
+        let submitted = "https://legacy.example.test/records";
+        assert_ne!(
+            normalized_submitted_url(submitted),
+            registration.canonical_url,
+            "the submitted form must not normalize to the canonical one, or this proves nothing"
+        );
+        assert_ne!(
+            publisher_pattern_for_url(submitted),
+            publisher_pattern_for_url(&registration.canonical_url),
+            "the two URLs must not share a publisher, or the reuse arm could be what matches"
+        );
+        let guidance = SourceGuidance {
+            allowed_hostnames: vec!["assets.example.test".to_string()],
+            ..SourceGuidance::default()
+        };
+        let window = MetadataPageWindow {
+            start_page: 400,
+            page_size: 25,
+        };
+        repository
+            .save_source_connector_recipe(
+                &registration,
+                submitted,
+                &CrawlPolicy::default(),
+                &guidance,
+            )
+            .await
+            .expect("the connector recipe must save");
+        repository
+            .save_source_metadata_page_window(&registration, submitted, window)
+            .await
+            .expect("the page window must save");
+
+        let loaded = repository
+            .load_source_connector_recipe(submitted)
+            .await
+            .expect("the recipe must load")
+            .expect("a re-add of the URL the operator typed must find the row that URL wrote");
+        assert_eq!(
+            loaded.guidance, guidance,
+            "guidance must apply when the source is re-added at the URL that redirects"
+        );
+        assert_eq!(
+            loaded.metadata_page_window,
+            Some(window),
+            "a row matched on its submitted URL is still the caller's own row, and the window it \
+             holds must come back with it"
+        );
+    }
+
+    /// `submitted_url` carries no UNIQUE, and that is deliberate: a portal that moves resolves one
+    /// pasted string to a new canonical URL, which is a new `source_key` and so a second row
+    /// legitimately holding the same submission. The reader owes the operator the source they most
+    /// recently started at that URL, which is what `updated_at DESC` decides inside the own-row
+    /// rank. The superseded row's timestamp is written directly so the ordering is decided by the
+    /// data and not by how fast two writes happened to run.
+    #[tokio::test]
+    async fn two_sources_sharing_a_submitted_url_resolve_to_the_most_recent_one() {
+        let (repository, superseded) = repository_with_registered_portal().await;
+        let submitted = "https://legacy.example.test/records";
+        let moved = test_registration("records-moved", "https://records-moved.example.test/");
+        repository
+            .insert_or_update_portal_registration(&moved)
+            .await
+            .expect("the moved registration must persist");
+        let stale = SourceGuidance {
+            allowed_hostnames: vec!["stale.example.test".to_string()],
+            ..SourceGuidance::default()
+        };
+        let current = SourceGuidance {
+            allowed_hostnames: vec!["current.example.test".to_string()],
+            ..SourceGuidance::default()
+        };
+        repository
+            .save_source_connector_recipe(&superseded, submitted, &CrawlPolicy::default(), &stale)
+            .await
+            .expect("the superseded recipe must save");
+        {
+            let conn = repository.conn.lock().await;
+            conn.execute(
+                "UPDATE source_connector_recipes
+                 SET updated_at = '2026-01-01T00:00:00.000000Z'
+                 WHERE source_key = ?1",
+                params![superseded.portal_key],
+            )
+            .expect("the superseded row must be backdated");
+        }
+        repository
+            .save_source_connector_recipe(&moved, submitted, &CrawlPolicy::default(), &current)
+            .await
+            .expect("the current recipe must save");
+
+        let loaded = repository
+            .load_source_connector_recipe(submitted)
+            .await
+            .expect("the recipe must load")
+            .expect("one of the two rows holding the submission must answer");
+        assert_eq!(
+            loaded.guidance, current,
+            "the most recently started source at a shared submitted URL is the one that answers"
+        );
+    }
+
     /// `root_url` is UNIQUE while both writers upsert on `source_key`, so a row holding a URL
     /// under a superseded key fails the insert outright and takes the source start down with it.
     /// The key is a digest over the source kind and the final URL, so a source that reclassifies
@@ -7550,6 +7763,7 @@ mod tests {
         repository
             .save_source_connector_recipe(
                 &registration,
+                &registration.canonical_url,
                 &CrawlPolicy::default(),
                 &SourceGuidance::default(),
             )
@@ -7569,7 +7783,12 @@ mod tests {
         };
 
         repository
-            .save_source_connector_recipe(&reclassified, &CrawlPolicy::default(), &guidance)
+            .save_source_connector_recipe(
+                &reclassified,
+                &reclassified.canonical_url,
+                &CrawlPolicy::default(),
+                &guidance,
+            )
             .await
             .expect("a recipe for the same URL under a new key must not fail the start");
 
@@ -7600,7 +7819,12 @@ mod tests {
             ..SourceGuidance::default()
         };
         repository
-            .save_source_connector_recipe(&registration, &CrawlPolicy::default(), &guidance)
+            .save_source_connector_recipe(
+                &registration,
+                &registration.canonical_url,
+                &CrawlPolicy::default(),
+                &guidance,
+            )
             .await
             .expect("the standing recipe must save");
         let unregistered = test_registration("source-unregistered", RECIPE_ROOT_URL);
@@ -7608,6 +7832,7 @@ mod tests {
         repository
             .save_source_connector_recipe(
                 &unregistered,
+                &unregistered.canonical_url,
                 &CrawlPolicy::default(),
                 &SourceGuidance::default(),
             )
@@ -7644,7 +7869,12 @@ mod tests {
             ..SourceGuidance::default()
         };
         repository
-            .save_source_connector_recipe(&sibling, &CrawlPolicy::default(), &approved)
+            .save_source_connector_recipe(
+                &sibling,
+                &sibling.canonical_url,
+                &CrawlPolicy::default(),
+                &approved,
+            )
             .await
             .expect("the approved publisher recipe must save");
         let window = MetadataPageWindow {
@@ -7652,7 +7882,7 @@ mod tests {
             page_size: 25,
         };
         repository
-            .save_source_metadata_page_window(&registration, window)
+            .save_source_metadata_page_window(&registration, &registration.canonical_url, window)
             .await
             .expect("the page window must save");
 

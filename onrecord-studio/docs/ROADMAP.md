@@ -142,15 +142,38 @@ that compiled, linted, and passed 283 tests.
       that the key derives from the host; it derives from the source kind as well, and keying the
       row on `canonical_url` made the collision reachable enough to close here.
 
-Open, and specific:
+- [x] **A recipe is found from a URL that redirects.** `start_data_source` reads the recipe before
+      discovery has run, so it holds the string the operator typed while the row is keyed on
+      `canonical_url`, the URL after redirects. Normalization closed the bare-host and
+      trailing-slash difference and could never close this one: no rule applied to a submission
+      produces its destination. So the submission is stored, not derived. `submitted_url` is a
+      nullable column with no DEFAULT written by both recipe writers, and the URL reader matches
+      both columns against both query forms. It is not backfilled from `root_url`: that would
+      assert the submission did not redirect, which is the one case the column exists to record.
+      Rows written before it hold NULL and stay reachable through `root_url` exactly as they were.
 
-- [ ] **A recipe cannot be found from a URL that redirects.** `start_data_source` reads the recipe
-      before discovery has run, so it has only the string the operator typed, while the row is keyed
-      on `canonical_url`, which is the URL after redirects. Normalization closes the bare-host and
-      trailing-slash difference; it cannot close this one, because the final URL is not knowable
-      before the fetch. The effect is bounded: guidance is missed on re-add only, and the resume
-      paths find the row by key regardless. Closing it means storing the submitted URL alongside the
-      canonical one as a second lookup key.
+      The lookup now ranks the match in SQL and selects the rank, rather than recognizing its own
+      row by the column value that came back. A row matched on `submitted_url` carries a `root_url`
+      equal to neither query form, so the old shape would have returned that row's recipe and
+      silently dropped its page window. That is the two-arms-disagree failure the previous commit
+      was written to repair, and it would have returned one layer down.
+
+      The DELETE both writers run to clear a superseded `root_url` is deliberately not extended.
+      `submitted_url` carries no UNIQUE, so no insert can collide on it, and dropping another
+      source's row for sharing a pasted string would destroy that source's guidance for nothing.
+      Not being UNIQUE is a fact the reader has to answer for, because a portal that moves resolves
+      one pasted string to a new canonical URL and so to a second row legitimately holding it:
+      `updated_at DESC` inside the own-row rank returns the source the operator most recently
+      started there. Three proofs by removal: the submitted-URL arm, the rank that arm is given,
+      and that ordering.
+
+      Not closed by this, and not a defect: the NextRequest arm of `start_data_source` never reads
+      a stored recipe at all, so a re-add of a NextRequest source runs the window the operator
+      supplies now rather than the one they chose before. Applying a stored window silently to a
+      start the operator did not ask for it on is a decision about what a re-add means, and it is
+      not this change.
+
+Open, and specific:
 
 - [ ] **A NextRequest resume re-fetches its start page every time.** The seed is additive to the
       adopted frontier by design, so a source paused at page 900 re-enters at its configured start
