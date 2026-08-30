@@ -67,6 +67,14 @@ pub struct SourceGuidance {
     pub document_date_from: Option<String>,
     #[serde(default)]
     pub document_date_to: Option<String>,
+    /// Refuse a discovered download whose bytes live on a host other than the source root's,
+    /// unless `allowed_hostnames` names that host. False is today's behaviour: a crawled page may
+    /// steer a download anywhere, which is how government portals that host their PDFs on S3,
+    /// Azure Blob, Granicus or CivicPlus are ingested at all. Setting it is an operator's decision
+    /// to trade that reach for a hard scope boundary, and it never affects which links are
+    /// followed -- only which payloads are fetched.
+    #[serde(default)]
+    pub restrict_downloads_to_source_host: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

@@ -507,6 +507,11 @@ enum FrontierExclusion {
     QueryVariant { path: String },
     /// The host is off-scope for this source and no policy admits it.
     OffScopeHost,
+    /// The payload is hosted off the source root and the source set
+    /// `restrict_downloads_to_source_host`. Distinct from `OffScopeHost` because that rule governs
+    /// which links are followed and this one governs only which payloads are fetched; a ledger that
+    /// merged them could not say which policy dropped the document.
+    OffSourceHostDownload,
     /// The crawl depth ceiling was reached.
     DepthCeiling,
     /// The link sits in the page's navigation chrome. See `is_navigation_chrome`.
@@ -541,6 +546,7 @@ impl FrontierExclusion {
             Self::Guidance => "guidance",
             Self::QueryVariant { .. } => "query-variant",
             Self::OffScopeHost => "off-scope-host",
+            Self::OffSourceHostDownload => "off-source-host-download",
             Self::DepthCeiling => "depth-ceiling",
             Self::NavigationChrome => "navigation-chrome",
             Self::HostStopped { .. } => "host-stopped",
@@ -2655,6 +2661,19 @@ async fn prepare_discovered_download(
     discovered_from: &str,
     depth: PayloadDepth,
 ) -> Result<Option<IngestionTask>, AppError> {
+    // Before `reserve_resource`, so a refused host does not spend a resource slot, and reported
+    // rather than dropped: a crawl that silently declines documents claims coverage it does not
+    // have. This is the only place a remote URL becomes a fetch task -- the other
+    // `DownloadBinaryPayload` births carry bytes already on disk (`local_path`) or come from the
+    // source's own metadata API.
+    if !download_host_allowed(
+        &context.crawl.guidance,
+        &context.portal.canonical_url,
+        &inspection.final_url,
+    ) {
+        record_frontier_exclusion(context, &FrontierExclusion::OffSourceHostDownload).await;
+        return Ok(None);
+    }
     if !reserve_resource(context, &inspection.final_url).await? {
         return Ok(None);
     }
@@ -5547,6 +5566,21 @@ fn guidance_explicitly_allows_host(guidance: &SourceGuidance, value: &str) -> bo
         })
 }
 
+/// Whether a payload hosted at `candidate_url` may be downloaded for a source rooted at
+/// `source_url`.
+///
+/// Unset (the default) this admits every host, which is what the crawl has always done: the link
+/// that reached the payload was already admitted by the follow gate, and real portals serve their
+/// documents from storage hosts that gate does not enumerate. Set, the source root's own host and
+/// any host the operator wrote into `allowed_hostnames` are the whole permitted set. The explicit
+/// allowlist has to stay in the permitted set, or setting the flag would refuse hosts the operator
+/// named on purpose.
+fn download_host_allowed(guidance: &SourceGuidance, source_url: &str, candidate_url: &str) -> bool {
+    !guidance.restrict_downloads_to_source_host
+        || source_host_matches(source_url, candidate_url)
+        || guidance_explicitly_allows_host(guidance, candidate_url)
+}
+
 fn is_supported_external_data_platform(value: &str) -> bool {
     // Host policy fetches, caches, and enforces robots rules before any supported external host is
     // crawled. This list decides only which off-source platforms are eligible for that policy.
@@ -5741,6 +5775,202 @@ mod tests {
             semaphore.available_permits(),
             PARSER_MEMORY_PERMITS as usize
         );
+    }
+
+    /// Builds a real `WorkerContext` so the download gate is exercised on the path a crawl
+    /// actually takes, rather than on the predicate alone.
+    async fn crawl_worker_context(
+        directory: &tempfile::TempDir,
+        guidance: SourceGuidance,
+    ) -> WorkerContext {
+        let repository =
+            DuckDbRepository::new(Path::new(":memory:")).expect("DuckDB core must open");
+        repository
+            .run_migrations(include_str!("../../migrations/0001_initial_schema.sql"))
+            .await
+            .expect("migrations must apply");
+        let corpus_index =
+            CorpusIndex::open(directory.path().join("corpus.db")).expect("corpus index must open");
+        let (progress_sender, _progress_receiver) = mpsc::channel(64);
+        let (dispatcher, _task_receiver) = mpsc::channel(64);
+        let portal = PortalRegistration {
+            portal_key: "records".to_string(),
+            display_name: "Records".to_string(),
+            canonical_url: "https://records.example.test/portal".to_string(),
+            origin_url: "https://records.example.test/portal".to_string(),
+            api_layout: PortalApiLayout {
+                requests_endpoint: "https://records.example.test/client/requests".to_string(),
+                requests_pointer: "/requests".to_string(),
+                metadata_pointer: None,
+                page_parameter: "page".to_string(),
+                page_size_parameter: "per_page".to_string(),
+            },
+            verified_at: "2026-08-26T00:00:00Z".to_string(),
+            source_kind: SourceKind::NextRequest,
+        };
+        repository
+            .insert_or_update_portal_registration(&portal)
+            .await
+            .expect("source registration must persist");
+        repository
+            .begin_portal_sync_run("download-gate-run", &portal.portal_key)
+            .await
+            .expect("sync run must begin");
+        let compiled_guidance = CompiledGuidancePatterns::compile(&guidance);
+        WorkerContext {
+            portal,
+            client: ApiClient::new(HttpClientConfig::default()).expect("client must build"),
+            repository,
+            corpus_index,
+            limiter: RateLimiter::new(5).expect("limiter must build"),
+            dispatcher,
+            progress_sender,
+            global_semaphore: Arc::new(Semaphore::new(4)),
+            parser_semaphore: Arc::new(Semaphore::new(4)),
+            ocr_semaphore: Arc::new(Semaphore::new(4)),
+            parser_memory: Arc::new(Semaphore::new(PARSER_MEMORY_PERMITS as usize)),
+            download_root: directory.path().to_path_buf(),
+            statistics: Arc::new(PortalStatistics::default()),
+            pools: Arc::new(RwLock::new(HashMap::new())),
+            provisioning_lock: Arc::new(Mutex::new(())),
+            slot_freed: watch::channel(0).0,
+            cancellation: watch::channel(false).0,
+            sync_run_id: "download-gate-run".to_string(),
+            crawl: Arc::new(CrawlState {
+                policy: CrawlPolicy::default(),
+                guidance,
+                visited_urls: Mutex::new(HashSet::new()),
+                resource_urls: Mutex::new(HashSet::new()),
+                crawl_path_claims: Mutex::new(HashSet::new()),
+                announced_host_stops: Mutex::new(HashSet::new()),
+                frontier_exclusions: Mutex::new(BTreeMap::new()),
+                pages_started: AtomicUsize::new(0),
+                resources_started: AtomicUsize::new(0),
+                frontier_refill_lock: Mutex::new(()),
+                arcgis_page_hashes: Mutex::new(HashSet::new()),
+                compiled_guidance,
+            }),
+        }
+    }
+
+    fn off_host_download() -> PublicResourceInspection {
+        PublicResourceInspection {
+            final_url: "https://records-files.s3.amazonaws.com/report.pdf".to_string(),
+            content_type: Some("application/pdf".to_string()),
+            title: "Report".to_string(),
+            kind: PublicResourceKind::Download,
+            links: Vec::new(),
+            body: None,
+            embedded_connectors: Vec::new(),
+            content_length: None,
+        }
+    }
+
+    // REGRESSION(queue): a crawled page could steer a download to any host, and there was no way
+    // for an operator to say otherwise. Proven by deleting the `download_host_allowed` branch in
+    // `prepare_discovered_download`: the restricted cases below then produce a task and the
+    // exclusion ledger stays empty.
+    #[tokio::test]
+    async fn a_cross_host_download_is_admitted_by_default_and_refused_once_restricted() {
+        let directory = tempdir().expect("temp dir must be created");
+        let permissive = crawl_worker_context(&directory, SourceGuidance::default()).await;
+        let task = prepare_discovered_download(
+            &permissive,
+            &off_host_download(),
+            Some(7),
+            "https://records.example.test/portal/reports",
+            PayloadDepth::discovered(1, 0),
+        )
+        .await
+        .expect("the permissive default must not error");
+        assert!(
+            task.is_some(),
+            "today's behaviour admits a payload hosted off the source root"
+        );
+        assert!(permissive.crawl.frontier_exclusions.lock().await.is_empty());
+
+        let restricted = crawl_worker_context(
+            &directory,
+            SourceGuidance {
+                restrict_downloads_to_source_host: true,
+                ..SourceGuidance::default()
+            },
+        )
+        .await;
+        let task = prepare_discovered_download(
+            &restricted,
+            &off_host_download(),
+            Some(7),
+            "https://records.example.test/portal/reports",
+            PayloadDepth::discovered(1, 0),
+        )
+        .await
+        .expect("a refused host is a policy outcome, not an error");
+        assert!(task.is_none(), "the restricted source must refuse the host");
+        assert_eq!(
+            restricted
+                .crawl
+                .frontier_exclusions
+                .lock()
+                .await
+                .get("off-source-host-download"),
+            Some(&1),
+            "a refused download has to be countable, not silent"
+        );
+    }
+
+    #[tokio::test]
+    async fn restricting_downloads_still_admits_the_source_root_and_the_explicit_allowlist() {
+        let directory = tempdir().expect("temp dir must be created");
+        let context = crawl_worker_context(
+            &directory,
+            SourceGuidance {
+                restrict_downloads_to_source_host: true,
+                allowed_hostnames: vec!["s3.amazonaws.com".to_string()],
+                ..SourceGuidance::default()
+            },
+        )
+        .await;
+        for url in [
+            "https://records.example.test/files/report.pdf",
+            "https://records-files.s3.amazonaws.com/report.pdf",
+        ] {
+            let inspection = PublicResourceInspection {
+                final_url: url.to_string(),
+                ..off_host_download()
+            };
+            let task = prepare_discovered_download(
+                &context,
+                &inspection,
+                Some(7),
+                "https://records.example.test/portal/reports",
+                PayloadDepth::discovered(1, 0),
+            )
+            .await
+            .expect("an admitted host must not error");
+            assert!(task.is_some(), "{url} must survive the download gate");
+        }
+    }
+
+    // The rejected fix was to apply the follow-path gate to downloads. This pins that the new flag
+    // did not do that by another route: `is_supported_external_data_platform` omits S3, Azure Blob,
+    // Granicus and CivicPlus, so a source that restricts its downloads must still follow links onto
+    // the platforms that gate does admit.
+    #[test]
+    fn restricting_downloads_does_not_narrow_which_links_are_followed() {
+        let guidance = SourceGuidance {
+            restrict_downloads_to_source_host: true,
+            ..SourceGuidance::default()
+        };
+        assert!(is_supported_external_data_platform(
+            "https://services.arcgis.com/abc/FeatureServer/0"
+        ));
+        assert!(guidance.allowed_hostnames.is_empty());
+        assert!(!download_host_allowed(
+            &guidance,
+            "https://records.example.test/portal",
+            "https://services.arcgis.com/abc/FeatureServer/0"
+        ));
     }
 
     async fn manager_with_source(
