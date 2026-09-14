@@ -10,17 +10,20 @@ interface DocumentViewerProps {
   requestId?: number;
   portalKey: string;
   fileName: string;
+  originalAvailable?: boolean;
   textContent: string;
   fileSizeFormatted: string;
   textPositionLabel?: string;
   characterOffset?: number;
   knownMaskedFindingCount?: number;
   onNextChunk?: () => void;
+  onPreviousChunk?: () => void;
+  onSaveEvidence?: (selection: { excerpt: string; characterOffset: number }) => void;
 }
 
 const TEXT_PAGE_CHARACTERS = 12_000;
 
-export default function DocumentViewer({ documentId, requestId, portalKey, fileName, textContent, fileSizeFormatted, textPositionLabel, characterOffset = 0, knownMaskedFindingCount = 0, onNextChunk }: DocumentViewerProps) {
+export default function DocumentViewer({ documentId, requestId, portalKey, fileName, originalAvailable = true, textContent, fileSizeFormatted, textPositionLabel, characterOffset = 0, knownMaskedFindingCount = 0, onNextChunk, onPreviousChunk, onSaveEvidence }: DocumentViewerProps) {
   const { verifyAssetProvenance, activeManifest, isValidating, error: provenanceError } = useC2PA();
   const [recoveryProfile, setRecoveryProfile] = useState<RecoveredVersionProfile | null>(null);
   const [isRecovering, setIsRecovering] = useState(false);
@@ -37,13 +40,14 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
   const [activeMatch, setActiveMatch] = useState(0);
   const [textPage, setTextPage] = useState(0);
   const [shareStatus, setShareStatus] = useState<string | null>(null);
+  const [briefingStatus, setBriefingStatus] = useState<string | null>(null);
   const historyGate = useLatestRequestGate();
   const recoveryGate = useLatestRequestGate();
   const residualAuditGate = useLatestRequestGate();
 
   useEffect(() => {
-    void verifyAssetProvenance(documentId, portalKey);
-  }, [documentId, portalKey, verifyAssetProvenance]);
+    if (originalAvailable) void verifyAssetProvenance(documentId, portalKey);
+  }, [documentId, portalKey, originalAvailable, verifyAssetProvenance]);
 
   useEffect(() => {
     historyGate.invalidate();
@@ -66,7 +70,10 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
     setActiveMatch(0);
     setTextPage(0);
     setShareStatus(null);
+    setBriefingStatus(null);
   }, [documentId, historyGate, portalKey, recoveryGate, residualAuditGate]);
+
+  useEffect(() => { setTextPage(0); setActiveMatch(0); }, [characterOffset, textContent]);
 
   const searchMatches = useMemo(() => findMatches(textContent, documentSearch), [documentSearch, textContent]);
   const pageCount = Math.max(1, Math.ceil(textContent.length / TEXT_PAGE_CHARACTERS));
@@ -103,6 +110,23 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
     } catch {
       setShareStatus(`Link set at offset ${sourceCharacterOffset.toLocaleString()}`);
     }
+  };
+
+  const saveEvidenceToBriefing = () => {
+    if (!onSaveEvidence) return;
+    const anchor = selectedMatch ?? textPage * TEXT_PAGE_CHARACTERS;
+    const excerptStart = Math.max(0, anchor - (selectedMatch === null ? 0 : 180));
+    const excerptEnd = Math.min(
+      textContent.length,
+      anchor + (selectedMatch === null ? 520 : Math.max(documentSearch.trim().length, 1) + 340),
+    );
+    const sourceCharacterOffset = characterOffset
+      + Array.from(textContent.slice(0, excerptStart)).length;
+    onSaveEvidence({
+      excerpt: textContent.slice(excerptStart, excerptEnd),
+      characterOffset: sourceCharacterOffset,
+    });
+    setBriefingStatus(`Saved excerpt at character ${sourceCharacterOffset.toLocaleString()}`);
   };
 
   const toggleVerificationHistory = async () => {
@@ -186,15 +210,15 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
           <div className="mt-1 font-mono text-[9px] text-slate-400">{portalKey} / document {documentId} · {fileSizeFormatted}</div>
         </div>
         <div className="flex items-center gap-2">
-          <button type="button" onClick={() => void inspectResidualEvidence()} disabled={isAuditingResiduals} className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-2.5 py-1 text-[9px] font-medium text-cyan-300 transition hover:border-cyan-300/40 disabled:cursor-wait disabled:opacity-60">
+          <button type="button" onClick={() => void inspectResidualEvidence()} disabled={!originalAvailable || isAuditingResiduals} className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-2.5 py-1 text-[9px] font-medium text-cyan-300 transition hover:border-cyan-300/40 disabled:cursor-wait disabled:opacity-60">
             {isAuditingResiduals ? 'Auditing residuals…' : residualAudit ? 'Reaudit residuals' : 'Audit residual evidence'}
           </button>
           {fileName.toLocaleLowerCase().endsWith('.pdf') && (
             <>
-              <button type="button" onClick={() => setShowRedactionAudit((visible) => !visible)} aria-expanded={showRedactionAudit} className="rounded-full border border-indigo-400/25 bg-indigo-500/10 px-2.5 py-1 text-[9px] font-medium text-indigo-300 transition hover:border-indigo-300/40">
+              <button type="button" disabled={!originalAvailable} onClick={() => setShowRedactionAudit((visible) => !visible)} aria-expanded={showRedactionAudit} className="rounded-full border border-indigo-400/25 bg-indigo-500/10 px-2.5 py-1 text-[9px] font-medium text-indigo-300 transition hover:border-indigo-300/40">
                 {showRedactionAudit ? 'Hide redaction audit' : 'Audit redactions'}
               </button>
-              <button type="button" onClick={() => void inspectRevisionHistory()} disabled={isRecovering} className="rounded-full border border-indigo-400/25 bg-indigo-500/10 px-2.5 py-1 text-[9px] font-medium text-indigo-300 transition hover:border-indigo-300/40 disabled:cursor-wait disabled:opacity-60">
+              <button type="button" onClick={() => void inspectRevisionHistory()} disabled={!originalAvailable || isRecovering} className="rounded-full border border-indigo-400/25 bg-indigo-500/10 px-2.5 py-1 text-[9px] font-medium text-indigo-300 transition hover:border-indigo-300/40 disabled:cursor-wait disabled:opacity-60">
                 {isRecovering ? 'Inspecting revisions…' : recoveryProfile ? 'Reinspect revisions' : 'Inspect revision history'}
               </button>
             </>
@@ -202,7 +226,7 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
           <button type="button" onClick={() => void toggleVerificationHistory()} aria-expanded={showVerificationHistory} className="rounded-full border border-slate-700 px-2.5 py-1 text-[9px] font-medium text-slate-400 transition hover:border-indigo-400/30 hover:text-indigo-300">
             {showVerificationHistory ? 'Hide verification log' : 'Verification log'}
           </button>
-          <ProvenanceShield isValidating={isValidating} result={activeManifest} error={provenanceError} />
+          {originalAvailable ? <ProvenanceShield isValidating={isValidating} result={activeManifest} error={provenanceError} /> : <span className="text-[9px] text-amber-200">Original referenced · file verification unavailable</span>}
         </div>
       </div>
       <div className="flex items-center justify-between border-b border-slate-900 px-4 py-2 text-[9px] text-slate-400">
@@ -210,6 +234,7 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
         <div className="flex items-center gap-3">
           {textPositionLabel && <span>{textPositionLabel}</span>}
           <span>{knownMaskedFindingCount > 0 ? `${knownMaskedFindingCount} sensitive value${knownMaskedFindingCount === 1 ? '' : 's'} masked` : 'No structured PII detected'}</span>
+          {onPreviousChunk && <button type="button" onClick={onPreviousChunk} className="rounded border border-slate-800 px-2 py-1 text-slate-400">Previous chunk</button>}
           {onNextChunk && <button type="button" onClick={onNextChunk} className="rounded border border-slate-800 px-2 py-1 text-slate-400 transition hover:border-indigo-400/30 hover:text-indigo-300">Next chunk</button>}
         </div>
       </div>
@@ -222,7 +247,9 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
         <button type="button" onClick={() => moveToMatch(-1)} disabled={searchMatches.length === 0} className="rounded border border-slate-800 px-2 py-1 text-slate-400 disabled:opacity-40">Previous</button>
         <button type="button" onClick={() => moveToMatch(1)} disabled={searchMatches.length === 0} className="rounded border border-slate-800 px-2 py-1 text-slate-400 disabled:opacity-40">Next</button>
         <button type="button" onClick={() => void shareEvidenceLocation()} className="rounded border border-indigo-400/25 bg-indigo-500/10 px-2 py-1 text-indigo-300">Copy evidence link</button>
+        {onSaveEvidence && <button type="button" onClick={saveEvidenceToBriefing} className="rounded border border-amber-400/25 bg-amber-500/10 px-2 py-1 text-amber-200">Save excerpt to briefing</button>}
         {shareStatus && <span role="status" className="text-emerald-300">{shareStatus}</span>}
+        {briefingStatus && <span role="status" className="text-emerald-300">{briefingStatus}</span>}
       </div>
       {activeManifest && activeManifest.claimGraph.claims.length > 0 && (
         <ProvenanceGraphPanel graph={activeManifest.claimGraph} />

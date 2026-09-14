@@ -311,6 +311,7 @@ pub struct RequestDocumentSummary {
     pub extraction_status: String,
     pub extraction_format: Option<String>,
     pub extraction_deferred_reason: Option<String>,
+    pub original_source_uri: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

@@ -21,6 +21,7 @@ import {
 import { useAudioAlerts } from './hooks/useAudioAlerts';
 import { workspaceCommandRegistry } from './commands/registry';
 import LicenseGate from './components/licensing/LicenseGate';
+import { AutomaticDiscoveryProvider } from './components/dashboard/AutomaticDiscoveryProvider';
 import type { LicenseStatus } from './types';
 
 const RUNTIME_FAILURE_REMINDER_MILLISECONDS = 60_000;
@@ -108,6 +109,7 @@ function LicensedWorkspace() {
   const analyticsRefreshRequests = useAppStore((state) => state.analyticsRefreshRequests);
   const setPendingSourceRepair = useAppStore((state) => state.setPendingSourceRepair);
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
+  const requestEvidenceRefresh = useAppStore((state) => state.requestEvidenceRefresh);
   const runtimeRefreshFailure = useRef<ReportedFailure | null>(null);
   const audioAlertsEnabled = useAppStore((state) => state.audioAlertsEnabled);
   const { triggerFailureAlert, triggerSuccessAlert } = useAudioAlerts(audioAlertsEnabled);
@@ -298,6 +300,14 @@ function LicensedWorkspace() {
     let stopListening: (() => void) | null = null;
     let reconnectTimer: number | null = null;
     let reconnectAttempt = 0;
+    let evidenceRefreshTimer: number | null = null;
+    const refreshEvidenceSoon = () => {
+      if (evidenceRefreshTimer !== null) return;
+      evidenceRefreshTimer = window.setTimeout(() => {
+        evidenceRefreshTimer = null;
+        requestEvidenceRefresh();
+      }, 750);
+    };
     const seenTelemetrySequences = new Set<string>();
     const connect = () => {
       void listen<IngestionTelemetry>('ingestion-telemetry', ({ payload }) => {
@@ -321,6 +331,7 @@ function LicensedWorkspace() {
           appendSyncLog(`${payload.payload.portalKey}: requesting page ${payload.payload.page}.`);
           break;
         case 'pageCompleted':
+          refreshEvidenceSoon();
           incrementMetric('pagesProcessed');
           appendSyncLog(`${payload.payload.portalKey}: page ${payload.payload.page} committed ${payload.payload.recordsFound} requests.`);
           break;
@@ -334,16 +345,19 @@ function LicensedWorkspace() {
           appendSyncLog(`${payload.payload.portalKey}: ${payload.payload.format} document ${payload.payload.documentId} expanded into ${payload.payload.entryCount} entries.`);
           break;
         case 'documentDeferred':
+          refreshEvidenceSoon();
           appendSyncLog(`${payload.payload.portalKey}: document ${payload.payload.documentId} deferred (${payload.payload.reason}).`);
           break;
         case 'documentSalvaged':
           appendSyncLog(`${payload.payload.portalKey}: document ${payload.payload.documentId} indexed through bounded ${payload.payload.format} salvage after the primary parser failed.`);
           break;
         case 'documentCompleted':
+          refreshEvidenceSoon();
           incrementMetric('documentsDownloaded');
           addBytesTransferred(payload.payload.bytesSaved);
           break;
         case 'syncStopped':
+          refreshEvidenceSoon();
           setPortalSyncState(payload.payload.portalKey, false, payload.payload.syncRunId);
           appendSyncLog(`${payload.payload.portalKey}: synchronization pool stopped.`);
           void refreshRuntimes();
@@ -401,16 +415,17 @@ function LicensedWorkspace() {
     return () => {
       active = false;
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
+      if (evidenceRefreshTimer !== null) window.clearTimeout(evidenceRefreshTimer);
       stopListening?.();
     };
-  }, [addBytesTransferred, appendSyncLog, incrementMetric, refreshAnalytics, refreshRuntimes, setPendingSourceRepair, setPortalSyncState, triggerFailureAlert, triggerSuccessAlert, upsertPortal]);
+  }, [addBytesTransferred, appendSyncLog, incrementMetric, refreshAnalytics, refreshRuntimes, requestEvidenceRefresh, setPendingSourceRepair, setPortalSyncState, triggerFailureAlert, triggerSuccessAlert, upsertPortal]);
 
   return (
     <div data-theme={resolvedTheme} data-platform={platform} className="app-theme flex h-screen w-screen overflow-hidden antialiased">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Header />
-        <MainLayout />
+        <AutomaticDiscoveryProvider><MainLayout /></AutomaticDiscoveryProvider>
       </div>
       <CommandPalette />
     </div>

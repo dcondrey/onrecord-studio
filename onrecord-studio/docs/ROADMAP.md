@@ -9,6 +9,20 @@ limit, context compaction, or a change of contributor. Search for `TODO(` and
 
 ## Session log
 
+### Product focus — 2026-09-13 San Diego
+
+The active product direction is [San Diego first](san-diego-focus.md): City records,
+CPP meeting preparation, and SDPD policy research. The home screen and source
+presets now reflect that scope. New general-purpose adapters and jurisdiction
+expansion are deferred until the local acquisition → search → document → briefing
+workflow meets its acceptance milestones. Older entries below remain a historical
+ledger and do not override this priority.
+
+This pass addresses the five workflow defects in the
+[September 13 investigation](investigation-2026-09-13.md), adds direct routing for
+known City document pages, and preserves SDPD category and pagination identities.
+See the focus document and `san_diego_live` tests for source coverage and live checks.
+
 ### Continuation — 2026-08-29 unreached-surface pass
 
 Verification at the end of this pass, all run together: `cargo fmt --check`,

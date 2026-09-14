@@ -1,0 +1,411 @@
+{
+  "verified_on": "2026-09-13",
+  "scope": "Read-only source inspection; no production bulk ingestion. Catalog presence does not establish complete acquisition.",
+  "live_connector_checks": [
+    {
+      "source_id": "sandag-open-data",
+      "observation": "Socrata detected; 1950 advertised catalog assets; 72 scoped CSV exports on first catalog page.",
+      "test": "sandag_catalog_downloads_belong_to_sandag"
+    },
+    {
+      "source_id": "sd-county-budget",
+      "observation": "Two published CSV routes resolved from application configuration to data.sandiegocounty.gov.",
+      "test": "county_budget_exposes_published_csv_and_schema"
+    },
+    {
+      "source_id": "sandag-gis",
+      "observation": "Content group found in the legacy ArcGIS Open Data Hub bootstrap.",
+      "test": "sandag_hub_exposes_a_content_group"
+    },
+    {
+      "source_id": "sd-hyland-agendas",
+      "observation": "78 public index links; selected meeting resolves its HTML agenda, with two linked file candidates.",
+      "test": "hyland_exposes_distinct_meetings_and_downloads"
+    }
+  ],
+  "additional_observations": [
+    {
+      "url": "https://data.sandiego.gov/data.json",
+      "status": 404,
+      "note": "Do not invent a DCAT endpoint; use published dataset pages."
+    },
+    {
+      "url": "https://gis.sandiego.org/FreightViewer",
+      "note": "Hostname did not resolve during inspection; export route retained."
+    },
+    {
+      "url": "https://library.ucsd.edu/dc/collection/bb7998853b",
+      "note": "Browser inspection returned an Anubis access challenge; local export route retained."
+    },
+    {
+      "url": "https://sandiego.granicus.com/",
+      "note": "Redirects to staff login; use public ViewPublisher.php?view_id=3."
+    },
+    {
+      "url": "https://escondido.org/",
+      "note": "Redirects to https://www.escondido.gov/."
+    }
+  ],
+  "source_routes": [
+    {
+      "id": "sd-air-quality",
+      "name": "Air Pollution Control District data",
+      "url": "https://www.sdapcd.org/content/sdapcd/apcd-air-data.html",
+      "topic": "Environment and water",
+      "publisher": "San Diego County Air Pollution Control District",
+      "route": "Public discovery"
+    },
+    {
+      "id": "sd-watergis",
+      "name": "Regional WaterGIS",
+      "url": "https://sdirwmp.org/watergis",
+      "topic": "Environment and water",
+      "publisher": "San Diego Integrated Regional Water Management",
+      "route": "Public discovery"
+    },
+    {
+      "id": "project-clean-water",
+      "name": "Project Clean Water",
+      "url": "https://projectcleanwater.org",
+      "topic": "Environment and water",
+      "publisher": "Project Clean Water",
+      "route": "Public discovery"
+    },
+    {
+      "id": "think-blue-data",
+      "name": "Think Blue by the numbers",
+      "url": "https://thinkblue.org/by-the-numbers",
+      "topic": "Environment and water",
+      "publisher": "City of San Diego Think Blue",
+      "route": "Public discovery"
+    },
+    {
+      "id": "sd-water-board",
+      "name": "San Diego Regional Water Board",
+      "url": "https://www.waterboards.ca.gov/sandiego",
+      "topic": "Environment and water",
+      "publisher": "California Regional Water Quality Control Board, San Diego Region",
+      "route": "Public discovery"
+    },
+    {
+      "id": "sd-netfile",
+      "name": "City campaign disclosure filings",
+      "url": "https://ssl.netfile.com/static/agency/csd/",
+      "topic": "Elections and finance",
+      "publisher": "City of San Diego / NetFile",
+      "route": "Public discovery"
+    },
+    {
+      "id": "sd-vote",
+      "name": "County Registrar of Voters",
+      "url": "https://www.sdvote.com",
+      "topic": "Elections and finance",
+      "publisher": "County Registrar of Voters",
+      "route": "Public discovery"
+    },
+    {
+      "id": "sd-iba",
+      "name": "Independent Budget Analyst reports",
+      "url": "https://www.sandiego.gov/iba/reports",
+      "topic": "Elections and finance",
+      "publisher": "City Independent Budget Analyst",
+      "route": "Public discovery"
+    },
+    {
+      "id": "sdcers-finance",
+      "name": "City retirement system reports",
+      "url": "https://www.sdcers.gov",
+      "topic": "Elections and finance",
+      "publisher": "San Diego City Employees’ Retirement System",
+      "route": "Public discovery"
+    },
+    {
+      "id": "sdcera-finance",
+      "name": "County retirement association reports",
+      "url": "https://www.sdcera.org",
+      "topic": "Elections and finance",
+      "publisher": "San Diego County Employees Retirement Association",
+      "route": "Public discovery"
+    },
+    {
+      "id": "sd-assessor",
+      "name": "Assessor / Recorder / County Clerk",
+      "url": "https://www.sdarcc.gov",
+      "topic": "Government",
+      "publisher": "County Assessor / Recorder / County Clerk",
+      "route": "Public discovery"
+    },
+    {
+      "id": "sdusd-budget",
+      "name": "San Diego Unified budget",
+      "url": "https://www.sandiegounified.org/about/budget",
+      "topic": "Education and economy",
+      "publisher": "San Diego Unified School District",
+      "route": "Public discovery"
+    },
+    {
+      "id": "sd-efile",
+      "name": "City electronic disclosure portal",
+      "url": "https://efile.sandiego.gov",
+      "topic": "Elections and finance",
+      "publisher": "City of San Diego",
+      "route": "Public discovery"
+    },
+    {
+      "id": "ucsd-massive-ftp",
+      "name": "UCSD MassIVE file exports",
+      "url": "ftp://massive-ftp.ucsd.edu",
+      "topic": "Research",
+      "publisher": "UC San Diego MassIVE",
+      "route": "Local export"
+    },
+    {
+      "id": "sangis-ftp",
+      "name": "SanGIS FTP exports",
+      "url": "ftp://ftp.sangis.org",
+      "topic": "Geography",
+      "publisher": "SanGIS",
+      "route": "Local export"
+    },
+    {
+      "id": "sd-city-ftp",
+      "name": "City FTP exports",
+      "url": "ftp://ftp.sandiego.gov",
+      "topic": "Government",
+      "publisher": "City of San Diego",
+      "route": "Local export"
+    },
+    {
+      "id": "sd-city-sftp",
+      "name": "City SFTP exports",
+      "url": "sftp://sftp.sandiego.gov",
+      "topic": "Government",
+      "publisher": "City of San Diego",
+      "route": "Local export"
+    },
+    {
+      "id": "sd-open-data",
+      "name": "City open data",
+      "url": "https://data.sandiego.gov",
+      "topic": "Open data",
+      "publisher": "City of San Diego",
+      "route": "Public discovery"
+    },
+    {
+      "id": "sandag-open-data",
+      "name": "SANDAG open data",
+      "url": "https://opendata.sandag.org",
+      "topic": "Open data",
+      "publisher": "SANDAG",
+      "route": "Public discovery"
+    },
+    {
+      "id": "sd-city-records",
+      "name": "City reports and records",
+      "url": "https://www.sandiego.gov",
+      "topic": "Government",
+      "publisher": "City of San Diego",
+      "route": "Public discovery"
+    },
+    {
+      "id": "sd-county-budget",
+      "name": "County budget portal",
+      "url": "https://sandiegocounty.budget.socrata.com",
+      "topic": "Open data",
+      "publisher": "County of San Diego",
+      "route": "Public discovery"
+    },
+    {
+      "id": "sd-county-records",
+      "name": "County reports and records",
+      "url": "https://www.sandiegocounty.gov",
+      "topic": "Government",
+      "publisher": "County of San Diego",
+      "route": "Public discovery"
+    },
+    {
+      "id": "sandag-reports",
+      "name": "SANDAG reports",
+      "url": "https://www.sandag.org",
+      "topic": "Government",
+      "publisher": "SANDAG",
+      "route": "Public discovery"
+    },
+    {
+      "id": "sd-nextrequest",
+      "name": "City public-records requests",
+      "url": "https://sandiego.nextrequest.com",
+      "topic": "Public records",
+      "publisher": "City of San Diego",
+      "route": "Public discovery"
+    },
+    {
+      "id": "sdhc-nextrequest",
+      "name": "Housing Commission requests",
+      "url": "https://sandiegohousingcommission.nextrequest.com",
+      "topic": "Public records",
+      "publisher": "San Diego Housing Commission",
+      "route": "Public discovery"
+    },
+    {
+      "id": "sd-county-pra",
+      "name": "County public-records requests",
+      "url": "https://pra.sandiegocounty.gov",
+      "topic": "Public records",
+      "publisher": "County of San Diego",
+      "route": "Public discovery"
+    },
+    {
+      "id": "sandag-gis",
+      "name": "SANDAG / SanGIS geography",
+      "url": "https://sdgis-sandag.opendata.arcgis.com",
+      "topic": "Geography",
+      "publisher": "SANDAG / SanGIS",
+      "route": "Public discovery"
+    },
+    {
+      "id": "ucsd-regional-archive",
+      "name": "UC San Diego digital collection",
+      "url": "https://library.ucsd.edu/dc/collection/bb7998853b",
+      "topic": "Research",
+      "publisher": "UC San Diego Library",
+      "route": "Local export"
+    },
+    {
+      "id": "sd-freight",
+      "name": "Regional Freight Viewer",
+      "url": "https://gis.sandiego.org/FreightViewer",
+      "topic": "Geography",
+      "publisher": "Regional Freight Viewer",
+      "route": "Local export"
+    },
+    {
+      "id": "sd-health-statistics",
+      "name": "County community health statistics",
+      "url": "https://www.sandiegocounty.gov/content/sdc/hhsa/programs/phs/community_health_statistics.html",
+      "topic": "Health and housing",
+      "publisher": "County HHSA",
+      "route": "Public discovery"
+    },
+    {
+      "id": "arjis-public",
+      "name": "ARJIS public information",
+      "url": "https://arjis.org",
+      "topic": "Government",
+      "publisher": "ARJIS",
+      "route": "Public discovery"
+    },
+    {
+      "id": "sdcoe-data",
+      "name": "County education dashboards",
+      "url": "https://data.sdcoe.net",
+      "topic": "Education and economy",
+      "publisher": "San Diego County Office of Education",
+      "route": "Public discovery"
+    },
+    {
+      "id": "ca-open-data",
+      "name": "California open data",
+      "url": "https://data.ca.gov",
+      "topic": "Open data",
+      "publisher": "State of California",
+      "route": "Public discovery"
+    },
+    {
+      "id": "rtfh-data",
+      "name": "Regional Task Force on Homelessness",
+      "url": "https://rtfhsd.org",
+      "topic": "Health and housing",
+      "publisher": "Regional Task Force on Homelessness",
+      "route": "Public discovery"
+    },
+    {
+      "id": "211-data",
+      "name": "211 San Diego",
+      "url": "https://211sandiego.org",
+      "topic": "Health and housing",
+      "publisher": "211 San Diego",
+      "route": "Public discovery"
+    },
+    {
+      "id": "livewell-data",
+      "name": "Live Well regional data hub",
+      "url": "https://livewellsd.org/regional-data-hub",
+      "topic": "Health and housing",
+      "publisher": "Live Well San Diego",
+      "route": "Public discovery"
+    },
+    {
+      "id": "innovate78-data",
+      "name": "Innovate78",
+      "url": "https://innovate78.com",
+      "topic": "Education and economy",
+      "publisher": "Innovate78",
+      "route": "Public discovery"
+    },
+    {
+      "id": "opendatasandiego",
+      "name": "Open Data San Diego explorer",
+      "url": "https://opendatasandiego.com",
+      "topic": "Open data",
+      "publisher": "Open Data San Diego",
+      "route": "Public discovery"
+    },
+    {
+      "id": "escondido-records",
+      "name": "Escondido public records",
+      "url": "https://www.escondido.gov",
+      "topic": "Government",
+      "publisher": "City of Escondido",
+      "route": "Public discovery"
+    },
+    {
+      "id": "sdsu-hdma",
+      "name": "SDSU Human Dynamics",
+      "url": "https://humandynamics.sdsu.edu",
+      "topic": "Research",
+      "publisher": "San Diego State University",
+      "route": "Public discovery"
+    },
+    {
+      "id": "sd-sheriff-data",
+      "name": "Sheriff open data",
+      "url": "https://www.sdsheriff.gov/resources/open-data",
+      "topic": "Government",
+      "publisher": "San Diego County Sheriff",
+      "route": "Public discovery"
+    },
+    {
+      "id": "downtown-data",
+      "name": "Downtown San Diego Partnership",
+      "url": "https://downtownsandiego.org",
+      "topic": "Health and housing",
+      "publisher": "Downtown San Diego Partnership",
+      "route": "Public discovery"
+    },
+    {
+      "id": "homelessdata-exports",
+      "name": "HomelessData exports",
+      "url": "https://homelessdata.com",
+      "topic": "Health and housing",
+      "publisher": "HomelessData",
+      "route": "Local export"
+    },
+    {
+      "id": "sd-hyland-agendas",
+      "name": "Council agenda archive",
+      "url": "https://sandiego.hylandcloud.com/211agendaonlinecouncil",
+      "topic": "Public records",
+      "publisher": "City Clerk",
+      "route": "Public discovery"
+    },
+    {
+      "id": "sd-granicus",
+      "name": "Council video archive and agendas",
+      "url": "https://sandiego.granicus.com/ViewPublisher.php?view_id=3",
+      "topic": "Public records",
+      "publisher": "CityTV / City Clerk",
+      "route": "Public discovery"
+    }
+  ]
+}

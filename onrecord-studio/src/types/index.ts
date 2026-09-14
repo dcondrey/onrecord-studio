@@ -8,3 +8,6 @@ export * from './license';
 export * from './corpus';
 export * from './source';
 export * from './sourceCatalog';
+export * from './semantic';
+export * from './analysisWorkbench';
+export * from './maintenance';

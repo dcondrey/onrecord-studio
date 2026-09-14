@@ -1,0 +1,166 @@
+{
+  "csv": "group,year,amount,phase\nA,22,1,adopted\nA,22,2,adopted\nA,22,3,adopted\nA,22,4,adopted\nA,22,5,adopted\nA,22,6,adopted\nA,22,7,adopted\nA,22,8,adopted\nA,22,9,adopted\nA,22,100,adopted\nA,23,10,adopted\nA,23,10,adopted\nA,23,10,adopted\nA,23,10,adopted\nA,23,10,adopted\nA,23,10,adopted\nA,23,10,adopted\nA,23,10,adopted\nA,23,10,adopted\nA,23,10,adopted\nA,25,200,adopted\nB,22,0,adopted\nB,23,5,adopted\nC,22,,adopted\nC,23,10,adopted\nD,unknown,7,adopted\nA,23,999,proposed\n,23,3,adopted\n",
+  "schema": {
+    "datasets": [
+      {
+        "snapshotId": "fixture",
+        "datasetKind": "REGIONAL_DATA",
+        "displayName": "Discovery fixture",
+        "tableName": "analysis_fixture",
+        "importedRows": 28,
+        "rejectedRows": 0,
+        "sourceUri": "https://example.test/fixture.csv",
+        "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "retrievedAt": "2026-09-14T00:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}"
+      }
+    ],
+    "columns": [
+      {
+        "tableName": "analysis_fixture",
+        "columnName": "group",
+        "logicalType": "TEXT",
+        "originalName": "group",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_fixture",
+        "columnName": "year",
+        "logicalType": "TEXT",
+        "originalName": "year",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_fixture",
+        "columnName": "amount",
+        "logicalType": "INTEGER",
+        "originalName": "amount",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_fixture",
+        "columnName": "phase",
+        "logicalType": "TEXT",
+        "originalName": "phase",
+        "nullable": true,
+        "dictionary": null
+      }
+    ],
+    "templates": []
+  },
+  "selection": {
+    "snapshotId": "fixture",
+    "measure": "amount",
+    "aggregation": "sum",
+    "dimension": "group",
+    "period": "year",
+    "periodMode": "year_code",
+    "filters": [
+      {
+        "column": "phase",
+        "operator": "equals",
+        "value": "adopted"
+      }
+    ]
+  },
+  "queries": [
+    {
+      "id": "coverage",
+      "title": "Scope and missing data",
+      "method": "Full filtered snapshot. Missing and unparseable periods remain in the coverage count but are excluded from time comparisons.",
+      "sql": "WITH analysis_scope AS (SELECT \"group\" AS \"source: group\", \"year\" AS \"source: year\", \"amount\" AS \"source: amount\", \"phase\" AS \"source: phase\", CAST(\"group\" AS VARCHAR) AS discovery_group, CASE WHEN REGEXP_FULL_MATCH(TRIM(CAST(\"year\" AS VARCHAR)), '[0-9]{2}|[0-9]{4}') THEN TRY_CAST(\"year\" AS INTEGER) END AS discovery_period FROM \"analysis_fixture\" WHERE CAST(\"phase\" AS VARCHAR) = 'adopted') SELECT COUNT(*) AS source_rows, COUNT(\"source: amount\") AS reported_values, COUNT(*) - COUNT(\"source: amount\") AS missing_values, MIN(\"source: amount\") AS minimum, MEDIAN(\"source: amount\") AS median, MAX(\"source: amount\") AS maximum, COUNT(*) - COUNT(discovery_period) AS unusable_period_rows, MIN(discovery_period) AS first_period, MAX(discovery_period) AS last_period FROM analysis_scope"
+    },
+    {
+      "id": "quality",
+      "title": "Column quality",
+      "method": "Null counts, distinct reported values, and range over every filtered row. Text suppression markers remain distinct values; a nonmissing cell is not necessarily a usable measurement.",
+      "sql": "SELECT 'group' AS column_name, 'TEXT' AS logical_type, COUNT(*) AS source_rows, COUNT(*) - COUNT(\"group\") AS missing_rows, COUNT(DISTINCT \"group\") AS distinct_values, CAST(MIN(\"group\") AS VARCHAR) AS minimum, CAST(MAX(\"group\") AS VARCHAR) AS maximum FROM \"analysis_fixture\" WHERE CAST(\"phase\" AS VARCHAR) = 'adopted'\nUNION ALL\nSELECT 'year' AS column_name, 'TEXT' AS logical_type, COUNT(*) AS source_rows, COUNT(*) - COUNT(\"year\") AS missing_rows, COUNT(DISTINCT \"year\") AS distinct_values, CAST(MIN(\"year\") AS VARCHAR) AS minimum, CAST(MAX(\"year\") AS VARCHAR) AS maximum FROM \"analysis_fixture\" WHERE CAST(\"phase\" AS VARCHAR) = 'adopted'\nUNION ALL\nSELECT 'amount' AS column_name, 'INTEGER' AS logical_type, COUNT(*) AS source_rows, COUNT(*) - COUNT(\"amount\") AS missing_rows, COUNT(DISTINCT \"amount\") AS distinct_values, CAST(MIN(\"amount\") AS VARCHAR) AS minimum, CAST(MAX(\"amount\") AS VARCHAR) AS maximum FROM \"analysis_fixture\" WHERE CAST(\"phase\" AS VARCHAR) = 'adopted'\nUNION ALL\nSELECT 'phase' AS column_name, 'TEXT' AS logical_type, COUNT(*) AS source_rows, COUNT(*) - COUNT(\"phase\") AS missing_rows, COUNT(DISTINCT \"phase\") AS distinct_values, CAST(MIN(\"phase\") AS VARCHAR) AS minimum, CAST(MAX(\"phase\") AS VARCHAR) AS maximum FROM \"analysis_fixture\" WHERE CAST(\"phase\" AS VARCHAR) = 'adopted'"
+    },
+    {
+      "id": "groups",
+      "title": "Differences by group",
+      "method": "Sum of reported values per group across all selected periods. Record share uses ALL filtered rows as denominator, including missing groups. Missing measurements are shown separately; observed values may be incomplete.",
+      "sql": "WITH analysis_scope AS (SELECT \"group\" AS \"source: group\", \"year\" AS \"source: year\", \"amount\" AS \"source: amount\", \"phase\" AS \"source: phase\", CAST(\"group\" AS VARCHAR) AS discovery_group, CASE WHEN REGEXP_FULL_MATCH(TRIM(CAST(\"year\" AS VARCHAR)), '[0-9]{2}|[0-9]{4}') THEN TRY_CAST(\"year\" AS INTEGER) END AS discovery_period FROM \"analysis_fixture\" WHERE CAST(\"phase\" AS VARCHAR) = 'adopted'), analysis_groups AS (\n  SELECT discovery_group AS group_value, COUNT(*) AS source_rows, COUNT(*) - COUNT(\"source: amount\") AS missing_values, SUM(\"source: amount\") AS observed_value\n  FROM analysis_scope GROUP BY discovery_group\n) SELECT *, ROUND(100.0 * source_rows / NULLIF(SUM(source_rows) OVER (), 0), 2) AS record_share_percent\nFROM analysis_groups ORDER BY ABS(observed_value) DESC NULLS LAST, group_value NULLS LAST"
+    },
+    {
+      "id": "changes",
+      "title": "Largest changes over time",
+      "method": "Adjacent observed periods within the same group. Missing intervening periods and missing measurements suppress differences. A zero baseline suppresses percentage change. Partial period coverage and changing populations require review.",
+      "sql": "WITH analysis_scope AS (SELECT \"group\" AS \"source: group\", \"year\" AS \"source: year\", \"amount\" AS \"source: amount\", \"phase\" AS \"source: phase\", CAST(\"group\" AS VARCHAR) AS discovery_group, CASE WHEN REGEXP_FULL_MATCH(TRIM(CAST(\"year\" AS VARCHAR)), '[0-9]{2}|[0-9]{4}') THEN TRY_CAST(\"year\" AS INTEGER) END AS discovery_period FROM \"analysis_fixture\" WHERE CAST(\"phase\" AS VARCHAR) = 'adopted'), analysis_periods AS (\n SELECT discovery_group AS group_value, discovery_period, COUNT(*) AS source_rows, COUNT(*) - COUNT(\"source: amount\") AS missing_values, SUM(\"source: amount\") AS observed_value\n FROM analysis_scope WHERE discovery_period IS NOT NULL GROUP BY discovery_group, discovery_period\n), analysis_previous AS (\n SELECT *, LAG(discovery_period) OVER w AS previous_period, LAG(observed_value) OVER w AS previous_value,\n LAG(source_rows) OVER w AS previous_rows, LAG(missing_values) OVER w AS previous_missing_values\n FROM analysis_periods WINDOW w AS (PARTITION BY group_value ORDER BY discovery_period)\n), analysis_changes AS (\n SELECT *, CASE WHEN previous_period IS NULL THEN 'No baseline' WHEN discovery_period - previous_period <> 1 THEN 'Missing intervening periods'\n WHEN missing_values > 0 OR previous_missing_values > 0 THEN 'Incomplete measurements' ELSE 'Adjacent periods with reported values' END AS comparison_status\n FROM analysis_previous\n)\nSELECT *, CASE WHEN comparison_status = 'Adjacent periods with reported values' THEN observed_value - previous_value END AS change,\n CASE WHEN comparison_status = 'Adjacent periods with reported values' THEN ROUND(100.0 * (observed_value - previous_value) / NULLIF(ABS(previous_value), 0), 2) END AS change_percent\nFROM analysis_changes ORDER BY ABS(change) DESC NULLS LAST, group_value NULLS LAST, discovery_period"
+    },
+    {
+      "id": "outliers",
+      "title": "Unusual source values",
+      "method": "Values outside Q1 − 1.5 × IQR or Q3 + 1.5 × IQR within the selected group and period. At least eight reported values and a positive IQR are required. These are review leads, not evidence of error or wrongdoing. Quartiles use observed values (discrete quantiles).",
+      "sql": "WITH analysis_scope AS (SELECT \"group\" AS \"source: group\", \"year\" AS \"source: year\", \"amount\" AS \"source: amount\", \"phase\" AS \"source: phase\", CAST(\"group\" AS VARCHAR) AS discovery_group, CASE WHEN REGEXP_FULL_MATCH(TRIM(CAST(\"year\" AS VARCHAR)), '[0-9]{2}|[0-9]{4}') THEN TRY_CAST(\"year\" AS INTEGER) END AS discovery_period FROM \"analysis_fixture\" WHERE CAST(\"phase\" AS VARCHAR) = 'adopted'), analysis_distribution AS (\n SELECT *, COUNT(\"source: amount\") OVER w AS peer_values, QUANTILE_DISC(\"source: amount\", 0.25) OVER w AS q1,\n QUANTILE_DISC(\"source: amount\", 0.75) OVER w AS q3\n FROM analysis_scope WINDOW w AS (PARTITION BY discovery_group, discovery_period)\n), analysis_unusual AS (\n SELECT *, q1 - 1.5 * (q3 - q1) AS lower_fence, q3 + 1.5 * (q3 - q1) AS upper_fence\n FROM analysis_distribution WHERE peer_values >= 8 AND q3 > q1 AND discovery_period IS NOT NULL\n)\nSELECT *, COUNT(*) OVER () AS total_flagged_rows FROM analysis_unusual\nWHERE \"source: amount\" < lower_fence OR \"source: amount\" > upper_fence\nORDER BY ABS(\"source: amount\") DESC"
+    },
+    {
+      "id": "duplicates",
+      "title": "Repeated source rows",
+      "method": "Exact row-hash repeats across the entire snapshot, including rows outside the selected filters. They are not removed automatically: repeated records can be legitimate. Original row numbers and source cells are retained for review.",
+      "sql": "SELECT row_hash, COUNT(*) AS occurrences, MIN(row_number) AS first_source_row, MAX(row_number) AS last_source_row,\n MIN(source_payload_json) AS source_cells FROM analytical_rows\nWHERE snapshot_id = 'fixture' AND malformed = 0\nGROUP BY row_hash HAVING COUNT(*) > 1 ORDER BY occurrences DESC, first_source_row"
+    }
+  ],
+  "calendar": {
+    "csv": "group,year,amount,phase\nA,2026-01-03,1,adopted\nA,2026-01-03,2,adopted\nA,2026-01-03,3,adopted\nA,2026-01-03,4,adopted\nA,2026-01-03,5,adopted\nA,2026-01-03,6,adopted\nA,2026-01-03,7,adopted\nA,2026-01-03,8,adopted\nA,2026-01-03,9,adopted\nA,2026-01-03,100,adopted\nA,2026-02-03,10,adopted\nA,2026-02-03,10,adopted\nA,2026-02-03,10,adopted\nA,2026-02-03,10,adopted\nA,2026-02-03,10,adopted\nA,2026-02-03,10,adopted\nA,2026-02-03,10,adopted\nA,2026-02-03,10,adopted\nA,2026-02-03,10,adopted\nA,2026-02-03,10,adopted\nA,2026-04-03,200,adopted\nB,2026-01-03,0,adopted\nB,2026-02-03,5,adopted\nC,2026-01-03,,adopted\nC,2026-02-03,10,adopted\nD,unknown,7,adopted\nA,2026-02-03,999,proposed\n,2026-02-03,3,adopted\n",
+    "selection": {
+      "snapshotId": "fixture",
+      "measure": "amount",
+      "aggregation": "sum",
+      "dimension": "group",
+      "period": "year",
+      "periodMode": "month",
+      "filters": [
+        {
+          "column": "phase",
+          "operator": "equals",
+          "value": "adopted"
+        }
+      ]
+    },
+    "queries": [
+      {
+        "id": "coverage",
+        "title": "Scope and missing data",
+        "method": "Full filtered snapshot. Missing and unparseable periods remain in the coverage count but are excluded from time comparisons.",
+        "sql": "WITH analysis_scope AS (SELECT \"group\" AS \"source: group\", \"year\" AS \"source: year\", \"amount\" AS \"source: amount\", \"phase\" AS \"source: phase\", CAST(\"group\" AS VARCHAR) AS discovery_group, CAST(DATE_TRUNC('month', TRY_CAST(\"year\" AS DATE)) AS DATE) AS discovery_period FROM \"analysis_fixture\" WHERE CAST(\"phase\" AS VARCHAR) = 'adopted') SELECT COUNT(*) AS source_rows, COUNT(\"source: amount\") AS reported_values, COUNT(*) - COUNT(\"source: amount\") AS missing_values, MIN(\"source: amount\") AS minimum, MEDIAN(\"source: amount\") AS median, MAX(\"source: amount\") AS maximum, COUNT(*) - COUNT(discovery_period) AS unusable_period_rows, MIN(discovery_period) AS first_period, MAX(discovery_period) AS last_period FROM analysis_scope"
+      },
+      {
+        "id": "quality",
+        "title": "Column quality",
+        "method": "Null counts, distinct reported values, and range over every filtered row. Text suppression markers remain distinct values; a nonmissing cell is not necessarily a usable measurement.",
+        "sql": "SELECT 'group' AS column_name, 'TEXT' AS logical_type, COUNT(*) AS source_rows, COUNT(*) - COUNT(\"group\") AS missing_rows, COUNT(DISTINCT \"group\") AS distinct_values, CAST(MIN(\"group\") AS VARCHAR) AS minimum, CAST(MAX(\"group\") AS VARCHAR) AS maximum FROM \"analysis_fixture\" WHERE CAST(\"phase\" AS VARCHAR) = 'adopted'\nUNION ALL\nSELECT 'year' AS column_name, 'TEXT' AS logical_type, COUNT(*) AS source_rows, COUNT(*) - COUNT(\"year\") AS missing_rows, COUNT(DISTINCT \"year\") AS distinct_values, CAST(MIN(\"year\") AS VARCHAR) AS minimum, CAST(MAX(\"year\") AS VARCHAR) AS maximum FROM \"analysis_fixture\" WHERE CAST(\"phase\" AS VARCHAR) = 'adopted'\nUNION ALL\nSELECT 'amount' AS column_name, 'INTEGER' AS logical_type, COUNT(*) AS source_rows, COUNT(*) - COUNT(\"amount\") AS missing_rows, COUNT(DISTINCT \"amount\") AS distinct_values, CAST(MIN(\"amount\") AS VARCHAR) AS minimum, CAST(MAX(\"amount\") AS VARCHAR) AS maximum FROM \"analysis_fixture\" WHERE CAST(\"phase\" AS VARCHAR) = 'adopted'\nUNION ALL\nSELECT 'phase' AS column_name, 'TEXT' AS logical_type, COUNT(*) AS source_rows, COUNT(*) - COUNT(\"phase\") AS missing_rows, COUNT(DISTINCT \"phase\") AS distinct_values, CAST(MIN(\"phase\") AS VARCHAR) AS minimum, CAST(MAX(\"phase\") AS VARCHAR) AS maximum FROM \"analysis_fixture\" WHERE CAST(\"phase\" AS VARCHAR) = 'adopted'"
+      },
+      {
+        "id": "groups",
+        "title": "Differences by group",
+        "method": "Sum of reported values per group across all selected periods. Record share uses ALL filtered rows as denominator, including missing groups. Missing measurements are shown separately; observed values may be incomplete.",
+        "sql": "WITH analysis_scope AS (SELECT \"group\" AS \"source: group\", \"year\" AS \"source: year\", \"amount\" AS \"source: amount\", \"phase\" AS \"source: phase\", CAST(\"group\" AS VARCHAR) AS discovery_group, CAST(DATE_TRUNC('month', TRY_CAST(\"year\" AS DATE)) AS DATE) AS discovery_period FROM \"analysis_fixture\" WHERE CAST(\"phase\" AS VARCHAR) = 'adopted'), analysis_groups AS (\n  SELECT discovery_group AS group_value, COUNT(*) AS source_rows, COUNT(*) - COUNT(\"source: amount\") AS missing_values, SUM(\"source: amount\") AS observed_value\n  FROM analysis_scope GROUP BY discovery_group\n) SELECT *, ROUND(100.0 * source_rows / NULLIF(SUM(source_rows) OVER (), 0), 2) AS record_share_percent\nFROM analysis_groups ORDER BY ABS(observed_value) DESC NULLS LAST, group_value NULLS LAST"
+      },
+      {
+        "id": "changes",
+        "title": "Largest changes over time",
+        "method": "Adjacent observed periods within the same group. Missing intervening periods and missing measurements suppress differences. A zero baseline suppresses percentage change. Partial period coverage and changing populations require review.",
+        "sql": "WITH analysis_scope AS (SELECT \"group\" AS \"source: group\", \"year\" AS \"source: year\", \"amount\" AS \"source: amount\", \"phase\" AS \"source: phase\", CAST(\"group\" AS VARCHAR) AS discovery_group, CAST(DATE_TRUNC('month', TRY_CAST(\"year\" AS DATE)) AS DATE) AS discovery_period FROM \"analysis_fixture\" WHERE CAST(\"phase\" AS VARCHAR) = 'adopted'), analysis_periods AS (\n SELECT discovery_group AS group_value, discovery_period, COUNT(*) AS source_rows, COUNT(*) - COUNT(\"source: amount\") AS missing_values, SUM(\"source: amount\") AS observed_value\n FROM analysis_scope WHERE discovery_period IS NOT NULL GROUP BY discovery_group, discovery_period\n), analysis_previous AS (\n SELECT *, LAG(discovery_period) OVER w AS previous_period, LAG(observed_value) OVER w AS previous_value,\n LAG(source_rows) OVER w AS previous_rows, LAG(missing_values) OVER w AS previous_missing_values\n FROM analysis_periods WINDOW w AS (PARTITION BY group_value ORDER BY discovery_period)\n), analysis_changes AS (\n SELECT *, CASE WHEN previous_period IS NULL THEN 'No baseline' WHEN DATE_DIFF('month', previous_period, discovery_period) <> 1 THEN 'Missing intervening periods'\n WHEN missing_values > 0 OR previous_missing_values > 0 THEN 'Incomplete measurements' ELSE 'Adjacent periods with reported values' END AS comparison_status\n FROM analysis_previous\n)\nSELECT *, CASE WHEN comparison_status = 'Adjacent periods with reported values' THEN observed_value - previous_value END AS change,\n CASE WHEN comparison_status = 'Adjacent periods with reported values' THEN ROUND(100.0 * (observed_value - previous_value) / NULLIF(ABS(previous_value), 0), 2) END AS change_percent\nFROM analysis_changes ORDER BY ABS(change) DESC NULLS LAST, group_value NULLS LAST, discovery_period"
+      },
+      {
+        "id": "outliers",
+        "title": "Unusual source values",
+        "method": "Values outside Q1 − 1.5 × IQR or Q3 + 1.5 × IQR within the selected group and period. At least eight reported values and a positive IQR are required. These are review leads, not evidence of error or wrongdoing. Quartiles use observed values (discrete quantiles).",
+        "sql": "WITH analysis_scope AS (SELECT \"group\" AS \"source: group\", \"year\" AS \"source: year\", \"amount\" AS \"source: amount\", \"phase\" AS \"source: phase\", CAST(\"group\" AS VARCHAR) AS discovery_group, CAST(DATE_TRUNC('month', TRY_CAST(\"year\" AS DATE)) AS DATE) AS discovery_period FROM \"analysis_fixture\" WHERE CAST(\"phase\" AS VARCHAR) = 'adopted'), analysis_distribution AS (\n SELECT *, COUNT(\"source: amount\") OVER w AS peer_values, QUANTILE_DISC(\"source: amount\", 0.25) OVER w AS q1,\n QUANTILE_DISC(\"source: amount\", 0.75) OVER w AS q3\n FROM analysis_scope WINDOW w AS (PARTITION BY discovery_group, discovery_period)\n), analysis_unusual AS (\n SELECT *, q1 - 1.5 * (q3 - q1) AS lower_fence, q3 + 1.5 * (q3 - q1) AS upper_fence\n FROM analysis_distribution WHERE peer_values >= 8 AND q3 > q1 AND discovery_period IS NOT NULL\n)\nSELECT *, COUNT(*) OVER () AS total_flagged_rows FROM analysis_unusual\nWHERE \"source: amount\" < lower_fence OR \"source: amount\" > upper_fence\nORDER BY ABS(\"source: amount\") DESC"
+      },
+      {
+        "id": "duplicates",
+        "title": "Repeated source rows",
+        "method": "Exact row-hash repeats across the entire snapshot, including rows outside the selected filters. They are not removed automatically: repeated records can be legitimate. Original row numbers and source cells are retained for review.",
+        "sql": "SELECT row_hash, COUNT(*) AS occurrences, MIN(row_number) AS first_source_row, MAX(row_number) AS last_source_row,\n MIN(source_payload_json) AS source_cells FROM analytical_rows\nWHERE snapshot_id = 'fixture' AND malformed = 0\nGROUP BY row_hash HAVING COUNT(*) > 1 ORDER BY occurrences DESC, first_source_row"
+      }
+    ]
+  }
+}

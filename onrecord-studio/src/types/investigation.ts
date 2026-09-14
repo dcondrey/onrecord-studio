@@ -63,6 +63,7 @@ export interface DocumentPurge {
   documentId: number;
   sourceKey: string;
   localPath: string | null;
+  additionalLocalPaths?: string[];
   searchRowsRemoved: number;
   provenanceRowsRemoved: number;
 }
@@ -329,6 +330,7 @@ export interface RequestDocumentSummary {
   extractionStatus: string;
   extractionFormat: string | null;
   extractionDeferredReason: string | null;
+  originalSourceUri?: string | null;
 }
 
 export interface DocumentTextChunk {

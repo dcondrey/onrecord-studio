@@ -2,6 +2,7 @@
 
 pub mod anomaly;
 pub mod cluster;
+pub(crate) mod sql;
 pub mod statute;
 pub mod timeline;
 

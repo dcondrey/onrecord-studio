@@ -1,18 +1,26 @@
 //! Root type orchestration boundary exposing modular data engine shapes.
 
 pub mod analysis;
+pub mod analysis_workbench;
 pub mod audit;
 pub mod c2pa;
 pub mod corpus;
 pub mod investigation;
 pub mod legal;
 pub mod license;
+pub mod maintenance;
 pub mod nextrequest;
 pub mod portal;
+pub mod semantic;
 pub mod source;
 
 // Re-export core structures for convenient root usage
 pub use analysis::{AgencyPerformanceProfile, AnalysisConfig, OutlierCluster};
+pub use analysis_workbench::{
+    AnalyticalColumnSummary, AnalyticalDatasetKind, AnalyticalDatasetSummary,
+    AnalyticalImportCandidate, AnalyticalImportRequest, AnalyticalImportResult, AnalyticalSchema,
+    SqlExportResult, SqlQueryResult, SqlTemplate,
+};
 pub use audit::{CaseAuditRecord, StateTransitionLog, TimelineAnomalyMarker, VerificationState};
 pub use c2pa::{
     C2pAssertion, ProvenanceConfidence, ProvenanceManifest, RecordedDigestSource,
@@ -36,6 +44,7 @@ pub use legal::{
     LegalEvaluationResult, LegalFindingReviewStatus, LegalMandateInput, LegalMandateSeverity,
 };
 pub use license::{LicenseState, LicenseStatus};
+pub use maintenance::{DataMaintenanceEvent, DataMaintenancePolicy, DataMaintenanceStatus};
 pub use nextrequest::{
     DocumentMetadata, EmailMetadata, EmailParticipantMetadata, NextRequestResponse, PaginationMeta,
     PublicRequest,
@@ -44,6 +53,10 @@ pub use portal::{
     DocumentPurge, FrontierExclusionCount, PortalApiLayout, PortalRegistration,
     PortalRuntimeSnapshot, PortalSyncStart, RateLimitPolicy, SavedSource, SourceKind,
     SourceLifecycleState, SourcePurge, SourcePurgePreview, SourceRemoval, StoppedHost,
+};
+pub use semantic::{
+    EmbeddingIndexReport, EmbeddingIndexStatus, EmbeddingModelStatus, HybridSearchFilter,
+    HybridSearchResult,
 };
 pub use source::{
     CrawlPolicy, DiscoveredSourceLink, MetadataPageWindow, PastedContentInput,

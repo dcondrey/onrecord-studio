@@ -1,0 +1,218 @@
+use onrecord_studio_lib::{
+    storage::DuckDbRepository,
+    types::{AnalyticalImportRequest, SqlQueryResult},
+};
+use serde_json::{json, Value};
+
+fn cell<'a>(result: &'a SqlQueryResult, row: usize, name: &str) -> &'a Value {
+    &result.rows[row][result.columns.iter().position(|c| c == name).unwrap()]
+}
+
+#[tokio::test]
+async fn generated_discovery_queries_run_through_the_native_boundary() {
+    let fixture: Value = serde_json::from_str(include_str!("fixtures/discovery.json")).unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let db = DuckDbRepository::new(temp.path().join("analysis.db")).unwrap();
+    db.run_migrations(include_str!("../migrations/0001_initial_schema.sql"))
+        .await
+        .unwrap();
+    let path = temp.path().join("fixture.csv");
+    std::fs::write(&path, fixture["csv"].as_str().unwrap()).unwrap();
+    let input: AnalyticalImportRequest = serde_json::from_value(json!({
+        "datasetKind":"REGIONAL_DATA", "displayName":"Discovery fixture", "localPath":path,
+        "sourceUri":"https://example.test/fixture.csv", "partialDataset":true
+    }))
+    .unwrap();
+    let imported = db.import_analytical_csv(input.clone()).await.unwrap();
+    // Another snapshot must not be cited by a query that never reads it.
+    let mut other = input;
+    other.source_uri = Some("https://example.test/unrelated.csv".into());
+    db.import_analytical_csv(other).await.unwrap();
+    for query in fixture["queries"].as_array().unwrap() {
+        let id = query["id"].as_str().unwrap();
+        let sql = query["sql"]
+            .as_str()
+            .unwrap()
+            .replace("analysis_fixture", &imported.table_name)
+            .replace("'fixture'", &format!("'{}'", imported.snapshot_id));
+        let result = db
+            .execute_restricted_sql(&sql, 100)
+            .await
+            .unwrap_or_else(|e| panic!("{id}: {e}"));
+        if id != "duplicates" {
+            assert_eq!(result.provenance.len(), 1, "{id} provenance");
+        }
+        match id {
+            "coverage" => {
+                assert_eq!(cell(&result, 0, "source_rows"), &json!(27));
+                assert_eq!(cell(&result, 0, "missing_values"), &json!(1));
+                assert_eq!(cell(&result, 0, "unusable_period_rows"), &json!(1));
+                assert_eq!(cell(&result, 0, "last_period"), &json!(25));
+            }
+            "quality" => assert_eq!(result.row_count, 4),
+            "groups" => {
+                assert_eq!(cell(&result, 0, "group_value"), &json!("A"));
+                assert_eq!(cell(&result, 0, "observed_value"), &json!("445"));
+                assert!(
+                    result.rows.iter().any(|row| row[0].is_null()),
+                    "missing groups stay in denominator"
+                );
+            }
+            "changes" => {
+                assert_eq!(cell(&result, 0, "change"), &json!("-45"));
+                for i in 0..result.row_count {
+                    match (
+                        cell(&result, i, "group_value").as_str(),
+                        cell(&result, i, "discovery_period").as_i64(),
+                    ) {
+                        (Some("A"), Some(25)) => {
+                            assert_eq!(
+                                cell(&result, i, "comparison_status"),
+                                &json!("Missing intervening periods")
+                            );
+                            assert!(cell(&result, i, "change").is_null());
+                        }
+                        (Some("B"), Some(23)) => {
+                            assert!(cell(&result, i, "change_percent").is_null())
+                        }
+                        (Some("C"), Some(23)) => {
+                            assert_eq!(
+                                cell(&result, i, "comparison_status"),
+                                &json!("Incomplete measurements")
+                            );
+                            assert!(cell(&result, i, "change").is_null());
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            "outliers" => {
+                assert_eq!(result.row_count, 1);
+                assert_eq!(cell(&result, 0, "source: amount"), &json!(100));
+                assert_eq!(cell(&result, 0, "total_flagged_rows"), &json!(1));
+            }
+            "duplicates" => {
+                assert_eq!(result.row_count, 1);
+                assert_eq!(cell(&result, 0, "occurrences"), &json!(10));
+                assert!(cell(&result, 0, "source_cells")
+                    .as_str()
+                    .unwrap()
+                    .contains("adopted"));
+            }
+            _ => panic!("Unverified query {id}"),
+        }
+    }
+    // User-written CTE names work, while nested reads of unrelated evidence tables fail.
+    assert!(db
+        .execute_restricted_sql(
+            &format!(
+                "WITH budget AS (SELECT * FROM {}) SELECT COUNT(*) FROM budget",
+                imported.table_name
+            ),
+            1
+        )
+        .await
+        .is_ok());
+    assert!(db
+        .execute_restricted_sql(
+            "WITH analysis_hidden AS (SELECT * FROM documents) SELECT * FROM analysis_hidden",
+            1
+        )
+        .await
+        .is_err());
+}
+
+#[tokio::test]
+async fn calendar_discovery_preserves_gaps_and_applies_limits_after_aggregation() {
+    let fixture: Value = serde_json::from_str(include_str!("fixtures/discovery.json")).unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let db = DuckDbRepository::new(temp.path().join("calendar.db")).unwrap();
+    db.run_migrations(include_str!("../migrations/0001_initial_schema.sql"))
+        .await
+        .unwrap();
+    let path = temp.path().join("calendar.csv");
+    std::fs::write(&path, fixture["calendar"]["csv"].as_str().unwrap()).unwrap();
+    let input = serde_json::from_value(json!({"datasetKind":"REGIONAL_DATA", "displayName":"Calendar", "localPath":path, "partialDataset":true})).unwrap();
+    let imported = db.import_analytical_csv(input).await.unwrap();
+    let query = |id| {
+        fixture["calendar"]["queries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["id"] == id)
+            .unwrap()["sql"]
+            .as_str()
+            .unwrap()
+            .replace("analysis_fixture", &imported.table_name)
+    };
+    let changes = db
+        .execute_restricted_sql(&query("changes"), 100)
+        .await
+        .unwrap();
+    assert_eq!(cell(&changes, 0, "change"), &json!("-45"));
+    assert_eq!(cell(&changes, 0, "discovery_period"), &json!("2026-02-01"));
+    assert!(changes
+        .rows
+        .iter()
+        .enumerate()
+        .any(|(i, _)| cell(&changes, i, "comparison_status")
+            == &json!("Missing intervening periods")));
+    let groups = db
+        .execute_restricted_sql(&query("groups"), 1)
+        .await
+        .unwrap();
+    assert!(groups.truncated);
+    assert_eq!(cell(&groups, 0, "source_rows"), &json!(21));
+    assert_eq!(cell(&groups, 0, "observed_value"), &json!("445"));
+    assert_eq!(
+        cell(&groups, 0, "record_share_percent"),
+        &json!(77.78),
+        "denominator includes all 27 records even with a one-group display limit"
+    );
+}
+
+#[tokio::test]
+async fn automatic_startup_queries_run_on_real_imported_rows() {
+    let fixture: Value =
+        serde_json::from_str(include_str!("fixtures/automatic-discovery.json")).unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let db = DuckDbRepository::new(temp.path().join("automatic.db")).unwrap();
+    db.run_migrations(include_str!("../migrations/0001_initial_schema.sql"))
+        .await
+        .unwrap();
+    let path = temp.path().join("automatic.csv");
+    std::fs::write(&path, fixture["csv"].as_str().unwrap()).unwrap();
+    let input: AnalyticalImportRequest = serde_json::from_value(json!({ "datasetKind":"REGIONAL_DATA", "displayName":"Automatic fixture", "localPath":path, "sourceUri":"https://example.test/automatic.csv", "partialDataset":true })).unwrap();
+    let imported = db.import_analytical_csv(input).await.unwrap();
+    for query in fixture["queries"].as_array().unwrap() {
+        let sql = query["sql"]
+            .as_str()
+            .unwrap()
+            .replace("analysis_fixture", &imported.table_name)
+            .replace("'fixture'", &format!("'{}'", imported.snapshot_id));
+        let result = db.execute_restricted_sql(&sql, 100).await.unwrap();
+        assert_eq!(result.provenance.len(), 1);
+        match query["id"].as_str().unwrap() {
+            "quality" => {
+                assert_eq!(result.row_count, 4);
+                assert_eq!(cell(&result, 0, "source_rows"), &json!(28));
+            }
+            "coverage" => {
+                assert_eq!(cell(&result, 0, "source_rows"), &json!(28));
+                assert_eq!(cell(&result, 0, "last_period"), &json!(25));
+            }
+            "groups" => {
+                assert_eq!(cell(&result, 0, "group_value"), &json!("A"));
+                assert_eq!(cell(&result, 0, "source_rows"), &json!(22));
+                assert_eq!(cell(&result, 0, "observed_value"), &json!(22));
+            }
+            "changes" => assert!(result.rows.iter().enumerate().any(|(i, _)| cell(
+                &result,
+                i,
+                "comparison_status"
+            )
+                == "Missing intervening periods")),
+            other => panic!("Unexpected automatic query {other}"),
+        }
+    }
+}

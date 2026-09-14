@@ -11,37 +11,32 @@ export default function AgencySelector() {
   const selectedStatus = useAppStore((state) => state.selectedStatus);
   const selectedPolicyDeviation = useAppStore((state) => state.selectedPolicyDeviation);
   const setSearchFilters = useAppStore((state) => state.setSearchFilters);
+  const setActivePortal = useAppStore((state) => state.setActivePortal);
   const agencyIndex = useMemo(() => {
-    const all = new Map<number, string>();
-    const byPortal = new Map<string, Map<number, string>>();
+    const all = new Map<string, { value: string; portalKey: string; agencyId: number; name: string }>();
     for (const profile of profiles) {
-      all.set(profile.agencyId, profile.agencyName);
-      const scoped = byPortal.get(profile.portalSubdomain) ?? new Map<number, string>();
-      scoped.set(profile.agencyId, profile.agencyName);
-      byPortal.set(profile.portalSubdomain, scoped);
+      const value = JSON.stringify([profile.portalSubdomain, profile.agencyId]);
+      all.set(value, { value, portalKey: profile.portalSubdomain, agencyId: profile.agencyId, name: profile.agencyName });
     }
-    const sorted = (values: Map<number, string>) => [...values.entries()].sort((left, right) => left[1].localeCompare(right[1]));
-    return {
-      all: sorted(all),
-      byPortal: new Map([...byPortal].map(([portalKey, values]) => [portalKey, sorted(values)])),
-    };
+    return [...all.values()].sort((left, right) => left.name.localeCompare(right.name) || left.portalKey.localeCompare(right.portalKey));
   }, [profiles]);
-  const agencies = activePortalKey ? agencyIndex.byPortal.get(activePortalKey) ?? [] : agencyIndex.all;
+  const agencies = activePortalKey ? agencyIndex.filter((agency) => agency.portalKey === activePortalKey) : agencyIndex;
 
   return (
     <label className="flex min-w-0 items-center gap-2">
       <span className="sr-only">Department</span>
       <select
-        value={selectedAgencyId ?? ''}
+        value={selectedAgencyId !== null && activePortalKey ? JSON.stringify([activePortalKey, selectedAgencyId]) : ''}
         onChange={(event) => {
-          const agencyId = event.target.value ? Number(event.target.value) : null;
-          setSearchFilters(searchTerm, agencyId, selectedStatus, selectedPolicyDeviation);
+          const agency = agencyIndex.find((candidate) => candidate.value === event.target.value);
+          if (agency && activePortalKey !== agency.portalKey) setActivePortal(agency.portalKey);
+          setSearchFilters(searchTerm, agency?.agencyId ?? null, selectedStatus, selectedPolicyDeviation);
         }}
         className="focus-ring h-10 max-w-52 rounded-xl border border-slate-800 bg-slate-950/65 px-3 text-[10px] text-slate-300 transition focus:border-indigo-400/50"
       >
         <option value="">All departments</option>
-        {agencies.map(([agencyId, agencyName]) => (
-          <option key={agencyId} value={agencyId}>{agencyName}</option>
+        {agencies.map((agency) => (
+          <option key={agency.value} value={agency.value}>{agency.name}{activePortalKey ? '' : ` · ${agency.portalKey}`}</option>
         ))}
       </select>
     </label>

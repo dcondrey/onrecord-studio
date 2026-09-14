@@ -52,6 +52,20 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::corpus::get_corpus_index_status,
         commands::corpus::list_top_corpus_entities,
         commands::corpus::get_corpus_entity_neighborhood,
+        commands::semantic::get_embedding_model_status,
+        commands::semantic::initialize_embedding_model,
+        commands::semantic::get_embedding_index_status,
+        commands::semantic::rebuild_embedding_index,
+        commands::semantic::cancel_embedding_index,
+        commands::semantic::hybrid_search,
+        commands::analysis_workbench::import_analytical_dataset,
+        commands::analysis_workbench::list_analytical_import_candidates,
+        commands::analysis_workbench::get_analytical_schema,
+        commands::maintenance::get_data_maintenance_status,
+        commands::maintenance::set_data_maintenance_policy,
+        commands::maintenance::run_data_maintenance,
+        commands::analysis_workbench::run_analytical_sql,
+        commands::analysis_workbench::export_analytical_sql_csv,
         commands::query::query_audit_records,
         commands::export::export_legal_brief,
         commands::investigation::get_agency_performance_profiles,
@@ -112,6 +126,13 @@ fn application_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         "workspace-evidence",
         "Evidence",
         true,
+        Some("CmdOrCtrl+4"),
+    )?;
+    let analysis = MenuItem::with_id(
+        app,
+        "workspace-analysis",
+        "Analysis",
+        true,
         Some("CmdOrCtrl+3"),
     )?;
     let activity = MenuItem::with_id(
@@ -119,7 +140,14 @@ fn application_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         "workspace-activity",
         "Activity",
         true,
-        Some("CmdOrCtrl+4"),
+        Some("CmdOrCtrl+5"),
+    )?;
+    let briefing = MenuItem::with_id(
+        app,
+        "workspace-briefing",
+        "Briefing",
+        true,
+        Some("CmdOrCtrl+6"),
     )?;
     let add_source = MenuItem::with_id(
         app,
@@ -136,7 +164,9 @@ fn application_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         Some("CmdOrCtrl+K"),
     )?;
     let workspace = SubmenuBuilder::new(app, "Workspace")
-        .items(&[&overview, &patterns, &evidence, &activity])
+        .items(&[
+            &overview, &patterns, &analysis, &evidence, &activity, &briefing,
+        ])
         .separator()
         .item(&add_source)
         .item(&command_palette)

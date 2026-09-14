@@ -149,6 +149,7 @@ pub struct DocumentPurge {
     pub document_id: u64,
     pub source_key: String,
     pub local_path: Option<String>,
+    pub additional_local_paths: Vec<String>,
     pub search_rows_removed: u64,
     pub provenance_rows_removed: u64,
 }

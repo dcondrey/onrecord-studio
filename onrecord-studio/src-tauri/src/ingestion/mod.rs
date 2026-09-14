@@ -14,3 +14,4 @@ pub use source_catalog::{
     planned_source_profiles, AccessRequirement, AdapterAvailability, ConnectorFamily,
     ConnectorManifest, SourceProfile,
 };
+pub(crate) mod regional;

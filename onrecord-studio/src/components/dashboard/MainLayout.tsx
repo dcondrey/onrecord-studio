@@ -20,17 +20,25 @@ import Icon from '../ui/icons';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import ExtractionTerminal from '../documents/ExtractionTerminal';
 import MetadataCard from '../documents/MetadataCard';
+import BriefingWorkspace from './BriefingWorkspace';
+import { documentBriefingEvidence, requestBriefingEvidence } from '../../utils/briefing';
+import AnalysisWorkbench from './AnalysisWorkbench';
 
 export default function MainLayout() {
   // Request selection lives in the shared workspace store and survives view switches. The open
   // document chunk is session-local and is deliberately cleared when the selected request changes.
   const workspaceView = useAppStore((state) => state.workspaceView);
+  const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
+  const evidenceRefreshRequests = useAppStore((state) => state.evidenceRefreshRequests);
   const results = useAppStore((state) => state.filteredResults);
   const searchError = useAppStore((state) => state.searchError);
   const selectedRequestId = useAppStore((state) => state.selectedRequestId);
   const selectedRequestPortalKey = useAppStore((state) => state.selectedRequestPortalKey);
   const setSelectedRequest = useAppStore((state) => state.setSelectedRequest);
   const syncingPortalKeys = useAppStore((state) => state.syncingPortalKeys);
+  const portals = useAppStore((state) => state.portals);
+  const briefingEvidence = useAppStore((state) => state.briefingProject.evidence);
+  const addBriefingEvidence = useAppStore((state) => state.addBriefingEvidence);
   const [exportState, setExportState] = useState<{ key: string; isExporting: boolean; result: LegalBriefExportResult | null; error: string | null } | null>(null);
   const [documents, setDocuments] = useState<RequestDocumentSummary[]>([]);
   const [documentError, setDocumentError] = useState<string | null>(null);
@@ -51,36 +59,42 @@ export default function MainLayout() {
   const documentListGate = useLatestRequestGate();
   const documentOpenGate = useLatestRequestGate();
   const exportGate = useLatestRequestGate();
+  const selectedSourceUrl = selected
+    ? portals.find(({ registration }) => registration.portalKey === selected.portalKey)?.registration.canonicalUrl ?? null
+    : null;
 
   useEffect(() => {
     if (pendingEvidenceLink) {
       setSelectedRequest(pendingEvidenceLink.requestId, pendingEvidenceLink.portalKey);
+      setWorkspaceView('evidence');
     }
-  }, [pendingEvidenceLink, setSelectedRequest]);
+  }, [pendingEvidenceLink, setSelectedRequest, setWorkspaceView]);
 
   useEffect(() => {
     const request = documentListGate.begin();
-    documentOpenGate.invalidate();
-    setDocuments([]);
-    setDocumentError(null);
-    setActiveDocument(null);
-    const target = selected ?? (pendingEvidenceLink ? {
-      requestId: pendingEvidenceLink.requestId,
-      portalKey: pendingEvidenceLink.portalKey,
-    } : null);
+    const target = selectedRequestId !== null && selectedRequestPortalKey
+      ? { requestId: selectedRequestId, portalKey: selectedRequestPortalKey }
+      : null;
+    const owner = documentOwnerRef.current;
+    if (owner?.requestId !== target?.requestId || owner?.portalKey !== target?.portalKey) {
+      documentOpenGate.invalidate();
+      setDocuments([]);
+      setDocumentError(null);
+      setActiveDocument(null);
+      setPendingDocumentPurge(null);
+    }
     documentOwnerRef.current = target;
-    setPendingDocumentPurge(null);
     if (!target) return documentListGate.invalidate;
     void invokeCommand('list_request_documents', {
       requestId: target.requestId,
       portalKey: target.portalKey,
     }).then((values) => {
-      if (documentListGate.isCurrent(request)) setDocuments(values);
+      if (documentListGate.isCurrent(request)) { setDocuments(values); setDocumentError(null); }
     }).catch((reason) => {
       if (documentListGate.isCurrent(request)) setDocumentError(String(reason));
     });
     return documentListGate.invalidate;
-  }, [documentListGate, documentOpenGate, pendingEvidenceLink, selected?.portalKey, selected?.requestId]);
+  }, [documentListGate, documentOpenGate, evidenceRefreshRequests, selectedRequestPortalKey, selectedRequestId]);
 
   const purgeDocument = async () => {
     const summary = pendingDocumentPurge;
@@ -193,6 +207,14 @@ export default function MainLayout() {
     return <main className="flex min-h-0 flex-1 overflow-hidden"><PatternExplorer /></main>;
   }
 
+  if (workspaceView === 'analysis') {
+    return <AnalysisWorkbench />;
+  }
+
+  if (workspaceView === 'briefing') {
+    return <BriefingWorkspace />;
+  }
+
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="flex shrink-0 items-center justify-between px-5 pb-1 pt-4 lg:px-6">
@@ -269,7 +291,17 @@ export default function MainLayout() {
                       <h2 className="text-sm font-semibold leading-snug text-slate-100">{selected.title || 'Untitled request'}</h2>
                       <p className="mt-1 text-[10px] text-slate-400">{selected.agencyName} · {selected.portalKey}</p>
                     </div>
-                    <StatusBadge status={selected.status} />
+                    <div className="flex shrink-0 flex-col items-end gap-2">
+                      <StatusBadge status={selected.status} />
+                      <button
+                        type="button"
+                        disabled={briefingEvidence.some((item) => item.id === `request:${selected.portalKey}:${selected.requestId}`)}
+                        onClick={() => addBriefingEvidence(requestBriefingEvidence(selected, selectedSourceUrl))}
+                        className="focus-ring rounded-lg border border-indigo-400/25 bg-indigo-500/10 px-2.5 py-1.5 text-[8px] font-semibold text-indigo-200 disabled:cursor-default disabled:border-emerald-400/20 disabled:bg-emerald-500/[0.06] disabled:text-emerald-300"
+                      >
+                        {briefingEvidence.some((item) => item.id === `request:${selected.portalKey}:${selected.requestId}`) ? 'Saved to briefing' : 'Save lead to briefing'}
+                      </button>
+                    </div>
                   </div>
                   <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-slate-800 pt-3 text-[10px]">
                     <CaseField label="Request ID" value={String(selected.requestId)} />
@@ -397,14 +429,33 @@ export default function MainLayout() {
                 requestId={selectedRequestId ?? undefined}
                 portalKey={activeDocument.summary.portalKey}
                 fileName={activeDocument.summary.fileName}
+                originalAvailable={!activeDocument.summary.extractionDeferredReason?.startsWith('REFERENCE_ONLY:')}
                 textContent={activeDocument.chunk.maskedText}
                 fileSizeFormatted={formatFileSize(activeDocument.summary.fileSize)}
                 textPositionLabel={`${activeDocument.chunk.characterOffset.toLocaleString()}–${Math.min(activeDocument.chunk.characterOffset + activeDocument.chunk.returnedCharacterCount, activeDocument.chunk.totalCharacterCount).toLocaleString()} of ${activeDocument.chunk.totalCharacterCount.toLocaleString()} characters`}
                 characterOffset={activeDocument.chunk.characterOffset}
                 knownMaskedFindingCount={activeDocument.chunk.maskedFindingCount}
+                onPreviousChunk={activeDocument.chunk.characterOffset > 0 ? () => void openDocument(activeDocument.summary, Math.max(0, activeDocument.chunk.characterOffset - 100000)) : undefined}
                 onNextChunk={activeDocument.chunk.nextCharacterOffset === null ? undefined : () => void openDocument(activeDocument.summary, activeDocument.chunk.nextCharacterOffset ?? 0)}
+                onSaveEvidence={({ excerpt, characterOffset }) => {
+                  if (!selected) return;
+                  addBriefingEvidence(documentBriefingEvidence({
+                    portalKey: activeDocument.summary.portalKey,
+                    requestId: selected.requestId,
+                    documentId: activeDocument.summary.documentId,
+                    fileName: activeDocument.summary.fileName,
+                    characterOffset,
+                    sourceUrl: selectedSourceUrl,
+                    agencyName: selected.agencyName,
+                    requestTitle: selected.title,
+                    excerpt,
+                    rawFileSha256: activeDocument.summary.rawFileSha256,
+                  }));
+                }}
               />
               <aside className="min-h-0 space-y-4 overflow-y-auto" aria-label="Document evidence details">
+                {activeDocument.summary.extractionDeferredReason?.startsWith('REFERENCE_ONLY:') && <p className="rounded border border-amber-500/30 p-3 text-xs text-amber-200">{activeDocument.summary.extractionDeferredReason.slice('REFERENCE_ONLY:'.length)}</p>}
+                {activeDocument.summary.originalSourceUri && <a className="block break-all text-xs text-cyan-300 underline" href={activeDocument.summary.originalSourceUri} target="_blank" rel="noreferrer">View publisher’s original file</a>}
                 <MetadataCard
                   documentId={activeDocument.summary.documentId}
                   portalKey={activeDocument.summary.portalKey}
@@ -482,11 +533,13 @@ function formatFileSize(value: number | null) {
 }
 
 function isPdfDocument(document: RequestDocumentSummary) {
+  if (document.extractionDeferredReason?.startsWith('REFERENCE_ONLY:')) return false;
   return document.contentType?.toLocaleLowerCase() === 'application/pdf'
     || document.fileName.toLocaleLowerCase().endsWith('.pdf');
 }
 
 function formatExtractionState(document: RequestDocumentSummary) {
+  if (document.extractionDeferredReason?.startsWith('REFERENCE_ONLY:')) return 'Searchable text · original referenced';
   if (document.extractionStatus === 'SEARCHABLE') return 'Searchable text';
   if (document.extractionStatus === 'SALVAGED') return 'Searchable text · recovered';
   if (document.extractionStatus === 'EXPANDED') return `Container expanded${document.extractionFormat ? ` · ${document.extractionFormat}` : ''}`;

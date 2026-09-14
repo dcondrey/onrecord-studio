@@ -176,7 +176,7 @@ describe('source purge', () => {
     act(() => useAppStore.setState({ activePortalKey: 'oakland' }));
     fireEvent.click(screen.getByRole('button', { name: 'Delete source and its documents' }));
     await screen.findByText(/Delete Oakland and everything from it\?/);
-    await waitFor(() => expect(screen.getByText(/\b3\b/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('3', { exact: true })).toBeTruthy());
 
     // San Diego's superseded count now lands, after Oakland's dialog is on screen.
     act(() => bridge.heldPreviews.get('sandiego')?.({

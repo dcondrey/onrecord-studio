@@ -582,7 +582,58 @@ CREATE TABLE IF NOT EXISTS document_search_index_state (
 );
 
 -- ----------------------------------------------------------------------------
--- 7. PERFORMANCE & ANALYTICS INDEXES
+-- 7. DURABLE ANALYTICAL DATASETS
+-- Typed San Diego datasets live in the core database because they are original analytical inputs
+-- and provenance, not disposable search projections.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS analytical_snapshots (
+    snapshot_id TEXT PRIMARY KEY,
+    dataset_kind TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    table_name TEXT NOT NULL,
+    source_uri TEXT,
+    local_path TEXT NOT NULL,
+    source_sha256 TEXT NOT NULL,
+    retrieved_at TEXT NOT NULL,
+    observation_period_start TEXT,
+    observation_period_end TEXT,
+    partial_dataset BIGINT NOT NULL DEFAULT 0,
+    imported_rows BIGINT NOT NULL DEFAULT 0,
+    rejected_rows BIGINT NOT NULL DEFAULT 0,
+    malformed_rows BIGINT NOT NULL DEFAULT 0,
+    duplicate_key_rows BIGINT NOT NULL DEFAULT 0,
+    validation_summary_json TEXT NOT NULL,
+    CHECK (length(source_sha256) = 64),
+    CHECK (partial_dataset IN (0, 1))
+);
+
+CREATE TABLE IF NOT EXISTS analytical_columns (
+    snapshot_id TEXT NOT NULL,
+    table_name TEXT NOT NULL,
+    column_name TEXT NOT NULL,
+    original_name TEXT,
+    logical_type TEXT NOT NULL,
+    nullable BIGINT NOT NULL DEFAULT 1,
+    dictionary TEXT,
+    ordinal BIGINT NOT NULL,
+    PRIMARY KEY (snapshot_id, column_name),
+    FOREIGN KEY (snapshot_id) REFERENCES analytical_snapshots(snapshot_id)
+);
+
+CREATE TABLE IF NOT EXISTS analytical_rows (
+    snapshot_id TEXT NOT NULL,
+    row_number BIGINT NOT NULL,
+    row_hash TEXT NOT NULL,
+    source_payload_json TEXT NOT NULL,
+    normalized_payload_json TEXT NOT NULL,
+    malformed BIGINT NOT NULL DEFAULT 0,
+    validation_errors_json TEXT NOT NULL,
+    PRIMARY KEY (snapshot_id, row_number),
+    FOREIGN KEY (snapshot_id) REFERENCES analytical_snapshots(snapshot_id)
+);
+
+-- ----------------------------------------------------------------------------
+-- 8. PERFORMANCE & ANALYTICS INDEXES
 -- Accelerates analytical timelines, cross-agency metrics, and outlier checks.
 -- ----------------------------------------------------------------------------
 CREATE INDEX IF NOT EXISTS idx_requests_agency ON requests(agency_id, portal_subdomain);
@@ -604,12 +655,34 @@ CREATE INDEX IF NOT EXISTS idx_legal_provisions_statute ON legal_provisions(stat
 CREATE INDEX IF NOT EXISTS idx_legal_mandates_statute ON legal_mandates(statute_id, enabled);
 CREATE INDEX IF NOT EXISTS idx_statutory_violations_request ON statutory_violations(request_id, portal_subdomain, review_status);
 CREATE INDEX IF NOT EXISTS idx_statutory_violations_statute ON statutory_violations(matched_statute_id, classification, evaluated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_analytical_rows_snapshot_hash ON analytical_rows(snapshot_id, row_hash);
+
+-- Durable maintenance choices, retries and crash-recoverable reference-retention receipts.
+CREATE TABLE IF NOT EXISTS data_maintenance_policy (
+    singleton BOOLEAN PRIMARY KEY, policy_json TEXT NOT NULL, effective_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS data_maintenance_jobs (
+    job_key TEXT PRIMARY KEY, attempts BIGINT NOT NULL, next_attempt_at TEXT NOT NULL,
+    action TEXT NOT NULL, detail TEXT NOT NULL, recorded_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS data_retention_receipts (
+    receipt_id TEXT PRIMARY KEY, portal_key TEXT NOT NULL, document_id BIGINT NOT NULL,
+    original_path TEXT NOT NULL, pending_path TEXT NOT NULL, source_uri TEXT NOT NULL,
+    source_sha256 TEXT NOT NULL, byte_count BIGINT NOT NULL, state TEXT NOT NULL, recorded_at TEXT NOT NULL
+);
 -- The index on provenance_verification_log is created in `run_migrations`, next to the columns it
 -- covers, so the index and the shim that adds those columns stay in one place. DuckDB permits
 -- ADD COLUMN on an indexed table (it refuses only DROP COLUMN), so either location would work; the
 -- migration test pins that behavior rather than leaving it assumed.
 
 -- ----------------------------------------------------------------------------
--- 8. SEARCH SYNCHRONIZATION
+-- 9. SEARCH SYNCHRONIZATION
 -- Search rows are maintained transactionally by the repository.
 -- ----------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS data_maintenance_origins (
+    snapshot_id TEXT NOT NULL,
+    portal_key TEXT NOT NULL,
+    document_id BIGINT NOT NULL,
+    PRIMARY KEY (snapshot_id, portal_key, document_id)
+);

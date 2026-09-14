@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { invokeCommand } from '../../ipc';
+import { sanDiegoGuidance, sanDiegoSourceForUrl } from '../../utils/sanDiego';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useAppStore } from '../../store/useAppStore';
 import { cn } from '../../utils/cn';
@@ -22,10 +23,12 @@ import { BUILT_IN_SOURCE_OPTIONS, type PortalRegistration, type SourceDiscoveryP
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 
 const viewLabels = {
-  overview: 'Intelligence overview',
+  overview: 'San Diego research desk',
   patterns: 'Corpus connections',
+  analysis: 'Analysis workbench',
   evidence: 'Evidence workspace',
   activity: 'Ingestion activity',
+  briefing: 'Presentation briefing',
 };
 
 interface CrawlNumberField {
@@ -139,10 +142,22 @@ export default function Header() {
   const [repairDownloadSelector, setRepairDownloadSelector] = useState('');
   const [reuseRepairForPublisher, setReuseRepairForPublisher] = useState(false);
   const [isPreviewingSelectors, setIsPreviewingSelectors] = useState(false);
-  const [selectedSourceId, setSelectedSourceId] = useState('auto');
+  const selectedPreset = sanDiegoSourceForUrl(portalUrlDraft);
+  const selectedSourceId = selectedPreset?.id ?? 'auto';
   const [isCrawlSettingsOpen, setCrawlSettingsOpen] = useState(false);
   const [crawlDraft, setCrawlDraft] = useState<CrawlSettingsDraft>(DEFAULT_CRAWL_SETTINGS_DRAFT);
-  const crawlSettings = useMemo(() => parseCrawlSettings(crawlDraft), [crawlDraft]);
+  const effectiveCrawlDraft = useMemo(() => {
+    const raw = parseCrawlSettings(crawlDraft);
+    if (!selectedPreset || !raw.ok || crawlPolicyOverride(raw.crawlPolicy)) return crawlDraft;
+    return {
+      ...crawlDraft,
+      maximumDepth: String(selectedPreset.crawlPolicy.maximumDepth),
+      maximumPages: String(selectedPreset.crawlPolicy.maximumPages),
+      maximumResources: String(selectedPreset.crawlPolicy.maximumResources),
+      followSupportedExternalPlatforms: selectedPreset.crawlPolicy.followSupportedExternalPlatforms,
+    };
+  }, [crawlDraft, selectedPreset]);
+  const crawlSettings = useMemo(() => parseCrawlSettings(effectiveCrawlDraft), [effectiveCrawlDraft]);
   const crawlSettingsAreCustom = useMemo(
     () =>
       (Object.keys(DEFAULT_CRAWL_SETTINGS_DRAFT) as (keyof CrawlSettingsDraft)[]).some(
@@ -151,7 +166,7 @@ export default function Header() {
     [crawlDraft],
   );
   const updateCrawlDraft = (patch: Partial<CrawlSettingsDraft>) =>
-    setCrawlDraft((draft) => ({ ...draft, ...patch }));
+    setCrawlDraft({ ...effectiveCrawlDraft, ...patch });
   const [guidanceDraft, setGuidanceDraft] = useState<GuidanceFilterDraft>(DEFAULT_GUIDANCE_FILTER_DRAFT);
   const guidanceFilters = useMemo(() => parseGuidanceFilters(guidanceDraft), [guidanceDraft]);
   const hasGuidanceFilters = useMemo(() => guidanceFiltersAreCustom(guidanceDraft), [guidanceDraft]);
@@ -244,10 +259,15 @@ export default function Header() {
     setIsDiscovering(true);
     appendSyncLog(`Verifying portal layout and public network route for ${targetUrl}.`);
     try {
+      const preset = sanDiegoSourceForUrl(targetUrl);
+      if (preset?.access === 'export') {
+        setError(`${preset.coverage} Use Import files in the toolbar, or Analytical Import for a table.`);
+        return;
+      }
       const { source, syncRunId, detectedKind } = await invokeCommand('start_data_source', {
-        url: targetUrl,
-        crawlPolicy: crawlPolicyOverride(settings.crawlPolicy),
-        guidance: null,
+        url: preset?.url ?? targetUrl,
+        crawlPolicy: crawlPolicyOverride(settings.crawlPolicy) ?? preset?.crawlPolicy ?? null,
+        guidance: preset ? sanDiegoGuidance(preset) : null,
         rateLimitPolicy: settings.rateLimitPolicy,
         metadataPageWindow: metadataPageWindowOverride(settings.metadataPageWindow),
       });
@@ -515,13 +535,13 @@ export default function Header() {
         value={selectedSource.id}
         onChange={(event) => {
           const next = BUILT_IN_SOURCE_OPTIONS.find((source) => source.id === event.target.value) ?? BUILT_IN_SOURCE_OPTIONS[0];
-          setSelectedSourceId(next.id);
+          setPortalUrlDraft(next.url ?? '');
           if (error) setError(null);
         }}
         disabled={isDiscovering}
         className="h-8 w-44 border-0 bg-transparent px-2 text-[10px] text-slate-400 shadow-none"
       >
-        <optgroup label="Built-in connectors">
+        <optgroup label="San Diego sources">
           {BUILT_IN_SOURCE_OPTIONS.map((source) => <option key={source.id} value={source.id}>{source.label}</option>)}
         </optgroup>
       </Select>
@@ -554,6 +574,7 @@ export default function Header() {
       <button
         type="button"
         onClick={() => void chooseFiles()}
+        id={`${inputId}-import-files`}
         disabled={isDiscovering}
         aria-label="Add files"
         title="Add files"
@@ -642,11 +663,11 @@ export default function Header() {
           <div className="flex items-center gap-2 text-[9px] font-medium text-slate-400">
             <span>{viewLabels[workspaceView]}</span>
             <Icon name="chevron" className="h-2.5 w-2.5" />
-            <span className="truncate text-slate-400">{activePortal?.displayName ?? 'All jurisdictions'}</span>
+            <span className="truncate text-slate-400">{activePortal?.displayName ?? 'All saved sources'}</span>
           </div>
           <div className="mt-1 flex min-w-0 items-center gap-2">
             <h1 className="truncate text-[15px] font-semibold tracking-[-0.015em] text-slate-100">
-              {activePortal?.displayName ?? 'Cross-portal investigation'}
+              {activePortal?.displayName ?? 'City of San Diego'}
             </h1>
             {activePortal && (
               <span className="hidden shrink-0 items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/[0.08] px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wider text-emerald-300 sm:flex">
@@ -838,6 +859,7 @@ export default function Header() {
           </div>
           <div className="space-y-3 p-4">
             <div className="grid gap-3 sm:grid-cols-3">
+              {selectedPreset && <p className="text-[10px] text-cyan-300 sm:col-span-3">{selectedPreset.label}: {selectedPreset.coverage}</p>}
               {crawlNumberFields.map(({ field, label, hint, min, max, step }) => (
                 <label key={field} className="block text-[9px] font-semibold text-slate-400">
                   {label}
@@ -847,7 +869,7 @@ export default function Header() {
                     min={min}
                     max={max}
                     step={step}
-                    value={crawlDraft[field]}
+                    value={effectiveCrawlDraft[field]}
                     onChange={(event) => updateCrawlDraft({ [field]: event.target.value })}
                     className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 font-mono text-[11px] text-slate-200"
                   />
@@ -858,7 +880,7 @@ export default function Header() {
             <label className="flex items-start gap-2.5 rounded-xl border border-slate-800 bg-slate-950/50 p-3">
               <input
                 type="checkbox"
-                checked={crawlDraft.followSupportedExternalPlatforms}
+                checked={effectiveCrawlDraft.followSupportedExternalPlatforms}
                 onChange={(event) => updateCrawlDraft({ followSupportedExternalPlatforms: event.target.checked })}
                 className="focus-ring mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-slate-700 bg-slate-950 accent-cyan-400"
               />

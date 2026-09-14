@@ -243,6 +243,7 @@ pub async fn purge_source(
     manager: State<'_, Arc<QueueManager>>,
     index: State<'_, CorpusIndex>,
 ) -> Result<SourcePurge, AppError> {
+    let _maintenance = super::maintenance::MAINTENANCE_LOCK.lock().await;
     let source_key = validate_portal_key(&source_key)?;
     let purge = manager.purge_source(source_key).await?;
     index.purge_portal(source_key.to_string()).await?;
@@ -258,6 +259,7 @@ pub async fn purge_document(
     manager: State<'_, Arc<QueueManager>>,
     index: State<'_, CorpusIndex>,
 ) -> Result<DocumentPurge, AppError> {
+    let _maintenance = super::maintenance::MAINTENANCE_LOCK.lock().await;
     let source_key = validate_portal_key(&source_key)?;
     let purge = manager.purge_document(source_key, document_id).await?;
     index
@@ -266,6 +268,7 @@ pub async fn purge_document(
     if let Some(path) = purge.local_path.as_ref() {
         remove_evidence_files(std::slice::from_ref(path)).await;
     }
+    remove_evidence_files(&purge.additional_local_paths).await;
     Ok(purge)
 }
 

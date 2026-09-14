@@ -393,6 +393,11 @@ impl ApiClient {
 
     pub async fn discover_portal(&self, portal_url: &str) -> Result<PortalRegistration, AppError> {
         let submitted_url = normalize_submitted_url(portal_url)?;
+        if super::regional::is_publication_site(&submitted_url) {
+            return Err(AppError::PortalDiscovery(
+                "San Diego City document pages and regional publication sites use public document discovery; request portals use their own NextRequest endpoints".to_string(),
+            ));
+        }
         validate_remote_url(&self.dns, &submitted_url).await?;
         let origin = origin_url(&submitted_url)?;
         let mut candidates = initial_api_candidates(&submitted_url, &origin)?;
@@ -797,6 +802,7 @@ impl ApiClient {
             feature_count: features.len(),
             exceeded_transfer_limit: value
                 .get("exceededTransferLimit")
+                .or_else(|| value.pointer("/properties/exceededTransferLimit"))
                 .and_then(Value::as_bool)
                 .unwrap_or(false),
         })
@@ -1297,8 +1303,17 @@ impl ApiClient {
     /// fallback for genuinely static HTML.
     pub async fn detect_data_catalog(&self, source_url: &str) -> Option<DataCatalogEndpoint> {
         let url = normalize_submitted_url(source_url).ok()?;
+        if !super::regional::is_catalog_root(&url) {
+            return None;
+        }
         let origin = origin_url(&url).ok()?;
         let domain = url.host_str()?.to_ascii_lowercase();
+        if super::regional::socrata_host(&domain) {
+            return self.detect_socrata(&origin, &domain).await;
+        }
+        if super::regional::is_publication_site(&url) && domain != "data.ca.gov" {
+            return None;
+        }
         if let Some(endpoint) = self.detect_ckan(&origin, &domain).await {
             return Some(endpoint);
         }
@@ -1567,7 +1582,7 @@ fn decode_socrata_page(value: &Value, domain: &str) -> Result<DataCatalogPage, A
 
 /// Catalog `format` strings are free text. Only the unambiguous ones are mapped; an unrecognized
 /// format leaves the media type absent so extraction reads the bytes rather than a guess.
-fn catalog_format_media_type(format: &str) -> Option<&'static str> {
+pub(crate) fn catalog_format_media_type(format: &str) -> Option<&'static str> {
     match format.trim().to_ascii_uppercase().as_str() {
         "CSV" => Some("text/csv"),
         "TSV" => Some("text/tab-separated-values"),
@@ -1875,6 +1890,7 @@ fn extract_public_resource_links(
             .collect::<Vec<_>>()
             .join(" ");
         let download_candidate = forced_download
+            || super::regional::is_datagov_metadata_url(&url)
             || element.value().attr("download").is_some()
             || has_download_extension(url.path())
             || url.path().to_ascii_lowercase().contains("/download")
@@ -1884,7 +1900,8 @@ fn extract_public_resource_links(
             });
         let target_host = url.host_str().unwrap_or_default().to_ascii_lowercase();
         let follow_candidate = target_host == base_host || is_supported_platform_host(&target_host);
-        let navigation_chrome = is_navigation_chrome(&element);
+        let navigation_chrome =
+            is_navigation_chrome(&element) && !is_san_diego_policy_page_link(base, &url, &element);
         if !download_candidate && !follow_candidate {
             continue;
         }
@@ -1904,6 +1921,108 @@ fn extract_public_resource_links(
         }
     }
     let embedded_connectors = extract_embedded_connectors(base, &document)?;
+    if let Some(url) = super::regional::hyland_document_companion(base, &text) {
+        if seen.insert(url.clone()) {
+            links.push(PublicResourceLink {
+                url,
+                label: "Published meeting document and attachments".into(),
+                download_candidate: false,
+                follow_candidate: true,
+                navigation_chrome: false,
+            });
+        }
+    }
+    for url in super::queue::arcgis_hub_companion_urls(base.as_str(), body) {
+        if seen.insert(url.clone()) {
+            links.push(PublicResourceLink {
+                url,
+                label: "ArcGIS published catalog metadata".into(),
+                download_candidate: true,
+                follow_candidate: false,
+                navigation_chrome: false,
+            });
+        }
+    }
+    if base.host_str() == Some("sandiego.granicus.com") {
+        // Granicus archive buttons use a literal window.open URL. Read only that literal;
+        // never evaluate inline JavaScript or fetch media files as documents.
+        let buttons = Selector::parse("a[onclick]").expect("static selector");
+        let literal = regex::Regex::new(r#"window\.open\(\s*['"]([^'"]+)['"]"#)
+            .expect("static popup pattern");
+        for button in document.select(&buttons).take(50_000) {
+            let Some(capture) = button
+                .value()
+                .attr("onclick")
+                .and_then(|value| literal.captures(value))
+            else {
+                continue;
+            };
+            let Ok(mut url) = base.join(&capture[1]) else {
+                continue;
+            };
+            if url.host_str() != base.host_str() || !matches!(url.scheme(), "http" | "https") {
+                continue;
+            }
+            strip_tracking_parameters(&mut url);
+            if super::regional::meeting_identity(&url).is_some() && seen.insert(url.to_string()) {
+                links.push(PublicResourceLink {
+                    url: url.to_string(),
+                    label: button.text().collect::<Vec<_>>().join(" "),
+                    download_candidate: false,
+                    follow_candidate: true,
+                    navigation_chrome: false,
+                });
+            }
+        }
+    }
+    for (url, label) in super::regional::dataset_companions(base) {
+        if seen.insert(url.clone()) {
+            links.push(PublicResourceLink {
+                url,
+                label,
+                download_candidate: true,
+                follow_candidate: false,
+                navigation_chrome: false,
+            });
+        }
+    }
+    for (url, label) in super::regional::opengov_companions(base, &text) {
+        if seen.insert(url.clone()) {
+            links.push(PublicResourceLink {
+                url,
+                label,
+                download_candidate: true,
+                follow_candidate: false,
+                navigation_chrome: false,
+            });
+        }
+    }
+    // The County's Open Budget app publishes these identifiers in its public configuration.
+    // Resolve those declarations, rather than enumerating the unrelated county-wide catalog.
+    if base.host_str() == Some("sandiegocounty.budget.socrata.com") {
+        let pattern = regex::Regex::new(
+            r#"\"((?:operating|revenue)_budget_dataset_id)\"\s*:\s*\"([a-z0-9]{4}-[a-z0-9]{4})\""#,
+        )
+        .expect("static pattern");
+        for capture in pattern.captures_iter(&text).take(8) {
+            let id = &capture[2];
+            for (suffix, label) in [
+                (".json", "Budget schema and attribution"),
+                ("/rows.csv?accessType=DOWNLOAD", "Published budget CSV"),
+            ] {
+                let url = format!("https://data.sandiegocounty.gov/api/views/{id}{suffix}");
+                if seen.insert(url.clone()) {
+                    links.push(PublicResourceLink {
+                        url,
+                        label: label.into(),
+                        download_candidate: true,
+                        follow_candidate: false,
+                        navigation_chrome: false,
+                    });
+                }
+            }
+        }
+    }
     Ok((title, links, embedded_connectors))
 }
 
@@ -2018,6 +2137,22 @@ fn resolved_public_url(base: &Url, element: &scraper::ElementRef<'_>) -> Option<
         return None;
     }
     let mut url = base.join(reference).ok()?;
+    if url.host_str() == Some("view.officeapps.live.com")
+        && matches!(url.path(), "/op/view.aspx" | "/op/embed.aspx")
+    {
+        if let Some(target) = url
+            .query_pairs()
+            .find(|(key, _)| key == "src")
+            .and_then(|(_, value)| Url::parse(&value).ok())
+        {
+            if target.scheme() == "https"
+                && target.username().is_empty()
+                && target.password().is_none()
+            {
+                url = target;
+            }
+        }
+    }
     url.set_fragment(None);
     (url.scheme() == "https").then_some(url)
 }
@@ -2079,6 +2214,95 @@ fn is_navigation_chrome(element: &scraper::ElementRef<'_>) -> bool {
         })
 }
 
+// San Diego publishes these as document pages. Probing each for unrelated platform APIs first
+// spends the City's request budget before any records are collected.
+#[cfg(test)]
+fn is_san_diego_document_source(url: &Url) -> bool {
+    matches!(url.host_str(), Some("www.sandiego.gov" | "sandiego.gov"))
+        && [
+            "/cpp",
+            "/police/data-transparency/policies-procedures",
+            "/city-clerk/officialdocs/legisdocs/brown-act",
+            "/sites/default/files",
+        ]
+        .iter()
+        .any(|prefix| url.path() == *prefix || url.path().starts_with(&format!("{prefix}/")))
+}
+
+// The SDPD Drupal catalog puts pagination inside a navigation landmark. Treating that landmark
+// like the site menu silently leaves the policy library on its first twenty documents.
+fn is_san_diego_policy_page_link(
+    base: &Url,
+    target: &Url,
+    element: &scraper::ElementRef<'_>,
+) -> bool {
+    san_diego_policy_listing_identity(base).is_some()
+        && san_diego_policy_listing_identity(target).is_some()
+        && target.origin() == base.origin()
+        && target.path() == base.path()
+        && target
+            .query_pairs()
+            .any(|(key, value)| key == "page" && value.parse::<u32>().is_ok())
+        && element
+            .ancestors()
+            .filter_map(scraper::ElementRef::wrap)
+            .any(|ancestor| {
+                ancestor.value().name() == "nav"
+                    && ancestor.value().classes().any(|class| class == "pager")
+            })
+}
+
+// The City's category and page parameters identify different sets of documents, not optional
+// search facets. Keep only those parameters in the crawl identity. Both the page range and the
+// normal crawl budgets remain bounded, even if a page emits arbitrary query combinations.
+pub(super) fn san_diego_policy_listing_identity(url: &Url) -> Option<String> {
+    if !matches!(url.host_str(), Some("www.sandiego.gov" | "sandiego.gov")) {
+        return None;
+    }
+    let path = url.path().trim_end_matches('/');
+    let root = "/police/data-transparency/policies-procedures";
+    let pairs = url.query_pairs().collect::<Vec<_>>();
+    let category = if path == format!("{root}/category") {
+        let category = pairs.iter().find(|(key, _)| key == "category")?.1.as_ref();
+        if ![
+            "Department Orders",
+            "Policies",
+            "Education and Training Material",
+            "Operations Manuals",
+            "Training Bulletins",
+        ]
+        .contains(&category)
+        {
+            return None;
+        }
+        Some(category)
+    } else if path == format!("{root}/procedures") {
+        None
+    } else {
+        return None;
+    };
+    let page = match pairs.iter().find(|(key, _)| key == "page") {
+        Some((_, value)) => value.parse::<u32>().ok()?,
+        None => 0,
+    };
+    if page >= 100 {
+        return None;
+    }
+    let mut identity = url.clone();
+    identity.set_path(path);
+    identity.set_query(None);
+    identity.set_fragment(None);
+    if let Some(category) = category {
+        identity.query_pairs_mut().append_pair("category", category);
+    }
+    if page > 0 {
+        identity
+            .query_pairs_mut()
+            .append_pair("page", &page.to_string());
+    }
+    Some(identity.to_string())
+}
+
 fn strip_tracking_parameters(url: &mut Url) {
     let mut retained = url
         .query_pairs()
@@ -2097,9 +2321,17 @@ fn strip_tracking_parameters(url: &mut Url) {
 }
 
 fn is_supported_platform_host(host: &str) -> bool {
-    host.contains("arcgis.com")
-        || host.contains("arcgisonline.com")
-        || host.contains("tableau.com")
+    [
+        "arcgis.com",
+        "arcgisonline.com",
+        "tableau.com",
+        "socrata.com",
+        "granicus.com",
+        "hylandcloud.com",
+        "netfile.com",
+    ]
+    .iter()
+    .any(|platform| host == *platform || host.ends_with(&format!(".{platform}")))
         || host == "drive.google.com"
         || host == "docs.google.com"
 }
@@ -2169,6 +2401,11 @@ pub(crate) fn normalize_submitted_url(value: &str) -> Result<Url, AppError> {
     let mut url = Url::parse(&candidate).map_err(|error| {
         AppError::PortalDiscovery(format!("Portal URL '{value}' is invalid: {error}"))
     })?;
+    if let Some(selected) = super::regional::normalize_opengov_selection(&url)
+        .map_err(|message| AppError::PortalDiscovery(message.to_string()))?
+    {
+        return Ok(selected);
+    }
     url.set_fragment(None);
     Ok(url)
 }
@@ -3162,6 +3399,58 @@ mod tests {
     }
 
     #[test]
+    fn san_diego_policy_pagination_is_followed_without_admitting_site_menus() {
+        let url = |value: &str| Url::parse(value).unwrap();
+        let base =
+            url("https://www.sandiego.gov/police/data-transparency/policies-procedures/procedures");
+        let body = br#"<main>
+          <nav><a href="/police">Police home</a></nav>
+          <a href="/sites/default/files/104.pdf">Use of Force</a>
+          <nav class="pager" role="navigation" aria-label="Pagination">
+            <a href="?page=1" rel="next">Next page</a>
+            <a href="https://example.test/?page=2">External</a>
+            <a href="/other?page=3">Other section</a>
+          </nav>
+        </main>"#;
+        let (_, links, _) = extract_public_resource_links(&base, body, None, None).unwrap();
+        let next = links
+            .iter()
+            .find(|link| link.url.ends_with("?page=1"))
+            .unwrap();
+        assert!(next.follow_candidate && !next.navigation_chrome);
+        assert!(
+            links
+                .iter()
+                .find(|link| link.url.ends_with("/police"))
+                .unwrap()
+                .navigation_chrome
+        );
+        assert!(
+            links
+                .iter()
+                .find(|link| link.url.ends_with("/other?page=3"))
+                .unwrap()
+                .navigation_chrome
+        );
+        assert!(
+            links
+                .iter()
+                .find(|link| link.url.ends_with("104.pdf"))
+                .unwrap()
+                .download_candidate
+        );
+        assert!(!is_san_diego_document_source(&url(
+            "https://www.sandiego.gov.example.test/cpp"
+        )));
+        assert!(!is_san_diego_document_source(&url(
+            "https://www.sandiego.gov/cpp-unrelated"
+        )));
+        assert!(!is_san_diego_document_source(&url(
+            "https://sandiego.nextrequest.com/"
+        )));
+    }
+
+    #[test]
     fn navigation_chrome_is_not_followed_but_a_download_in_it_is_kept() {
         // Structure taken from https://data.ca.gov/dataset fetched 2026-08-25: the account bar
         // links `/contact?ref=<referrer>`, which is a distinct URL on every page of the site, and
@@ -3644,4 +3933,36 @@ mod url_security_tests {
         assert!(visited.insert(alternate.as_str().to_string()));
         assert!(!visited.insert(cycle.as_str().to_string()));
     }
+}
+#[test]
+fn regional_budget_hub_and_meeting_buttons_expose_their_public_resources() {
+    let budget = Url::parse("https://sandiegocounty.budget.socrata.com").unwrap();
+    let html = br#"<script>var settings={"operating_budget_dataset_id":"u4wm-r3vc","revenue_budget_dataset_id":"sucv-y5vk"};</script>"#;
+    let (_, links, _) = extract_public_resource_links(&budget, html, None, None).unwrap();
+    assert_eq!(
+        links.iter().filter(|l| l.url.contains("rows.csv")).count(),
+        2
+    );
+    assert!(links.iter().all(|l| l
+        .url
+        .starts_with("https://data.sandiegocounty.gov/api/views/")));
+    let hub = Url::parse("https://sdgis-sandag.opendata.arcgis.com").unwrap();
+    let (_, links, _) = extract_public_resource_links(&hub, br#"<meta content='%7B%22contentGroupId%22%3A%22e1a39cc8334f4aa0b7970f7dd268a8ab%22%2C%22ownerId%22%3A%226e08ea455575ef20877c0ef11251959f%22%7D'>"#, None, None).unwrap();
+    assert_eq!(
+        links.len(),
+        1,
+        "owner hashes must not be treated as content items"
+    );
+    assert!(links[0]
+        .url
+        .contains("group%3Ae1a39cc8334f4aa0b7970f7dd268a8ab"));
+    let granicus = Url::parse("https://sandiego.granicus.com/ViewPublisher.php?view_id=3").unwrap();
+    let (_, links, _) = extract_public_resource_links(&granicus, br#"<a href="javascript:void(0)" onclick="window.open('//sandiego.granicus.com/MediaPlayer.php?view_id=3&amp;clip_id=9484','player')">Video</a><a onclick="window.open('https://other.test/MediaPlayer.php?clip_id=1')">External</a>"#, None, None).unwrap();
+    assert_eq!(links.len(), 1);
+    assert!(links[0].url.contains("clip_id=9484"));
+    assert!(links[0].follow_candidate);
+    assert!(!is_supported_platform_host("arcgis.com.evil.test"));
+    let (_, links, _) = extract_public_resource_links(&budget, br#"<a href="https://view.officeapps.live.com/op/view.aspx?src=https%3A%2F%2Fwww.sandiego.gov%2Fcomments.xlsx">Comments</a>"#, None, None).unwrap();
+    assert_eq!(links[0].url, "https://www.sandiego.gov/comments.xlsx");
+    assert!(links[0].download_candidate);
 }

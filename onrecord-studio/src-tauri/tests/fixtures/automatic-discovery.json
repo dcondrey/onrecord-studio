@@ -1,0 +1,123 @@
+{
+  "csv": "city,year,amount,phase\nA,22,1,adopted\nA,22,2,adopted\nA,22,3,adopted\nA,22,4,adopted\nA,22,5,adopted\nA,22,6,adopted\nA,22,7,adopted\nA,22,8,adopted\nA,22,9,adopted\nA,22,100,adopted\nA,23,10,adopted\nA,23,10,adopted\nA,23,10,adopted\nA,23,10,adopted\nA,23,10,adopted\nA,23,10,adopted\nA,23,10,adopted\nA,23,10,adopted\nA,23,10,adopted\nA,23,10,adopted\nA,25,200,adopted\nB,22,0,adopted\nB,23,5,adopted\nC,22,,adopted\nC,23,10,adopted\nD,unknown,7,adopted\nA,23,999,proposed\n,23,3,adopted\n",
+  "schema": {
+    "datasets": [
+      {
+        "snapshotId": "fixture",
+        "datasetKind": "REGIONAL_DATA",
+        "displayName": "Discovery fixture",
+        "tableName": "analysis_fixture",
+        "importedRows": 28,
+        "rejectedRows": 0,
+        "sourceUri": "https://example.test/fixture.csv",
+        "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "retrievedAt": "2026-09-14T00:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}"
+      }
+    ],
+    "columns": [
+      {
+        "tableName": "analysis_fixture",
+        "columnName": "city",
+        "logicalType": "TEXT",
+        "originalName": "city",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_fixture",
+        "columnName": "year",
+        "logicalType": "TEXT",
+        "originalName": "year",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_fixture",
+        "columnName": "amount",
+        "logicalType": "INTEGER",
+        "originalName": "amount",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_fixture",
+        "columnName": "phase",
+        "logicalType": "TEXT",
+        "originalName": "phase",
+        "nullable": true,
+        "dictionary": null
+      }
+    ],
+    "templates": []
+  },
+  "profile": {
+    "columns": [
+      "column_name",
+      "source_rows",
+      "missing_rows",
+      "distinct_values"
+    ],
+    "rows": [
+      [
+        "year",
+        28,
+        0,
+        4
+      ],
+      [
+        "city",
+        28,
+        1,
+        4
+      ],
+      [
+        "phase",
+        28,
+        0,
+        2
+      ],
+      [
+        "amount",
+        28,
+        1,
+        13
+      ]
+    ],
+    "rowCount": 4,
+    "truncated": false,
+    "elapsedMs": 0,
+    "provenance": [
+      "analysis_fixture@fixture"
+    ]
+  },
+  "queries": [
+    {
+      "id": "quality",
+      "title": "Column quality",
+      "method": "Full-row profile of up to 12 prioritized columns. Time and grouping fields are checked first; source record counts are not counts of unique people or events.",
+      "sql": "SELECT 'year' AS column_name, 'TEXT' AS logical_type, COUNT(*) AS source_rows, COUNT(*) - COUNT(\"year\") AS missing_rows, COUNT(DISTINCT \"year\") AS distinct_values, CAST(MIN(\"year\") AS VARCHAR) AS minimum, CAST(MAX(\"year\") AS VARCHAR) AS maximum FROM \"analysis_fixture\"\nUNION ALL\nSELECT 'city' AS column_name, 'TEXT' AS logical_type, COUNT(*) AS source_rows, COUNT(*) - COUNT(\"city\") AS missing_rows, COUNT(DISTINCT \"city\") AS distinct_values, CAST(MIN(\"city\") AS VARCHAR) AS minimum, CAST(MAX(\"city\") AS VARCHAR) AS maximum FROM \"analysis_fixture\"\nUNION ALL\nSELECT 'phase' AS column_name, 'TEXT' AS logical_type, COUNT(*) AS source_rows, COUNT(*) - COUNT(\"phase\") AS missing_rows, COUNT(DISTINCT \"phase\") AS distinct_values, CAST(MIN(\"phase\") AS VARCHAR) AS minimum, CAST(MAX(\"phase\") AS VARCHAR) AS maximum FROM \"analysis_fixture\"\nUNION ALL\nSELECT 'amount' AS column_name, 'INTEGER' AS logical_type, COUNT(*) AS source_rows, COUNT(*) - COUNT(\"amount\") AS missing_rows, COUNT(DISTINCT \"amount\") AS distinct_values, CAST(MIN(\"amount\") AS VARCHAR) AS minimum, CAST(MAX(\"amount\") AS VARCHAR) AS maximum FROM \"analysis_fixture\""
+    },
+    {
+      "id": "coverage",
+      "title": "Scope and missing data",
+      "method": "Full filtered snapshot. Missing and unparseable periods remain in the coverage count but are excluded from time comparisons.",
+      "sql": "WITH analysis_scope AS (SELECT \"city\" AS \"source: city\", \"year\" AS \"source: year\", \"amount\" AS \"source: amount\", \"phase\" AS \"source: phase\", CAST(\"city\" AS VARCHAR) AS discovery_group, CASE WHEN REGEXP_FULL_MATCH(TRIM(CAST(\"year\" AS VARCHAR)), '[0-9]{2}|[0-9]{4}') THEN TRY_CAST(\"year\" AS INTEGER) END AS discovery_period FROM \"analysis_fixture\") SELECT COUNT(*) AS source_rows, COUNT(*) - COUNT(discovery_period) AS unusable_period_rows, MIN(discovery_period) AS first_period, MAX(discovery_period) AS last_period FROM analysis_scope"
+    },
+    {
+      "id": "groups",
+      "title": "Differences by city",
+      "method": "Count of records per group across all selected periods. Record share uses ALL filtered rows as denominator, including missing groups. Missing measurements are shown separately; observed values may be incomplete.",
+      "sql": "WITH analysis_scope AS (SELECT \"city\" AS \"source: city\", \"year\" AS \"source: year\", \"amount\" AS \"source: amount\", \"phase\" AS \"source: phase\", CAST(\"city\" AS VARCHAR) AS discovery_group, CASE WHEN REGEXP_FULL_MATCH(TRIM(CAST(\"year\" AS VARCHAR)), '[0-9]{2}|[0-9]{4}') THEN TRY_CAST(\"year\" AS INTEGER) END AS discovery_period FROM \"analysis_fixture\"), analysis_groups AS (\n  SELECT discovery_group AS group_value, COUNT(*) AS source_rows, 0 AS missing_values, COUNT(*) AS observed_value\n  FROM analysis_scope GROUP BY discovery_group\n) SELECT *, ROUND(100.0 * source_rows / NULLIF(SUM(source_rows) OVER (), 0), 2) AS record_share_percent\nFROM analysis_groups ORDER BY ABS(observed_value) DESC NULLS LAST, group_value NULLS LAST"
+    },
+    {
+      "id": "changes",
+      "title": "Largest changes over time",
+      "method": "Adjacent observed periods within the same group. Missing intervening periods and missing measurements suppress differences. A zero baseline suppresses percentage change. Partial period coverage and changing populations require review.",
+      "sql": "WITH analysis_scope AS (SELECT \"city\" AS \"source: city\", \"year\" AS \"source: year\", \"amount\" AS \"source: amount\", \"phase\" AS \"source: phase\", CAST(\"city\" AS VARCHAR) AS discovery_group, CASE WHEN REGEXP_FULL_MATCH(TRIM(CAST(\"year\" AS VARCHAR)), '[0-9]{2}|[0-9]{4}') THEN TRY_CAST(\"year\" AS INTEGER) END AS discovery_period FROM \"analysis_fixture\"), analysis_periods AS (\n SELECT discovery_group AS group_value, discovery_period, COUNT(*) AS source_rows, 0 AS missing_values, COUNT(*) AS observed_value\n FROM analysis_scope WHERE discovery_period IS NOT NULL GROUP BY discovery_group, discovery_period\n), analysis_previous AS (\n SELECT *, LAG(discovery_period) OVER w AS previous_period, LAG(observed_value) OVER w AS previous_value,\n LAG(source_rows) OVER w AS previous_rows, LAG(missing_values) OVER w AS previous_missing_values\n FROM analysis_periods WINDOW w AS (PARTITION BY group_value ORDER BY discovery_period)\n), analysis_changes AS (\n SELECT *, CASE WHEN previous_period IS NULL THEN 'No baseline' WHEN discovery_period - previous_period <> 1 THEN 'Missing intervening periods'\n WHEN missing_values > 0 OR previous_missing_values > 0 THEN 'Incomplete measurements' ELSE 'Adjacent periods with reported values' END AS comparison_status\n FROM analysis_previous\n)\nSELECT *, CASE WHEN comparison_status = 'Adjacent periods with reported values' THEN observed_value - previous_value END AS change,\n CASE WHEN comparison_status = 'Adjacent periods with reported values' THEN ROUND(100.0 * (observed_value - previous_value) / NULLIF(ABS(previous_value), 0), 2) END AS change_percent\nFROM analysis_changes ORDER BY ABS(change) DESC NULLS LAST, group_value NULLS LAST, discovery_period"
+    }
+  ]
+}

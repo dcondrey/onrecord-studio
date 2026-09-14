@@ -1,0 +1,167 @@
+{
+  "research_date": "2026-09-13",
+  "scope": "Read-only online research and bounded data verification. No production database ingestion.",
+  "csv_checks": [
+    {
+      "status": "fulfilled",
+      "value": {
+        "url": "https://seshat.datasd.org/police_ripa_stops/ripa_stops_datasd.csv",
+        "http_status": 206,
+        "verified_at": "2026-09-13T10:50:45.268Z",
+        "content_type": "binary/octet-stream",
+        "content_range": "bytes 0-4095/75166145",
+        "content_length": "4096",
+        "last_modified": "Sat, 12 Sep 2026 14:02:37 GMT",
+        "etag": "\"9e24560ccc78e6a6daae6799ed219040\"",
+        "sample_bytes": 4096,
+        "sample_sha256": "a90297d8bd75ed6844bb923415a6c79fa7b7f1794da3d42ba7930e47feca5d18",
+        "header": "\"UID\",\"ID\",\"ORI\",\"AGENCY\",\"EXPYEARS\",\"STOPDATE\",\"STOPTIME\",\"STOPDURATION\",\"STOPINRESPONSETOCFS\",\"STOPMADEDURINGWELFARECHECK\",\"STOPTYPE\",\"OFFICERASSIGNMENTKEY\",\"ASSIGNMENT\",\"INTERSECTION\",\"BLOCK\",\"LANDMARK\",\"STREET\",\"HIGHWAYEXIT\",\"ISSCHOOL\",\"SCHOOLNAME\",\"CITYNAME\",\"BEAT\",\"BEATNAME\",\"PID\",\"ISSTUDENT\",\"PERCEIVEDLIMITEDENGLISH\",\"PERCEIVEDAGE\",\"PERCEIVEDGENDER\",\"NONBINARYPERSON\",\"PERCEIVEDUNHOUSED\",\"PERCEIVEDSEXUALORIENTATION\",\"PASSENGERINVEHICLE\",\"INSIDERESIDENCE\"",
+        "verification_scope": "First 4096 bytes only; full CSV not downloaded or validated. Hash refers to sample, not complete file."
+      }
+    },
+    {
+      "status": "fulfilled",
+      "value": {
+        "url": "https://seshat.datasd.org/police_calls_for_service/pd_calls_for_service_2026_datasd.csv",
+        "http_status": 206,
+        "verified_at": "2026-09-13T10:50:45.269Z",
+        "content_type": "binary/octet-stream",
+        "content_range": "bytes 0-4095/31530569",
+        "content_length": "4096",
+        "last_modified": "Sun, 13 Sep 2026 00:01:31 GMT",
+        "etag": "\"8c88e30ab37813e7149dcf7727669248\"",
+        "sample_bytes": 4096,
+        "sample_sha256": "a4c080a8c552fb97f9c8b4b0d0d71975f488e1288d5aa8b1e5955f21dd901060",
+        "header": "\"INCIDENT_NUM\",\"DATE_TIME\",\"DAY_OF_WEEK\",\"ADDRESS_NUMBER_PRIMARY\",\"ADDRESS_DIR_PRIMARY\",\"ADDRESS_ROAD_PRIMARY\",\"ADDRESS_SFX_PRIMARY\",\"ADDRESS_DIR_INTERSECTING\",\"ADDRESS_ROAD_INTERSECTING\",\"ADDRESS_SFX_INTERSECTING\",\"CALL_TYPE\",\"DISPOSITION\",\"BEAT\",\"PRIORITY\"",
+        "verification_scope": "First 4096 bytes only; full CSV not downloaded or validated. Hash refers to sample, not complete file."
+      }
+    },
+    {
+      "status": "fulfilled",
+      "value": {
+        "url": "https://seshat.datasd.org/police_nibrs/pd_nibrs_2026_datasd.csv",
+        "http_status": 206,
+        "verified_at": "2026-09-13T10:50:45.285Z",
+        "content_type": "binary/octet-stream",
+        "content_range": "bytes 0-4095/20854084",
+        "content_length": "4096",
+        "last_modified": "Sat, 12 Sep 2026 14:04:38 GMT",
+        "etag": "\"ef24e3438602dac82584cdc16b9fc2d7-3\"",
+        "sample_bytes": 4096,
+        "sample_sha256": "131e3e5ed26ffe93738f6ae998cc94cb221923a96075e1c0897fe98eb84de049",
+        "header": "\"objectid\",\"nibrs_uniq\",\"case_number\",\"occured_on\",\"approved_on\",\"day_of_week\",\"month\",\"year\",\"code_section\",\"group_type\",\"ibr_category\",\"crime_against\",\"ibr_offense\",\"ibr_offense_description\",\"pd_offense_category\",\"violent_crime\",\"property_crime\",\"beat\",\"neighborhood\",\"service_area\",\"division_number\",\"division\",\"block_addr\",\"city\",\"state\",\"zip\",\"geocode_status\",\"geocode_score\",\"latitude\",\"longitude\"",
+        "verification_scope": "First 4096 bytes only; full CSV not downloaded or validated. Hash refers to sample, not complete file."
+      }
+    },
+    {
+      "status": "fulfilled",
+      "value": {
+        "url": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+        "http_status": 206,
+        "verified_at": "2026-09-13T10:50:45.259Z",
+        "content_type": "binary/octet-stream",
+        "content_range": "bytes 0-4095/63825383",
+        "content_length": "4096",
+        "last_modified": "Fri, 31 Jul 2026 17:03:06 GMT",
+        "etag": "\"45d125e861202a008c2f145bf3e55969-8\"",
+        "sample_bytes": 4096,
+        "sample_sha256": "6699a3d036a87fcf68fcf965b02df105ddedd7e96cb551af0d2f8af07849f04a",
+        "header": "\"amount\",\"report_fy\",\"budget_cycle\",\"fund_type\",\"fund_number\",\"dept_name\",\"funds_center_number\",\"account\",\"account_number\"",
+        "verification_scope": "First 4096 bytes only; full CSV not downloaded or validated. Hash refers to sample, not complete file."
+      }
+    }
+  ],
+  "localview": {
+    "doi": "10.7910/DVN/NJTBEM",
+    "metadata_api": "https://dataverse.harvard.edu/api/datasets/:persistentId/?persistentId=doi:10.7910/DVN/NJTBEM",
+    "dataset_version": 15,
+    "license": {
+      "name": "CC0 1.0",
+      "uri": "http://creativecommons.org/publicdomain/zero/1.0",
+      "iconUri": "https://licensebuttons.net/p/zero/1.0/88x31.png",
+      "rightsIdentifier": "CC0-1.0",
+      "rightsIdentifierScheme": "SPDX",
+      "schemeUri": "https://spdx.org/licenses/",
+      "languageCode": "en"
+    },
+    "metadata_file_id": 14214554,
+    "metadata_file_bytes": 35200750,
+    "metadata_file_sha256": "bf54ef10bb54f1c99fbe69e49db227479a3953b5bd2a2de17cc21cd9d61c9af8",
+    "query": "SELECT COUNT(*) AS total_metadata_rows, COUNT(*) FILTER (WHERE st_fips LIKE '06%') AS california_metadata_rows, COUNT(*) FILTER (WHERE regexp_matches(place_names, '(?i)san.{0,3}diego') OR st_fips = '0666000' OR predicted_st_fips LIKE '%0666000%') AS san_diego_candidate_rows FROM read_parquet('meta_localview.parquet');",
+    "result": {
+      "total_metadata_rows": 301003,
+      "california_metadata_rows": 35053,
+      "san_diego_candidate_rows": 0
+    },
+    "limitation": "No confirmed San Diego match in these metadata fields. This is not proof that no recording mentions San Diego or that no other release contains City meetings. Transcript archives were not downloaded.",
+    "files": [
+      {
+        "name": "codebook.md",
+        "id": 14077924,
+        "bytes": 6387,
+        "checksum": {
+          "type": "MD5",
+          "value": "ebc5d2ed9f72f5921db2229ad5516fa3"
+        }
+      },
+      {
+        "name": "meta_localview.parquet",
+        "id": 14214554,
+        "bytes": 35200750,
+        "checksum": {
+          "type": "MD5",
+          "value": "230fad4a9e55ebb3f7efabd39578c824"
+        }
+      },
+      {
+        "name": "transcripts_localview_part1.tar",
+        "id": 14214555,
+        "bytes": 2136033280,
+        "checksum": {
+          "type": "MD5",
+          "value": "cb7434b7e0b6178d1d9bbda636f27fba"
+        }
+      },
+      {
+        "name": "transcripts_localview_part2.tar",
+        "id": 14214556,
+        "bytes": 2136606720,
+        "checksum": {
+          "type": "MD5",
+          "value": "2fa9b17daaa469926e0d7df126c0dcec"
+        }
+      },
+      {
+        "name": "transcripts_localview_part3.tar",
+        "id": 14214557,
+        "bytes": 1021030400,
+        "checksum": {
+          "type": "MD5",
+          "value": "d477d6be7693341054b77934cff1c101"
+        }
+      }
+    ]
+  },
+  "access_limits": [
+    {
+      "source": "Zenodo",
+      "status": "Direct API/search access returned HTTP 403 unusual-traffic response. Search-indexed primary records and file manifests were reviewed; bulk downloads were not verified."
+    },
+    {
+      "source": "Census ACS",
+      "status": "Official current API examples require an API key. No authenticated query was run."
+    },
+    {
+      "source": "Wolfram",
+      "status": "Documentation and repository records reviewed. No Wolfram runtime/API queries or bulk reuse permission verified."
+    },
+    {
+      "source": "SDPD disclosures",
+      "status": "Live listing and one case page returned HTTP 200; attachment URLs observed. Attachment contents were not downloaded in this research check."
+    },
+    {
+      "source": "City Council archive",
+      "status": "Official City Clerk pointer to Hyland archive verified. Completeness, export and pagination not tested."
+    }
+  ]
+}

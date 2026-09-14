@@ -51,7 +51,7 @@ describe('workspace initialization states', () => {
     useAppStore.setState({ workspaceInitializationStatus: 'ready' });
     render(<OverviewDashboard />);
 
-    expect(screen.getByText('Add your first source')).toBeTruthy();
+    expect(screen.getByText('Start with the local record.')).toBeTruthy();
     expect(screen.queryByText('Saved sources unavailable')).toBeNull();
   });
 
@@ -64,6 +64,6 @@ describe('workspace initialization states', () => {
 
     expect(screen.getByText('Saved sources unavailable')).toBeTruthy();
     expect(screen.getByText('source catalog unavailable')).toBeTruthy();
-    expect(screen.queryByText('Add your first source')).toBeNull();
+    expect(screen.queryAllByText('Not yet in your library')).toHaveLength(0);
   });
 });

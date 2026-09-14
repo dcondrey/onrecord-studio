@@ -19,13 +19,18 @@
 //! See `docs/storage-and-evidence-architecture.md`.
 
 pub mod corpus;
+pub(crate) mod discovery_search;
 pub mod duckdb;
 pub mod fts;
 pub mod legacy_import;
+pub mod maintenance;
 pub mod pii;
 pub mod sqlite;
 pub(crate) mod sqlite_snapshot;
+pub(crate) mod tabular;
+pub mod vector;
 
 pub use duckdb::DuckDbWorkspace;
 pub use pii::{mask_json_pii, mask_pii, PiiFinding, PiiKind, PiiMaskResult};
 pub use sqlite::{DocumentExtractionFinalization, DuckDbRepository};
+pub use vector::VectorIndex;

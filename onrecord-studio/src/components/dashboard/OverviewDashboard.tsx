@@ -7,12 +7,15 @@ import AnalyticsUnavailable from '../charts/AnalyticsUnavailable';
 import { useAppStore } from '../../store/useAppStore';
 import MetricsGrid from './MetricsGrid';
 import Icon from '../ui/icons';
+import SanDiegoWorkspace from './SanDiegoWorkspace';
+import AutomaticDiscovery from './AutomaticDiscovery';
 import { invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { AgencyPerformanceProfile } from '../../types';
 
 export default function OverviewDashboard() {
   const portals = useAppStore((state) => state.portals);
+  const [showAnalytics, setShowAnalytics] = useState(false);
   const workspaceInitializationStatus = useAppStore((state) => state.workspaceInitializationStatus);
   const workspaceInitializationError = useAppStore((state) => state.workspaceInitializationError);
   const profiles = useAppStore((state) => state.agencyProfiles);
@@ -35,36 +38,40 @@ export default function OverviewDashboard() {
         <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
             <div className="app-eyebrow flex items-center gap-2 text-cyan-300/60">
-              <Icon name="sparkles" className="h-3.5 w-3.5" /> Investigative intelligence
+              <Icon name="sparkles" className="h-3.5 w-3.5" /> San Diego public records
             </div>
-            <h2 className="mt-2 text-[26px] font-semibold tracking-[-0.035em] text-slate-100 sm:text-[30px]">See the story behind the records.</h2>
+            <h2 className="mt-2 text-[26px] font-semibold tracking-[-0.035em] text-slate-100 sm:text-[30px]">Know the record. Prepare the next question.</h2>
             <p className="mt-1.5 max-w-3xl text-[11px] leading-relaxed text-slate-400">
-              A live view of response behavior, statutory risk, and cross-agency signals across {activePortalKey ? 'the selected jurisdiction' : 'every connected jurisdiction'}.
+              A local workspace for City records, police oversight, and evidence you can bring to a public meeting.
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {analyticsError ? (
+            {showAnalytics && (analyticsError ? (
               // `analyticsUpdatedAt` only advances on success, so the unchanged badge would keep
               // claiming "Live" over a figure that stopped updating.
               <span className="overview-freshness hidden items-center gap-2 whitespace-nowrap rounded-full border border-amber-500/30 px-3 py-1.5 text-[9px] text-amber-200/90 sm:flex" title={`Analytics refresh failed: ${analyticsError}`}><span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> {analyticsUpdatedAt ? `Stale · last updated ${formatRelativeTime(analyticsUpdatedAt)}` : 'Analytics unavailable'}</span>
             ) : analyticsUpdatedAt ? (
               <span className="overview-freshness hidden items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-[9px] text-slate-400 sm:flex" title={`Analytics updated ${formatRelativeTime(analyticsUpdatedAt)}`}><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Live · {formatRelativeTime(analyticsUpdatedAt)}</span>
-            ) : null}
+            ) : null)}
             <button type="button" onClick={() => setWorkspaceView('evidence')} className="secondary-action focus-ring flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border px-3.5 py-2.5 text-[10px] font-semibold text-slate-300 transition hover:text-cyan-200">
               Review evidence <Icon name="arrow" className="h-3.5 w-3.5" />
             </button>
           </div>
         </section>
 
-        <PeriodComparison activePortalKey={activePortalKey} />
 
         {workspaceInitializationStatus === 'loading' ? (
           <WorkspaceSourcesLoading />
         ) : workspaceInitializationStatus === 'error' ? (
           <WorkspaceSourcesUnavailable detail={workspaceInitializationError} />
-        ) : portals.length === 0 ? (
-          <WelcomePanel />
         ) : null}
+
+        <AutomaticDiscovery />
+        <SanDiegoWorkspace />
+
+        {portals.length > 0 && <button type="button" onClick={() => setShowAnalytics((visible) => !visible)} aria-expanded={showAnalytics} className="secondary-action focus-ring rounded-xl border px-4 py-2 text-xs text-slate-300">{showAnalytics ? 'Hide response analytics' : 'Show response analytics'}</button>}
+        {showAnalytics && <>
+        <PeriodComparison activePortalKey={activePortalKey} />
 
         <MetricsGrid />
 
@@ -78,6 +85,7 @@ export default function OverviewDashboard() {
           <LifecycleFunnel />
           <div className="lg:col-span-2 2xl:col-span-1"><TemporalMap /></div>
         </section>
+        </>}
       </div>
     </div>
   );
@@ -162,59 +170,6 @@ function WorkspaceSourcesUnavailable({ detail }: { detail: string | null }) {
         </div>
       </div>
     </section>
-  );
-}
-
-function WelcomePanel() {
-  const focusSourceInput = () => {
-    const desktopInput = document.getElementById('portal-url-desktop');
-    if (desktopInput?.getClientRects().length) {
-      desktopInput.focus();
-      return;
-    }
-    document.querySelector<HTMLButtonElement>('button[aria-label="Connect a data source"]')?.click();
-    window.setTimeout(() => document.getElementById('portal-url-mobile')?.focus(), 0);
-  };
-
-  return (
-    <section className="onboarding-panel relative overflow-hidden rounded-2xl border p-5 sm:p-6">
-      <div className="onboarding-grid pointer-events-none absolute inset-0" aria-hidden="true" />
-      <div className="onboarding-glow pointer-events-none absolute -right-20 -top-28 h-80 w-80 rounded-full" aria-hidden="true" />
-      <div className="relative grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-center">
-        <div>
-          <div className="flex items-center gap-2 text-[10px] font-semibold text-cyan-300"><Icon name="database" className="h-4 w-4" /> New investigation</div>
-          <h3 className="mt-2 max-w-2xl text-lg font-semibold tracking-[-0.02em] text-slate-100">Turn scattered public information into a connected evidence record.</h3>
-          <p className="mt-1.5 max-w-2xl text-[10px] leading-relaxed text-slate-400">Add a website, report library, open-data catalog, API, local file, or pasted material. OnRecord identifies the source, preserves it locally, and builds searchable intelligence as ingestion continues.</p>
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <button type="button" onClick={focusSourceInput} className="primary-action focus-ring flex items-center gap-2 rounded-lg px-3.5 py-2 text-[10px] font-semibold text-white">
-              Add your first source <Icon name="arrow" className="h-3.5 w-3.5" />
-            </button>
-            <SourceType icon="globe" label="Web & APIs" />
-            <SourceType icon="filePlus" label="Files" />
-            <SourceType icon="clipboard" label="Pasted content" />
-          </div>
-        </div>
-        <div className="welcome-flow relative grid grid-cols-3 gap-2 text-center">
-          <span className="welcome-flow-line" aria-hidden="true" />
-          <WelcomeStep number="01" label="Discover" />
-          <WelcomeStep number="02" label="Preserve" />
-          <WelcomeStep number="03" label="Connect" />
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function SourceType({ icon, label }: { icon: 'globe' | 'filePlus' | 'clipboard'; label: string }) {
-  return <span className="source-type-chip flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[8px] font-medium text-slate-400"><Icon name={icon} className="h-3.5 w-3.5" /> {label}</span>;
-}
-
-function WelcomeStep({ number, label }: { number: string; label: string }) {
-  return (
-    <div className="welcome-step relative rounded-xl border px-3 py-4">
-      <div className="welcome-step-number mx-auto grid h-8 w-8 place-items-center rounded-full font-mono text-[9px] font-semibold text-cyan-300">{number}</div>
-      <div className="mt-2 text-[9px] font-semibold text-slate-300">{label}</div>
-    </div>
   );
 }
 

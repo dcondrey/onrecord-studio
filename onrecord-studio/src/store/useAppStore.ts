@@ -18,6 +18,12 @@ import type {
   SavedSource,
   SourceLifecycleState,
 } from '../types';
+import {
+  loadBriefingProject,
+  persistBriefingProject,
+  type BriefingEvidence,
+  type BriefingProject,
+} from '../utils/briefing';
 
 export interface IngestionMetrics {
   pagesProcessed: number;
@@ -26,7 +32,7 @@ export interface IngestionMetrics {
   bytesTransferred: number;
 }
 
-export type WorkspaceView = 'overview' | 'patterns' | 'evidence' | 'activity';
+export type WorkspaceView = 'overview' | 'patterns' | 'analysis' | 'evidence' | 'activity' | 'briefing';
 export type AppTheme = ThemePreference;
 export type AppMotion = MotionPreference;
 export type AppContrast = ContrastPreference;
@@ -78,6 +84,7 @@ interface AppState {
    * coverage answer the database no longer supports.
    */
   analyticsRefreshRequests: number;
+  evidenceRefreshRequests: number;
   legalAuthorities: LegalAuthoritySummary[];
   activeLegalFindings: LegalComplianceFinding[];
   legalDataUpdatedAt: string | null;
@@ -93,6 +100,7 @@ interface AppState {
   isExtractionTerminalOpen: boolean;
   pendingSourceRepair: SourceRepairNotice | null;
   patternEvidenceSelection: PatternEvidenceSelection | null;
+  briefingProject: BriefingProject;
   setWorkspaceView: (view: WorkspaceView) => void;
   setTheme: (theme: AppTheme) => void;
   setMotion: (motion: AppMotion) => void;
@@ -123,6 +131,7 @@ interface AppState {
   ) => void;
   setAnalyticsError: (message: string | null) => void;
   requestAnalyticsRefresh: () => void;
+  requestEvidenceRefresh: () => void;
   setLegalAuthorities: (authorities: LegalAuthoritySummary[]) => void;
   setActiveLegalFindings: (findings: LegalComplianceFinding[]) => void;
   setSearchFilters: (
@@ -137,6 +146,10 @@ interface AppState {
   setTerminalVisibility: (visible: boolean) => void;
   setPendingSourceRepair: (notice: SourceRepairNotice | null) => void;
   setPatternEvidenceSelection: (selection: PatternEvidenceSelection | null) => void;
+  updateBriefingProject: (patch: Partial<Omit<BriefingProject, 'version' | 'evidence'>>) => void;
+  addBriefingEvidence: (evidence: BriefingEvidence) => void;
+  updateBriefingEvidence: (id: string, patch: Pick<Partial<BriefingEvidence>, 'claim' | 'note' | 'readiness'>) => void;
+  removeBriefingEvidence: (id: string) => void;
 }
 
 const emptyMetrics = (): IngestionMetrics => ({
@@ -171,6 +184,7 @@ export const useAppStore = create<AppState>((set) => ({
   analyticsUpdatedAt: null,
   analyticsError: null,
   analyticsRefreshRequests: 0,
+  evidenceRefreshRequests: 0,
   legalAuthorities: [],
   activeLegalFindings: [],
   legalDataUpdatedAt: null,
@@ -185,6 +199,9 @@ export const useAppStore = create<AppState>((set) => ({
   isExtractionTerminalOpen: false,
   pendingSourceRepair: null,
   patternEvidenceSelection: null,
+  briefingProject: loadBriefingProject(
+    typeof window === 'undefined' ? undefined : window.localStorage,
+  ),
   setWorkspaceView: (workspaceView) => set({ workspaceView, isSidebarOpen: false }),
   setTheme: (theme) => set({ theme }),
   setMotion: (motion) => set({ motion }),
@@ -329,6 +346,8 @@ export const useAppStore = create<AppState>((set) => ({
   setAnalyticsError: (analyticsError) => set({ analyticsError }),
   requestAnalyticsRefresh: () =>
     set((state) => ({ analyticsRefreshRequests: state.analyticsRefreshRequests + 1 })),
+  requestEvidenceRefresh: () =>
+    set((state) => ({ evidenceRefreshRequests: state.evidenceRefreshRequests + 1 })),
   setLegalAuthorities: (legalAuthorities) =>
     set({
       legalAuthorities: [...legalAuthorities].sort((left, right) =>
@@ -351,6 +370,51 @@ export const useAppStore = create<AppState>((set) => ({
   setTerminalVisibility: (isExtractionTerminalOpen) => set({ isExtractionTerminalOpen }),
   setPendingSourceRepair: (pendingSourceRepair) => set({ pendingSourceRepair }),
   setPatternEvidenceSelection: (patternEvidenceSelection) => set({ patternEvidenceSelection }),
+  updateBriefingProject: (patch) => set((state) => {
+    const briefingProject = { ...state.briefingProject, ...patch };
+    persistBriefingProject(
+      briefingProject,
+      typeof window === 'undefined' ? undefined : window.localStorage,
+    );
+    return { briefingProject };
+  }),
+  addBriefingEvidence: (evidence) => set((state) => {
+    const existing = state.briefingProject.evidence.find((item) => item.id === evidence.id);
+    const briefingProject = {
+      ...state.briefingProject,
+      evidence: existing
+        ? state.briefingProject.evidence
+        : [...state.briefingProject.evidence, evidence].slice(-200),
+    };
+    persistBriefingProject(
+      briefingProject,
+      typeof window === 'undefined' ? undefined : window.localStorage,
+    );
+    return { briefingProject };
+  }),
+  updateBriefingEvidence: (id, patch) => set((state) => {
+    const briefingProject = {
+      ...state.briefingProject,
+      evidence: state.briefingProject.evidence.map((item) =>
+        item.id === id ? { ...item, ...patch } : item),
+    };
+    persistBriefingProject(
+      briefingProject,
+      typeof window === 'undefined' ? undefined : window.localStorage,
+    );
+    return { briefingProject };
+  }),
+  removeBriefingEvidence: (id) => set((state) => {
+    const briefingProject = {
+      ...state.briefingProject,
+      evidence: state.briefingProject.evidence.filter((item) => item.id !== id),
+    };
+    persistBriefingProject(
+      briefingProject,
+      typeof window === 'undefined' ? undefined : window.localStorage,
+    );
+    return { briefingProject };
+  }),
 }));
 
 function readAudioAlertsPreference() {

@@ -1,13 +1,19 @@
 //! Registration system formatting IPC pathways for frontend consumption.
 
+pub mod analysis_workbench;
 pub mod corpus;
 pub mod export;
 pub mod ingest;
 pub mod investigation;
+pub mod maintenance;
 pub mod query;
 pub mod runtime;
+pub mod semantic;
 pub(crate) mod validation;
 
+pub use analysis_workbench::{
+    export_analytical_sql_csv, get_analytical_schema, import_analytical_dataset, run_analytical_sql,
+};
 pub use corpus::{get_corpus_index_status, query_corpus_patterns};
 pub use export::export_legal_brief;
 pub use ingest::{
@@ -26,3 +32,7 @@ pub use investigation::{
 };
 pub use query::query_audit_records;
 pub use runtime::get_ocr_capability;
+pub use semantic::{
+    cancel_embedding_index, get_embedding_index_status, get_embedding_model_status, hybrid_search,
+    initialize_embedding_model, rebuild_embedding_index,
+};

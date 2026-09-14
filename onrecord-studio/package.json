@@ -11,6 +11,7 @@
     "build": "npm run check:ipc && tsc && vite build",
     "lint": "eslint . --max-warnings 0",
     "test:unit": "vitest run",
+    "test:budget-comparison": "node scripts/verify-budget-comparison.mjs",
     "test:release-performance": "node scripts/validate-release-performance.mjs",
     "prepare:app-store": "node scripts/prepare-app-store.mjs",
     "build:app-store": "npm run prepare:app-store && tauri build --ci --bundles app --target universal-apple-darwin --features app-store --config src-tauri/tauri.appstore.conf.json",

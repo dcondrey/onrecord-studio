@@ -7,6 +7,7 @@ import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 
 export default function SearchFilter() {
   const activePortalKey = useAppStore((state) => state.activePortalKey);
+  const evidenceRefreshRequests = useAppStore((state) => state.evidenceRefreshRequests);
   const searchTerm = useAppStore((state) => state.searchTerm);
   const selectedAgencyId = useAppStore((state) => state.selectedAgencyId);
   const selectedStatus = useAppStore((state) => state.selectedStatus);
@@ -75,7 +76,7 @@ export default function SearchFilter() {
       }
     }, 220);
     return () => window.clearTimeout(timer);
-  }, [activePortalKey, compiledQuery, inputValue, requestGate, selectedAgencyId, selectedPolicyDeviation, selectedStatus, setFilteredResults, setSearchError]);
+  }, [activePortalKey, compiledQuery, evidenceRefreshRequests, inputValue, requestGate, selectedAgencyId, selectedPolicyDeviation, selectedStatus, setFilteredResults, setSearchError]);
 
   const updateTerm = (value: string) => {
     setInputValue(value);

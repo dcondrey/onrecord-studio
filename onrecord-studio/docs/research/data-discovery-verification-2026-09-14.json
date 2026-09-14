@@ -1,0 +1,160 @@
+{
+  "verifiedOn": "2026-09-14",
+  "scope": "Guided analysis and document evidence retrieval; source acquisition routes remain covered by the earlier regional verification records.",
+  "sourceChecks": [
+    {
+      "dataset": "budget",
+      "bytes": 63825383,
+      "sha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5",
+      "scopeFilters": [
+        {
+          "column": "budget_cycle",
+          "operator": "equals",
+          "value": "adopted"
+        },
+        {
+          "column": "account_number",
+          "operator": "contains",
+          "value": "511"
+        }
+      ],
+      "aggregation": "sum",
+      "measure": "amount",
+      "dimension": "dept_name",
+      "period": "report_fy",
+      "periodMode": "year_code",
+      "checks": [
+        {
+          "id": "coverage",
+          "elapsedMsIncludingCsvLoad": 383,
+          "displayLimit": 3,
+          "rowsDisplayed": 1,
+          "coverage": {
+            "source_rows": 64242,
+            "reported_values": 64242,
+            "missing_values": 0,
+            "minimum": "-71388.0000000000",
+            "median": "1500.0000000000",
+            "maximum": "256844747.0000000000",
+            "unusable_period_rows": 0,
+            "first_period": 11,
+            "last_period": 25
+          }
+        },
+        {
+          "id": "groups",
+          "elapsedMsIncludingCsvLoad": 300,
+          "displayLimit": 3,
+          "rowsDisplayed": 3
+        },
+        {
+          "id": "changes",
+          "elapsedMsIncludingCsvLoad": 310,
+          "displayLimit": 3,
+          "rowsDisplayed": 3
+        },
+        {
+          "id": "outliers",
+          "elapsedMsIncludingCsvLoad": 313,
+          "displayLimit": 3,
+          "rowsDisplayed": 3
+        }
+      ]
+    },
+    {
+      "dataset": "actuals",
+      "bytes": 69104357,
+      "sha256": "53cfc7488c40c2d3b654c64ba8599bc11a4086fa5efe403371c38eff78dd2143",
+      "scopeFilters": [
+        {
+          "column": "account_number",
+          "operator": "contains",
+          "value": "511"
+        }
+      ],
+      "aggregation": "sum",
+      "measure": "amount",
+      "dimension": "dept_name",
+      "period": "report_fy",
+      "periodMode": "year_code",
+      "checks": [
+        {
+          "id": "coverage",
+          "elapsedMsIncludingCsvLoad": 304,
+          "displayLimit": 3,
+          "rowsDisplayed": 1,
+          "coverage": {
+            "source_rows": 110560,
+            "reported_values": 110560,
+            "missing_values": 0,
+            "minimum": "-21085515.0000000000",
+            "median": "313.0000000000",
+            "maximum": "236766222.0000000000",
+            "unusable_period_rows": 0,
+            "first_period": 11,
+            "last_period": 23
+          }
+        },
+        {
+          "id": "groups",
+          "elapsedMsIncludingCsvLoad": 279,
+          "displayLimit": 3,
+          "rowsDisplayed": 3
+        },
+        {
+          "id": "changes",
+          "elapsedMsIncludingCsvLoad": 291,
+          "displayLimit": 3,
+          "rowsDisplayed": 3
+        },
+        {
+          "id": "outliers",
+          "elapsedMsIncludingCsvLoad": 342,
+          "displayLimit": 3,
+          "rowsDisplayed": 3
+        }
+      ]
+    }
+  ],
+  "interpretation": "These are execution checks on cached complete City exports, not findings about program effectiveness. Account-number substring 511 is an explicitly selected test scope, not a complete expense classification. Group sums span all selected fiscal periods. Coverage is observed coverage within those filters.",
+  "nativeTests": {
+    "suite": "cargo test --workspace --manifest-path src-tauri/Cargo.toml",
+    "status": "passed",
+    "passed": 348,
+    "ignored": 13
+  },
+  "frontendTests": {
+    "suite": "npm run test:unit",
+    "status": "passed",
+    "passed": 123,
+    "files": 30
+  },
+  "generationContract": "The Rust integration fixture is generated from the actual TypeScript query builder; frontend tests compare generated queries to the fixture.",
+  "methodsDocumentation": "https://duckdb.org/docs/current/sql/functions/aggregates#quantile_discx-pos",
+  "limits": {
+    "discoveryRowsPerCheck": 100,
+    "columnProfiles": 64,
+    "sqlRows": 500,
+    "csvExportRows": 10000,
+    "documentIndexCharacters": 4000000,
+    "stopBehavior": "Stop between queries; an in-flight query completes."
+  },
+  "build": {
+    "status": "passed",
+    "advisory": "Existing Vite bundle-size advisory remains; application bundle is approximately 587 kB before gzip."
+  },
+  "lint": {
+    "status": "passed"
+  },
+  "additionalRegression": {
+    "suite": "cargo test --workspace --manifest-path src-tauri/Cargo.toml passage_search --lib",
+    "status": "passed",
+    "purpose": "Jurisdiction filtering and result bounds apply before materializing matching document text.",
+    "passed": 1
+  },
+  "sqlBoundaryRegression": {
+    "status": "passed",
+    "suite": "cargo test --workspace --manifest-path src-tauri/Cargo.toml analysis::sql --lib",
+    "covers": "CTEs, scalar subqueries, protected tables, external table functions, SELECT INTO, and qualified side-effect functions."
+  }
+}

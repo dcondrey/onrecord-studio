@@ -136,7 +136,7 @@ export default function CommandPalette() {
         else openPalette();
         return;
       }
-      if (!isOpen && modified && /^[1-4]$/.test(event.key)) {
+      if (!isOpen && modified && /^[1-5]$/.test(event.key)) {
         event.preventDefault();
         setWorkspaceView(workspaceCommandRegistry[Number(event.key) - 1].view);
         return;

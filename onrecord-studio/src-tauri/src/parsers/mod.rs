@@ -22,7 +22,7 @@ pub mod raster_audit;
 pub mod recovery;
 pub mod rtf;
 pub mod salvage;
-mod source;
+pub(crate) mod source;
 pub(crate) mod staging;
 pub mod svg;
 pub mod text;

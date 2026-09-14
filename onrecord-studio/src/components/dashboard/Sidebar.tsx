@@ -57,7 +57,7 @@ export default function Sidebar() {
           {!isCollapsed && (
             <div className="min-w-0">
               <div className="truncate text-[13px] font-semibold tracking-[-0.015em] text-slate-100">OnRecord Studio</div>
-              <div className="mt-0.5 text-[12px] text-slate-400">Local investigation workspace</div>
+              <div className="mt-0.5 text-[12px] text-slate-400">San Diego research workspace</div>
             </div>
           )}
           <button
@@ -113,7 +113,7 @@ export default function Sidebar() {
           )}
           <button
             type="button"
-            title={isCollapsed ? 'All jurisdictions' : undefined}
+            title={isCollapsed ? 'All saved sources' : undefined}
             onClick={() => setActivePortal(null)}
             className={cn(
               'sidebar-nav-item focus-ring relative mb-0.5 flex w-full items-center overflow-hidden rounded-lg border text-left transition',
@@ -126,7 +126,7 @@ export default function Sidebar() {
             <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md">
               <Icon name="globe" className="h-4 w-4" />
             </span>
-            {!isCollapsed && <span className="min-w-0 flex-1 text-[13px] font-medium">All jurisdictions</span>}
+            {!isCollapsed && <span className="min-w-0 flex-1 text-[13px] font-medium">All saved sources</span>}
             {!isCollapsed && <span className="numeric-value rounded-md bg-slate-900 px-1.5 py-0.5 text-[11px] text-slate-400">{portals.length}</span>}
           </button>
 

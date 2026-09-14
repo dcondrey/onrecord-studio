@@ -12,6 +12,7 @@ use crate::storage::legacy_import::{
     classify_core_database, migrate_legacy_sqlite_core, CoreDatabaseKind,
 };
 use crate::storage::sqlite::DuckDbRepository;
+use crate::storage::vector::VectorIndex;
 use std::path::Path;
 use tauri::{App, Emitter, Manager, Runtime};
 #[cfg(target_os = "windows")]
@@ -32,6 +33,8 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
     create_runtime_directory(&report_directory)?;
     let core_db_file = app_data_dir.join("onrecord_studio_core.db");
     let corpus_db_file = app_data_dir.join("onrecord_studio_corpus.db");
+    let vector_db_file = app_data_dir.join("onrecord_studio_vectors.db");
+    let model_cache_dir = app_data_dir.join("models").join("embeddings");
     let initial_migration = include_str!("../migrations/0001_initial_schema.sql");
 
     // 2. Upgrade a pre-DuckDB core before anything tries to open it. DuckDB cannot read a SQLite
@@ -53,6 +56,7 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
     // 3. Initialize the DuckDB core repository and run structural tracking migrations.
     let repository = DuckDbRepository::new(&core_db_file)?;
     let corpus_index = CorpusIndex::open(&corpus_db_file)?;
+    let vector_index = VectorIndex::open(&vector_db_file, model_cache_dir)?;
     tauri::async_runtime::block_on(repository.run_migrations(initial_migration))?;
 
     // Both analytics nodes read through live sibling connections to the repository's DuckDB
@@ -93,6 +97,7 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
     start_corpus_reconciliation(app_handle, repository.clone(), corpus_index.clone());
     app.manage(repository);
     app.manage(corpus_index);
+    app.manage(vector_index);
     app.manage(report_directory);
     app.manage(AppInvestigationPaths::new(download_root));
     app.manage(manager);

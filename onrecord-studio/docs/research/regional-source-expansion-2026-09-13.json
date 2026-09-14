@@ -1,0 +1,1453 @@
+{
+  "verified_on": "2026-09-13",
+  "scope": "Read-only verification and temporary-database analysis. No production bulk crawl. HTTP header success does not establish complete document extraction.",
+  "counts": {
+    "regional_routes": 76,
+    "selected_housing_routes": 42,
+    "existing_city_collections": 4,
+    "research_desk_total": 122
+  },
+  "source_routes": [
+    {
+      "id": "ucsd-homelessness-hub",
+      "url": "https://homelessnesshub.ucsd.edu",
+      "aliases": [
+        "https://homeleessnesshub.ucsd.edu"
+      ],
+      "access": "public",
+      "publisher": "UC San Diego Homelessness Hub",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Public pages and linked downloads within the collection limits. Dashboard exports and historical releases may require a separate import."
+    },
+    {
+      "id": "sd-regional-data-library",
+      "url": "https://data.sandiegodata.org",
+      "aliases": [],
+      "access": "public",
+      "publisher": "San Diego Regional Data Library",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Public pages and linked downloads within the collection limits. Dashboard exports and historical releases may require a separate import."
+    },
+    {
+      "id": "voice-of-san-diego",
+      "url": "https://voiceofsandiego.org",
+      "aliases": [],
+      "access": "public",
+      "publisher": "Voice of San Diego",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Public article pages and linked documents within collection limits. Restricted articles require an available authorized copy; audio and video are not transcribed."
+    },
+    {
+      "id": "inside-san-diego",
+      "url": "https://www.insidesandiego.org",
+      "aliases": [
+        "https://insidesandiego.org"
+      ],
+      "access": "public",
+      "publisher": "City of San Diego",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Public pages and linked downloads within the collection limits. Dashboard exports and historical releases may require a separate import."
+    },
+    {
+      "id": "el-cajon-collaborative",
+      "url": "https://www.elcajoncollaborative.org",
+      "aliases": [
+        "https://elcajoncollaborative.org"
+      ],
+      "access": "public",
+      "publisher": "El Cajon Collaborative",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Public pages and linked downloads within the collection limits. Dashboard exports and historical releases may require a separate import."
+    },
+    {
+      "id": "transparent-homeless-data",
+      "url": "https://transparenthomelessdata.com",
+      "aliases": [],
+      "access": "export",
+      "publisher": "Transparent Homeless Data",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "The host did not respond during verification. Import an available local export with its original URL and methodology."
+    },
+    {
+      "id": "kpbs-reporting",
+      "url": "https://www.kpbs.org",
+      "aliases": [
+        "https://kpbs.org"
+      ],
+      "access": "public",
+      "publisher": "KPBS Public Media",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Public article pages and linked documents within collection limits. Restricted articles require an available authorized copy; audio and video are not transcribed."
+    },
+    {
+      "id": "sd-homelessness-analytics",
+      "url": "https://san-diego-homelessness-analytics.vercel.app",
+      "aliases": [],
+      "access": "export",
+      "publisher": "San Diego Homelessness Analytics",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "The page is a JavaScript application without static data links. Open it to obtain a published dataset URL or download, then import that source."
+    },
+    {
+      "id": "ppic-research",
+      "url": "https://www.ppic.org",
+      "aliases": [
+        "https://ppic.org"
+      ],
+      "access": "public",
+      "publisher": "Public Policy Institute of California",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Public research pages and linked files where accessible. Automated access returned 403 during verification; import downloaded reports when needed."
+    },
+    {
+      "id": "fox5-reporting",
+      "url": "https://fox5sandiego.com",
+      "aliases": [],
+      "access": "public",
+      "publisher": "FOX 5 San Diego",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Public article discovery when available. Verification returned a rate-limit response; the app respects server backoff and supports downloaded copies."
+    },
+    {
+      "id": "calmatters-reporting",
+      "url": "https://calmatters.org",
+      "aliases": [],
+      "access": "public",
+      "publisher": "CalMatters",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Public article pages and linked documents within collection limits. Restricted articles require an available authorized copy; audio and video are not transcribed."
+    },
+    {
+      "id": "sd-district-attorney",
+      "url": "https://www.sdcda.org",
+      "aliases": [
+        "https://sdcda.org"
+      ],
+      "access": "public",
+      "publisher": "San Diego County District Attorney",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Public pages and linked downloads within the collection limits. Dashboard exports and historical releases may require a separate import."
+    },
+    {
+      "id": "ucsd-homelessness-gis",
+      "url": "https://hhubsandiego-ucsdonline.hub.arcgis.com",
+      "aliases": [],
+      "access": "public",
+      "publisher": "UC San Diego Homelessness Hub",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Public pages and linked downloads within the collection limits. Dashboard exports and historical releases may require a separate import."
+    },
+    {
+      "id": "times-of-san-diego",
+      "url": "https://timesofsandiego.com",
+      "aliases": [],
+      "access": "public",
+      "publisher": "Times of San Diego",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Public article pages and linked documents within collection limits. Restricted articles require an available authorized copy; audio and video are not transcribed."
+    },
+    {
+      "id": "cbs8-reporting",
+      "url": "https://www.cbs8.com",
+      "aliases": [
+        "https://cbs8.com"
+      ],
+      "access": "public",
+      "publisher": "CBS 8",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Public article pages and linked documents within collection limits. Restricted articles require an available authorized copy; audio and video are not transcribed."
+    },
+    {
+      "id": "ca-housing-community",
+      "url": "https://www.hcd.ca.gov",
+      "aliases": [
+        "https://hcd.ca.gov"
+      ],
+      "access": "public",
+      "publisher": "California Department of Housing and Community Development",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Public pages and linked downloads within the collection limits. Dashboard exports and historical releases may require a separate import."
+    },
+    {
+      "id": "lucky-duck-foundation",
+      "url": "https://www.luckyduckfoundation.org",
+      "aliases": [
+        "https://luckyduckfoundation.org"
+      ],
+      "access": "public",
+      "publisher": "Lucky Duck Foundation",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Public pages and linked downloads within the collection limits. Dashboard exports and historical releases may require a separate import."
+    },
+    {
+      "id": "inewsource-reporting",
+      "url": "https://inewsource.org",
+      "aliases": [
+        "https://inewssoure.org"
+      ],
+      "access": "public",
+      "publisher": "inewsource",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Public article pages and linked documents within collection limits. Restricted articles require an available authorized copy; audio and video are not transcribed."
+    },
+    {
+      "id": "sd-rescue-mission",
+      "url": "https://www.sdrescue.org",
+      "aliases": [
+        "https://sdrescue.org"
+      ],
+      "access": "public",
+      "publisher": "San Diego Rescue Mission",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Public pages and linked downloads within the collection limits. Dashboard exports and historical releases may require a separate import."
+    },
+    {
+      "id": "coast-news",
+      "url": "https://thecoastnews.com",
+      "aliases": [],
+      "access": "public",
+      "publisher": "The Coast News Group",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Public article pages and linked documents within collection limits. Restricted articles require an available authorized copy; audio and video are not transcribed."
+    },
+    {
+      "id": "voice-viewpoint",
+      "url": "https://sdvoice.info",
+      "aliases": [],
+      "access": "public",
+      "publisher": "San Diego Voice & Viewpoint",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Public article pages and linked documents within collection limits. Restricted articles require an available authorized copy; audio and video are not transcribed."
+    },
+    {
+      "id": "axios-san-diego",
+      "url": "https://www.axios.com/local/san-diego",
+      "aliases": [
+        "https://axios.com",
+        "https://www.axios.com",
+        "https://axios.com/local/san-diego"
+      ],
+      "access": "public",
+      "publisher": "Axios",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Public article pages and linked documents within collection limits. Restricted articles require an available authorized copy; audio and video are not transcribed."
+    },
+    {
+      "id": "poway-unified",
+      "url": "https://www.powayusd.com",
+      "aliases": [
+        "https://powayusd.com"
+      ],
+      "access": "public",
+      "publisher": "Poway Unified School District",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Public pages and linked downloads within the collection limits. Dashboard exports and historical releases may require a separate import."
+    },
+    {
+      "id": "hud-data",
+      "url": "https://www.hud.gov",
+      "aliases": [
+        "https://hud.gov"
+      ],
+      "access": "public",
+      "publisher": "U.S. Department of Housing and Urban Development",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Public pages and linked downloads within the collection limits. Dashboard exports and historical releases may require a separate import."
+    },
+    {
+      "id": "sdhc-publications",
+      "url": "https://sdhc.org",
+      "aliases": [],
+      "access": "public",
+      "publisher": "San Diego Housing Commission",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Public pages and linked downloads within the collection limits. Dashboard exports and historical releases may require a separate import."
+    },
+    {
+      "id": "mts-data",
+      "url": "https://www.sdmts.com",
+      "aliases": [
+        "https://sdmts.com"
+      ],
+      "access": "public",
+      "publisher": "San Diego Metropolitan Transit System",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Public pages and linked downloads within the collection limits. Dashboard exports and historical releases may require a separate import."
+    },
+    {
+      "id": "ucsd-data-nexus",
+      "url": "https://datanexus.ucsd.edu",
+      "aliases": [],
+      "access": "public",
+      "publisher": "UC San Diego",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Public pages and linked downloads within the collection limits. Dashboard exports and historical releases may require a separate import."
+    },
+    {
+      "id": "federal-data-catalog",
+      "url": "https://catalog.data.gov",
+      "aliases": [],
+      "access": "public",
+      "publisher": "Data.gov / contributing publishers",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Bounded discovery of current public catalog pages and linked resources. The legacy CKAN endpoint is unavailable; no API key is configured for the replacement GSA API."
+    },
+    {
+      "id": "federal-transportation-data",
+      "url": "https://data.transportation.gov",
+      "aliases": [],
+      "access": "public",
+      "publisher": "U.S. Department of Transportation",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Public pages and linked downloads within the collection limits. Dashboard exports and historical releases may require a separate import."
+    },
+    {
+      "id": "sdsu-institutional-research",
+      "url": "https://asir.sdsu.edu",
+      "aliases": [],
+      "access": "public",
+      "publisher": "San Diego State University",
+      "evidence_type": null,
+      "period": null,
+      "coverage": "Public pages and linked downloads within the collection limits. Dashboard exports and historical releases may require a separate import."
+    },
+    {
+      "id": "sd-opengov-budget",
+      "url": "https://budget.sandiego.gov/transparency",
+      "aliases": [
+        "https://budget.sandiego.gov"
+      ],
+      "access": "public",
+      "publisher": "City of San Diego",
+      "evidence_type": "Collection",
+      "period": null,
+      "coverage": "Resolves publicly listed OpenGov reports and supporting files. Also collects the City’s published Finance data collection. Filtered dashboard spreadsheets require a browser export."
+    },
+    {
+      "id": "fy25-city-agencies",
+      "url": "https://www.sandiego.gov/sites/default/files/2024-08/fy25ab_v1cityagencies.pdf",
+      "aliases": [
+        "https://www.sandiego.gov/sites/default/files/2024-08/fy25ab_v1cityagencies.pdf",
+        "https://sandiego.gov/sites/default/files/2024-08/fy25ab_v1cityagencies.pdf"
+      ],
+      "access": "public",
+      "publisher": "City of San Diego",
+      "evidence_type": "Adopted budget",
+      "period": "FY2025",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "fy25-annual-action-plan",
+      "url": "https://www.sandiego.gov/sites/default/files/2024-08/annual-action-plan.pdf",
+      "aliases": [
+        "https://www.sandiego.gov/sites/default/files/2024-08/annual-action-plan.pdf",
+        "https://sandiego.gov/sites/default/files/2024-08/annual-action-plan.pdf"
+      ],
+      "access": "public",
+      "publisher": "City of San Diego",
+      "evidence_type": "Plan",
+      "period": "August 2024 release",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "fy26-budget-guide",
+      "url": "https://www.sandiego.gov/sites/default/files/2025-08/fy26ab_v2guidetothebudget.pdf",
+      "aliases": [
+        "https://www.sandiego.gov/sites/default/files/2025-08/fy26ab_v2guidetothebudget.pdf",
+        "https://sandiego.gov/sites/default/files/2025-08/fy26ab_v2guidetothebudget.pdf"
+      ],
+      "access": "public",
+      "publisher": "City of San Diego",
+      "evidence_type": "Budget explanation",
+      "period": "FY2026",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "iba-legacy-budget-guide",
+      "url": "https://www.sandiego.gov/sites/default/files/legacy/iba/pdf/budgetguide.pdf",
+      "aliases": [
+        "https://www.sandiego.gov/sites/default/files/legacy/iba/pdf/budgetguide.pdf",
+        "https://sandiego.gov/sites/default/files/legacy/iba/pdf/budgetguide.pdf"
+      ],
+      "access": "public",
+      "publisher": "City Independent Budget Analyst",
+      "evidence_type": "Budget explanation",
+      "period": "Legacy edition",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "sd-operating-budget",
+      "url": "https://data.sandiego.gov/datasets/operating-budget",
+      "aliases": [],
+      "access": "public",
+      "publisher": "City Department of Finance",
+      "evidence_type": "Dataset",
+      "period": "Multiple fiscal years",
+      "coverage": "Public pages and linked downloads within the collection limits. Dashboard exports and historical releases may require a separate import."
+    },
+    {
+      "id": "fy26-city-budget-overview",
+      "url": "https://www.sandiego.gov/sites/default/files/2025-08/fy26ab_v1cbo.pdf",
+      "aliases": [
+        "https://www.sandiego.gov/sites/default/files/2025-08/fy26ab_v1cbo.pdf",
+        "https://sandiego.gov/sites/default/files/2025-08/fy26ab_v1cbo.pdf"
+      ],
+      "access": "public",
+      "publisher": "City of San Diego",
+      "evidence_type": "Adopted budget",
+      "period": "FY2026",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "iba-2024-budget-guide",
+      "url": "https://www.sandiego.gov/sites/default/files/2024-10/iba-budget-guide-eng.pdf",
+      "aliases": [
+        "https://www.sandiego.gov/sites/default/files/2024-10/iba-budget-guide-eng.pdf",
+        "https://sandiego.gov/sites/default/files/2024-10/iba-budget-guide-eng.pdf"
+      ],
+      "access": "public",
+      "publisher": "City Independent Budget Analyst",
+      "evidence_type": "Budget explanation",
+      "period": "October 2024 edition",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "fy26-city-agencies",
+      "url": "https://www.sandiego.gov/sites/default/files/2025-08/fy26ab_v1cityagencies.pdf",
+      "aliases": [
+        "https://www.sandiego.gov/sites/default/files/2025-08/fy26ab_v1cityagencies.pdf",
+        "https://sandiego.gov/sites/default/files/2025-08/fy26ab_v1cityagencies.pdf"
+      ],
+      "access": "public",
+      "publisher": "City of San Diego",
+      "evidence_type": "Adopted budget",
+      "period": "FY2026",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "rtfh-2024-performance",
+      "url": "https://www.rtfhsd.org/wp-content/uploads/2025/07/2024-Data-Performance-Report_v3.pdf",
+      "aliases": [
+        "https://rtfhsd.org/wp-content/uploads/2025/07/2024-data-performance-report_v3.pdf"
+      ],
+      "access": "public",
+      "publisher": "Regional Task Force on Homelessness",
+      "evidence_type": "Performance report",
+      "period": "2024 · version 3",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "county-fy25-29-consolidated-plan",
+      "url": "https://www.sandiegocounty.gov/content/dam/sdc/sdhcd/new-docs/cd/fy25-29_conplan_fy25-26_annualplan_final.pdf",
+      "aliases": [
+        "https://www.sandiegocounty.gov/content/dam/sdc/sdhcd/new-docs/cd/fy25-29_conplan_fy25-26_annualplan_final.pdf",
+        "https://sandiegocounty.gov/content/dam/sdc/sdhcd/new-docs/cd/fy25-29_conplan_fy25-26_annualplan_final.pdf"
+      ],
+      "access": "export",
+      "publisher": "County of San Diego",
+      "evidence_type": "Plan",
+      "period": "FY2025–2029 / FY2025–2026",
+      "coverage": "The supplied document URL returned 404 during verification. Import an available downloaded copy through Import files; retain its original URL and document identity."
+    },
+    {
+      "id": "fy26-public-budget-guide",
+      "url": "https://www.sandiego.gov/sites/default/files/2025-12/publics-guide-to-the-budget-process-and-the-fy-2026-adopted-budget.pdf",
+      "aliases": [
+        "https://www.sandiego.gov/sites/default/files/2025-12/publics-guide-to-the-budget-process-and-the-fy-2026-adopted-budget.pdf",
+        "https://sandiego.gov/sites/default/files/2025-12/publics-guide-to-the-budget-process-and-the-fy-2026-adopted-budget.pdf"
+      ],
+      "access": "public",
+      "publisher": "City Independent Budget Analyst",
+      "evidence_type": "Budget explanation",
+      "period": "FY2026 · December 2025 edition",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "fy25-community-action-plan",
+      "url": "https://www.sandiego.gov/sites/default/files/2024-07/fy25cpaap_1.pdf",
+      "aliases": [
+        "https://www.sandiego.gov/sites/default/files/2024-07/fy25cpaap_1.pdf",
+        "https://sandiego.gov/sites/default/files/2024-07/fy25cpaap_1.pdf"
+      ],
+      "access": "public",
+      "publisher": "City of San Diego",
+      "evidence_type": "Plan",
+      "period": "FY2025",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "fy21-caper-attachment",
+      "url": "https://www.sandiego.gov/sites/default/files/cosdfy21caper_att3.pdf",
+      "aliases": [
+        "https://www.sandiego.gov/sites/default/files/cosdfy21caper_att3.pdf",
+        "https://sandiego.gov/sites/default/files/cosdfy21caper_att3.pdf"
+      ],
+      "access": "public",
+      "publisher": "City of San Diego",
+      "evidence_type": "Performance report",
+      "period": "FY2021 · attachment 3",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "county-homeless-health-2024-26",
+      "url": "https://www.sandiegocounty.gov/content/dam/sdc/hhsa/programs/phs/CHS/Persons%20Experiencing%20Homelessness%20in%20SDC%202024-2026.pdf",
+      "aliases": [
+        "https://www.sandiegocounty.gov/content/dam/sdc/hhsa/programs/phs/chs/persons%20experiencing%20homelessness%20in%20sdc%202024-2026.pdf",
+        "https://sandiegocounty.gov/content/dam/sdc/hhsa/programs/phs/chs/persons%20experiencing%20homelessness%20in%20sdc%202024-2026.pdf"
+      ],
+      "access": "public",
+      "publisher": "County HHSA",
+      "evidence_type": "Health report",
+      "period": "2024–2026 edition",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "fy27-sheltering-announcement",
+      "url": "https://www.sandiego.gov/sites/default/files/2026-06/2026-6-16-city-of-san-diego-funds-2-700-sheltering-options-for-individuals-experiencing-homelessness-in-fy-2027-budget.pdf",
+      "aliases": [
+        "https://www.sandiego.gov/sites/default/files/2026-06/2026-6-16-city-of-san-diego-funds-2-700-sheltering-options-for-individuals-experiencing-homelessness-in-fy-2027-budget.pdf",
+        "https://sandiego.gov/sites/default/files/2026-06/2026-6-16-city-of-san-diego-funds-2-700-sheltering-options-for-individuals-experiencing-homelessness-in-fy-2027-budget.pdf"
+      ],
+      "access": "public",
+      "publisher": "City of San Diego",
+      "evidence_type": "Agency statement",
+      "period": "FY2027 · June 16, 2026",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "fy26-hssd",
+      "url": "https://www.sandiego.gov/sites/default/files/2025-08/fy26ab_v3hssd.pdf",
+      "aliases": [
+        "https://www.sandiego.gov/sites/default/files/2025-08/fy26ab_v3hssd.pdf",
+        "https://sandiego.gov/sites/default/files/2025-08/fy26ab_v3hssd.pdf"
+      ],
+      "access": "public",
+      "publisher": "City of San Diego",
+      "evidence_type": "Adopted capital budget",
+      "period": "FY2026",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "fy26-caper",
+      "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy2026-caper.pdf",
+      "aliases": [
+        "https://www.sandiego.gov/sites/default/files/2026-08/fy2026-caper.pdf",
+        "https://sandiego.gov/sites/default/files/2026-08/fy2026-caper.pdf"
+      ],
+      "access": "public",
+      "publisher": "City of San Diego",
+      "evidence_type": "Performance report",
+      "period": "FY2026",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "city-home-arp",
+      "url": "https://www.sandiego.gov/sites/default/files/cosd_home_arp.pdf",
+      "aliases": [
+        "https://www.sandiego.gov/sites/default/files/cosd_home_arp.pdf",
+        "https://sandiego.gov/sites/default/files/cosd_home_arp.pdf"
+      ],
+      "access": "public",
+      "publisher": "City of San Diego",
+      "evidence_type": "Plan",
+      "period": "HOME-ARP",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "iba-fy24-homelessness",
+      "url": "https://www.sandiego.gov/sites/default/files/23-21_fy_2024_homelessness_programs_and_funding.pdf",
+      "aliases": [
+        "https://www.sandiego.gov/sites/default/files/23-21_fy_2024_homelessness_programs_and_funding.pdf",
+        "https://sandiego.gov/sites/default/files/23-21_fy_2024_homelessness_programs_and_funding.pdf"
+      ],
+      "access": "public",
+      "publisher": "City Independent Budget Analyst",
+      "evidence_type": "Funding analysis",
+      "period": "FY2024 · report 23-21",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "fy26-capital-budget",
+      "url": "https://www.sandiego.gov/sites/default/files/2025-08/fy26ab_v3.pdf",
+      "aliases": [
+        "https://www.sandiego.gov/sites/default/files/2025-08/fy26ab_v3.pdf",
+        "https://sandiego.gov/sites/default/files/2025-08/fy26ab_v3.pdf"
+      ],
+      "access": "public",
+      "publisher": "City of San Diego",
+      "evidence_type": "Adopted capital budget",
+      "period": "FY2026",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "sdhc-fy26-budget",
+      "url": "https://sdhc.org/wp-content/uploads/2025/01/FY26-Budget-City-Format.pdf",
+      "aliases": [
+        "https://sdhc.org/wp-content/uploads/2025/01/fy26-budget-city-format.pdf"
+      ],
+      "access": "public",
+      "publisher": "San Diego Housing Commission",
+      "evidence_type": "Budget proposal",
+      "period": "FY2026",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "sdhc-fy24-budget",
+      "url": "https://sdhc.org/wp-content/uploads/2023/05/SDHC-FY2024-Budget-Report.pdf",
+      "aliases": [
+        "https://sdhc.org/wp-content/uploads/2023/05/sdhc-fy2024-budget-report.pdf"
+      ],
+      "access": "public",
+      "publisher": "San Diego Housing Commission",
+      "evidence_type": "Budget document",
+      "period": "FY2024",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "sdhc-fy25-budget",
+      "url": "https://sdhc.org/wp-content/uploads/2024/06/HAR24-005-SDHC-FY25-Budget-Report.pdf",
+      "aliases": [
+        "https://sdhc.org/wp-content/uploads/2024/06/har24-005-sdhc-fy25-budget-report.pdf"
+      ],
+      "access": "public",
+      "publisher": "San Diego Housing Commission",
+      "evidence_type": "Budget proposal",
+      "period": "FY2025 · HAR24-005",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "iba-fy25-homelessness-revised",
+      "url": "https://www.sandiego.gov/sites/default/files/2024-09/24-24-rev-fy-2025-homelessness-programs-and-funding_rev.pdf",
+      "aliases": [
+        "https://www.sandiego.gov/sites/default/files/2024-09/24-24-rev-fy-2025-homelessness-programs-and-funding_rev.pdf",
+        "https://sandiego.gov/sites/default/files/2024-09/24-24-rev-fy-2025-homelessness-programs-and-funding_rev.pdf"
+      ],
+      "access": "public",
+      "publisher": "City Independent Budget Analyst",
+      "evidence_type": "Funding analysis",
+      "period": "FY2025 · report 24-24 revised",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "city-fy25-29-consolidated-materials",
+      "url": "https://www.sandiego.gov/cdbg/general/consolidatedplanmaterials/fy25-29",
+      "aliases": [
+        "https://sandiego.gov/cdbg/general/consolidatedplanmaterials/fy25-29"
+      ],
+      "access": "public",
+      "publisher": "City of San Diego",
+      "evidence_type": "Collection",
+      "period": "FY2025–2029",
+      "coverage": "Public pages and linked downloads within the collection limits. Dashboard exports and historical releases may require a separate import."
+    },
+    {
+      "id": "csh-supportive-housing",
+      "url": "https://www.csh.org",
+      "aliases": [
+        "https://csh.org"
+      ],
+      "access": "public",
+      "publisher": "Corporation for Supportive Housing",
+      "evidence_type": "Research",
+      "period": null,
+      "coverage": "Public pages and linked downloads within the collection limits. Dashboard exports and historical releases may require a separate import."
+    },
+    {
+      "id": "rtfh-reports-data",
+      "url": "https://rtfhsd.org/reports-data",
+      "aliases": [],
+      "access": "public",
+      "publisher": "Regional Task Force on Homelessness",
+      "evidence_type": "Collection",
+      "period": null,
+      "coverage": "Public pages and linked downloads within the collection limits. Dashboard exports and historical releases may require a separate import."
+    },
+    {
+      "id": "sdhc-homelessness-at-a-glance",
+      "url": "https://sdhc.org/wp-content/uploads/2022/12/SDHC-at-a-glance-homelessness-solutions.pdf",
+      "aliases": [
+        "https://sdhc.org/wp-content/uploads/2022/12/sdhc-at-a-glance-homelessness-solutions.pdf"
+      ],
+      "access": "public",
+      "publisher": "San Diego Housing Commission",
+      "evidence_type": "Program summary",
+      "period": "December 2022 path; verify document edition",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "state-audit-homelessness-2023-102-2",
+      "url": "https://information.auditor.ca.gov/reports/2023-102.2/index.html",
+      "aliases": [
+        "https://information.auditor.ca.gov/reports/2023-102.2/index.html"
+      ],
+      "access": "public",
+      "publisher": "California State Auditor",
+      "evidence_type": "Audit",
+      "period": "Report 2023-102.2",
+      "coverage": "This selected page and its directly linked documents. Collection limits and publisher availability apply."
+    },
+    {
+      "id": "fy27-financial-summary",
+      "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v1financialsummary.pdf",
+      "aliases": [
+        "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v1financialsummary.pdf",
+        "https://sandiego.gov/sites/default/files/2026-08/fy27ab_v1financialsummary.pdf"
+      ],
+      "access": "public",
+      "publisher": "City of San Diego",
+      "evidence_type": "Adopted budget",
+      "period": "FY2027",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "city-homelessness-trend-announcement",
+      "url": "https://www.insidesandiego.org/san-diego-homelessness-down-135-city-sheltering-options-and-supportive-housing-grow-91-2019",
+      "aliases": [
+        "https://www.insidesandiego.org/san-diego-homelessness-down-135-city-sheltering-options-and-supportive-housing-grow-91-2019",
+        "https://insidesandiego.org/san-diego-homelessness-down-135-city-sheltering-options-and-supportive-housing-grow-91-2019"
+      ],
+      "access": "public",
+      "publisher": "City of San Diego",
+      "evidence_type": "Agency statement",
+      "period": "Verify comparison periods in article",
+      "coverage": "This selected page and its directly linked documents. Collection limits and publisher availability apply."
+    },
+    {
+      "id": "fy25-citywide-budget",
+      "url": "https://www.sandiego.gov/sites/default/files/2024-08/fy25ab_v2citywide.pdf",
+      "aliases": [
+        "https://www.sandiego.gov/sites/default/files/2024-08/fy25ab_v2citywide.pdf",
+        "https://sandiego.gov/sites/default/files/2024-08/fy25ab_v2citywide.pdf"
+      ],
+      "access": "public",
+      "publisher": "City of San Diego",
+      "evidence_type": "Adopted budget",
+      "period": "FY2025",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "rtfh-hmis-dec2024",
+      "url": "https://www.rtfhsd.org/wp-content/uploads/2025/01/RTFH-HMIS-Data-Newsletter-Dec-2024.pdf",
+      "aliases": [
+        "https://rtfhsd.org/wp-content/uploads/2025/01/rtfh-hmis-data-newsletter-dec-2024.pdf"
+      ],
+      "access": "public",
+      "publisher": "Regional Task Force on Homelessness",
+      "evidence_type": "Performance report",
+      "period": "December 2024",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "county-draft-housing-element",
+      "url": "https://www.sandiegocounty.gov/content/dam/sdc/pds/GPUpdate2021/DraftHousingElement-StrikeoutVersion.pdf",
+      "aliases": [
+        "https://www.sandiegocounty.gov/content/dam/sdc/pds/gpupdate2021/drafthousingelement-strikeoutversion.pdf",
+        "https://sandiegocounty.gov/content/dam/sdc/pds/gpupdate2021/drafthousingelement-strikeoutversion.pdf"
+      ],
+      "access": "public",
+      "publisher": "County of San Diego",
+      "evidence_type": "Draft plan",
+      "period": "2021 update path; verify planning cycle",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "city-consolidated-plan-2005",
+      "url": "https://www.sandiego.gov/sites/default/files/legacy/planning/community/pdf/cpc/agendas/cplan2005.pdf",
+      "aliases": [
+        "https://www.sandiego.gov/sites/default/files/legacy/planning/community/pdf/cpc/agendas/cplan2005.pdf",
+        "https://sandiego.gov/sites/default/files/legacy/planning/community/pdf/cpc/agendas/cplan2005.pdf"
+      ],
+      "access": "public",
+      "publisher": "City of San Diego",
+      "evidence_type": "Historical plan",
+      "period": "2005 archive",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "fy25-hssd",
+      "url": "https://www.sandiego.gov/sites/default/files/2024-08/fy25ab_v2hssd.pdf",
+      "aliases": [
+        "https://www.sandiego.gov/sites/default/files/2024-08/fy25ab_v2hssd.pdf",
+        "https://sandiego.gov/sites/default/files/2024-08/fy25ab_v2hssd.pdf"
+      ],
+      "access": "public",
+      "publisher": "City of San Diego",
+      "evidence_type": "Adopted budget",
+      "period": "FY2025",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "county-fifth-cycle-housing-element",
+      "url": "https://www.hcd.ca.gov/housing-elements/docs/san-diego-cou-5th-adopted050713.pdf",
+      "aliases": [
+        "https://www.hcd.ca.gov/housing-elements/docs/san-diego-cou-5th-adopted050713.pdf",
+        "https://hcd.ca.gov/housing-elements/docs/san-diego-cou-5th-adopted050713.pdf"
+      ],
+      "access": "public",
+      "publisher": "California HCD / County of San Diego",
+      "evidence_type": "Historical plan",
+      "period": "Fifth cycle · May 7, 2013 edition",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "fy27-draft-budget",
+      "url": "https://www.sandiego.gov/sites/default/files/2026-06/fy27-draft-budget.pdf",
+      "aliases": [
+        "https://www.sandiego.gov/sites/default/files/2026-06/fy27-draft-budget.pdf",
+        "https://sandiego.gov/sites/default/files/2026-06/fy27-draft-budget.pdf"
+      ],
+      "access": "public",
+      "publisher": "City Auditor",
+      "evidence_type": "Budget proposal",
+      "period": "FY2027",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "fy26-convention-center",
+      "url": "https://www.sandiego.gov/sites/default/files/2025-08/fy26ab_v2conventioncenter.pdf",
+      "aliases": [
+        "https://www.sandiego.gov/sites/default/files/2025-08/fy26ab_v2conventioncenter.pdf",
+        "https://sandiego.gov/sites/default/files/2025-08/fy26ab_v2conventioncenter.pdf"
+      ],
+      "access": "public",
+      "publisher": "City of San Diego",
+      "evidence_type": "Adopted budget",
+      "period": "FY2026",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "county-housing-blueprint",
+      "url": "https://engage.sandiegocounty.gov/housing-blueprint",
+      "aliases": [],
+      "access": "public",
+      "publisher": "County of San Diego",
+      "evidence_type": "Collection",
+      "period": null,
+      "coverage": "Public pages and linked downloads within the collection limits. Dashboard exports and historical releases may require a separate import."
+    },
+    {
+      "id": "rtfh-2024-pit-cities-revised",
+      "url": "https://www.rtfhsd.org/wp-content/uploads/2024/09/2024-PITC-Regional-Cities-Breakdown-revised-Final-June-17-1.pdf",
+      "aliases": [
+        "https://rtfhsd.org/wp-content/uploads/2024/09/2024-pitc-regional-cities-breakdown-revised-final-june-17-1.pdf"
+      ],
+      "access": "public",
+      "publisher": "Regional Task Force on Homelessness",
+      "evidence_type": "Point-in-Time count",
+      "period": "2024 · revised June 17 edition",
+      "coverage": "This specific PDF, subject to publisher availability. Review extracted text and page references; PDF tables require verification before numerical analysis."
+    },
+    {
+      "id": "escondido-meeting-housing-attachment",
+      "url": "https://mccmeetingspublic.blob.core.usgovcloudapi.net/escondidca-meet-4c27edfbde4e4fbe81564d7925ed98fb/item-attachment-002-2aa4e015c04f476fadae609b490f75e4.pdf",
+      "aliases": [
+        "https://mccmeetingspublic.blob.core.usgovcloudapi.net/escondidca-meet-4c27edfbde4e4fbe81564d7925ed98fb/item-attachment-002-2aa4e015c04f476fadae609b490f75e4.pdf"
+      ],
+      "access": "export",
+      "publisher": "Escondido meeting archive",
+      "evidence_type": "Meeting attachment",
+      "period": "Verify meeting and item in document",
+      "coverage": "The supplied document URL returned 404 during verification. Import an available downloaded copy through Import files; retain its original URL and document identity."
+    }
+  ],
+  "additional_http_checks": [
+    {
+      "url": "https://catalog.data.gov/api/3/action/package_search?rows=1",
+      "status": 404,
+      "effectiveUrl": "https://catalog.data.gov/api/3/action/package_search?rows=1",
+      "contentType": "application/json",
+      "error": "",
+      "keys": [
+        "detail",
+        "message"
+      ],
+      "count": null,
+      "firstResource": null
+    },
+    {
+      "url": "https://data.transportation.gov/api/catalog/v1?limit=1&domains=data.transportation.gov",
+      "status": 200,
+      "effectiveUrl": "https://data.transportation.gov/api/catalog/v1?limit=1&domains=data.transportation.gov",
+      "contentType": "application/json;charset=utf-8",
+      "error": "",
+      "keys": [
+        "results",
+        "resultSetSize",
+        "timings",
+        "warnings"
+      ],
+      "count": 3,
+      "firstResource": "rki6-jcxp"
+    },
+    {
+      "url": "https://data.sandiegodata.org",
+      "status": 200,
+      "effectiveUrl": "https://data.sandiegodata.org/",
+      "contentType": "text/html; charset=UTF-8",
+      "error": ""
+    },
+    {
+      "url": "https://hhubsandiego-ucsdonline.hub.arcgis.com",
+      "status": 200,
+      "effectiveUrl": "https://hhubsandiego-ucsdonline.hub.arcgis.com/",
+      "contentType": "text/html; charset=utf-8",
+      "error": ""
+    },
+    {
+      "url": "https://transparenthomelessdata.com",
+      "status": 0,
+      "effectiveUrl": "https://transparenthomelessdata.com/",
+      "contentType": null,
+      "error": "curl: (28) Connection timed out after 22006 milliseconds"
+    },
+    {
+      "url": "https://san-diego-homelessness-analytics.vercel.app",
+      "status": 200,
+      "effectiveUrl": "https://san-diego-homelessness-analytics.vercel.app/",
+      "contentType": "text/html; charset=utf-8",
+      "error": ""
+    },
+    {
+      "url": "https://www.ppic.org",
+      "status": 403,
+      "effectiveUrl": "https://www.ppic.org/",
+      "contentType": "text/html; charset=UTF-8",
+      "error": ""
+    },
+    {
+      "url": "https://www.hcd.ca.gov",
+      "status": 200,
+      "effectiveUrl": "https://www.hcd.ca.gov/",
+      "contentType": "text/html; charset=UTF-8",
+      "error": ""
+    },
+    {
+      "url": "https://www.sdcda.org",
+      "status": 200,
+      "effectiveUrl": "https://www.sdcda.org/",
+      "contentType": "text/html; charset=utf-8",
+      "error": ""
+    },
+    {
+      "url": "https://www.luckyduckfoundation.org",
+      "status": 200,
+      "effectiveUrl": "https://www.luckyduckfoundation.org/",
+      "contentType": "text/html; charset=UTF-8",
+      "error": ""
+    },
+    {
+      "url": "https://sdrescue.org",
+      "status": 200,
+      "effectiveUrl": "https://www.sdrescue.org/",
+      "contentType": "text/html; charset=UTF-8",
+      "error": ""
+    },
+    {
+      "url": "https://www.cbs8.com",
+      "status": 200,
+      "effectiveUrl": "https://www.cbs8.com/",
+      "contentType": "text/html; charset=utf-8",
+      "error": ""
+    },
+    {
+      "url": "https://fox5sandiego.com",
+      "status": 429,
+      "effectiveUrl": "https://fox5sandiego.com/",
+      "contentType": null,
+      "error": ""
+    },
+    {
+      "url": "https://insidesandiego.org",
+      "status": 200,
+      "effectiveUrl": "https://www.insidesandiego.org/",
+      "contentType": "text/html; charset=UTF-8",
+      "error": ""
+    },
+    {
+      "url": "https://elcajoncollaborative.org",
+      "status": 200,
+      "effectiveUrl": "https://www.elcajoncollaborative.org/",
+      "contentType": "text/html; charset=UTF-8",
+      "error": ""
+    },
+    {
+      "url": "https://www.axios.com/local/san-diego",
+      "status": 403,
+      "effectiveUrl": "https://www.axios.com/local/san-diego",
+      "contentType": "text/html; charset=UTF-8",
+      "error": ""
+    },
+    {
+      "url": "https://www.csh.org",
+      "status": 200,
+      "effectiveUrl": "https://www.csh.org/",
+      "contentType": "text/html; charset=UTF-8",
+      "error": ""
+    }
+  ],
+  "supplied_document_head_checks": [
+    {
+      "url": "https://www.sandiego.gov/sites/default/files/2024-08/fy25ab_v1cityagencies.pdf",
+      "status": 200,
+      "effectiveUrl": "https://www.sandiego.gov/sites/default/files/2024-08/fy25ab_v1cityagencies.pdf",
+      "contentType": "application/pdf",
+      "error": null
+    },
+    {
+      "url": "https://www.sandiego.gov/sites/default/files/2024-08/annual-action-plan.pdf",
+      "status": 200,
+      "effectiveUrl": "https://www.sandiego.gov/sites/default/files/2024-08/annual-action-plan.pdf",
+      "contentType": "application/pdf",
+      "error": null
+    },
+    {
+      "url": "https://www.sandiego.gov/sites/default/files/2025-08/fy26ab_v2guidetothebudget.pdf",
+      "status": 200,
+      "effectiveUrl": "https://www.sandiego.gov/sites/default/files/2025-08/fy26ab_v2guidetothebudget.pdf",
+      "contentType": "application/pdf",
+      "error": null
+    },
+    {
+      "url": "https://www.sandiego.gov/sites/default/files/legacy/iba/pdf/budgetguide.pdf",
+      "status": 200,
+      "effectiveUrl": "https://www.sandiego.gov/sites/default/files/legacy/iba/pdf/budgetguide.pdf",
+      "contentType": "application/pdf",
+      "error": null
+    },
+    {
+      "url": "https://data.sandiego.gov/datasets/operating-budget",
+      "status": 200,
+      "effectiveUrl": "https://data.sandiego.gov/datasets/operating-budget/",
+      "contentType": "text/html",
+      "error": null
+    },
+    {
+      "url": "https://www.sandiego.gov/sites/default/files/2025-08/fy26ab_v1cbo.pdf",
+      "status": 200,
+      "effectiveUrl": "https://www.sandiego.gov/sites/default/files/2025-08/fy26ab_v1cbo.pdf",
+      "contentType": "application/pdf",
+      "error": null
+    },
+    {
+      "url": "https://www.sandiego.gov/sites/default/files/2024-10/iba-budget-guide-eng.pdf",
+      "status": 200,
+      "effectiveUrl": "https://www.sandiego.gov/sites/default/files/2024-10/iba-budget-guide-eng.pdf",
+      "contentType": "application/pdf",
+      "error": null
+    },
+    {
+      "url": "https://www.sandiego.gov/sites/default/files/2025-08/fy26ab_v1cityagencies.pdf",
+      "status": 200,
+      "effectiveUrl": "https://www.sandiego.gov/sites/default/files/2025-08/fy26ab_v1cityagencies.pdf",
+      "contentType": "application/pdf",
+      "error": null
+    },
+    {
+      "url": "https://rtfhsd.org/wp-content/uploads/2025/07/2024-data-performance-report_v3.pdf",
+      "status": 404,
+      "effectiveUrl": "https://www.rtfhsd.org/wp-content/uploads/2025/07/2024-data-performance-report_v3.pdf",
+      "contentType": "text/html; charset=UTF-8",
+      "error": null
+    },
+    {
+      "url": "https://www.sandiegocounty.gov/content/dam/sdc/sdhcd/new-docs/cd/fy25-29_conplan_fy25-26_annualplan_final.pdf",
+      "status": 404,
+      "effectiveUrl": "https://www.sandiegocounty.gov/content/dam/sdc/sdhcd/new-docs/cd/fy25-29_conplan_fy25-26_annualplan_final.pdf",
+      "contentType": "text/html;charset=utf-8",
+      "error": null
+    },
+    {
+      "url": "https://www.sandiego.gov/sites/default/files/2025-12/publics-guide-to-the-budget-process-and-the-fy-2026-adopted-budget.pdf",
+      "status": 200,
+      "effectiveUrl": "https://www.sandiego.gov/sites/default/files/2025-12/publics-guide-to-the-budget-process-and-the-fy-2026-adopted-budget.pdf",
+      "contentType": "application/pdf",
+      "error": null
+    },
+    {
+      "url": "https://www.sandiego.gov/sites/default/files/2024-07/fy25cpaap_1.pdf",
+      "status": 200,
+      "effectiveUrl": "https://www.sandiego.gov/sites/default/files/2024-07/fy25cpaap_1.pdf",
+      "contentType": "application/pdf",
+      "error": null
+    },
+    {
+      "url": "https://www.sandiego.gov/sites/default/files/cosdfy21caper_att3.pdf",
+      "status": 200,
+      "effectiveUrl": "https://www.sandiego.gov/sites/default/files/cosdfy21caper_att3.pdf",
+      "contentType": "application/pdf",
+      "error": null
+    },
+    {
+      "url": "https://www.sandiegocounty.gov/content/dam/sdc/hhsa/programs/phs/chs/persons%20experiencing%20homelessness%20in%20sdc%202024-2026.pdf",
+      "status": 404,
+      "effectiveUrl": "https://www.sandiegocounty.gov/content/dam/sdc/hhsa/programs/phs/chs/persons%20experiencing%20homelessness%20in%20sdc%202024-2026.pdf",
+      "contentType": "text/html;charset=utf-8",
+      "error": null
+    },
+    {
+      "url": "https://www.sandiego.gov/sites/default/files/2026-06/2026-6-16-city-of-san-diego-funds-2-700-sheltering-options-for-individuals-experiencing-homelessness-in-fy-2027-budget.pdf",
+      "status": 200,
+      "effectiveUrl": "https://www.sandiego.gov/sites/default/files/2026-06/2026-6-16-city-of-san-diego-funds-2-700-sheltering-options-for-individuals-experiencing-homelessness-in-fy-2027-budget.pdf",
+      "contentType": "application/pdf",
+      "error": null
+    },
+    {
+      "url": "https://www.sandiego.gov/sites/default/files/2025-08/fy26ab_v3hssd.pdf",
+      "status": 200,
+      "effectiveUrl": "https://www.sandiego.gov/sites/default/files/2025-08/fy26ab_v3hssd.pdf",
+      "contentType": "application/pdf",
+      "error": null
+    },
+    {
+      "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy2026-caper.pdf",
+      "status": 200,
+      "effectiveUrl": "https://www.sandiego.gov/sites/default/files/2026-08/fy2026-caper.pdf",
+      "contentType": "application/pdf",
+      "error": null
+    },
+    {
+      "url": "https://www.sandiego.gov/sites/default/files/cosd_home_arp.pdf",
+      "status": 200,
+      "effectiveUrl": "https://www.sandiego.gov/sites/default/files/cosd_home_arp.pdf",
+      "contentType": "application/pdf",
+      "error": null
+    },
+    {
+      "url": "https://www.sandiego.gov/sites/default/files/23-21_fy_2024_homelessness_programs_and_funding.pdf",
+      "status": 200,
+      "effectiveUrl": "https://www.sandiego.gov/sites/default/files/23-21_fy_2024_homelessness_programs_and_funding.pdf",
+      "contentType": "application/pdf",
+      "error": null
+    },
+    {
+      "url": "https://www.sandiego.gov/sites/default/files/2025-08/fy26ab_v3.pdf",
+      "status": 200,
+      "effectiveUrl": "https://www.sandiego.gov/sites/default/files/2025-08/fy26ab_v3.pdf",
+      "contentType": "application/pdf",
+      "error": null
+    },
+    {
+      "url": "https://sdhc.org/wp-content/uploads/2025/01/fy26-budget-city-format.pdf",
+      "status": 404,
+      "effectiveUrl": "https://sdhc.org/wp-content/uploads/2025/01/fy26-budget-city-format.pdf",
+      "contentType": "text/html",
+      "error": null
+    },
+    {
+      "url": "https://sdhc.org/wp-content/uploads/2023/05/sdhc-fy2024-budget-report.pdf",
+      "status": 404,
+      "effectiveUrl": "https://sdhc.org/wp-content/uploads/2023/05/sdhc-fy2024-budget-report.pdf",
+      "contentType": "text/html",
+      "error": null
+    },
+    {
+      "url": "https://sdhc.org/wp-content/uploads/2024/06/har24-005-sdhc-fy25-budget-report.pdf",
+      "status": 404,
+      "effectiveUrl": "https://sdhc.org/wp-content/uploads/2024/06/har24-005-sdhc-fy25-budget-report.pdf",
+      "contentType": "text/html",
+      "error": null
+    },
+    {
+      "url": "https://www.sandiego.gov/sites/default/files/2024-09/24-24-rev-fy-2025-homelessness-programs-and-funding_rev.pdf",
+      "status": 200,
+      "effectiveUrl": "https://www.sandiego.gov/sites/default/files/2024-09/24-24-rev-fy-2025-homelessness-programs-and-funding_rev.pdf",
+      "contentType": "application/pdf",
+      "error": null
+    },
+    {
+      "url": "https://www.sandiego.gov/cdbg/general/consolidatedplanmaterials/fy25-29",
+      "status": 200,
+      "effectiveUrl": "https://www.sandiego.gov/cdbg/general/consolidatedplanmaterials/fy25-29",
+      "contentType": "text/html; charset=UTF-8",
+      "error": null
+    },
+    {
+      "url": "https://www.csh.org",
+      "status": 200,
+      "effectiveUrl": "https://www.csh.org/",
+      "contentType": "text/html; charset=UTF-8",
+      "error": null
+    },
+    {
+      "url": "https://rtfhsd.org/reports-data",
+      "status": 200,
+      "effectiveUrl": "https://www.rtfhsd.org/reports-data/",
+      "contentType": "text/html; charset=UTF-8",
+      "error": null
+    },
+    {
+      "url": "https://sdhc.org/wp-content/uploads/2022/12/sdhc-at-a-glance-homelessness-solutions.pdf",
+      "status": 404,
+      "effectiveUrl": "https://sdhc.org/wp-content/uploads/2022/12/sdhc-at-a-glance-homelessness-solutions.pdf",
+      "contentType": "text/html",
+      "error": null
+    },
+    {
+      "url": "https://information.auditor.ca.gov/reports/2023-102.2/index.html",
+      "status": 200,
+      "effectiveUrl": "https://information.auditor.ca.gov/reports/2023-102.2/index.html",
+      "contentType": "text/html",
+      "error": null
+    },
+    {
+      "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v1financialsummary.pdf",
+      "status": 200,
+      "effectiveUrl": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v1financialsummary.pdf",
+      "contentType": "application/pdf",
+      "error": null
+    },
+    {
+      "url": "https://www.insidesandiego.org/san-diego-homelessness-down-135-city-sheltering-options-and-supportive-housing-grow-91-2019",
+      "status": 200,
+      "effectiveUrl": "https://www.insidesandiego.org/san-diego-homelessness-down-135-city-sheltering-options-and-supportive-housing-grow-91-2019",
+      "contentType": "text/html; charset=UTF-8",
+      "error": null
+    },
+    {
+      "url": "https://www.sandiego.gov/sites/default/files/2024-08/fy25ab_v2citywide.pdf",
+      "status": 200,
+      "effectiveUrl": "https://www.sandiego.gov/sites/default/files/2024-08/fy25ab_v2citywide.pdf",
+      "contentType": "application/pdf",
+      "error": null
+    },
+    {
+      "url": "https://rtfhsd.org/wp-content/uploads/2025/01/rtfh-hmis-data-newsletter-dec-2024.pdf",
+      "status": 404,
+      "effectiveUrl": "https://www.rtfhsd.org/wp-content/uploads/2025/01/rtfh-hmis-data-newsletter-dec-2024.pdf",
+      "contentType": "text/html; charset=UTF-8",
+      "error": null
+    },
+    {
+      "url": "https://www.sandiegocounty.gov/content/dam/sdc/pds/gpupdate2021/drafthousingelement-strikeoutversion.pdf",
+      "status": 404,
+      "effectiveUrl": "https://www.sandiegocounty.gov/content/dam/sdc/pds/gpupdate2021/drafthousingelement-strikeoutversion.pdf",
+      "contentType": "text/html;charset=utf-8",
+      "error": null
+    },
+    {
+      "url": "https://www.sandiego.gov/sites/default/files/legacy/planning/community/pdf/cpc/agendas/cplan2005.pdf",
+      "status": 200,
+      "effectiveUrl": "https://www.sandiego.gov/sites/default/files/legacy/planning/community/pdf/cpc/agendas/cplan2005.pdf",
+      "contentType": "application/pdf",
+      "error": null
+    },
+    {
+      "url": "https://www.sandiego.gov/sites/default/files/2024-08/fy25ab_v2hssd.pdf",
+      "status": 200,
+      "effectiveUrl": "https://www.sandiego.gov/sites/default/files/2024-08/fy25ab_v2hssd.pdf",
+      "contentType": "application/pdf",
+      "error": null
+    },
+    {
+      "url": "https://www.hcd.ca.gov/housing-elements/docs/san-diego-cou-5th-adopted050713.pdf",
+      "status": 200,
+      "effectiveUrl": "https://www.hcd.ca.gov/housing-elements/docs/san-diego-cou-5th-adopted050713.pdf",
+      "contentType": "application/pdf",
+      "error": null
+    },
+    {
+      "url": "https://www.sandiego.gov/sites/default/files/2026-06/fy27-draft-budget.pdf",
+      "status": 200,
+      "effectiveUrl": "https://www.sandiego.gov/sites/default/files/2026-06/fy27-draft-budget.pdf",
+      "contentType": "application/pdf",
+      "error": null
+    },
+    {
+      "url": "https://www.sandiego.gov/sites/default/files/2025-08/fy26ab_v2conventioncenter.pdf",
+      "status": 200,
+      "effectiveUrl": "https://www.sandiego.gov/sites/default/files/2025-08/fy26ab_v2conventioncenter.pdf",
+      "contentType": "application/pdf",
+      "error": null
+    },
+    {
+      "url": "https://engage.sandiegocounty.gov/housing-blueprint",
+      "status": 200,
+      "effectiveUrl": "https://engage.sandiegocounty.gov/housing-blueprint",
+      "contentType": "text/html; charset=utf-8",
+      "error": null
+    },
+    {
+      "url": "https://rtfhsd.org/wp-content/uploads/2024/09/2024-pitc-regional-cities-breakdown-revised-final-june-17-1.pdf",
+      "status": 404,
+      "effectiveUrl": "https://www.rtfhsd.org/wp-content/uploads/2024/09/2024-pitc-regional-cities-breakdown-revised-final-june-17-1.pdf",
+      "contentType": "text/html; charset=UTF-8",
+      "error": null
+    },
+    {
+      "url": "https://mccmeetingspublic.blob.core.usgovcloudapi.net/escondidca-meet-4c27edfbde4e4fbe81564d7925ed98fb/item-attachment-002-2aa4e015c04f476fadae609b490f75e4.pdf",
+      "status": 404,
+      "effectiveUrl": "https://mccmeetingspublic.blob.core.usgovcloudapi.net/escondidca-meet-4c27edfbde4e4fbe81564d7925ed98fb/item-attachment-002-2aa4e015c04f476fadae609b490f75e4.pdf",
+      "contentType": null,
+      "error": null
+    }
+  ],
+  "repaired_document_head_checks": [
+    {
+      "url": "https://www.rtfhsd.org/wp-content/uploads/2025/07/2024-Data-Performance-Report_v3.pdf",
+      "result": "200 application/pdf"
+    },
+    {
+      "url": "https://www.rtfhsd.org/wp-content/uploads/2025/01/RTFH-HMIS-Data-Newsletter-Dec-2024.pdf",
+      "result": "200 application/pdf"
+    },
+    {
+      "url": "https://www.rtfhsd.org/wp-content/uploads/2024/09/2024-PITC-Regional-Cities-Breakdown-revised-Final-June-17-1.pdf",
+      "result": "200 application/pdf"
+    },
+    {
+      "url": "https://sdhc.org/wp-content/uploads/2025/01/FY26-Budget-City-Format.pdf",
+      "result": "200 application/pdf"
+    },
+    {
+      "url": "https://sdhc.org/wp-content/uploads/2023/05/SDHC-FY2024-Budget-Report.pdf",
+      "result": "200 application/pdf"
+    },
+    {
+      "url": "https://sdhc.org/wp-content/uploads/2024/06/HAR24-005-SDHC-FY25-Budget-Report.pdf",
+      "result": "200 application/pdf"
+    },
+    {
+      "url": "https://sdhc.org/wp-content/uploads/2022/12/SDHC-at-a-glance-homelessness-solutions.pdf",
+      "result": "200 application/pdf"
+    },
+    {
+      "url": "https://www.sandiegocounty.gov/content/dam/sdc/pds/GPUpdate2021/DraftHousingElement-StrikeoutVersion.pdf",
+      "result": "200 application/pdf"
+    },
+    {
+      "url": "https://www.sandiegocounty.gov/content/dam/sdc/hhsa/programs/phs/CHS/Persons%20Experiencing%20Homelessness%20in%20SDC%202024-2026.pdf",
+      "result": "200 application/pdf"
+    }
+  ],
+  "live_connector_checks": [
+    {
+      "test": "transportation_catalog_preserves_its_domain",
+      "result": "Passed; 1203 advertised assets, 47 exports on the first domain-scoped catalog page."
+    },
+    {
+      "test": "ucsd_homelessness_hub_exposes_published_content",
+      "result": "Passed; public content group fc3e345822664a3cb7ffb771453f1ba8."
+    },
+    {
+      "test": "selected_catalog_pages_expose_cdn_files_and_original_metadata",
+      "result": "Passed; selected City budget exposes seshat.datasd.org CSV; selected Data.gov page exposes public harvest-record metadata and external publisher distributions."
+    },
+    {
+      "test": "city_opengov_resolves_report_metadata_and_supporting_files",
+      "result": "Passed; six public City report metadata URLs, supporting documents, and a selected report returning JSON."
+    }
+  ],
+  "full_budget_import": {
+    "url": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+    "sha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5",
+    "bytes": 63825383,
+    "rows": 548811,
+    "columns": 9,
+    "rejected_rows": 0,
+    "ledger_rows": 548811,
+    "test": "full_city_budget_export_reaches_sql_without_truncation",
+    "seconds": 53.93,
+    "measured_maximum_resident_set_bytes": 2135146496,
+    "limits": "750000 rows, 6000000 cells, 512 columns, 96 MiB source bytes. Full import can require substantial working memory.",
+    "quality_observation": "32596 rows have blank budget_cycle; all report_fy=26. They remain unspecified."
+  },
+  "references": [
+    "https://homelessnesshub.ucsd.edu/",
+    "https://inewsource.org/",
+    "https://data.gov/user-guide/",
+    "https://resources.data.gov/catalog-api/",
+    "https://data.sandiegodata.org/dataset/isr-umich-edu-psid-89-94-actsav/",
+    "https://www.rtfhsd.org/reports-data/",
+    "https://sdhc.org/about-us/budget-finance/",
+    "https://www.sandiegocounty.gov/content/sdc/hhsa/programs/phs/community_health_statistics/healthequity.html",
+    "https://budget.sandiego.gov/transparency",
+    "https://budget.sandiego.gov/api/v1/reports/7714",
+    "https://data.sandiego.gov/departments/department-of-finance/"
+  ],
+  "full_actuals_import": {
+    "url": "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv",
+    "sha256": "53cfc7488c40c2d3b654c64ba8599bc11a4086fa5efe403371c38eff78dd2143",
+    "bytes": 69104357,
+    "rows": 663858,
+    "columns": 8,
+    "rejected_rows": 0,
+    "fiscal_year_codes": [
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20",
+      "21",
+      "22",
+      "23"
+    ],
+    "seconds": 47.76,
+    "test": "full_city_actuals_export_preserves_observed_fiscal_years"
+  },
+  "fy23_expense_comparison": {
+    "scope": "Both complete releases, fiscal-year code 23, adopted expense accounts; actual UI query builder executed by DuckDB CLI.",
+    "results": [
+      {
+        "comparison_status": "Matched",
+        "account_groups": 23968,
+        "budget_source_rows": "23968",
+        "actuals_source_rows": "23968"
+      },
+      {
+        "comparison_status": "Missing actuals",
+        "account_groups": 6307,
+        "budget_source_rows": "6307",
+        "actuals_source_rows": null
+      },
+      {
+        "comparison_status": "Missing budget baseline",
+        "account_groups": 28382,
+        "budget_source_rows": null,
+        "actuals_source_rows": "28382"
+      }
+    ]
+  },
+  "validation": {
+    "native_tests_passed": 342,
+    "frontend_tests_passed": 117,
+    "live_read_only_checks_passed": 8,
+    "full_export_checks_passed": 2,
+    "budget_comparison_regression": "passed",
+    "build": "passed; bundle size advisory remains",
+    "lint": "passed"
+  }
+}

@@ -363,6 +363,7 @@ mod persisted_document {
 enum PoolSeedPolicy {
     OperatorRequested,
     ContinueInterruptedWalk,
+    AutomaticRefresh,
 }
 
 struct ScheduledTask {
@@ -863,6 +864,56 @@ impl QueueManager {
         .await
     }
 
+    /// Hold the same lock as source starts so an idle check cannot race a new extraction.
+    pub async fn maintain_idle_storage(
+        &self,
+        effective_at: Option<&str>,
+    ) -> Result<bool, AppError> {
+        let _provisioning_guard = self.provisioning_lock.lock().await;
+        if self
+            .runtime_snapshots()
+            .await?
+            .iter()
+            .any(|runtime| runtime.is_running)
+        {
+            return Ok(false);
+        }
+        match effective_at {
+            Some(at) => {
+                self.repository
+                    .compact_one_document(&self.download_root, at)
+                    .await
+            }
+            None => {
+                self.repository
+                    .recover_maintenance_storage(&self.download_root)
+                    .await
+            }
+        }
+    }
+
+    /// Background rechecks must never reactivate a source paused or removed by its owner.
+    pub async fn refresh_registered_source(
+        &self,
+        source: PortalRegistration,
+        crawl_policy: CrawlPolicy,
+        guidance: SourceGuidance,
+        window: Option<MetadataPageWindow>,
+    ) -> Result<String, AppError> {
+        let window = window.unwrap_or_default();
+        validate_page_parameters(window.start_page, window.page_size)?;
+        let initial_tasks = resume_initial_tasks(&source, window);
+        self.start_task_pool(
+            source,
+            RateLimitPolicy::default(),
+            initial_tasks,
+            crawl_policy,
+            guidance,
+            PoolSeedPolicy::AutomaticRefresh,
+        )
+        .await
+    }
+
     async fn start_task_pool(
         &self,
         portal: PortalRegistration,
@@ -910,7 +961,7 @@ impl QueueManager {
             // polling) is guaranteed to be observed here rather than lost.
             let _ = slot_freed.changed().await;
         };
-        if was_parked {
+        if was_parked || seed_policy == PoolSeedPolicy::AutomaticRefresh {
             // The park may have outlived the source: it could have been withdrawn or paused
             // while queued for a slot. Re-check before provisioning so a promoted start never
             // resurrects a source the operator removed while it waited. A brand-new source has
@@ -931,6 +982,11 @@ impl QueueManager {
                         "Source '{}' was paused while its start was queued",
                         portal.portal_key
                     )));
+                }
+                None if seed_policy == PoolSeedPolicy::AutomaticRefresh => {
+                    return Err(AppError::DataParsing(
+                        "Automatic refresh requires an active registered source".into(),
+                    ));
                 }
                 Some(SourceLifecycleState::Active) | None => {}
             }
@@ -2143,6 +2199,10 @@ async fn process_public_resource(
     if !reserve_crawl_page(context, depth).await? {
         return Ok(());
     }
+    context
+        .repository
+        .check_retained_file_budget(&context.download_root)
+        .await?;
     let inspection = context
         .client
         .inspect_public_resource_with_selectors(
@@ -2493,6 +2553,12 @@ async fn process_arcgis_layer(
         .fetch_arcgis_feature_page(&layer_url, offset, ARCGIS_FEATURE_PAGE_SIZE)
         .await?;
     if page.feature_count == 0 {
+        if page.exceeded_transfer_limit {
+            return Err(AppError::DataParsing(
+                "ArcGIS reported more features but returned an empty page; coverage is incomplete."
+                    .into(),
+            ));
+        }
         context
             .statistics
             .pages_processed
@@ -2508,7 +2574,9 @@ async fn process_arcgis_layer(
         .await
         .insert(page_identity)
     {
-        return Ok(());
+        return Err(AppError::DataParsing(
+            "ArcGIS repeated a feature page without advancing; coverage is incomplete.".into(),
+        ));
     }
     if !reserve_resource(context, &page.request_url).await? {
         return Ok(());
@@ -2523,6 +2591,10 @@ async fn process_arcgis_layer(
     )
     .await?;
     let document_id = stable_source_identifier(&format!("arcgis-page|{layer_url}|{offset}"));
+    context
+        .repository
+        .check_retained_file_budget(&context.download_root)
+        .await?;
     let managed_path =
         store_inline_payload(&context.download_root, document_id, &page.bytes).await?;
     let now = Utc::now().to_rfc3339();
@@ -2793,7 +2865,7 @@ async fn prepare_crawl_url(
 }
 
 /// Claims the site path a crawl node occupies, refusing a second URL that reaches the same path
-/// with a different query string.
+/// with a different query string, except the known San Diego policy category/page keys.
 ///
 /// The first URL to reach a path wins, which is normally the one linked from the seed. Later
 /// query variants are the faceted-search shape: `/dataset/` and `/dataset/?tags=species` are the
@@ -2820,6 +2892,12 @@ fn crawl_path_identity(url: &str) -> String {
     let Ok(parsed) = reqwest::Url::parse(url) else {
         return url.to_string();
     };
+    if let Some(identity) = super::client::san_diego_policy_listing_identity(&parsed) {
+        return identity;
+    }
+    if let Some(identity) = super::regional::meeting_identity(&parsed) {
+        return identity;
+    }
     format!(
         "{}://{}{}",
         parsed.scheme(),
@@ -3132,6 +3210,10 @@ async fn process_binary_payload(
         let hash = sha256_file(&path).await?;
         (path, count, hash)
     } else {
+        context
+            .repository
+            .check_retained_file_budget(&context.download_root)
+            .await?;
         context.limiter.acquire(&context.portal.portal_key).await?;
         let download_url = document
             .download_url
@@ -3776,9 +3858,14 @@ fn collect_structured_link_candidates(
                 .find_map(|key| object.get(key).and_then(serde_json::Value::as_str))
                 .or(inherited_label)
                 .unwrap_or("Structured data resource");
-            let media_type = ["mediaType", "contentType", "mimeType"]
+            let declared_format = object
+                .get("format")
+                .and_then(serde_json::Value::as_str)
+                .and_then(super::client::catalog_format_media_type);
+            let media_type = ["mediaType", "contentType", "mimeType", "mimetype"]
                 .into_iter()
-                .find_map(|key| object.get(key).and_then(serde_json::Value::as_str));
+                .find_map(|key| object.get(key).and_then(serde_json::Value::as_str))
+                .or(declared_format);
             let object_is_data_descriptor = object
                 .get("type")
                 .and_then(serde_json::Value::as_str)
@@ -3799,7 +3886,8 @@ fn collect_structured_link_candidates(
                     let declared_download = matches!(
                         normalized_key.as_str(),
                         "downloadurl" | "downloaduri" | "contenturl" | "fileurl" | "describedby"
-                    );
+                    ) || (normalized_key == "url"
+                        && declared_format.is_some());
                     let declared_access = matches!(
                         normalized_key.as_str(),
                         "accessurl" | "endpointurl" | "apiurl" | "serviceurl"
@@ -3909,23 +3997,27 @@ fn arcgis_item_companion_urls(value: &str) -> Vec<String> {
     vec![format!("{root}?f=json"), format!("{root}/data?f=json")]
 }
 
-fn arcgis_hub_companion_urls(page_url: &str, body: &[u8]) -> Vec<String> {
+pub(crate) fn arcgis_hub_companion_urls(page_url: &str, body: &[u8]) -> Vec<String> {
     let is_hub = reqwest::Url::parse(page_url)
         .ok()
         .and_then(|url| url.host_str().map(str::to_ascii_lowercase))
-        .is_some_and(|host| host == "hub.arcgis.com" || host.ends_with(".hub.arcgis.com"));
+        .is_some_and(|host| {
+            host == "hub.arcgis.com"
+                || host.ends_with(".hub.arcgis.com")
+                || host.ends_with(".opendata.arcgis.com")
+        });
     if !is_hub {
         return Vec::new();
     }
     let decoded = percent_decode_bytes(body);
     let mut urls = BTreeSet::new();
-    for (offset, item_id) in arcgis_identifiers_with_offsets(&decoded)
-        .into_iter()
-        .take(256)
-    {
-        let context_start = offset.saturating_sub(40);
-        let context = String::from_utf8_lossy(&decoded[context_start..offset]).to_ascii_lowercase();
-        if context.contains("group") {
+    let decoded = String::from_utf8_lossy(&decoded);
+    let identifiers =
+        regex::Regex::new(r#"(?i)"(contentGroupId|siteId|itemId|webmap)"\s*:\s*"([a-f0-9]{32})""#)
+            .expect("static ArcGIS property pattern");
+    for capture in identifiers.captures_iter(&decoded).take(128) {
+        let item_id = &capture[2];
+        if capture[1].eq_ignore_ascii_case("contentGroupId") {
             let mut search = reqwest::Url::parse("https://www.arcgis.com/sharing/rest/search")
                 .expect("static ArcGIS search URL is valid");
             search.query_pairs_mut().extend_pairs([
@@ -4037,24 +4129,6 @@ fn percent_decode_bytes(value: &[u8]) -> Vec<u8> {
     decoded
 }
 
-fn arcgis_identifiers_with_offsets(value: &[u8]) -> Vec<(usize, String)> {
-    let mut identifiers = Vec::new();
-    let mut index = 0_usize;
-    while index.saturating_add(32) <= value.len() {
-        let end = index + 32;
-        let candidate = &value[index..end];
-        let bounded_left = index == 0 || !value[index - 1].is_ascii_hexdigit();
-        let bounded_right = end == value.len() || !value[end].is_ascii_hexdigit();
-        if bounded_left && bounded_right && candidate.iter().all(u8::is_ascii_hexdigit) {
-            identifiers.push((index, String::from_utf8_lossy(candidate).into_owned()));
-            index = end;
-        } else {
-            index += 1;
-        }
-    }
-    identifiers
-}
-
 fn tableau_export_companion_urls(value: &str) -> Vec<String> {
     let Ok(url) = reqwest::Url::parse(value) else {
         return Vec::new();
@@ -4106,6 +4180,17 @@ fn arcgis_layer_url(value: &str) -> Option<String> {
         .iter()
         .position(|segment| matches!(*segment, "FeatureServer" | "MapServer"))?;
     let layer_id = segments.get(server_index.saturating_add(1))?;
+    if segments
+        .iter()
+        .skip(server_index + 2)
+        .any(|part| !part.is_empty())
+        || url
+            .query_pairs()
+            .any(|(key, value)| key != "f" || !matches!(value.as_ref(), "json" | "pjson"))
+    {
+        // A supplied /query is a selected export, possibly filtered. Do not turn it into 1=1.
+        return None;
+    }
     if layer_id.is_empty() || !layer_id.bytes().all(|byte| byte.is_ascii_digit()) {
         return None;
     }
@@ -5706,6 +5791,9 @@ fn is_supported_external_data_platform(value: &str) -> bool {
         "google.com",
         "googleusercontent.com",
         "socrata.com",
+        "granicus.com",
+        "hylandcloud.com",
+        "netfile.com",
         "github.com",
         "githubusercontent.com",
         "box.com",
@@ -6281,6 +6369,63 @@ mod tests {
     /// than erroring, and a deadlock is invisible to review and fatal in the app. This test hangs
     /// instead of failing if either grows a second acquisition.
     #[tokio::test]
+    async fn automatic_refresh_never_reactivates_paused_removed_or_purged_sources() {
+        let directory = tempdir().unwrap();
+        let (manager, repository, source, _telemetry) = manager_with_source(&directory).await;
+        manager.pause_source(&source.portal_key).await.unwrap();
+        assert!(manager
+            .refresh_registered_source(
+                source.clone(),
+                CrawlPolicy::default(),
+                SourceGuidance::default(),
+                None
+            )
+            .await
+            .is_err());
+        assert_eq!(
+            repository
+                .source_lifecycle_state(&source.portal_key)
+                .await
+                .unwrap(),
+            Some(SourceLifecycleState::Paused)
+        );
+        manager.remove_source(&source.portal_key).await.unwrap();
+        assert!(manager
+            .refresh_registered_source(
+                source.clone(),
+                CrawlPolicy::default(),
+                SourceGuidance::default(),
+                None
+            )
+            .await
+            .is_err());
+        assert_eq!(
+            repository
+                .source_lifecycle_state(&source.portal_key)
+                .await
+                .unwrap(),
+            Some(SourceLifecycleState::Removed)
+        );
+        manager.purge_source(&source.portal_key).await.unwrap();
+        assert!(manager
+            .refresh_registered_source(
+                source.clone(),
+                CrawlPolicy::default(),
+                SourceGuidance::default(),
+                None
+            )
+            .await
+            .is_err());
+        assert_eq!(
+            repository
+                .source_lifecycle_state(&source.portal_key)
+                .await
+                .unwrap(),
+            None
+        );
+    }
+
+    #[tokio::test]
     async fn pausing_keeps_the_queue_and_removing_discards_it() {
         let directory = tempdir().expect("temp dir must be created");
         let (manager, repository, source, _telemetry) = manager_with_source(&directory).await;
@@ -6531,6 +6676,48 @@ mod tests {
             .is_some_and(|value| value.parse::<u64>().is_ok()));
         assert!(envelope["emittedAt"].as_str().is_some());
         assert_eq!(envelope["type"], "corpusReconciliationStarted");
+    }
+
+    #[test]
+    fn san_diego_policy_categories_and_pages_keep_distinct_crawl_nodes() {
+        let procedures =
+            "https://www.sandiego.gov/police/data-transparency/policies-procedures/procedures";
+        assert_eq!(
+            crawl_path_identity(procedures),
+            crawl_path_identity(&format!("{procedures}/?page=0"))
+        );
+        assert_ne!(
+            crawl_path_identity(procedures),
+            crawl_path_identity(&format!("{procedures}?page=1"))
+        );
+        assert_eq!(
+            crawl_path_identity(&format!("{procedures}?page=1")),
+            crawl_path_identity(&format!("{procedures}?page=1&tracking=123"))
+        );
+        let categories =
+            "https://www.sandiego.gov/police/data-transparency/policies-procedures/category";
+        let orders = format!("{categories}?category=Department%20Orders");
+        let policies = format!("{categories}?category=Policies");
+        assert_ne!(crawl_path_identity(&orders), crawl_path_identity(&policies));
+        assert_ne!(
+            crawl_path_identity(&orders),
+            crawl_path_identity(&format!("{orders}&page=1"))
+        );
+        assert_eq!(
+            crawl_path_identity(&format!("{procedures}?page=100")),
+            crawl_path_identity(&format!("{procedures}?page=99999"))
+        );
+        // The exception never applies to a lookalike host or the City's other sections.
+        let other = procedures.replace("www.sandiego.gov", "www.sandiego.gov.example.test");
+        assert_eq!(
+            crawl_path_identity(&other),
+            crawl_path_identity(&format!("{other}?page=1"))
+        );
+        let calendar = "https://www.sandiego.gov/cpp/meetingsagendas";
+        assert_eq!(
+            crawl_path_identity(calendar),
+            crawl_path_identity(&format!("{calendar}?page=1"))
+        );
     }
 
     #[test]
@@ -6859,6 +7046,21 @@ mod tests {
 
     #[test]
     fn derives_arcgis_item_and_paginated_layer_endpoints() {
+        let package = discover_structured_document_links(br#"{"success":true,"result":{"resources":[{"name":"Measurements","format":"CSV","url":"https://data.example.test/export?id=42"}]}}"#, Some("https://data.ca.gov/api/3/action/package_show?id=sample")).unwrap();
+        assert_eq!(package.candidates.len(), 1);
+        assert!(package.candidates[0].download_candidate);
+        assert_eq!(
+            package.candidates[0].media_type.as_deref(),
+            Some("text/csv")
+        );
+        assert!(arcgis_layer_url(
+            "https://services.arcgis.com/a/FeatureServer/0/query?where=county%3D73&f=geojson"
+        )
+        .is_none());
+        assert!(arcgis_layer_url(
+            "https://services.arcgis.com/a/FeatureServer/0?where=county%3D73"
+        )
+        .is_none());
         let companions = arcgis_item_companion_urls(
             "https://gis-portal.example.gov/arcgis/home/webmap/viewer.html?webmap=e75d5c7a59ff4d6a90e862a481c3ba96",
         );
