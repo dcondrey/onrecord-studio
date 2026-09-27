@@ -1,6 +1,75 @@
 //! Small, deterministic adapters for published regional URLs. No speculative endpoint crawling.
 use reqwest::Url;
 
+pub(crate) fn is_sdhc_board_index(url: &Url) -> bool {
+    matches!(url.host_str(), Some("sdhc.org" | "www.sdhc.org"))
+        && matches!(url.path().trim_end_matches('/'),
+            "/governance-legislative-affairs/sdhc-board-of-commissioners/meetings"
+            | "/governance-legislative-affairs/sdhc-board-of-commissioners/meetings/meetings-archive")
+}
+
+/// SDHC publishes many board reports, presentations and resolutions through extensionless
+/// WordPress attachment routes that respond directly with PDF bytes. The table and its
+/// literal document labels establish the route; never guess sibling URLs or run scripts.
+pub(crate) fn sdhc_board_attachment(
+    base: &Url,
+    target: &Url,
+    element: &scraper::ElementRef<'_>,
+) -> Option<String> {
+    if !is_sdhc_board_index(base)
+        || !matches!(target.host_str(), Some("sdhc.org" | "www.sdhc.org"))
+        || !matches!(target.scheme(), "http" | "https")
+        || target.query().is_some()
+        || target.fragment().is_some()
+        || element.value().name() != "a"
+    {
+        return None;
+    }
+    let label = element
+        .text()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let lower = label.to_lowercase();
+    let report = regex::Regex::new(r"(?i)\bHCR[0-9]{2}-[0-9]{3}\b").expect("static report label");
+    if !report.is_match(&label)
+        && !matches!(
+            lower.as_str(),
+            "presentation"
+                | "resolution"
+                | "agenda"
+                | "minutes"
+                | "amended agenda"
+                | "revised agenda"
+                | "amended revised agenda"
+                | "adjourned meeting notice"
+                | "non-agenda public comment"
+        )
+    {
+        return None;
+    }
+    let path = target.path().trim_matches('/');
+    if !(path.starts_with("wp-content/uploads/") && path.to_lowercase().ends_with(".pdf"))
+        && (path.is_empty() || path.contains('/') || is_sdhc_board_index(target))
+    {
+        return None;
+    }
+    let row = element
+        .ancestors()
+        .filter_map(scraper::ElementRef::wrap)
+        .find(|ancestor| ancestor.value().name() == "tr")?;
+    let context = row
+        .text()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    Some(format!("{label} — {context}").chars().take(256).collect())
+}
+
 /// Publisher scope comes from the registered source, never a substring in a request ID or title.
 pub(crate) fn source_jurisdiction(source: &str) -> &'static str {
     let Ok(url) = Url::parse(source) else {
@@ -364,8 +433,12 @@ pub(crate) fn meeting_identity(url: &Url) -> Option<String> {
     let host = url.host_str()?;
     let path = url.path().to_ascii_lowercase();
     let keys: &[&str] =
-        if host == "sandiego.hylandcloud.com" && path.contains("/meetings/viewmeeting") {
+        if host == "sandiego.hylandcloud.com" && path.ends_with("/meetings/viewmeeting") {
             &["id", "doctype", "site"]
+        } else if host == "sandiego.hylandcloud.com"
+            && path.ends_with("/meetings/viewmeetingagendaitem")
+        {
+            &["meetingId", "itemId", "isSection", "type"]
         } else if host == "sandiego.hylandcloud.com" && path.ends_with("/documents/viewagenda") {
             &["meetingId", "type", "doctype"]
         } else if host == "sandiego.granicus.com"
@@ -438,9 +511,194 @@ pub(crate) fn hyland_document_companion(url: &Url, html: &str) -> Option<String>
     Some(document.to_string())
 }
 
+/// The City's published agenda contains literal `loadAgendaItem(id, false)` links. They
+/// are public item references, not executable code. Resolve only that exact grammar on
+/// this tenant and preserve the meeting and document type; never enumerate nearby IDs.
+pub(crate) fn hyland_agenda_items(url: &Url, html: &str) -> Vec<(String, String)> {
+    if url.host_str() != Some("sandiego.hylandcloud.com")
+        || !url
+            .path()
+            .eq_ignore_ascii_case("/211agendaonlinecouncil/Documents/ViewAgenda")
+    {
+        return Vec::new();
+    }
+    let pairs = url
+        .query_pairs()
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let Some(id) = pairs
+        .get("meetingId")
+        .filter(|id| !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit()))
+    else {
+        return Vec::new();
+    };
+    let Some(kind) = pairs
+        .get("type")
+        .filter(|kind| matches!(kind.as_ref(), "agenda" | "summary" | "minutes"))
+    else {
+        return Vec::new();
+    };
+    let document = scraper::Html::parse_document(html);
+    let selector = scraper::Selector::parse("a[href]").expect("static selector");
+    let literal = regex::Regex::new(
+        r"^javascript:\s*loadAgendaItem\(\s*([0-9]{1,18})\s*,\s*false\s*\)\s*;?\s*$",
+    )
+    .expect("static agenda item pattern");
+    let mut seen = std::collections::BTreeSet::new();
+    let mut items = Vec::new();
+    for element in document.select(&selector).take(50_000) {
+        let Some(capture) = element
+            .value()
+            .attr("href")
+            .and_then(|href| literal.captures(href))
+        else {
+            continue;
+        };
+        if !seen.insert(capture[1].to_string()) {
+            continue;
+        }
+        let mut target = url
+            .join("/211agendaonlinecouncil/Meetings/ViewMeetingAgendaItem")
+            .expect("absolute route");
+        target.query_pairs_mut().extend_pairs([
+            ("meetingId", id.as_ref()),
+            ("itemId", &capture[1]),
+            ("isSection", "false"),
+            ("type", kind.as_ref()),
+        ]);
+        let label = element
+            .text()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        items.push((
+            target.to_string(),
+            label.chars().take(512).collect::<String>(),
+        ));
+        if items.len() >= 128 {
+            break;
+        }
+    }
+    // Within the bounded packet expansion, consequential service/funding items precede
+    // ceremonial business. Stable sorting retains the publisher's order for equal scores.
+    items.sort_by_key(|(_, label)| std::cmp::Reverse(agenda_research_priority(label)));
+    items
+}
+
+fn agenda_research_priority(label: &str) -> usize {
+    let label = label.to_lowercase();
+    let topical = [
+        "homeless",
+        "encampment",
+        "shelter",
+        "housing",
+        "restroom",
+        "bathroom",
+        "abatement",
+        "police",
+        "overtime",
+    ];
+    let financial = [
+        "budget",
+        "funding",
+        "contract",
+        "grant",
+        "amendment",
+        "audit",
+        "appropriat",
+        "expenditur",
+    ];
+    topical.iter().filter(|term| label.contains(**term)).count() * 10
+        + financial
+            .iter()
+            .filter(|term| label.contains(**term))
+            .count()
+}
+
+pub(crate) fn hyland_item_attachment(item: &Url, attachment: &Url) -> bool {
+    if item.host_str() != Some("sandiego.hylandcloud.com")
+        || attachment.host_str() != item.host_str()
+        || !attachment
+            .path()
+            .to_ascii_lowercase()
+            .starts_with("/211agendaonlinecouncil/documents/downloadfile/")
+    {
+        return false;
+    }
+    let item_pairs = item
+        .query_pairs()
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let attachment_pairs = attachment
+        .query_pairs()
+        .collect::<std::collections::BTreeMap<_, _>>();
+    ["meetingId", "itemId"].iter().all(|key| {
+        item_pairs.contains_key(*key) && item_pairs.get(*key) == attachment_pairs.get(*key)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn council_items_are_literal_scoped_prioritized_and_distinct() {
+        let agenda = Url::parse("https://sandiego.hylandcloud.com/211agendaonlinecouncil/Documents/ViewAgenda?meetingId=7192&type=summary&doctype=3").unwrap();
+        let html = r#"
+            <a href="javascript:loadAgendaItem(40,false);">Honorary street name</a>
+            <a href="javascript:loadAgendaItem(41,false);">Riverbed Encampment Resolution Funding grant amendment</a>
+            <a href="javascript:loadAgendaItem(42,false);">Police overtime budget</a>
+            <a href="javascript:loadAgendaItem(41,false);">Duplicate</a>
+            <a href="javascript:loadAgendaItem(43,true);">Section</a>
+            <a href="javascript:loadAgendaItem(44,false);fetch('https://evil.test')">Not a literal</a>
+            <a href="javascript:loadAgendaItem(unknown,false);">Not an ID</a>
+        "#;
+        let items = hyland_agenda_items(&agenda, html);
+        assert_eq!(items.len(), 3);
+        assert!(items[0].1.contains("Police"));
+        assert!(items[1].1.contains("Riverbed"));
+        assert!(items[2].1.contains("Honorary"));
+        let first = Url::parse(&items[0].0).unwrap();
+        assert!(first
+            .query()
+            .unwrap()
+            .contains("meetingId=7192&itemId=42&isSection=false&type=summary"));
+        assert_ne!(
+            meeting_identity(&first),
+            meeting_identity(&Url::parse(&items[1].0).unwrap())
+        );
+        let lookalike = Url::parse(&agenda.as_str().replace(
+            "sandiego.hylandcloud.com",
+            "sandiego.hylandcloud.com.evil.test",
+        ))
+        .unwrap();
+        assert!(hyland_agenda_items(&lookalike, html).is_empty());
+        assert!(hyland_agenda_items(
+            &Url::parse(
+                &agenda
+                    .as_str()
+                    .replace("meetingId=7192", "meetingId=unknown")
+            )
+            .unwrap(),
+            html
+        )
+        .is_empty());
+        let attachment = Url::parse("https://sandiego.hylandcloud.com/211agendaonlinecouncil/Documents/DownloadFile/report.pdf?meetingId=7192&itemId=42&publishId=99").unwrap();
+        assert!(hyland_item_attachment(&first, &attachment));
+        assert!(!hyland_item_attachment(
+            &first,
+            &Url::parse(&attachment.as_str().replace("itemId=42", "itemId=41")).unwrap()
+        ));
+        assert!(!hyland_item_attachment(
+            &first,
+            &Url::parse(
+                &attachment
+                    .as_str()
+                    .replace("sandiego.hylandcloud.com", "evil.test")
+            )
+            .unwrap()
+        ));
+    }
+
     #[test]
     fn opengov_bootstrap_resolves_only_published_tenant_reports_and_documents() {
         let url = Url::parse("https://budget.sandiego.gov/transparency").unwrap();

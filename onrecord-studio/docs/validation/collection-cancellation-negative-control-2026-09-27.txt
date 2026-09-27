@@ -1,0 +1,39 @@
+Collection cancellation negative control — 2026-09-27
+
+Only mutation: restore the original unconditional provisioning_lock.lock().await
+in retire_portal_if_idle. All other queue code, the automatic-discovery guard and
+the model-dispatch identity guard remain identical to the normal workspace.
+The independent worker cancellation receiver is retained in both test variants.
+Expected outcome: exit101 at the bounded3-second lifecycle-lock timeout.
+Observed outcome: exit101, exactly that timeout, test runtime3.63seconds.
+Normal workspace source was never mutated. Root performs normal artifact restoration.
+
+Command (in isolated source copy, excluding target):
+CARGO_TARGET_DIR=/Volumes/C/rust-target cargo test --locked --offline --manifest-path src-tauri/Cargo.toml --lib ingestion::queue::tests::finishing_worker_observes_cancellation_while_lifecycle_lock_is_held -- --exact --nocapture
+
+{
+  "workspaceQueueSha256": "a1f5b861c8677e1f7de595303cdb7b5fbfa3a10e221b535846c7cc6f042a2951",
+  "onlyMutation": "Restore unconditional provisioning_lock.lock().await in retire_portal_if_idle; preserve model and automatic-discovery guards",
+  "independentWorkerReceiverRetained": true,
+  "allOtherQueueTextIdentical": true
+}
+
+   Compiling onrecord-studio-lib v1.0.0 (/private/var/folders/f6/9fydz_3n0p13t2scsr8ppdlm0000gn/T/onrecord-retirement-negative-control-3icsxhze/src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 52.31s
+     Running unittests src/lib.rs (/Volumes/C/rust-target/debug/deps/onrecord_studio_lib-10bd5de24fbd0850)
+
+running 1 test
+
+thread 'ingestion::queue::tests::finishing_worker_observes_cancellation_while_lifecycle_lock_is_held' (30339280) panicked at src-tauri/src/ingestion/queue.rs:6656:14:
+A stopped worker must not wait on the lifecycle lock held by its joiner: Elapsed(())
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test ingestion::queue::tests::finishing_worker_observes_cancellation_while_lifecycle_lock_is_held ... FAILED
+
+failures:
+
+failures:
+    ingestion::queue::tests::finishing_worker_observes_cancellation_while_lifecycle_lock_is_held
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 458 filtered out; finished in 3.63s
+
+error: test failed, to rerun pass `--lib`

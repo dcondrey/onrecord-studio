@@ -1,0 +1,42 @@
+{
+  "validation": "Real archived reports rendered through a read-only mocked IPC status bridge; browser/component navigation, not native app E2E",
+  "desktop": {
+    "finding": {
+      "x": 24,
+      "y": 204.015625,
+      "width": 1392,
+      "height": 720
+    },
+    "action": {
+      "x": 807.078125,
+      "y": 387.015625,
+      "width": 196.890625,
+      "height": 40
+    },
+    "horizontalOverflow": false
+  },
+  "mobile": {
+    "finding": {
+      "x": 16,
+      "y": 296.171875,
+      "width": 358,
+      "height": 1646.875
+    },
+    "action": {
+      "x": 54,
+      "y": 630.171875,
+      "width": 196.890625,
+      "height": 40
+    },
+    "horizontalOverflow": false
+  },
+  "requestTitle": "Citywide homelessness-spending reconciliation including CleanSD and Police NPD",
+  "requestPosition": {
+    "x": 49,
+    "y": 271.40625,
+    "width": 1342,
+    "height": 465.5
+  },
+  "mobileRequest": "Citywide homelessness-spending reconciliation including CleanSD and Police NPD",
+  "errors": []
+}

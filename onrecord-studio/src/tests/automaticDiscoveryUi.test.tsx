@@ -40,8 +40,8 @@ describe('automatic discovery landing experience', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Choose budget data' }));
     expect(bridge.stage).toHaveBeenCalledWith('https://data.sandiego.gov/datasets/operating-budget');
     fireEvent.click(screen.getByText(/Data upkeep & storage/));
-    fireEvent.change(await screen.findByLabelText('New acquisitions'), { target: { value: 'REFERENCE_ONLY' } });
-    expect(screen.getByText(/publishers can change or remove files/)).toBeTruthy();
+    fireEvent.change(await screen.findByLabelText('Original download retention'), { target: { value: 'REFERENCE_ONLY' } });
+    expect(screen.getByText(/Original-file layout and forensic checks require the original bytes/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Save upkeep settings' }));
     await screen.findByText('Upkeep settings saved.');
     expect(bridge.invoke).toHaveBeenCalledWith('set_data_maintenance_policy', { policy: { ...upkeep.policy, retentionMode: 'REFERENCE_ONLY' } });

@@ -11,6 +11,9 @@ pub mod license;
 pub mod maintenance;
 pub mod nextrequest;
 pub mod portal;
+pub mod reconstruction;
+pub mod research;
+pub use reconstruction::*;
 pub mod semantic;
 pub mod source;
 
@@ -54,6 +57,7 @@ pub use portal::{
     PortalRuntimeSnapshot, PortalSyncStart, RateLimitPolicy, SavedSource, SourceKind,
     SourceLifecycleState, SourcePurge, SourcePurgePreview, SourceRemoval, StoppedHost,
 };
+pub use research::*;
 pub use semantic::{
     EmbeddingIndexReport, EmbeddingIndexStatus, EmbeddingModelStatus, HybridSearchFilter,
     HybridSearchResult,
@@ -62,3 +66,14 @@ pub use source::{
     CrawlPolicy, DiscoveredSourceLink, MetadataPageWindow, PastedContentInput,
     SourceDiscoveryPreview, SourceGuidance, SourceIngestionStart,
 };
+
+pub mod review;
+
+pub mod financial;
+pub use financial::*;
+
+pub mod casework;
+pub use casework::*;
+
+pub mod monitoring;
+pub use monitoring::*;

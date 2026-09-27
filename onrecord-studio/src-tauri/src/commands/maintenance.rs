@@ -39,6 +39,14 @@ pub async fn run_data_maintenance(
     manager: State<'_, Arc<QueueManager>>,
     paths: State<'_, AppInvestigationPaths>,
 ) -> Result<DataMaintenanceStatus, AppError> {
+    maintain(&repository, &manager, &paths).await
+}
+
+pub(crate) async fn maintain(
+    repository: &DuckDbRepository,
+    manager: &Arc<QueueManager>,
+    paths: &AppInvestigationPaths,
+) -> Result<DataMaintenanceStatus, AppError> {
     let Ok(_guard) = MAINTENANCE_LOCK.try_lock() else {
         return repository
             .maintenance_status_with_storage(&paths.document_root)
@@ -58,7 +66,11 @@ pub async fn run_data_maintenance(
         return Ok(status);
     }
     if status.policy.auto_import {
-        repository.maintain_one_table().await?;
+        for _ in 0..4 {
+            if !repository.maintain_one_table().await? {
+                break;
+            }
+        }
     }
     // Retiring files while an extraction or forensic reader is using them would break that
     // reader. Work on references only when acquisition and evidence auditing are idle.
@@ -83,9 +95,14 @@ pub async fn run_data_maintenance(
             .acquire_many(4)
             .await
             .map_err(|e| AppError::Internal(e.to_string()))?;
-        manager
-            .maintain_idle_storage(Some(&status.effective_at))
-            .await?;
+        for _ in 0..32 {
+            if !manager
+                .maintain_idle_storage(Some(&status.effective_at))
+                .await?
+            {
+                break;
+            }
+        }
     }
     if status.policy.auto_refresh
         && !any_running

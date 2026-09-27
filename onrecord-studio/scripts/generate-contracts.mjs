@@ -98,6 +98,7 @@ function rustTypeToTs(value) {
   if (vector !== null) return `${rustTypeToTs(vector)}[]`;
   if (['String', 'str'].includes(type)) return 'string';
   if (type === 'bool') return 'boolean';
+  if (type === '()') return 'null';
   if (/^(?:u|i)(?:8|16|32|64|128|size)$/.test(type) || /^(?:f32|f64)$/.test(type)) return 'number';
   const name = type.split('::').at(-1).replace(/[>,].*$/, '').trim();
   const aliases = { UnredactorForensicReport: 'RedactionIntegrityReport' };

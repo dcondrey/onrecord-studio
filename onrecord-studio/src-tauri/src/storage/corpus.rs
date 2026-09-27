@@ -2272,19 +2272,14 @@ fn insert_segments(
     transaction: &Transaction<'_>,
     document: &AnalyzedDocument,
 ) -> Result<(), AppError> {
-    let mut statement = transaction
-        .prepare_cached(
-            "INSERT INTO corpus_segments (
-                portal_key, document_id, segment_index, character_start, character_end,
-                content_sha256, simhash_hex
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        )
-        .map_err(|error| {
-            AppError::Storage(format!("Failed to prepare corpus segments: {error}"))
-        })?;
+    // Append vectors inside the existing transaction. Preparing/executing an INSERT for
+    // every text segment makes a full City export spend minutes planning identical SQL.
+    let mut appender = transaction
+        .appender("corpus_segments")
+        .map_err(|error| AppError::Storage(format!("Failed to append corpus segments: {error}")))?;
     for segment in &document.segments {
-        statement
-            .execute(params![
+        appender
+            .append_row(params![
                 document.portal_key,
                 document.document_id,
                 segment.index,
@@ -2297,6 +2292,9 @@ fn insert_segments(
                 AppError::Storage(format!("Failed to persist corpus segment: {error}"))
             })?;
     }
+    appender
+        .flush()
+        .map_err(|error| AppError::Storage(format!("Failed to flush corpus segments: {error}")))?;
     Ok(())
 }
 
@@ -2304,15 +2302,14 @@ fn insert_terms(
     transaction: &Transaction<'_>,
     document: &AnalyzedDocument,
 ) -> Result<(), AppError> {
-    let mut statement = transaction
-        .prepare_cached(
-            "INSERT INTO corpus_term_postings (portal_key, document_id, term, frequency)
-             VALUES (?1, ?2, ?3, ?4)",
-        )
-        .map_err(|error| AppError::Storage(format!("Failed to prepare corpus terms: {error}")))?;
+    // Append vectors inside the existing transaction. Preparing/executing an INSERT for
+    // every text segment makes a full City export spend minutes planning identical SQL.
+    let mut appender = transaction
+        .appender("corpus_term_postings")
+        .map_err(|error| AppError::Storage(format!("Failed to append corpus terms: {error}")))?;
     for (term, frequency) in &document.terms {
-        statement
-            .execute(params![
+        appender
+            .append_row(params![
                 document.portal_key,
                 document.document_id,
                 term,
@@ -2322,6 +2319,9 @@ fn insert_terms(
                 AppError::Storage(format!("Failed to persist corpus term: {error}"))
             })?;
     }
+    appender
+        .flush()
+        .map_err(|error| AppError::Storage(format!("Failed to flush corpus terms: {error}")))?;
     Ok(())
 }
 
@@ -2339,23 +2339,20 @@ fn insert_entities(
         .map_err(|error| {
             AppError::Storage(format!("Failed to prepare corpus entities: {error}"))
         })?;
-    let mut mention_statement = transaction
-        .prepare_cached(
-            "INSERT INTO corpus_entity_mentions (
-                portal_key, document_id, entity_id, segment_index, character_start,
-                character_end, confidence_basis_points, extractor_id, extractor_version,
-                validation_grade
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-        )
-        .map_err(|error| {
-            AppError::Storage(format!("Failed to prepare entity mentions: {error}"))
-        })?;
+    // Repeated mentions share one normalized entity. Keep the final display spelling,
+    // matching the old sequential upserts, without re-planning an upsert per mention.
+    let mut unique = BTreeMap::new();
     for entity in &document.entities {
-        let entity_id = stable_id(&format!(
-            "{}|{}",
-            entity.kind.as_str(),
-            entity.normalized_value
-        ));
+        unique.insert(
+            stable_id(&format!(
+                "{}|{}",
+                entity.kind.as_str(),
+                entity.normalized_value
+            )),
+            entity,
+        );
+    }
+    for (entity_id, entity) in &unique {
         entity_statement
             .execute(params![
                 entity_id,
@@ -2370,8 +2367,18 @@ fn insert_entities(
             .map_err(|error| {
                 AppError::Storage(format!("Failed to persist corpus entity: {error}"))
             })?;
-        mention_statement
-            .execute(params![
+    }
+    let mut mentions = transaction
+        .appender("corpus_entity_mentions")
+        .map_err(|error| AppError::Storage(format!("Failed to append entity mentions: {error}")))?;
+    for entity in &document.entities {
+        let entity_id = stable_id(&format!(
+            "{}|{}",
+            entity.kind.as_str(),
+            entity.normalized_value
+        ));
+        mentions
+            .append_row(params![
                 document.portal_key,
                 document.document_id,
                 entity_id,
@@ -2387,6 +2394,9 @@ fn insert_entities(
                 AppError::Storage(format!("Failed to persist entity mention: {error}"))
             })?;
     }
+    mentions
+        .flush()
+        .map_err(|error| AppError::Storage(format!("Failed to flush entity mentions: {error}")))?;
     Ok(())
 }
 
@@ -2394,23 +2404,21 @@ fn insert_relationships(
     transaction: &Transaction<'_>,
     document: &AnalyzedDocument,
 ) -> Result<(), AppError> {
-    let mut statement = transaction
-        .prepare_cached(
-            "INSERT INTO corpus_entity_relationships (
-                portal_key, document_id, left_entity_id, right_entity_id, relationship_kind,
-                basis, segment_index, character_start, character_end, confidence_basis_points
-             ) VALUES (?1, ?2, ?3, ?4, 'CO_OCCURS_IN_SEGMENT', ?5, ?6, ?7, ?8, ?9)",
-        )
+    // Append vectors inside the existing transaction. Preparing/executing an INSERT for
+    // every text segment makes a full City export spend minutes planning identical SQL.
+    let mut appender = transaction
+        .appender("corpus_entity_relationships")
         .map_err(|error| {
-            AppError::Storage(format!("Failed to prepare entity relationships: {error}"))
+            AppError::Storage(format!("Failed to append entity relationships: {error}"))
         })?;
     for relationship in &document.relationships {
-        statement
-            .execute(params![
+        appender
+            .append_row(params![
                 document.portal_key,
                 document.document_id,
                 relationship.left_entity_id,
                 relationship.right_entity_id,
+                "CO_OCCURS_IN_SEGMENT",
                 // Co-occurrence is a derivation this app performed and can re-derive. Calling it
                 // observed would make a claim the documents never made.
                 RelationshipBasis::Computed.as_str(),
@@ -2423,6 +2431,9 @@ fn insert_relationships(
                 AppError::Storage(format!("Failed to persist entity relationship: {error}"))
             })?;
     }
+    appender.flush().map_err(|error| {
+        AppError::Storage(format!("Failed to flush entity relationships: {error}"))
+    })?;
     Ok(())
 }
 

@@ -2,7 +2,7 @@
 //
 // An empty saved-source list is onboarding only after the source catalog loaded successfully.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 vi.hoisted(() => {
   const entries = new Map<string, string>();
@@ -47,11 +47,17 @@ describe('workspace initialization states', () => {
 
   afterEach(cleanup);
 
-  it('shows onboarding only after the source catalog reports a genuine empty list', () => {
+  it('shows source onboarding on request after the source catalog reports a genuine empty list', async () => {
     useAppStore.setState({ workspaceInitializationStatus: 'ready' });
     render(<OverviewDashboard />);
 
-    expect(screen.getByText('Start with the local record.')).toBeTruthy();
+    expect(screen.queryByText('Start with the local record.')).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Investigation workbench' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Open casework and research tools' })).toBeTruthy();
+    const drawer = screen.getByText('Browse sources and add records').closest('details')!;
+    drawer.open = true;
+    fireEvent(drawer, new Event('toggle'));
+    expect(await screen.findByText('Start with the local record.')).toBeTruthy();
     expect(screen.queryByText('Saved sources unavailable')).toBeNull();
   });
 

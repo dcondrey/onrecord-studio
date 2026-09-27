@@ -1,0 +1,176 @@
+{
+  "recorded_at_utc": "2026-09-27T00:47:05.158104+00:00",
+  "scope": "Local implementation of the twenty-item investigative product roadmap",
+  "gates": [
+    {
+      "name": "native_tests",
+      "command": "CARGO_HOME=/Users/davidcondrey/.local/share/cargo cargo +stable test --manifest-path src-tauri/Cargo.toml --lib",
+      "exit_code": 0,
+      "details": {
+        "passed": 434,
+        "failed": 0,
+        "ignored": 1
+      },
+      "local_log": "/tmp/onrecord-overhaul-native-final.log",
+      "log_sha256": "7d65662ea5233214bd178aad8281bfd1eb2fcf0f6b589e7aa3b9ccb3679d21b4"
+    },
+    {
+      "name": "frontend_tests",
+      "command": "npx vitest run",
+      "exit_code": 0,
+      "details": {
+        "passed": 178,
+        "files": 42
+      },
+      "local_log": "/tmp/onrecord-overhaul-ui-final.log",
+      "log_sha256": "7c1d7cfa0b6cbc37acac994d9f883776cb2242b24ae1bc2cd8492081563ae899"
+    },
+    {
+      "name": "production_build",
+      "command": "npm run build",
+      "exit_code": 0,
+      "details": {
+        "typecheck": "passed",
+        "ipc_commands": 79,
+        "telemetry_events": 18,
+        "verification_states": 6,
+        "advisory": "Vite entry chunk exceeds 500 kB"
+      },
+      "local_log": "/tmp/onrecord-overhaul-build-final.log",
+      "log_sha256": "1e6418a56f76ef543cfa3b38ae914ea18ea282784a2e9c26b39c61e0c6964d4c"
+    },
+    {
+      "name": "clippy",
+      "command": "CARGO_HOME=/Users/davidcondrey/.local/share/cargo cargo +stable clippy --manifest-path src-tauri/Cargo.toml --lib --all-targets",
+      "exit_code": 0,
+      "details": {
+        "warnings": 0
+      },
+      "local_log": "/tmp/onrecord-overhaul-clippy-final.log",
+      "log_sha256": "3e7f1ef790001b2f219235df6e1b6bab46157c895bc7964d6eaed010dcc514b5"
+    },
+    {
+      "name": "eslint",
+      "command": "npx eslint src --max-warnings 0",
+      "exit_code": 0,
+      "details": {
+        "warnings": 0
+      },
+      "local_log": "/tmp/onrecord-overhaul-eslint-final.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "format",
+      "command": "CARGO_HOME=/Users/davidcondrey/.local/share/cargo cargo +stable fmt --manifest-path src-tauri/Cargo.toml --check",
+      "exit_code": 0,
+      "details": {},
+      "local_log": "/tmp/onrecord-overhaul-fmt-final.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "mutations": [
+    {
+      "purpose": "Delayed report load and replay",
+      "result": "Expected regression failure with production guard removed; restored implementation passes integrated suite",
+      "failure_summary": "Tests  2 failed | 3 skipped (5)",
+      "local_log": "/tmp/onrecord-review-async-mutation.log",
+      "log_sha256": "9b1c3d175b6d6bbf388caa8de02f096f7ee7185754f8920137daac7ed0c89c9e"
+    },
+    {
+      "purpose": "Old report hidden before effects run",
+      "result": "Expected regression failure with production guard removed; restored implementation passes integrated suite",
+      "failure_summary": "Tests  1 failed | 4 skipped (5)",
+      "local_log": "/tmp/onrecord-review-render-mutation.log",
+      "log_sha256": "1ebf892ce029021b7d21838b5ba228acb50bd11119b208cac19860e93f78eace"
+    },
+    {
+      "purpose": "Retained source identity and latest-view dependencies",
+      "result": "Expected regression failure with production guard removed; restored implementation passes integrated suite",
+      "failure_summary": "test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 432 filtered out; finished in 0.59s",
+      "local_log": "/tmp/onrecord-review-native-mutation.log",
+      "log_sha256": "f8d7d9e57728add55983728c819f08580d4c6385c8d5c046ce9839ce4adec8da"
+    },
+    {
+      "purpose": "Financial scope identity",
+      "result": "Expected regression failure with production guard removed; restored implementation passes integrated suite",
+      "failure_summary": "Tests  1 failed | 2 skipped (3)",
+      "local_log": "/tmp/onrecord-financial-scope-mutation.log",
+      "log_sha256": "5a7bc84d3e0b230be4fb65f2c279e5e7e5be8731ef7d368964d5aa60f61f4c3f"
+    },
+    {
+      "purpose": "Scenario input identity",
+      "result": "Expected regression failure with production guard removed; restored implementation passes integrated suite",
+      "failure_summary": "Tests  1 failed | 2 skipped (3)",
+      "local_log": "/tmp/onrecord-financial-scenario-mutation.log",
+      "log_sha256": "3bab65974001479bc7958483f8f1297cf0515d9174ab58941e229ce0a2298830"
+    },
+    {
+      "purpose": "Analytical snapshot source hash",
+      "result": "Expected regression failure with production guard removed; restored implementation passes integrated suite",
+      "failure_summary": "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 433 filtered out; finished in 0.03s",
+      "local_log": "/tmp/onrecord-financial-native-mutation.log",
+      "log_sha256": "e4bfe7df6c8f78807e4a8ffecb3a238ded370bed1a2cd8f2b72d75ba6ce6a7a3"
+    },
+    {
+      "purpose": "Case save, import preview and packet file-read identity",
+      "result": "Expected regression failure with production guard removed; restored implementation passes integrated suite",
+      "failure_summary": "Tests  3 failed | 4 skipped (7)",
+      "local_log": "/tmp/onrecord-casework-race-mutation.log",
+      "log_sha256": "83ccaed81ed3ce67417dd3196b6673a141428cab1072d0e2c43430a6da797dad"
+    },
+    {
+      "purpose": "Public-source identity during historical-case save",
+      "result": "Expected regression failure with production guard removed; restored implementation passes integrated suite",
+      "failure_summary": "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 434 filtered out; finished in 2.08s",
+      "local_log": "/tmp/onrecord-casework-native-mutation.log",
+      "log_sha256": "f01c2a1cc6806ef3d07e9b26fb1f544d5b1f76aa840c45bd9d6cc997db11812e"
+    },
+    {
+      "purpose": "Case-scoped workspace and receipt identity",
+      "result": "Expected regression failure with production guard removed; restored implementation passes integrated suite",
+      "failure_summary": "Tests  2 failed | 2 passed (4)",
+      "local_log": "/tmp/onrecord-monitoring-identity-mutation.log",
+      "log_sha256": "531c69aa715b96e70d641de8b2ce0434db04fadefe854ef9565b40d867089243"
+    }
+  ],
+  "source_sha256": {
+    "src/components/dashboard/CaseworkPanel.tsx": "6cf801f813a3813510a8a2b8718c635009baf5832cb22845b6ad14fd556a020d",
+    "src/components/dashboard/EvidenceReviewPanel.tsx": "2630936100bd64c192e788e36ef39660e9572eda4a4aa99632f4a2e480e5df4d",
+    "src/components/dashboard/FinancialInvestigationsPanel.tsx": "d0ef42a4d719f82cd7c1bec18dff5cf47987d65ab59bc706c6f6fe284f3fa476",
+    "src/components/dashboard/InvestigationEvaluationPanel.tsx": "51ca21c63b8d268ea176a1e4ac9ccb9f5524bd7df5c96147e5fa0c3d8a89cda2",
+    "src/components/dashboard/MonitoringPanel.tsx": "c48e05f03689c37cd84e226830c9c4234866129712dd3121ffcb03637dfb1c01",
+    "src/components/dashboard/ProfessionalWorkbench.tsx": "ccf6f2f67f7a90b6ea6d0cd5a81b8e3271c352622d0b2c55649b95cf9c5643fb",
+    "src/components/dashboard/ResearchWorkspace.tsx": "fbb129b762fb44011b004cec8d8351bcd7d1124fdcb66968741898a746527925",
+    "src/generated/nativeCommands.ts": "b2704c3c6aff23e08c68667dac27113b5d4f8172f4334986e6b9779f367043cf",
+    "src-tauri/src/analysis/financial.rs": "51ea5370b4eb7bf4362665304c9d9892ff4563b9c35adf0c6166596104f87ab2",
+    "src-tauri/src/analysis/monitoring.rs": "7d9e2640c67ffabaedc70d732e62b8f73397b4930d871f0aaeb5a6468060151f",
+    "src-tauri/src/analysis/review.rs": "68a7b53ab950c7837cba0c0c934b7b2213be4a2073e2d6c797d56183f3e92874",
+    "src-tauri/src/commands/casework.rs": "0d520844cd9950a988302e8abde5c8423b45c738617bfa051755750fff94b247",
+    "src-tauri/src/commands/financial.rs": "e80fa69918c6c86d8f1446428f348651bdea7aed46025cc2c392c1c48d512a2e",
+    "src-tauri/src/commands/monitoring.rs": "bf28103722b1048b02338d0754be2c4b08d3a5f16a66790bd09c568021c2e018",
+    "src-tauri/src/commands/review.rs": "aa1526e9f76b69b5b0cc50d4adc10eed6322db89efb3144fb194d8ff69eb5964",
+    "src-tauri/src/ingestion/client.rs": "eed96a07ac464147e4097ad336f2e37ccaecb96abd734ad841b52b1f2df27694",
+    "src-tauri/src/ingestion/queue.rs": "f0f561bda19ebf10373f7f5c79eac49fb5722a79d1969a2708f3ed15548954cd",
+    "src-tauri/src/lib.rs": "9da6b3cd1caa6a1159e3a7d550da08629a27f3dc50f6d512dc82d01e4620c40f",
+    "src-tauri/src/research/evidence.rs": "f1babd3e83c00912059559b5f0358ab5c89bacb900e2c809c42998d20c869c38",
+    "src-tauri/src/setup.rs": "5a852fd6ad589f70c159e980da77b59d467421bbf8635ad04905b7d591b30d6b",
+    "src-tauri/src/storage/casework.rs": "ad2d7e31dd62a1734acc711ff99557219d32a08afe14d5ca842348cb5eca04d3",
+    "src-tauri/src/storage/financial.rs": "3a585790e9687a17ba30b994079d9ae35014368d9a14ae169a45db2021e99d7d",
+    "src-tauri/src/storage/maintenance.rs": "700059b86d6ec6073e9462631c468cd273721eabc11f4f3d8b392d5d8c87710e",
+    "src-tauri/src/storage/monitoring.rs": "ffa24e58a09c4e170b7926a39357ca2223327f82c100e58005c53404615af2ec",
+    "src-tauri/src/storage/research.rs": "e53c5045e143815cfb7bce6be363f81180579c7cfbe5a3a519c6ac7691cde1af",
+    "src-tauri/src/storage/review.rs": "3d9ca8909e87771c01891d030ba9eb66df6e9b7d39a97dddf2386c047047281d",
+    "src-tauri/src/storage/sqlite.rs": "f5996076d5ccf31cf0729f1df6120bfda67ae1914312fdd612b5e6d451661251",
+    "src-tauri/src/types/casework.rs": "95d2e5e76b060563efc9f97eff4dedaeac6c00f58498e242a755a9e56f5ebebe",
+    "src-tauri/src/types/financial.rs": "cb52669c309e8cd923c462b338a9d603eac95b87a67ca2c1d64eaf3622e7049a",
+    "src-tauri/src/types/monitoring.rs": "e79e4ac456f7ade964d91b4e97ec4f16a00a97acef5257e5f5c60264c4dcb1df",
+    "src-tauri/src/types/review.rs": "c7bb1ffdefffc66474fc65f12eb8e3c254fb542c91aec1b4d17067f768534ace"
+  },
+  "limitations": [
+    "One model-download test is intentionally ignored.",
+    "Existing live San Diego dossiers are replayed offline; no new paid model run is claimed by these gates.",
+    "Missing contract/payment/outcome ledgers use synthetic integration fixtures; acquisition gaps remain explicit.",
+    "Portable local collaboration; no hosted multiplayer or real human pilot outcomes.",
+    "No signed desktop release or installed application replacement."
+  ]
+}

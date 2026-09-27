@@ -1,0 +1,85 @@
+Deliberate guard removal: expected assertion failures (2026-09-27)
+Workspace guards were preserved or restored; these are negative controls, not accepted production failures.
+
+Source hash identity
+running 1 test
+test research::retrieval::tests::deeper_reads_use_signed_unicode_offsets_and_reject_changed_or_removed_sources ... FAILED
+
+failures:
+
+---- research::retrieval::tests::deeper_reads_use_signed_unicode_offsets_and_reject_changed_or_removed_sources stdout ----
+
+thread 'research::retrieval::tests::deeper_reads_use_signed_unicode_offsets_and_reject_changed_or_removed_sources' (30279046) panicked at src-tauri/src/research/retrieval.rs:185:9:
+assertion failed: db.research_read(&source, 4014).await.unwrap().is_none()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    research::retrieval::tests::deeper_reads_use_signed_unicode_offsets_and_reject_changed_or_removed_sources
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 444 filtered out; finished in 0.75s
+
+error: test failed, to rerun pass `--lib`
+
+
+Provider/model identity
+running 2 tests
+test research::model::tests::model_dispatch_rechecks_identity_after_async_preparation_before_evidence_send ... FAILED
+test research::model::tests::model_dispatch_discards_reply_when_destination_changes_while_in_flight ... FAILED
+
+failures:
+
+---- research::model::tests::model_dispatch_rechecks_identity_after_async_preparation_before_evidence_send stdout ----
+
+thread 'research::model::tests::model_dispatch_rechecks_identity_after_async_preparation_before_evidence_send' (30303379) panicked at src-tauri/src/research/model.rs:463:13:
+Changed provider/model must block the evidence-send closure, not merely reject its reply
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- research::model::tests::model_dispatch_discards_reply_when_destination_changes_while_in_flight stdout ----
+
+thread 'research::model::tests::model_dispatch_discards_reply_when_destination_changes_while_in_flight' (30303378) panicked at src-tauri/src/research/model.rs:533:13:
+An in-flight result must not be published under a newly selected provider/model
+
+
+failures:
+    research::model::tests::model_dispatch_discards_reply_when_destination_changes_while_in_flight
+    research::model::tests::model_dispatch_rechecks_identity_after_async_preparation_before_evidence_send
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 450 filtered out; finished in 0.10s
+
+error: test failed, to rerun pass `--lib`
+
+
+Discovery lifecycle
+running 1 test
+
+thread 'ingestion::queue::tests::automatic_discovery_preserves_resolved_source_lifecycle_and_recipe' (30306478) panicked at src-tauri/src/ingestion/queue.rs:6514:17:
+Automatic discovery must reject the resolved registered identity: Ok("c5a9f784-33a1-4f76-9006-d9e65710a155")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test ingestion::queue::tests::automatic_discovery_preserves_resolved_source_lifecycle_and_recipe ... FAILED
+
+failures:
+
+failures:
+    ingestion::queue::tests::automatic_discovery_preserves_resolved_source_lifecycle_and_recipe
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 451 filtered out; finished in 0.65s
+
+
+
+Concurrent pause
+running 1 test
+
+thread 'ingestion::queue::tests::automatic_discovery_rechecks_identity_after_a_concurrent_pause' (30306596) panicked at src-tauri/src/ingestion/queue.rs:6604:9:
+A discovery resolved before pause cannot reactivate its source
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test ingestion::queue::tests::automatic_discovery_rechecks_identity_after_a_concurrent_pause ... FAILED
+
+failures:
+
+failures:
+    ingestion::queue::tests::automatic_discovery_rechecks_identity_after_a_concurrent_pause
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 451 filtered out; finished in 0.64s
+
+

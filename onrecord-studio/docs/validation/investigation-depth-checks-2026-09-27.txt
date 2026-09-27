@@ -1,0 +1,73 @@
+Final gate output excerpts — September 27, 2026
+
+All listed commands exited successfully. Native commands used CARGO_HOME=/Users/davidcondrey/.local/share/cargo. Native test detail is abbreviated below; the final count is preserved.
+
+$ cargo +stable fmt --manifest-path src-tauri/Cargo.toml --check
+(no output)
+
+$ cargo +stable test --manifest-path src-tauri/Cargo.toml --lib
+
+test result: ok. 460 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 17.64s
+
+
+$ cargo +stable clippy --manifest-path src-tauri/Cargo.toml --lib --all-targets
+    Checking onrecord-studio-lib v1.0.0 (/Volumes/A/onrecord-studio/onrecord-studio/src-tauri)
+warning: consider using `sort_by_key`
+   --> src-tauri/src/research/agenda.rs:256:5
+    |
+256 |     relevant.sort_by(|a, b| b.0.cmp(&a.0));
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#unnecessary_sort_by
+    = note: `#[warn(clippy::unnecessary_sort_by)]` on by default
+help: try
+    |
+256 -     relevant.sort_by(|a, b| b.0.cmp(&a.0));
+256 +     relevant.sort_by_key(|b| std::cmp::Reverse(b.0));
+    |
+
+warning: `onrecord-studio-lib` (lib) generated 1 warning
+warning: `onrecord-studio-lib` (lib test) generated 1 warning (1 duplicate)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 59.38s
+
+$ npx tsc --noEmit
+(no output)
+
+$ npx eslint src --max-warnings 0
+(no output)
+
+$ npx vitest run
+
+ RUN  v4.1.11 /Volumes/A/onrecord-studio/onrecord-studio
+
+
+ Test Files  44 passed (44)
+      Tests  199 passed (199)
+   Start at  01:37:54
+   Duration  6.44s (transform 4.34s, setup 0ms, import 9.01s, tests 12.12s, environment 19.38s)
+
+
+$ npm run build
+
+> onrecord-studio@1.0.0 build
+> npm run check:ipc && tsc && vite build
+
+
+> onrecord-studio@1.0.0 check:ipc
+> node scripts/check-ipc-contract.mjs
+
+IPC contract verified: 79 commands are typed and centralized, 18 telemetry events and 6 verification states are generated from the native definitions.
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 154 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.45 kB │ gzip:   0.29 kB
+dist/assets/index-Ceegx1rc.css   80.38 kB │ gzip:  14.80 kB
+dist/assets/index-bjvmht4R.js   785.09 kB │ gzip: 220.72 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 1.01s

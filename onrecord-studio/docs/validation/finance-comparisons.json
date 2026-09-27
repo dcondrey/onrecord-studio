@@ -1,0 +1,141 @@
+[
+  {
+    "id": "sql:ea4e1830bf7ff3cd",
+    "label": "Fiscal-year and budget-cycle coverage needed to establish comparable spending periods",
+    "sourceUrl": null,
+    "portalKey": null,
+    "requestId": null,
+    "documentId": null,
+    "characterOffset": null,
+    "sourceSha256": "ea4e1830bf7ff3cd843f0edc67ca5177a790324f76e18659f9485923009d5fad",
+    "text": "{\"columns\":[\"record_type\",\"fiscal_year\",\"cycle\",\"source_rows\",\"null_amounts\"],\"rows\":[[\"budget\",2026,\"UNLABELED\",16023,0],[\"budget\",2025,\"adopted\",16622,0],[\"budget\",2025,\"proposed\",16641,0],[\"budget\",2024,\"adopted\",16091,0],[\"budget\",2024,\"proposed\",16034,0],[\"actuals\",2023,\"actual\",28071,0],[\"budget\",2023,\"adopted\",15159,0],[\"actuals\",2022,\"actual\",26106,0],[\"budget\",2022,\"adopted\",14564,0],[\"actuals\",2021,\"actual\",25588,0],[\"budget\",2021,\"adopted\",14381,0]]}",
+    "sql": "WITH b AS (SELECT CASE WHEN TRY_CAST(report_fy AS INTEGER)<100 THEN 2000+TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fiscal_year, COALESCE(NULLIF(lower(trim(budget_cycle)),''),'UNLABELED') AS cycle,amount FROM \"analysis_regional_data_6248b76b917ad88fb00a1800\" WHERE CAST(fund_number AS VARCHAR)='100000' AND CAST(account_number AS VARCHAR) LIKE '5%'), a AS (SELECT CASE WHEN TRY_CAST(report_fy AS INTEGER)<100 THEN 2000+TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fiscal_year,amount FROM \"analysis_regional_data_7ee003c264e5cfe2fe14254e\" WHERE CAST(fund_number AS VARCHAR)='100000' AND CAST(account_number AS VARCHAR) LIKE '5%') SELECT 'budget' AS record_type,fiscal_year,cycle,COUNT(*) AS source_rows,COUNT(*)-COUNT(amount) AS null_amounts FROM b WHERE fiscal_year >= 2021 GROUP BY 1,2,3 UNION ALL SELECT 'actuals',fiscal_year,'actual',COUNT(*),COUNT(*)-COUNT(amount) FROM a WHERE fiscal_year >= 2021 GROUP BY 1,2,3 ORDER BY fiscal_year DESC,record_type,cycle",
+    "snapshotProvenance": [
+      "analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e",
+      "analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+    ],
+    "sourceReferences": [
+      {
+        "url": "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv",
+        "snapshot": "regional-data-7ee003c264e5cfe2fe14254e",
+        "sha256": "53cfc7488c40c2d3b654c64ba8599bc11a4086fa5efe403371c38eff78dd2143"
+      },
+      {
+        "url": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+        "snapshot": "regional-data-6248b76b917ad88fb00a1800",
+        "sha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5"
+      }
+    ],
+    "limitations": "Read-only analytical query; 11 result rows; truncated: false. Assumptions to verify: City General Fund 100000; expense accounts beginning 5; adopted budget only. Fiscal-year codes under 100 normalized by adding 2000. Fiscal years have ended, but ledger close/finality is not established. Budget/actuals aggregate within each key before joining; missing counterparts and null amounts are not zero. Department names may change; inspect stable funds-center/account comparison. Department spending is not a program, abatement-event or restroom cost. Variance is against original adopted appropriation, not revised legal authority. Do not add City and SDHC transfers or infer outcomes/waste from these comparisons.. Snapshot provenance: analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e; analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+  },
+  {
+    "id": "sql:6fd0e350c7e1593b",
+    "label": "Largest account differences between adopted budget and actual spending, with unmatched counterparts",
+    "sourceUrl": null,
+    "portalKey": null,
+    "requestId": null,
+    "documentId": null,
+    "characterOffset": null,
+    "sourceSha256": "6fd0e350c7e1593b0b63f1c3315ea12db05f78adf86ee88123d5281e02a58dac",
+    "text": "{\"columns\":[\"fiscal_year\",\"funds_center_number\",\"account_number\",\"budget_departments\",\"actual_departments\",\"account\",\"adopted_budget\",\"actual_spending\",\"budget_rows\",\"actual_rows\",\"budget_nulls\",\"actual_nulls\",\"comparison_status\",\"actual_minus_adopted\"],\"rows\":[[2023,\"1716000011\",\"512059\",\"Homelessness Strategies & Solutions\",\"Homelessness Strategies & Solutions\",\"Miscellaneous Professional/Technical Ser\",\"11332872\",\"769568\",1,1,0,0,\"Matched\",\"-10563304\"],[2023,\"1716000011\",\"512066\",\"Homelessness Strategies & Solutions\",\"Homelessness Strategies & Solutions\",\"Reimbursement Agreements\",\"3158106\",\"11925135\",1,1,0,0,\"Matched\",\"8767029\"],[2023,\"1914180011\",\"500128\",\"Police\",null,\"Overtime Budgeted\",\"7924735\",null,1,null,0,null,\"Missing actuals\",null],[2023,\"1914121111\",\"500128\",\"Police\",null,\"Overtime Budgeted\",\"7301363\",null,1,null,0,null,\"Missing actuals\",null],[2023,\"1714131301\",\"512172\",\"Parks & Recreation\",\"Parks & Recreation\",\"Contractual Services - Other Agencies\",\"14874000\",\"7925455\",1,1,0,0,\"Matched\",\"-6948545\"],[2023,\"1914121117\",\"500124\",null,\"Police\",\"Overtime - Premium\",null,\"6402389\",null,1,null,0,\"Missing budget baseline\",null],[2023,\"1714131301\",\"512059\",\"Parks & Recreation\",\"Parks & Recreation\",\"Miscellaneous Professional/Technical Ser\",\"1069987\",\"6880820\",1,1,0,0,\"Matched\",\"5810833\"],[2023,\"1914121111\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"18709182\",\"13095797\",1,1,0,0,\"Matched\",\"-5613385\"],[2023,\"1914121117\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"15430565\",\"10080402\",1,1,0,0,\"Matched\",\"-5350163\"],[2023,\"1714121301\",\"514104\",\"Parks & Recreation\",\"Parks & Recreation\",\"Water Serv-Incl Hydr Rent\",\"5936936\",\"712833\",1,1,0,0,\"Matched\",\"-5224103\"],[2023,\"1914121111\",\"500189\",\"Police\",null,\"Budgeted Personnel Expenditure Savings\",\"-5034622\",null,1,null,0,null,\"Missing actuals\",null],[2023,\"1914121120\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"13633356\",\"8728574\",1,1,0,0,\"Matched\",\"-4904782\"],[2023,\"1914121111\",\"500124\",null,\"Police\",\"Overtime - Premium\",null,\"4605048\",null,1,null,0,\"Missing budget baseline\",null],[2023,\"1914131511\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"11548934\",\"7056098\",1,1,0,0,\"Matched\",\"-4492836\"],[2023,\"1914161113\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"9736454\",\"5358965\",1,1,0,0,\"Matched\",\"-4377489\"],[2023,\"1914121113\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"15245765\",\"11108670\",1,1,0,0,\"Matched\",\"-4137095\"],[2023,\"1914121118\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"12664157\",\"8661288\",1,1,0,0,\"Matched\",\"-4002869\"],[2023,\"1716000011\",\"512172\",\"Homelessness Strategies & Solutions\",null,\"Contractual Services - Other Agencies\",\"3450000\",null,1,null,0,null,\"Missing actuals\",null],[2023,\"1914121112\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"10322831\",\"6923829\",1,1,0,0,\"Matched\",\"-3399002\"],[2023,\"1714121101\",\"500011\",\"Parks & Recreation\",\"Parks & Recreation\",\"Salaried Wages\",\"4126600\",\"767052\",1,1,0,0,\"Matched\",\"-3359548\"],[2023,\"1914121119\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"9029406\",\"5761419\",1,1,0,0,\"Matched\",\"-3267987\"],[2023,\"1714121301\",\"500011\",\"Parks & Recreation\",\"Parks & Recreation\",\"Salaried Wages\",\"4511236\",\"1450419\",1,1,0,0,\"Matched\",\"-3060817\"],[2023,\"1914000001\",\"500136\",\"Police\",null,\"Holiday Credit on Day Off\",\"3011628\",null,1,null,0,null,\"Missing actuals\",null],[2023,\"1914121115\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"8463523\",\"5517426\",1,1,0,0,\"Matched\",\"-2946097\"]]}",
+    "sql": "WITH b0 AS (SELECT CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fy, CAST(funds_center_number AS VARCHAR) AS center, CAST(account_number AS VARCHAR) AS account_number, dept_name, account, amount FROM \"analysis_regional_data_6248b76b917ad88fb00a1800\" WHERE CAST(fund_number AS VARCHAR) = '100000' AND CAST(account_number AS VARCHAR) LIKE '5%' AND lower(trim(budget_cycle)) = 'adopted'), a0 AS (SELECT CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fy, CAST(funds_center_number AS VARCHAR) AS center, CAST(account_number AS VARCHAR) AS account_number, dept_name, account, amount FROM \"analysis_regional_data_7ee003c264e5cfe2fe14254e\" WHERE CAST(fund_number AS VARCHAR) = '100000' AND CAST(account_number AS VARCHAR) LIKE '5%' ), period AS (SELECT MAX(b0.fy) AS fy FROM (SELECT DISTINCT fy FROM b0) b0 JOIN (SELECT DISTINCT fy FROM a0) a0 ON b0.fy=a0.fy WHERE b0.fy <= 2026), b AS (SELECT fy, center, account_number, STRING_AGG(DISTINCT dept_name, ' | ' ORDER BY dept_name) AS departments, STRING_AGG(DISTINCT account, ' | ' ORDER BY account) AS account_labels, SUM(amount) AS amount, COUNT(*) AS source_rows, COUNT(*) - COUNT(amount) AS missing_amounts FROM b0 WHERE fy = (SELECT fy FROM period) GROUP BY 1,2,3), a AS (SELECT fy, center, account_number, STRING_AGG(DISTINCT dept_name, ' | ' ORDER BY dept_name) AS departments, STRING_AGG(DISTINCT account, ' | ' ORDER BY account) AS account_labels, SUM(amount) AS amount, COUNT(*) AS source_rows, COUNT(*) - COUNT(amount) AS missing_amounts FROM a0 WHERE fy = (SELECT fy FROM period) GROUP BY 1,2,3) SELECT COALESCE(b.fy,a.fy) AS fiscal_year, COALESCE(b.center,a.center) AS funds_center_number, COALESCE(b.account_number,a.account_number) AS account_number, b.departments AS budget_departments, a.departments AS actual_departments, COALESCE(a.account_labels,b.account_labels) AS account, b.amount AS adopted_budget, a.amount AS actual_spending, b.source_rows AS budget_rows, a.source_rows AS actual_rows, b.missing_amounts AS budget_nulls, a.missing_amounts AS actual_nulls, CASE WHEN b.source_rows IS NULL THEN 'Missing budget baseline' WHEN a.source_rows IS NULL THEN 'Missing actuals' WHEN b.missing_amounts > 0 OR a.missing_amounts > 0 THEN 'Incomplete amounts' ELSE 'Matched' END AS comparison_status, CASE WHEN b.missing_amounts=0 AND a.missing_amounts=0 THEN a.amount-b.amount END AS actual_minus_adopted FROM b FULL OUTER JOIN a ON b.fy=a.fy AND b.center=a.center AND b.account_number=a.account_number WHERE (contains(lower(COALESCE(a.departments,'') || ' ' || COALESCE(b.departments,'')), 'police') OR contains(lower(COALESCE(a.departments,'') || ' ' || COALESCE(b.departments,'')), 'homeless') OR contains(lower(COALESCE(a.departments,'') || ' ' || COALESCE(b.departments,'')), 'park') OR contains(lower(COALESCE(a.departments,'') || ' ' || COALESCE(b.departments,'')), 'librar')) ORDER BY ABS(CASE WHEN b.source_rows IS NULL THEN a.amount WHEN a.source_rows IS NULL THEN b.amount ELSE a.amount-b.amount END) DESC NULLS LAST LIMIT 24",
+    "snapshotProvenance": [
+      "analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e",
+      "analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+    ],
+    "sourceReferences": [
+      {
+        "url": "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv",
+        "snapshot": "regional-data-7ee003c264e5cfe2fe14254e",
+        "sha256": "53cfc7488c40c2d3b654c64ba8599bc11a4086fa5efe403371c38eff78dd2143"
+      },
+      {
+        "url": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+        "snapshot": "regional-data-6248b76b917ad88fb00a1800",
+        "sha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5"
+      }
+    ],
+    "limitations": "Read-only analytical query; 24 result rows; truncated: false. Assumptions to verify: City General Fund 100000; expense accounts beginning 5; adopted budget only. Fiscal-year codes under 100 normalized by adding 2000. Fiscal years have ended, but ledger close/finality is not established. Budget/actuals aggregate within each key before joining; missing counterparts and null amounts are not zero. Department names may change; inspect stable funds-center/account comparison. Department spending is not a program, abatement-event or restroom cost. Variance is against original adopted appropriation, not revised legal authority. Do not add City and SDHC transfers or infer outcomes/waste from these comparisons.. Snapshot provenance: analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e; analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+  },
+  {
+    "id": "sql:e6231241d960d77f",
+    "label": "Three-year General Fund spending and allocation history for relevant departments",
+    "sourceUrl": null,
+    "portalKey": null,
+    "requestId": null,
+    "documentId": null,
+    "characterOffset": null,
+    "sourceSha256": "e6231241d960d77fee7b6ec8fcf99276adc5793015657e7f9ea801af463123c2",
+    "text": "{\"columns\":[\"fiscal_year\",\"department\",\"adopted_budget\",\"actual_spending\",\"actual_minus_adopted\"],\"rows\":[[2023,\"Commission on Police Practices\",\"2550352\",\"791792\",\"-1758560\"],[2022,\"Commission on Police Practices\",\"1327134\",\"491390\",\"-835744\"],[2023,\"Homelessness Strategies & Solutions\",\"25157607\",\"22920122\",\"-2237485\"],[2022,\"Homelessness Strategies & Solutions\",\"18071824\",\"9815698\",\"-8256126\"],[2021,\"Homelessness Strategies & Solutions\",\"49135899\",\"42779044\",\"-6356855\"],[2023,\"Library\",\"66823341\",\"67586967\",\"763626\"],[2022,\"Library\",\"60741326\",\"61226563\",\"485237\"],[2021,\"Library\",\"59665414\",\"54676088\",\"-4989326\"],[2023,\"Parks & Recreation\",\"161934929\",\"157885927\",\"-4049002\"],[2022,\"Parks & Recreation\",\"133859293\",\"128755327\",\"-5103966\"],[2021,\"Parks & Recreation\",\"121960039\",\"116749648\",\"-5210391\"],[2023,\"Police\",\"584706166\",\"588906166\",\"4200000\"],[2022,\"Police\",\"593292386\",\"604197963\",\"10905577\"],[2021,\"Police\",\"568243558\",\"558797942\",\"-9445616\"]]}",
+    "sql": "WITH b0 AS (SELECT CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fy, CAST(funds_center_number AS VARCHAR) AS center, CAST(account_number AS VARCHAR) AS account_number, dept_name, account, amount FROM \"analysis_regional_data_6248b76b917ad88fb00a1800\" WHERE CAST(fund_number AS VARCHAR) = '100000' AND CAST(account_number AS VARCHAR) LIKE '5%' AND lower(trim(budget_cycle)) = 'adopted'), a0 AS (SELECT CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fy, CAST(funds_center_number AS VARCHAR) AS center, CAST(account_number AS VARCHAR) AS account_number, dept_name, account, amount FROM \"analysis_regional_data_7ee003c264e5cfe2fe14254e\" WHERE CAST(fund_number AS VARCHAR) = '100000' AND CAST(account_number AS VARCHAR) LIKE '5%' ), period AS (SELECT MAX(b0.fy) AS fy FROM (SELECT DISTINCT fy FROM b0) b0 JOIN (SELECT DISTINCT fy FROM a0) a0 ON b0.fy=a0.fy WHERE b0.fy <= 2026), b AS (SELECT fy,dept_name,CASE WHEN COUNT(*)=COUNT(amount) THEN SUM(amount) END AS adopted_budget FROM b0 WHERE (contains(lower(dept_name), 'police') OR contains(lower(dept_name), 'homeless') OR contains(lower(dept_name), 'park') OR contains(lower(dept_name), 'librar')) AND fy BETWEEN (SELECT fy-2 FROM period) AND (SELECT fy FROM period) GROUP BY 1,2), a AS (SELECT fy,dept_name,CASE WHEN COUNT(*)=COUNT(amount) THEN SUM(amount) END AS actual_spending FROM a0 WHERE (contains(lower(dept_name), 'police') OR contains(lower(dept_name), 'homeless') OR contains(lower(dept_name), 'park') OR contains(lower(dept_name), 'librar')) AND fy BETWEEN (SELECT fy-2 FROM period) AND (SELECT fy FROM period) GROUP BY 1,2) SELECT COALESCE(b.fy,a.fy) AS fiscal_year,COALESCE(b.dept_name,a.dept_name) AS department,b.adopted_budget,a.actual_spending,a.actual_spending-b.adopted_budget AS actual_minus_adopted FROM b FULL OUTER JOIN a ON b.fy=a.fy AND b.dept_name=a.dept_name ORDER BY department,fiscal_year DESC LIMIT 36",
+    "snapshotProvenance": [
+      "analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e",
+      "analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+    ],
+    "sourceReferences": [
+      {
+        "url": "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv",
+        "snapshot": "regional-data-7ee003c264e5cfe2fe14254e",
+        "sha256": "53cfc7488c40c2d3b654c64ba8599bc11a4086fa5efe403371c38eff78dd2143"
+      },
+      {
+        "url": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+        "snapshot": "regional-data-6248b76b917ad88fb00a1800",
+        "sha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5"
+      }
+    ],
+    "limitations": "Read-only analytical query; 14 result rows; truncated: false. Assumptions to verify: City General Fund 100000; expense accounts beginning 5; adopted budget only. Fiscal-year codes under 100 normalized by adding 2000. Fiscal years have ended, but ledger close/finality is not established. Budget/actuals aggregate within each key before joining; missing counterparts and null amounts are not zero. Department names may change; inspect stable funds-center/account comparison. Department spending is not a program, abatement-event or restroom cost. Variance is against original adopted appropriation, not revised legal authority. Do not add City and SDHC transfers or infer outcomes/waste from these comparisons.. Snapshot provenance: analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e; analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+  },
+  {
+    "id": "sql:6025e01d78486501",
+    "label": "Latest explicitly adopted General Fund allocation changes and service tradeoffs",
+    "sourceUrl": null,
+    "portalKey": null,
+    "requestId": null,
+    "documentId": null,
+    "characterOffset": null,
+    "sourceSha256": "6025e01d7848650100b4fea589ea0f709edad11fc7648b4d3c968d43f5d52e5a",
+    "text": "{\"columns\":[\"fiscal_year\",\"department\",\"prior_adopted\",\"current_adopted\",\"allocation_change\"],\"rows\":[[2025,\"Police\",\"622908762\",\"673002146\",\"50093384\"],[2025,\"Homelessness Strategies & Solutions\",\"44007454\",\"53916571\",\"9909117\"],[2025,\"Parks & Recreation\",\"178289156\",\"184235182\",\"5946026\"],[2025,\"Library\",\"73160862\",\"77069362\",\"3908500\"],[2025,\"Commission on Police Practices\",\"2241817\",\"2145832\",\"-95985\"]]}",
+    "sql": "WITH b0 AS (SELECT CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fy, CAST(funds_center_number AS VARCHAR) AS center, CAST(account_number AS VARCHAR) AS account_number, dept_name, account, amount FROM \"analysis_regional_data_6248b76b917ad88fb00a1800\" WHERE CAST(fund_number AS VARCHAR) = '100000' AND CAST(account_number AS VARCHAR) LIKE '5%' AND lower(trim(budget_cycle)) = 'adopted'), period AS (SELECT MAX(fy) AS fy FROM b0 WHERE fy <= 2027), totals AS (SELECT fy,dept_name,CASE WHEN COUNT(*)=COUNT(amount) THEN SUM(amount) END AS adopted FROM b0 WHERE (contains(lower(dept_name), 'police') OR contains(lower(dept_name), 'homeless') OR contains(lower(dept_name), 'park') OR contains(lower(dept_name), 'librar')) GROUP BY 1,2), current_year AS (SELECT * FROM totals WHERE fy=(SELECT fy FROM period)), prior_year AS (SELECT * FROM totals WHERE fy=(SELECT fy-1 FROM period)) SELECT (SELECT fy FROM period) AS fiscal_year,COALESCE(c.dept_name,p.dept_name) AS department,p.adopted AS prior_adopted,c.adopted AS current_adopted,c.adopted-p.adopted AS allocation_change FROM current_year c FULL OUTER JOIN prior_year p ON c.dept_name=p.dept_name ORDER BY ABS(allocation_change) DESC NULLS LAST LIMIT 24",
+    "snapshotProvenance": [
+      "analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+    ],
+    "sourceReferences": [
+      {
+        "url": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+        "snapshot": "regional-data-6248b76b917ad88fb00a1800",
+        "sha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5"
+      }
+    ],
+    "limitations": "Read-only analytical query; 5 result rows; truncated: false. Assumptions to verify: City General Fund 100000; expense accounts beginning 5; adopted budget only. Fiscal-year codes under 100 normalized by adding 2000. Fiscal years have ended, but ledger close/finality is not established. Budget/actuals aggregate within each key before joining; missing counterparts and null amounts are not zero. Department names may change; inspect stable funds-center/account comparison. Department spending is not a program, abatement-event or restroom cost. Variance is against original adopted appropriation, not revised legal authority. Do not add City and SDHC transfers or infer outcomes/waste from these comparisons.. Snapshot provenance: analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+  },
+  {
+    "id": "sql:866037066b165164",
+    "label": "Police overtime: adopted allocation versus actual spending in ended fiscal years",
+    "sourceUrl": null,
+    "portalKey": null,
+    "requestId": null,
+    "documentId": null,
+    "characterOffset": null,
+    "sourceSha256": "866037066b1651649586429853e12d0ef7bae9a26edf9f3ad4ea75d4e8d2f622",
+    "text": "{\"columns\":[\"fiscal_year\",\"adopted_overtime\",\"actual_overtime\",\"overtime_variance\"],\"rows\":[[2023,\"40162474\",\"50818708\",\"10656234\"],[2022,\"30678213\",\"40906497\",\"10228284\"],[2021,\"33715021\",\"32899783\",\"-815238\"]]}",
+    "sql": "WITH b0 AS (SELECT CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fy, CAST(funds_center_number AS VARCHAR) AS center, CAST(account_number AS VARCHAR) AS account_number, dept_name, account, amount FROM \"analysis_regional_data_6248b76b917ad88fb00a1800\" WHERE CAST(fund_number AS VARCHAR) = '100000' AND CAST(account_number AS VARCHAR) LIKE '5%' AND lower(trim(budget_cycle)) = 'adopted'), a0 AS (SELECT CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fy, CAST(funds_center_number AS VARCHAR) AS center, CAST(account_number AS VARCHAR) AS account_number, dept_name, account, amount FROM \"analysis_regional_data_7ee003c264e5cfe2fe14254e\" WHERE CAST(fund_number AS VARCHAR) = '100000' AND CAST(account_number AS VARCHAR) LIKE '5%' ), period AS (SELECT MAX(b0.fy) AS fy FROM (SELECT DISTINCT fy FROM b0) b0 JOIN (SELECT DISTINCT fy FROM a0) a0 ON b0.fy=a0.fy WHERE b0.fy <= 2026), b AS (SELECT fy,CASE WHEN COUNT(*)=COUNT(amount) THEN SUM(amount) END AS adopted FROM b0 WHERE lower(trim(dept_name))='police' AND contains(lower(account),'overtime') GROUP BY fy), a AS (SELECT fy,CASE WHEN COUNT(*)=COUNT(amount) THEN SUM(amount) END AS actual FROM a0 WHERE lower(trim(dept_name))='police' AND contains(lower(account),'overtime') GROUP BY fy) SELECT COALESCE(b.fy,a.fy) AS fiscal_year,b.adopted AS adopted_overtime,a.actual AS actual_overtime,a.actual-b.adopted AS overtime_variance FROM b FULL OUTER JOIN a ON a.fy=b.fy WHERE COALESCE(b.fy,a.fy) BETWEEN (SELECT fy-2 FROM period) AND (SELECT fy FROM period) ORDER BY fiscal_year DESC",
+    "snapshotProvenance": [
+      "analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e",
+      "analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+    ],
+    "sourceReferences": [
+      {
+        "url": "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv",
+        "snapshot": "regional-data-7ee003c264e5cfe2fe14254e",
+        "sha256": "53cfc7488c40c2d3b654c64ba8599bc11a4086fa5efe403371c38eff78dd2143"
+      },
+      {
+        "url": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+        "snapshot": "regional-data-6248b76b917ad88fb00a1800",
+        "sha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5"
+      }
+    ],
+    "limitations": "Read-only analytical query; 3 result rows; truncated: false. Assumptions to verify: City General Fund 100000; expense accounts beginning 5; adopted budget only. Fiscal-year codes under 100 normalized by adding 2000. Fiscal years have ended, but ledger close/finality is not established. Budget/actuals aggregate within each key before joining; missing counterparts and null amounts are not zero. Department names may change; inspect stable funds-center/account comparison. Department spending is not a program, abatement-event or restroom cost. Variance is against original adopted appropriation, not revised legal authority. Do not add City and SDHC transfers or infer outcomes/waste from these comparisons.. Snapshot provenance: analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e; analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+  }
+]

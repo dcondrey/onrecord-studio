@@ -36,7 +36,7 @@ const MAXIMUM_COORDINATE: f64 = 1_000_000_000.0;
 const MINIMUM_RECTANGLE_DIMENSION: f64 = 2.0;
 const MINIMUM_TEXT_OVERLAP_RATIO: f64 = 0.5;
 const MINIMUM_REDACTION_FILL_ALPHA: f64 = 0.8;
-const REDACTION_ANALYSIS_VERSION: &str = "pdf-redaction-geometry-v2";
+const REDACTION_ANALYSIS_VERSION: &str = "pdf-redaction-geometry-v3";
 
 #[derive(Clone, Copy, Debug)]
 struct Matrix {
@@ -299,6 +299,7 @@ struct GeometryBudget {
 }
 
 struct GeometryTraversal<'a> {
+    inherited_encoding: Option<&'a Encoding<'a>>,
     active_forms: &'a mut HashSet<ObjectId>,
     budget: &'a mut GeometryBudget,
     geometry: &'a mut PageGeometry,
@@ -925,6 +926,7 @@ fn analyze_page_geometry(
         TextState::default(),
         0,
         GeometryTraversal {
+            inherited_encoding: None,
             active_forms: &mut active_forms,
             budget: &mut budget,
             geometry: &mut geometry,
@@ -946,10 +948,15 @@ fn analyze_geometry_operations(
     traversal: GeometryTraversal<'_>,
 ) -> Result<(), AppError> {
     let GeometryTraversal {
+        inherited_encoding,
         active_forms,
         budget,
         geometry,
     } = traversal;
+    // Positioned fragments must use the same PDF font mapping as page extraction.
+    // Treating encoded glyph bytes as UTF-8 produced gibberish in real CPP packets.
+    let encodings = resource_font_encodings(document, resources);
+    let mut current_encoding = inherited_encoding;
     let mut graphics_stack = Vec::new();
     let mut pending_rectangles = Vec::new();
     let mut pending_polygon = Vec::new();
@@ -974,10 +981,13 @@ fn analyze_geometry_operations(
                         "PDF graphics-state depth exceeds {MAXIMUM_GRAPHICS_STATE_DEPTH}"
                     )));
                 }
-                graphics_stack.push((graphics, text));
+                graphics_stack.push((graphics, text, current_encoding));
             }
             "Q" => {
-                if let Some((restored_graphics, mut restored_text)) = graphics_stack.pop() {
+                if let Some((restored_graphics, mut restored_text, restored_encoding)) =
+                    graphics_stack.pop()
+                {
+                    current_encoding = restored_encoding;
                     restored_text.matrix = text.matrix;
                     restored_text.line_matrix = text.line_matrix;
                     graphics = restored_graphics;
@@ -1159,6 +1169,14 @@ fn analyze_geometry_operations(
             }
             "ET" => inside_text = false,
             "Tf" if inside_text => {
+                current_encoding = operation
+                    .operands
+                    .first()
+                    .and_then(|value| value.as_name().ok())
+                    .and_then(|name| encodings.get(name));
+                if current_encoding.is_none() {
+                    geometry.malformed_operations += 1;
+                }
                 if let Some(font_size) =
                     operand_number(&operation.operands, 1).filter(|value| value.abs() <= 10_000.0)
                 {
@@ -1251,7 +1269,14 @@ fn analyze_geometry_operations(
             }
             "Tj" if inside_text => {
                 if let Some(value) = operation.operands.first() {
-                    show_text_object(value, &mut text, graphics.ctm, operation_index, geometry)?;
+                    show_text_object(
+                        value,
+                        current_encoding,
+                        &mut text,
+                        graphics.ctm,
+                        operation_index,
+                        geometry,
+                    )?;
                 } else {
                     geometry.malformed_operations += 1;
                 }
@@ -1262,7 +1287,14 @@ fn analyze_geometry_operations(
                     .first()
                     .and_then(|value| value.as_array().ok())
                 {
-                    show_text_array(array, &mut text, graphics.ctm, operation_index, geometry)?;
+                    show_text_array(
+                        array,
+                        current_encoding,
+                        &mut text,
+                        graphics.ctm,
+                        operation_index,
+                        geometry,
+                    )?;
                 } else {
                     geometry.malformed_operations += 1;
                 }
@@ -1270,7 +1302,14 @@ fn analyze_geometry_operations(
             "'" if inside_text => {
                 move_to_next_text_line(&mut text);
                 if let Some(value) = operation.operands.first() {
-                    show_text_object(value, &mut text, graphics.ctm, operation_index, geometry)?;
+                    show_text_object(
+                        value,
+                        current_encoding,
+                        &mut text,
+                        graphics.ctm,
+                        operation_index,
+                        geometry,
+                    )?;
                 } else {
                     geometry.malformed_operations += 1;
                 }
@@ -1286,6 +1325,7 @@ fn analyze_geometry_operations(
                     move_to_next_text_line(&mut text);
                     show_text_object(
                         &operation.operands[2],
+                        current_encoding,
                         &mut text,
                         graphics.ctm,
                         operation_index,
@@ -1312,6 +1352,7 @@ fn analyze_geometry_operations(
                     text,
                     form_depth,
                     GeometryTraversal {
+                        inherited_encoding: current_encoding,
                         active_forms: &mut *active_forms,
                         budget: &mut *budget,
                         geometry: &mut *geometry,
@@ -1335,6 +1376,7 @@ fn analyze_form_xobject(
     traversal: GeometryTraversal<'_>,
 ) -> Result<(), AppError> {
     let GeometryTraversal {
+        inherited_encoding,
         active_forms,
         budget,
         geometry,
@@ -1466,6 +1508,7 @@ fn analyze_form_xobject(
         child_text,
         form_depth + 1,
         GeometryTraversal {
+            inherited_encoding,
             active_forms: &mut *active_forms,
             budget: &mut *budget,
             geometry: &mut *geometry,
@@ -1533,6 +1576,47 @@ fn finalize_polygon(
     Ok(())
 }
 
+fn encoding_for_font<'a>(font: &'a Dictionary, document: &'a Document) -> Option<Encoding<'a>> {
+    // /ToUnicode maps character codes to the published Unicode text even when /Encoding
+    // is also present. lopdf otherwise prefers WinAnsi and loses custom/subset glyph maps.
+    if font.has(b"ToUnicode") {
+        let mut unicode_font = font.clone();
+        unicode_font.remove(b"Encoding");
+        return match unicode_font.get_font_encoding_with_limit(document, MAXIMUM_PAGE_CONTENT_BYTES)
+        {
+            Ok(Encoding::UnicodeMapEncoding(map)) => Some(Encoding::UnicodeMapEncoding(map)),
+            // A malformed/bomb map must not silently turn glyph IDs into misleading text.
+            _ => None,
+        };
+    }
+    if font.get(b"Subtype").and_then(Object::as_name).ok() == Some(b"Type0".as_slice()) {
+        // CID codes are glyph indices, not Unicode. Identity-H without /ToUnicode requires
+        // an embedded-font cmap decoder that this bounded analyzer does not implement.
+        return None;
+    }
+    font.get_font_encoding_with_limit(document, MAXIMUM_PAGE_CONTENT_BYTES)
+        .ok()
+}
+
+fn resource_font_encodings<'a>(
+    document: &'a Document,
+    resources: Option<&'a Dictionary>,
+) -> BTreeMap<Vec<u8>, Encoding<'a>> {
+    let Some(fonts) = resources
+        .and_then(|r| r.get(b"Font").ok())
+        .and_then(|value| resolve_dictionary(document, value))
+    else {
+        return BTreeMap::new();
+    };
+    fonts
+        .iter()
+        .filter_map(|(name, value)| {
+            let font = resolve_dictionary(document, value)?;
+            encoding_for_font(font, document).map(|encoding| (name.clone(), encoding))
+        })
+        .collect()
+}
+
 fn extract_page_text(
     document: &Document,
     page_id: ObjectId,
@@ -1544,9 +1628,7 @@ fn extract_page_text(
     let encodings = fonts
         .into_iter()
         .filter_map(|(name, font)| {
-            font.get_font_encoding_with_limit(document, MAXIMUM_PAGE_CONTENT_BYTES)
-                .ok()
-                .map(|encoding| (name, encoding))
+            encoding_for_font(font, document).map(|encoding| (name, encoding))
         })
         .collect::<BTreeMap<Vec<u8>, Encoding<'_>>>();
     let mut current_encoding = None;
@@ -1637,6 +1719,7 @@ fn decode_pdf_text(encoding: Option<&Encoding<'_>>, bytes: &[u8]) -> String {
 
 fn show_text_object(
     object: &Object,
+    encoding: Option<&Encoding<'_>>,
     text: &mut TextState,
     ctm: Matrix,
     operation_index: usize,
@@ -1646,11 +1729,12 @@ fn show_text_object(
         geometry.malformed_operations += 1;
         return Ok(());
     };
-    show_text_bytes(bytes, text, ctm, operation_index, geometry)
+    show_text_bytes(bytes, encoding, text, ctm, operation_index, geometry)
 }
 
 fn show_text_bytes(
     bytes: &[u8],
+    encoding: Option<&Encoding<'_>>,
     text: &mut TextState,
     ctm: Matrix,
     operation_index: usize,
@@ -1660,7 +1744,9 @@ fn show_text_bytes(
     record_text_run(
         advance,
         glyph_count,
-        decode_pdf_text(None, bytes),
+        encoding
+            .map(|mapping| decode_pdf_text(Some(mapping), bytes))
+            .unwrap_or_default(),
         text,
         ctm,
         operation_index,
@@ -1672,6 +1758,7 @@ fn show_text_bytes(
 
 fn show_text_array(
     array: &[Object],
+    encoding: Option<&Encoding<'_>>,
     text: &mut TextState,
     ctm: Matrix,
     operation_index: usize,
@@ -1679,7 +1766,7 @@ fn show_text_array(
 ) -> Result<(), AppError> {
     for object in array {
         if let Ok(bytes) = object.as_str() {
-            show_text_bytes(bytes, text, ctm, operation_index, geometry)?;
+            show_text_bytes(bytes, encoding, text, ctm, operation_index, geometry)?;
         } else if let Some(adjustment) = object_number(object) {
             let advance = -adjustment / 1_000.0 * text.font_size * text.horizontal_scale;
             text.matrix = text.matrix.multiply(Matrix::translation(advance, 0.0));
@@ -2483,4 +2570,95 @@ fn decode_utf16_metadata(bytes: &[u8], decode: fn([u8; 2]) -> u16) -> String {
 
 fn resolve_dictionary<'a>(document: &'a Document, object: &'a Object) -> Option<&'a Dictionary> {
     resolve_object(document, object)?.as_dict().ok()
+}
+
+#[cfg(test)]
+mod positioned_text_tests {
+    use super::*;
+    use lopdf::{content::Operation, dictionary};
+
+    #[test]
+    fn cid_glyph_indices_without_unicode_map_are_not_presented_as_text() {
+        let document = Document::with_version("1.7");
+        let font = dictionary! { "Type"=>"Font", "Subtype"=>"Type0", "Encoding"=>"Identity-H" };
+        assert!(encoding_for_font(&font, &document).is_none());
+        let mut geometry = PageGeometry::default();
+        let mut text = TextState::default();
+        show_text_bytes(
+            &[0, 73, 0, 72, 0, 81],
+            None,
+            &mut text,
+            Matrix::IDENTITY,
+            1,
+            &mut geometry,
+        )
+        .unwrap();
+        assert!(geometry
+            .text_runs
+            .iter()
+            .all(|run| run.extracted_text.is_empty()));
+    }
+
+    #[test]
+    fn positioned_fragments_decode_font_maps_and_restore_encoding_after_graphics_state() {
+        let mut document = Document::with_version("1.7");
+        let mut fonts = Dictionary::new();
+        for (name, values) in [("F1", [0x43, 0x41, 0x54]), ("F2", [0x44, 0x4f, 0x47])] {
+            let cmap = format!("/CIDInit /ProcSet findresource begin 12 dict begin begincmap /CMapName /Test def /CMapType 2 def 1 begincodespacerange <00> <FF> endcodespacerange 3 beginbfchar <01> <{:04X}> <02> <{:04X}> <03> <{:04X}> endbfchar endcmap CMapName currentdict /CMap defineresource pop end end", values[0],values[1],values[2]);
+            let mapping = document.add_object(Stream::new(Dictionary::new(), cmap.into_bytes()));
+            let font = document.add_object(dictionary! { "Type"=>"Font", "Subtype"=>"Type1", "BaseFont"=>"Helvetica", "Encoding"=>"WinAnsiEncoding", "ToUnicode"=>mapping });
+            fonts.set(name, font);
+        }
+        let resources = dictionary! { "Font"=>fonts };
+        let show = || {
+            Operation::new(
+                "Tj",
+                vec![Object::String(vec![1, 2, 3], StringFormat::Hexadecimal)],
+            )
+        };
+        let operations = vec![
+            Operation::new("BT", vec![]),
+            Operation::new("Tf", vec!["F1".into(), 12.into()]),
+            Operation::new("Td", vec![100.into(), 100.into()]),
+            show(),
+            Operation::new("q", vec![]),
+            Operation::new("Tf", vec!["F2".into(), 12.into()]),
+            show(),
+            Operation::new("Q", vec![]),
+            show(),
+            Operation::new("ET", vec![]),
+            Operation::new("re", vec![99.into(), 96.into(), 100.into(), 20.into()]),
+            Operation::new("f", vec![]),
+        ];
+        let mut geometry = PageGeometry::default();
+        let mut active_forms = HashSet::new();
+        let mut budget = GeometryBudget::default();
+        analyze_geometry_operations(
+            &document,
+            Some(&resources),
+            &operations,
+            GraphicsState::default(),
+            TextState::default(),
+            0,
+            GeometryTraversal {
+                inherited_encoding: None,
+                active_forms: &mut active_forms,
+                budget: &mut budget,
+                geometry: &mut geometry,
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            geometry
+                .text_runs
+                .iter()
+                .map(|run| run.extracted_text.as_str())
+                .collect::<Vec<_>>(),
+            vec!["CAT", "DOG", "CAT"]
+        );
+        let clashes =
+            correlate_redaction_geometry(&geometry.text_runs, &geometry.filled_rectangles, &[])
+                .unwrap();
+        assert_eq!(clashes.overlay_text_runs.len(), 3);
+    }
 }

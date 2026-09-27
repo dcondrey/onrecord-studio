@@ -75,7 +75,7 @@ export default function UnredactorPanel({ documentId, portalKey }: { documentId:
           <div className="space-y-3">
             <div className={cn('rounded-lg border p-3 text-[10px] font-medium', report.requiresManualReview ? 'border-amber-500/25 bg-amber-500/10 text-amber-200' : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200')}>
               {report.isLeakyRedaction
-                ? 'Positioned text intersects a dark mask or unapplied redaction annotation and requires manual review.'
+                ? 'Approximate text bounds intersect a dark shape or redaction annotation. Backgrounds and layout elements can trigger this; concealed content has not been established.'
                 : coverageLimited
                   ? 'The bounded pass found no qualifying intersection, but some page geometry could not be evaluated conclusively.'
                   : report.requiresManualReview

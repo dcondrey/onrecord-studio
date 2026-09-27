@@ -7,6 +7,8 @@ pub mod ingest;
 pub mod investigation;
 pub mod maintenance;
 pub mod query;
+pub mod reconstruction;
+pub mod research;
 pub mod runtime;
 pub mod semantic;
 pub(crate) mod validation;
@@ -36,3 +38,11 @@ pub use semantic::{
     cancel_embedding_index, get_embedding_index_status, get_embedding_model_status, hybrid_search,
     initialize_embedding_model, rebuild_embedding_index,
 };
+
+pub mod review;
+
+pub mod financial;
+
+pub mod casework;
+
+pub mod monitoring;

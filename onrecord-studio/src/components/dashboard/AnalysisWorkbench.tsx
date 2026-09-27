@@ -44,7 +44,7 @@ export default function AnalysisWorkbench() {
   const [modelStatus, setModelStatus] = useState<EmbeddingModelStatus | null>(null);
   const [indexStatus, setIndexStatus] = useState<EmbeddingIndexStatus | null>(null);
   const [indexReport, setIndexReport] = useState<EmbeddingIndexReport | null>(null);
-  const [hybridQuery, setHybridQuery] = useState('ALPR annual surveillance report SDPD');
+  const [hybridQuery, setHybridQuery] = useState('homelessness spending shelter outcomes contract amendments');
   const [jurisdiction, setJurisdiction] = useState('');
   const [hybridResults, setHybridResults] = useState<HybridSearchResult[]>([]);
   const [schema, setSchema] = useState<AnalyticalSchema | null>(null);

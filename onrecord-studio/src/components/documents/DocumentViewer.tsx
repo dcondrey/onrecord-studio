@@ -4,6 +4,7 @@ import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { invokeCommand } from '../../ipc';
 import type { EvidenceBundle, ForensicFinding, ProvenanceConfidence, ProvenanceVerificationRecord, RecoveredVersionProfile } from '../../types';
 import UnredactorPanel from './UnredactorPanel';
+import ReconstructionPanel from './ReconstructionPanel';
 
 interface DocumentViewerProps {
   documentId: number;
@@ -213,11 +214,12 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
           <button type="button" onClick={() => void inspectResidualEvidence()} disabled={!originalAvailable || isAuditingResiduals} className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-2.5 py-1 text-[9px] font-medium text-cyan-300 transition hover:border-cyan-300/40 disabled:cursor-wait disabled:opacity-60">
             {isAuditingResiduals ? 'Auditing residuals…' : residualAudit ? 'Reaudit residuals' : 'Audit residual evidence'}
           </button>
+          <button type="button" onClick={() => setShowRedactionAudit((visible) => !visible)} aria-expanded={showRedactionAudit} className="rounded-full border border-indigo-400/25 bg-indigo-500/10 px-2.5 py-1 text-[9px] font-medium text-indigo-300 transition hover:border-indigo-300/40">
+            {showRedactionAudit ? 'Hide redaction audit' : 'Audit redactions'}
+          </button>
           {fileName.toLocaleLowerCase().endsWith('.pdf') && (
             <>
-              <button type="button" disabled={!originalAvailable} onClick={() => setShowRedactionAudit((visible) => !visible)} aria-expanded={showRedactionAudit} className="rounded-full border border-indigo-400/25 bg-indigo-500/10 px-2.5 py-1 text-[9px] font-medium text-indigo-300 transition hover:border-indigo-300/40">
-                {showRedactionAudit ? 'Hide redaction audit' : 'Audit redactions'}
-              </button>
+
               <button type="button" onClick={() => void inspectRevisionHistory()} disabled={!originalAvailable || isRecovering} className="rounded-full border border-indigo-400/25 bg-indigo-500/10 px-2.5 py-1 text-[9px] font-medium text-indigo-300 transition hover:border-indigo-300/40 disabled:cursor-wait disabled:opacity-60">
                 {isRecovering ? 'Inspecting revisions…' : recoveryProfile ? 'Reinspect revisions' : 'Inspect revision history'}
               </button>
@@ -257,7 +259,7 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
       {showVerificationHistory && <VerificationHistoryPanel records={verificationHistory} isLoading={isLoadingHistory} error={historyError} />}
       {(recoveryProfile || recoveryError) && <RevisionRecoveryPanel profile={recoveryProfile} error={recoveryError} />}
       {(residualAudit || residualAuditError) && <ResidualEvidencePanel bundle={residualAudit} error={residualAuditError} />}
-      {showRedactionAudit && <div className="border-b border-slate-800 p-3"><UnredactorPanel documentId={documentId} portalKey={portalKey} /></div>}
+      {showRedactionAudit && <div className="max-h-[70vh] space-y-3 overflow-y-auto border-b border-slate-800 p-3"><ReconstructionPanel documentId={documentId} portalKey={portalKey} />{originalAvailable && fileName.toLocaleLowerCase().endsWith('.pdf') && <UnredactorPanel documentId={documentId} portalKey={portalKey} />}</div>}
       <div className="min-h-0 flex-1 overflow-y-auto p-5 font-mono text-xs leading-relaxed text-slate-300 selection:bg-indigo-500/30">
         <HighlightedTextPage text={textContent} query={documentSearch} page={textPage} activeMatchIndex={selectedMatch} />
       </div>
@@ -405,11 +407,12 @@ function RevisionRecoveryPanel({ profile, error }: { profile: RecoveredVersionPr
     <div className="max-h-60 overflow-y-auto border-b border-indigo-400/15 bg-indigo-500/[0.04] px-4 py-3">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[9px] text-slate-400">
         <span className="font-semibold text-indigo-300">Incremental revision inspection</span>
-        <span>{profile.historicalVersionsFound} prior revision{profile.historicalVersionsFound === 1 ? '' : 's'} detected</span>
-        <span>{profile.recoveredTextSegments.length} recoverable text layer{profile.recoveredTextSegments.length === 1 ? '' : 's'}</span>
+        <span>{profile.historicalVersionsFound} candidate revision boundar{profile.historicalVersionsFound === 1 ? 'y' : 'ies'}</span>
+        <span>{profile.recoveredTextSegments.length} extracted historical text layer{profile.recoveredTextSegments.length === 1 ? '' : 's'}</span>
         <span className="font-mono">SHA-256 {profile.sourceSha256.slice(0, 12)}…</span>
       </div>
       {profile.historicalVersionsFound === 0 && <p className="mt-2 text-[9px] text-slate-400">No earlier incremental-save boundary was present. This does not rule out edits made before the current file was created.</p>}
+      {profile.recoveredTextSegments.length > 0 && <p className="mt-2 text-[9px] text-slate-400">Historical text may duplicate the current document. A revision boundary does not establish removed or concealed content.</p>}
       {profile.analysisTruncated && <p className="mt-2 text-[9px] text-amber-300">The bounded inspection reached a safety limit; the results are incomplete.</p>}
       {profile.warnings.length > 0 && <ul className="mt-2 space-y-1 text-[9px] text-amber-200/80">{profile.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
       {profile.revisionDiagnostics.map((diagnostic) => (

@@ -34,6 +34,7 @@ const MAX_QUERY_PARAMETER_LENGTH: usize = 64;
 const DEFAULT_JSON_LIMIT_BYTES: usize = 16 * 1024 * 1024;
 const DEFAULT_DOCUMENT_LIMIT_BYTES: usize = 512 * 1024 * 1024;
 const MAX_PUBLIC_LINKS_PER_PAGE: usize = 50_000;
+const MAX_HYLAND_ITEMS_PER_MEETING: usize = 8;
 const JAVASCRIPT_MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 /// A pinned DNS answer outlives the validation that created it just long enough to cover the
 /// request, then expires so a legitimate address change is seen at the next validation.
@@ -654,6 +655,18 @@ impl ApiClient {
             "HTML discovery page",
         )
         .await?;
+        // A meeting shell has no substantive text. Follow the exact document route it
+        // publishes in place, so a bounded source run does not spend every page on shells.
+        // Release the host permit before the next governed request (concurrency may be 1).
+        drop(_host_permit);
+        if link_selector.is_none() && download_selector.is_none() {
+            if let Some(companion) = super::regional::hyland_document_companion(
+                &final_url,
+                &String::from_utf8_lossy(&bytes),
+            ) {
+                return self.inspect_hyland_packet(&companion).await;
+            }
+        }
         let (title, links, embedded_connectors) =
             extract_public_resource_links(&final_url, &bytes, link_selector, download_selector)?;
         Ok(PublicResourceInspection {
@@ -665,6 +678,56 @@ impl ApiClient {
             body: Some(bytes),
             embedded_connectors,
             content_length,
+        })
+    }
+
+    /// Public OnBase packets use JavaScript item links. Read their literal references,
+    /// then fetch a bounded number of supporting-document indexes through the same
+    /// retry, robots, pacing and host budget as every other request. The source text
+    /// remains the published agenda; attachments retain their own original URLs.
+    async fn inspect_hyland_packet(
+        &self,
+        companion: &str,
+    ) -> Result<PublicResourceInspection, AppError> {
+        let companion =
+            Url::parse(companion).map_err(|error| AppError::DataParsing(error.to_string()))?;
+        let payload = self
+            .get_bounded(companion.clone(), &[], self.config.max_json_response_bytes)
+            .await?;
+        if payload.final_url != companion
+            || !is_html_resource(&payload.final_url, payload.content_type.as_deref())
+        {
+            return Err(AppError::DataParsing(
+                "The published Council agenda route did not return its expected HTML document."
+                    .into(),
+            ));
+        }
+        let (title, mut links, embedded_connectors) =
+            extract_public_resource_links(&payload.final_url, &payload.bytes, None, None)?;
+        let items = super::regional::hyland_agenda_items(
+            &payload.final_url,
+            &String::from_utf8_lossy(&payload.bytes),
+        );
+        let mut seen = links
+            .iter()
+            .map(|link| link.url.clone())
+            .collect::<BTreeSet<_>>();
+        for (item_url, item_title) in items.into_iter().take(MAX_HYLAND_ITEMS_PER_MEETING) {
+            let item_url = Url::parse(&item_url).expect("adapter emits validated URLs");
+            let item = self
+                .get_bounded(item_url.clone(), &[], self.config.max_json_response_bytes)
+                .await;
+            merge_hyland_item_attachments(&item_url, &item_title, item, &mut links, &mut seen);
+        }
+        Ok(PublicResourceInspection {
+            final_url: payload.final_url.to_string(),
+            content_type: payload.content_type,
+            title,
+            kind: PublicResourceKind::HtmlPage,
+            links,
+            content_length: Some(payload.bytes.len() as u64),
+            body: Some(payload.bytes),
+            embedded_connectors,
         })
     }
 
@@ -1093,15 +1156,7 @@ impl ApiClient {
         // materialized into `request_url` so loop detection distinguishes that request from a
         // legitimate redirect back to the same path without its pagination query.
         for redirect_count in 0..=MAX_REDIRECTS {
-            let mut request_url = current_url.clone();
-            if let Some(query_values) = current_query.take() {
-                request_url.query_pairs_mut().extend_pairs(
-                    query_values
-                        .iter()
-                        .map(|(key, value)| (*key, value.as_str())),
-                );
-            }
-            request_url.set_fragment(None);
+            let request_url = materialize_request_url(&current_url, current_query.take());
             if !visited_requests.insert(request_url.as_str().to_string()) {
                 return Err(RetryDisposition::Terminal(AppError::PortalSecurity(
                     format!("Redirect loop detected at '{request_url}'"),
@@ -1804,6 +1859,69 @@ fn looks_like_open_data_catalog(url: &Url) -> bool {
     path.contains("/dataset") || path.contains("/datasets") || path.contains("/catalog")
 }
 
+/// An optional item failure leaves its original follow link intact for the ordinary
+/// crawl frontier. Successful agenda text and other item attachments remain usable.
+fn merge_hyland_item_attachments(
+    item_url: &Url,
+    item_title: &str,
+    result: Result<ResponsePayload, AppError>,
+    links: &mut Vec<PublicResourceLink>,
+    seen: &mut BTreeSet<String>,
+) {
+    let Ok(item) = result else {
+        return;
+    };
+    if item.final_url != *item_url
+        || !is_html_resource(&item.final_url, item.content_type.as_deref())
+    {
+        return;
+    }
+    let Ok((_, attachments, _)) =
+        extract_public_resource_links(&item.final_url, &item.bytes, None, None)
+    else {
+        return;
+    };
+    for mut attachment in attachments {
+        if links.len() >= MAX_PUBLIC_LINKS_PER_PAGE {
+            break;
+        }
+        if !attachment.download_candidate
+            || !Url::parse(&attachment.url)
+                .is_ok_and(|url| super::regional::hyland_item_attachment(item_url, &url))
+            || !seen.insert(attachment.url.clone())
+        {
+            continue;
+        }
+        attachment.label = format!(
+            "{} — {}",
+            item_title.chars().take(160).collect::<String>(),
+            attachment.label.chars().take(160).collect::<String>()
+        );
+        links.push(attachment);
+    }
+}
+
+/// Snapshot references declared by this successfully retrieved body only. Packet
+/// expansion may add links from optional network responses to `inspection.links`;
+/// those must not be mistaken for changes to this body's publication listing.
+pub(crate) fn publication_listing_links(
+    source_url: &str,
+    body: &[u8],
+) -> Result<Vec<String>, AppError> {
+    let base = Url::parse(source_url).map_err(|error| AppError::DataParsing(error.to_string()))?;
+    let (_, links, _) = extract_public_resource_links(&base, body, None, None)?;
+    Ok(links
+        .into_iter()
+        .filter(|link| {
+            !link.navigation_chrome
+                && (link.download_candidate
+                    || Url::parse(&link.url)
+                        .is_ok_and(|url| super::regional::meeting_identity(&url).is_some()))
+        })
+        .map(|link| link.url)
+        .collect())
+}
+
 fn extract_public_resource_links(
     base: &Url,
     body: &[u8],
@@ -1882,6 +2000,7 @@ fn extract_public_resource_links(
         if !seen.insert(canonical.clone()) {
             continue;
         }
+        let board_attachment = super::regional::sdhc_board_attachment(base, &url, &element);
         let label = element
             .text()
             .collect::<Vec<_>>()
@@ -1890,6 +2009,7 @@ fn extract_public_resource_links(
             .collect::<Vec<_>>()
             .join(" ");
         let download_candidate = forced_download
+            || board_attachment.is_some()
             || super::regional::is_datagov_metadata_url(&url)
             || element.value().attr("download").is_some()
             || has_download_extension(url.path())
@@ -1907,7 +2027,9 @@ fn extract_public_resource_links(
         }
         links.push(PublicResourceLink {
             url: canonical,
-            label: if label.is_empty() {
+            label: if let Some(context) = board_attachment {
+                context
+            } else if label.is_empty() {
                 file_name_from_url(&url)
             } else {
                 label.chars().take(256).collect()
@@ -1920,7 +2042,42 @@ fn extract_public_resource_links(
             break;
         }
     }
+    if super::regional::is_sdhc_board_index(base) {
+        // Resource limits must reach the shelter agreements and their evidence before
+        // unrelated navigation or presentation slides consume the collection budget.
+        links.sort_by_key(|link| {
+            let label = link.label.to_lowercase();
+            let consequential = [
+                "shelter",
+                "homeless",
+                "budget",
+                "audit",
+                "financial",
+                "performance",
+            ]
+            .iter()
+            .any(|term| label.contains(term));
+            let report = label.starts_with("hcr");
+            (
+                !link.download_candidate,
+                !consequential,
+                !report,
+                link.navigation_chrome,
+            )
+        });
+    }
     let embedded_connectors = extract_embedded_connectors(base, &document)?;
+    for (url, label) in super::regional::hyland_agenda_items(base, &text) {
+        if seen.insert(url.clone()) {
+            links.push(PublicResourceLink {
+                url,
+                label,
+                download_candidate: false,
+                follow_candidate: true,
+                navigation_chrome: false,
+            });
+        }
+    }
     if let Some(url) = super::regional::hyland_document_companion(base, &text) {
         if seen.insert(url.clone()) {
             links.push(PublicResourceLink {
@@ -2203,6 +2360,9 @@ fn is_navigation_chrome(element: &scraper::ElementRef<'_>) -> bool {
         .any(|ancestor| {
             let value = ancestor.value();
             matches!(value.name(), "nav" | "aside" | "header" | "footer")
+                || value
+                    .classes()
+                    .any(|class| matches!(class, "navbar" | "navbar-collapse"))
                 || value.attr("role").is_some_and(|role| {
                     role.split_ascii_whitespace().any(|token| {
                         matches!(
@@ -2474,6 +2634,18 @@ fn with_query_parameters(url: &Url, values: &[(&str, String)]) -> Url {
         .query_pairs_mut()
         .extend_pairs(values.iter().map(|(name, value)| (*name, value.as_str())));
     updated
+}
+
+fn materialize_request_url(current: &Url, query: Option<&[(&str, String)]>) -> Url {
+    let mut url = current.clone();
+    // Opening query_pairs_mut on an empty slice appends a bare '?'. That changes
+    // acquisition identity and causes stable file URLs to fail reference retention.
+    if let Some(values) = query.filter(|values| !values.is_empty()) {
+        url.query_pairs_mut()
+            .extend_pairs(values.iter().map(|(key, value)| (*key, value.as_str())));
+    }
+    url.set_fragment(None);
+    url
 }
 
 fn next_redirect_url(current: &Url, location: &str) -> Result<Url, AppError> {
@@ -3920,6 +4092,24 @@ mod url_security_tests {
     }
 
     #[test]
+    fn empty_request_parameters_preserve_stable_file_identity() {
+        let file = url("https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv");
+        assert_eq!(materialize_request_url(&file, Some(&[])), file);
+        assert!(materialize_request_url(&file, Some(&[])).query().is_none());
+        let params = [("page", "2".to_string())];
+        let paginated = materialize_request_url(
+            &url("https://example.test/records?kind=budget#section"),
+            Some(&params),
+        );
+        assert_eq!(
+            paginated.as_str(),
+            "https://example.test/records?kind=budget&page=2"
+        );
+        let landing = next_redirect_url(&paginated, "/download.csv").unwrap();
+        assert!(materialize_request_url(&landing, None).query().is_none());
+    }
+
+    #[test]
     fn redirect_request_identity_detects_cycles_without_conflating_query_removal() {
         let mut visited = BTreeSet::new();
         let paginated = url("https://93.184.216.34/records?page=2");
@@ -3965,4 +4155,123 @@ fn regional_budget_hub_and_meeting_buttons_expose_their_public_resources() {
     let (_, links, _) = extract_public_resource_links(&budget, br#"<a href="https://view.officeapps.live.com/op/view.aspx?src=https%3A%2F%2Fwww.sandiego.gov%2Fcomments.xlsx">Comments</a>"#, None, None).unwrap();
     assert_eq!(links[0].url, "https://www.sandiego.gov/comments.xlsx");
     assert!(links[0].download_candidate);
+}
+
+#[test]
+fn sdhc_board_extensionless_reports_are_downloads_with_usable_context() {
+    let base = Url::parse(
+        "https://sdhc.org/governance-legislative-affairs/sdhc-board-of-commissioners/meetings/",
+    )
+    .unwrap();
+    let body = br#"<nav><a href='/housing-opportunities/'>Housing opportunities</a></nav>
+      <table><tr><td>April 16, 2026</td><td><a href='/4-16-2026-agenda/'>Agenda</a></td></tr>
+      <tr><td></td><td>Item 103 <a href='/103_hcr26-014-imperial-shelter_final/'>HCR26-014</a>
+      Approval of the Operating Agreement with Alpha Project for the Imperial Shelter
+      <a href='/103_imperial-shelter_final/'>Presentation</a></td><td>Approved 6-0</td></tr>
+      <tr><td><a href='/contact/'>Contact us</a><a href='https://unrelated.test/report/'>HCR26-900</a>
+      <a href='/account/?download=private'>Account</a></td></tr></table>"#;
+    let (_, links, _) = extract_public_resource_links(&base, body, None, None).unwrap();
+    let report = &links[0];
+    assert!(report
+        .url
+        .ends_with("/103_hcr26-014-imperial-shelter_final/"));
+    assert!(report.download_candidate && !report.navigation_chrome);
+    assert!(report.label.contains("Alpha Project") && report.label.contains("Imperial Shelter"));
+    assert!(links
+        .iter()
+        .any(|l| l.label.starts_with("Presentation") && l.download_candidate));
+    assert!(
+        !links
+            .iter()
+            .find(|l| l.url.ends_with("/contact/"))
+            .unwrap()
+            .download_candidate
+    );
+    let elsewhere = Url::parse("https://sdhc.org/news-release/example/").unwrap();
+    let (_, generic, _) = extract_public_resource_links(&elsewhere, body, None, None).unwrap();
+    assert!(
+        !generic
+            .iter()
+            .find(|l| l.url == report.url)
+            .unwrap()
+            .download_candidate
+    );
+    let listing = publication_listing_links(base.as_str(), body).unwrap();
+    assert!(listing.contains(&report.url));
+}
+
+#[test]
+fn council_agendas_expose_item_indexes_without_spending_frontier_on_bootstrap_navigation() {
+    let agenda = Url::parse("https://sandiego.hylandcloud.com/211agendaonlinecouncil/Documents/ViewAgenda?meetingId=7192&type=agenda&doctype=1").unwrap();
+    let (_, links, _) = extract_public_resource_links(&agenda, br#"
+        <div class="navbar-collapse"><a href="/211agendaonlinecouncil/Meetings">Past Meeting Search</a></div>
+        <a href="javascript:loadAgendaItem(265583,false);">Riverbed encampment funding</a>
+        <a href="javascript:loadAgendaItem(265584,false);">Loan documents</a>
+    "#, None, None).unwrap();
+    assert_eq!(links.len(), 3);
+    assert!(
+        links
+            .iter()
+            .find(|link| link.label == "Past Meeting Search")
+            .unwrap()
+            .navigation_chrome
+    );
+    let items = links
+        .iter()
+        .filter(|link| link.url.contains("ViewMeetingAgendaItem"))
+        .collect::<Vec<_>>();
+    assert_eq!(items.len(), 2);
+    assert!(items
+        .iter()
+        .all(|link| link.follow_candidate && !link.download_candidate && !link.navigation_chrome));
+}
+
+#[test]
+fn council_optional_item_failure_preserves_other_attachments_and_retry_links() {
+    let agenda = Url::parse("https://sandiego.hylandcloud.com/211agendaonlinecouncil/Documents/ViewAgenda?meetingId=7192&type=agenda&doctype=1").unwrap();
+    let (_, mut links, _) = extract_public_resource_links(
+        &agenda,
+        br#"
+        <a href="javascript:loadAgendaItem(265583,false);">Riverbed encampment funding</a>
+        <a href="javascript:loadAgendaItem(265584,false);">Loan documents</a>
+    "#,
+        None,
+        None,
+    )
+    .unwrap();
+    let original_links = links.clone();
+    let mut seen = links
+        .iter()
+        .map(|link| link.url.clone())
+        .collect::<BTreeSet<_>>();
+    let item = Url::parse(&links[0].url).unwrap();
+    let unavailable = Url::parse(&links[1].url).unwrap();
+    let successful = ResponsePayload { final_url: item.clone(), content_type: Some("text/html".into()), bytes: br#"<a href="/211agendaonlinecouncil/Documents/DownloadFile/grant.pdf?meetingId=7192&amp;itemId=265583&amp;publishId=1">Grant agreement</a>"#.to_vec() };
+    merge_hyland_item_attachments(&item, "Riverbed", Ok(successful), &mut links, &mut seen);
+    merge_hyland_item_attachments(
+        &unavailable,
+        "Loan documents",
+        Err(AppError::DataParsing("temporarily unavailable".into())),
+        &mut links,
+        &mut seen,
+    );
+    let redirected = ResponsePayload {
+        final_url: agenda.clone(),
+        content_type: Some("text/html".into()),
+        bytes: Vec::new(),
+    };
+    merge_hyland_item_attachments(
+        &unavailable,
+        "Loan documents",
+        Ok(redirected),
+        &mut links,
+        &mut seen,
+    );
+    assert_eq!(links.len(), 3);
+    assert_eq!(&links[..2], original_links.as_slice());
+    assert!(
+        links[1].follow_candidate,
+        "A failed item must remain eligible for ordinary frontier retry"
+    );
+    assert!(links[2].download_candidate && links[2].label.contains("Grant agreement"));
 }

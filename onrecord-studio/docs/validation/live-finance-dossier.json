@@ -1,0 +1,876 @@
+{
+  "id": "ea7c13f1-f4f2-47e6-9db1-9dea8862b68b",
+  "topic": "police",
+  "createdAt": "2026-09-26T23:08:19.478190+00:00",
+  "model": "openrouter / openai/gpt-5.4",
+  "evidence": [
+    {
+      "id": "doc:source-dbef8451c1254970abc34e9e:6045804517944699:1637502:c35009aa8e",
+      "label": "actuals_operating_datasd.csv",
+      "sourceUrl": "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv",
+      "portalKey": "source-dbef8451c1254970abc34e9e",
+      "requestId": 4692650142466871,
+      "documentId": 6045804517944699,
+      "characterOffset": 1637502,
+      "sourceSha256": "53cfc7488c40c2d3b654c64ba8599bc11a4086fa5efe403371c38eff78dd2143",
+      "text": "\"25768\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912121101\",\"Cliff Rescue Inst Pay\",\"500091\" \"3283\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912121101\",\"Standby Pay\",\"500092\" \"378545\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912121101\",\"Hourly Wages\",\"500121\" \"1121378\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912121101\",\"Overtime - Premium\",\"500124\" \"33748\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912121101\",\"Industrial Leave-Police & Fire Safety Personnel\",\"500130\" \"310203\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912121101\",\"Overtime - Comp\",\"500133\" \"35859\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912121101\",\"Sick Leave - Hourly\",\"500134\" \"16673\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912121101\",\"Parental Leave\",\"500135\" \"2089873\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912121101\",\"CERS - Saf Ret - Lifeguard\",\"502019\" \"148776\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912121101\",\"Supp Pens Sav Plan Mandatory\",\"502021\" \"156778\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912121101\",\"Supp Pens Sav Plan Voluntary\",\"502022\" \"32713\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912121101\",\"CERS - DROP - Saf-Lifeguard\",\"502032\" \"2298\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912121101\",\"CERS-UAAL MEA Supervisory\",\"502039\" \"23727\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912121101\",\"CERS-UAAL MEA Technical\",\"502040\" \"3311\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912121101\",\"CERS-UAAL Classified Unrepresented\",\"502042\" \"349\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912121101\",\"CERS-UAAL Unclass-Unrepresented\",\"502043\" \"190574\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912121101\",\"Workers' Comp Insurance\",\"502046\" \"676278\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912121101\",\"Flexible Benefit Plan\",\"502047\" \"58271\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912121101\",\"Risk Mgmt Administration\",\"502048\" \"11620\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912121101\",\"Long Term Disability\",\"502049\" \"7887\",\"",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 1637502 of 69104353. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-3ccf2a8fc1704e9b329aa2b7:5985443479405310:189852:513e93702c",
+      "label": "budget_operating_datasd.csv",
+      "sourceUrl": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+      "portalKey": "source-3ccf2a8fc1704e9b329aa2b7",
+      "requestId": 5558692596084489,
+      "documentId": 5985443479405310,
+      "characterOffset": 189852,
+      "sourceSha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5",
+      "text": "irement 2010\",\"502065\" \"5763\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Office of the City Auditor\",\"1215000011\",\"401(A) Plan Mandatory\",\"502067\" \"4145\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Office of the City Auditor\",\"1215000011\",\"Employer Contrib RMT\",\"502077\" \"99525\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Office of the City Auditor\",\"1215000011\",\"SPSP-H General Members\",\"502094\" \"309424\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000001\",\"Salaried Wages\",\"500011\" \"11813\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000001\",\"Vacation Pay In Lieu\",\"500017\" \"70212\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000001\",\"Adjust Budget To Approved Levels\",\"500199\" \"2058\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000001\",\"Workers' Comp Insurance\",\"502046\" \"37850\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000001\",\"Flexible Benefit Plan\",\"502047\" \"3495\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000001\",\"Risk Mgmt Administration\",\"502048\" \"1083\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000001\",\"Long Term Disability\",\"502049\" \"393\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000001\",\"Unemployment Insurance\",\"502050\" \"4486\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000001\",\"Fica/Medicare Insurance\",\"502051\" \"17067\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000001\",\"Retiree Health Contribution\",\"502052\" \"7190\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000001\",\"CERS - General Retirement 2010\",\"502065\" \"521\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000001\",\"401(A) Plan Mandatory\",\"502067\" \"773\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"12160",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 189852 of 63825382. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-dbef8451c1254970abc34e9e:6045804517944699:1692542:01a4a35213",
+      "label": "actuals_operating_datasd.csv",
+      "sourceUrl": "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv",
+      "portalKey": "source-dbef8451c1254970abc34e9e",
+      "requestId": 4692650142466871,
+      "documentId": 6045804517944699,
+      "characterOffset": 1692542,
+      "sourceSha256": "53cfc7488c40c2d3b654c64ba8599bc11a4086fa5efe403371c38eff78dd2143",
+      "text": "837\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912130018\",\"Paramedic Pay\",\"500083\" \"2803\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912130018\",\"Paramedic Splty Pay\",\"500084\" \"13907\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912130018\",\"Fire Admin Assign\",\"500110\" \"483522\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912130018\",\"Overtime - Premium\",\"500124\" \"16244\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912130018\",\"Industrial Leave-Police & Fire Safety Personnel\",\"500130\" \"658\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912130018\",\"Overtime - Comp\",\"500133\" \"-441\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912130018\",\"CERS - General Retirement\",\"502012\" \"661722\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912130018\",\"CERS - Saf Ret - Fire\",\"502017\" \"2872\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912130018\",\"CERS - DROP - Saf-Fire\",\"502031\" \"20900\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912130018\",\"CERS-UAAL Fire\",\"502034\" \"50710\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912130018\",\"Workers' Comp Insurance\",\"502046\" \"148074\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912130018\",\"Flexible Benefit Plan\",\"502047\" \"11532\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912130018\",\"Risk Mgmt Administration\",\"502048\" \"2438\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912130018\",\"Long Term Disability\",\"502049\" \"1690\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912130018\",\"Unemployment Insurance\",\"502050\" \"22775\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912130018\",\"Fica/Medicare Insurance\",\"502051\" \"66135\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912130018\",\"Retiree Health Contribution\",\"502052\" \"590\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912130018\",\"Employer Contrib RMT\",\"502077\" \"20338\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912130018\",\"SPSP-H General Members\",\"502094\" \"21443\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue\",\"1912130018\",\"SPSP-H Public Safety Members\",\"502095\" \"6015\",\"17\",\"General Fund\",\"100000\",\"Fire-Rescue",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 1692542 of 69104353. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-3ccf2a8fc1704e9b329aa2b7:5985443479405310:191865:5dc309c9f3",
+      "label": "budget_operating_datasd.csv",
+      "sourceUrl": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+      "portalKey": "source-3ccf2a8fc1704e9b329aa2b7",
+      "requestId": 5558692596084489,
+      "documentId": 5985443479405310,
+      "characterOffset": 191865,
+      "sourceSha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5",
+      "text": "yer Contrib RMT\",\"502077\" \"23670\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000001\",\"SPSP-H General Members\",\"502094\" \"279\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000001\",\"Office Supplies\",\"511010\" \"337\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000001\",\"Postage/Mailing\",\"511011\" \"2009\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000001\",\"Food Products\",\"511039\" \"200\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000001\",\"Other Misc Supplies\",\"511058\" \"25000\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000001\",\"Fees-Legal\",\"512042\" \"333\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000001\",\"Fees-Membership\",\"512043\" \"11896\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000001\",\"Miscellaneous Professional/Technical Ser\",\"512059\" \"263\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000001\",\"Photocopy Services\",\"512077\" \"168\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000001\",\"Print Shop Services\",\"512080\" \"33\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000001\",\"In-House Bindery Services\",\"512088\" \"2324\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000001\",\"Meetings\",\"512237\" \"15000\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000001\",\"Professional IT Services\",\"513006\" \"1303\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000001\",\"Cellular Phone Operating Cost\",\"514009\" \"1100\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000001\",\"Transportation Allowance\",\"516015\" \"920090\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Commission on Police Practices\",\"1216000011\",\"Salaried Wages\",\"500011\" \"4",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 191865 of 63825382. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-dbef8451c1254970abc34e9e:6045804517944699:67969:36010da028",
+      "label": "actuals_operating_datasd.csv",
+      "sourceUrl": "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv",
+      "portalKey": "source-dbef8451c1254970abc34e9e",
+      "requestId": 4692650142466871,
+      "documentId": 6045804517944699,
+      "characterOffset": 67969,
+      "sourceSha256": "53cfc7488c40c2d3b654c64ba8599bc11a4086fa5efe403371c38eff78dd2143",
+      "text": "ave/Vacation Accrual\",\"500015\" \"9133\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000011\",\"Vacation Pay In Lieu\",\"500017\" \"9539\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000011\",\"Holidays\",\"500018\" \"6475\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000011\",\"D/L-Dept Award\",\"500025\" \"2807\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000011\",\"Bilingual - Regular\",\"500055\" \"327\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000011\",\"Overtime - Premium\",\"500124\" \"333\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000011\",\"Overtime - Comp\",\"500133\" \"135165\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000011\",\"CERS - General Retirement\",\"502012\" \"8522\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000011\",\"Supp Pens Sav Plan Mandatory\",\"502021\" \"6072\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000011\",\"Supp Pens Sav Plan Voluntary\",\"502022\" \"1264\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000011\",\"CERS - DROP - General\",\"502029\" \"555\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000011\",\"CERS-UAAL MEA Adm/Field\",\"502033\" \"653\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000011\",\"CERS-UAAL MEA Professional\",\"502037\" \"267\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000011\",\"CERS-UAAL MEA Supervisory\",\"502039\" \"0\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000011\",\"CERS-UAAL MEA Technical\",\"502040\" \"2161\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000011\",\"CERS-UAAL Classified Unrepresented\",\"502042\" \"1673\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000011\",\"CERS-UAAL Unclass-Unrepresented\",\"502043\" \"4638\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000011\",\"Workers' Comp Insurance\",\"502046\" \"50934\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000011\",\"Flexible Benefit Plan\",\"502047\" \"4639\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000011\",\"Risk Mgmt Administration\",\"502048\" \"757\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000011\",\"Long Term Disability\",\"502049\" \"502\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 67969 of 69104353. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-3ccf2a8fc1704e9b329aa2b7:5985443479405310:95339:7b17161942",
+      "label": "budget_operating_datasd.csv",
+      "sourceUrl": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+      "portalKey": "source-3ccf2a8fc1704e9b329aa2b7",
+      "requestId": 5558692596084489,
+      "documentId": 5985443479405310,
+      "characterOffset": 95339,
+      "sourceSha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5",
+      "text": "al Fund\",\"100000\",\"City Clerk\",\"1152120011\",\"Print Shop Services\",\"512080\" \"-2830\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Clerk\",\"1152120014\",\"Salary Savings\",\"500010\" \"482518\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Clerk\",\"1152120014\",\"Salaried Wages\",\"500011\" \"5824\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Clerk\",\"1152120014\",\"Bilingual - Regular\",\"500055\" \"2500\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Clerk\",\"1152120014\",\"Overtime Budgeted\",\"500128\" \"-52142\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Clerk\",\"1152120014\",\"Budgeted Personnel Expenditure Savings\",\"500189\" \"135831\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Clerk\",\"1152120014\",\"CERS - General Retirement\",\"502012\" \"4616\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Clerk\",\"1152120014\",\"Supp Pens Sav Plan Mandatory\",\"502021\" \"534\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Clerk\",\"1152120014\",\"Supp Pens Sav Plan Voluntary\",\"502022\" \"464\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Clerk\",\"1152120014\",\"CERS-UAAL MEA Adm/Field\",\"502033\" \"1068\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Clerk\",\"1152120014\",\"CERS-UAAL MEA Supervisory\",\"502039\" \"8761\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Clerk\",\"1152120014\",\"Workers' Comp Insurance\",\"502046\" \"103535\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Clerk\",\"1152120014\",\"Flexible Benefit Plan\",\"502047\" \"10485\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Clerk\",\"1152120014\",\"Risk Mgmt Administration\",\"502048\" \"1495\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Clerk\",\"1152120014\",\"Long Term Disability\",\"502049\" \"544\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Clerk\",\"1152120014\",\"Unemployment Insurance\",\"502050\" \"6285\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Clerk\",\"1152120014\",\"Fica/Medicare Insurance\",\"502051\" \"51201\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Clerk\",\"1152120014\",\"Retiree Health Contribution\",\"502052\" \"5297\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Clerk\",\"1152120014\",\"CERS - General Retirement",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 95339 of 63825382. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-dbef8451c1254970abc34e9e:6045804517944699:75088:98e0b6feb0",
+      "label": "actuals_operating_datasd.csv",
+      "sourceUrl": "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv",
+      "portalKey": "source-dbef8451c1254970abc34e9e",
+      "requestId": 4692650142466871,
+      "documentId": 6045804517944699,
+      "characterOffset": 75088,
+      "sourceSha256": "53cfc7488c40c2d3b654c64ba8599bc11a4086fa5efe403371c38eff78dd2143",
+      "text": ",\"1152000012\",\"Vacation Pay In Lieu\",\"500017\" \"2519\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000012\",\"Holidays\",\"500018\" \"66\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000012\",\"Jury Duty\",\"500019\" \"1183\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000012\",\"D/L-Dept Award\",\"500025\" \"805\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000012\",\"Bilingual - Regular\",\"500055\" \"34\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000012\",\"Overtime - Premium\",\"500124\" \"6952\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000012\",\"CERS - General Retirement\",\"502012\" \"390\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000012\",\"Supp Pens Sav Plan Mandatory\",\"502021\" \"298\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000012\",\"Supp Pens Sav Plan Voluntary\",\"502022\" \"2\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000012\",\"CERS - DROP - General\",\"502029\" \"59\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000012\",\"CERS-UAAL MEA Adm/Field\",\"502033\" \"55\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000012\",\"CERS-UAAL MEA Supervisory\",\"502039\" \"13\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000012\",\"CERS-UAAL MEA Technical\",\"502040\" \"884\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000012\",\"Workers' Comp Insurance\",\"502046\" \"8932\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000012\",\"Flexible Benefit Plan\",\"502047\" \"924\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000012\",\"Risk Mgmt Administration\",\"502048\" \"84\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000012\",\"Long Term Disability\",\"502049\" \"60\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000012\",\"Unemployment Insurance\",\"502050\" \"646\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000012\",\"Fica/Medicare Insurance\",\"502051\" \"5297\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000012\",\"Retiree Health Contribution\",\"502052\" \"108\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000012\",\"CERS - General Retirement 2010\",\"502065\" \"11\",\"17\",\"General Fund\",\"100000\",\"City Clerk\",\"1152000012\",\"401(A)",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 75088 of 69104353. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-3ccf2a8fc1704e9b329aa2b7:5985443479405310:110759:d7b1b0702f",
+      "label": "budget_operating_datasd.csv",
+      "sourceUrl": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+      "portalKey": "source-3ccf2a8fc1704e9b329aa2b7",
+      "requestId": 5558692596084489,
+      "documentId": 5985443479405310,
+      "characterOffset": 110759,
+      "sourceSha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5",
+      "text": "ty Attorney\",\"1211111111\",\"Salaried Wages\",\"500011\" \"643120\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Attorney\",\"1211111111\",\"Vacation Pay In Lieu\",\"500017\" \"4300\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Attorney\",\"1211111111\",\"Master Library Degree\",\"500039\" \"1456\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Attorney\",\"1211111111\",\"Bilingual - Regular\",\"500055\" \"375\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Attorney\",\"1211111111\",\"Overtime Budgeted\",\"500128\" \"10167\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Attorney\",\"1211111111\",\"Chief Attorney Pay\",\"500159\" \"-77628\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Attorney\",\"1211111111\",\"Budgeted Personnel Expenditure Savings\",\"500189\" \"-44331\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Attorney\",\"1211111111\",\"Adjust Budget To Approved Levels\",\"500199\" \"382693\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Attorney\",\"1211111111\",\"CERS - Legislative Retire\",\"502010\" \"1107970\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Attorney\",\"1211111111\",\"CERS - General Retirement\",\"502012\" \"65430\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Attorney\",\"1211111111\",\"Supp Pens Sav Plan Mandatory\",\"502021\" \"61178\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Attorney\",\"1211111111\",\"Supp Pens Sav Plan Voluntary\",\"502022\" \"21289\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Attorney\",\"1211111111\",\"CERS - DROP - General\",\"502029\" \"510\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Attorney\",\"1211111111\",\"CERS-UAAL MEA Adm/Field\",\"502033\" \"2705\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Attorney\",\"1211111111\",\"CERS-UAAL MEA Professional\",\"502037\" \"2495\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Attorney\",\"1211111111\",\"CERS-UAAL MEA Supervisory\",\"502039\" \"2398\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Attorney\",\"1211111111\",\"CERS-UAAL MEA Technical\",\"502040\" \"14928\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"City Attorney\",\"1211111111\",\"CERS-UAAL Classified Unrepresented\",\"502042\" \"8445\",\"23\",\"adopted\",\"General F",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 110759 of 63825382. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "sql:ea4e1830bf7ff3cd",
+      "label": "Fiscal-year and budget-cycle coverage needed to establish comparable spending periods",
+      "sourceUrl": null,
+      "portalKey": null,
+      "requestId": null,
+      "documentId": null,
+      "characterOffset": null,
+      "sourceSha256": "ea4e1830bf7ff3cd843f0edc67ca5177a790324f76e18659f9485923009d5fad",
+      "text": "{\"columns\":[\"record_type\",\"fiscal_year\",\"cycle\",\"source_rows\",\"null_amounts\"],\"rows\":[[\"budget\",2026,\"UNLABELED\",16023,0],[\"budget\",2025,\"adopted\",16622,0],[\"budget\",2025,\"proposed\",16641,0],[\"budget\",2024,\"adopted\",16091,0],[\"budget\",2024,\"proposed\",16034,0],[\"actuals\",2023,\"actual\",28071,0],[\"budget\",2023,\"adopted\",15159,0],[\"actuals\",2022,\"actual\",26106,0],[\"budget\",2022,\"adopted\",14564,0],[\"actuals\",2021,\"actual\",25588,0],[\"budget\",2021,\"adopted\",14381,0]]}",
+      "sql": "WITH b AS (SELECT CASE WHEN TRY_CAST(report_fy AS INTEGER)<100 THEN 2000+TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fiscal_year, COALESCE(NULLIF(lower(trim(budget_cycle)),''),'UNLABELED') AS cycle,amount FROM \"analysis_regional_data_6248b76b917ad88fb00a1800\" WHERE CAST(fund_number AS VARCHAR)='100000' AND CAST(account_number AS VARCHAR) LIKE '5%'), a AS (SELECT CASE WHEN TRY_CAST(report_fy AS INTEGER)<100 THEN 2000+TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fiscal_year,amount FROM \"analysis_regional_data_7ee003c264e5cfe2fe14254e\" WHERE CAST(fund_number AS VARCHAR)='100000' AND CAST(account_number AS VARCHAR) LIKE '5%') SELECT 'budget' AS record_type,fiscal_year,cycle,COUNT(*) AS source_rows,COUNT(*)-COUNT(amount) AS null_amounts FROM b WHERE fiscal_year >= 2021 GROUP BY 1,2,3 UNION ALL SELECT 'actuals',fiscal_year,'actual',COUNT(*),COUNT(*)-COUNT(amount) FROM a WHERE fiscal_year >= 2021 GROUP BY 1,2,3 ORDER BY fiscal_year DESC,record_type,cycle",
+      "snapshotProvenance": [
+        "analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e",
+        "analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+      ],
+      "sourceReferences": [
+        {
+          "url": "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv",
+          "snapshot": "regional-data-7ee003c264e5cfe2fe14254e",
+          "sha256": "53cfc7488c40c2d3b654c64ba8599bc11a4086fa5efe403371c38eff78dd2143"
+        },
+        {
+          "url": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+          "snapshot": "regional-data-6248b76b917ad88fb00a1800",
+          "sha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5"
+        }
+      ],
+      "limitations": "Read-only analytical query; 11 result rows; truncated: false. Assumptions to verify: City General Fund 100000; expense accounts beginning 5; adopted budget only. Fiscal-year codes under 100 normalized by adding 2000. Fiscal years have ended, but ledger close/finality is not established. Budget/actuals aggregate within each key before joining; missing counterparts and null amounts are not zero. Department names may change; inspect stable funds-center/account comparison. Department spending is not a program, abatement-event or restroom cost. Variance is against original adopted appropriation, not revised legal authority. Do not add City and SDHC transfers or infer outcomes/waste from these comparisons.. Snapshot provenance: analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e; analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+    },
+    {
+      "id": "sql:6fd0e350c7e1593b",
+      "label": "Largest account differences between adopted budget and actual spending, with unmatched counterparts",
+      "sourceUrl": null,
+      "portalKey": null,
+      "requestId": null,
+      "documentId": null,
+      "characterOffset": null,
+      "sourceSha256": "6fd0e350c7e1593b0b63f1c3315ea12db05f78adf86ee88123d5281e02a58dac",
+      "text": "{\"columns\":[\"fiscal_year\",\"funds_center_number\",\"account_number\",\"budget_departments\",\"actual_departments\",\"account\",\"adopted_budget\",\"actual_spending\",\"budget_rows\",\"actual_rows\",\"budget_nulls\",\"actual_nulls\",\"comparison_status\",\"actual_minus_adopted\"],\"rows\":[[2023,\"1716000011\",\"512059\",\"Homelessness Strategies & Solutions\",\"Homelessness Strategies & Solutions\",\"Miscellaneous Professional/Technical Ser\",\"11332872\",\"769568\",1,1,0,0,\"Matched\",\"-10563304\"],[2023,\"1716000011\",\"512066\",\"Homelessness Strategies & Solutions\",\"Homelessness Strategies & Solutions\",\"Reimbursement Agreements\",\"3158106\",\"11925135\",1,1,0,0,\"Matched\",\"8767029\"],[2023,\"1914180011\",\"500128\",\"Police\",null,\"Overtime Budgeted\",\"7924735\",null,1,null,0,null,\"Missing actuals\",null],[2023,\"1914121111\",\"500128\",\"Police\",null,\"Overtime Budgeted\",\"7301363\",null,1,null,0,null,\"Missing actuals\",null],[2023,\"1714131301\",\"512172\",\"Parks & Recreation\",\"Parks & Recreation\",\"Contractual Services - Other Agencies\",\"14874000\",\"7925455\",1,1,0,0,\"Matched\",\"-6948545\"],[2023,\"1914121117\",\"500124\",null,\"Police\",\"Overtime - Premium\",null,\"6402389\",null,1,null,0,\"Missing budget baseline\",null],[2023,\"1714131301\",\"512059\",\"Parks & Recreation\",\"Parks & Recreation\",\"Miscellaneous Professional/Technical Ser\",\"1069987\",\"6880820\",1,1,0,0,\"Matched\",\"5810833\"],[2023,\"1914121111\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"18709182\",\"13095797\",1,1,0,0,\"Matched\",\"-5613385\"],[2023,\"1914121117\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"15430565\",\"10080402\",1,1,0,0,\"Matched\",\"-5350163\"],[2023,\"1714121301\",\"514104\",\"Parks & Recreation\",\"Parks & Recreation\",\"Water Serv-Incl Hydr Rent\",\"5936936\",\"712833\",1,1,0,0,\"Matched\",\"-5224103\"],[2023,\"1914121111\",\"500189\",\"Police\",null,\"Budgeted Personnel Expenditure Savings\",\"-5034622\",null,1,null,0,null,\"Missing actuals\",null],[2023,\"1914121120\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"13633356\",\"8728574\",1,1,0,0,\"Matched\",\"-4904782\"],[2023,\"1914121111\",\"500124\",null,\"Police\",\"Overtime - Premium\",null,\"4605048\",null,1,null,0,\"Missing budget baseline\",null],[2023,\"1914131511\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"11548934\",\"7056098\",1,1,0,0,\"Matched\",\"-4492836\"],[2023,\"1914161113\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"9736454\",\"5358965\",1,1,0,0,\"Matched\",\"-4377489\"],[2023,\"1914121113\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"15245765\",\"11108670\",1,1,0,0,\"Matched\",\"-4137095\"],[2023,\"1914121118\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"12664157\",\"8661288\",1,1,0,0,\"Matched\",\"-4002869\"],[2023,\"1716000011\",\"512172\",\"Homelessness Strategies & Solutions\",null,\"Contractual Services - Other Agencies\",\"3450000\",null,1,null,0,null,\"Missing actuals\",null],[2023,\"1914121112\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"10322831\",\"6923829\",1,1,0,0,\"Matched\",\"-3399002\"],[2023,\"1714121101\",\"500011\",\"Parks & Recreation\",\"Parks & Recreation\",\"Salaried Wages\",\"4126600\",\"767052\",1,1,0,0,\"Matched\",\"-3359548\"],[2023,\"1914121119\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"9029406\",\"5761419\",1,1,0,0,\"Matched\",\"-3267987\"],[2023,\"1714121301\",\"500011\",\"Parks & Recreation\",\"Parks & Recreation\",\"Salaried Wages\",\"4511236\",\"1450419\",1,1,0,0,\"Matched\",\"-3060817\"],[2023,\"1914000001\",\"500136\",\"Police\",null,\"Holiday Credit on Day Off\",\"3011628\",null,1,null,0,null,\"Missing actuals\",null],[2023,\"1914121115\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"8463523\",\"5517426\",1,1,0,0,\"Matched\",\"-2946097\"]]}",
+      "sql": "WITH b0 AS (SELECT CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fy, CAST(funds_center_number AS VARCHAR) AS center, CAST(account_number AS VARCHAR) AS account_number, dept_name, account, amount FROM \"analysis_regional_data_6248b76b917ad88fb00a1800\" WHERE CAST(fund_number AS VARCHAR) = '100000' AND CAST(account_number AS VARCHAR) LIKE '5%' AND lower(trim(budget_cycle)) = 'adopted'), a0 AS (SELECT CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fy, CAST(funds_center_number AS VARCHAR) AS center, CAST(account_number AS VARCHAR) AS account_number, dept_name, account, amount FROM \"analysis_regional_data_7ee003c264e5cfe2fe14254e\" WHERE CAST(fund_number AS VARCHAR) = '100000' AND CAST(account_number AS VARCHAR) LIKE '5%' ), period AS (SELECT MAX(b0.fy) AS fy FROM (SELECT DISTINCT fy FROM b0) b0 JOIN (SELECT DISTINCT fy FROM a0) a0 ON b0.fy=a0.fy WHERE b0.fy <= 2026), b AS (SELECT fy, center, account_number, STRING_AGG(DISTINCT dept_name, ' | ' ORDER BY dept_name) AS departments, STRING_AGG(DISTINCT account, ' | ' ORDER BY account) AS account_labels, SUM(amount) AS amount, COUNT(*) AS source_rows, COUNT(*) - COUNT(amount) AS missing_amounts FROM b0 WHERE fy = (SELECT fy FROM period) GROUP BY 1,2,3), a AS (SELECT fy, center, account_number, STRING_AGG(DISTINCT dept_name, ' | ' ORDER BY dept_name) AS departments, STRING_AGG(DISTINCT account, ' | ' ORDER BY account) AS account_labels, SUM(amount) AS amount, COUNT(*) AS source_rows, COUNT(*) - COUNT(amount) AS missing_amounts FROM a0 WHERE fy = (SELECT fy FROM period) GROUP BY 1,2,3) SELECT COALESCE(b.fy,a.fy) AS fiscal_year, COALESCE(b.center,a.center) AS funds_center_number, COALESCE(b.account_number,a.account_number) AS account_number, b.departments AS budget_departments, a.departments AS actual_departments, COALESCE(a.account_labels,b.account_labels) AS account, b.amount AS adopted_budget, a.amount AS actual_spending, b.source_rows AS budget_rows, a.source_rows AS actual_rows, b.missing_amounts AS budget_nulls, a.missing_amounts AS actual_nulls, CASE WHEN b.source_rows IS NULL THEN 'Missing budget baseline' WHEN a.source_rows IS NULL THEN 'Missing actuals' WHEN b.missing_amounts > 0 OR a.missing_amounts > 0 THEN 'Incomplete amounts' ELSE 'Matched' END AS comparison_status, CASE WHEN b.missing_amounts=0 AND a.missing_amounts=0 THEN a.amount-b.amount END AS actual_minus_adopted FROM b FULL OUTER JOIN a ON b.fy=a.fy AND b.center=a.center AND b.account_number=a.account_number WHERE (contains(lower(COALESCE(a.departments,'') || ' ' || COALESCE(b.departments,'')), 'police') OR contains(lower(COALESCE(a.departments,'') || ' ' || COALESCE(b.departments,'')), 'homeless') OR contains(lower(COALESCE(a.departments,'') || ' ' || COALESCE(b.departments,'')), 'park') OR contains(lower(COALESCE(a.departments,'') || ' ' || COALESCE(b.departments,'')), 'librar')) ORDER BY ABS(CASE WHEN b.source_rows IS NULL THEN a.amount WHEN a.source_rows IS NULL THEN b.amount ELSE a.amount-b.amount END) DESC NULLS LAST LIMIT 24",
+      "snapshotProvenance": [
+        "analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e",
+        "analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+      ],
+      "sourceReferences": [
+        {
+          "url": "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv",
+          "snapshot": "regional-data-7ee003c264e5cfe2fe14254e",
+          "sha256": "53cfc7488c40c2d3b654c64ba8599bc11a4086fa5efe403371c38eff78dd2143"
+        },
+        {
+          "url": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+          "snapshot": "regional-data-6248b76b917ad88fb00a1800",
+          "sha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5"
+        }
+      ],
+      "limitations": "Read-only analytical query; 24 result rows; truncated: false. Assumptions to verify: City General Fund 100000; expense accounts beginning 5; adopted budget only. Fiscal-year codes under 100 normalized by adding 2000. Fiscal years have ended, but ledger close/finality is not established. Budget/actuals aggregate within each key before joining; missing counterparts and null amounts are not zero. Department names may change; inspect stable funds-center/account comparison. Department spending is not a program, abatement-event or restroom cost. Variance is against original adopted appropriation, not revised legal authority. Do not add City and SDHC transfers or infer outcomes/waste from these comparisons.. Snapshot provenance: analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e; analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+    },
+    {
+      "id": "sql:e6231241d960d77f",
+      "label": "Three-year General Fund spending and allocation history for relevant departments",
+      "sourceUrl": null,
+      "portalKey": null,
+      "requestId": null,
+      "documentId": null,
+      "characterOffset": null,
+      "sourceSha256": "e6231241d960d77fee7b6ec8fcf99276adc5793015657e7f9ea801af463123c2",
+      "text": "{\"columns\":[\"fiscal_year\",\"department\",\"adopted_budget\",\"actual_spending\",\"actual_minus_adopted\"],\"rows\":[[2023,\"Commission on Police Practices\",\"2550352\",\"791792\",\"-1758560\"],[2022,\"Commission on Police Practices\",\"1327134\",\"491390\",\"-835744\"],[2023,\"Homelessness Strategies & Solutions\",\"25157607\",\"22920122\",\"-2237485\"],[2022,\"Homelessness Strategies & Solutions\",\"18071824\",\"9815698\",\"-8256126\"],[2021,\"Homelessness Strategies & Solutions\",\"49135899\",\"42779044\",\"-6356855\"],[2023,\"Library\",\"66823341\",\"67586967\",\"763626\"],[2022,\"Library\",\"60741326\",\"61226563\",\"485237\"],[2021,\"Library\",\"59665414\",\"54676088\",\"-4989326\"],[2023,\"Parks & Recreation\",\"161934929\",\"157885927\",\"-4049002\"],[2022,\"Parks & Recreation\",\"133859293\",\"128755327\",\"-5103966\"],[2021,\"Parks & Recreation\",\"121960039\",\"116749648\",\"-5210391\"],[2023,\"Police\",\"584706166\",\"588906166\",\"4200000\"],[2022,\"Police\",\"593292386\",\"604197963\",\"10905577\"],[2021,\"Police\",\"568243558\",\"558797942\",\"-9445616\"]]}",
+      "sql": "WITH b0 AS (SELECT CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fy, CAST(funds_center_number AS VARCHAR) AS center, CAST(account_number AS VARCHAR) AS account_number, dept_name, account, amount FROM \"analysis_regional_data_6248b76b917ad88fb00a1800\" WHERE CAST(fund_number AS VARCHAR) = '100000' AND CAST(account_number AS VARCHAR) LIKE '5%' AND lower(trim(budget_cycle)) = 'adopted'), a0 AS (SELECT CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fy, CAST(funds_center_number AS VARCHAR) AS center, CAST(account_number AS VARCHAR) AS account_number, dept_name, account, amount FROM \"analysis_regional_data_7ee003c264e5cfe2fe14254e\" WHERE CAST(fund_number AS VARCHAR) = '100000' AND CAST(account_number AS VARCHAR) LIKE '5%' ), period AS (SELECT MAX(b0.fy) AS fy FROM (SELECT DISTINCT fy FROM b0) b0 JOIN (SELECT DISTINCT fy FROM a0) a0 ON b0.fy=a0.fy WHERE b0.fy <= 2026), b AS (SELECT fy,dept_name,CASE WHEN COUNT(*)=COUNT(amount) THEN SUM(amount) END AS adopted_budget FROM b0 WHERE (contains(lower(dept_name), 'police') OR contains(lower(dept_name), 'homeless') OR contains(lower(dept_name), 'park') OR contains(lower(dept_name), 'librar')) AND fy BETWEEN (SELECT fy-2 FROM period) AND (SELECT fy FROM period) GROUP BY 1,2), a AS (SELECT fy,dept_name,CASE WHEN COUNT(*)=COUNT(amount) THEN SUM(amount) END AS actual_spending FROM a0 WHERE (contains(lower(dept_name), 'police') OR contains(lower(dept_name), 'homeless') OR contains(lower(dept_name), 'park') OR contains(lower(dept_name), 'librar')) AND fy BETWEEN (SELECT fy-2 FROM period) AND (SELECT fy FROM period) GROUP BY 1,2) SELECT COALESCE(b.fy,a.fy) AS fiscal_year,COALESCE(b.dept_name,a.dept_name) AS department,b.adopted_budget,a.actual_spending,a.actual_spending-b.adopted_budget AS actual_minus_adopted FROM b FULL OUTER JOIN a ON b.fy=a.fy AND b.dept_name=a.dept_name ORDER BY department,fiscal_year DESC LIMIT 36",
+      "snapshotProvenance": [
+        "analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e",
+        "analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+      ],
+      "sourceReferences": [
+        {
+          "url": "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv",
+          "snapshot": "regional-data-7ee003c264e5cfe2fe14254e",
+          "sha256": "53cfc7488c40c2d3b654c64ba8599bc11a4086fa5efe403371c38eff78dd2143"
+        },
+        {
+          "url": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+          "snapshot": "regional-data-6248b76b917ad88fb00a1800",
+          "sha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5"
+        }
+      ],
+      "limitations": "Read-only analytical query; 14 result rows; truncated: false. Assumptions to verify: City General Fund 100000; expense accounts beginning 5; adopted budget only. Fiscal-year codes under 100 normalized by adding 2000. Fiscal years have ended, but ledger close/finality is not established. Budget/actuals aggregate within each key before joining; missing counterparts and null amounts are not zero. Department names may change; inspect stable funds-center/account comparison. Department spending is not a program, abatement-event or restroom cost. Variance is against original adopted appropriation, not revised legal authority. Do not add City and SDHC transfers or infer outcomes/waste from these comparisons.. Snapshot provenance: analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e; analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+    },
+    {
+      "id": "sql:6025e01d78486501",
+      "label": "Latest explicitly adopted General Fund allocation changes and service tradeoffs",
+      "sourceUrl": null,
+      "portalKey": null,
+      "requestId": null,
+      "documentId": null,
+      "characterOffset": null,
+      "sourceSha256": "6025e01d7848650100b4fea589ea0f709edad11fc7648b4d3c968d43f5d52e5a",
+      "text": "{\"columns\":[\"fiscal_year\",\"department\",\"prior_adopted\",\"current_adopted\",\"allocation_change\"],\"rows\":[[2025,\"Police\",\"622908762\",\"673002146\",\"50093384\"],[2025,\"Homelessness Strategies & Solutions\",\"44007454\",\"53916571\",\"9909117\"],[2025,\"Parks & Recreation\",\"178289156\",\"184235182\",\"5946026\"],[2025,\"Library\",\"73160862\",\"77069362\",\"3908500\"],[2025,\"Commission on Police Practices\",\"2241817\",\"2145832\",\"-95985\"]]}",
+      "sql": "WITH b0 AS (SELECT CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fy, CAST(funds_center_number AS VARCHAR) AS center, CAST(account_number AS VARCHAR) AS account_number, dept_name, account, amount FROM \"analysis_regional_data_6248b76b917ad88fb00a1800\" WHERE CAST(fund_number AS VARCHAR) = '100000' AND CAST(account_number AS VARCHAR) LIKE '5%' AND lower(trim(budget_cycle)) = 'adopted'), period AS (SELECT MAX(fy) AS fy FROM b0 WHERE fy <= 2027), totals AS (SELECT fy,dept_name,CASE WHEN COUNT(*)=COUNT(amount) THEN SUM(amount) END AS adopted FROM b0 WHERE (contains(lower(dept_name), 'police') OR contains(lower(dept_name), 'homeless') OR contains(lower(dept_name), 'park') OR contains(lower(dept_name), 'librar')) GROUP BY 1,2), current_year AS (SELECT * FROM totals WHERE fy=(SELECT fy FROM period)), prior_year AS (SELECT * FROM totals WHERE fy=(SELECT fy-1 FROM period)) SELECT (SELECT fy FROM period) AS fiscal_year,COALESCE(c.dept_name,p.dept_name) AS department,p.adopted AS prior_adopted,c.adopted AS current_adopted,c.adopted-p.adopted AS allocation_change FROM current_year c FULL OUTER JOIN prior_year p ON c.dept_name=p.dept_name ORDER BY ABS(allocation_change) DESC NULLS LAST LIMIT 24",
+      "snapshotProvenance": [
+        "analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+      ],
+      "sourceReferences": [
+        {
+          "url": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+          "snapshot": "regional-data-6248b76b917ad88fb00a1800",
+          "sha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5"
+        }
+      ],
+      "limitations": "Read-only analytical query; 5 result rows; truncated: false. Assumptions to verify: City General Fund 100000; expense accounts beginning 5; adopted budget only. Fiscal-year codes under 100 normalized by adding 2000. Fiscal years have ended, but ledger close/finality is not established. Budget/actuals aggregate within each key before joining; missing counterparts and null amounts are not zero. Department names may change; inspect stable funds-center/account comparison. Department spending is not a program, abatement-event or restroom cost. Variance is against original adopted appropriation, not revised legal authority. Do not add City and SDHC transfers or infer outcomes/waste from these comparisons.. Snapshot provenance: analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+    },
+    {
+      "id": "sql:866037066b165164",
+      "label": "Police overtime: adopted allocation versus actual spending in ended fiscal years",
+      "sourceUrl": null,
+      "portalKey": null,
+      "requestId": null,
+      "documentId": null,
+      "characterOffset": null,
+      "sourceSha256": "866037066b1651649586429853e12d0ef7bae9a26edf9f3ad4ea75d4e8d2f622",
+      "text": "{\"columns\":[\"fiscal_year\",\"adopted_overtime\",\"actual_overtime\",\"overtime_variance\"],\"rows\":[[2023,\"40162474\",\"50818708\",\"10656234\"],[2022,\"30678213\",\"40906497\",\"10228284\"],[2021,\"33715021\",\"32899783\",\"-815238\"]]}",
+      "sql": "WITH b0 AS (SELECT CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fy, CAST(funds_center_number AS VARCHAR) AS center, CAST(account_number AS VARCHAR) AS account_number, dept_name, account, amount FROM \"analysis_regional_data_6248b76b917ad88fb00a1800\" WHERE CAST(fund_number AS VARCHAR) = '100000' AND CAST(account_number AS VARCHAR) LIKE '5%' AND lower(trim(budget_cycle)) = 'adopted'), a0 AS (SELECT CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fy, CAST(funds_center_number AS VARCHAR) AS center, CAST(account_number AS VARCHAR) AS account_number, dept_name, account, amount FROM \"analysis_regional_data_7ee003c264e5cfe2fe14254e\" WHERE CAST(fund_number AS VARCHAR) = '100000' AND CAST(account_number AS VARCHAR) LIKE '5%' ), period AS (SELECT MAX(b0.fy) AS fy FROM (SELECT DISTINCT fy FROM b0) b0 JOIN (SELECT DISTINCT fy FROM a0) a0 ON b0.fy=a0.fy WHERE b0.fy <= 2026), b AS (SELECT fy,CASE WHEN COUNT(*)=COUNT(amount) THEN SUM(amount) END AS adopted FROM b0 WHERE lower(trim(dept_name))='police' AND contains(lower(account),'overtime') GROUP BY fy), a AS (SELECT fy,CASE WHEN COUNT(*)=COUNT(amount) THEN SUM(amount) END AS actual FROM a0 WHERE lower(trim(dept_name))='police' AND contains(lower(account),'overtime') GROUP BY fy) SELECT COALESCE(b.fy,a.fy) AS fiscal_year,b.adopted AS adopted_overtime,a.actual AS actual_overtime,a.actual-b.adopted AS overtime_variance FROM b FULL OUTER JOIN a ON a.fy=b.fy WHERE COALESCE(b.fy,a.fy) BETWEEN (SELECT fy-2 FROM period) AND (SELECT fy FROM period) ORDER BY fiscal_year DESC",
+      "snapshotProvenance": [
+        "analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e",
+        "analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+      ],
+      "sourceReferences": [
+        {
+          "url": "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv",
+          "snapshot": "regional-data-7ee003c264e5cfe2fe14254e",
+          "sha256": "53cfc7488c40c2d3b654c64ba8599bc11a4086fa5efe403371c38eff78dd2143"
+        },
+        {
+          "url": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+          "snapshot": "regional-data-6248b76b917ad88fb00a1800",
+          "sha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5"
+        }
+      ],
+      "limitations": "Read-only analytical query; 3 result rows; truncated: false. Assumptions to verify: City General Fund 100000; expense accounts beginning 5; adopted budget only. Fiscal-year codes under 100 normalized by adding 2000. Fiscal years have ended, but ledger close/finality is not established. Budget/actuals aggregate within each key before joining; missing counterparts and null amounts are not zero. Department names may change; inspect stable funds-center/account comparison. Department spending is not a program, abatement-event or restroom cost. Variance is against original adopted appropriation, not revised legal authority. Do not add City and SDHC transfers or infer outcomes/waste from these comparisons.. Snapshot provenance: analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e; analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+    },
+    {
+      "id": "sql:5eebf00b3b3d312d",
+      "label": "What police account numbers and labels appear in adopted budget versus actuals for staffing-, overtime-, holiday-, and savings-related lines in FY2021-FY2023, and which keys exist on only one side?",
+      "sourceUrl": null,
+      "portalKey": null,
+      "requestId": null,
+      "documentId": null,
+      "characterOffset": null,
+      "sourceSha256": "5eebf00b3b3d312d2538c8c9c1298e086fa0a21def4f335c4bd61a698cf876d7",
+      "text": "{\"columns\":[\"fiscal_year\",\"account_number\",\"budget_account_label\",\"actual_account_label\",\"budget_rows\",\"actual_rows\",\"budget_amount\",\"actual_amount\",\"presence_status\"],\"rows\":[[2023,\"500010\",\"Salary Savings\",null,56,null,\"-710915\",null,\"Budget only\"],[2023,\"500011\",\"Salaried Wages\",\"Salaried Wages\",92,96,\"247215809\",\"172011006\",\"Present in both\"],[2023,\"500018\",null,\"Holidays\",null,91,null,\"8076474\",\"Actual only\"],[2023,\"500026\",null,\"D/L-Standby\",null,55,null,\"1659863\",\"Actual only\"],[2023,\"500092\",null,\"Standby Pay\",null,7,null,\"33096\",\"Actual only\"],[2023,\"500124\",null,\"Overtime - Premium\",null,82,null,\"45263953\",\"Actual only\"],[2023,\"500128\",\"Overtime Budgeted\",null,79,null,\"40162474\",null,\"Budget only\"],[2023,\"500133\",null,\"Overtime - Comp\",null,69,null,\"5554755\",\"Actual only\"],[2023,\"500136\",\"Holiday Credit on Day Off\",\"Holiday Credit on Day Off\",1,72,\"3011628\",\"3507979\",\"Present in both\"],[2023,\"500189\",\"Budgeted Personnel Expenditure Savings\",null,41,null,\"-21372414\",null,\"Budget only\"],[2022,\"500010\",\"Salary Savings\",null,59,null,\"-689318\",null,\"Budget only\"],[2022,\"500011\",\"Salaried Wages\",\"Salaried Wages\",93,94,\"236439970\",\"167529100\",\"Present in both\"],[2022,\"500018\",null,\"Holidays\",null,92,null,\"7459436\",\"Actual only\"],[2022,\"500026\",null,\"D/L-Standby\",null,56,null,\"1639760\",\"Actual only\"],[2022,\"500092\",\"Standby Pay\",\"Standby Pay\",1,6,\"2698\",\"28400\",\"Present in both\"],[2022,\"500124\",null,\"Overtime - Premium\",null,78,null,\"36894588\",\"Actual only\"],[2022,\"500128\",\"Overtime Budgeted\",null,78,null,\"30678213\",null,\"Budget only\"],[2022,\"500133\",null,\"Overtime - Comp\",null,63,null,\"4011909\",\"Actual only\"],[2022,\"500136\",\"Holiday Credit on Day Off\",\"Holiday Credit on Day Off\",1,72,\"3011628\",\"2490691\",\"Present in both\"],[2022,\"500189\",\"Budgeted Personnel Expenditure Savings\",null,43,null,\"-17790832\",null,\"Budget only\"],[2021,\"500010\",\"Salary Savings\",null,55,null,\"-665268\",null,\"Budget only\"],[2021,\"500011\",\"Salaried Wages\",\"Salaried Wages\",92,95,\"234152528\",\"166845541\",\"Present in both\"],[2021,\"500018\",null,\"Holidays\",null,93,null,\"7157321\",\"Actual only\"],[2021,\"500026\",null,\"D/L-Standby\",null,57,null,\"1640415\",\"Actual only\"],[2021,\"500092\",null,\"Standby Pay\",null,8,null,\"30908\",\"Actual only\"],[2021,\"500124\",null,\"Overtime - Premium\",null,77,null,\"28091563\",\"Actual only\"],[2021,\"500128\",\"Overtime Budgeted\",null,79,null,\"33715021\",null,\"Budget only\"],[2021,\"500133\",null,\"Overtime - Comp\",null,65,null,\"4808220\",\"Actual only\"],[2021,\"500136\",\"Holiday Credit on Day Off\",\"Holiday Credit on Day Off\",1,74,\"3011628\",\"2703737\",\"Present in both\"],[2021,\"500189\",\"Budgeted Personnel Expenditure Savings\",null,44,null,\"-20419506\",null,\"Budget only\"]]}",
+      "sql": "WITH b AS ( SELECT CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fiscal_year, CAST(account_number AS VARCHAR) AS account_number, account, COUNT(*) AS budget_rows, SUM(amount) AS budget_amount FROM \"analysis_regional_data_6248b76b917ad88fb00a1800\" WHERE CAST(fund_number AS VARCHAR) = '100000' AND lower(trim(dept_name)) = 'police' AND lower(trim(budget_cycle)) = 'adopted' AND ( contains(lower(account), 'overtime') OR contains(lower(account), 'salary') OR contains(lower(account), 'salaried') OR contains(lower(account), 'holiday') OR contains(lower(account), 'standby') OR contains(lower(account), 'personnel expenditure savings') ) GROUP BY 1,2,3 ), a AS ( SELECT CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fiscal_year, CAST(account_number AS VARCHAR) AS account_number, account, COUNT(*) AS actual_rows, SUM(amount) AS actual_amount FROM \"analysis_regional_data_7ee003c264e5cfe2fe14254e\" WHERE CAST(fund_number AS VARCHAR) = '100000' AND lower(trim(dept_name)) = 'police' AND ( contains(lower(account), 'overtime') OR contains(lower(account), 'salary') OR contains(lower(account), 'salaried') OR contains(lower(account), 'holiday') OR contains(lower(account), 'standby') OR contains(lower(account), 'personnel expenditure savings') ) GROUP BY 1,2,3 ) SELECT COALESCE(b.fiscal_year, a.fiscal_year) AS fiscal_year, COALESCE(b.account_number, a.account_number) AS account_number, b.account AS budget_account_label, a.account AS actual_account_label, b.budget_rows, a.actual_rows, b.budget_amount, a.actual_amount, CASE WHEN b.account_number IS NULL THEN 'Actual only' WHEN a.account_number IS NULL THEN 'Budget only' ELSE 'Present in both' END AS presence_status FROM b FULL OUTER JOIN a ON b.fiscal_year = a.fiscal_year AND b.account_number = a.account_number WHERE COALESCE(b.fiscal_year, a.fiscal_year) BETWEEN 2021 AND 2023 ORDER BY fiscal_year DESC, account_number;",
+      "snapshotProvenance": [
+        "analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e",
+        "analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+      ],
+      "sourceReferences": [
+        {
+          "url": "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv",
+          "snapshot": "regional-data-7ee003c264e5cfe2fe14254e",
+          "sha256": "53cfc7488c40c2d3b654c64ba8599bc11a4086fa5efe403371c38eff78dd2143"
+        },
+        {
+          "url": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+          "snapshot": "regional-data-6248b76b917ad88fb00a1800",
+          "sha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5"
+        }
+      ],
+      "limitations": "Read-only analytical query; 30 result rows; truncated: false. Assumptions to verify: General Fund 100000 only; Police dept_name is stable; the keyword filter is only a key-inspection pass and should not yet be treated as the final overtime definition.. Snapshot provenance: analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e; analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+    },
+    {
+      "id": "sql:30176210bb12993c",
+      "label": "For FY2023, which police funds-center/account combinations show the largest mismatches between adopted staffing/overtime-related budget lines and actual spending, including missing counterparts on either side?",
+      "sourceUrl": null,
+      "portalKey": null,
+      "requestId": null,
+      "documentId": null,
+      "characterOffset": null,
+      "sourceSha256": "30176210bb12993cc861e43840ca49f1b9b5849594a773b373c8d0b76d907f1e",
+      "text": "{\"columns\":[\"fiscal_year\",\"funds_center_number\",\"account_number\",\"budget_account_label\",\"actual_account_label\",\"adopted_budget\",\"actual_spending\",\"comparison_status\",\"actual_minus_adopted\"],\"rows\":[[2023,\"1914180011\",\"500128\",\"Overtime Budgeted\",null,\"7924735\",null,\"Missing actuals\",null],[2023,\"1914121111\",\"500128\",\"Overtime Budgeted\",null,\"7301363\",null,\"Missing actuals\",null],[2023,\"1914121117\",\"500124\",null,\"Overtime - Premium\",null,\"6402389\",\"Missing budget baseline\",null],[2023,\"1914121111\",\"500011\",\"Salaried Wages\",\"Salaried Wages\",\"18709182\",\"13095797\",\"Matched\",\"-5613385\"],[2023,\"1914121117\",\"500011\",\"Salaried Wages\",\"Salaried Wages\",\"15430565\",\"10080402\",\"Matched\",\"-5350163\"],[2023,\"1914121111\",\"500189\",\"Budgeted Personnel Expenditure Savings\",null,\"-5034622\",null,\"Missing actuals\",null],[2023,\"1914121120\",\"500011\",\"Salaried Wages\",\"Salaried Wages\",\"13633356\",\"8728574\",\"Matched\",\"-4904782\"],[2023,\"1914121111\",\"500124\",null,\"Overtime - Premium\",null,\"4605048\",\"Missing budget baseline\",null],[2023,\"1914131511\",\"500011\",\"Salaried Wages\",\"Salaried Wages\",\"11548934\",\"7056098\",\"Matched\",\"-4492836\"],[2023,\"1914161113\",\"500011\",\"Salaried Wages\",\"Salaried Wages\",\"9736454\",\"5358965\",\"Matched\",\"-4377489\"],[2023,\"1914121113\",\"500011\",\"Salaried Wages\",\"Salaried Wages\",\"15245765\",\"11108670\",\"Matched\",\"-4137095\"],[2023,\"1914121118\",\"500011\",\"Salaried Wages\",\"Salaried Wages\",\"12664157\",\"8661288\",\"Matched\",\"-4002869\"],[2023,\"1914121112\",\"500011\",\"Salaried Wages\",\"Salaried Wages\",\"10322831\",\"6923829\",\"Matched\",\"-3399002\"],[2023,\"1914121119\",\"500011\",\"Salaried Wages\",\"Salaried Wages\",\"9029406\",\"5761419\",\"Matched\",\"-3267987\"],[2023,\"1914000001\",\"500136\",\"Holiday Credit on Day Off\",null,\"3011628\",null,\"Missing actuals\",null],[2023,\"1914121115\",\"500011\",\"Salaried Wages\",\"Salaried Wages\",\"8463523\",\"5517426\",\"Matched\",\"-2946097\"],[2023,\"1914121118\",\"500124\",null,\"Overtime - Premium\",null,\"2610294\",\"Missing budget baseline\",null],[2023,\"1914131511\",\"500128\",\"Overtime Budgeted\",null,\"2516516\",null,\"Missing actuals\",null],[2023,\"1914141311\",\"500011\",\"Salaried Wages\",\"Salaried Wages\",\"8080335\",\"5572445\",\"Matched\",\"-2507890\"],[2023,\"1914180011\",\"500011\",\"Salaried Wages\",\"Salaried Wages\",\"5544546\",\"3169057\",\"Matched\",\"-2375489\"],[2023,\"1914121113\",\"500124\",null,\"Overtime - Premium\",null,\"2324274\",\"Missing budget baseline\",null],[2023,\"1914121116\",\"500011\",\"Salaried Wages\",\"Salaried Wages\",\"5791998\",\"3494481\",\"Matched\",\"-2297517\"],[2023,\"1914121115\",\"500124\",null,\"Overtime - Premium\",null,\"2243081\",\"Missing budget baseline\",null],[2023,\"1914171111\",\"500011\",\"Salaried Wages\",\"Salaried Wages\",\"4643663\",\"2414299\",\"Matched\",\"-2229364\"],[2023,\"1914121120\",\"500124\",null,\"Overtime - Premium\",null,\"2222701\",\"Missing budget baseline\",null],[2023,\"1914121119\",\"500124\",null,\"Overtime - Premium\",null,\"2153445\",\"Missing budget baseline\",null],[2023,\"1914121117\",\"500128\",\"Overtime Budgeted\",null,\"2082861\",null,\"Missing actuals\",null],[2023,\"1914171112\",\"500011\",\"Salaried Wages\",\"Salaried Wages\",\"4967271\",\"2972406\",\"Matched\",\"-1994865\"],[2023,\"1914121120\",\"500128\",\"Overtime Budgeted\",null,\"1874237\",null,\"Missing actuals\",null],[2023,\"1914121113\",\"500128\",\"Overtime Budgeted\",null,\"1839957\",null,\"Missing actuals\",null],[2023,\"1914161113\",\"500189\",\"Budgeted Personnel Expenditure Savings\",null,\"-1828046\",null,\"Missing actuals\",null],[2023,\"1914131511\",\"500124\",null,\"Overtime - Premium\",null,\"1818172\",\"Missing budget baseline\",null],[2023,\"1914171112\",\"500128\",\"Overtime Budgeted\",null,\"1786806\",null,\"Missing actuals\",null],[2023,\"1914180011\",\"500124\",null,\"Overtime - Premium\",null,\"1739743\",\"Missing budget baseline\",null],[2023,\"1914121112\",\"500124\",null,\"Overtime - Premium\",null,\"1615538\",\"Missing budget baseline\",null],[2023,\"1914121118\",\"500128\",\"Overtime Budgeted\",null,\"1538450\",null,\"Missing actuals\",null],[2023,\"1914141311\",\"500189\",\"Budgeted Personnel Expenditure Savings\",null,\"-1512012\",null,\"Missing actuals\",null],[2023,\"1914171112\",\"500124\",null,\"Overtime - Premium\",null,\"1374532\",\"Missing budget baseline\",null],[2023,\"1914121117\",\"500189\",\"Budgeted Personnel Expenditure Savings\",null,\"-1372640\",null,\"Missing actuals\",null],[2023,\"1914121116\",\"500124\",null,\"Overtime - Premium\",null,\"1368716\",\"Missing budget baseline\",null]]}",
+      "sql": "WITH b AS ( SELECT CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fiscal_year, CAST(funds_center_number AS VARCHAR) AS center, CAST(account_number AS VARCHAR) AS account_number, STRING_AGG(DISTINCT account, ' | ' ORDER BY account) AS budget_account_label, SUM(amount) AS adopted_budget FROM \"analysis_regional_data_6248b76b917ad88fb00a1800\" WHERE CAST(fund_number AS VARCHAR) = '100000' AND lower(trim(dept_name)) = 'police' AND lower(trim(budget_cycle)) = 'adopted' AND ( CAST(account_number AS VARCHAR) IN ('500010','500011','500124','500128','500133','500136','500189') OR contains(lower(account), 'overtime') OR contains(lower(account), 'salary') OR contains(lower(account), 'salaried') OR contains(lower(account), 'holiday') OR contains(lower(account), 'personnel expenditure savings') ) GROUP BY 1,2,3 ), a AS ( SELECT CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fiscal_year, CAST(funds_center_number AS VARCHAR) AS center, CAST(account_number AS VARCHAR) AS account_number, STRING_AGG(DISTINCT account, ' | ' ORDER BY account) AS actual_account_label, SUM(amount) AS actual_spending FROM \"analysis_regional_data_7ee003c264e5cfe2fe14254e\" WHERE CAST(fund_number AS VARCHAR) = '100000' AND lower(trim(dept_name)) = 'police' AND ( CAST(account_number AS VARCHAR) IN ('500010','500011','500124','500128','500133','500136','500189') OR contains(lower(account), 'overtime') OR contains(lower(account), 'salary') OR contains(lower(account), 'salaried') OR contains(lower(account), 'holiday') OR contains(lower(account), 'personnel expenditure savings') ) GROUP BY 1,2,3 ) SELECT COALESCE(b.fiscal_year, a.fiscal_year) AS fiscal_year, COALESCE(b.center, a.center) AS funds_center_number, COALESCE(b.account_number, a.account_number) AS account_number, b.budget_account_label, a.actual_account_label, b.adopted_budget, a.actual_spending, CASE WHEN b.center IS NULL THEN 'Missing budget baseline' WHEN a.center IS NULL THEN 'Missing actuals' ELSE 'Matched' END AS comparison_status, CASE WHEN b.center IS NOT NULL AND a.center IS NOT NULL THEN a.actual_spending - b.adopted_budget END AS actual_minus_adopted FROM b FULL OUTER JOIN a ON b.fiscal_year = a.fiscal_year AND b.center = a.center AND b.account_number = a.account_number WHERE COALESCE(b.fiscal_year, a.fiscal_year) = 2023 ORDER BY ABS(COALESCE(actual_minus_adopted, COALESCE(a.actual_spending, b.adopted_budget))) DESC, funds_center_number, account_number;",
+      "snapshotProvenance": [
+        "analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e",
+        "analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+      ],
+      "sourceReferences": [
+        {
+          "url": "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv",
+          "snapshot": "regional-data-7ee003c264e5cfe2fe14254e",
+          "sha256": "53cfc7488c40c2d3b654c64ba8599bc11a4086fa5efe403371c38eff78dd2143"
+        },
+        {
+          "url": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+          "snapshot": "regional-data-6248b76b917ad88fb00a1800",
+          "sha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5"
+        }
+      ],
+      "limitations": "Read-only analytical query; 40 result rows; truncated: true. Assumptions to verify: FY2023 is the latest ended year with both budget and actuals in the current dataset; this query tests the vacancy-versus-underbudgeting explanation at the operational-unit level, not legal revised authority.. Snapshot provenance: analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e; analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+    },
+    {
+      "id": "sql:daddde70b3e2dd83",
+      "label": "How did the adopted Police budget change from FY2024 to FY2025 by account key, and was the increase concentrated in overtime/staffing lines, benefits, or other spending categories?",
+      "sourceUrl": null,
+      "portalKey": null,
+      "requestId": null,
+      "documentId": null,
+      "characterOffset": null,
+      "sourceSha256": "daddde70b3e2dd83cf496de0768fad632e95be8a84033aaaa980812434dcd87d",
+      "text": "{\"columns\":[\"account_number\",\"account_label\",\"account_prefix\",\"fy2024_adopted\",\"fy2025_adopted\",\"change_status\",\"adopted_change\"],\"rows\":[[\"502015\",\"CERS - Saf Ret - Police\",\"502\",\"88366295\",\"121297144\",\"Present in both\",\"32930849\"],[\"500011\",\"Salaried Wages\",\"500\",\"271608292\",\"287295323\",\"Present in both\",\"15687031\"],[\"502093\",\"CERS-Safety Retirement-Police 2014\",\"502\",\"19919287\",\"26475693\",\"Present in both\",\"6556406\"],[\"502046\",\"Workers' Comp Insurance\",\"502\",\"20305662\",\"15769327\",\"Present in both\",\"-4536335\"],[\"500199\",\"Adjust Budget To Approved Levels\",\"500\",null,\"-3814500\",\"Added in FY2025\",null],[\"502052\",\"Retiree Health Contribution\",\"502\",\"13180939\",\"9575332\",\"Present in both\",\"-3605607\"],[\"500189\",\"Budgeted Personnel Expenditure Savings\",\"500\",\"-32194363\",\"-28987991\",\"Present in both\",\"3206372\"],[\"500128\",\"Overtime Budgeted\",\"500\",\"49337051\",\"46373409\",\"Present in both\",\"-2963642\"],[\"511072\",\"Lighting Fixtures\",\"511\",\"3512724\",\"2012724\",\"Present in both\",\"-1500000\"],[\"502079\",\"CERS-Safety Retirement-Police 2010\",\"502\",\"2063290\",\"3399881\",\"Present in both\",\"1336591\"],[\"514112\",\"Wireless Communication Transfer\",\"514\",\"6415866\",\"5202702\",\"Present in both\",\"-1213164\"],[\"516021\",\"Information Technology Services Transfer\",\"516\",\"826156\",\"1909973\",\"Present in both\",\"1083817\"],[\"512102\",\"Equipment Rental - Motive Usage\",\"512\",\"13912733\",\"14778858\",\"Present in both\",\"866125\"],[\"502051\",\"Fica/Medicare Insurance\",\"502\",\"4083678\",\"4932590\",\"Present in both\",\"848912\"],[\"514011\",\"Fleet Fuel (Non-Discretionary)\",\"514\",\"5762308\",\"4914844\",\"Present in both\",\"-847464\"],[\"502091\",\"CERS-Safety Retirement-Police 2013\",\"502\",\"1755166\",\"2599690\",\"Present in both\",\"844524\"],[\"512101\",\"Equipment Rental - Motive Assign\",\"512\",\"5284154\",\"4478169\",\"Present in both\",\"-805985\"],[\"500051\",\"Advanced Post Certificate\",\"500\",\"10768198\",\"11426744\",\"Present in both\",\"658546\"],[\"502065\",\"CERS - General Retirement 2010\",\"502\",\"2666941\",\"3324689\",\"Present in both\",\"657748\"],[\"502085\",\"CERS-Safety Retirement-Police 2012\",\"502\",\"348765\",\"999871\",\"Present in both\",\"651106\"],[\"500017\",\"Vacation Pay In Lieu\",\"500\",\"3503589\",\"4096387\",\"Present in both\",\"592798\"],[\"502047\",\"Flexible Benefit Plan\",\"502\",\"32938111\",\"33413605\",\"Present in both\",\"475494\"],[\"502012\",\"CERS - General Retirement\",\"502\",\"11324130\",\"11763260\",\"Present in both\",\"439130\"],[\"500121\",\"Hourly Wages\",\"500\",\"2810262\",\"3188452\",\"Present in both\",\"378190\"],[\"500047\",\"Dispatch Cert Pay\",\"500\",\"2036465\",\"2383905\",\"Present in both\",\"347440\"],[\"500028\",\"Termination Pay Annual Leave\",\"500\",\"2360724\",\"2051381\",\"Present in both\",\"-309343\"],[\"424071\",\"Reimbursements Between Funds/Depts\",\"424\",\"6305632\",\"6596692\",\"Present in both\",\"291060\"],[\"502048\",\"Risk Mgmt Administration\",\"502\",\"2981979\",\"3207204\",\"Present in both\",\"225225\"],[\"513211\",\"Data Center\",\"513\",\"3536406\",\"3737428\",\"Present in both\",\"201022\"],[\"512059\",\"Miscellaneous Professional/Technical Ser\",\"512\",\"7094413\",\"6894413\",\"Present in both\",\"-200000\"],[\"513004\",\"Network Access - Discretionary\",\"513\",\"472432\",\"272432\",\"Present in both\",\"-200000\"],[\"417006\",\"Vehicle Code Violations\",\"417\",\"1617512\",\"1812512\",\"Present in both\",\"195000\"],[\"514102\",\"Street Lighting/Traf Sig\",\"514\",null,\"192780\",\"Added in FY2025\",null],[\"513104\",\"Hardware/Software - Discretionary\",\"513\",\"1530953\",\"1722953\",\"Present in both\",\"192000\"],[\"500055\",\"Bilingual - Regular\",\"500\",\"85904\",\"276640\",\"Present in both\",\"190736\"],[\"590113\",\"Financed Purchase - Principal\",\"590\",null,\"180000\",\"Added in FY2025\",null],[\"500053\",\"Bilingual - POA\",\"500\",\"1098055\",\"1270700\",\"Present in both\",\"172645\"],[\"500111\",\"3rd Watch Shift\",\"500\",\"1655481\",\"1812679\",\"Present in both\",\"157198\"],[\"590110\",\"Financed Purchase - Interest\",\"590\",null,\"150000\",\"Added in FY2025\",null],[\"513210\",\"Help Desk and Desktop Support\",\"513\",\"2946318\",\"3088365\",\"Present in both\",\"142047\"]]}",
+      "sql": "WITH b AS ( SELECT CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fiscal_year, CAST(account_number AS VARCHAR) AS account_number, account, SUM(amount) AS adopted_amount FROM \"analysis_regional_data_6248b76b917ad88fb00a1800\" WHERE CAST(fund_number AS VARCHAR) = '100000' AND lower(trim(dept_name)) = 'police' AND lower(trim(budget_cycle)) = 'adopted' AND CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END IN (2024, 2025) GROUP BY 1,2,3 ), fy24 AS ( SELECT account_number, account, adopted_amount FROM b WHERE fiscal_year = 2024 ), fy25 AS ( SELECT account_number, account, adopted_amount FROM b WHERE fiscal_year = 2025 ) SELECT COALESCE(fy25.account_number, fy24.account_number) AS account_number, COALESCE(fy25.account, fy24.account) AS account_label, SUBSTR(COALESCE(fy25.account_number, fy24.account_number), 1, 3) AS account_prefix, fy24.adopted_amount AS fy2024_adopted, fy25.adopted_amount AS fy2025_adopted, CASE WHEN fy24.account_number IS NULL THEN 'Added in FY2025' WHEN fy25.account_number IS NULL THEN 'Removed after FY2024' ELSE 'Present in both' END AS change_status, CASE WHEN fy24.account_number IS NOT NULL AND fy25.account_number IS NOT NULL THEN fy25.adopted_amount - fy24.adopted_amount END AS adopted_change FROM fy24 FULL OUTER JOIN fy25 ON fy24.account_number = fy25.account_number ORDER BY ABS(COALESCE(adopted_change, COALESCE(fy25.adopted_amount, fy24.adopted_amount))) DESC, account_number LIMIT 60;",
+      "snapshotProvenance": [
+        "analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+      ],
+      "sourceReferences": [
+        {
+          "url": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+          "snapshot": "regional-data-6248b76b917ad88fb00a1800",
+          "sha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5"
+        }
+      ],
+      "limitations": "Read-only analytical query; 40 result rows; truncated: true. Assumptions to verify: Compares adopted-to-adopted only, not revised authority; intended to test whether the large FY2025 Police increase looks like a catch-up for compensation/overtime or mainly reflects other account categories.. Snapshot provenance: analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+    },
+    {
+      "id": "doc:source-3ccf2a8fc1704e9b329aa2b7:5985443479405310:1179975:d19b796838",
+      "label": "budget_operating_datasd.csv",
+      "sourceUrl": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+      "portalKey": "source-3ccf2a8fc1704e9b329aa2b7",
+      "requestId": 5558692596084489,
+      "documentId": 5985443479405310,
+      "characterOffset": 1179975,
+      "sourceSha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5",
+      "text": ",\"500094\" \"56240\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"Swat Team Pay\",\"500095\" \"309726\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"3rd Watch Shift\",\"500111\" \"206279\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"2nd Watch Shift\",\"500112\" \"7030\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"Comm Relations\",\"500119\" \"7301363\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"Overtime Budgeted\",\"500128\" \"309\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"Sick Leave - Hourly\",\"500134\" \"63000\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"Service Pay\",\"500155\" \"-5034622\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"Budgeted Personnel Expenditure Savings\",\"500189\" \"3375957\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"CERS - Saf Ret - Police\",\"502015\" \"1586\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"Supp Pens Sav Plan Mandatory\",\"502021\" \"2380\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"Supp Pens Sav Plan Voluntary\",\"502022\" \"1653\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"CERS - DROP - General\",\"502029\" \"16116\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"CERS - DROP - Saf-Police\",\"502030\" \"14228\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"CERS-UAAL Police DROP\",\"502036\" \"80435\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"CERS-UAAL Police Active\",\"502044\" \"1336597\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"Workers' Comp Insurance\",\"502046\" \"2179274\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"Flexible Benefit Plan\",\"502047\" \"210865\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"Risk Mgmt Administration\",\"502048\" \"61789\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"Long Term Disability\",\"502049\" \"22455\",\"23\",\"adopted\",\"General Fund\",\"100000",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 1179975 of 63825382. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-3ccf2a8fc1704e9b329aa2b7:5985443479405310:1180266:6d38563b0a",
+      "label": "budget_operating_datasd.csv",
+      "sourceUrl": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+      "portalKey": "source-3ccf2a8fc1704e9b329aa2b7",
+      "requestId": 5558692596084489,
+      "documentId": 5985443479405310,
+      "characterOffset": 1180266,
+      "sourceSha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5",
+      "text": "00112\" \"7030\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"Comm Relations\",\"500119\" \"7301363\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"Overtime Budgeted\",\"500128\" \"309\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"Sick Leave - Hourly\",\"500134\" \"63000\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"Service Pay\",\"500155\" \"-5034622\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"Budgeted Personnel Expenditure Savings\",\"500189\" \"3375957\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"CERS - Saf Ret - Police\",\"502015\" \"1586\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"Supp Pens Sav Plan Mandatory\",\"502021\" \"2380\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"Supp Pens Sav Plan Voluntary\",\"502022\" \"1653\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"CERS - DROP - General\",\"502029\" \"16116\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"CERS - DROP - Saf-Police\",\"502030\" \"14228\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"CERS-UAAL Police DROP\",\"502036\" \"80435\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"CERS-UAAL Police Active\",\"502044\" \"1336597\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"Workers' Comp Insurance\",\"502046\" \"2179274\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"Flexible Benefit Plan\",\"502047\" \"210865\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"Risk Mgmt Administration\",\"502048\" \"61789\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"Long Term Disability\",\"502049\" \"22455\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"Unemployment Insurance\",\"502050\" \"339478\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"Fica/Medicare Insurance\",\"502051\" \"1029709\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"Retiree Health Contribution\",\"502052\" \"443\",\"23\",\"adopte",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 1180266 of 63825382. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-dbef8451c1254970abc34e9e:6045804517944699:1969097:8b02ef1df6",
+      "label": "actuals_operating_datasd.csv",
+      "sourceUrl": "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv",
+      "portalKey": "source-dbef8451c1254970abc34e9e",
+      "requestId": 4692650142466871,
+      "documentId": 6045804517944699,
+      "characterOffset": 1969097,
+      "sourceSha256": "53cfc7488c40c2d3b654c64ba8599bc11a4086fa5efe403371c38eff78dd2143",
+      "text": "00\",\"Police\",\"1914121117\",\"2-Wheel Motorcyle (POA)\",\"500096\" \"181225\",\"17\",\"General Fund\",\"100000\",\"Police\",\"1914121117\",\"3rd Watch Shift\",\"500111\" \"108194\",\"17\",\"General Fund\",\"100000\",\"Police\",\"1914121117\",\"2nd Watch Shift\",\"500112\" \"4827\",\"17\",\"General Fund\",\"100000\",\"Police\",\"1914121117\",\"Comm Relations\",\"500119\" \"17845\",\"17\",\"General Fund\",\"100000\",\"Police\",\"1914121117\",\"Hourly Wages\",\"500121\" \"1566601\",\"17\",\"General Fund\",\"100000\",\"Police\",\"1914121117\",\"Overtime - Premium\",\"500124\" \"218274\",\"17\",\"General Fund\",\"100000\",\"Police\",\"1914121117\",\"Industrial Leave-Police & Fire Safety Personnel\",\"500130\" \"467948\",\"17\",\"General Fund\",\"100000\",\"Police\",\"1914121117\",\"Overtime - Comp\",\"500133\" \"46335\",\"17\",\"General Fund\",\"100000\",\"Police\",\"1914121117\",\"Parental Leave\",\"500135\" \"68955\",\"17\",\"General Fund\",\"100000\",\"Police\",\"1914121117\",\"CERS - General Retirement\",\"502012\" \"3927335\",\"17\",\"General Fund\",\"100000\",\"Police\",\"1914121117\",\"CERS - Saf Ret - Police\",\"502015\" \"3085\",\"17\",\"General Fund\",\"100000\",\"Police\",\"1914121117\",\"Supp Pens Sav Plan Mandatory\",\"502021\" \"3120\",\"17\",\"General Fund\",\"100000\",\"Police\",\"1914121117\",\"Supp Pens Sav Plan Voluntary\",\"502022\" \"34934\",\"17\",\"General Fund\",\"100000\",\"Police\",\"1914121117\",\"CERS - DROP - Saf-Police\",\"502030\" \"376\",\"17\",\"General Fund\",\"100000\",\"Police\",\"1914121117\",\"CERS-UAAL MEA Adm/Field\",\"502033\" \"31237\",\"17\",\"General Fund\",\"100000\",\"Police\",\"1914121117\",\"CERS-UAAL Police DROP\",\"502036\" \"413\",\"17\",\"General Fund\",\"100000\",\"Police\",\"1914121117\",\"CERS-UAAL MEA Supervisory\",\"502039\" \"427\",\"17\",\"General Fund\",\"100000\",\"Police\",\"1914121117\",\"CERS-UAAL MEA Technical\",\"502040\" \"170803\",\"17\",\"General Fund\",\"100000\",\"Police\",\"1914121117\",\"CERS-UAAL Police Active\",\"502044\" \"965671\",\"17\",\"General Fund\",\"100000\",\"Police\",\"1914121117\",\"Workers' Comp Insurance\",\"502046\" \"2030500\",\"17\",\"General Fund\",\"100000\",\"Police\",\"1914121117\",\"Flexible Benefit Plan\",\"502047\" \"151130\",\"17\",\"General Fund\",\"100000\",\"Police\",\"1914121117\",\"Risk Mgmt Administ",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 1969097 of 69104353. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-3ccf2a8fc1704e9b329aa2b7:5985443479405310:22214080:75912a5eb1",
+      "label": "budget_operating_datasd.csv",
+      "sourceUrl": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+      "portalKey": "source-3ccf2a8fc1704e9b329aa2b7",
+      "requestId": 5558692596084489,
+      "documentId": 5985443479405310,
+      "characterOffset": 22214080,
+      "sourceSha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5",
+      "text": "d Personnel Expenditure Savings\",\"500189\" \"2672687\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000001\",\"CERS - Saf Ret - Police\",\"502015\" \"51685\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000001\",\"CERS - DROP - Saf-Police\",\"502030\" \"47590\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000001\",\"CERS-UAAL Police DROP\",\"502036\" \"10139\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000001\",\"CERS-UAAL Classified Unrepresented\",\"502042\" \"36395\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000001\",\"CERS-UAAL Police Active\",\"502044\" \"132890\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000001\",\"Workers' Comp Insurance\",\"502046\" \"245701\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000001\",\"Flexible Benefit Plan\",\"502047\" \"23212\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000001\",\"Risk Mgmt Administration\",\"502048\" \"14931\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000001\",\"Long Term Disability\",\"502049\" \"2797\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000001\",\"Unemployment Insurance\",\"502050\" \"836398\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000001\",\"Fica/Medicare Insurance\",\"502051\" \"57442\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000001\",\"Retiree Health Contribution\",\"502052\" \"29665\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000001\",\"Dry Goods/Wearing Apparel\",\"511041\" \"1552\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000001\",\"Fees-Membership\",\"512043\" \"46000\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000001\",\"Travel-Non Training\",\"512072\" \"4000\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000001\",\"Travel-Training\",\"512073\" \"1000\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000001\",\"Print Shop Services\",\"512080\" \"78803\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000001\",\"Equipment Rental - Motive Assign\",\"512101\" \"247180\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000001\",\"Equipment Rental - Motive Usage\",\"512102\" \"8635\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000001\",\"Lobby Contract\",\"512109\" \"68404\",\"26\",\"\",\"Gener",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 22214080 of 63825382. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-3ccf2a8fc1704e9b329aa2b7:5985443479405310:22216126:feeadfd34c",
+      "label": "budget_operating_datasd.csv",
+      "sourceUrl": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+      "portalKey": "source-3ccf2a8fc1704e9b329aa2b7",
+      "requestId": 5558692596084489,
+      "documentId": 5985443479405310,
+      "characterOffset": 22216126,
+      "sourceSha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5",
+      "text": " Fuel (Non-Discretionary)\",\"514011\" \"749\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000001\",\"Renewable Diesel (Non-Discretionary)\",\"514016\" \"[MASKED_PRIVATE_ADDRESS] Lighting/Traf Sig\",\"514102\" \"18747\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000012\",\"Reimbursements Between Funds/Depts\",\"424071\" \"-20731\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000012\",\"Salary Savings\",\"500010\" \"3119077\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000012\",\"Salaried Wages\",\"500011\" \"102366\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000012\",\"Vacation Pay In Lieu\",\"500017\" \"37718\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000012\",\"Termination Pay Annual Leave\",\"500028\" \"243459\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000012\",\"Advanced Post Certificate\",\"500051\" \"22688\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000012\",\"Bilingual - POA\",\"500053\" \"36340\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000012\",\"Detective Pay\",\"500057\" \"14576\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000012\",\"Emergency Negotiator\",\"500120\" \"472464\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000012\",\"Overtime Budgeted\",\"500128\" \"84664\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000012\",\"Service Pay\",\"500155\" \"-48747\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000012\",\"Budgeted Personnel Expenditure Savings\",\"500189\" \"183698\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000012\",\"CERS - General Retirement\",\"502012\" \"2944391\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000012\",\"CERS - Saf Ret - Police\",\"502015\" \"6046\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000012\",\"Supp Pens Sav Plan Mandatory\",\"502021\" \"6147\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000012\",\"Supp Pens Sav Plan Voluntary\",\"502022\" \"17813\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000012\",\"CERS - DROP - Saf-Police\",\"502030\" \"16092\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000012\",\"CERS-UAAL Police DROP\",\"502036\" \"1031\",\"26\",\"\",\"Gen",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 22216126 of 63825382. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "sql:b6b7f4dcabbdd6d2",
+      "label": "Which Police funds_center keys are stable between adopted budget and actuals in FY2022-FY2023, and which large centers appear only on one side?",
+      "sourceUrl": null,
+      "portalKey": null,
+      "requestId": null,
+      "documentId": null,
+      "characterOffset": null,
+      "sourceSha256": "b6b7f4dcabbdd6d26f000f6a849038141998f9a65f665f6d4915ffc7cf29262b",
+      "text": "{\"columns\":[\"fiscal_year\",\"funds_center_number\",\"budget_rows\",\"actual_rows\",\"budget_account_keys\",\"actual_account_keys\",\"budget_total\",\"actual_total\",\"presence_status\"],\"rows\":[[2023,\"1914121111\",63,90,63,90,\"37595936\",\"38504572\",\"Present in both\"],[2023,\"1914121117\",64,95,64,95,\"31218176\",\"34168912\",\"Present in both\"],[2023,\"1914121113\",56,77,56,77,\"29809367\",\"31773178\",\"Present in both\"],[2023,\"1914131612\",59,73,59,73,\"31921327\",\"31581782\",\"Present in both\"],[2023,\"1914121118\",63,84,63,84,\"25138901\",\"27152006\",\"Present in both\"],[2023,\"1914121120\",59,86,59,86,\"27059457\",\"26500521\",\"Present in both\"],[2023,\"1914171111\",49,72,49,72,\"30231173\",\"26344585\",\"Present in both\"],[2023,\"1914131511\",47,74,47,74,\"24352733\",\"22166884\",\"Present in both\"],[2023,\"1914121112\",54,71,54,71,\"20743361\",\"21451163\",\"Present in both\"],[2023,\"1914121119\",56,75,56,75,\"18308896\",\"20052163\",\"Present in both\"],[2023,\"1914121115\",58,82,58,82,\"18514986\",\"19863826\",\"Present in both\"],[2023,\"1914141311\",72,100,72,100,\"13360012\",\"13553838\",\"Present in both\"],[2023,\"1914000001\",35,53,35,53,\"14823595\",\"13439479\",\"Present in both\"],[2023,\"1914121101\",28,39,28,39,\"9911449\",\"12183025\",\"Present in both\"],[2023,\"1914171112\",44,72,44,72,\"12316383\",\"12181871\",\"Present in both\"],[2023,\"1914121116\",49,71,49,71,\"11911012\",\"12077660\",\"Present in both\"],[2023,\"1914131217\",46,54,46,54,\"11183809\",\"11807321\",\"Present in both\"],[2023,\"1914180011\",37,65,37,65,\"19631777\",\"11649367\",\"Present in both\"],[2023,\"1914161114\",29,51,29,51,\"7169260\",\"10807833\",\"Present in both\"],[2023,\"1914161113\",34,51,34,51,\"13243799\",\"10603618\",\"Present in both\"],[2023,\"1914141213\",42,65,42,65,\"10057279\",\"10320150\",\"Present in both\"],[2023,\"1914171213\",46,69,46,69,\"12136469\",\"9526059\",\"Present in both\"],[2023,\"1914171113\",33,45,33,45,\"9040924\",\"9019433\",\"Present in both\"],[2023,\"1914171115\",28,38,28,38,\"8940689\",\"8928960\",\"Present in both\"],[2023,\"1914131211\",57,80,57,80,\"11011649\",\"8333932\",\"Present in both\"],[2023,\"1914141113\",85,99,85,99,\"8049777\",\"8283526\",\"Present in both\"],[2023,\"1914141212\",47,64,47,64,\"7758642\",\"8274904\",\"Present in both\"],[2023,\"1914000012\",44,68,44,68,\"6299149\",\"7384332\",\"Present in both\"],[2023,\"1914000013\",30,53,30,53,\"6522776\",\"6573813\",\"Present in both\"],[2023,\"1914131219\",35,59,35,59,\"6237013\",\"6510419\",\"Present in both\"],[2023,\"1914141116\",39,61,39,61,\"6869302\",\"6501396\",\"Present in both\"],[2023,\"1914141217\",29,48,29,48,\"6284291\",\"6106924\",\"Present in both\"],[2023,\"1914141111\",49,77,49,77,\"5408374\",\"6047656\",\"Present in both\"],[2023,\"1914171101\",44,55,44,55,\"6879549\",\"5781137\",\"Present in both\"],[2023,\"1914141214\",36,61,36,61,\"6094839\",\"5290375\",\"Present in both\"],[2023,\"1914170012\",39,70,39,70,\"6326816\",\"5077882\",\"Present in both\"],[2023,\"1914141115\",37,56,37,56,\"5072172\",\"5075177\",\"Present in both\"],[2023,\"1914141112\",47,63,47,63,\"5162913\",\"5060879\",\"Present in both\"],[2023,\"1914141117\",35,49,35,49,\"4822886\",\"4971868\",\"Present in both\"],[2023,\"1914001112\",41,48,41,48,\"3784483\",\"4869752\",\"Present in both\"]]}",
+      "sql": "WITH b AS (\n  SELECT\n    CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fiscal_year,\n    CAST(funds_center_number AS VARCHAR) AS funds_center_number,\n    COUNT(*) AS budget_rows,\n    COUNT(DISTINCT CAST(account_number AS VARCHAR)) AS budget_account_keys,\n    SUM(amount) AS budget_total\n  FROM \"analysis_regional_data_6248b76b917ad88fb00a1800\"\n  WHERE CAST(fund_number AS VARCHAR) = '100000'\n    AND lower(trim(dept_name)) = 'police'\n    AND lower(trim(budget_cycle)) = 'adopted'\n    AND (CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END) IN (2022, 2023)\n  GROUP BY 1,2\n),\na AS (\n  SELECT\n    CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fiscal_year,\n    CAST(funds_center_number AS VARCHAR) AS funds_center_number,\n    COUNT(*) AS actual_rows,\n    COUNT(DISTINCT CAST(account_number AS VARCHAR)) AS actual_account_keys,\n    SUM(amount) AS actual_total\n  FROM \"analysis_regional_data_7ee003c264e5cfe2fe14254e\"\n  WHERE CAST(fund_number AS VARCHAR) = '100000'\n    AND lower(trim(dept_name)) = 'police'\n    AND (CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END) IN (2022, 2023)\n  GROUP BY 1,2\n)\nSELECT\n  COALESCE(b.fiscal_year, a.fiscal_year) AS fiscal_year,\n  COALESCE(b.funds_center_number, a.funds_center_number) AS funds_center_number,\n  b.budget_rows,\n  a.actual_rows,\n  b.budget_account_keys,\n  a.actual_account_keys,\n  b.budget_total,\n  a.actual_total,\n  CASE\n    WHEN b.funds_center_number IS NULL THEN 'Actual only center'\n    WHEN a.funds_center_number IS NULL THEN 'Budget only center'\n    ELSE 'Present in both'\n  END AS presence_status\nFROM b\nFULL OUTER JOIN a\n  ON b.fiscal_year = a.fiscal_year\n AND b.funds_center_number = a.funds_center_number\nORDER BY fiscal_year DESC,\n         ABS(COALESCE(a.actual_total, b.budget_total)) DESC,\n         funds_center_number\nLIMIT 120;",
+      "snapshotProvenance": [
+        "analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e",
+        "analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+      ],
+      "sourceReferences": [
+        {
+          "url": "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv",
+          "snapshot": "regional-data-7ee003c264e5cfe2fe14254e",
+          "sha256": "53cfc7488c40c2d3b654c64ba8599bc11a4086fa5efe403371c38eff78dd2143"
+        },
+        {
+          "url": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+          "snapshot": "regional-data-6248b76b917ad88fb00a1800",
+          "sha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5"
+        }
+      ],
+      "limitations": "Read-only analytical query; 40 result rows; truncated: true. Assumptions to verify: General Fund 100000 only; dept_name 'Police' is stable enough for a key-inspection pass; FY2022-FY2023 are the latest ended years with both adopted budget and actuals available in the current tables.. Snapshot provenance: analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e; analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+    },
+    {
+      "id": "sql:3d8a6c90e35261b7",
+      "label": "At the Police funds-center level in FY2022-FY2023, do comparable 500-series pay totals show net overspending after regular-pay underruns are weighed against overtime and holiday/standby actuals?",
+      "sourceUrl": null,
+      "portalKey": null,
+      "requestId": null,
+      "documentId": null,
+      "characterOffset": null,
+      "sourceSha256": "3d8a6c90e35261b7d062cdcb8169327635f838e6c514a1e8f60f65b91d03ead5",
+      "text": "{\"columns\":[\"fiscal_year\",\"funds_center_number\",\"budget_total_500\",\"actual_total_500\",\"total_500_variance\",\"budget_regular_pay\",\"actual_regular_pay\",\"regular_pay_gap\",\"budget_overtime_planning\",\"actual_overtime\",\"overtime_gap\",\"budget_holiday_credit\",\"actual_holiday_standby_credit\",\"holiday_standby_gap\",\"budget_500_keys\",\"actual_500_keys\",\"presence_status\"],\"rows\":[[2023,\"1914180011\",\"13910246\",\"6852376\",\"-7057870\",\"5985511\",\"4627484\",\"-1358027\",\"7924735\",\"1976648\",\"-5948087\",\"0\",\"248244\",\"248244\",13,25,\"Present in both\"],[2023,\"1914121117\",\"17518868\",\"22663220\",\"5144352\",\"15436007\",\"14789577\",\"-646430\",\"2082861\",\"7105915\",\"5023054\",\"0\",\"767728\",\"767728\",18,34,\"Present in both\"],[2023,\"1914000001\",\"5812825\",\"2316559\",\"-3496266\",\"2801197\",\"2216739\",\"-584458\",\"0\",\"0\",\"0\",\"3011628\",\"99820\",\"-2911808\",6,14,\"Present in both\"],[2023,\"1914161114\",\"4517341\",\"7116458\",\"2599117\",\"4400307\",\"6035104\",\"1634797\",\"117034\",\"750150\",\"633116\",\"0\",\"331204\",\"331204\",10,23,\"Present in both\"],[2023,\"1914121118\",\"14389339\",\"16775598\",\"2386259\",\"12850889\",\"13261139\",\"410250\",\"1538450\",\"2866834\",\"1328384\",\"0\",\"647625\",\"647625\",18,34,\"Present in both\"],[2023,\"1914121111\",\"22818563\",\"24742381\",\"1923818\",\"15517200\",\"18597925\",\"3080725\",\"7301363\",\"5182950\",\"-2118413\",\"0\",\"961506\",\"961506\",19,31,\"Present in both\"],[2023,\"1914131511\",\"15637517\",\"13730142\",\"-1907375\",\"13121001\",\"10926760\",\"-2194241\",\"2516516\",\"2278570\",\"-237946\",\"0\",\"524812\",\"524812\",13,26,\"Present in both\"],[2023,\"1914121113\",\"17582060\",\"19410893\",\"1828833\",\"15742103\",\"15895143\",\"153040\",\"1839957\",\"2690672\",\"850715\",\"0\",\"825078\",\"825078\",15,29,\"Present in both\"],[2023,\"1914161113\",\"8303480\",\"6490701\",\"-1812779\",\"8127618\",\"5884639\",\"-2242979\",\"175862\",\"326654\",\"150792\",\"0\",\"279408\",\"279408\",12,24,\"Present in both\"],[2023,\"1914121119\",\"10306841\",\"12060257\",\"1753416\",\"9120982\",\"9135508\",\"14526\",\"1185859\",\"2456639\",\"1270780\",\"0\",\"468110\",\"468110\",17,29,\"Present in both\"],[2023,\"1914121115\",\"10072578\",\"11397673\",\"1325095\",\"8906539\",\"8408884\",\"-497655\",\"1166039\",\"2549472\",\"1383433\",\"0\",\"439317\",\"439317\",17,29,\"Present in both\"],[2023,\"1914121101\",\"5420710\",\"6641026\",\"1220316\",\"5416846\",\"6413925\",\"997079\",\"3864\",\"1722\",\"-2142\",\"0\",\"225379\",\"225379\",9,20,\"Present in both\"],[2023,\"1914171111\",\"4965784\",\"4087154\",\"-878630\",\"4519271\",\"3040664\",\"-1478607\",\"446513\",\"878876\",\"432363\",\"0\",\"167614\",\"167614\",8,22,\"Present in both\"],[2023,\"1914121112\",\"11840445\",\"12615370\",\"774925\",\"10682808\",\"10239291\",\"-443517\",\"1157637\",\"1837370\",\"679733\",\"0\",\"538709\",\"538709\",16,29,\"Present in both\"],[2023,\"1914141213\",\"4827134\",\"5548672\",\"721538\",\"4416688\",\"4333615\",\"-83073\",\"410446\",\"831875\",\"421429\",\"0\",\"383182\",\"383182\",12,21,\"Present in both\"],[2023,\"1914000012\",\"3027986\",\"3718327\",\"690341\",\"2783660\",\"2977678\",\"194018\",\"244326\",\"509797\",\"265471\",\"0\",\"230852\",\"230852\",9,22,\"Present in both\"],[2023,\"1914121120\",\"15921590\",\"16599054\",\"677464\",\"14047353\",\"13189144\",\"-858209\",\"1874237\",\"2727704\",\"853467\",\"0\",\"682206\",\"682206\",19,32,\"Present in both\"],[2023,\"1914131217\",\"5378277\",\"6032550\",\"654273\",\"4947651\",\"4756374\",\"-191277\",\"430626\",\"1034689\",\"604063\",\"0\",\"241487\",\"241487\",13,24,\"Present in both\"],[2023,\"1914141212\",\"4115588\",\"4716380\",\"600792\",\"3639021\",\"3621247\",\"-17774\",\"476567\",\"839894\",\"363327\",\"0\",\"255239\",\"255239\",12,24,\"Present in both\"],[2023,\"1914141111\",\"2688442\",\"3190422\",\"501980\",\"2551381\",\"2759026\",\"207645\",\"137061\",\"232192\",\"95131\",\"0\",\"199204\",\"199204\",11,27,\"Present in both\"],[2023,\"1914171213\",\"3382043\",\"2891148\",\"-490895\",\"3023368\",\"2343998\",\"-679370\",\"358675\",\"495847\",\"137172\",\"0\",\"51303\",\"51303\",11,21,\"Present in both\"],[2023,\"1914121121\",\"1404443\",\"1838349\",\"433906\",\"1193423\",\"1403342\",\"209919\",\"211020\",\"364953\",\"153933\",\"0\",\"70054\",\"70054\",9,17,\"Present in both\"],[2023,\"1914161111\",\"1388534\",\"994412\",\"-394122\",\"1013528\",\"811656\",\"-201872\",\"375006\",\"132553\",\"-242453\",\"0\",\"50203\",\"50203\",9,23,\"Present in both\"],[2023,\"1914000021\",\"911906\",\"1300382\",\"388476\",\"905907\",\"950525\",\"44618\",\"5999\",\"301827\",\"295828\",\"0\",\"48030\",\"48030\",8,18,\"Present in both\"],[2023,\"1914161311\",\"2013341\",\"2387411\",\"374070\",\"1931412\",\"2036098\",\"104686\",\"81929\",\"254414\",\"172485\",\"0\",\"96899\",\"96899\",11,25,\"Present in both\"],[2023,\"1914000013\",\"2842557\",\"3186094\",\"343537\",\"2608297\",\"2595702\",\"-12595\",\"234260\",\"433200\",\"198940\",\"0\",\"157192\",\"157192\",7,20,\"Present in both\"],[2023,\"1914141311\",\"6850654\",\"7193042\",\"342388\",\"6671182\",\"6476470\",\"-194712\",\"179472\",\"346519\",\"167047\",\"0\",\"370053\",\"370053\",10,25,\"Present in both\"],[2023,\"1914131219\",\"2463541\",\"2778815\",\"315274\",\"2159654\",\"2020068\",\"-139586\",\"303887\",\"614536\",\"310649\",\"0\",\"144211\",\"144211\",8,21,\"Present in both\"],[2023,\"1914161312\",\"971003\",\"1265665\",\"294662\",\"832297\",\"933501\",\"101204\",\"138706\",\"289012\",\"150306\",\"0\",\"43152\",\"43152\",9,20,\"Present in both\"],[2023,\"1914141222\",\"1200452\",\"1460201\",\"259749\",\"1189644\",\"1294918\",\"105274\",\"10808\",\"108107\",\"97299\",\"0\",\"57176\",\"57176\",10,18,\"Present in both\"],[2023,\"1914121116\",\"7036434\",\"7277027\",\"240593\",\"6162861\",\"5412176\",\"-750685\",\"873573\",\"1584493\",\"710920\",\"0\",\"280358\",\"280358\",17,30,\"Present in both\"],[2023,\"1914141112\",\"2961826\",\"3192904\",\"231078\",\"2756686\",\"2661589\",\"-95097\",\"205140\",\"369512\",\"164372\",\"0\",\"161803\",\"161803\",14,25,\"Present in both\"],[2023,\"1914131612\",\"1248113\",\"1018166\",\"-229947\",\"1238295\",\"952396\",\"-285899\",\"9818\",\"8425\",\"-1393\",\"0\",\"57345\",\"57345\",6,13,\"Present in both\"],[2023,\"1914141214\",\"2828740\",\"2608720\",\"-220020\",\"2542268\",\"2099384\",\"-442884\",\"286472\",\"328092\",\"41620\",\"0\",\"181244\",\"181244\",10,22,\"Present in both\"],[2023,\"1914171201\",\"207891\",\"426532\",\"218641\",\"0\",\"9093\",\"9093\",\"207891\",\"417439\",\"209548\",\"0\",\"0\",\"0\",1,7,\"Present in both\"],[2023,\"1914141113\",\"1448384\",\"1658757\",\"210373\",\"1398079\",\"1394325\",\"-3754\",\"50305\",\"186502\",\"136197\",\"0\",\"77930\",\"77930\",10,20,\"Present in both\"],[2023,\"1914171211\",\"224485\",\"428412\",\"203927\",\"219710\",\"331146\",\"111436\",\"4775\",\"82070\",\"77295\",\"0\",\"15196\",\"15196\",5,17,\"Present in both\"],[2023,\"1914171112\",\"7112993\",\"6915315\",\"-197678\",\"5326187\",\"5151143\",\"-175044\",\"1786806\",\"1490496\",\"-296310\",\"0\",\"273676\",\"273676\",18,33,\"Present in both\"],[2023,\"1914141301\",\"545718\",\"736365\",\"190647\",\"543247\",\"694675\",\"151428\",\"2471\",\"15433\",\"12962\",\"0\",\"26257\",\"26257\",6,11,\"Present in both\"],[2023,\"1914180012\",\"1968038\",\"1781910\",\"-186128\",\"1918333\",\"1384093\",\"-534240\",\"49705\",\"310498\",\"260793\",\"0\",\"87319\",\"87319\",10,25,\"Present in both\"]]}",
+      "sql": "WITH b AS (\n  SELECT\n    CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fiscal_year,\n    CAST(funds_center_number AS VARCHAR) AS funds_center_number,\n    SUM(CASE WHEN CAST(account_number AS VARCHAR) LIKE '500%' THEN amount ELSE 0 END) AS budget_total_500,\n    SUM(CASE WHEN CAST(account_number AS VARCHAR) LIKE '500%'\n              AND CAST(account_number AS VARCHAR) NOT IN ('500128','500136')\n              AND CAST(account_number AS VARCHAR) NOT IN ('500124','500133','500018','500026','500092')\n             THEN amount ELSE 0 END) AS budget_regular_pay,\n    SUM(CASE WHEN CAST(account_number AS VARCHAR) = '500128' THEN amount ELSE 0 END) AS budget_overtime_planning,\n    SUM(CASE WHEN CAST(account_number AS VARCHAR) = '500136' THEN amount ELSE 0 END) AS budget_holiday_credit,\n    COUNT(DISTINCT CASE WHEN CAST(account_number AS VARCHAR) LIKE '500%' THEN CAST(account_number AS VARCHAR) END) AS budget_500_keys\n  FROM \"analysis_regional_data_6248b76b917ad88fb00a1800\"\n  WHERE CAST(fund_number AS VARCHAR) = '100000'\n    AND lower(trim(dept_name)) = 'police'\n    AND lower(trim(budget_cycle)) = 'adopted'\n    AND CAST(account_number AS VARCHAR) LIKE '500%'\n    AND (CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END) IN (2022, 2023)\n  GROUP BY 1,2\n),\na AS (\n  SELECT\n    CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fiscal_year,\n    CAST(funds_center_number AS VARCHAR) AS funds_center_number,\n    SUM(CASE WHEN CAST(account_number AS VARCHAR) LIKE '500%' THEN amount ELSE 0 END) AS actual_total_500,\n    SUM(CASE WHEN CAST(account_number AS VARCHAR) LIKE '500%'\n              AND CAST(account_number AS VARCHAR) NOT IN ('500124','500133','500018','500026','500092','500136')\n             THEN amount ELSE 0 END) AS actual_regular_pay,\n    SUM(CASE WHEN CAST(account_number AS VARCHAR) IN ('500124','500133') THEN amount ELSE 0 END) AS actual_overtime,\n    SUM(CASE WHEN CAST(account_number AS VARCHAR) IN ('500018','500026','500092','500136') THEN amount ELSE 0 END) AS actual_holiday_standby_credit,\n    COUNT(DISTINCT CASE WHEN CAST(account_number AS VARCHAR) LIKE '500%' THEN CAST(account_number AS VARCHAR) END) AS actual_500_keys\n  FROM \"analysis_regional_data_7ee003c264e5cfe2fe14254e\"\n  WHERE CAST(fund_number AS VARCHAR) = '100000'\n    AND lower(trim(dept_name)) = 'police'\n    AND CAST(account_number AS VARCHAR) LIKE '500%'\n    AND (CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END) IN (2022, 2023)\n  GROUP BY 1,2\n)\nSELECT\n  COALESCE(b.fiscal_year, a.fiscal_year) AS fiscal_year,\n  COALESCE(b.funds_center_number, a.funds_center_number) AS funds_center_number,\n  b.budget_total_500,\n  a.actual_total_500,\n  CASE WHEN b.funds_center_number IS NOT NULL AND a.funds_center_number IS NOT NULL THEN a.actual_total_500 - b.budget_total_500 END AS total_500_variance,\n  b.budget_regular_pay,\n  a.actual_regular_pay,\n  CASE WHEN b.funds_center_number IS NOT NULL AND a.funds_center_number IS NOT NULL THEN a.actual_regular_pay - b.budget_regular_pay END AS regular_pay_gap,\n  b.budget_overtime_planning,\n  a.actual_overtime,\n  CASE WHEN b.funds_center_number IS NOT NULL AND a.funds_center_number IS NOT NULL THEN a.actual_overtime - b.budget_overtime_planning END AS overtime_gap,\n  b.budget_holiday_credit,\n  a.actual_holiday_standby_credit,\n  CASE WHEN b.funds_center_number IS NOT NULL AND a.funds_center_number IS NOT NULL THEN a.actual_holiday_standby_credit - b.budget_holiday_credit END AS holiday_standby_gap,\n  b.budget_500_keys,\n  a.actual_500_keys,\n  CASE\n    WHEN b.funds_center_number IS NULL THEN 'Missing budget center'\n    WHEN a.funds_center_number IS NULL THEN 'Missing actual center'\n    ELSE 'Present in both'\n  END AS presence_status\nFROM b\nFULL OUTER JOIN a\n  ON b.fiscal_year = a.fiscal_year\n AND b.funds_center_number = a.funds_center_number\nORDER BY fiscal_year DESC,\n         ABS(COALESCE(CASE WHEN b.funds_center_number IS NOT NULL AND a.funds_center_number IS NOT NULL THEN a.actual_total_500 - b.budget_total_500 END,\n                      COALESCE(a.actual_total_500, b.budget_total_500))) DESC,\n         funds_center_number\nLIMIT 120;",
+      "snapshotProvenance": [
+        "analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e",
+        "analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+      ],
+      "sourceReferences": [
+        {
+          "url": "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv",
+          "snapshot": "regional-data-7ee003c264e5cfe2fe14254e",
+          "sha256": "53cfc7488c40c2d3b654c64ba8599bc11a4086fa5efe403371c38eff78dd2143"
+        },
+        {
+          "url": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+          "snapshot": "regional-data-6248b76b917ad88fb00a1800",
+          "sha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5"
+        }
+      ],
+      "limitations": "Read-only analytical query; 40 result rows; truncated: true. Assumptions to verify: This is a comparability test for police pay lines only: it uses 500-series accounts and treats 500128 as budget overtime planning, 500124/500133 as actual overtime, and 500018/500026/500092/500136 as actual holiday-standby-credit pay. It does not test revised legal authority or 502-series benefit costs.. Snapshot provenance: analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e; analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+    },
+    {
+      "id": "sql:1a701ca031538c0c",
+      "label": "For adopted FY2024 versus FY2025, was the Police increase concentrated in regular pay and pensions rather than overtime, and how does that composition compare with the Commission on Police Practices?",
+      "sourceUrl": null,
+      "portalKey": null,
+      "requestId": null,
+      "documentId": null,
+      "characterOffset": null,
+      "sourceSha256": "1a701ca031538c0c62552865d74ca4d15720366db19e580e997ee87d0a251436",
+      "text": "{\"columns\":[\"department\",\"spend_category\",\"fy2024_account_keys\",\"fy2025_account_keys\",\"fy2024_adopted\",\"fy2025_adopted\",\"change_status\",\"adopted_change\"],\"rows\":[[\"Commission on Police Practices\",\"51x_nonpersonnel_operating\",23,26,\"499022\",\"373614\",\"Present in both\",\"-125408\"],[\"Commission on Police Practices\",\"500_pay_other\",3,5,\"1293329\",\"1381549\",\"Present in both\",\"88220\"],[\"Commission on Police Practices\",\"502_benefits_pensions\",13,11,\"449466\",\"390669\",\"Present in both\",\"-58797\"],[\"Police\",\"502_benefits_pensions\",30,30,\"207341243\",\"244373151\",\"Present in both\",\"37031908\"],[\"Police\",\"500_pay_other\",35,36,\"274702834\",\"292364280\",\"Present in both\",\"17661446\"],[\"Police\",\"500_pay_overtime_holiday_standby\",3,3,\"52351282\",\"49387872\",\"Present in both\",\"-2963410\"],[\"Police\",\"51x_nonpersonnel_operating\",115,116,\"88488403\",\"86521843\",\"Present in both\",\"-1966560\"],[\"Police\",\"59x_financing\",null,2,null,\"330000\",\"Added in FY2025\",null],[\"Police\",\"other_5xx\",1,1,\"25000\",\"25000\",\"Present in both\",\"0\"]]}",
+      "sql": "WITH base AS (\n  SELECT\n    CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fiscal_year,\n    lower(trim(dept_name)) AS dept_key,\n    dept_name,\n    CASE\n      WHEN CAST(account_number AS VARCHAR) LIKE '500%'\n           AND (CAST(account_number AS VARCHAR) = '500128'\n                OR contains(lower(account), 'overtime')\n                OR contains(lower(account), 'holiday')\n                OR contains(lower(account), 'standby'))\n        THEN '500_pay_overtime_holiday_standby'\n      WHEN CAST(account_number AS VARCHAR) LIKE '500%'\n        THEN '500_pay_other'\n      WHEN CAST(account_number AS VARCHAR) LIKE '502%'\n        THEN '502_benefits_pensions'\n      WHEN CAST(account_number AS VARCHAR) LIKE '51%'\n        THEN '51x_nonpersonnel_operating'\n      WHEN CAST(account_number AS VARCHAR) LIKE '59%'\n        THEN '59x_financing'\n      ELSE 'other_5xx'\n    END AS spend_category,\n    COUNT(DISTINCT CAST(account_number AS VARCHAR)) AS account_keys,\n    SUM(amount) AS adopted_amount\n  FROM \"analysis_regional_data_6248b76b917ad88fb00a1800\"\n  WHERE CAST(fund_number AS VARCHAR) = '100000'\n    AND lower(trim(budget_cycle)) = 'adopted'\n    AND lower(trim(dept_name)) IN ('police', 'commission on police practices')\n    AND CAST(account_number AS VARCHAR) LIKE '5%'\n    AND (CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END) IN (2024, 2025)\n  GROUP BY 1,2,3,4\n),\nfy24 AS (\n  SELECT dept_key, dept_name, spend_category, account_keys, adopted_amount\n  FROM base\n  WHERE fiscal_year = 2024\n),\nfy25 AS (\n  SELECT dept_key, dept_name, spend_category, account_keys, adopted_amount\n  FROM base\n  WHERE fiscal_year = 2025\n)\nSELECT\n  COALESCE(fy25.dept_name, fy24.dept_name) AS department,\n  COALESCE(fy25.spend_category, fy24.spend_category) AS spend_category,\n  fy24.account_keys AS fy2024_account_keys,\n  fy25.account_keys AS fy2025_account_keys,\n  fy24.adopted_amount AS fy2024_adopted,\n  fy25.adopted_amount AS fy2025_adopted,\n  CASE\n    WHEN fy24.dept_key IS NULL THEN 'Added in FY2025'\n    WHEN fy25.dept_key IS NULL THEN 'Removed after FY2024'\n    ELSE 'Present in both'\n  END AS change_status,\n  CASE WHEN fy24.dept_key IS NOT NULL AND fy25.dept_key IS NOT NULL THEN fy25.adopted_amount - fy24.adopted_amount END AS adopted_change\nFROM fy24\nFULL OUTER JOIN fy25\n  ON fy24.dept_key = fy25.dept_key\n AND fy24.spend_category = fy25.spend_category\nORDER BY department,\n         ABS(COALESCE(adopted_change, COALESCE(fy25.adopted_amount, fy24.adopted_amount))) DESC;",
+      "snapshotProvenance": [
+        "analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+      ],
+      "sourceReferences": [
+        {
+          "url": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+          "snapshot": "regional-data-6248b76b917ad88fb00a1800",
+          "sha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5"
+        }
+      ],
+      "limitations": "Read-only analytical query; 9 result rows; truncated: false. Assumptions to verify: Expense accounts only, using 5-prefix rows for comparability with prior Police total-budget queries. The category mapping is a composition test, not proof of policy intent or a deliberate tradeoff.. Snapshot provenance: analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+    }
+  ],
+  "synthesis": {
+    "title": "San Diego Police budget dossier: FY2022-FY2023 overtime pressure, uneven unit-level pay variance, and FY2025-FY2026 budget caveats",
+    "summary": "Bounded evidence from City General Fund 100000 expense rows supports several concrete leads. First, Police FY2022 and FY2023 actual 5-prefix expense spending exceeded adopted 5-prefix expense budget, and overtime variance is large enough to be a leading reconciliation target, though not proof of spending above revised legal authority. Second, a blanket vacancy-based explanation does not fit all FY2023 Police funds centers: some 500-series pay centers ended above plan after overtime and related pay are rolled in, while others ended far below plan. Third, budget-to-actual payroll comparisons are structurally distorted because adopted overtime is pooled in budget account 500128 while actual payroll posts to different overtime, holiday, and standby accounts. Fourth, the FY2025 adopted Police increase in these expense rows looks driven mainly by pensions and other compensation, not by overtime. Fifth, the Commission on Police Practices did not show parallel execution or adopted growth in this record set. Sixth, FY2026 Police rows in the current budget export are unlabeled, so this export alone cannot support an 'adopted FY2026' claim. The main gaps are revised appropriations, transfer history, funds-center crosswalks, staffing/vacancy reports, an official account reconciliation, and official FY2026 adoption records.",
+    "findings": [
+      {
+        "title": "FY2022-FY2023 Police General Fund expense actuals were above adopted expense budget; overtime variance is a leading but unproven explanation",
+        "interpretation": "Within General Fund 100000 expense accounts beginning with 5, Police actual spending was above adopted in FY2022 and FY2023. Police overtime, defined here by the query as accounts containing \"overtime,\" was also above adopted in both years. That makes overtime a strong place to reconcile the variance, but it does not prove an unauthorized overrun because revised appropriations are not in this record set, and overtime variance alone does not establish the full cause of the department-level gap.",
+        "whyItMatters": "The key accountability question is not just whether adopted expense rows were exceeded, but whether later legal budget changes, transfers, or staffing conditions explain the difference. Without that reconciliation, public debate can overstate or understate the significance of the over-adopted actuals.",
+        "citations": [
+          {
+            "evidenceId": "sql:e6231241d960d77f",
+            "quote": "[2023,\"Police\",\"584706166\",\"588906166\",\"4200000\"]"
+          },
+          {
+            "evidenceId": "sql:e6231241d960d77f",
+            "quote": "[2022,\"Police\",\"593292386\",\"604197963\",\"10905577\"]"
+          },
+          {
+            "evidenceId": "sql:866037066b165164",
+            "quote": "[2023,\"40162474\",\"50818708\",\"10656234\"]"
+          },
+          {
+            "evidenceId": "sql:866037066b165164",
+            "quote": "[2022,\"30678213\",\"40906497\",\"10228284\"]"
+          }
+        ],
+        "counterEvidence": [
+          {
+            "evidenceId": "sql:e6231241d960d77f",
+            "quote": "[2021,\"Police\",\"568243558\",\"558797942\",\"-9445616\"]"
+          },
+          {
+            "evidenceId": "sql:866037066b165164",
+            "quote": "[2021,\"33715021\",\"32899783\",\"-815238\"]"
+          }
+        ],
+        "alternativeExplanations": [
+          "Revised appropriations, transfers, or BAOs may have increased legal authority enough to absorb the adopted-to-actual gap.",
+          "Some of the net variance may sit in benefits or other pay lines, with overtime acting only as a correlated symptom.",
+          "One-time events, backfill needs, or labor-timing effects could have raised overtime without indicating a chronic budgeting problem."
+        ],
+        "nextTest": "Obtain FY2022-FY2023 revised Police appropriations, transfer history, and year-end legal budget reports for General Fund 100000. This interpretation would be weakened or disproved if revised authority fully covered the adopted-to-actual gap or if a formal variance report shows non-overtime accounts, not overtime, drove the net difference."
+      },
+      {
+        "title": "A department-wide vacancy explanation does not fit all FY2023 Police funds centers",
+        "interpretation": "The FY2023 500-series comparability test is mixed across Police funds centers. Center 1914121117 shows a positive total 500-series variance driven by overtime and related pay despite only a small regular-pay underrun. Center 1914121111 also ended above its total 500-series budget, and its regular-pay subtotal exceeded the budget subtotal even though the adopted budget included a large negative \"Budgeted Personnel Expenditure Savings\" line. But center 1914180011 ended far below its 500-series budget, mainly because actual overtime and related pay were far below plan. This weakens any one-size-fits-all story that vacancies alone explain Police pay variance across units.",
+        "whyItMatters": "If the pressure is concentrated in particular funds centers rather than spread evenly across Police, then department-wide narratives may hide unit-specific operational stress, unrealistic savings assumptions, or misallocated overtime planning.",
+        "citations": [
+          {
+            "evidenceId": "sql:3d8a6c90e35261b7",
+            "quote": "[2023,\"1914121117\",\"17518868\",\"22663220\",\"5144352\",\"15436007\",\"14789577\",\"-646430\",\"2082861\",\"7105915\",\"5023054\",\"0\",\"767728\",\"767728\",18,34,\"Present in both\"]"
+          },
+          {
+            "evidenceId": "sql:3d8a6c90e35261b7",
+            "quote": "[2023,\"1914121111\",\"22818563\",\"24742381\",\"1923818\",\"15517200\",\"18597925\",\"3080725\",\"7301363\",\"5182950\",\"-2118413\",\"0\",\"961506\",\"961506\",19,31,\"Present in both\"]"
+          },
+          {
+            "evidenceId": "doc:source-3ccf2a8fc1704e9b329aa2b7:5985443479405310:1179975:d19b796838",
+            "quote": "\"-5034622\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1914121111\",\"Budgeted Personnel Expenditure Savings\",\"500189\""
+          },
+          {
+            "evidenceId": "sql:3d8a6c90e35261b7",
+            "quote": "[2023,\"1914180011\",\"13910246\",\"6852376\",\"-7057870\",\"5985511\",\"4627484\",\"-1358027\",\"7924735\",\"1976648\",\"-5948087\",\"0\",\"248244\",\"248244\",13,25,\"Present in both\"]"
+          }
+        ],
+        "counterEvidence": [
+          {
+            "evidenceId": "sql:3d8a6c90e35261b7",
+            "quote": "[2023,\"1914180011\",\"13910246\",\"6852376\",\"-7057870\",\"5985511\",\"4627484\",\"-1358027\",\"7924735\",\"1976648\",\"-5948087\",\"0\",\"248244\",\"248244\",13,25,\"Present in both\"]"
+          }
+        ],
+        "alternativeExplanations": [
+          "Funds centers may represent very different functions, so their pay patterns may not be comparable without a service crosswalk.",
+          "Some centers may have been designated backfill or specialty-workload hubs that were expected to use more overtime.",
+          "The adopted personnel-savings assumptions may have been unusually aggressive in some centers, making actual pay look high even if managers behaved as expected."
+        ],
+        "nextTest": "Get a funds-center-to-unit crosswalk plus monthly FY2023 budgeted positions, filled positions, separations, overtime hours, and backfill logs for centers 1914121117, 1914121111, and 1914180011. This interpretation would be weakened if those centers prove not comparable, or if detailed staffing and deployment records show the over-plan centers were intentionally budgeted as overtime-heavy service hubs."
+      },
+      {
+        "title": "Budgeted overtime and actual payroll post to different account structures, so raw row-matching can mislead",
+        "interpretation": "Police adopted budget rows pool overtime planning in account 500128 \"Overtime Budgeted,\" while actual payroll posts mainly to 500124 \"Overtime - Premium\" and 500133 \"Overtime - Comp,\" with additional actual-only holiday and standby-type pay lines. That means a simple account-by-account join will manufacture many apparent \"missing actual\" or \"missing budget\" variances that are accounting-structure differences rather than proof of management failure.",
+        "whyItMatters": "Any serious Police overtime analysis needs an official crosswalk or a defensible rollup. Without that, an analyst can overstate unbudgeted overtime or mistake a chart-of-accounts design issue for a spending-control problem.",
+        "citations": [
+          {
+            "evidenceId": "sql:5eebf00b3b3d312d",
+            "quote": "[2023,\"500128\",\"Overtime Budgeted\",null,79,null,\"40162474\",null,\"Budget only\"]"
+          },
+          {
+            "evidenceId": "sql:5eebf00b3b3d312d",
+            "quote": "[2023,\"500124\",null,\"Overtime - Premium\",null,82,null,\"45263953\",\"Actual only\"]"
+          },
+          {
+            "evidenceId": "sql:5eebf00b3b3d312d",
+            "quote": "[2023,\"500133\",null,\"Overtime - Comp\",null,69,null,\"5554755\",\"Actual only\"]"
+          },
+          {
+            "evidenceId": "sql:5eebf00b3b3d312d",
+            "quote": "[2023,\"500018\",null,\"Holidays\",null,91,null,\"8076474\",\"Actual only\"]"
+          },
+          {
+            "evidenceId": "sql:5eebf00b3b3d312d",
+            "quote": "[2023,\"500026\",null,\"D/L-Standby\",null,55,null,\"1659863\",\"Actual only\"]"
+          }
+        ],
+        "counterEvidence": [
+          {
+            "evidenceId": "sql:5eebf00b3b3d312d",
+            "quote": "[2023,\"500136\",\"Holiday Credit on Day Off\",\"Holiday Credit on Day Off\",1,72,\"3011628\",\"3507979\",\"Present in both\"]"
+          }
+        ],
+        "alternativeExplanations": [
+          "The mismatch may simply reflect deliberate budgeting in pooled accounts and payroll posting in detailed subaccounts.",
+          "Some actual-only pay lines may be planned elsewhere in aggregate rather than omitted from budget logic.",
+          "A revised-budget export or internal variance workbook may already reconcile these lines correctly, even though this public export does not."
+        ],
+        "nextTest": "Obtain the City's official reconciliation or chart-of-accounts guidance for FY2021-FY2023 Police payroll budgeting and variance analysis. This interpretation would be weakened or disproved if official reconciliation rules map 500128 to a materially different set of actual accounts than the rollup used here."
+      },
+      {
+        "title": "The FY2025 adopted Police increase in these expense rows was driven more by pensions and other compensation than by overtime",
+        "interpretation": "Between adopted FY2024 and adopted FY2025, Police General Fund 5-prefix expense rows increased by 50,093,384. The category rollup shows large increases in 502 benefits/pensions and 500 pay other, while the 500 pay overtime/holiday/standby category decreased. On this bounded evidence, the increase looks more like a structural compensation and pension commitment than an overtime catch-up.",
+        "whyItMatters": "If the biggest adopted Police increase was not mainly overtime, then the budget debate should focus on recurring compensation costs, pension growth, and staffing assumptions rather than treating the increase as a temporary overtime fix.",
+        "citations": [
+          {
+            "evidenceId": "sql:6025e01d78486501",
+            "quote": "[2025,\"Police\",\"622908762\",\"673002146\",\"50093384\"]"
+          },
+          {
+            "evidenceId": "sql:1a701ca031538c0c",
+            "quote": "[\"Police\",\"502_benefits_pensions\",30,30,\"207341243\",\"244373151\",\"Present in both\",\"37031908\"]"
+          },
+          {
+            "evidenceId": "sql:1a701ca031538c0c",
+            "quote": "[\"Police\",\"500_pay_other\",35,36,\"274702834\",\"292364280\",\"Present in both\",\"17661446\"]"
+          },
+          {
+            "evidenceId": "sql:1a701ca031538c0c",
+            "quote": "[\"Police\",\"500_pay_overtime_holiday_standby\",3,3,\"52351282\",\"49387872\",\"Present in both\",\"-2963410\"]"
+          }
+        ],
+        "counterEvidence": [
+          {
+            "evidenceId": "sql:daddde70b3e2dd83",
+            "quote": "[\"500128\",\"Overtime Budgeted\",\"500\",\"49337051\",\"46373409\",\"Present in both\",\"-2963642\"]"
+          }
+        ],
+        "alternativeExplanations": [
+          "The pension increase may mainly reflect actuarial or rate changes rather than a discretionary expansion of policing service.",
+          "Regular-pay growth may reflect labor agreements, step increases, reduced vacancy assumptions, or filled positions rather than new service commitments.",
+          "Some service-expansion costs could sit in categories not isolated by this rollup."
+        ],
+        "nextTest": "Get the FY2025 Police budget build-up showing pension-rate effects, labor-settlement costs, position changes, and vacancy-factor changes. This interpretation would be weakened if official budget support shows the net increase was primarily driven by service additions or other categories outside the compensation-heavy rollup used here."
+      },
+      {
+        "title": "The Commission on Police Practices did not show parallel execution or adopted growth in this record set",
+        "interpretation": "In the same General Fund 5-prefix expense scope, the Commission on Police Practices spent far below adopted in FY2022 and FY2023, and its adopted FY2025 total was slightly below FY2024. On this bounded record, a claim that police oversight scaled up in parallel with Police spending is not supported. The reason remains unresolved.",
+        "whyItMatters": "Oversight capacity is often discussed alongside Police funding. If the oversight body was not executing its adopted budget and then did not receive a higher adopted total, the next step is to determine whether that reflects vacancies and delayed build-out or a substantive priority gap.",
+        "citations": [
+          {
+            "evidenceId": "sql:e6231241d960d77f",
+            "quote": "[2023,\"Commission on Police Practices\",\"2550352\",\"791792\",\"-1758560\"]"
+          },
+          {
+            "evidenceId": "sql:e6231241d960d77f",
+            "quote": "[2022,\"Commission on Police Practices\",\"1327134\",\"491390\",\"-835744\"]"
+          },
+          {
+            "evidenceId": "sql:6025e01d78486501",
+            "quote": "[2025,\"Commission on Police Practices\",\"2241817\",\"2145832\",\"-95985\"]"
+          },
+          {
+            "evidenceId": "sql:6025e01d78486501",
+            "quote": "[2025,\"Police\",\"622908762\",\"673002146\",\"50093384\"]"
+          }
+        ],
+        "counterEvidence": [
+          {
+            "evidenceId": "sql:1a701ca031538c0c",
+            "quote": "[\"Commission on Police Practices\",\"500_pay_other\",3,5,\"1293329\",\"1381549\",\"Present in both\",\"88220\"]"
+          }
+        ],
+        "alternativeExplanations": [
+          "The Commission may have faced vacancies, start-up delays, or phased implementation rather than an intentional funding deprioritization.",
+          "Some oversight-related costs may have been booked outside the Commission's own General Fund 5-prefix rows.",
+          "The small FY2025 total decline may coexist with internal rebalancing toward personnel."
+        ],
+        "nextTest": "Obtain FY2022-FY2025 Commission staffing, vacancy, hiring, and quarterly expenditure records. This interpretation would be weakened if those records show the apparent under-execution mainly reflects delayed hiring, or if major oversight costs were carried elsewhere in City accounts."
+      },
+      {
+        "title": "The FY2026 budget export cannot by itself support an 'adopted Police budget' claim",
+        "interpretation": "The current export shows FY2026 budget rows only under an unlabeled cycle, and raw Police FY2026 rows carry blank cycle fields. On this evidence alone, FY2026 Police amounts in the export should not be treated as confirmed adopted commitments.",
+        "whyItMatters": "A budget claim can fail on source status alone. Before comparing FY2026 Police figures to homelessness, sanitation, or oversight spending, the adoption status of the FY2026 rows has to be verified from an official ordinance or clearly labeled export.",
+        "citations": [
+          {
+            "evidenceId": "sql:ea4e1830bf7ff3cd",
+            "quote": "[\"budget\",2026,\"UNLABELED\",16023,0]"
+          },
+          {
+            "evidenceId": "doc:source-3ccf2a8fc1704e9b329aa2b7:5985443479405310:22216126:feeadfd34c",
+            "quote": "\"-20731\",\"26\",\"\",\"General Fund\",\"100000\",\"Police\",\"1914000012\",\"Salary Savings\",\"500010\""
+          }
+        ],
+        "counterEvidence": [],
+        "alternativeExplanations": [
+          "The City may have adopted FY2026 elsewhere, and the blank cycle may be only an export or ingestion defect.",
+          "Another official file may identify these same Police rows as proposed or adopted even though this extract does not."
+        ],
+        "nextTest": "Verify FY2026 Police figures against the adopted ordinance or an official budget file with a populated cycle/status field. This interpretation would be disproved if an official adopted record matches these blank-cycle rows and identifies them as adopted FY2026 amounts."
+      }
+    ],
+    "questions": [
+      {
+        "question": "What revised FY2022-FY2023 Police legal authority, transfers, or BAOs explain the gap between adopted and actual expense spending?",
+        "why": "The current evidence shows Police above adopted in FY2022 and FY2023, but adopted expense budget is not the same as revised legal authority. That is the main disproof path for any over-budget interpretation.",
+        "evidenceIds": [
+          "sql:e6231241d960d77f",
+          "sql:866037066b165164"
+        ]
+      },
+      {
+        "question": "Which operating units do Police funds centers 1914121117, 1914121111, and 1914180011 represent, and did they face different staffing or incident loads?",
+        "why": "The strongest unit-level lead is concentrated in specific funds centers, but the current record set does not identify their functions. Without that crosswalk, the service explanation remains speculative.",
+        "evidenceIds": [
+          "sql:3d8a6c90e35261b7",
+          "doc:source-3ccf2a8fc1704e9b329aa2b7:5985443479405310:1179975:d19b796838"
+        ]
+      },
+      {
+        "question": "How does the City formally reconcile Police adopted overtime planning to actual payroll accounts 500124, 500133, 500018, 500026, 500092, and 500136?",
+        "why": "Account mismatch is large enough that a naive budget-versus-actual join can misstate the overtime story. An official crosswalk could confirm or disprove the rollup method used here.",
+        "evidenceIds": [
+          "sql:5eebf00b3b3d312d",
+          "sql:866037066b165164"
+        ]
+      },
+      {
+        "question": "How much of the FY2025 Police increase came from pension rates, wage growth, added positions, or changed vacancy assumptions?",
+        "why": "The current evidence shows the FY2025 increase was concentrated in pensions and non-overtime pay, but not why. That distinction matters for whether the increase was structural or temporary.",
+        "evidenceIds": [
+          "sql:6025e01d78486501",
+          "sql:1a701ca031538c0c",
+          "sql:daddde70b3e2dd83"
+        ]
+      },
+      {
+        "question": "Why did the Commission on Police Practices spend far below adopted levels in FY2022-FY2023 and then receive a slightly smaller FY2025 adopted total?",
+        "why": "The bounded evidence does not support a parallel oversight expansion, but the reason could be vacancies, start-up delays, or costs carried elsewhere. That changes the interpretation materially.",
+        "evidenceIds": [
+          "sql:e6231241d960d77f",
+          "sql:6025e01d78486501",
+          "sql:1a701ca031538c0c"
+        ]
+      },
+      {
+        "question": "What is the official status of the FY2026 Police rows with blank cycle values in the current budget export?",
+        "why": "The current export cannot support FY2026 adopted-budget claims unless the blank cycle is explained or matched to an official adopted record.",
+        "evidenceIds": [
+          "sql:ea4e1830bf7ff3cd",
+          "doc:source-3ccf2a8fc1704e9b329aa2b7:5985443479405310:22216126:feeadfd34c"
+        ]
+      }
+    ],
+    "requests": [
+      {
+        "title": "FY2022-FY2023 revised Police appropriations and transfer history",
+        "custodian": "City of San Diego Department of Finance / Office of the City Comptroller",
+        "gap": "Current evidence compares actual expense spending to adopted expense budget, not revised legal authority.",
+        "resolves": "Whether Police actually exceeded legal budget authority in FY2022-FY2023 or whether midyear actions authorized the higher spending.",
+        "draft": "Please provide existing records for FY2022 and FY2023 showing each budget adjustment, appropriation change, transfer, or other authorization affecting the Police Department in General Fund 100000, including for 500- and 502-series expense accounts. Please include, where they already exist in the records, report fiscal year, action date, funds_center_number, account_number, amount, action type, authority document or BAO number, and brief description. Please also provide any year-end revised budget report or ledger extract showing revised appropriations for Police by funds center and account.",
+        "evidenceIds": [
+          "sql:e6231241d960d77f",
+          "sql:866037066b165164"
+        ]
+      },
+      {
+        "title": "Police vacancy and overtime reports by funds center for FY2023",
+        "custodian": "San Diego Police Department and City Department of Finance",
+        "gap": "The strongest current explanation for pay pressure is staffing vacancy or backfill, but no staffing records were retrieved.",
+        "resolves": "Whether the centers with the largest 500-series variances were also the centers with the deepest vacancies or abnormal overtime demand.",
+        "draft": "Please provide existing monthly or pay-period reports for FY2023 that track Police staffing and overtime by funds_center_number, including budgeted positions, filled positions, vacancy counts, separations, overtime hours, overtime dollars, and any existing backfill reports. Please include any existing reports or spreadsheets for funds centers 1914121117, 1914121111, and 1914180011, and do not include employee names or other personal identifiers.",
+        "evidenceIds": [
+          "sql:3d8a6c90e35261b7",
+          "sql:b6b7f4dcabbdd6d2"
+        ]
+      },
+      {
+        "title": "Chart-of-accounts crosswalk for Police overtime and related payroll lines",
+        "custodian": "City of San Diego Department of Finance / Payroll or Comptroller",
+        "gap": "Budget and actual Police overtime appear in different account structures.",
+        "resolves": "Whether the current rollup is the correct way to reconcile adopted overtime planning to actual payroll spending.",
+        "draft": "Please provide any existing chart-of-accounts guidance, reconciliation workpapers, variance-analysis templates, or internal documentation used to compare adopted Police overtime planning to actual payroll postings for FY2021 through FY2023. Please include records that explain how account 500128 (Overtime Budgeted) is reconciled to actual accounts including 500124, 500133, 500018, 500026, 500092, and 500136.",
+        "evidenceIds": [
+          "sql:5eebf00b3b3d312d",
+          "sql:866037066b165164"
+        ]
+      },
+      {
+        "title": "FY2025 Police budget build-up and compensation-driver support",
+        "custodian": "City of San Diego Department of Finance",
+        "gap": "The current evidence shows FY2025 Police growth was concentrated in pensions and non-overtime pay, but not why.",
+        "resolves": "Whether FY2025 reflected pension-rate changes, wage growth, added positions, reduced vacancy assumptions, or some other driver.",
+        "draft": "Please provide existing records used to build the FY2025 adopted Police budget in General Fund 100000, including account-level change explanations, position add/delete lists, vacancy-factor assumptions, salary or step/COLA assumptions, pension-rate support, workers' compensation allocation support, and any memorandum or presentation that explains the FY2024-to-FY2025 change by major driver.",
+        "evidenceIds": [
+          "sql:6025e01d78486501",
+          "sql:1a701ca031538c0c",
+          "sql:daddde70b3e2dd83"
+        ]
+      },
+      {
+        "title": "Commission on Police Practices staffing and budget-execution records",
+        "custodian": "Commission on Police Practices and City Department of Finance",
+        "gap": "The oversight body's large FY2022-FY2023 under-execution and later slight adopted decline are unexplained here.",
+        "resolves": "Whether the oversight gap reflects vacancies and delayed build-out or a more substantive budget-priority issue.",
+        "draft": "Please provide existing quarterly or monthly expenditure reports, vacancy reports, filled-position counts, recruitment status reports, and any budget reduction or reallocation records for the Commission on Police Practices for FY2022 through FY2025. Please exclude personal identifiers and provide records at the department or position-count level.",
+        "evidenceIds": [
+          "sql:e6231241d960d77f",
+          "sql:6025e01d78486501",
+          "sql:1a701ca031538c0c"
+        ]
+      },
+      {
+        "title": "Official FY2026 Police operating-budget records with cycle or adoption status",
+        "custodian": "City of San Diego Department of Finance / City Clerk",
+        "gap": "The current budget export shows FY2026 as unlabeled or blank cycle.",
+        "resolves": "Whether FY2026 Police figures in the current export are proposed, adopted, or malformed export rows.",
+        "draft": "Please provide the official FY2026 operating-budget records or ordinance attachments for the Police Department in General Fund 100000 that show, where they already exist, report_fy, budget_cycle or status, funds_center_number, account_number, amount, and adoption date. If an official export file exists with a populated budget-cycle field, please provide that existing file or its Police extract.",
+        "evidenceIds": [
+          "sql:ea4e1830bf7ff3cd",
+          "doc:source-3ccf2a8fc1704e9b329aa2b7:5985443479405310:22216126:feeadfd34c"
+        ]
+      }
+    ],
+    "meetings": [],
+    "limitations": [
+      "No official Council or committee agendas were retrieved, so no meeting recommendations can be supported from this bounded record set.",
+      "The main budget-versus-actual comparisons are against adopted expense budget, not revised legal authority; an adopted-over-actual variance alone does not prove overspending against authorized appropriations.",
+      "The SQL totals are limited to General Fund 100000 and primarily 5-prefix expense rows; they do not capture grant funds, capital spending, all reimbursements, or net budget effects outside that scope.",
+      "The unit-level pay comparison is a constructed comparability test, not an official City reconciliation. It rolls budget overtime planning and actual overtime or holiday or standby lines into analyst-defined categories.",
+      "FY2023 is the latest ended fiscal year with both adopted-budget and actuals coverage in the current analytical tables. FY2024 actuals were not available here.",
+      "Funds-center numbers were not translated to operating-unit names in the retrieved evidence, limiting service-level interpretation.",
+      "Some SQL outputs are truncated to top results, so the absence of a center or account from a shown result is not evidence that it was absent from the underlying data.",
+      "Raw text excerpts are partial windows from large CSV files; they are useful for field confirmation but not a substitute for full-record extracts or official budget documents."
+    ]
+  },
+  "investigationLog": [
+    "Searched 'Police': 4 excerpts retrieved.",
+    "Searched 'overtime': 4 excerpts retrieved.",
+    "Searched 'vacancy': 0 excerpts retrieved.",
+    "Searched 'budget reduction': 0 excerpts retrieved.",
+    "Searched 'agenda': 0 excerpts retrieved.",
+    "Computed reproducible City finance comparison: Fiscal-year and budget-cycle coverage needed to establish comparable spending periods",
+    "Computed reproducible City finance comparison: Largest account differences between adopted budget and actual spending, with unmatched counterparts",
+    "Computed reproducible City finance comparison: Three-year General Fund spending and allocation history for relevant departments",
+    "Computed reproducible City finance comparison: Latest explicitly adopted General Fund allocation changes and service tradeoffs",
+    "Computed reproducible City finance comparison: Police overtime: adopted allocation versus actual spending in ended fiscal years",
+    "Follow-up search 'Police overtime vacancy adopted budget': 0 excerpts.",
+    "Follow-up search '\"Budgeted Personnel Expenditure Savings\" Police': 0 excerpts.",
+    "Follow-up search '\"Commission on Police Practices\" \"2025 adopted budget\"': 0 excerpts.",
+    "Follow-up search '\"FY 2026\" Police adopted budget proposed budget': 0 excerpts.",
+    "Executed comparison: What police account numbers and labels appear in adopted budget versus actuals for staffing-, overtime-, holiday-, and savings-related lines in FY2021-FY2023, and which keys exist on only one side?",
+    "Executed comparison: For FY2023, which police funds-center/account combinations show the largest mismatches between adopted staffing/overtime-related budget lines and actual spending, including missing counterparts on either side?",
+    "Executed comparison: How did the adopted Police budget change from FY2024 to FY2025 by account key, and was the increase concentrated in overtime/staffing lines, benefits, or other spending categories?",
+    "Follow-up search '\"1914121111\",\"Overtime Budgeted\",\"500128\"': 1 excerpts.",
+    "Follow-up search '\"1914121111\",\"Budgeted Personnel Expenditure Savings\",\"500189\"': 1 excerpts.",
+    "Follow-up search '\"1914121117\",\"Overtime - Premium\",\"500124\"': 1 excerpts.",
+    "Follow-up search '\"26\",\"\",\"General Fund\",\"100000\",\"Police\"': 2 excerpts.",
+    "Executed comparison: Which Police funds_center keys are stable between adopted budget and actuals in FY2022-FY2023, and which large centers appear only on one side?",
+    "Executed comparison: At the Police funds-center level in FY2022-FY2023, do comparable 500-series pay totals show net overspending after regular-pay underruns are weighed against overtime and holiday/standby actuals?",
+    "Executed comparison: For adopted FY2024 versus FY2025, was the Police increase concentrated in regular pay and pensions rather than overtime, and how does that composition compare with the Commission on Police Practices?",
+    "Completed 2 retrieval/query passes and a separate critical review. Exact citation quotes and meeting dates passed validation. Interpretations still require researcher review."
+  ],
+  "inputTokens": 112486,
+  "outputTokens": 57163
+}

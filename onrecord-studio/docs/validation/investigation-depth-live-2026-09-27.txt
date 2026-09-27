@@ -1,0 +1,49 @@
+
+running 1 test
+Acquired https://www.sandiego.gov/sites/default/files/23-21_fy_2024_homelessness_programs_and_funding.pdf
+Acquired https://www.sandiego.gov/sites/default/files/2024-09/24-24-rev-fy-2025-homelessness-programs-and-funding_rev.pdf
+Acquired https://information.auditor.ca.gov/reports/2023-102.2/index.html
+Acquired https://www.sandiego.gov/sites/default/files/2026-09/26-19-fy-2027-homelessness-programs-and-funding_rev.pdf
+Acquired https://www.sandiego.gov/sites/default/files/2026-09/9-28-26-special.pdf
+Acquired https://sdhc.org/103_hcr26-014-imperial-shelter_final/
+Acquired https://sdhc.org/104_hcr26-015-harm-reduction-shelter_final/
+Acquired https://sdhc.org/101_hcr26-016-single-adults-shelter_final/
+Acquired https://www.sandiego.gov/sites/default/files/fy23-year-end-performance-report.pdf
+Acquired https://www.sandiego.gov/sites/default/files/2026-05/fy2026-third-quarter-budget-monitoring-report.pdf
+test real_homelessness_records_produce_a_grounded_investigation has been running for over 60 seconds
+Research: Research pass 1/3: pursuing questions and testing connections (1 calls)
+Research: Research pass 1/3: pursuing questions and testing connections (1 calls)
+Research: Looking for available primary records before drafting requests (2 calls)
+Research: Acquiring primary evidence: FY 2026 Homelessness Programs and Funding (2 calls)
+Research: Research pass 2/3: pursuing questions and testing connections (3 calls)
+Research: Research pass 2/3: pursuing questions and testing connections (3 calls)
+Research: Research pass 2/3: pursuing questions and testing connections (3 calls)
+Research: Research pass 3/3: pursuing questions and testing connections (4 calls)
+Research: Synthesizing evidence into findings, requests, and meeting actions (5 calls)
+Research: Synthesizing evidence into findings, requests, and meeting actions (5 calls)
+Research: Synthesizing evidence into findings, requests, and meeting actions (5 calls)
+Research: Synthesizing evidence into findings, requests, and meeting actions (5 calls)
+Research: Synthesizing evidence into findings, requests, and meeting actions (5 calls)
+Research: Synthesizing evidence into findings, requests, and meeting actions (5 calls)
+Research: Synthesizing evidence into findings, requests, and meeting actions (5 calls)
+Research: Synthesizing evidence into findings, requests, and meeting actions (5 calls)
+Research: Challenging findings against sources and competing explanations (6 calls)
+Research: Challenging findings against sources and competing explanations (6 calls)
+Research: Challenging findings against sources and competing explanations (6 calls)
+Research: Reviewing findings against challenge results (7 calls)
+Research: Reviewing findings against challenge results (7 calls)
+Research: Reviewing findings against challenge results (7 calls)
+Research: Reviewing findings against challenge results (7 calls)
+Research: Reviewing findings against challenge results (7 calls)
+Research: Reviewing findings against challenge results (7 calls)
+Dossier: /var/folders/f6/9fydz_3n0p13t2scsr8ppdlm0000gn/T/onrecord-live-research-dossier.json
+San Diego investigation: validated evidence and follow-up
+Findings: 4; requests: 6; originals released: 12
+Finding: The FY2027 homelessness report uses conflicting Police-scope cues, so its headline totals are hard to compare cleanly
+Finding: FY2026 projected HSSD savings were partly fund shifts, prior-year billing corrections, delays, and storm costs—not clean evidence of cheaper service delivery
+Finding: Round 2 Encampment Resolution Funding still needs a dollar-by-dollar lineage before the 2026 Riverbed amendment is treated as proof of timely rollout
+Finding: The shelter packets expose a missing contract-to-outcome link: proposed dollars and amenities are visible, but exits and actual payments are not
+test real_homelessness_records_produce_a_grounded_investigation ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 800.86s
+

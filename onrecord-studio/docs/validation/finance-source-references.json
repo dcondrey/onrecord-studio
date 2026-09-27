@@ -1,0 +1,14 @@
+[
+  {
+    "name": "budget",
+    "url": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+    "sha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5",
+    "originalBytes": 63825383
+  },
+  {
+    "name": "actuals",
+    "url": "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv",
+    "sha256": "53cfc7488c40c2d3b654c64ba8599bc11a4086fa5efe403371c38eff78dd2143",
+    "originalBytes": 69104357
+  }
+]

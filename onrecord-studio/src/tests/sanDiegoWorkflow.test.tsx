@@ -77,7 +77,8 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 describe('San Diego research workflow', () => {
   it('selects a corrected budget PDF with its proposed status and single-document acquisition scope', async () => {
     render(<App />);
-    const desk = within(screen.getByRole('region', { name: 'San Diego research desk' }));
+    fireEvent.click(screen.getByText('Browse sources and add records'));
+    const desk = within(await screen.findByRole('region', { name: 'San Diego research desk' }));
     fireEvent.change(desk.getByLabelText('Evidence type'), { target: { value: 'Budget proposal' } });
     fireEvent.change(desk.getByLabelText('Find a regional source'), { target: { value: 'FY2026' } });
     const card = desk.getByText('SDHC FY2026 proposed budget — City format').closest('article')!;
@@ -92,7 +93,8 @@ describe('San Diego research workflow', () => {
 
   it('stages the SDPD source and applies its scoped acquisition recipe when Add is clicked', async () => {
     render(<App />);
-    const description = screen.getByText('Find the written policies, procedures, department orders, and training documents behind a police practice.');
+    fireEvent.click(screen.getByText('Browse sources and add records'));
+    const description = await screen.findByText('Find the written policies, procedures, department orders, and training documents behind a police practice.');
     const card = description.closest('article')!;
     fireEvent.click(within(card).getByRole('button', { name: 'Choose source' }));
     expect(bridge.calls.some((call) => call.command === 'start_data_source')).toBe(false);

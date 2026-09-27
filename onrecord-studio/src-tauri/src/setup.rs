@@ -58,6 +58,10 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
     let corpus_index = CorpusIndex::open(&corpus_db_file)?;
     let vector_index = VectorIndex::open(&vector_db_file, model_cache_dir)?;
     tauri::async_runtime::block_on(repository.run_migrations(initial_migration))?;
+    tauri::async_runtime::block_on(repository.initialize_research())?;
+    tauri::async_runtime::block_on(repository.initialize_review())?;
+    tauri::async_runtime::block_on(repository.initialize_casework())?;
+    tauri::async_runtime::block_on(repository.initialize_monitoring())?;
 
     // Both analytics nodes read through live sibling connections to the repository's DuckDB
     // instance. Opening or attaching the core file separately would pin each node to the database
@@ -103,6 +107,7 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
     app.manage(manager);
     app.manage(agency_engine);
     app.manage(correlation_engine);
+    crate::research::start_service(app.handle().clone());
 
     // 5. Apply the native window material.
     if let Some(main_window) = app.get_webview_window("main") {

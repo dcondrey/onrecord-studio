@@ -8,6 +8,7 @@ import {
 import { cn } from '../../utils/cn';
 import { focusSourceComposer } from '../../utils/sanDiego';
 import Icon from '../ui/icons';
+import { INVESTIGATION_TOPICS } from '../../utils/investigations';
 
 interface ResearchLane {
   title: string;
@@ -25,75 +26,19 @@ interface StarterSource {
 }
 
 const STARTER_SOURCES: StarterSource[] = [
-  {
-    label: 'Current CPP agendas and meeting packets',
-    url: 'https://www.sandiego.gov/cpp/meetingsagendas',
-    purpose: 'Find the posted meeting agenda and packet; confirm the date, agenda item, and participation instructions in that record.',
-    tier: 'Meeting record',
-  },
-  {
-    label: 'CPP resources',
-    url: 'https://www.sandiego.gov/cpp/reports',
-    purpose: 'Review the Commission’s published resources and linked reference documents.',
-    tier: 'Meeting record',
-  },
-  {
-    label: 'SDPD policies and procedures',
-    url: 'https://www.sandiego.gov/police/data-transparency/policies-procedures',
-    purpose: 'Compare a presentation or proposal with the department’s operative written rules and revision dates.',
-    tier: 'Local policy',
-  },
-  {
-    label: 'NHTSA oral-fluid testing guidance',
-    url: 'https://www.nhtsa.gov/book/countermeasures-that-work/drug-impaired-driving/emerging-issues',
-    purpose: 'Independent federal context on what a roadside oral-fluid result can and cannot establish about impairment.',
-    tier: 'Independent research',
-  },
-  {
-    label: 'California Public Safety Officers Procedural Bill of Rights Act',
-    url: 'https://leginfo.legislature.ca.gov/faces/codes_displayText.xhtml?division=4.&chapter=9.7.&part=&lawCode=GOV&title=1.',
-    purpose: 'Use current statutory text to distinguish procedural protections from claims made in a training deck.',
-    tier: 'Governing law',
-  },
+  { label: 'Current Council agendas and packets', url: 'https://www.sandiego.gov/city-clerk/officialdocs/legisdocs/brown-act', purpose: 'Confirm the meeting date, item, staff recommendation, and participation instructions in the posted agenda.', tier: 'Meeting record' },
+  { label: 'Homelessness funding and program reports', url: 'https://www.sandiego.gov/homelessness-strategies-and-solutions/data-reports', purpose: 'Connect program commitments with reported services and housing outcomes for the same period.', tier: 'Local policy' },
+  { label: 'Independent Budget Analyst reports', url: 'https://www.sandiego.gov/iba/reports', purpose: 'Check funding assumptions, recurring costs, alternatives, and the fiscal implications of Council decisions.', tier: 'Independent research' },
+  { label: 'City Auditor reports', url: 'https://www.sandiego.gov/auditor/reports', purpose: 'Follow a specific audit recommendation through management responses and evidence of implementation.', tier: 'Independent research' },
 ];
 
-const RESEARCH_LANES: ResearchLane[] = [
-  {
-    title: 'SoToxa safeguards',
-    agendaItem: 'Example · Policy safeguards',
-    purpose: 'Separate recent drug detection from proof of impairment, then test the proposed operating safeguards.',
-    questions: [
-      'Is use voluntary, based on individualized suspicion, or treated as a condition of avoiding arrest—and what happens after refusal?',
-      'What are the per-drug sensitivity, specificity, cutoff, invalid-test, and false-result rates for the exact device and field conditions?',
-      'Is every positive treated as non-evidentiary until laboratory confirmation, and may a negative override observed impairment?',
-      'What rules cover calibration, operator certification, chain of custody, retention, access, demographic auditing, and public reporting?',
-    ],
-    searches: ['SoToxa', 'oral fluid', 'drug screening', 'confirmatory testing'],
-  },
-  {
-    title: 'POBOR and accountable review',
-    agendaItem: 'Example · Accountability review',
-    purpose: 'Map officer procedural rights against the Commission’s ability to complete timely, independent investigations.',
-    questions: [
-      'Which statements in the training come from current statute, a local labor agreement, department procedure, or case law?',
-      'When does the one-year investigation period begin, what tolling is claimed, and how will the Commission see the dates needed to audit it?',
-      'How are compelled administrative statements separated from criminal investigators while still reaching independent civilian reviewers?',
-      'Which notice, interview, representation, confidentiality, discipline, and appeal rules create measurable delays or information gaps?',
-    ],
-    searches: ['POBOR', 'officer discipline', 'administrative investigation', 'internal affairs'],
-  },
-  {
-    title: 'Continuity and prior commitments',
-    agendaItem: 'Earlier CPP record',
-    purpose: 'Connect the meeting’s discussion to unresolved oversight priorities instead of presenting an isolated anecdote.',
-    questions: [
-      'Did earlier minutes promise a written policy, public engagement, quarterly reporting, or a future agenda item?',
-      'Do policies, minutes, and reports use the same definition, scope, and timeline?',
-      'What result would the Commission be able to verify at a named future meeting?',
-    ],
-    searches: ['surveillance policy', 'pretext stop', 'use of force', 'quarterly report'],
-  },
-];
+const RESEARCH_LANES: ResearchLane[] = INVESTIGATION_TOPICS.map((topic) => ({
+  title: topic.title,
+  agendaItem: 'Match to a verified agenda item',
+  purpose: topic.method,
+  questions: [topic.question, ...topic.records.map((record) => `What do the available records establish about: ${record}`), topic.limitation],
+  searches: topic.searches,
+}));
 
 export default function BriefingWorkspace() {
   const project = useAppStore((state) => state.briefingProject);
@@ -119,11 +64,11 @@ export default function BriefingWorkspace() {
     return { completed: checks.filter(Boolean).length, total: checks.length };
   }, [project]);
 
-  const useCppStarter = () => updateProject({
-    title: 'San Diego Commission on Police Practices briefing',
-    audience: 'San Diego Commission on Police Practices',
+  const useAccountabilityStarter = () => updateProject({
+    title: 'San Diego spending and services briefing',
+    audience: 'San Diego City Council',
     durationMinutes: 3,
-    objective: 'Present a documented concern about a San Diego police practice and request a specific public follow-up.',
+    objective: 'Present a documented connection between spending, delivered services, and an unresolved commitment; request a specific, verifiable follow-up.',
   });
 
   const runSearch = (search: string) => {
@@ -166,7 +111,7 @@ export default function BriefingWorkspace() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="secondary-action rounded-xl border px-3 py-2 text-[9px] text-slate-400">{readiness.completed}/{readiness.total} presentation checks complete</span>
-            <button type="button" onClick={useCppStarter} className="focus-ring rounded-xl border border-indigo-400/25 bg-indigo-500/10 px-3 py-2 text-[9px] font-semibold text-indigo-200">Use CPP briefing template</button>
+            <button type="button" onClick={useAccountabilityStarter} className="focus-ring rounded-xl border border-indigo-400/25 bg-indigo-500/10 px-3 py-2 text-[9px] font-semibold text-indigo-200">Use accountability briefing template</button>
             <button type="button" onClick={exportOutline} className="primary-action focus-ring rounded-xl px-3 py-2 text-[9px] font-semibold text-white">Export outline</button>
           </div>
         </section>

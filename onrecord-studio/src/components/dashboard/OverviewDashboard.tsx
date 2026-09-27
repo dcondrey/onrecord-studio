@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import AnomalyRadar from '../charts/AnomalyRadar';
 import LifecycleFunnel from '../charts/LifecycleFunnel';
 import PerformanceScatter from '../charts/PerformanceScatter';
@@ -8,6 +8,10 @@ import { useAppStore } from '../../store/useAppStore';
 import MetricsGrid from './MetricsGrid';
 import Icon from '../ui/icons';
 import SanDiegoWorkspace from './SanDiegoWorkspace';
+import InvestigationDesk from './InvestigationDesk';
+import ResearchWorkspace from './ResearchWorkspace';
+import ProfessionalWorkbench from './ProfessionalWorkbench';
+import DataMaintenance from './DataMaintenance';
 import AutomaticDiscovery from './AutomaticDiscovery';
 import { invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
@@ -16,6 +20,7 @@ import type { AgencyPerformanceProfile } from '../../types';
 export default function OverviewDashboard() {
   const portals = useAppStore((state) => state.portals);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [workbench, setWorkbench] = useState<{ reportId: string; review: boolean } | null>(null);
   const workspaceInitializationStatus = useAppStore((state) => state.workspaceInitializationStatus);
   const workspaceInitializationError = useAppStore((state) => state.workspaceInitializationError);
   const profiles = useAppStore((state) => state.agencyProfiles);
@@ -40,9 +45,9 @@ export default function OverviewDashboard() {
             <div className="app-eyebrow flex items-center gap-2 text-cyan-300/60">
               <Icon name="sparkles" className="h-3.5 w-3.5" /> San Diego public records
             </div>
-            <h2 className="mt-2 text-[26px] font-semibold tracking-[-0.035em] text-slate-100 sm:text-[30px]">Know the record. Prepare the next question.</h2>
+            <h2 className="mt-2 text-[26px] font-semibold tracking-[-0.035em] text-slate-100 sm:text-[30px]">{workbench ? 'Develop the case' : 'Your investigation briefing'}</h2>
             <p className="mt-1.5 max-w-3xl text-[11px] leading-relaxed text-slate-400">
-              A local workspace for City records, police oversight, and evidence you can bring to a public meeting.
+              Investigate homelessness spending, encampment abatements, public bathrooms, and City budget priorities.
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -66,8 +71,16 @@ export default function OverviewDashboard() {
           <WorkspaceSourcesUnavailable detail={workspaceInitializationError} />
         ) : null}
 
-        <AutomaticDiscovery />
-        <SanDiegoWorkspace />
+        {workbench ? <>
+          <button type="button" className="analysis-button" onClick={() => setWorkbench(null)}>Return to investigation briefing</button>
+          <ProfessionalWorkbench key={`${workbench.reportId}:${workbench.review}`} initialReportId={workbench.reportId} initialTab={workbench.review ? 'Evidence review' : 'Cases and follow-through'} />
+        </> : <>
+          <ResearchWorkspace onReview={(reportId) => setWorkbench({ reportId, review: true })} />
+          <section className="app-panel flex flex-wrap items-center justify-between gap-3 p-4"><div><h3 className="text-sm font-semibold text-slate-200">Develop a lead into a durable case</h3><p className="mt-1 text-xs text-slate-400">Track requests, productions and commitments; reconcile spending; challenge the evidence.</p></div><button type="button" className="analysis-button" onClick={() => setWorkbench({ reportId: '', review: false })}>Open casework and research tools</button></section>
+        </>}
+        <ToolDrawer label="Plan an investigation or draft a request manually"><InvestigationDesk /></ToolDrawer>
+        <ToolDrawer label="Collection, coverage and storage"><AutomaticDiscovery /><div className="mt-4"><DataMaintenance /></div></ToolDrawer>
+        <ToolDrawer label="Browse sources and add records"><SanDiegoWorkspace /></ToolDrawer>
 
         {portals.length > 0 && <button type="button" onClick={() => setShowAnalytics((visible) => !visible)} aria-expanded={showAnalytics} className="secondary-action focus-ring rounded-xl border px-4 py-2 text-xs text-slate-300">{showAnalytics ? 'Hide response analytics' : 'Show response analytics'}</button>}
         {showAnalytics && <>
@@ -89,6 +102,11 @@ export default function OverviewDashboard() {
       </div>
     </div>
   );
+}
+
+function ToolDrawer({ label, children }: { label: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return <details className="app-panel p-4" onToggle={(event) => setOpen(event.currentTarget.open)}><summary className="cursor-pointer text-sm font-semibold text-slate-300">{label}</summary>{open && <div className="mt-4">{children}</div>}</details>;
 }
 
 function PeriodComparison({ activePortalKey }: { activePortalKey: string | null }) {

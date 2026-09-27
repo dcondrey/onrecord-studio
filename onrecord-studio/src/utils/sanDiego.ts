@@ -1,6 +1,7 @@
 import type { CrawlPolicy, SourceGuidance } from '../types';
 import { REGIONAL_SOURCES } from './regionalSources';
 import { HOUSING_SOURCES } from './housingSources';
+import { INVESTIGATION_SOURCES } from './investigationSources';
 
 export interface SanDiegoSource {
   id: string;
@@ -69,6 +70,7 @@ export const SAN_DIEGO_SOURCES: readonly SanDiegoSource[] = [
   },
   ...REGIONAL_SOURCES,
   ...HOUSING_SOURCES,
+  ...INVESTIGATION_SOURCES,
 ];
 
 export const SAN_DIEGO_RECORDS_URL = 'https://sandiego.nextrequest.com/';

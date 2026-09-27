@@ -1,0 +1,7 @@
+import type { ReviewWorkspace } from '../types';
+import { buildResearchMarkdown } from './researchExport';
+export function reviewPacket(workspace: ReviewWorkspace): string {
+  const body = buildResearchMarkdown(workspace.report, {}, new Date().toISOString());
+  const reviews = workspace.reviews.map(r => `### Finding ${r.input.findingIndex + 1} — ${r.input.verdict}\n\nReviewer: ${r.input.reviewer} (local attribution); revision ${r.revision}; ${r.createdAt}\n\n${r.input.reasoning}\n\nFalsification test: ${r.input.falsificationTest}\n\nCounterevidence search: ${r.input.counterSearch}\n\n${r.input.counterEvidence.map(c => `> ${c.quote}\n\nEvidence: ${c.evidenceId}`).join('\n\n')}`).join('\n\n');
+  return `${body}\n\n## Accountable review history\n\n${reviews || 'No human review recorded.'}\n\n## Recomputed evidence\n\n${workspace.replays.map(r => `- ${r.evidenceId}: ${r.state} at ${r.checkedAt}. ${r.detail}`).join('\n') || 'Not replayed.'}\n\n## Public relationship assertions\n\n${workspace.relationships.map(r => `- ${r.subject.name} (${r.subject.key}) → ${r.predicate} → ${r.object.name} (${r.object.key}); ${r.status}; ${r.validFrom ?? 'unknown start'} to ${r.validTo ?? 'unknown end'}. ${r.note}\n${r.citations.map(c => `  Evidence ${c.evidenceId}: ${c.quote}`).join('\n')}`).join('\n') || 'None recorded.'}\n\nRelationships are attributed assertions, not evidence of misconduct. Sources may change after this snapshot.\n`;
+}

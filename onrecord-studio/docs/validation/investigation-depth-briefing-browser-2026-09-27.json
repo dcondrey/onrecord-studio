@@ -1,0 +1,52 @@
+{
+  "validation": "Actual dashboard components with a supplied saved dossier and a read-only mocked IPC status bridge; browser/component review, not native app end-to-end validation. No live research state or credentials are connected.",
+  "dossier": {
+    "path": "docs/validation/investigation-depth-live-2026-09-27.json",
+    "sha256": "8345c426951e2542fef0a165a9196c10f03d01c83df1ff01ac15b8873f1b96b4",
+    "id": "82083f08-4af4-4ea3-aa2d-fa66a175d803",
+    "createdAt": "2026-09-27T08:59:43.995881+00:00"
+  },
+  "latestSavedLabel": "Latest saved dossier: 9/27/2026, 1:59:43 AM",
+  "findingTitle": "The FY2027 homelessness report uses conflicting Police-scope cues, so its headline totals are hard to compare cleanly",
+  "displayedQuote": "“The table does not capture all homelessness-related expenses such as homeless encampment abatement through CleanSD, the Police Department's Neighborhood Policing Division, or other costs related to direct or indirect department involvement with those experiencing homelessness.”",
+  "sourceHref": "https://www.sandiego.gov/sites/default/files/2025-08/25-26-rev-fy-2026-homelessness-programs-and-funding.pdf",
+  "requestTitle": "FY2026-to-FY2027 homelessness funding scope crosswalk",
+  "requestPosition": {
+    "x": 49,
+    "y": 271.40625,
+    "width": 1342,
+    "height": 445.5
+  },
+  "mobileRequestTitle": "FY2026-to-FY2027 homelessness funding scope crosswalk",
+  "desktop": {
+    "finding": {
+      "x": 24,
+      "y": 204.015625,
+      "width": 1392,
+      "height": 695
+    },
+    "action": {
+      "x": 807.078125,
+      "y": 420.015625,
+      "width": 196.890625,
+      "height": 40
+    },
+    "horizontalOverflow": false
+  },
+  "mobile": {
+    "finding": {
+      "x": 16,
+      "y": 312.171875,
+      "width": 358,
+      "height": 1615.375
+    },
+    "action": {
+      "x": 54,
+      "y": 659.171875,
+      "width": 196.890625,
+      "height": 40
+    },
+    "horizontalOverflow": false
+  },
+  "errors": []
+}

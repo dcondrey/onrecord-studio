@@ -1,0 +1,62 @@
+[
+  {
+    "id": 5081757220038862,
+    "fileName": "Best-Practices-Toolkit.pdf",
+    "revision": 2,
+    "identicalToCurrentText": false,
+    "currentTextSha256": "e61c0b01682d797c750326ec3c6caf1cd71265e3d6395fe934051b60f5d36661",
+    "historicalTextSha256": "db8ab4a4b639e1dd5506afaa5f13d99051cd761d6d3700f4809e61e458febe22",
+    "currentCharacters": 117238,
+    "historicalCharacters": 117242,
+    "pageErrors": 0,
+    "historicalTruncated": false
+  },
+  {
+    "id": 5992224815169554,
+    "fileName": "DisruptingChurnReport.pdf",
+    "revision": 1,
+    "identicalToCurrentText": true,
+    "currentTextSha256": "145e3740bd8e87d7b5fdc2827bccb8fe7005dfe097dddd0dd0079c3d7555561e",
+    "historicalTextSha256": "145e3740bd8e87d7b5fdc2827bccb8fe7005dfe097dddd0dd0079c3d7555561e",
+    "currentCharacters": 80714,
+    "historicalCharacters": 80714,
+    "pageErrors": 0,
+    "historicalTruncated": false
+  },
+  {
+    "id": 5795536947208604,
+    "fileName": "HSEEGovernment.pdf",
+    "revision": 1,
+    "identicalToCurrentText": true,
+    "currentTextSha256": "f162b3b5dc4a68a2ab79996caaa73a532d77acd2a7831780875b0b7bd2320c68",
+    "historicalTextSha256": "f162b3b5dc4a68a2ab79996caaa73a532d77acd2a7831780875b0b7bd2320c68",
+    "currentCharacters": 102715,
+    "historicalCharacters": 102715,
+    "pageErrors": 0,
+    "historicalTruncated": false
+  },
+  {
+    "id": 6237534570323630,
+    "fileName": "OZ_Best_Practices_Report.pdf",
+    "revision": 1,
+    "identicalToCurrentText": false,
+    "currentTextSha256": "03be27bbc779031a5269edfc7fc423f1e2cb09d13030dbf454f49cdad7bccb1c",
+    "historicalTextSha256": "d86f1a96b964bbb44489205e94247883bf66465ac2c75b5960afe1f8acee8e54",
+    "currentCharacters": 204548,
+    "historicalCharacters": 183062,
+    "pageErrors": 0,
+    "historicalTruncated": true
+  },
+  {
+    "id": 6706327431232379,
+    "fileName": "cpp-agenda-260819.pdf",
+    "revision": 2,
+    "identicalToCurrentText": true,
+    "currentTextSha256": "dae2ee2c22ccf27f9d27f2f89bbd3ca7d4a4a02a5ea59285b6b4cd4bb50f0684",
+    "historicalTextSha256": "dae2ee2c22ccf27f9d27f2f89bbd3ca7d4a4a02a5ea59285b6b4cd4bb50f0684",
+    "currentCharacters": 8788,
+    "historicalCharacters": 8788,
+    "pageErrors": 0,
+    "historicalTruncated": false
+  }
+]

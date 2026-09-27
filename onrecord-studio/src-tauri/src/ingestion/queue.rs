@@ -359,11 +359,12 @@ mod persisted_document {
 /// in its durable frontier, so seeding its configured start page there re-fetches every page in
 /// between. Deduplication makes that correct and not free -- 900 requests against a portal that
 /// rate-limits.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 enum PoolSeedPolicy {
     OperatorRequested,
     ContinueInterruptedWalk,
     AutomaticRefresh,
+    AutomaticDiscovery { submitted_url: String },
 }
 
 struct ScheduledTask {
@@ -961,6 +962,27 @@ impl QueueManager {
             // polling) is guaranteed to be observed here rather than lost.
             let _ = slot_freed.changed().await;
         };
+        if matches!(&seed_policy, PoolSeedPolicy::AutomaticDiscovery { .. }) {
+            // Discovery may have followed an alias or outlived a pause/removal. The
+            // submitted URL is not the source identity. Check the resolved key AND
+            // publication URL while holding the same lock as lifecycle mutations,
+            // before registration or a recipe can overwrite the owner's choices.
+            let key = portal.portal_key.clone();
+            let canonical = portal.canonical_url.trim_end_matches('/').to_string();
+            let already_registered = self.repository.query_connection(
+                "Check automatic discovery identity", move |conn| {
+                    conn.query_row(
+                        "SELECT EXISTS (SELECT 1 FROM portals WHERE subdomain = ?1 OR rtrim(base_url, '/') = ?2)",
+                        duckdb::params![key, canonical], |row| row.get::<_, bool>(0),
+                    ).map_err(|error| AppError::Storage(error.to_string()))
+                },
+            ).await?;
+            if already_registered {
+                return Err(AppError::DataParsing(
+                    "Automatic discovery resolved to an existing source. Its lifecycle and saved collection scope were preserved; use its existing refresh schedule or an explicit operator start.".into(),
+                ));
+            }
+        }
         if was_parked || seed_policy == PoolSeedPolicy::AutomaticRefresh {
             // The park may have outlived the source: it could have been withdrawn or paused
             // while queued for a slot. Re-check before provisioning so a promoted start never
@@ -994,6 +1016,13 @@ impl QueueManager {
         self.repository
             .insert_or_update_portal_registration(&portal)
             .await?;
+        if let PoolSeedPolicy::AutomaticDiscovery { submitted_url } = &seed_policy {
+            if guidance != SourceGuidance::default() || crawl_policy != CrawlPolicy::default() {
+                self.repository
+                    .save_source_connector_recipe(&portal, submitted_url, &crawl_policy, &guidance)
+                    .await?;
+            }
+        }
         self.limiter
             .register_portal(&portal.portal_key, rate_limit_policy)
             .await?;
@@ -1207,6 +1236,45 @@ impl QueueManager {
         guidance: SourceGuidance,
         rate_limit_policy: RateLimitPolicy,
     ) -> Result<SourceIngestionStart, AppError> {
+        self.discover_and_start_public_source_with_policy(
+            source_url,
+            crawl_policy,
+            guidance,
+            rate_limit_policy,
+            PoolSeedPolicy::OperatorRequested,
+        )
+        .await
+    }
+
+    /// Automatic discovery admits only a new resolved source. Aliases must not
+    /// reactivate a paused/removed source or replace an owner's saved recipe.
+    pub async fn discover_and_start_public_source_automatically(
+        &self,
+        source_url: &str,
+        crawl_policy: CrawlPolicy,
+        guidance: SourceGuidance,
+        rate_limit_policy: RateLimitPolicy,
+    ) -> Result<SourceIngestionStart, AppError> {
+        self.discover_and_start_public_source_with_policy(
+            source_url,
+            crawl_policy,
+            guidance,
+            rate_limit_policy,
+            PoolSeedPolicy::AutomaticDiscovery {
+                submitted_url: source_url.to_string(),
+            },
+        )
+        .await
+    }
+
+    async fn discover_and_start_public_source_with_policy(
+        &self,
+        source_url: &str,
+        crawl_policy: CrawlPolicy,
+        guidance: SourceGuidance,
+        rate_limit_policy: RateLimitPolicy,
+        seed_policy: PoolSeedPolicy,
+    ) -> Result<SourceIngestionStart, AppError> {
         validate_crawl_policy(&crawl_policy)?;
         validate_source_guidance(&guidance)?;
         // Platform detection runs ahead of the crawler, not as a fallback from it. A catalog
@@ -1259,7 +1327,9 @@ impl QueueManager {
             }
         };
         let detected_kind = source.source_kind;
-        if guidance != SourceGuidance::default() || crawl_policy != CrawlPolicy::default() {
+        if seed_policy == PoolSeedPolicy::OperatorRequested
+            && (guidance != SourceGuidance::default() || crawl_policy != CrawlPolicy::default())
+        {
             self.repository
                 .insert_or_update_portal_registration(&source)
                 .await?;
@@ -1274,7 +1344,7 @@ impl QueueManager {
                 initial_tasks,
                 crawl_policy,
                 guidance,
-                PoolSeedPolicy::OperatorRequested,
+                seed_policy,
             )
             .await?;
         Ok(SourceIngestionStart {
@@ -2005,7 +2075,22 @@ async fn join_workers(worker_handles: Vec<tokio::task::JoinHandle<()>>) -> Resul
 }
 
 async fn retire_portal_if_idle(context: &WorkerContext) {
-    let _provisioning_guard = context.provisioning_lock.lock().await;
+    // A pause/removal holds this lock while joining the workers. A worker that
+    // finishes its current task must observe cancellation instead of waiting on
+    // the lock held by its own joiner. Do not abort the task/parser: all task
+    // writes have already completed before this retirement boundary.
+    let mut cancellation = context.cancellation.subscribe();
+    if *cancellation.borrow() {
+        return;
+    }
+    let _provisioning_guard = tokio::select! {
+        biased;
+        _ = cancellation.changed() => return,
+        guard = context.provisioning_lock.lock() => guard,
+    };
+    if *cancellation.borrow() {
+        return;
+    }
     if context.statistics.queued_tasks.load(Ordering::Acquire) != 0
         || context.statistics.active_tasks.load(Ordering::Acquire) != 0
     {
@@ -2223,6 +2308,18 @@ async fn process_public_resource(
             .await?;
         }
         PublicResourceKind::HtmlPage => {
+            // A disappearance lead is created only after a successfully retrieved listing.
+            // Failed requests never imply that a publisher removed a record.
+            if let Some(body) = inspection.body.as_deref() {
+                context
+                    .repository
+                    .record_publication_listing(
+                        inspection.final_url.clone(),
+                        sha256_hex(body),
+                        super::client::publication_listing_links(&inspection.final_url, body)?,
+                    )
+                    .await?;
+            }
             let request_id = ensure_crawl_request(context, &inspection).await?;
             let mut discovered_tasks = Vec::new();
             for companion_url in arcgis_item_companion_urls(&inspection.final_url) {
@@ -3642,6 +3739,10 @@ async fn finalize_and_index_extracted_document(
             entropy_sample_bytes: download.entropy_sample_bytes,
             suspicious_data_density: download.suspicious_data_density,
         })
+        .await?;
+    context
+        .repository
+        .capture_monitoring_document(download.portal_subdomain, download.document_id)
         .await?;
     index_extracted_document(
         context,
@@ -6360,6 +6461,302 @@ mod tests {
         // The receiver is handed back so the caller keeps the channel open for the test's
         // lifetime; nothing here reads telemetry.
         (manager, repository, source, progress_receiver)
+    }
+
+    // The input is the canonical registration returned AFTER redirect/platform discovery,
+    // while submitted_url deliberately names a different alias. No network is needed to
+    // exercise the mutation boundary: disabling its identity guard must alter the stored
+    // lifecycle/recipe and fail these assertions.
+    #[tokio::test]
+    async fn automatic_discovery_preserves_resolved_source_lifecycle_and_recipe() {
+        let directory = tempdir().unwrap();
+        let (manager, repository, source, _telemetry) = manager_with_source(&directory).await;
+        manager.global_semaphore.close(); // Mutants must never issue an actual network request.
+        let saved_guidance = SourceGuidance {
+            link_selector: Some("main a[href]".into()),
+            ..Default::default()
+        };
+        repository
+            .save_source_connector_recipe(
+                &source,
+                "https://records.example.test/original-alias",
+                &CrawlPolicy::default(),
+                &saved_guidance,
+            )
+            .await
+            .unwrap();
+        let original_recipe = repository
+            .load_source_connector_recipe_for_source(&source)
+            .await
+            .unwrap()
+            .unwrap();
+        for state in [
+            SourceLifecycleState::Paused,
+            SourceLifecycleState::Removed,
+            SourceLifecycleState::Active,
+        ] {
+            repository
+                .set_source_lifecycle_state(&source.portal_key, state)
+                .await
+                .unwrap();
+            for reclassified in [false, true] {
+                let mut resolved = source.clone();
+                resolved.display_name = "Unwanted automatic replacement".into();
+                if reclassified {
+                    // A changed platform classification can change the derived key;
+                    // the canonical publication still belongs to the saved source.
+                    resolved.portal_key = "source-reclassified".into();
+                    resolved.source_kind = SourceKind::WebCrawl;
+                    resolved.canonical_url.push('/');
+                }
+                let result = manager
+                    .start_task_pool(
+                        resolved.clone(),
+                        RateLimitPolicy::default(),
+                        resume_initial_tasks(&resolved, MetadataPageWindow::default()),
+                        CrawlPolicy {
+                            maximum_pages: 2,
+                            maximum_depth: 1,
+                            maximum_resources: 8,
+                            follow_supported_external_platforms: false,
+                        },
+                        SourceGuidance::default(),
+                        PoolSeedPolicy::AutomaticDiscovery {
+                            submitted_url: "https://records.example.test/redirecting-alias".into(),
+                        },
+                    )
+                    .await;
+                assert!(
+                    matches!(result, Err(AppError::DataParsing(ref message)) if message.contains("existing source")),
+                    "Automatic discovery must reject the resolved registered identity: {result:?}"
+                );
+                assert_eq!(
+                    repository
+                        .source_lifecycle_state(&source.portal_key)
+                        .await
+                        .unwrap(),
+                    Some(state)
+                );
+                let retained = repository
+                    .load_source_connector_recipe_for_source(&source)
+                    .await
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(
+                    (
+                        &retained.crawl_policy,
+                        &retained.guidance,
+                        &retained.metadata_page_window
+                    ),
+                    (
+                        &original_recipe.crawl_policy,
+                        &original_recipe.guidance,
+                        &original_recipe.metadata_page_window
+                    ),
+                    "Rejected discovery must not replace the owner's collection recipe"
+                );
+                if reclassified {
+                    assert_eq!(
+                        repository
+                            .source_lifecycle_state(&resolved.portal_key)
+                            .await
+                            .unwrap(),
+                        None
+                    );
+                }
+            }
+        }
+        let conn = repository.analytics_connection().await.unwrap();
+        let (registrations, runs, label): (i64, i64, String) = conn.query_row(
+            "SELECT (SELECT count(*) FROM portals), (SELECT count(*) FROM portal_sync_runs), display_name FROM portals WHERE subdomain = ?1",
+            [&source.portal_key], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        ).unwrap();
+        assert_eq!((registrations, runs, label), (1, 0, source.display_name));
+    }
+
+    #[tokio::test]
+    async fn automatic_discovery_rechecks_identity_after_a_concurrent_pause() {
+        let directory = tempdir().unwrap();
+        let (manager, repository, source, _telemetry) = manager_with_source(&directory).await;
+        manager.global_semaphore.close();
+        let held = manager.provisioning_lock.lock().await;
+        let (ready, waiting) = tokio::sync::oneshot::channel();
+        let pause_manager = Arc::clone(&manager);
+        let pause_key = source.portal_key.clone();
+        let pause = tokio::spawn(async move {
+            ready.send(()).unwrap();
+            pause_manager.pause_source(&pause_key).await
+        });
+        waiting.await.unwrap();
+        // Tokio's mutex is FIFO: pause has reached the lock before discovery is polled.
+        let start_manager = Arc::clone(&manager);
+        let resolved = source.clone();
+        let start = tokio::spawn(async move {
+            start_manager
+                .start_task_pool(
+                    resolved.clone(),
+                    RateLimitPolicy::default(),
+                    resume_initial_tasks(&resolved, MetadataPageWindow::default()),
+                    CrawlPolicy::default(),
+                    SourceGuidance::default(),
+                    PoolSeedPolicy::AutomaticDiscovery {
+                        submitted_url: "https://records.example.test/alias".into(),
+                    },
+                )
+                .await
+        });
+        tokio::task::yield_now().await;
+        assert!(
+            !start.is_finished(),
+            "The identity check must share the lifecycle mutation lock"
+        );
+        drop(held);
+        pause.await.unwrap().unwrap();
+        let result = tokio::time::timeout(std::time::Duration::from_secs(5), start)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            result.is_err(),
+            "A discovery resolved before pause cannot reactivate its source"
+        );
+        assert_eq!(
+            repository
+                .source_lifecycle_state(&source.portal_key)
+                .await
+                .unwrap(),
+            Some(SourceLifecycleState::Paused)
+        );
+        let conn = repository.analytics_connection().await.unwrap();
+        let runs: i64 = conn
+            .query_row("SELECT count(*) FROM portal_sync_runs", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(
+            runs, 0,
+            "Rejected discovery cannot leave even a cancelled automatic run"
+        );
+    }
+
+    #[tokio::test]
+    async fn finishing_worker_observes_cancellation_while_lifecycle_lock_is_held() {
+        let directory = tempdir().unwrap();
+        let context = crawl_worker_context(&directory, SourceGuidance::default()).await;
+        // A real worker_loop owns this receiver independently of retirement. Keep
+        // it alive so the negative control reaches the lock timeout, not SendError.
+        let _worker_cancellation = context.cancellation.subscribe();
+        let lifecycle = context.provisioning_lock.lock().await;
+        let worker = context.clone();
+        let (ready, waiting) = tokio::sync::oneshot::channel();
+        let retirement = tokio::spawn(async move {
+            ready.send(()).unwrap();
+            retire_portal_if_idle(&worker).await;
+        });
+        waiting.await.unwrap();
+        tokio::task::yield_now().await;
+        assert!(
+            !retirement.is_finished(),
+            "An uncancelled worker must wait for normal lifecycle finalization"
+        );
+        context
+            .statistics
+            .stop_requested
+            .store(true, Ordering::Release);
+        context.cancellation.send(true).unwrap();
+        // Keep the lifecycle lock held, exactly as stop_source_pool_locked does
+        // while joining this worker. Cancellation must break the lock cycle.
+        tokio::time::timeout(std::time::Duration::from_secs(3), retirement)
+            .await
+            .expect("A stopped worker must not wait on the lifecycle lock held by its joiner")
+            .unwrap();
+        assert!(context.provisioning_lock.try_lock().is_err());
+        drop(lifecycle);
+        // Cancellation sent before retirement subscribes must also be honored.
+        let held_again = context.provisioning_lock.lock().await;
+        tokio::time::timeout(
+            std::time::Duration::from_secs(3),
+            retire_portal_if_idle(&context),
+        )
+        .await
+        .expect("Already-cancelled retirement must return without acquiring the lifecycle lock");
+        drop(held_again);
+    }
+
+    #[tokio::test]
+    async fn automatic_discovery_accepts_new_sources_and_operator_starts_can_resume_them() {
+        let directory = tempdir().unwrap();
+        let (manager, repository, _source, _telemetry) = manager_with_source(&directory).await;
+        manager.global_semaphore.close(); // Starts are real; payload workers remain network-free.
+        let fresh = second_source("new-automatic-source");
+        let crawl = CrawlPolicy {
+            maximum_pages: 2,
+            maximum_depth: 1,
+            maximum_resources: 8,
+            follow_supported_external_platforms: false,
+        };
+        let alias = "https://second.example.test/alias";
+        tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            manager.start_task_pool(
+                fresh.clone(),
+                RateLimitPolicy::default(),
+                resume_initial_tasks(&fresh, MetadataPageWindow::default()),
+                crawl.clone(),
+                SourceGuidance::default(),
+                PoolSeedPolicy::AutomaticDiscovery {
+                    submitted_url: alias.into(),
+                },
+            ),
+        )
+        .await
+        .expect("A new automatic source must finish provisioning")
+        .unwrap();
+        assert_eq!(
+            repository
+                .source_lifecycle_state(&fresh.portal_key)
+                .await
+                .unwrap(),
+            Some(SourceLifecycleState::Active)
+        );
+        let recipe = repository
+            .load_source_connector_recipe(alias)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(recipe.crawl_policy, crawl);
+        tokio::time::timeout(std::time::Duration::from_secs(5), manager.pause_source(&fresh.portal_key))
+            .await.expect("Pausing the new automatic source must join its workers without a lifecycle-lock deadlock").unwrap();
+        tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            manager.start_task_pool(
+                fresh.clone(),
+                RateLimitPolicy::default(),
+                resume_initial_tasks(&fresh, MetadataPageWindow::default()),
+                CrawlPolicy::default(),
+                SourceGuidance::default(),
+                PoolSeedPolicy::OperatorRequested,
+            ),
+        )
+        .await
+        .expect("An explicit operator resume must finish provisioning")
+        .unwrap();
+        assert_eq!(
+            repository
+                .source_lifecycle_state(&fresh.portal_key)
+                .await
+                .unwrap(),
+            Some(SourceLifecycleState::Active)
+        );
+        tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            manager.pause_source(&fresh.portal_key),
+        )
+        .await
+        .expect(
+            "Pausing the resumed source must join its workers without a lifecycle-lock deadlock",
+        )
+        .unwrap();
     }
 
     /// Covers the lifecycle writes as one sequence, and the lock discipline underneath them.

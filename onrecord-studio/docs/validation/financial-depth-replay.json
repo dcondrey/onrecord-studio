@@ -1,0 +1,2272 @@
+{
+  "scope": {
+    "fiscalYear": 2023,
+    "fund": "100000",
+    "department": null
+  },
+  "status": "Offline production-engine replay of preserved executed query rows; not a fresh download or a conclusion about service delivery.",
+  "findings": [
+    {
+      "id": "8af65e31f278ba19df71",
+      "kind": "account_shift",
+      "title": "Opposite account movements challenge an isolated spending story",
+      "observation": "Homelessness Strategies & Solutions FY2023 fund 100000 center 1716000011: account 512059 (Miscellaneous Professional/Technical Ser) is 10563304.00 USD below adopted while account 512066 (Reimbursement Agreements) is 8767029.00 above adopted. 82.9951% of the larger movement is offset by the opposite movement; together these two accounts have adopted 14490978.00 and actual 12694703.00, a net difference of -1796275.00 USD. This is a candidate accounting/service shift, not evidence that money actually transferred or that services were cut.",
+      "citations": [
+        "real-0-actual",
+        "real-0-budget",
+        "real-1-actual",
+        "real-1-budget"
+      ],
+      "alternatives": [
+        "A reclassification, reimbursement agreement, transfer or contract-posting change may explain offsetting movements.",
+        "The accounts may purchase different services; one service may have declined while an unrelated service expanded.",
+        "Revised appropriations, timing and encumbrances may explain either account separately. Similar amounts do not establish a transfer."
+      ],
+      "nextTest": "Obtain FY2023 fund 100000 center 1716000011 journal entries and budget transfers touching accounts 512059 and 512066, including document/date, offsetting account, vendor/contract/program IDs and revised authority. Reconcile each agreement's invoices and accepted service outputs; reject the reclassification hypothesis if the underlying programs or vendors differ.",
+      "calculations": [
+        {
+          "label": "Offsetting movement",
+          "formula": "min(abs(-10563304.00), abs(8767029.00))",
+          "result": "8767029.00",
+          "unit": "USD"
+        },
+        {
+          "label": "Two-account net difference",
+          "formula": "769568.00 + 11925135.00 − 11332872.00 − 3158106.00",
+          "result": "-1796275.00",
+          "unit": "USD"
+        },
+        {
+          "label": "Larger movement offset",
+          "formula": "min(abs(downward difference), upward difference) / max(abs(downward difference), upward difference) × 100",
+          "result": "82.9951",
+          "unit": "%"
+        }
+      ]
+    },
+    {
+      "id": "810a4037cca295ebfc29",
+      "kind": "account_shift",
+      "title": "Opposite account movements challenge an isolated spending story",
+      "observation": "Parks & Recreation FY2023 fund 100000 center 1714131301: account 512172 (Contractual Services - Other Agencies) is 6948545.00 USD below adopted while account 512059 (Miscellaneous Professional/Technical Ser) is 5810833.00 above adopted. 83.6266% of the larger movement is offset by the opposite movement; together these two accounts have adopted 15943987.00 and actual 14806275.00, a net difference of -1137712.00 USD. This is a candidate accounting/service shift, not evidence that money actually transferred or that services were cut.",
+      "citations": [
+        "real-4-actual",
+        "real-4-budget",
+        "real-6-actual",
+        "real-6-budget"
+      ],
+      "alternatives": [
+        "A reclassification, reimbursement agreement, transfer or contract-posting change may explain offsetting movements.",
+        "The accounts may purchase different services; one service may have declined while an unrelated service expanded.",
+        "Revised appropriations, timing and encumbrances may explain either account separately. Similar amounts do not establish a transfer."
+      ],
+      "nextTest": "Obtain FY2023 fund 100000 center 1714131301 journal entries and budget transfers touching accounts 512172 and 512059, including document/date, offsetting account, vendor/contract/program IDs and revised authority. Reconcile each agreement's invoices and accepted service outputs; reject the reclassification hypothesis if the underlying programs or vendors differ.",
+      "calculations": [
+        {
+          "label": "Offsetting movement",
+          "formula": "min(abs(-6948545.00), abs(5810833.00))",
+          "result": "5810833.00",
+          "unit": "USD"
+        },
+        {
+          "label": "Two-account net difference",
+          "formula": "7925455.00 + 6880820.00 − 14874000.00 − 1069987.00",
+          "result": "-1137712.00",
+          "unit": "USD"
+        },
+        {
+          "label": "Larger movement offset",
+          "formula": "min(abs(downward difference), upward difference) / max(abs(downward difference), upward difference) × 100",
+          "result": "83.6266",
+          "unit": "%"
+        }
+      ]
+    },
+    {
+      "id": "d372d19ecc381fa6b2c6",
+      "kind": "rebound_below_baseline",
+      "title": "A spending rebound still leaves an earlier service-funding baseline unexplained",
+      "observation": "Homelessness Strategies & Solutions fund 100000 actual spending went from 42779044.00 USD in FY2021 to 9815698.00 in FY2022 and 22920122.00 in FY2023. The latest increase of 13104424.00 still leaves recorded spending 19858922.00 (46.422%) below FY2021. A latest-year growth narrative therefore cannot establish restoration of the earlier scope of services; the program/funding boundary needs to be reconciled.",
+      "citations": [
+        "history-2-actual_history",
+        "history-3-actual_history",
+        "history-4-actual_history"
+      ],
+      "alternatives": [
+        "One-time grants, emergency programs or capital/startup costs may make the earlier year an inappropriate recurring baseline.",
+        "Services or accounts may have moved to another department, fund or administering agency.",
+        "A lower amount may reflect efficiency or changed service demand; spending alone does not measure services."
+      ],
+      "nextTest": "Obtain the FY2021–FY2023 program/fund/department crosswalk for Homelessness Strategies & Solutions fund 100000, expiring grant and one-time funding schedules, and comparable service capacities and outputs. Follow any transferred program to its receiving ledger before asserting a cut; separate one-time startup costs from recurring delivery.",
+      "calculations": [
+        {
+          "label": "Amount below earlier baseline",
+          "formula": "42779044.00 − 22920122.00",
+          "result": "19858922.00",
+          "unit": "USD"
+        },
+        {
+          "label": "Latest rebound",
+          "formula": "22920122.00 − 9815698.00",
+          "result": "13104424.00",
+          "unit": "USD"
+        },
+        {
+          "label": "Below earlier baseline",
+          "formula": "(42779044.00 − 22920122.00) / 42779044.00 × 100",
+          "result": "46.422",
+          "unit": "%"
+        }
+      ]
+    },
+    {
+      "id": "d5dd66c0a80ad785c471",
+      "kind": "execution_capacity_gap",
+      "title": "A larger allocation has not translated into proportional recorded execution",
+      "observation": "Commission on Police Practices fund 100000: adopted allocation rose 1223218.00 USD from FY2022 to FY2023, while recorded actual spending rose 300402.00. Only 24.5583% of the added allocation is reflected in additional actuals; execution was 37.0264% and 31.0463% of adopted in the two years. The repeated gap merits a capacity and implementation test, not an assertion that the money was available or services failed.",
+      "citations": [
+        "history-0-actual_history",
+        "history-0-budget_history",
+        "history-1-actual_history",
+        "history-1-budget_history"
+      ],
+      "alternatives": [
+        "Delayed hiring, program launch, procurement or reimbursement can postpone execution.",
+        "The organization, accounting scope, fiscal close or funding source may have changed between years.",
+        "Revised budgets may legitimately reduce or move authority; adopted funding does not establish spendable balances."
+      ],
+      "nextTest": "For Commission on Police Practices FY2022–FY2023 fund 100000, obtain quarterly authorized/filled/vacant positions, program launch and contract milestones, revised appropriations and transfers, year-end commitments, and accepted outputs. Test whether staffing/procurement timing explains the gap and whether delivery later caught up.",
+      "calculations": [
+        {
+          "label": "Increase in adopted allocation",
+          "formula": "2550352.00 − 1327134.00",
+          "result": "1223218.00",
+          "unit": "USD"
+        },
+        {
+          "label": "Increase in recorded actuals",
+          "formula": "791792.00 − 491390.00",
+          "result": "300402.00",
+          "unit": "USD"
+        },
+        {
+          "label": "Added allocation reflected in additional actuals",
+          "formula": "(791792.00 − 491390.00) / (2550352.00 − 1327134.00) × 100",
+          "result": "24.5583",
+          "unit": "%"
+        }
+      ]
+    }
+  ],
+  "sourceRows": [
+    {
+      "citationId": "real-0-budget",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 0,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1716000011",
+        "512059",
+        "Homelessness Strategies & Solutions",
+        "Homelessness Strategies & Solutions",
+        "Miscellaneous Professional/Technical Ser",
+        "11332872",
+        "769568",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-10563304"
+      ]
+    },
+    {
+      "citationId": "real-0-actual",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 0,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1716000011",
+        "512059",
+        "Homelessness Strategies & Solutions",
+        "Homelessness Strategies & Solutions",
+        "Miscellaneous Professional/Technical Ser",
+        "11332872",
+        "769568",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-10563304"
+      ]
+    },
+    {
+      "citationId": "real-1-budget",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 1,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1716000011",
+        "512066",
+        "Homelessness Strategies & Solutions",
+        "Homelessness Strategies & Solutions",
+        "Reimbursement Agreements",
+        "3158106",
+        "11925135",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "8767029"
+      ]
+    },
+    {
+      "citationId": "real-1-actual",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 1,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1716000011",
+        "512066",
+        "Homelessness Strategies & Solutions",
+        "Homelessness Strategies & Solutions",
+        "Reimbursement Agreements",
+        "3158106",
+        "11925135",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "8767029"
+      ]
+    },
+    {
+      "citationId": "real-2-budget",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 2,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1914180011",
+        "500128",
+        "Police",
+        null,
+        "Overtime Budgeted",
+        "7924735",
+        null,
+        1,
+        null,
+        0,
+        null,
+        "Missing actuals",
+        null
+      ]
+    },
+    {
+      "citationId": "real-3-budget",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 3,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1914121111",
+        "500128",
+        "Police",
+        null,
+        "Overtime Budgeted",
+        "7301363",
+        null,
+        1,
+        null,
+        0,
+        null,
+        "Missing actuals",
+        null
+      ]
+    },
+    {
+      "citationId": "real-4-budget",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 4,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1714131301",
+        "512172",
+        "Parks & Recreation",
+        "Parks & Recreation",
+        "Contractual Services - Other Agencies",
+        "14874000",
+        "7925455",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-6948545"
+      ]
+    },
+    {
+      "citationId": "real-4-actual",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 4,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1714131301",
+        "512172",
+        "Parks & Recreation",
+        "Parks & Recreation",
+        "Contractual Services - Other Agencies",
+        "14874000",
+        "7925455",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-6948545"
+      ]
+    },
+    {
+      "citationId": "real-5-actual",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 5,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1914121117",
+        "500124",
+        null,
+        "Police",
+        "Overtime - Premium",
+        null,
+        "6402389",
+        null,
+        1,
+        null,
+        0,
+        "Missing budget baseline",
+        null
+      ]
+    },
+    {
+      "citationId": "real-6-budget",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 6,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1714131301",
+        "512059",
+        "Parks & Recreation",
+        "Parks & Recreation",
+        "Miscellaneous Professional/Technical Ser",
+        "1069987",
+        "6880820",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "5810833"
+      ]
+    },
+    {
+      "citationId": "real-6-actual",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 6,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1714131301",
+        "512059",
+        "Parks & Recreation",
+        "Parks & Recreation",
+        "Miscellaneous Professional/Technical Ser",
+        "1069987",
+        "6880820",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "5810833"
+      ]
+    },
+    {
+      "citationId": "real-7-budget",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 7,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1914121111",
+        "500011",
+        "Police",
+        "Police",
+        "Salaried Wages",
+        "18709182",
+        "13095797",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-5613385"
+      ]
+    },
+    {
+      "citationId": "real-7-actual",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 7,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1914121111",
+        "500011",
+        "Police",
+        "Police",
+        "Salaried Wages",
+        "18709182",
+        "13095797",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-5613385"
+      ]
+    },
+    {
+      "citationId": "real-8-budget",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 8,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1914121117",
+        "500011",
+        "Police",
+        "Police",
+        "Salaried Wages",
+        "15430565",
+        "10080402",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-5350163"
+      ]
+    },
+    {
+      "citationId": "real-8-actual",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 8,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1914121117",
+        "500011",
+        "Police",
+        "Police",
+        "Salaried Wages",
+        "15430565",
+        "10080402",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-5350163"
+      ]
+    },
+    {
+      "citationId": "real-9-budget",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 9,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1714121301",
+        "514104",
+        "Parks & Recreation",
+        "Parks & Recreation",
+        "Water Serv-Incl Hydr Rent",
+        "5936936",
+        "712833",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-5224103"
+      ]
+    },
+    {
+      "citationId": "real-9-actual",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 9,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1714121301",
+        "514104",
+        "Parks & Recreation",
+        "Parks & Recreation",
+        "Water Serv-Incl Hydr Rent",
+        "5936936",
+        "712833",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-5224103"
+      ]
+    },
+    {
+      "citationId": "real-10-budget",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 10,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1914121111",
+        "500189",
+        "Police",
+        null,
+        "Budgeted Personnel Expenditure Savings",
+        "-5034622",
+        null,
+        1,
+        null,
+        0,
+        null,
+        "Missing actuals",
+        null
+      ]
+    },
+    {
+      "citationId": "real-11-budget",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 11,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1914121120",
+        "500011",
+        "Police",
+        "Police",
+        "Salaried Wages",
+        "13633356",
+        "8728574",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-4904782"
+      ]
+    },
+    {
+      "citationId": "real-11-actual",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 11,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1914121120",
+        "500011",
+        "Police",
+        "Police",
+        "Salaried Wages",
+        "13633356",
+        "8728574",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-4904782"
+      ]
+    },
+    {
+      "citationId": "real-12-actual",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 12,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1914121111",
+        "500124",
+        null,
+        "Police",
+        "Overtime - Premium",
+        null,
+        "4605048",
+        null,
+        1,
+        null,
+        0,
+        "Missing budget baseline",
+        null
+      ]
+    },
+    {
+      "citationId": "real-13-budget",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 13,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1914131511",
+        "500011",
+        "Police",
+        "Police",
+        "Salaried Wages",
+        "11548934",
+        "7056098",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-4492836"
+      ]
+    },
+    {
+      "citationId": "real-13-actual",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 13,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1914131511",
+        "500011",
+        "Police",
+        "Police",
+        "Salaried Wages",
+        "11548934",
+        "7056098",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-4492836"
+      ]
+    },
+    {
+      "citationId": "real-14-budget",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 14,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1914161113",
+        "500011",
+        "Police",
+        "Police",
+        "Salaried Wages",
+        "9736454",
+        "5358965",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-4377489"
+      ]
+    },
+    {
+      "citationId": "real-14-actual",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 14,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1914161113",
+        "500011",
+        "Police",
+        "Police",
+        "Salaried Wages",
+        "9736454",
+        "5358965",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-4377489"
+      ]
+    },
+    {
+      "citationId": "real-15-budget",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 15,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1914121113",
+        "500011",
+        "Police",
+        "Police",
+        "Salaried Wages",
+        "15245765",
+        "11108670",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-4137095"
+      ]
+    },
+    {
+      "citationId": "real-15-actual",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 15,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1914121113",
+        "500011",
+        "Police",
+        "Police",
+        "Salaried Wages",
+        "15245765",
+        "11108670",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-4137095"
+      ]
+    },
+    {
+      "citationId": "real-16-budget",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 16,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1914121118",
+        "500011",
+        "Police",
+        "Police",
+        "Salaried Wages",
+        "12664157",
+        "8661288",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-4002869"
+      ]
+    },
+    {
+      "citationId": "real-16-actual",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 16,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1914121118",
+        "500011",
+        "Police",
+        "Police",
+        "Salaried Wages",
+        "12664157",
+        "8661288",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-4002869"
+      ]
+    },
+    {
+      "citationId": "real-17-budget",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 17,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1716000011",
+        "512172",
+        "Homelessness Strategies & Solutions",
+        null,
+        "Contractual Services - Other Agencies",
+        "3450000",
+        null,
+        1,
+        null,
+        0,
+        null,
+        "Missing actuals",
+        null
+      ]
+    },
+    {
+      "citationId": "real-18-budget",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 18,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1914121112",
+        "500011",
+        "Police",
+        "Police",
+        "Salaried Wages",
+        "10322831",
+        "6923829",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-3399002"
+      ]
+    },
+    {
+      "citationId": "real-18-actual",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 18,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1914121112",
+        "500011",
+        "Police",
+        "Police",
+        "Salaried Wages",
+        "10322831",
+        "6923829",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-3399002"
+      ]
+    },
+    {
+      "citationId": "real-19-budget",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 19,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1714121101",
+        "500011",
+        "Parks & Recreation",
+        "Parks & Recreation",
+        "Salaried Wages",
+        "4126600",
+        "767052",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-3359548"
+      ]
+    },
+    {
+      "citationId": "real-19-actual",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 19,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1714121101",
+        "500011",
+        "Parks & Recreation",
+        "Parks & Recreation",
+        "Salaried Wages",
+        "4126600",
+        "767052",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-3359548"
+      ]
+    },
+    {
+      "citationId": "real-20-budget",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 20,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1914121119",
+        "500011",
+        "Police",
+        "Police",
+        "Salaried Wages",
+        "9029406",
+        "5761419",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-3267987"
+      ]
+    },
+    {
+      "citationId": "real-20-actual",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 20,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1914121119",
+        "500011",
+        "Police",
+        "Police",
+        "Salaried Wages",
+        "9029406",
+        "5761419",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-3267987"
+      ]
+    },
+    {
+      "citationId": "real-21-budget",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 21,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1714121301",
+        "500011",
+        "Parks & Recreation",
+        "Parks & Recreation",
+        "Salaried Wages",
+        "4511236",
+        "1450419",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-3060817"
+      ]
+    },
+    {
+      "citationId": "real-21-actual",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 21,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1714121301",
+        "500011",
+        "Parks & Recreation",
+        "Parks & Recreation",
+        "Salaried Wages",
+        "4511236",
+        "1450419",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-3060817"
+      ]
+    },
+    {
+      "citationId": "real-22-budget",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 22,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1914000001",
+        "500136",
+        "Police",
+        null,
+        "Holiday Credit on Day Off",
+        "3011628",
+        null,
+        1,
+        null,
+        0,
+        null,
+        "Missing actuals",
+        null
+      ]
+    },
+    {
+      "citationId": "real-23-budget",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 23,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1914121115",
+        "500011",
+        "Police",
+        "Police",
+        "Salaried Wages",
+        "8463523",
+        "5517426",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-2946097"
+      ]
+    },
+    {
+      "citationId": "real-23-actual",
+      "evidenceId": "sql:6fd0e350c7e1593b",
+      "rowIndex": 23,
+      "columns": [
+        "fiscal_year",
+        "funds_center_number",
+        "account_number",
+        "budget_departments",
+        "actual_departments",
+        "account",
+        "adopted_budget",
+        "actual_spending",
+        "budget_rows",
+        "actual_rows",
+        "budget_nulls",
+        "actual_nulls",
+        "comparison_status",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "1914121115",
+        "500011",
+        "Police",
+        "Police",
+        "Salaried Wages",
+        "8463523",
+        "5517426",
+        1,
+        1,
+        0,
+        0,
+        "Matched",
+        "-2946097"
+      ]
+    },
+    {
+      "citationId": "history-0-budget_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 0,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "Commission on Police Practices",
+        "2550352",
+        "791792",
+        "-1758560"
+      ]
+    },
+    {
+      "citationId": "history-0-actual_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 0,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "Commission on Police Practices",
+        "2550352",
+        "791792",
+        "-1758560"
+      ]
+    },
+    {
+      "citationId": "history-1-budget_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 1,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2022,
+        "Commission on Police Practices",
+        "1327134",
+        "491390",
+        "-835744"
+      ]
+    },
+    {
+      "citationId": "history-1-actual_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 1,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2022,
+        "Commission on Police Practices",
+        "1327134",
+        "491390",
+        "-835744"
+      ]
+    },
+    {
+      "citationId": "history-2-budget_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 2,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "Homelessness Strategies & Solutions",
+        "25157607",
+        "22920122",
+        "-2237485"
+      ]
+    },
+    {
+      "citationId": "history-2-actual_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 2,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "Homelessness Strategies & Solutions",
+        "25157607",
+        "22920122",
+        "-2237485"
+      ]
+    },
+    {
+      "citationId": "history-3-budget_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 3,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2022,
+        "Homelessness Strategies & Solutions",
+        "18071824",
+        "9815698",
+        "-8256126"
+      ]
+    },
+    {
+      "citationId": "history-3-actual_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 3,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2022,
+        "Homelessness Strategies & Solutions",
+        "18071824",
+        "9815698",
+        "-8256126"
+      ]
+    },
+    {
+      "citationId": "history-4-budget_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 4,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2021,
+        "Homelessness Strategies & Solutions",
+        "49135899",
+        "42779044",
+        "-6356855"
+      ]
+    },
+    {
+      "citationId": "history-4-actual_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 4,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2021,
+        "Homelessness Strategies & Solutions",
+        "49135899",
+        "42779044",
+        "-6356855"
+      ]
+    },
+    {
+      "citationId": "history-5-budget_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 5,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "Library",
+        "66823341",
+        "67586967",
+        "763626"
+      ]
+    },
+    {
+      "citationId": "history-5-actual_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 5,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "Library",
+        "66823341",
+        "67586967",
+        "763626"
+      ]
+    },
+    {
+      "citationId": "history-6-budget_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 6,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2022,
+        "Library",
+        "60741326",
+        "61226563",
+        "485237"
+      ]
+    },
+    {
+      "citationId": "history-6-actual_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 6,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2022,
+        "Library",
+        "60741326",
+        "61226563",
+        "485237"
+      ]
+    },
+    {
+      "citationId": "history-7-budget_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 7,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2021,
+        "Library",
+        "59665414",
+        "54676088",
+        "-4989326"
+      ]
+    },
+    {
+      "citationId": "history-7-actual_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 7,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2021,
+        "Library",
+        "59665414",
+        "54676088",
+        "-4989326"
+      ]
+    },
+    {
+      "citationId": "history-8-budget_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 8,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "Parks & Recreation",
+        "161934929",
+        "157885927",
+        "-4049002"
+      ]
+    },
+    {
+      "citationId": "history-8-actual_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 8,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "Parks & Recreation",
+        "161934929",
+        "157885927",
+        "-4049002"
+      ]
+    },
+    {
+      "citationId": "history-9-budget_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 9,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2022,
+        "Parks & Recreation",
+        "133859293",
+        "128755327",
+        "-5103966"
+      ]
+    },
+    {
+      "citationId": "history-9-actual_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 9,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2022,
+        "Parks & Recreation",
+        "133859293",
+        "128755327",
+        "-5103966"
+      ]
+    },
+    {
+      "citationId": "history-10-budget_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 10,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2021,
+        "Parks & Recreation",
+        "121960039",
+        "116749648",
+        "-5210391"
+      ]
+    },
+    {
+      "citationId": "history-10-actual_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 10,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2021,
+        "Parks & Recreation",
+        "121960039",
+        "116749648",
+        "-5210391"
+      ]
+    },
+    {
+      "citationId": "history-11-budget_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 11,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "Police",
+        "584706166",
+        "588906166",
+        "4200000"
+      ]
+    },
+    {
+      "citationId": "history-11-actual_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 11,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2023,
+        "Police",
+        "584706166",
+        "588906166",
+        "4200000"
+      ]
+    },
+    {
+      "citationId": "history-12-budget_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 12,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2022,
+        "Police",
+        "593292386",
+        "604197963",
+        "10905577"
+      ]
+    },
+    {
+      "citationId": "history-12-actual_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 12,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2022,
+        "Police",
+        "593292386",
+        "604197963",
+        "10905577"
+      ]
+    },
+    {
+      "citationId": "history-13-budget_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 13,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2021,
+        "Police",
+        "568243558",
+        "558797942",
+        "-9445616"
+      ]
+    },
+    {
+      "citationId": "history-13-actual_history",
+      "evidenceId": "sql:e6231241d960d77f",
+      "rowIndex": 13,
+      "columns": [
+        "fiscal_year",
+        "department",
+        "adopted_budget",
+        "actual_spending",
+        "actual_minus_adopted"
+      ],
+      "row": [
+        2021,
+        "Police",
+        "568243558",
+        "558797942",
+        "-9445616"
+      ]
+    }
+  ],
+  "executedEvidence": [
+    {
+      "id": "sql:6fd0e350c7e1593b",
+      "label": "Largest account differences between adopted budget and actual spending, with unmatched counterparts",
+      "sourceUrl": null,
+      "portalKey": null,
+      "requestId": null,
+      "documentId": null,
+      "characterOffset": null,
+      "sourceSha256": "6fd0e350c7e1593b0b63f1c3315ea12db05f78adf86ee88123d5281e02a58dac",
+      "text": "{\"columns\":[\"fiscal_year\",\"funds_center_number\",\"account_number\",\"budget_departments\",\"actual_departments\",\"account\",\"adopted_budget\",\"actual_spending\",\"budget_rows\",\"actual_rows\",\"budget_nulls\",\"actual_nulls\",\"comparison_status\",\"actual_minus_adopted\"],\"rows\":[[2023,\"1716000011\",\"512059\",\"Homelessness Strategies & Solutions\",\"Homelessness Strategies & Solutions\",\"Miscellaneous Professional/Technical Ser\",\"11332872\",\"769568\",1,1,0,0,\"Matched\",\"-10563304\"],[2023,\"1716000011\",\"512066\",\"Homelessness Strategies & Solutions\",\"Homelessness Strategies & Solutions\",\"Reimbursement Agreements\",\"3158106\",\"11925135\",1,1,0,0,\"Matched\",\"8767029\"],[2023,\"1914180011\",\"500128\",\"Police\",null,\"Overtime Budgeted\",\"7924735\",null,1,null,0,null,\"Missing actuals\",null],[2023,\"1914121111\",\"500128\",\"Police\",null,\"Overtime Budgeted\",\"7301363\",null,1,null,0,null,\"Missing actuals\",null],[2023,\"1714131301\",\"512172\",\"Parks & Recreation\",\"Parks & Recreation\",\"Contractual Services - Other Agencies\",\"14874000\",\"7925455\",1,1,0,0,\"Matched\",\"-6948545\"],[2023,\"1914121117\",\"500124\",null,\"Police\",\"Overtime - Premium\",null,\"6402389\",null,1,null,0,\"Missing budget baseline\",null],[2023,\"1714131301\",\"512059\",\"Parks & Recreation\",\"Parks & Recreation\",\"Miscellaneous Professional/Technical Ser\",\"1069987\",\"6880820\",1,1,0,0,\"Matched\",\"5810833\"],[2023,\"1914121111\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"18709182\",\"13095797\",1,1,0,0,\"Matched\",\"-5613385\"],[2023,\"1914121117\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"15430565\",\"10080402\",1,1,0,0,\"Matched\",\"-5350163\"],[2023,\"1714121301\",\"514104\",\"Parks & Recreation\",\"Parks & Recreation\",\"Water Serv-Incl Hydr Rent\",\"5936936\",\"712833\",1,1,0,0,\"Matched\",\"-5224103\"],[2023,\"1914121111\",\"500189\",\"Police\",null,\"Budgeted Personnel Expenditure Savings\",\"-5034622\",null,1,null,0,null,\"Missing actuals\",null],[2023,\"1914121120\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"13633356\",\"8728574\",1,1,0,0,\"Matched\",\"-4904782\"],[2023,\"1914121111\",\"500124\",null,\"Police\",\"Overtime - Premium\",null,\"4605048\",null,1,null,0,\"Missing budget baseline\",null],[2023,\"1914131511\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"11548934\",\"7056098\",1,1,0,0,\"Matched\",\"-4492836\"],[2023,\"1914161113\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"9736454\",\"5358965\",1,1,0,0,\"Matched\",\"-4377489\"],[2023,\"1914121113\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"15245765\",\"11108670\",1,1,0,0,\"Matched\",\"-4137095\"],[2023,\"1914121118\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"12664157\",\"8661288\",1,1,0,0,\"Matched\",\"-4002869\"],[2023,\"1716000011\",\"512172\",\"Homelessness Strategies & Solutions\",null,\"Contractual Services - Other Agencies\",\"3450000\",null,1,null,0,null,\"Missing actuals\",null],[2023,\"1914121112\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"10322831\",\"6923829\",1,1,0,0,\"Matched\",\"-3399002\"],[2023,\"1714121101\",\"500011\",\"Parks & Recreation\",\"Parks & Recreation\",\"Salaried Wages\",\"4126600\",\"767052\",1,1,0,0,\"Matched\",\"-3359548\"],[2023,\"1914121119\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"9029406\",\"5761419\",1,1,0,0,\"Matched\",\"-3267987\"],[2023,\"1714121301\",\"500011\",\"Parks & Recreation\",\"Parks & Recreation\",\"Salaried Wages\",\"4511236\",\"1450419\",1,1,0,0,\"Matched\",\"-3060817\"],[2023,\"1914000001\",\"500136\",\"Police\",null,\"Holiday Credit on Day Off\",\"3011628\",null,1,null,0,null,\"Missing actuals\",null],[2023,\"1914121115\",\"500011\",\"Police\",\"Police\",\"Salaried Wages\",\"8463523\",\"5517426\",1,1,0,0,\"Matched\",\"-2946097\"]]}",
+      "sql": "WITH b0 AS (SELECT CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fy, CAST(funds_center_number AS VARCHAR) AS center, CAST(account_number AS VARCHAR) AS account_number, dept_name, account, amount FROM \"analysis_regional_data_6248b76b917ad88fb00a1800\" WHERE CAST(fund_number AS VARCHAR) = '100000' AND CAST(account_number AS VARCHAR) LIKE '5%' AND lower(trim(budget_cycle)) = 'adopted'), a0 AS (SELECT CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fy, CAST(funds_center_number AS VARCHAR) AS center, CAST(account_number AS VARCHAR) AS account_number, dept_name, account, amount FROM \"analysis_regional_data_7ee003c264e5cfe2fe14254e\" WHERE CAST(fund_number AS VARCHAR) = '100000' AND CAST(account_number AS VARCHAR) LIKE '5%' ), period AS (SELECT MAX(b0.fy) AS fy FROM (SELECT DISTINCT fy FROM b0) b0 JOIN (SELECT DISTINCT fy FROM a0) a0 ON b0.fy=a0.fy WHERE b0.fy <= 2026), b AS (SELECT fy, center, account_number, STRING_AGG(DISTINCT dept_name, ' | ' ORDER BY dept_name) AS departments, STRING_AGG(DISTINCT account, ' | ' ORDER BY account) AS account_labels, SUM(amount) AS amount, COUNT(*) AS source_rows, COUNT(*) - COUNT(amount) AS missing_amounts FROM b0 WHERE fy = (SELECT fy FROM period) GROUP BY 1,2,3), a AS (SELECT fy, center, account_number, STRING_AGG(DISTINCT dept_name, ' | ' ORDER BY dept_name) AS departments, STRING_AGG(DISTINCT account, ' | ' ORDER BY account) AS account_labels, SUM(amount) AS amount, COUNT(*) AS source_rows, COUNT(*) - COUNT(amount) AS missing_amounts FROM a0 WHERE fy = (SELECT fy FROM period) GROUP BY 1,2,3) SELECT COALESCE(b.fy,a.fy) AS fiscal_year, COALESCE(b.center,a.center) AS funds_center_number, COALESCE(b.account_number,a.account_number) AS account_number, b.departments AS budget_departments, a.departments AS actual_departments, COALESCE(a.account_labels,b.account_labels) AS account, b.amount AS adopted_budget, a.amount AS actual_spending, b.source_rows AS budget_rows, a.source_rows AS actual_rows, b.missing_amounts AS budget_nulls, a.missing_amounts AS actual_nulls, CASE WHEN b.source_rows IS NULL THEN 'Missing budget baseline' WHEN a.source_rows IS NULL THEN 'Missing actuals' WHEN b.missing_amounts > 0 OR a.missing_amounts > 0 THEN 'Incomplete amounts' ELSE 'Matched' END AS comparison_status, CASE WHEN b.missing_amounts=0 AND a.missing_amounts=0 THEN a.amount-b.amount END AS actual_minus_adopted FROM b FULL OUTER JOIN a ON b.fy=a.fy AND b.center=a.center AND b.account_number=a.account_number WHERE (contains(lower(COALESCE(a.departments,'') || ' ' || COALESCE(b.departments,'')), 'police') OR contains(lower(COALESCE(a.departments,'') || ' ' || COALESCE(b.departments,'')), 'homeless') OR contains(lower(COALESCE(a.departments,'') || ' ' || COALESCE(b.departments,'')), 'park') OR contains(lower(COALESCE(a.departments,'') || ' ' || COALESCE(b.departments,'')), 'librar')) ORDER BY ABS(CASE WHEN b.source_rows IS NULL THEN a.amount WHEN a.source_rows IS NULL THEN b.amount ELSE a.amount-b.amount END) DESC NULLS LAST LIMIT 24",
+      "snapshotProvenance": [
+        "analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e",
+        "analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+      ],
+      "sourceReferences": [
+        {
+          "url": "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv",
+          "snapshot": "regional-data-7ee003c264e5cfe2fe14254e",
+          "sha256": "53cfc7488c40c2d3b654c64ba8599bc11a4086fa5efe403371c38eff78dd2143"
+        },
+        {
+          "url": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+          "snapshot": "regional-data-6248b76b917ad88fb00a1800",
+          "sha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5"
+        }
+      ],
+      "limitations": "Read-only analytical query; 24 result rows; truncated: false. Assumptions to verify: City General Fund 100000; expense accounts beginning 5; adopted budget only. Fiscal-year codes under 100 normalized by adding 2000. Fiscal years have ended, but ledger close/finality is not established. Budget/actuals aggregate within each key before joining; missing counterparts and null amounts are not zero. Department names may change; inspect stable funds-center/account comparison. Department spending is not a program, abatement-event or restroom cost. Variance is against original adopted appropriation, not revised legal authority. Do not add City and SDHC transfers or infer outcomes/waste from these comparisons.. Snapshot provenance: analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e; analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+    },
+    {
+      "id": "sql:e6231241d960d77f",
+      "label": "Three-year General Fund spending and allocation history for relevant departments",
+      "sourceUrl": null,
+      "portalKey": null,
+      "requestId": null,
+      "documentId": null,
+      "characterOffset": null,
+      "sourceSha256": "e6231241d960d77fee7b6ec8fcf99276adc5793015657e7f9ea801af463123c2",
+      "text": "{\"columns\":[\"fiscal_year\",\"department\",\"adopted_budget\",\"actual_spending\",\"actual_minus_adopted\"],\"rows\":[[2023,\"Commission on Police Practices\",\"2550352\",\"791792\",\"-1758560\"],[2022,\"Commission on Police Practices\",\"1327134\",\"491390\",\"-835744\"],[2023,\"Homelessness Strategies & Solutions\",\"25157607\",\"22920122\",\"-2237485\"],[2022,\"Homelessness Strategies & Solutions\",\"18071824\",\"9815698\",\"-8256126\"],[2021,\"Homelessness Strategies & Solutions\",\"49135899\",\"42779044\",\"-6356855\"],[2023,\"Library\",\"66823341\",\"67586967\",\"763626\"],[2022,\"Library\",\"60741326\",\"61226563\",\"485237\"],[2021,\"Library\",\"59665414\",\"54676088\",\"-4989326\"],[2023,\"Parks & Recreation\",\"161934929\",\"157885927\",\"-4049002\"],[2022,\"Parks & Recreation\",\"133859293\",\"128755327\",\"-5103966\"],[2021,\"Parks & Recreation\",\"121960039\",\"116749648\",\"-5210391\"],[2023,\"Police\",\"584706166\",\"588906166\",\"4200000\"],[2022,\"Police\",\"593292386\",\"604197963\",\"10905577\"],[2021,\"Police\",\"568243558\",\"558797942\",\"-9445616\"]]}",
+      "sql": "WITH b0 AS (SELECT CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fy, CAST(funds_center_number AS VARCHAR) AS center, CAST(account_number AS VARCHAR) AS account_number, dept_name, account, amount FROM \"analysis_regional_data_6248b76b917ad88fb00a1800\" WHERE CAST(fund_number AS VARCHAR) = '100000' AND CAST(account_number AS VARCHAR) LIKE '5%' AND lower(trim(budget_cycle)) = 'adopted'), a0 AS (SELECT CASE WHEN TRY_CAST(report_fy AS INTEGER) < 100 THEN 2000 + TRY_CAST(report_fy AS INTEGER) ELSE TRY_CAST(report_fy AS INTEGER) END AS fy, CAST(funds_center_number AS VARCHAR) AS center, CAST(account_number AS VARCHAR) AS account_number, dept_name, account, amount FROM \"analysis_regional_data_7ee003c264e5cfe2fe14254e\" WHERE CAST(fund_number AS VARCHAR) = '100000' AND CAST(account_number AS VARCHAR) LIKE '5%' ), period AS (SELECT MAX(b0.fy) AS fy FROM (SELECT DISTINCT fy FROM b0) b0 JOIN (SELECT DISTINCT fy FROM a0) a0 ON b0.fy=a0.fy WHERE b0.fy <= 2026), b AS (SELECT fy,dept_name,CASE WHEN COUNT(*)=COUNT(amount) THEN SUM(amount) END AS adopted_budget FROM b0 WHERE (contains(lower(dept_name), 'police') OR contains(lower(dept_name), 'homeless') OR contains(lower(dept_name), 'park') OR contains(lower(dept_name), 'librar')) AND fy BETWEEN (SELECT fy-2 FROM period) AND (SELECT fy FROM period) GROUP BY 1,2), a AS (SELECT fy,dept_name,CASE WHEN COUNT(*)=COUNT(amount) THEN SUM(amount) END AS actual_spending FROM a0 WHERE (contains(lower(dept_name), 'police') OR contains(lower(dept_name), 'homeless') OR contains(lower(dept_name), 'park') OR contains(lower(dept_name), 'librar')) AND fy BETWEEN (SELECT fy-2 FROM period) AND (SELECT fy FROM period) GROUP BY 1,2) SELECT COALESCE(b.fy,a.fy) AS fiscal_year,COALESCE(b.dept_name,a.dept_name) AS department,b.adopted_budget,a.actual_spending,a.actual_spending-b.adopted_budget AS actual_minus_adopted FROM b FULL OUTER JOIN a ON b.fy=a.fy AND b.dept_name=a.dept_name ORDER BY department,fiscal_year DESC LIMIT 36",
+      "snapshotProvenance": [
+        "analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e",
+        "analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+      ],
+      "sourceReferences": [
+        {
+          "url": "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv",
+          "snapshot": "regional-data-7ee003c264e5cfe2fe14254e",
+          "sha256": "53cfc7488c40c2d3b654c64ba8599bc11a4086fa5efe403371c38eff78dd2143"
+        },
+        {
+          "url": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+          "snapshot": "regional-data-6248b76b917ad88fb00a1800",
+          "sha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5"
+        }
+      ],
+      "limitations": "Read-only analytical query; 14 result rows; truncated: false. Assumptions to verify: City General Fund 100000; expense accounts beginning 5; adopted budget only. Fiscal-year codes under 100 normalized by adding 2000. Fiscal years have ended, but ledger close/finality is not established. Budget/actuals aggregate within each key before joining; missing counterparts and null amounts are not zero. Department names may change; inspect stable funds-center/account comparison. Department spending is not a program, abatement-event or restroom cost. Variance is against original adopted appropriation, not revised legal authority. Do not add City and SDHC transfers or infer outcomes/waste from these comparisons.. Snapshot provenance: analysis_regional_data_7ee003c264e5cfe2fe14254e@regional-data-7ee003c264e5cfe2fe14254e; analysis_regional_data_6248b76b917ad88fb00a1800@regional-data-6248b76b917ad88fb00a1800"
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "checkedAt": "2026-09-27T08:18:44.179878+00:00",
+  "index": "https://sdhc.org/governance-legislative-affairs/sdhc-board-of-commissioners/meetings/",
+  "pageBudget": 1,
+  "resourceBudget": 9,
+  "guidance": "default — no supplied document URLs, selectors or topic filters",
+  "automaticallySelectedReports": [
+    {
+      "title": "HCR26-034 — Item 101 HCR26-034 Amendment to the Finance Audit Consulting Contract with Cohn Reznick, LLP Presentation Approved 4-0",
+      "url": "https://sdhc.org/101-hcr26-034-amendment-to-cohnreznick-contract-final/"
+    },
+    {
+      "title": "HCR26-020 — Item 100 HCR26-020 San Diego Housing Commission Proposed Fiscal Year 2027 Budget Presentation Approved 4-0",
+      "url": "https://sdhc.org/100_hcr26-020_sdhc-fy27-budget/"
+    },
+    {
+      "title": "HCR26-016 — Item 101 HCR26-016 Approval of the Operating Agreement between the San Diego Housing Commission and St. Vincent de Paul Village, Inc., dba Father Joe’s Villages, to Operate the Single Adults Interim Shelter Program at 4141 Pacific Highway, San ",
+      "url": "https://sdhc.org/101_hcr26-016-single-adults-shelter_final/"
+    },
+    {
+      "title": "HCR26-018 — Item 100 HCR26-018 Workshop & Discussion: San Diego Housing Commission Proposed Fiscal Year 2027 Budget Presentation",
+      "url": "https://sdhc.org/100_hcr26-018_workshop_sdhcfy2027budget/"
+    },
+    {
+      "title": "HCR26-014 — Item 103 HCR26-014 Approval of the Operating Agreement between the San Diego Housing Commission and Alpha Project for the Homeless to Operate the Imperial Shelter for Single Adults at 1710 Imperial Ave., San Diego, CA 92101 Presentation Approve",
+      "url": "https://sdhc.org/103_hcr26-014-imperial-shelter_final/"
+    },
+    {
+      "title": "HCR26-015 — Item 104 HCR26-015 Approval of the Operating Agreement between the San Diego Housing Commission and Alpha Project for the Homeless to Operate the Harm Reduction Interim Shelter Program at 3220 Sports Arena Blvd., San Diego, CA 92110 Presentatio",
+      "url": "https://sdhc.org/104_hcr26-015-harm-reduction-shelter_final/"
+    },
+    {
+      "title": "HCR26-017 — Item 105 HCR26-017 Approval of a Noncompetitive, Sole Source Agreement between the San Diego Housing Commission and St. Vincent de Paul Village, Inc., dba Father Joe’s Villages, to Operate the City of San Diego’s Bishop Maher Interim Shelter Pr",
+      "url": "https://sdhc.org/105_hcr26-017-bishop-maher-center-shelter_final/"
+    },
+    {
+      "title": "HCR26-024 — Informational Report HCR26-024 Agency Financial Statements – Second Quarter Fiscal Year 2026 (Unaudited)",
+      "url": "https://sdhc.org/info_hcr26-024-agency-financial-statements-q2_final/"
+    }
+  ],
+  "records": [
+    {
+      "report": "HCR26-014",
+      "url": "https://sdhc.org/103_hcr26-014-imperial-shelter_final/",
+      "documentId": 5749409883755329,
+      "sha256": "cbd7113b1495e612585cbba799cffeff52632a1c173ac1af4c7d84a8ec83b68f",
+      "downloadedBytes": 460447,
+      "extractedCharacters": 19731,
+      "amountQuote": "e execution of a competitively awarded agreement with Alpha Project for the Homeless (Alpha Project), in the amount of $3,523,195 for an initial 12 -month term from July 1, 2026, through June 30, 2027, with four, one -year options for renewal, contingent on funds being available for the operation of the Imperial Shelter for Single Adults at 1710 Imperial Ave., San Diego, CA 92101. The funding source is anticipated to be Homeless Housing, Assistance and Prevention Grant Program (HHAP). EXECUTIVE SUMMARY OF KEY FACTORS: •The Imperial Shelter for "
+    },
+    {
+      "report": "HCR26-015",
+      "url": "https://sdhc.org/104_hcr26-015-harm-reduction-shelter_final/",
+      "documentId": 6311347836887328,
+      "sha256": "8b3c24f5e30cab0daad06b7b0a26470e151bdc21db1a822b575db558c6ee1f86",
+      "downloadedBytes": 455881,
+      "extractedCharacters": 19032,
+      "amountQuote": "he execution of a competitively awarded agreement with Alpha Project for the Homeless (Alpha Project) in the amount of $1,970,278 for a 12 -month term from July 1, 2026, through June 30, 2027, with four one -year options for renewal, contingent on funds being available, for the operation of the Harm Reduction Interim Shelter Program at 3220 Sports Arena Boulevard, San Diego, CA 92110. The funding source is anticipated to be the City of San Diego General Fund EXECUTIVE SUMMARY OF KEY FACTORS: •In partnership with the County of San Diego’s Behavi"
+    },
+    {
+      "report": "HCR26-016",
+      "url": "https://sdhc.org/101_hcr26-016-single-adults-shelter_final/",
+      "documentId": 4581835761052341,
+      "sha256": "4185f8ce224ffbec0b3972fd433478a5271ce61466d826b0f2e3275bc2b814f8",
+      "downloadedBytes": 447046,
+      "extractedCharacters": 22043,
+      "amountQuote": "UESTED ACTION: Approve the execution of a competitively awarded agreement with Father Joe’s Villages in the amount of $ 2,865,640 for an initial 12 -month term from July 1, 2026, through June 30, 2027, with four one-year option s for renewal, contingent on funds being available , for the operation of the Single Adult s Interim Shelter Program at 4141 Pacific Highway , San Diego, CA 92110. The funding source is anticipated to be the Homeless Housing, Assistance and Prevention Grant Program (HHAP). EXECUTIVE SUMMARY OF KEY FACTORS: •The Single Ad"
+    }
+  ],
+  "researchExcerpts": 8,
+  "limits": "These are published approval reports, not executed agreements or paid invoices. Published capacity is not occupancy or housing outcomes. The bounded default collection is verified against three current shelter reports and does not claim full archive coverage."
+}

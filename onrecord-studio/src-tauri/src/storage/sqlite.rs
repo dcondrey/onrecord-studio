@@ -475,7 +475,7 @@ fn approved_analysis_tables(conn: &Connection) -> Result<Vec<String>, AppError> 
         })
 }
 
-fn analytical_query_provenance(
+pub(crate) fn analytical_query_provenance(
     conn: &Connection,
     referenced: &std::collections::BTreeSet<String>,
 ) -> Result<Vec<String>, AppError> {
@@ -4311,7 +4311,15 @@ impl DuckDbRepository {
         transaction.commit().map_err(|error| {
             AppError::Storage(format!("Failed to commit a document purge: {error}"))
         })?;
-        retire_analytical_snapshots(&mut conn, &retired_snapshots)?;
+        retire_fk_parent_rows(
+            &mut conn,
+            "analytical_snapshots",
+            "snapshot_id",
+            &retired_snapshots,
+            "Purged an analytical snapshot's rows but could not remove its snapshot record, \
+             so it is still listed with nothing under it. Running the purge again is safe \
+             and finishes it",
+        )?;
         Ok(purge)
     }
 
@@ -4525,40 +4533,26 @@ impl DuckDbRepository {
         transaction.commit().map_err(|error| {
             AppError::Storage(format!("Failed to commit a source purge: {error}"))
         })?;
-        retire_analytical_snapshots(&mut conn, &retired_snapshots)?;
-
-        // The `portals` row is removed in a second transaction, and it has to be. DuckDB resolves
-        // foreign keys through an index whose entries are not released until the referencing
-        // delete commits, so deleting a parent in the same transaction that emptied its children
-        // fails with "still referenced by a foreign key in a different table" even though no child
-        // row will survive. This is the same family of constraint limitation CLAUDE.md records for
-        // `ADD CONSTRAINT` and `ALTER COLUMN SET NOT NULL`.
-        //
-        // A failure between the two commits leaves a registered source with nothing ingested under
-        // it: visible, harmless, and finished by running the purge again. That is a better failure
-        // than holding every child delete open across a second statement.
-        let removal = conn.transaction().map_err(|error| {
-            AppError::Storage(format!(
-                "Failed to open the source registration removal: {error}"
-            ))
-        })?;
-        removal
-            .execute(
-                "DELETE FROM portals WHERE subdomain = ?1",
-                params![source_key],
-            )
-            .map_err(|error| {
-                AppError::Storage(format!(
-                    "Purged every record of '{source_key}' but could not remove its registration, \
-                     so the source is still listed with nothing under it. Running the purge again \
-                     is safe and finishes it: {error}"
-                ))
-            })?;
-        removal.commit().map_err(|error| {
-            AppError::Storage(format!(
-                "Failed to commit the source registration removal: {error}"
-            ))
-        })?;
+        retire_fk_parent_rows(
+            &mut conn,
+            "analytical_snapshots",
+            "snapshot_id",
+            &retired_snapshots,
+            "Purged an analytical snapshot's rows but could not remove its snapshot record, \
+             so it is still listed with nothing under it. Running the purge again is safe \
+             and finishes it",
+        )?;
+        retire_fk_parent_rows(
+            &mut conn,
+            "portals",
+            "subdomain",
+            &[source_key.to_string()],
+            &format!(
+                "Purged every record of '{source_key}' but could not remove its registration, \
+                 so the source is still listed with nothing under it. Running the purge again \
+                 is safe and finishes it"
+            ),
+        )?;
 
         Ok(SourcePurge {
             source_key: source_key.to_string(),
@@ -7514,45 +7508,42 @@ fn backfill_search_token_batch(conn: &mut Connection) -> Result<u64, AppError> {
 /// Audits relations kept logical because DuckDB cannot support the required parent updates with
 /// physical foreign keys. Canonical evidence is never auto-deleted or guessed into a parent; the
 /// operator receives exact relation/count pairs and can restore from the retained source data.
-/// Deletes the `analytical_snapshots` rows that [`super::maintenance::purge_automatic_origins`]
-/// emptied of children, in a transaction of its own.
+/// Deletes rows from `table` (matched on `column`) in a transaction of its own, after the
+/// caller has already committed the transaction that emptied their children.
 ///
 /// It has to be a second transaction: DuckDB resolves foreign keys through an index whose entries
 /// are not released until the referencing delete commits, so deleting a parent in the same
 /// transaction that emptied its children fails with "still referenced by a foreign key in a
-/// different table" even though no child row will survive. Same constraint limitation CLAUDE.md
-/// records for `ADD CONSTRAINT` and `ALTER COLUMN SET NOT NULL`, and the same fix the `portals`
-/// row removal below already applies.
-fn retire_analytical_snapshots(
+/// different table" even though no child row will survive. This is the same family of constraint
+/// limitation CLAUDE.md records for `ADD CONSTRAINT` and `ALTER COLUMN SET NOT NULL`.
+///
+/// A failure here leaves a registered parent with nothing under it: visible, harmless, and
+/// finished by running the purge again. That is a better failure than holding every child delete
+/// open across a second statement. `retry_message` is folded into the returned error so the
+/// operator sees that the fix is to run the purge again.
+fn retire_fk_parent_rows(
     conn: &mut Connection,
-    snapshot_ids: &[String],
+    table: &str,
+    column: &str,
+    ids: &[String],
+    retry_message: &str,
 ) -> Result<(), AppError> {
-    if snapshot_ids.is_empty() {
+    if ids.is_empty() {
         return Ok(());
     }
     let transaction = conn.transaction().map_err(|error| {
-        AppError::Storage(format!(
-            "Failed to open the analytical snapshot removal: {error}"
-        ))
+        AppError::Storage(format!("Failed to open the {table} removal: {error}"))
     })?;
-    for snapshot_id in snapshot_ids {
+    for id in ids {
         transaction
             .execute(
-                "DELETE FROM analytical_snapshots WHERE snapshot_id = ?1",
-                params![snapshot_id],
+                &format!("DELETE FROM {table} WHERE {column} = ?1"),
+                params![id],
             )
-            .map_err(|error| {
-                AppError::Storage(format!(
-                    "Purged an analytical snapshot's rows but could not remove its snapshot \
-                     record, so it is still listed with nothing under it. Running the purge \
-                     again is safe and finishes it: {error}"
-                ))
-            })?;
+            .map_err(|error| AppError::Storage(format!("{retry_message}: {error}")))?;
     }
     transaction.commit().map_err(|error| {
-        AppError::Storage(format!(
-            "Failed to commit the analytical snapshot removal: {error}"
-        ))
+        AppError::Storage(format!("Failed to commit the {table} removal: {error}"))
     })
 }
 

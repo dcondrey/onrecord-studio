@@ -1,0 +1,668 @@
+{
+  "id": "91b703f7-233d-4e9e-8232-d0fd4a134d73",
+  "topic": "homelessness",
+  "createdAt": "2026-09-26T23:48:50.989947+00:00",
+  "model": "openrouter / openai/gpt-5.4",
+  "evidence": [
+    {
+      "id": "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:7918:988ee628b9",
+      "label": "26-19-fy-2027-homelessness-programs-and-funding_rev.pdf",
+      "sourceUrl": "https://www.sandiego.gov/sites/default/files/2026-09/26-19-fy-2027-homelessness-programs-and-funding_rev.pdf",
+      "portalKey": "source-98f065d5220f5b4fdc6e9c1e",
+      "requestId": 6233293779951364,
+      "documentId": 6522383784111698,
+      "characterOffset": 7918,
+      "sourceSha256": "08555a64852d27c8871a8ff3a94fb1d73870fd206cf40dcba91e29697f6a772a",
+      "text": "4 million from one -time HHAP funds. Although the State recently approved a seventh round of HHAP at 90% of prior funding levels in the 2026 -27 State budget, uncertainty remains over future HHAP funds , which could have implications for the City General Fund . For instance, the FY 2027 City budget allocated a net $2.5 million increase in hotel tax revenues to offset partially a $5.4 million d ecrease in HHAP funds , relative to FY [MASKED_PHONE]27 budget development, to better align with available resources and help mitigate the City’s larger structural budget deficit, various reductions were contemplated by HSSD, the Mayor’s Office, SDHC, and the Council to meet a 7% reduction target in the City’s General Fund 2 Measure C funding for homelessness is restricted to homelessness expenditures and therefore is represented separately from City General Fund in this report. HHAP-1 22.5 $ Fully expended HHAP-2 10.6 $ Fully expended HHAP-3 27.5 $ Fully expended HHAP-4 22.5 $ Fully expended HHAP-5 29.9 $ Estimated to be fully expended in FY 27 HHAP-6 25.8 $ Estimated to be largely expended in FY 27 HHAP-7 25.9 $ Estimated first 50% to be available in FY 2028, subject to future State guidance Figure 2: State Housing, Assistance and Prevention Program (HHAP) Grant Funding (in millions) Note: HHAP‑7 is based on preliminary State estimate, as of August 12, 2026. State Grant Amount Projected Availability 4 and Measure C homelessness budget. As summarized in Figure 3, the FY 2027 City and SDHC Adopted Budget s reflect the package of homelessness reductions ultimately adopted by Council after considering programmatic tradeoffs and priorities . These reductions included closure of the City -funded Lighthouse Shelter (although the site will continue to operate as a different program without City funds) , two safe parking sites, and Downtown public restrooms, as well as the reduction of the 16 th and Newton Shelter and the Neil Good Day Ce",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 7918 of 26133. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-fe2d39e3736bdf9f77803071:5619473930607963:653:12a9cd420e",
+      "label": "index.html",
+      "sourceUrl": "https://information.auditor.ca.gov/reports/2023-102.2/index.html",
+      "portalKey": "source-fe2d39e3736bdf9f77803071",
+      "requestId": 4839430654174367,
+      "documentId": 5619473930607963,
+      "characterOffset": 653,
+      "sourceSha256": "ad91b839af06558e9baaf75314293423ef822e174fc23312d70ec710c6688b7e",
+      "text": " report (2023‑102.1) that details our findings related to the State’s activities. This report (2023‑102.2) focuses primarily on the activities of the two cities we reviewed, San José and San Diego, and it concludes that the cities must do more to better evaluate their efforts to reduce homelessness. San José and San Diego identified hundreds of millions of dollars in spending of federal, state, and local funding in recent years to respond to the homelessness crisis. However, neither city could definitively identify all its revenues and expenditures related to its homelessness efforts because neither has an established mechanism, such as a spending plan, to track and report its spending. The absence of such a mechanism limits the transparency and accountability of the cities’ uses of funding to address homelessness. Although both cities provide tens of millions of dollars for homelessness programs and services through agreements with external service providers, such as nonprofits, neither city evaluated the effectiveness of its agreements. San Diego has generally established clear performance measures, such as specifying the number of people the service provider will assist, to enable it to assess whether the providers’ efforts are an effective use of funds. However, San José has not consistently done so. Furthermore, neither city has evaluated the effectiveness of the programs it provides to address the profound health and safety risks associated with unsheltered homelessness. Both cities use interim housing as a way to provide shelter for people experiencing homelessness, but they both need to develop additional permanent housing. Data consistently show that placements into permanent housing results in significantly better outcomes than placements into interim housing. The cities have each made efforts to develop additional interim and permanent housing; however, neither has a clear, long‑term plan to ensure that they have the housing necessary. We recommend that S",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 653 of 300553. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-8ed4ff07f7655a6b466d9daf:6022456265075325:6828:fbf902e80d",
+      "label": "24-24-rev-fy-2025-homelessness-programs-and-funding_rev.pdf",
+      "sourceUrl": "https://www.sandiego.gov/sites/default/files/2024-09/24-24-rev-fy-2025-homelessness-programs-and-funding_rev.pdf",
+      "portalKey": "source-8ed4ff07f7655a6b466d9daf",
+      "requestId": 6403640841404353,
+      "documentId": 6022456265075325,
+      "characterOffset": 6828,
+      "sourceSha256": "16a7003f8c31312699a5fd8a2e03634b473588d4f42c91f201cf902b32995321",
+      "text": "rt 2 3 - 2 1 ) , planned expenditures in FY 202 4 across the City and SDHC budget totaled $ 204.4 million . As of this writing, the total for FY 202 5 is $ 315.9 million , an increase of $111.5 million or 54.5% over FY 2024. This notable increase is largely due to one - time local and State funds budgeted for FY 2025 associated with two permanent supportive housing projects through the State Homekey program. Without the one - time Homekey funds, homelessness spending in FY 2025 represents an increase of $ 26.3 million or 12.9% over FY 202 4 . There ar e several notable fiscal risks in the City’s homelessness budget that warrant close monitoring. The use of $8.0 million from the Affordable Housing Fund to fill the funding gap for existing homelessness programs along with less available one - time HHAP funding anticipated in future year s signal s the potential for serious challenges in identifying sufficient ongoing revenue to support homelessness expenditures , especially if no new revenue sources become available . Other major source s of uncertainty are f uture service levels and associated costs. The FY 202 5 Adopted Budget includes $ 1.9 million for additional shelter beds, currently proposed for a 1,000 - bed permanent emergency shelter site – the lease for the site located at Kettner Blvd and Vine St was fi rst presented to City Council on July 22, 2024. Although the lease is still pending, if approved, the operation of the shelter program is estimated to cost up to $30.7 million annually , which cannot be supported within existing City resources without significant tradeoffs with other City services . Additionally, growth in expenditures for existing shelter programs and unknown costs to identify replacement sites in FY 2025 add to the City’s uncertainties. CONCLUSION This report reflects the C ity’s combined effort s with SDHC to address homelessness in FY 202 5 . Having a clear, comprehensive , and publicly available homelessness spending plan reflecting Ci",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 6828 of 12265. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-09918564b0172e3ce06a93d7:5382902989476028:266:9a9170debf",
+      "label": "23-21_fy_2024_homelessness_programs_and_funding.pdf",
+      "sourceUrl": "https://www.sandiego.gov/sites/default/files/23-21_fy_2024_homelessness_programs_and_funding.pdf",
+      "portalKey": "source-09918564b0172e3ce06a93d7",
+      "requestId": 6653193419370249,
+      "documentId": 5382902989476028,
+      "characterOffset": 266,
+      "sourceSha256": "f85de62de2f488cb34edcf13d4169030e1544052d5c47b43787648cb15badee7",
+      "text": "ness expenditures across various funding sources at the start of each fiscal year. This report describes homelessness programs and funding for FY 2024. Our Office worked with the Homelessness Strategies and Solutions Department (H SSD) , the San Diego Housing Commission (SDHC) , and the Economic Development Department (EDD) to reflect projected homelessness expenses in this report. BACKGROUND In recent years, the City has significantly ramped up homelessness programs and associated funding. Beginning in November 2017, t he City took initial steps to wards address ing homelessness with the establishment of three bridge shelters in response to a Hepatitis A outbreak that dis proportionately affected those experiencing homelessness . The operation s of the three shelters were initially funded with $6.5 million in SDHC funds on a one -time basis for a partial year . In FY 2024, the program is expected to total around $20 million . Shortly after establishing the bridge shelters , the City established the first of three storage facilit ies and the Homelessness Response Center . In December 2018, the City Council approved the first of a series of one -time multi -year State grants, summarized below. M ost notably , State funds include the Homeless Housing, Assistance and Prevention Program (HHAP) grant s, which have been used to partially fund the bridge shelters as well as continue the expansion of homelessness services. These grants have supported a wide range of homelessness programs, including storage facilities, outreach, safe parking, prevention and diversion, family reunification, flexible spending, landlord engagement, and ra pid rehousing. Thus, much of the program expansions since the creation of the bridge shelter programs were funded with one -time grant resources , creating a structural deficit in the homelessness budget . In contrast to past practice, however , the FY 2024 Adopted Budget includes $32.0 million in new ongoing City General Fund s to support ong",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 266 of 20668. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-cf09b76e9e3a2dfe95ad9107:6705806077615097:6812:0923242b24",
+      "label": "9-28-26-special.pdf",
+      "sourceUrl": "https://www.sandiego.gov/sites/default/files/2026-09/9-28-26-special.pdf",
+      "portalKey": "source-cf09b76e9e3a2dfe95ad9107",
+      "requestId": 5142461057422050,
+      "documentId": 6705806077615097,
+      "characterOffset": 6812,
+      "sourceSha256": "2fcf7ff0011c1047bf58cc50120ab00d970b07a135982b63a67dbe0a5433dc9f",
+      "text": "-2027 -8) Ordinance authorizing the Mayor , or designee, to execute the Second Amended and Restated Regional Wastewater Disposal Agreement between the City of San Diego and the Participating Agencies in the Metropolitan Sewerage System. 6 votes required pursuant to Charter Section 99. CONSENT, 2:00 P.M. RESOLUTIONS TO BE ADOPTED Item 604 : Approval of a Third Amendment to the Grant Agreement with the County of San Diego for the Domestic Violence Shelter. Council District(s) Affected: Citywide. Proposed Actions: (R-2027 -58) Resolution approving a third amendment to the Sub -Recipient Grant Agreement with the County of San Diego for the Domestic Violence Shelter. Item 605 : Approval of a First Amendment to the Subrecipient Grant Agreement with the County of San Diego for the Riverbed Encampment Resolution Funding Project. Council District(s) Affected: 2, 3, 7. Monday, September 28, 2026 Page 8 Proposed Actions: (R-2027 -55) Resolution authorizing the Mayor , or designee, to execute the First Amendment to the Subrecipient Grant Agreement with the County of San Diego for the acceptance, appropriation, and expenditure of $3,666,572 from Round 2 of the State of California Encampment Resolution Funding Program Ro lling Grant, and extend the term of the Agreement to June 14, 2027. Item 606 : 17th & Commercial Apartments - First Amendment to Regulatory Agreement and Loan Documents. Council District(s) Affected: 3. Proposed Actions: (R-2027 -37) Resolution approving the First Amendment to the Regulatory Agreement and related Loan Documents for the 17th & Commercial affordable housing project within the Downtown San Diego Community Plan Area. Item 607 : Declare Six City - Owned Parcels with Assessor Parcel Numbers 548-450-13, 587 -420-02, 425 -012 -22, 425 -012-24, 465 -273-06, and 591-100-40, “Exempt Surplus Land” Pursuant to California Government Code Section 54221(f)(1)(B). Council District(s) Affected: 2, 4, 9. Proposed Actions: (R-2027 -62) Resolution declaring real prop",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 6812 of 22316. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:9235:5d7a9f7c62",
+      "label": "26-19-fy-2027-homelessness-programs-and-funding_rev.pdf",
+      "sourceUrl": "https://www.sandiego.gov/sites/default/files/2026-09/26-19-fy-2027-homelessness-programs-and-funding_rev.pdf",
+      "portalKey": "source-98f065d5220f5b4fdc6e9c1e",
+      "requestId": 6233293779951364,
+      "documentId": 6522383784111698,
+      "characterOffset": 9235,
+      "sourceSha256": "08555a64852d27c8871a8ff3a94fb1d73870fd206cf40dcba91e29697f6a772a",
+      "text": "nt Funding (in millions) Note: HHAP‑7 is based on preliminary State estimate, as of August 12, 2026. State Grant Amount Projected Availability 4 and Measure C homelessness budget. As summarized in Figure 3, the FY 2027 City and SDHC Adopted Budget s reflect the package of homelessness reductions ultimately adopted by Council after considering programmatic tradeoffs and priorities . These reductions included closure of the City -funded Lighthouse Shelter (although the site will continue to operate as a different program without City funds) , two safe parking sites, and Downtown public restrooms, as well as the reduction of the 16 th and Newton Shelter and the Neil Good Day Center (which will continue to operate at reduced capacity at a nearby site without City funding after FY 2027 ). Notably, prevention and diversion funding is budgeted to increase by $4. 3 million relative to the prior year, largely due to local philanthropic grants secured by SDHC . City funding for substance use disorder treatment shelters is also expected to increase on net due to additional planned opioid treatment beds funded by Opioid Settlement Funds. As i t can be difficult to get a complete picture of the programs and investments anticipated to address homelessness in any given fiscal year due to the many funding sources involved and separate approval processes , this annual report aims to consolidate these actions and funding sources into one document for easier reference. Attachment 1 provides a comprehensive listing of the City’s planned homelessness expenditures in FY 2027; these are subject to change throughout the fiscal year as needs and funding shift . Activities reflected in the table are broken up by major components of the homeless service system, consistent with those identified in the Community Action Plan on Homelessness Update , last heard by Council in May 2025 , such that discrete programs can be seen as components of a larger system. The City’s efforts to address homeless",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 9235 of 26133. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-fe2d39e3736bdf9f77803071:5619473930607963:1681:809ee0bba4",
+      "label": "index.html",
+      "sourceUrl": "https://information.auditor.ca.gov/reports/2023-102.2/index.html",
+      "portalKey": "source-fe2d39e3736bdf9f77803071",
+      "requestId": 4839430654174367,
+      "documentId": 5619473930607963,
+      "characterOffset": 1681,
+      "sourceSha256": "ad91b839af06558e9baaf75314293423ef822e174fc23312d70ec710c6688b7e",
+      "text": "iveness of its agreements. San Diego has generally established clear performance measures, such as specifying the number of people the service provider will assist, to enable it to assess whether the providers’ efforts are an effective use of funds. However, San José has not consistently done so. Furthermore, neither city has evaluated the effectiveness of the programs it provides to address the profound health and safety risks associated with unsheltered homelessness. Both cities use interim housing as a way to provide shelter for people experiencing homelessness, but they both need to develop additional permanent housing. Data consistently show that placements into permanent housing results in significantly better outcomes than placements into interim housing. The cities have each made efforts to develop additional interim and permanent housing; however, neither has a clear, long‑term plan to ensure that they have the housing necessary. We recommend that San José and San Diego each publicly report on all of their homelessness funding, assess the effectiveness of their spending, and better plan to meet their permanent housing needs. Respectfully submitted, GRANT PARKS California State Auditor Selected Abbreviations Used in This Report Cal ICH California Interagency Council on Homelessness CoC Continuum of Care ERF Encampment Resolution Funding ESG Emergency Solutions Grant state data system Homeless Data Integration System HHAP Homeless Housing. Assistance and Prevention HMIS Homeless Management Information System HSSD Homelessness Strategies and Solutions Department HUD U.S. Department of Housing and Urban Development NPD Neighborhood Policing Division PIT count point-in-time count VASH Veterans Affairs Supportive Housing Summary The Joint Legislative Audit Committee requested an audit of the State’s homelessness funding, including an evaluation of the efforts undertaken by the State and two cities to monitor the cost effectiveness of such spending. Separately, we",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 1681 of 300553. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-8ed4ff07f7655a6b466d9daf:6022456265075325:7561:6ac3106d97",
+      "label": "24-24-rev-fy-2025-homelessness-programs-and-funding_rev.pdf",
+      "sourceUrl": "https://www.sandiego.gov/sites/default/files/2024-09/24-24-rev-fy-2025-homelessness-programs-and-funding_rev.pdf",
+      "portalKey": "source-8ed4ff07f7655a6b466d9daf",
+      "requestId": 6403640841404353,
+      "documentId": 6022456265075325,
+      "characterOffset": 7561,
+      "sourceSha256": "16a7003f8c31312699a5fd8a2e03634b473588d4f42c91f201cf902b32995321",
+      "text": "p for existing homelessness programs along with less available one - time HHAP funding anticipated in future year s signal s the potential for serious challenges in identifying sufficient ongoing revenue to support homelessness expenditures , especially if no new revenue sources become available . Other major source s of uncertainty are f uture service levels and associated costs. The FY 202 5 Adopted Budget includes $ 1.9 million for additional shelter beds, currently proposed for a 1,000 - bed permanent emergency shelter site – the lease for the site located at Kettner Blvd and Vine St was fi rst presented to City Council on July 22, 2024. Although the lease is still pending, if approved, the operation of the shelter program is estimated to cost up to $30.7 million annually , which cannot be supported within existing City resources without significant tradeoffs with other City services . Additionally, growth in expenditures for existing shelter programs and unknown costs to identify replacement sites in FY 2025 add to the City’s uncertainties. CONCLUSION This report reflects the C ity’s combined effort s with SDHC to address homelessness in FY 202 5 . Having a clear, comprehensive , and publicly available homelessness spending plan reflecting City and SDHC resources is critical for monitor ing program expenses over time , and for providin g public transparency. Further , from a policy standpoint, having this information provided in one place allow s the Council and public to better assess whether limited resources are w holistically aligned with strategies in the Community Action Plan on Homelessness , and whether the City is striking an appropriate balance between crisis strategies and housing solutions. Given that the FY 2025 homelessness budget was balanced with a $8.0 million contribution from the Afford able Housing Fund, which otherwise would have gone towards affordable housing and other programs , it is important to evaluate the fiscal sustainability of th",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 7561 of 12265. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:10974:1cb2d675c6",
+      "label": "26-19-fy-2027-homelessness-programs-and-funding_rev.pdf",
+      "sourceUrl": "https://www.sandiego.gov/sites/default/files/2026-09/26-19-fy-2027-homelessness-programs-and-funding_rev.pdf",
+      "portalKey": "source-98f065d5220f5b4fdc6e9c1e",
+      "requestId": 6233293779951364,
+      "documentId": 6522383784111698,
+      "characterOffset": 10974,
+      "sourceSha256": "08555a64852d27c8871a8ff3a94fb1d73870fd206cf40dcba91e29697f6a772a",
+      "text": " homeless service system, consistent with those identified in the Community Action Plan on Homelessness Update , last heard by Council in May 2025 , such that discrete programs can be seen as components of a larger system. The City’s efforts to address homelessness are funded by the City ’s General Fund ( 15.0 %, $[MASKED_PHONE]7 Adopted Budget Budget ($) Difference Percent (%) Difference Notable Programmatic Changes Permanent Housing 174.4$ 127.8$ (46.6) -26.7% Removal of one-time State Homekey funds due to acquisition completed in FY 2026, as well as 1,000 Homeless Veterans Initiative ($111,000) Rapid Rehousing 4.4 4.7 0.2 5.6%Exclusively funded by CoC funds in FY [MASKED_PHONE] 4.6 35.0% Addition of $4.1M local grants for SDHC prevention and diversion; funding for flexible spending removed ($195,000) Shelters [MASKED_PHONE]% Reduction of 16th & Newton ($1.5M) and Lighthouse closure ($980,000) Safe Parking 4.4 [MASKED_PRIVATE_ADDRESS] ($275,000) and Central Elementary ($250,000) Safe Parking closures Safe Sleeping 14.4 13.5 (1.0) -6.6% Removal of one-time capital grants SUD Shelters/Services 3.6 5.6 1.9 53.2% New Opioid Treatment Beds ($2.4M); Rosecrans Shelter funding removed due to closure in FY 2026 ($488,000) Outreach 10.5 9.9 (0.6) -5.9% SDHC Multidisciplinary Outreach Team one- time funding removed ($750,000) Storage 2.1 2.1 0.0 0.6% Other 7.0 4.1 (2.9) -41.8% Closure of public restrooms ($750,000) and Day Center ($711,000); State grant spend-down ($1.4M); PEER College course funding removed ($94,000) Figure 3: Year-Over-Year Comparison of Homelessness Funding by Strategy (in millions) CoC= Continuum of Care; SDHC = San Diego Housing Commission; SUD = Substance Use Disorder Note: FY 2026 lease expenses (previously reflected in Administration costs) were redistributed to program lines to make planned expenditures comparable with FY 2027. 5 million ), Measure C homelessness funding (13.6%, $32.0 mi",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 10974 of 26133. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-fe2d39e3736bdf9f77803071:5619473930607963:2358:c9b1033e1d",
+      "label": "index.html",
+      "sourceUrl": "https://information.auditor.ca.gov/reports/2023-102.2/index.html",
+      "portalKey": "source-fe2d39e3736bdf9f77803071",
+      "requestId": 4839430654174367,
+      "documentId": 5619473930607963,
+      "characterOffset": 2358,
+      "sourceSha256": "ad91b839af06558e9baaf75314293423ef822e174fc23312d70ec710c6688b7e",
+      "text": "ermanent housing results in significantly better outcomes than placements into interim housing. The cities have each made efforts to develop additional interim and permanent housing; however, neither has a clear, long‑term plan to ensure that they have the housing necessary. We recommend that San José and San Diego each publicly report on all of their homelessness funding, assess the effectiveness of their spending, and better plan to meet their permanent housing needs. Respectfully submitted, GRANT PARKS California State Auditor Selected Abbreviations Used in This Report Cal ICH California Interagency Council on Homelessness CoC Continuum of Care ERF Encampment Resolution Funding ESG Emergency Solutions Grant state data system Homeless Data Integration System HHAP Homeless Housing. Assistance and Prevention HMIS Homeless Management Information System HSSD Homelessness Strategies and Solutions Department HUD U.S. Department of Housing and Urban Development NPD Neighborhood Policing Division PIT count point-in-time count VASH Veterans Affairs Supportive Housing Summary The Joint Legislative Audit Committee requested an audit of the State’s homelessness funding, including an evaluation of the efforts undertaken by the State and two cities to monitor the cost effectiveness of such spending. Separately, we published a report ( 2023‑102.1 ) that focuses primarily on the State’s activities to address homelessness. In this report (2023‑102.2), we present our findings and conclusions regarding the two cities we reviewed: the city of San José (San José) and the city of San Diego (San Diego). Since 2015 both San José and San Diego have seen increases in the number of individuals experiencing homelessness. In response, the cities have dedicated hundreds of millions of dollars in federal, state, and local funding to preventing and ending homelessness. In this audit, we reviewed the cities’ spending and their efforts to evaluate the effectiveness of the programs they funded, and",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 2358 of 300553. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-09918564b0172e3ce06a93d7:5382902989476028:14740:d6849c28d5",
+      "label": "23-21_fy_2024_homelessness_programs_and_funding.pdf",
+      "sourceUrl": "https://www.sandiego.gov/sites/default/files/23-21_fy_2024_homelessness_programs_and_funding.pdf",
+      "portalKey": "source-09918564b0172e3ce06a93d7",
+      "requestId": 6653193419370249,
+      "documentId": 5382902989476028,
+      "characterOffset": 14740,
+      "sourceSha256": "f85de62de2f488cb34edcf13d4169030e1544052d5c47b43787648cb15badee7",
+      "text": "3,085,000 - 16,000 - 3,100,000 SDHC Administration 2,290,000 1,277,000 152,000 4,818,000 8,536,000 EDD Administration - - - 450,000 450,000 Subtotal 5,375,000 1,277,000 168,000 4,818,000 11,636,000 53,477,000 $ 31,397,000 $ 2,364,000 $ 117,168,000 $ 204,405,000 $ Crisis Response & Stabilization Shelters Safe Parking & Camping Substance Use Disorder Shelters & Services Table 1: FY 2024 Funding for Homelessness Subject to Change Housing & Services Permanent Housing Rapid Rehousing Prevention and Diversion Grand Total Engagement Services Outreach Storage Other Admin Admin Attachment I 2 Table 1 Notes The table does not capture all homelessness -related expenses such as homeless encampment abatement through CleanSD, the Police Department's Neighborhood Policing Division, or other costs related to direct or indirect department involvement with those experiencing ho melessness. Rather, the focus is on services provided. Our Office separated out administrative costs from program operating costs, to the best of our knowledge. There will likely be changes to some allocations and fund sources as staff identify carryforwar d funding from the close out of FY 2023 and as program needs fluctuate. We note that HSSD staff reports on HSSD -funded homelessness expenditures in a memorandum attached to quarterly budget monitoring reports. Values are rounded to the nearest $1,000. 1 In recent months, the City has submitted applications for the third round of State Homekey funds to support new permanent supportive housing. If Homekey funds are awarded, the City would be required to fund a local match for new permanent suppor tive housing , estimated to be at least $8.5 million. This includes funding from this item which are drawn from the City’s Permanent Local Housing Allocation funds. If this funding is not needed for the Homekey local match, the funds would be included in t he next Bridge to Home NOFA, administered by EDD. Depending on the City’s Homekey awards, additional l ocal matc",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 14740 of 20668. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:21658:e01ab96582",
+      "label": "26-19-fy-2027-homelessness-programs-and-funding_rev.pdf",
+      "sourceUrl": "https://www.sandiego.gov/sites/default/files/2026-09/26-19-fy-2027-homelessness-programs-and-funding_rev.pdf",
+      "portalKey": "source-98f065d5220f5b4fdc6e9c1e",
+      "requestId": 6233293779951364,
+      "documentId": 6522383784111698,
+      "characterOffset": 21658,
+      "sourceSha256": "08555a64852d27c8871a8ff3a94fb1d73870fd206cf40dcba91e29697f6a772a",
+      "text": ",064.4 $ 4,057.3 $ HSSD Administration 5,155.7 - - - - 5,[MASKED_PHONE].3 1,100.9 79.1 2,371.0 4,[MASKED_PHONE].2 Subtotal 5,497.2 $ 189.3 $ 1,460.1 $ 79.1 $ 2,371.0 $ 9,639.6 $ 35,173.0 $ 31,978.9 $ 19,789.7 $ 1,396.2 $ 146,505.6 $ 234,460.6 $ Crisis Response & Stabilization Engagement Services Administration Grand Total Admin Other Storage Outreach Safe Sleeping Safe Parking Shelters Rapid Rehousing Permanent Housing Substance Use Disorder Shelters & Services Table 1: FY 2027 Funding for Homelessness Subject to Change (in thousands) Housing & Services Prevention and Diversion Attachment 1 2 Notes: The table does not capture all homelessness - related expenses such as homeless encampment abatement through CleanSD, the Police Department's Neighborhood Policing Division, or other costs related to direct or indirect department involvement with those expe riencing homelessness. Rather, the focus is on services provided. Our Office separated out administrative costs from program operating costs, to the best of our knowledge. There will likely be changes to some allocations and fund sources as staff identify carryforward funding from the close out of FY 2026 and as program needs fluctuate. HSSD staff reports on HSSD -funded homelessness expenditures in a memorandum attached to quarterly budget monitoring reports. 1 At the time of this writing, $5.1 million from the City's Permanent Local Housing Allocation is anticipated to provide housing for households at risk or experiencing homelessness. 2 Includes $1.9 million for client financial assistance, case management, and supportive services 3 Includes Stabilizing Tenancy for Elderly Populations (STEP) and Seniors Safe at Home 4 Leasing costs included for Family Non -Congregate Shelter ($1.9 million), 17th and Imperial ($73,000), and Storage Connect Center ($347,000) 5 Funded through Opioid Settlement Funds 6 Consists of various initiatives, such as the 2 -1-1 hotline, inclement w",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 21658 of 26133. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-cf09b76e9e3a2dfe95ad9107:6705806077615097:5309:605129e8e1",
+      "label": "9-28-26-special.pdf",
+      "sourceUrl": "https://www.sandiego.gov/sites/default/files/2026-09/9-28-26-special.pdf",
+      "portalKey": "source-cf09b76e9e3a2dfe95ad9107",
+      "requestId": 5142461057422050,
+      "documentId": 6705806077615097,
+      "characterOffset": 5309,
+      "sourceSha256": "2fcf7ff0011c1047bf58cc50120ab00d970b07a135982b63a67dbe0a5433dc9f",
+      "text": " hearing. This item is not subject to the Mayor's veto. Monday, September 28, 2026 Page 6 CONSENT, APPROVAL AGENDA APPROVAL OF COUNCIL MINUTES Item 601 : Approval of Council Minutes. Proposed Actions: Subitem -A: Approval of Council Minutes for May 7, 2026. Subitem -B: Approval of Council Minutes for May 11, 2026. Subitem -C: Approval of Council Minutes for May 12, 2026. CONSENT, 2:00 P.M. ORDINANCES TO BE ADOPTED Item 602 : Award a Construction Contract with Skanska USA Civil West California District Inc, for the El Camino Real to Via De La Valle (1/2 Mile) Project. Council District(s) Affected: 1. Proposed Actions: Adopt the following Ordinance which was introduced on 9/14/2026, Item 200 (Council voted 7 -0, Councilmember Foster III -not present, Councilmember von Wilpert -not present): (O-2027 -9) Ordinance authorizing the Mayor, or designee, to enter into an Agreement with Skanska USA Civil West District Inc., in an amount not to exceed $57,397,332, to provide construction services, related to the El Camino Real to Via De La Valle 1/2 Mile Project. 6 votes required pursuant to Charter Section 99. Monday, September 28, 2026 Page 7 Item 603 : Re - Approval of the Second Amended and Restated Regional Wastewater Disposal Agreement with the Metropolitan Wastewater Joint Powers Authority. Council District(s) Affected: Citywide. Proposed Actions: Adopt the following Ordinance which was introduced on 9/15/2026, Item 50 (Council voted 8 -0, Councilmember von Wilpert -not present): (O-2027 -8) Ordinance authorizing the Mayor , or designee, to execute the Second Amended and Restated Regional Wastewater Disposal Agreement between the City of San Diego and the Participating Agencies in the Metropolitan Sewerage System. 6 votes required pursuant to Charter Section 99. CONSENT, 2:00 P.M. RESOLUTIONS TO BE ADOPTED Item 604 : Approval of a Third Amendment to the Grant Agreement with the County of San Diego for the Domestic Violence Shelter. Council District(s) Affected: Citywide",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 5309 of 22316. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:23484:6b1214c75d",
+      "label": "26-19-fy-2027-homelessness-programs-and-funding_rev.pdf",
+      "sourceUrl": "https://www.sandiego.gov/sites/default/files/2026-09/26-19-fy-2027-homelessness-programs-and-funding_rev.pdf",
+      "portalKey": "source-98f065d5220f5b4fdc6e9c1e",
+      "requestId": 6233293779951364,
+      "documentId": 6522383784111698,
+      "characterOffset": 23484,
+      "sourceSha256": "08555a64852d27c8871a8ff3a94fb1d73870fd206cf40dcba91e29697f6a772a",
+      "text": " Imperial ($73,000), and Storage Connect Center ($347,000) 5 Funded through Opioid Settlement Funds 6 Consists of various initiatives, such as the 2 -1-1 hotline, inclement weather shelter system, information management system, and Plaza Hotel Single Room Occupancy relocation services Attachment 2 1 Notes: The “Administering Entity” column reflects the agency that takes the primary role in administering a City program whic h is typically done by contracting with a provider. Other partnerships may be involved in operating a program that are not reflected. The “Funding Entity” column reflects the entity that contributes funding toward a program; which may also be the administrator, or may transfer the funds to another agency to operate . Program Administering Entity Funding Entity Federal Voucher Support SDHC SDHC CoC Permanent Supportive Housing Services SDHC SDHC Landlord Engagement SDHC SDHC New Permanent Supportive Housing SDHC SDHC/EDD Youth Homelessness Demonstration Project SDHC SDHC Rapid Rehousing - CoC Program SDHC SDHC Housing Instability Prevention Program SDHC HSSD Housing Support Programs for Seniors SDHC SDHC Prevention and Diversion SDHC HSSD/EDD/SDHC Eviction Prevention Program SDHC HSSD Family Reunification HSSD HSSD Seniors Safe at Home SDHC SDHC Bridge Shelter - 16th and Newton SDHC HSSD Rachel's Promise Women and Family Shelter SDHC HSSD Single Adult & Senior Interim Shelter (VVSD) SDHC HSSD Bridge Shelter - 17th and Imperial SDHC HSSD Domestic Violence Shelter HSSD HSSD Youth Case Management & Shelter SDHC HSSD Family Non-Congregate Shelter SDHC HSSD/EDD LGBT+ Youth Services and Shelter SDHC HSSD Connections Housing SDHC HSSD/EDD Veterans Interim Shelter (VVSD) SDHC HSSD Haven Interim Family Shelter SDHC HSSD New Opioid Treatment Beds (pending) SDHC HSSD Bishops Shelter SDHC HSSD Wind-Down Expenditures HSSD HSSD Transitional Housing SDHC SDHC Safe Parking Programs HSSD HSSD \"O\" Lot at Balboa Park HSSD HSSD 20th and B Street Lot HSSD HSSD Harm Red",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 23484 of 26133. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-fe2d39e3736bdf9f77803071:5619473930607963:72251:82b87338d6",
+      "label": "index.html",
+      "sourceUrl": "https://information.auditor.ca.gov/reports/2023-102.2/index.html",
+      "portalKey": "source-fe2d39e3736bdf9f77803071",
+      "requestId": 4839430654174367,
+      "documentId": 5619473930607963,
+      "characterOffset": 72251,
+      "sourceSha256": "ad91b839af06558e9baaf75314293423ef822e174fc23312d70ec710c6688b7e",
+      "text": "ata, the cities’ assessments were confusing at times. For example, in one assessment that San José performed of a $2 million amendment to an agreement for rapid rehousing services, city staff assessed a provider’s performance as “adequate.” However, the city staff’s description in the assessment of the provider’s performance indicated that the provider had failed to meet nearly all activity goals for the year. While the provider did not meet the contract performance targets, the city believes the performance was adequate given difficult circumstances related to moving people from an encampment into housing and agreed that it could have better documented why its assessment of the performance was adequate. We identified similar problems with San Diego’s performance assessments. The housing commission explained that it uses its monthly data collection tools to compare results of a program to the contracted benchmarks and that it bases these contracted benchmarks on its CoC's community standards and other best practice information. When we reviewed a data collection tool for an interim housing and supportive services contract, we saw that the service provider was consistently not meeting the stated benchmark of 26 percent exits to permanent housing. In fact, the percentage of exits to permanent housing was 6 percent during the term of the agreement. Given that the provider was falling significantly short of meeting this benchmark, we would have expected the housing commission to analyze the provider's performance to determine whether the agreement was effective. However, the data collection tool did not include such an analysis from the commission. Although both cities asserted that they monitored or reviewed the performance of their service providers, their staff did not always document overall conclusions about the effectiveness of the service providers’ efforts. One reason for this gap is that the cities’ procedures do not require staff to formally document such asse",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 72251 of 300553. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-8ed4ff07f7655a6b466d9daf:6022456265075325:11509:9cd1e08a43",
+      "label": "24-24-rev-fy-2025-homelessness-programs-and-funding_rev.pdf",
+      "sourceUrl": "https://www.sandiego.gov/sites/default/files/2024-09/24-24-rev-fy-2025-homelessness-programs-and-funding_rev.pdf",
+      "portalKey": "source-8ed4ff07f7655a6b466d9daf",
+      "requestId": 6403640841404353,
+      "documentId": 6022456265075325,
+      "characterOffset": 11509,
+      "sourceSha256": "16a7003f8c31312699a5fd8a2e03634b473588d4f42c91f201cf902b32995321",
+      "text": " and Caltrans ($600,000 General Fund), CARE Events and Outreach HUB ($25,000 General Fund) homelessness outreach. 6 Services from the State Encampment Resolution Grant include outreach ($800,000), mobile medical services ($800,000), and hous ing and supportive services ($3.4 million). Attachment II 1 Notes: The “Administering Entity” column reflects the agency that takes the primary role in administering a City program which is typically done by contracting with a provider. Note that other partnerships may be involved in operating a program that are not reflected. The “Funding Entity” column reflects the entity that contribute s funding toward a program; which may also be the administrator, or may transfer the funds to another agency to operate .",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 11509 of 12265. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-cf09b76e9e3a2dfe95ad9107:6705806077615097:4967:a7746a5689",
+      "label": "9-28-26-special.pdf",
+      "sourceUrl": "https://www.sandiego.gov/sites/default/files/2026-09/9-28-26-special.pdf",
+      "portalKey": "source-cf09b76e9e3a2dfe95ad9107",
+      "requestId": 5142461057422050,
+      "documentId": 6705806077615097,
+      "characterOffset": 4967,
+      "sourceSha256": "2fcf7ff0011c1047bf58cc50120ab00d970b07a135982b63a67dbe0a5433dc9f",
+      "text": "e the appropriate Resolution(s) according to Section 40 of the City Charter. If the City Council grants the appeal, the lower -decision maker's decision to approve the project shall be held in abeyance. The City Council shall retain jurisdiction to act on the revised environmental determination and associated project at a subsequen t public hearing. This item is not subject to the Mayor's veto. Monday, September 28, 2026 Page 6 CONSENT, APPROVAL AGENDA APPROVAL OF COUNCIL MINUTES Item 601 : Approval of Council Minutes. Proposed Actions: Subitem -A: Approval of Council Minutes for May 7, 2026. Subitem -B: Approval of Council Minutes for May 11, 2026. Subitem -C: Approval of Council Minutes for May 12, 2026. CONSENT, 2:00 P.M. ORDINANCES TO BE ADOPTED Item 602 : Award a Construction Contract with Skanska USA Civil West California District Inc, for the El Camino Real to Via De La Valle (1/2 Mile) Project. Council District(s) Affected: 1. Proposed Actions: Adopt the following Ordinance which was introduced on 9/14/2026, Item 200 (Council voted 7 -0, Councilmember Foster III -not present, Councilmember von Wilpert -not present): (O-2027 -9) Ordinance authorizing the Mayor, or designee, to enter into an Agreement with Skanska USA Civil West District Inc., in an amount not to exceed $57,397,332, to provide construction services, related to the El Camino Real to Via De La Valle 1/2 Mile Project. 6 votes required pursuant to Charter Section 99. Monday, September 28, 2026 Page 7 Item 603 : Re - Approval of the Second Amended and Restated Regional Wastewater Disposal Agreement with the Metropolitan Wastewater Joint Powers Authority. Council District(s) Affected: Citywide. Proposed Actions: Adopt the following Ordinance which was introduced on 9/15/2026, Item 50 (Council voted 8 -0, Councilmember von Wilpert -not present): (O-2027 -8) Ordinance authorizing the Mayor , or designee, to execute the Second Amended and Restated Regional Wastewater Disposal Agreement between the City",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 4967 of 22316. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-fe2d39e3736bdf9f77803071:5619473930607963:197114:d34b2b963a",
+      "label": "index.html",
+      "sourceUrl": "https://information.auditor.ca.gov/reports/2023-102.2/index.html",
+      "portalKey": "source-fe2d39e3736bdf9f77803071",
+      "requestId": 4839430654174367,
+      "documentId": 5619473930607963,
+      "characterOffset": 197114,
+      "sourceSha256": "ad91b839af06558e9baaf75314293423ef822e174fc23312d70ec710c6688b7e",
+      "text": " of San José and its partners, the County of Santa Clara, Destination: Home, and the Santa Clara County Housing Authority believe ending homelessness requires broad cross-sector alignment, collaboration, and significant investments and social innovation. Specifically, our collaboration is achieved through a collective impact model 1 Collective impact models are those where a broad cross-sector of key stakeholders work together to create a common agenda to solve a social problem. that leads to a common agenda shared by each partner. In 2015, the City and its partners came together and co-created our first regional strategic plan to end homelessness. Through our collective impact model on our first Community Plan to End Homelessness, we achieved significant results and brought a host of local resources to address the issue: Voters passed a $950 million affordable housing bond with a goal of building 4,800 new units of deeply affordable and supportive housing throughout San José and Santa Clara County; Garnered $100 million in private philanthropic contributions from corporations, including Cisco and Apple, to support efforts for innovative housing solutions and homelessness prevention; Voters approved a San José property transfer generating $40 to $50 million annually to support affordable housing, homelessness prevention, and homeless services; Received over $40 million in contributions from a coalition of private donors, corporations, and foundations to provide direct financial assistance to extremely low-income households impacted by the COVID-19 pandemic. Convened a broad coalition and launched the \"All the Way Home\" campaign to end veteran homelessness in our community. Our collective efforts connected 2,201 homeless veterans to housing and our system achieved functional zero 2 Number of veterans housed exceeds the number seeking housing assistance. on veteran homelessness. Launched a pilot homeless prevention system in 2017 that has grown to serve approximately ",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 197114 of 300553. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-cf09b76e9e3a2dfe95ad9107:6705806077615097:10912:69778514e2",
+      "label": "9-28-26-special.pdf",
+      "sourceUrl": "https://www.sandiego.gov/sites/default/files/2026-09/9-28-26-special.pdf",
+      "portalKey": "source-cf09b76e9e3a2dfe95ad9107",
+      "requestId": 5142461057422050,
+      "documentId": 6705806077615097,
+      "characterOffset": 10912,
+      "sourceSha256": "2fcf7ff0011c1047bf58cc50120ab00d970b07a135982b63a67dbe0a5433dc9f",
+      "text": ", at the intersection with Caminito Corriente, in the Rancho Bernardo Community as Marty Judge Way. Item 614 : Approval of a Request for a Conflict - of - Interest Waiver from Selman Leichenger Edson Hsu Newman & Moore LLP. Council District(s) Affected: Citywide. Proposed Actions: Monday, September 28, [MASKED_PHONE] -78) Resolution granting the waiver of conflict of interest request by Selman Leichenger Edson Hsu Newman & Moore LLP. NON - AGENDA PUBLIC COMMENT This portion of the agenda provides an opportunity for members of the public to comment on items that are not on the agenda, but within the subject matter jurisdiction of the City Council. Non - Agenda Public Comment: Two (2) minutes per person, per meeting. If eight (8) or more speakers address a single issue, the maximum cumulative time for that issue will be 16 minutes. NON - AGENDA ITEMS REPORT OUT FROM CLOSED SESSION ADJOURNMENT IN HONOR OF APPROPRIATE PARTIES ADJOURNMENT NOTICE The City Council may take any action with respect to the items included on this agenda. Recommendations made by staff do not limit actions that the City Council may take. Members of the public should not rely upon the recommendations of staff as determinat ive of the action the city council may take on a particular matter. Monday, September 28, 2026 Page 12 INFORMATION ON HOW TO PARTICIPATE IN THIS MEETING The City Council values public input. The information below outlines how you can address the City Council on agenda items, non -agenda matters, and closed session topics, both in -person and virtually. General Participation Rules • Opportunity to Address Council: Members of the public will have the opportunity to address the Council. • Time Management: The Council President may adjust speaking times to manage the meeting efficiently and ensure all agenda items are considered. • One Comment Per Item: You may only provide one comment per agenda item. Speaking at City Council Meetings In-Person Comment, as an individual spea",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 10912 of 22316. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    },
+    {
+      "id": "doc:source-fe2d39e3736bdf9f77803071:5619473930607963:280001:2004a41e54",
+      "label": "index.html",
+      "sourceUrl": "https://information.auditor.ca.gov/reports/2023-102.2/index.html",
+      "portalKey": "source-fe2d39e3736bdf9f77803071",
+      "requestId": 4839430654174367,
+      "documentId": 5619473930607963,
+      "characterOffset": 280001,
+      "sourceSha256": "ad91b839af06558e9baaf75314293423ef822e174fc23312d70ec710c6688b7e",
+      "text": " review quarterly fiscal and programmatic outcomes. The RFR review process is captured in “Policy 2.2: Processing Requests for Reimbursements” in the Policies and Procedure manual already provided to the State auditors. Quarterly Check-In Meetings and Technical Assistance Plans: SDHC’s Homelessness Innovations Division’s Policies and Procedures describe the method for facilitating the quarterly meetings and detail the items to be included on the agenda such as reviewing budget utilization, program outcomes, and other items identified as requiring more technical assistance. This is “Policy 2.8: Monitoring & Analysis” in the team’s Policy and Procedures manual provided to State auditors. Examples of the Fiscal Monitoring Tool and Quarterly Meeting Check-In Agenda were provided in the supplemental documents submitted for review. In addition to the Quarterly Check-In Meetings, technical assistance is provided at intervals, often daily, weekly or monthly. Technical assistance may be formal or informal. Internal SDHC Tools: SDHC drafted and continually updates a Policies and Procedures manual to guide the work of the team. All core contract administration functions are detailed in the Policies and Procedures manual, such as RFRs and data collection tools A copy of the Policies and Procedures manual was provided to State auditors on September 29, 2023. The Policies and Procedures manual also contains Professional Standards that SDHC has developed for the staff overseeing contracts. The standards are contained in the team’s Policies and Procedures manual within “Policy 1.4: Professional Standards.” These standards define the minimum expectations for staff with regard to professionalism and core competencies related to contract administration. For example, a Senior Program Analyst assigned a portfolio of programs is expected to perform contract administration according to the following standards: Contract Administration : Monitor and update the Administrative Team Work Plan;",
+      "sql": null,
+      "snapshotProvenance": [],
+      "sourceReferences": [],
+      "limitations": "Excerpt at character 280001 of 300553. Selected from a bounded 200,000-character search window, prioritizing costs, outcomes and commitments. Text may omit layout/images. Ingestion order is not publication chronology; coverage is incomplete."
+    }
+  ],
+  "synthesis": {
+    "title": "San Diego homelessness spending: incomplete cost accounting, temporary backfills, restroom-service ambiguity, and unresolved contract-effectiveness questions",
+    "summary": "The retrieved records support five concrete leads. First, San Diego’s published FY 2024 and FY 2027 homelessness funding tables explicitly exclude CleanSD encampment-abatement and Police Neighborhood Policing Division costs, matching the State Auditor’s warning that the City could not definitively identify all homelessness revenues and expenditures. Second, the FY 2025 budget used an $8.0 million Affordable Housing Fund contribution to balance existing homelessness programs despite a documented structural deficit, and FY 2027 later adopted visible service reductions. Third, the proposed Kettner/Vine 1,000-bed shelter showed only $1.9 million identified in the FY 2025 adopted budget against an estimated operating cost of up to $30.7 million annually, with no later legislative or payment file retrieved here. Fourth, FY 2027 explicitly cut Downtown public restrooms, but the annual homelessness tables also omit some sanitation and enforcement costs, so the retrieved reports cannot show whether bathroom and waste-response capacity actually fell citywide or shifted elsewhere. Fifth, the State Auditor documented at least one SDHC-monitored contract with 6 percent exits to permanent housing against a 26 percent benchmark without documented effectiveness analysis. The most useful next records are the Item 605 legislative file, Downtown restroom closure and replacement records, the Kettner/Vine lease and operating file, the $8.0 million transfer records, citywide reconciliations that add CleanSD and Police NPD actuals, and SDHC’s contract-specific monitoring and reimbursement files.",
+    "findings": [
+      {
+        "title": "Annual homelessness funding tables still exclude encampment-abatement and Police NPD costs",
+        "interpretation": "The FY 2024 and FY 2027 homelessness funding reports explicitly say their tables omit CleanSD encampment abatement, the Police Department’s Neighborhood Policing Division, and other direct or indirect departmental costs. That is consistent with the State Auditor’s conclusion that San Diego lacked a mechanism to definitively identify all homelessness revenues and expenditures. The supported conclusion is narrower than total nontransparency: the retrieved annual homelessness tables are not, by themselves, a complete citywide spending reconciliation.",
+        "whyItMatters": "Without those omitted costs, the public cannot fairly compare reductions in shelters, safe parking, restrooms, or day-center services against the City’s full homelessness-response footprint.",
+        "citations": [
+          {
+            "evidenceId": "doc:source-09918564b0172e3ce06a93d7:5382902989476028:14740:d6849c28d5",
+            "quote": "The table does not capture all homelessness -related expenses such as homeless encampment abatement through CleanSD, the Police Department's Neighborhood Policing Division, or other costs related to direct or indirect department involvement with those experiencing ho melessness."
+          },
+          {
+            "evidenceId": "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:21658:e01ab96582",
+            "quote": "The table does not capture all homelessness - related expenses such as homeless encampment abatement through CleanSD, the Police Department's Neighborhood Policing Division, or other costs related to direct or indirect department involvement with those expe riencing homelessness."
+          },
+          {
+            "evidenceId": "doc:source-fe2d39e3736bdf9f77803071:5619473930607963:653:12a9cd420e",
+            "quote": "neither city could definitively identify all its revenues and expenditures related to its homelessness efforts because neither has an established mechanism, such as a spending plan, to track and report its spending."
+          }
+        ],
+        "counterEvidence": [
+          {
+            "evidenceId": "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:9235:5d7a9f7c62",
+            "quote": "this annual report aims to consolidate these actions and funding sources into one document for easier reference."
+          },
+          {
+            "evidenceId": "doc:source-09918564b0172e3ce06a93d7:5382902989476028:14740:d6849c28d5",
+            "quote": "We note that HSSD staff reports on HSSD -funded homelessness expenditures in a memorandum attached to quarterly budget monitoring reports."
+          }
+        ],
+        "alternativeExplanations": [
+          "The omission may be an intentional scope choice to show direct service programs rather than every citywide homelessness-related cost.",
+          "Separate departmental or quarterly documents may already reconcile some omitted costs, but they were not retrieved in this bounded set.",
+          "Police and CleanSD costs may be tracked internally without being integrated into the public annual homelessness report."
+        ],
+        "nextTest": "Obtain FY 2024 through FY 2027 HSSD quarterly expenditure memoranda and any Department of Finance crosswalks that add CleanSD and Police NPD adopted budgets and actuals back into the homelessness reporting framework."
+      },
+      {
+        "title": "The $8.0 million Affordable Housing Fund contribution looks like a bridge, not a solved recurring funding source",
+        "interpretation": "The retrieved sequence is concrete: the City reported that many homelessness program expansions relied on one-time grants and created \"a structural deficit,\" then reported that FY 2025 used $8.0 million from the Affordable Housing Fund to fill the gap for existing programs, and by FY 2027 the adopted budget included visible closures or reductions. This does not prove the Affordable Housing Fund transfer caused the later cuts, but it supports a lead that the transfer was temporary gap-filling rather than a durable recurring fix.",
+        "whyItMatters": "The central policy question is whether shifting $8.0 million away from affordable-housing uses bought enough service continuity to justify the tradeoff, or mainly postponed later reductions.",
+        "citations": [
+          {
+            "evidenceId": "doc:source-09918564b0172e3ce06a93d7:5382902989476028:266:9a9170debf",
+            "quote": "much of the program expansions since the creation of the bridge shelter programs were funded with one -time grant resources , creating a structural deficit in the homelessness budget ."
+          },
+          {
+            "evidenceId": "doc:source-8ed4ff07f7655a6b466d9daf:6022456265075325:6828:fbf902e80d",
+            "quote": "The use of $8.0 million from the Affordable Housing Fund to fill the funding gap for existing homelessness programs along with less available one - time HHAP funding anticipated in future year s signal s the potential for serious challenges in identifying sufficient ongoing revenue to support homelessness expenditures"
+          },
+          {
+            "evidenceId": "doc:source-8ed4ff07f7655a6b466d9daf:6022456265075325:7561:6ac3106d97",
+            "quote": "the FY 2025 homelessness budget was balanced with a $8.0 million contribution from the Afford able Housing Fund, which otherwise would have gone towards affordable housing and other programs"
+          },
+          {
+            "evidenceId": "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:9235:5d7a9f7c62",
+            "quote": "These reductions included closure of the City -funded Lighthouse Shelter (although the site will continue to operate as a different program without City funds) , two safe parking sites, and Downtown public restrooms, as well as the reduction of the 16 th and Newton Shelter and the Neil Good Day Center"
+          }
+        ],
+        "counterEvidence": [
+          {
+            "evidenceId": "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:9235:5d7a9f7c62",
+            "quote": "prevention and diversion funding is budgeted to increase by $4. 3 million relative to the prior year, largely due to local philanthropic grants secured by SDHC . City funding for substance use disorder treatment shelters is also expected to increase on net due to additional planned opioid treatment beds funded by Opioid Settlement Funds."
+          }
+        ],
+        "alternativeExplanations": [
+          "The City may have intentionally shifted its mix from some shelter and restroom operations toward prevention, diversion, or treatment.",
+          "Some reduced programs may have continued with philanthropic, County, or provider funding outside the City budget.",
+          "The later reductions may reflect multiple pressures at once, including reduced HHAP availability and a broader General Fund reduction target, not just the Affordable Housing Fund transfer."
+        ],
+        "nextTest": "Retrieve the transfer authorizations, fund and account coding, and decision memos for the $8.0 million contribution, then compare FY 2025 through FY 2027 actual expenditures, occupancy, exits to permanent housing, and closure or wind-down costs for the programs it preserved against any affordable-housing activities deferred or reduced."
+      },
+      {
+        "title": "The Kettner/Vine 1,000-bed proposal shows a visible budget-to-obligation gap",
+        "interpretation": "The FY 2025 report says the adopted budget included $1.9 million for additional shelter beds tied to a proposed 1,000-bed permanent emergency shelter site, but also says the lease was still pending and that operations could cost up to $30.7 million annually and could not be supported within existing City resources without major tradeoffs. In this bounded retrieval, no later legislative file, executed lease, or payment record explains whether the concept was approved, revised, relocated, or abandoned. The supported discrepancy is between a limited identified FY 2025 amount and a much larger contingent recurring obligation.",
+        "whyItMatters": "Large shelter proposals can look funded in budget documents even when only a small initial amount is identified and the full operating plan remains unresolved.",
+        "citations": [
+          {
+            "evidenceId": "doc:source-8ed4ff07f7655a6b466d9daf:6022456265075325:6828:fbf902e80d",
+            "quote": "The FY 202 5 Adopted Budget includes $ 1.9 million for additional shelter beds, currently proposed for a 1,000 - bed permanent emergency shelter site – the lease for the site located at Kettner Blvd and Vine St was fi rst presented to City Council on July 22, 2024."
+          },
+          {
+            "evidenceId": "doc:source-8ed4ff07f7655a6b466d9daf:6022456265075325:7561:6ac3106d97",
+            "quote": "Although the lease is still pending, if approved, the operation of the shelter program is estimated to cost up to $30.7 million annually , which cannot be supported within existing City resources without significant tradeoffs with other City services ."
+          },
+          {
+            "evidenceId": "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:7918:988ee628b9",
+            "quote": "various reductions were contemplated by HSSD, the Mayor’s Office, SDHC, and the Council to meet a 7% reduction target in the City’s General Fund"
+          }
+        ],
+        "counterEvidence": [],
+        "alternativeExplanations": [
+          "The lease may have been rejected or materially revised before execution, eliminating the longer-term cost issue.",
+          "The $30.7 million figure may have been a high-end scenario that later changed with a different operator, scope, or outside funding package.",
+          "The project may have moved to another site or another budget vehicle not retrieved here."
+        ],
+        "nextTest": "Retrieve the July 22, 2024 legislative file, any executed lease or termination records, operator procurement documents, operating pro formas, encumbrances, and payment records tied to Kettner/Vine or any successor site."
+      },
+      {
+        "title": "FY 2027 cut Downtown public restrooms, but the public reports do not show whether sanitation services shifted elsewhere",
+        "interpretation": "The FY 2027 report explicitly lists \"Closure of public restrooms ($750,000)\" and elsewhere describes reductions that included \"Downtown public restrooms.\" The same report says its tables do not capture CleanSD encampment abatement and other indirect departmental costs. The supported conclusion is limited but important: the homelessness report confirms a line-item reduction in restroom funding, yet the retrieved annual reports cannot show whether public bathroom and waste-response capacity actually fell citywide or was transferred to another department or grant.",
+        "whyItMatters": "Bathroom access and waste management are direct health and encampment-response issues. If a restroom cut was offset elsewhere, the public should see that; if not, the cut may have broader sanitation consequences than the homelessness tables reveal.",
+        "citations": [
+          {
+            "evidenceId": "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:10974:1cb2d675c6",
+            "quote": "Closure of public restrooms ($750,000) and Day Center ($711,000); State grant spend-down ($1.4M); PEER College course funding removed ($94,000)"
+          },
+          {
+            "evidenceId": "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:9235:5d7a9f7c62",
+            "quote": "These reductions included closure of the City -funded Lighthouse Shelter (although the site will continue to operate as a different program without City funds) , two safe parking sites, and Downtown public restrooms, as well as the reduction of the 16 th and Newton Shelter and the Neil Good Day Center"
+          },
+          {
+            "evidenceId": "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:21658:e01ab96582",
+            "quote": "The table does not capture all homelessness - related expenses such as homeless encampment abatement through CleanSD, the Police Department's Neighborhood Policing Division, or other costs related to direct or indirect department involvement with those expe riencing homelessness."
+          }
+        ],
+        "counterEvidence": [
+          {
+            "evidenceId": "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:9235:5d7a9f7c62",
+            "quote": "this annual report aims to consolidate these actions and funding sources into one document for easier reference."
+          }
+        ],
+        "alternativeExplanations": [
+          "Restroom access may have been replaced by portable facilities or nearby public facilities funded outside the homelessness budget.",
+          "CleanSD or another department may have absorbed part of the sanitation response without labeling it as homelessness spending.",
+          "The closure may have reflected a site move, low utilization, or a provider change rather than a simple citywide service loss."
+        ],
+        "nextTest": "Obtain the Downtown restroom closure plan, any replacement sanitation or portable-restroom contracts, location and hours tables, CleanSD work orders and actuals, and any cross-department briefing that explains how restroom and waste services changed after the FY 2027 cut."
+      },
+      {
+        "title": "SDHC’s described monitoring process is hard to reconcile with the auditor’s 26%-benchmark and 6%-actual contract example",
+        "interpretation": "The State Auditor found an interim-housing and supportive-services contract in which the provider achieved 6 percent exits to permanent housing against a 26 percent benchmark, and auditors did not find documented analysis by the Housing Commission on whether the agreement was effective. Elsewhere in the same record, SDHC describes reimbursement review, quarterly check-ins, and technical-assistance processes. That combination suggests a concrete risk that SDHC tracked data and held monitoring meetings without preserving a formal decision trail showing how poor outcomes affected renewals, amendments, or reimbursements. The excerpt does not identify the provider, so this remains a contract-identification lead rather than a systemwide conclusion.",
+        "whyItMatters": "This is the clearest contract-specific cost-effectiveness lead in the record. If underperforming contracts kept receiving payments or extensions without documented analysis, decisionmakers could not easily tell whether funding was buying permanent exits or mainly preserving bed inventory.",
+        "citations": [
+          {
+            "evidenceId": "doc:source-fe2d39e3736bdf9f77803071:5619473930607963:72251:82b87338d6",
+            "quote": "the service provider was consistently not meeting the stated benchmark of 26 percent exits to permanent housing. In fact, the percentage of exits to permanent housing was 6 percent during the term of the agreement."
+          },
+          {
+            "evidenceId": "doc:source-fe2d39e3736bdf9f77803071:5619473930607963:72251:82b87338d6",
+            "quote": "we would have expected the housing commission to analyze the provider's performance to determine whether the agreement was effective. However, the data collection tool did not include such an analysis from the commission."
+          },
+          {
+            "evidenceId": "doc:source-fe2d39e3736bdf9f77803071:5619473930607963:280001:2004a41e54",
+            "quote": "Quarterly Check-In Meetings and Technical Assistance Plans: SDHC’s Homelessness Innovations Division’s Policies and Procedures describe the method for facilitating the quarterly meetings and detail the items to be included on the agenda such as reviewing budget utilization, program outcomes, and other items identified as requiring more technical assistance."
+          }
+        ],
+        "counterEvidence": [
+          {
+            "evidenceId": "doc:source-fe2d39e3736bdf9f77803071:5619473930607963:1681:809ee0bba4",
+            "quote": "San Diego has generally established clear performance measures, such as specifying the number of people the service provider will assist, to enable it to assess whether the providers’ efforts are an effective use of funds."
+          }
+        ],
+        "alternativeExplanations": [
+          "The provider may have served a higher-acuity or unusually difficult population, making the benchmark unrealistic.",
+          "SDHC may have performed an effectiveness analysis informally but failed to preserve it in the tool reviewed by auditors.",
+          "The example may have been an outlier rather than representative of SDHC’s broader contract portfolio."
+        ],
+        "nextTest": "Identify the specific contract and provider in the audit example, then review the contract file, amendments, reimbursements, quarterly monitoring records, technical-assistance plans, and any renewal or non-renewal recommendation after the 6 percent result."
+      }
+    ],
+    "questions": [
+      {
+        "question": "Do the Item 605 staff report and attachments show that the $3,666,572 amendment is restricted to riverbed-specific outreach, medical, or housing services rather than general shelter, restroom, or day-center operations?",
+        "why": "The FY 2027 report documents local cuts, while the September 28, 2026 agenda shows a near-contemporaneous new appropriation and term extension. Scope restrictions would help distinguish net new services from a substitution story.",
+        "evidenceIds": [
+          "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:9235:5d7a9f7c62",
+          "doc:source-cf09b76e9e3a2dfe95ad9107:6705806077615097:6812:0923242b24",
+          "doc:source-8ed4ff07f7655a6b466d9daf:6022456265075325:11509:9cd1e08a43"
+        ]
+      },
+      {
+        "question": "After the FY 2027 closure of Downtown public restrooms, what replacement sanitation access, if any, was funded through other departments or grants, and at which locations?",
+        "why": "The report explicitly shows a restroom closure, but the same annual tables exclude CleanSD and other indirect departmental costs. Without the replacement record, the public cannot tell whether access actually fell or merely moved off the homelessness report.",
+        "evidenceIds": [
+          "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:9235:5d7a9f7c62",
+          "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:10974:1cb2d675c6",
+          "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:21658:e01ab96582"
+        ]
+      },
+      {
+        "question": "After the FY 2027 budget reductions, which specific programs actually continued under non-City funding or reduced-capacity arrangements, especially Lighthouse Shelter and the Neil Good Day Center, and who funded and administered the successor operations?",
+        "why": "The FY 2027 report makes continuity claims for both sites. The interpretation weakens if no executed successor agreement or funding stream exists.",
+        "evidenceIds": [
+          "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:9235:5d7a9f7c62",
+          "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:23484:6b1214c75d"
+        ]
+      },
+      {
+        "question": "What became of the proposed 1,000-bed permanent emergency shelter at Kettner Blvd and Vine St after FY 2025 budgeted $1.9 million for added beds but warned that operations could cost up to $30.7 million annually?",
+        "why": "This is one of the clearest appropriation-to-obligation gaps in the record. The lead would weaken if later Council action shows the lease was denied, materially changed, relocated, or largely funded outside the General Fund.",
+        "evidenceIds": [
+          "doc:source-8ed4ff07f7655a6b466d9daf:6022456265075325:6828:fbf902e80d",
+          "doc:source-8ed4ff07f7655a6b466d9daf:6022456265075325:7561:6ac3106d97"
+        ]
+      },
+      {
+        "question": "Is there any later citywide reconciliation that adds omitted homelessness-related costs from CleanSD encampment abatement, the Police Department's Neighborhood Policing Division, and other indirect departmental work back into the published homelessness budget?",
+        "why": "This remains the biggest completeness gap in any budget-to-spending trace. The annual reports explicitly exclude those costs, while the State Auditor said San Diego lacked a mechanism to definitively identify all homelessness revenues and expenditures.",
+        "evidenceIds": [
+          "doc:source-09918564b0172e3ce06a93d7:5382902989476028:14740:d6849c28d5",
+          "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:21658:e01ab96582",
+          "doc:source-fe2d39e3736bdf9f77803071:5619473930607963:653:12a9cd420e"
+        ]
+      },
+      {
+        "question": "Can we identify the specific San Diego interim-housing or supportive-services contract in the State Auditor example with a 26 percent permanent-housing benchmark and only 6 percent actual exits, then test whether it later received renewals, amendments, or continued reimbursements?",
+        "why": "This would turn a general audit criticism into a contract-specific accountability trail. The concern would weaken if the agreement ended, reimbursements stopped, or later monitoring documented improved performance before new funding.",
+        "evidenceIds": [
+          "doc:source-fe2d39e3736bdf9f77803071:5619473930607963:72251:82b87338d6",
+          "doc:source-fe2d39e3736bdf9f77803071:5619473930607963:280001:2004a41e54",
+          "doc:source-fe2d39e3736bdf9f77803071:5619473930607963:1681:809ee0bba4"
+        ]
+      },
+      {
+        "question": "What actual FY 2025 and FY 2026 expenditures, occupancy or utilization, exits to permanent housing, and closure or wind-down costs were recorded for the programs preserved by the $8.0 million Affordable Housing Fund contribution, and which affordable-housing uses were delayed or displaced to free that money?",
+        "why": "This directly tests whether the Affordable Housing Fund transfer bought measurable continuity or mainly postponed cuts while reducing housing investment elsewhere.",
+        "evidenceIds": [
+          "doc:source-09918564b0172e3ce06a93d7:5382902989476028:266:9a9170debf",
+          "doc:source-8ed4ff07f7655a6b466d9daf:6022456265075325:6828:fbf902e80d",
+          "doc:source-8ed4ff07f7655a6b466d9daf:6022456265075325:7561:6ac3106d97",
+          "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:9235:5d7a9f7c62"
+        ]
+      },
+      {
+        "question": "For the two Homekey permanent supportive housing projects that drove the FY 2025 budget spike, what were the acquisition amounts, local match sources, units delivered, occupancy dates, and housing-retention outcomes by FY 2027?",
+        "why": "FY 2025's large increase was reported as mostly one-time Homekey money, and FY 2027 shows those one-time funds rolling off after acquisition. Project-level outputs are needed so capital spikes are not mistaken for recurring service expansion.",
+        "evidenceIds": [
+          "doc:source-8ed4ff07f7655a6b466d9daf:6022456265075325:6828:fbf902e80d",
+          "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:10974:1cb2d675c6"
+        ]
+      }
+    ],
+    "requests": [
+      {
+        "title": "Item 605 Riverbed Encampment Resolution Funding legislative file and spending terms",
+        "custodian": "Office of the City Clerk and Homelessness Strategies and Solutions Department",
+        "gap": "The agenda shows a new $3,666,572 appropriation and extension, but the retrieved evidence does not include the staff report, scope of work, restrictions, deliverables, or payment structure.",
+        "resolves": "Whether the Round 2 ERF money is additive, restricted to riverbed-specific work, or potentially substituting for local funding during FY 2027 service cuts.",
+        "draft": "Please provide the complete legislative file for Item 605, including the staff report, the First Amendment to the Subrecipient Grant Agreement with the County of San Diego, all attachments and exhibits, any budget by service line, scope of work, performance measures, reimbursement terms, and any existing progress, expenditure, or deliverables reports for Round 2 of the State of California Encampment Resolution Funding Program Rolling Grant. Please exclude personal identifiers of clients.",
+        "evidenceIds": [
+          "doc:source-cf09b76e9e3a2dfe95ad9107:6705806077615097:6812:0923242b24",
+          "doc:source-8ed4ff07f7655a6b466d9daf:6022456265075325:11509:9cd1e08a43",
+          "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:9235:5d7a9f7c62"
+        ]
+      },
+      {
+        "title": "Downtown public restroom closure and sanitation replacement records",
+        "custodian": "Homelessness Strategies and Solutions Department, with any department that administered the Downtown public restroom service or related CleanSD sanitation work",
+        "gap": "The FY 2027 report shows a restroom closure, but the retrieved record does not show whether portable facilities, replacement sites, or other sanitation services were funded elsewhere.",
+        "resolves": "Whether the reported restroom reduction was a true net loss of bathroom access and sanitation capacity or a shift to another department, contract, or grant.",
+        "draft": "Please provide existing records from FY 2027 to present regarding the closure, transition, relocation, or replacement of the Downtown public restroom service, including site lists, operating hours, contracts or amendments, notices, transition plans, cost summaries, portable-restroom or handwashing deployments, and any aggregate usage, cleaning, complaint, or service-response reports. Please exclude personal identifiers of clients.",
+        "evidenceIds": [
+          "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:9235:5d7a9f7c62",
+          "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:10974:1cb2d675c6",
+          "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:21658:e01ab96582"
+        ]
+      },
+      {
+        "title": "Successor funding and contracts for Lighthouse Shelter and Neil Good Day Center",
+        "custodian": "Homelessness Strategies and Solutions Department and San Diego Housing Commission",
+        "gap": "The FY 2027 report says these services would continue without City funding or at reduced capacity, but no retrieved contract, grant, or successor program record confirms how.",
+        "resolves": "Whether the announced FY 2027 cuts were full service losses, partial continuity under new funders, or only provisional transition plans.",
+        "draft": "Please provide all existing records from FY 2027 to present concerning continuation, transition, wind-down, or successor operations for the Lighthouse Shelter and the Neil Good Day Center, including executed agreements, MOUs, grant awards, provider communications, transition plans, capacity or service-level tables, funding-source summaries, and monthly aggregate utilization or outcome reports. Please exclude personal identifiers of clients.",
+        "evidenceIds": [
+          "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:9235:5d7a9f7c62",
+          "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:23484:6b1214c75d"
+        ]
+      },
+      {
+        "title": "Kettner/Vine 1,000-bed shelter fiscal and contract file",
+        "custodian": "Office of the City Clerk, Real Estate and Airport Management Department, and Homelessness Strategies and Solutions Department",
+        "gap": "The budget report identifies $1.9 million for additional beds and a much larger operating-cost estimate, but no later retrieved record shows the lease outcome, operator, or actual spending.",
+        "resolves": "Whether the proposed 1,000-bed shelter was approved, revised, relocated, abandoned, or funded differently than first presented.",
+        "draft": "Please provide all existing records from July 22, 2024 to present regarding the proposed 1,000-bed permanent emergency shelter site at Kettner Blvd and Vine St, including the City Council staff report and attachments, lease drafts and executed versions, amendments or termination records, operator procurement materials, operating pro formas, funding plans, budget schedules, encumbrances, invoices, and payment records. Please exclude personal identifiers of clients.",
+        "evidenceIds": [
+          "doc:source-8ed4ff07f7655a6b466d9daf:6022456265075325:6828:fbf902e80d",
+          "doc:source-8ed4ff07f7655a6b466d9daf:6022456265075325:7561:6ac3106d97"
+        ]
+      },
+      {
+        "title": "Citywide homelessness-spending reconciliation including CleanSD and Police NPD",
+        "custodian": "Department of Finance, with HSSD, Police Department, and CleanSD-responsive departments",
+        "gap": "The annual homelessness tables explicitly exclude encampment-abatement and NPD costs, and no retrieved citywide reconciliation shows adopted versus actual homelessness-related spending across departments.",
+        "resolves": "Whether San Diego now has an operational mechanism to reconcile total homelessness-response appropriations and actual expenditures across direct services and enforcement or abatement functions.",
+        "draft": "Please provide any existing spreadsheets, crosswalks, memoranda, dashboards, or presentations from FY 2024 through FY 2027 that reconcile homelessness-related adopted budgets and actual expenditures across departments, including HSSD, SDHC transfers, CleanSD encampment abatement, Police Department Neighborhood Policing Division, and any other department identified as doing direct or indirect work related to homelessness. Please also provide the HSSD-funded homelessness expenditure memoranda referenced in quarterly budget monitoring reports for that period.",
+        "evidenceIds": [
+          "doc:source-09918564b0172e3ce06a93d7:5382902989476028:14740:d6849c28d5",
+          "doc:source-98f065d5220f5b4fdc6e9c1e:6522383784111698:21658:e01ab96582",
+          "doc:source-fe2d39e3736bdf9f77803071:5619473930607963:653:12a9cd420e"
+        ]
+      },
+      {
+        "title": "SDHC contract file for the auditor’s 26%-benchmark and 6%-actual example",
+        "custodian": "San Diego Housing Commission",
+        "gap": "The audit excerpt identifies a severe performance miss but not the provider, contract number, or subsequent renewal and payment decisions.",
+        "resolves": "Whether the underperforming contract kept receiving reimbursements or extensions, and whether SDHC documented any corrective action or non-renewal rationale.",
+        "draft": "Please provide records sufficient to identify the interim housing and supportive services contract referenced in California State Auditor report 2023-102.2 as having a 26 percent exits-to-permanent-housing benchmark and 6 percent actual exits during the term of the agreement. Please also provide the contract and amendments, data collection tools, quarterly check-in agendas or notes, technical assistance plans, reimbursement requests, payment approvals, and any renewal, amendment, or non-renewal recommendations for that contract. Please exclude personal identifiers of clients.",
+        "evidenceIds": [
+          "doc:source-fe2d39e3736bdf9f77803071:5619473930607963:72251:82b87338d6",
+          "doc:source-fe2d39e3736bdf9f77803071:5619473930607963:280001:2004a41e54",
+          "doc:source-fe2d39e3736bdf9f77803071:5619473930607963:1681:809ee0bba4"
+        ]
+      }
+    ],
+    "meetings": [
+      {
+        "body": "San Diego City Council",
+        "date": "2026-09-28",
+        "agendaItem": "Item 605",
+        "relevance": "This is the clearest upcoming Council action in the retrieved record linking a specific homelessness appropriation to a grant amendment and term extension. It could clarify whether the $3,666,572 is restricted riverbed-specific funding or offsets local service reductions documented in the FY 2027 report.",
+        "action": "Review the posted backup and the Council discussion for Item 605, then extract any scope restrictions, service-line budgets, deliverables, reimbursement conditions, and explanations of how the amendment relates to FY 2027 service reductions.",
+        "citations": [
+          {
+            "evidenceId": "doc:source-cf09b76e9e3a2dfe95ad9107:6705806077615097:6812:0923242b24",
+            "quote": "Monday, September 28, 2026 Page 8 Proposed Actions:"
+          },
+          {
+            "evidenceId": "doc:source-cf09b76e9e3a2dfe95ad9107:6705806077615097:6812:0923242b24",
+            "quote": "Item 605 : Approval of a First Amendment to the Subrecipient Grant Agreement with the County of San Diego for the Riverbed Encampment Resolution Funding Project."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "The evidence set is excerpt-level only; it does not include full contracts, full attachment tables, staff reports, or legislative files for key actions such as Item 605 or the July 22, 2024 Kettner/Vine presentation.",
+      "No payment ledger, vendor-level disbursement data, or year-end actuals table was retrieved, so appropriations cannot yet be tied to actual payments with confidence.",
+      "Some text is masked or truncated, which limits precise year-over-year totals and may hide relevant program names, fund details, or amounts.",
+      "The State Auditor example of the 26 percent benchmark and 6 percent actual exits does not identify the provider or contract number in the supplied excerpt, so contract-specific accountability remains unverified until the underlying file is identified.",
+      "The retrieved FY 2027 materials show a public-restroom closure but do not include any replacement-plan, location, utilization, or sanitation-work-order records, so net impacts on bathroom access and waste response remain unresolved.",
+      "Comparisons across years can mislead unless one-time Homekey capital spending is separated from recurring operating services, and unless excluded cross-department costs are added back in."
+    ]
+  },
+  "investigationLog": [
+    "Searched 'homelessness': 8 excerpts retrieved.",
+    "Searched 'shelter': 7 excerpts retrieved.",
+    "Searched 'permanent housing': 5 excerpts retrieved.",
+    "Searched 'contract': 5 excerpts retrieved.",
+    "Searched 'agenda': 4 excerpts retrieved.",
+    "City finance comparisons await both official operating budget and actuals snapshots.",
+    "Follow-up search '\"Riverbed Encampment Resolution Funding Project\"': 0 excerpts.",
+    "Follow-up search '\"Kettner Blvd and Vine St\" shelter': 0 excerpts.",
+    "Follow-up search '\"quarterly budget monitoring reports\" \"homelessness expenditures\"': 0 excerpts.",
+    "Follow-up search '\"Downtown public restrooms\" homelessness': 0 excerpts.",
+    "Passage read failed: Storage operation failed: Binder Error: No function matches the given name and argument types 'substr(VARCHAR, UBIGINT, INTEGER_LITERAL)'. You might need to add explicit type casts.\n\tCandidate functions:\n\tsubstr(VARCHAR, BIGINT, BIGINT) -> VARCHAR\n\tsubstr(VARCHAR, BIGINT) -> VARCHAR\n\n\nLINE 1: SELECT substr(f.extracted_text, ?3 + 1, 4800), length(f.extracted_...\n               ^",
+    "Passage read failed: Storage operation failed: Binder Error: No function matches the given name and argument types 'substr(VARCHAR, UBIGINT, INTEGER_LITERAL)'. You might need to add explicit type casts.\n\tCandidate functions:\n\tsubstr(VARCHAR, BIGINT, BIGINT) -> VARCHAR\n\tsubstr(VARCHAR, BIGINT) -> VARCHAR\n\n\nLINE 1: SELECT substr(f.extracted_text, ?3 + 1, 4800), length(f.extracted_...\n               ^",
+    "Passage read failed: Storage operation failed: Binder Error: No function matches the given name and argument types 'substr(VARCHAR, UBIGINT, INTEGER_LITERAL)'. You might need to add explicit type casts.\n\tCandidate functions:\n\tsubstr(VARCHAR, BIGINT, BIGINT) -> VARCHAR\n\tsubstr(VARCHAR, BIGINT) -> VARCHAR\n\n\nLINE 1: SELECT substr(f.extracted_text, ?3 + 1, 4800), length(f.extracted_...\n               ^",
+    "Follow-up search '\"Round 2 of the State of California Encampment Resolution Funding Program Rolling Grant\"': 0 excerpts.",
+    "Follow-up search '\"HSSD-funded homelessness expenditures\" memorandum': 0 excerpts.",
+    "Follow-up search '\"1,000-bed permanent emergency shelter\"': 0 excerpts.",
+    "Follow-up search '\"26 percent exits to permanent housing\"': 0 excerpts.",
+    "Passage read failed: Storage operation failed: Binder Error: No function matches the given name and argument types 'substr(VARCHAR, UBIGINT, INTEGER_LITERAL)'. You might need to add explicit type casts.\n\tCandidate functions:\n\tsubstr(VARCHAR, BIGINT, BIGINT) -> VARCHAR\n\tsubstr(VARCHAR, BIGINT) -> VARCHAR\n\n\nLINE 1: SELECT substr(f.extracted_text, ?3 + 1, 4800), length(f.extracted_...\n               ^",
+    "Passage read failed: Storage operation failed: Binder Error: No function matches the given name and argument types 'substr(VARCHAR, UBIGINT, INTEGER_LITERAL)'. You might need to add explicit type casts.\n\tCandidate functions:\n\tsubstr(VARCHAR, BIGINT, BIGINT) -> VARCHAR\n\tsubstr(VARCHAR, BIGINT) -> VARCHAR\n\n\nLINE 1: SELECT substr(f.extracted_text, ?3 + 1, 4800), length(f.extracted_...\n               ^",
+    "Passage read failed: Storage operation failed: Binder Error: No function matches the given name and argument types 'substr(VARCHAR, UBIGINT, INTEGER_LITERAL)'. You might need to add explicit type casts.\n\tCandidate functions:\n\tsubstr(VARCHAR, BIGINT, BIGINT) -> VARCHAR\n\tsubstr(VARCHAR, BIGINT) -> VARCHAR\n\n\nLINE 1: SELECT substr(f.extracted_text, ?3 + 1, 4800), length(f.extracted_...\n               ^",
+    "Completed 2 retrieval/query passes and a separate critical review. Exact citation quotes and meeting dates passed validation. Interpretations still require researcher review."
+  ],
+  "inputTokens": 68935,
+  "outputTokens": 52075
+}

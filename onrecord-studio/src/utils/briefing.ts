@@ -40,11 +40,11 @@ export interface BriefingProject {
 export function createDefaultBriefingProject(now = new Date()): BriefingProject {
   return {
     version: 1,
-    title: 'Commission on Police Practices presentation',
-    audience: 'Commission on Police Practices',
+    title: 'San Diego public accountability briefing',
+    audience: 'San Diego City Council',
     meetingDate: localDateInput(now),
     durationMinutes: 3,
-    objective: 'Present one documented police-practice concern, explain its community impact, and request a specific measurable action.',
+    objective: 'Present a documented concern about public spending or services, explain its community impact, and request a specific measurable action.',
     opening: '',
     requestedAction: '',
     evidence: [],

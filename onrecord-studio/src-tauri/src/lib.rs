@@ -9,6 +9,7 @@ pub mod licensing;
 mod normalization;
 pub mod parsers;
 pub mod provenance;
+pub mod research;
 pub mod setup;
 pub mod storage;
 pub mod types;
@@ -64,6 +65,31 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::maintenance::get_data_maintenance_status,
         commands::maintenance::set_data_maintenance_policy,
         commands::maintenance::run_data_maintenance,
+        commands::reconstruction::reconstruct_document_context,
+        commands::financial::get_financial_workspace,
+        commands::financial::save_financial_mapping,
+        commands::financial::run_financial_investigation,
+        commands::financial::evaluate_financial_scenario,
+        commands::casework::get_casework_state,
+        commands::casework::create_casework_case,
+        commands::casework::save_casework_case,
+        commands::casework::export_casework_packet,
+        commands::casework::preview_casework_import,
+        commands::casework::import_casework_packet,
+        commands::monitoring::get_monitoring_status,
+        commands::monitoring::refresh_monitoring_now,
+        commands::monitoring::save_monitoring_coverage,
+        commands::monitoring::save_monitoring_observation,
+        commands::review::get_review_workspace,
+        commands::review::save_finding_review,
+        commands::review::replay_review_evidence,
+        commands::review::save_public_relationship,
+        commands::review::get_investigation_evaluations,
+        commands::review::save_pilot_assessment,
+        commands::research::get_research_status,
+        commands::research::set_research_policy,
+        commands::research::run_research_now,
+        commands::research::set_research_action_state,
         commands::analysis_workbench::run_analytical_sql,
         commands::analysis_workbench::export_analytical_sql_csv,
         commands::query::query_audit_records,

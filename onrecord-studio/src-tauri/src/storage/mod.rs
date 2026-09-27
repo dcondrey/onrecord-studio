@@ -25,6 +25,8 @@ pub mod fts;
 pub mod legacy_import;
 pub mod maintenance;
 pub mod pii;
+pub mod reconstruction;
+pub mod research;
 pub mod sqlite;
 pub(crate) mod sqlite_snapshot;
 pub(crate) mod tabular;
@@ -34,3 +36,11 @@ pub use duckdb::DuckDbWorkspace;
 pub use pii::{mask_json_pii, mask_pii, PiiFinding, PiiKind, PiiMaskResult};
 pub use sqlite::{DocumentExtractionFinalization, DuckDbRepository};
 pub use vector::VectorIndex;
+
+pub mod review;
+
+pub mod financial;
+
+pub mod casework;
+
+pub mod monitoring;
