@@ -27,14 +27,14 @@ pub fn extract_commitments(text: &str) -> Vec<Commitment> {
             else {
                 return None;
             };
-            let matched = text.get(assertion.char_start..assertion.char_end)?;
+            let matched = text.get(assertion.byte_start..assertion.byte_end)?;
             if words(matched).iter().any(|word| word.text == "business") {
                 return None;
             }
             Some(Commitment {
                 days,
-                byte_start: assertion.char_start,
-                byte_end: assertion.char_end,
+                byte_start: assertion.byte_start,
+                byte_end: assertion.byte_end,
             })
         })
         .collect()

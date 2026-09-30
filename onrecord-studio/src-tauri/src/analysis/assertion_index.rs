@@ -25,8 +25,8 @@ pub struct Assertion {
     pub predicate: AssertionPredicate,
     pub value: AssertionValue,
     /// Byte offsets into the source text (regex match bounds); use for slicing the text.
-    pub char_start: usize,
-    pub char_end: usize,
+    pub byte_start: usize,
+    pub byte_end: usize,
     /// Character offsets, which is what a citation and the viewer's `characterStart` count in.
     /// Bytes and characters diverge on any non-ASCII text, so a byte offset cited as a character
     /// offset highlights the wrong span.
@@ -179,8 +179,8 @@ pub fn extract_assertions(text: &str) -> Vec<Assertion> {
             subject,
             predicate: AssertionPredicate::RetentionPeriod,
             value: AssertionValue::Days(days),
-            char_start: full.start(),
-            char_end: full.end(),
+            byte_start: full.start(),
+            byte_end: full.end(),
             character_start: character_offset(text, full.start()),
             character_end: character_offset(text, full.end()),
         });
@@ -208,8 +208,8 @@ pub fn extract_assertions(text: &str) -> Vec<Assertion> {
             subject: "response_time_commitment".to_string(),
             predicate: AssertionPredicate::ResponseTimeCommitment,
             value: AssertionValue::Days(days),
-            char_start: full.start(),
-            char_end: full.end(),
+            byte_start: full.start(),
+            byte_end: full.end(),
             character_start: character_offset(text, full.start()),
             character_end: character_offset(text, full.end()),
         });
@@ -233,8 +233,8 @@ pub fn extract_assertions(text: &str) -> Vec<Assertion> {
             subject: format!("fee_per_{category}"),
             predicate: AssertionPredicate::Fee,
             value: AssertionValue::Cents(cents),
-            char_start: full.start(),
-            char_end: full.end(),
+            byte_start: full.start(),
+            byte_end: full.end(),
             character_start: character_offset(text, full.start()),
             character_end: character_offset(text, full.end()),
         });
@@ -261,8 +261,8 @@ pub fn extract_assertions(text: &str) -> Vec<Assertion> {
             subject: format!("{kind}::{referent}"),
             predicate: AssertionPredicate::EffectiveDate,
             value: AssertionValue::Date(iso),
-            char_start: full.start(),
-            char_end: full.end(),
+            byte_start: full.start(),
+            byte_end: full.end(),
             character_start: character_offset(text, full.start()),
             character_end: character_offset(text, full.end()),
         });
@@ -294,8 +294,8 @@ pub fn extract_assertions(text: &str) -> Vec<Assertion> {
             subject: format!("{kind}::{}", id.to_lowercase()),
             predicate: AssertionPredicate::Amount,
             value: AssertionValue::Cents(cents),
-            char_start: full.start(),
-            char_end: full.end(),
+            byte_start: full.start(),
+            byte_end: full.end(),
             character_start: character_offset(text, full.start()),
             character_end: character_offset(text, full.end()),
         });
@@ -594,5 +594,35 @@ mod tests {
         assert!(tokens.contains(&"redevelopment".to_string()));
         assert!(!tokens.iter().any(|t| t == "please" || t == "records"));
         assert!(tokens.len() <= 8);
+    }
+}
+
+#[cfg(test)]
+mod offset_tests {
+    use super::extract_assertions;
+
+    #[test]
+    fn citations_count_characters_not_bytes() {
+        // Two-byte 'é's and a three-byte dash sit before the match, so the byte and character
+        // offsets of the same span differ; a citation must use the character ones.
+        let text = "Résumé — Personnel records will be retained for 3 years.";
+        let assertion = extract_assertions(text)
+            .into_iter()
+            .next()
+            .expect("retention assertion");
+        assert!(assertion.character_start < assertion.byte_start);
+        assert_eq!(
+            assertion.character_start,
+            text[..assertion.byte_start].chars().count()
+        );
+        let by_characters: String = text
+            .chars()
+            .skip(assertion.character_start)
+            .take(assertion.character_end - assertion.character_start)
+            .collect();
+        assert_eq!(
+            by_characters,
+            text[assertion.byte_start..assertion.byte_end]
+        );
     }
 }
