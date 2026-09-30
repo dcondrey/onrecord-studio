@@ -348,6 +348,16 @@ pub struct EntityPath {
     pub weakest_confidence_basis_points: Option<u16>,
 }
 
+/// The answer to a path trace. "Not connected within the hop budget" and "that id is not in the
+/// index" are different statements about the corpus, so they are never collapsed into one absence.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "outcome", rename_all = "camelCase")]
+pub enum EntityPathOutcome {
+    Found { path: EntityPath },
+    NotConnected { max_hops: usize },
+    UnknownEntity { entity_id: String },
+}
+
 /// An entity ranked by how much information flows through it in the current graph.
 ///
 /// `brokerage_score` is a degree-based approximation of betweenness centrality: real betweenness

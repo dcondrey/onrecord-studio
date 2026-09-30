@@ -132,6 +132,12 @@ export interface EntityPath {
   weakestConfidenceBasisPoints?: number | null;
 }
 
+/** Mirrors `EntityPathOutcome` (serde tag `outcome`, camelCase). An unknown id and an unconnected pair are different statements and never share a value. */
+export type EntityPathOutcome =
+  | { outcome: 'found'; path: EntityPath }
+  | { outcome: 'notConnected'; maxHops: number }
+  | { outcome: 'unknownEntity'; entityId: string };
+
 export interface EntityBroker {
   entity: CorpusEntityNode;
   brokerageScore: number;

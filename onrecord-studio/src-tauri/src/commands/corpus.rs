@@ -5,7 +5,7 @@ use crate::error::AppError;
 use crate::storage::corpus::CorpusIndex;
 use crate::types::{
     CorpusEntityNeighborhood, CorpusEntityNode, CorpusIndexStatus, CorpusPattern,
-    CorpusPatternQuery, EntityBroker, EntityPath,
+    CorpusPatternQuery, EntityBroker, EntityPathOutcome,
 };
 use tauri::State;
 
@@ -71,15 +71,16 @@ pub async fn get_corpus_entity_neighborhood(
 /// Shortest path between two entities, up to `max_hops` edges.
 ///
 /// `None` when the ids name entities that exist but the graph does not connect them within the
-/// budget — a real answer distinct from an error. `Some(EntityPath { hops: 0, .. })` when
-/// `from_entity_id == to_entity_id`, so a reader distinguishes "same node" from "unreachable".
+/// budget — a real answer distinct from an error, and distinct from an id the index does not
+/// hold. A zero-hop `Found` when `from_entity_id == to_entity_id`, so a reader distinguishes
+/// "same node" from "unreachable".
 #[tauri::command]
 pub async fn find_entity_paths(
     from_entity_id: String,
     to_entity_id: String,
     max_hops: Option<usize>,
     index: State<'_, CorpusIndex>,
-) -> Result<Option<EntityPath>, AppError> {
+) -> Result<EntityPathOutcome, AppError> {
     index
         .find_entity_paths(from_entity_id, to_entity_id, max_hops.unwrap_or(4))
         .await

@@ -6,8 +6,8 @@ use crate::integrity::digest_hex;
 use crate::types::{
     CorpusEntityEdge, CorpusEntityKind, CorpusEntityNeighborhood, CorpusEntityNode,
     CorpusEvidenceReference, CorpusIndexStatus, CorpusPattern, CorpusPatternKind,
-    CorpusPatternQuery, EntityBroker, EntityPath, EntityPathStep, EntityResolutionBasis,
-    EntityValidationGrade, RelationshipBasis, RelationshipKind,
+    CorpusPatternQuery, EntityBroker, EntityPath, EntityPathOutcome, EntityPathStep,
+    EntityResolutionBasis, EntityValidationGrade, RelationshipBasis, RelationshipKind,
 };
 use duckdb::{params, Connection, OptionalExt, Transaction};
 use sha2::{Digest, Sha256};
@@ -646,25 +646,33 @@ impl CorpusIndex {
         from_entity_id: String,
         to_entity_id: String,
         max_hops: usize,
-    ) -> Result<Option<EntityPath>, AppError> {
+    ) -> Result<EntityPathOutcome, AppError> {
         let max_hops = max_hops.clamp(1, 6);
         self.read("Corpus entity path", move |connection| {
-            let start_node = load_entity_node(connection, &from_entity_id)?;
-            let end_node = load_entity_node(connection, &to_entity_id)?;
-            let (Some(start_node), Some(end_node)) = (start_node, end_node) else {
-                return Ok(None);
+            let Some(start_node) = load_entity_node(connection, &from_entity_id)? else {
+                return Ok(EntityPathOutcome::UnknownEntity {
+                    entity_id: from_entity_id,
+                });
             };
+            let Some(end_node) = load_entity_node(connection, &to_entity_id)? else {
+                return Ok(EntityPathOutcome::UnknownEntity {
+                    entity_id: to_entity_id,
+                });
+            };
+            let not_connected = || Ok(EntityPathOutcome::NotConnected { max_hops });
             if from_entity_id == to_entity_id {
-                return Ok(Some(EntityPath {
-                    steps: vec![EntityPathStep {
-                        neighbor: start_node,
-                        edge_kind: RelationshipKind::CoOccurrence,
-                        edge_basis: RelationshipBasis::Computed,
-                        shared_document_count: 0,
-                    }],
-                    hops: 0,
-                    weakest_confidence_basis_points: None,
-                }));
+                return Ok(EntityPathOutcome::Found {
+                    path: EntityPath {
+                        steps: vec![EntityPathStep {
+                            neighbor: start_node,
+                            edge_kind: RelationshipKind::CoOccurrence,
+                            edge_basis: RelationshipBasis::Computed,
+                            shared_document_count: 0,
+                        }],
+                        hops: 0,
+                        weakest_confidence_basis_points: None,
+                    },
+                });
             }
             // BFS. `parents` records each visited node's predecessor + the edge that reached it.
             // Cap total nodes explored so a densely-connected graph doesn't turn one query into a
@@ -705,14 +713,14 @@ impl CorpusIndex {
                 frontier = next_frontier;
             }
             if !found {
-                return Ok(None);
+                return not_connected();
             }
             // Walk parents back from end to start to reconstruct the path.
             let mut reversed: Vec<(String, EdgeCarriage)> = Vec::new();
             let mut cursor = to_entity_id.clone();
             while cursor != from_entity_id {
                 let Some((parent, carriage)) = parents.get(&cursor) else {
-                    return Ok(None);
+                    return not_connected();
                 };
                 reversed.push((cursor.clone(), carriage.clone()));
                 cursor = parent.clone();
@@ -745,13 +753,15 @@ impl CorpusIndex {
             let last_is_end = steps.last().map(|step| step.neighbor.entity_id.as_str())
                 == Some(end_node.entity_id.as_str());
             if !last_is_end {
-                return Ok(None);
+                return not_connected();
             }
-            Ok(Some(EntityPath {
-                steps,
-                hops,
-                weakest_confidence_basis_points: weakest,
-            }))
+            Ok(EntityPathOutcome::Found {
+                path: EntityPath {
+                    steps,
+                    hops,
+                    weakest_confidence_basis_points: weakest,
+                },
+            })
         })
         .await
     }
@@ -4534,11 +4544,13 @@ mod tests {
         let index = CorpusIndex::open(&path).expect("the index must reopen");
 
         // A→C: exists at 2 hops through B.
-        let path_ac = index
+        let EntityPathOutcome::Found { path: path_ac } = index
             .find_entity_paths("a".to_string(), "c".to_string(), 4)
             .await
             .expect("the path query must run")
-            .expect("A and C are connected");
+        else {
+            panic!("A and C are connected");
+        };
         assert_eq!(path_ac.hops, 2);
         assert_eq!(path_ac.steps.first().unwrap().neighbor.entity_id, "a");
         assert_eq!(path_ac.steps.last().unwrap().neighbor.entity_id, "c");
@@ -4546,31 +4558,39 @@ mod tests {
         assert_eq!(path_ac.weakest_confidence_basis_points, Some(4000));
 
         // Same start and end is a real answer, not a failure.
-        let path_aa = index
+        let EntityPathOutcome::Found { path: path_aa } = index
             .find_entity_paths("a".to_string(), "a".to_string(), 4)
             .await
             .expect("the path query must run")
-            .expect("A→A is trivially connected");
+        else {
+            panic!("A→A is trivially connected");
+        };
         assert_eq!(path_aa.hops, 0);
         assert_eq!(path_aa.steps.len(), 1);
         assert!(path_aa.weakest_confidence_basis_points.is_none());
 
-        // Unreachable — E has no relationship rows — returns None.
+        // Unreachable — E has no relationship rows — is "not connected", never a fabricated path.
         let path_ae = index
             .find_entity_paths("a".to_string(), "e".to_string(), 4)
             .await
             .expect("the path query must run");
-        assert!(
-            path_ae.is_none(),
+        assert_eq!(
+            path_ae,
+            EntityPathOutcome::NotConnected { max_hops: 4 },
             "E is isolated, so the query has to say so honestly rather than fabricate a path",
         );
 
-        // An unknown identifier returns None the same way `entity_neighborhood` does.
+        // An unknown identifier is a different statement from an unconnected pair.
         let path_ax = index
             .find_entity_paths("a".to_string(), "no-such-entity".to_string(), 4)
             .await
             .expect("the path query must run");
-        assert!(path_ax.is_none());
+        assert_eq!(
+            path_ax,
+            EntityPathOutcome::UnknownEntity {
+                entity_id: "no-such-entity".to_string()
+            }
+        );
 
         // Brokers rank B and C above A/D/E because they are the graph's chokepoints.
         let brokers = index

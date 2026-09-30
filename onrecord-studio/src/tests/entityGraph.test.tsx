@@ -153,7 +153,7 @@ describe("EntityGraph", () => {
     );
     await screen.findAllByText("SECOND NEIGHBOUR");
 
-    resolvers.get("path:entity-slow")?.(null);
+    resolvers.get("path:entity-slow")?.({ outcome: "notConnected", maxHops: 4 });
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(screen.queryByText(/No path within 4 hops/)).toBeNull();
   });
@@ -171,11 +171,31 @@ describe("EntityGraph", () => {
     });
     fireEvent.submit(screen.getByRole("button", { name: "Trace" }));
     await waitFor(() => expect(resolvers.has("path:entity-slow")).toBe(true));
-    resolvers.get("path:entity-slow")?.(null);
+    resolvers.get("path:entity-slow")?.({ outcome: "notConnected", maxHops: 4 });
     await screen.findByText(/No path within 4 hops/);
 
     screen.getByRole("button", { name: /rtfhsd\.org/ }).click();
     await waitFor(() => expect(resolvers.has("entity-fast")).toBe(true));
     expect(screen.queryByText(/No path within 4 hops/)).toBeNull();
+  });
+
+  // An id the index does not hold is a different statement from two entities that are not
+  // connected; the trace must say which.
+  it("reports an unknown target id as unknown, not as not connected", async () => {
+    render(<EntityGraph />);
+    await waitFor(() => expect(resolvers.has("entity-slow")).toBe(true));
+    resolvers.get("entity-slow")?.(
+      neighborhood("entity-slow", "Housing Authority", "FIRST NEIGHBOUR"),
+    );
+    await screen.findAllByText("FIRST NEIGHBOUR");
+
+    fireEvent.change(screen.getByLabelText(/Find path to entity id/), {
+      target: { value: "entity-missing" },
+    });
+    fireEvent.submit(screen.getByRole("button", { name: "Trace" }));
+    await waitFor(() => expect(resolvers.has("path:entity-slow")).toBe(true));
+    resolvers.get("path:entity-slow")?.({ outcome: "unknownEntity", entityId: "entity-missing" });
+    await screen.findByText(/entity-missing is not in the entity index/);
+    expect(screen.queryByText(/not connected/)).toBeNull();
   });
 });
