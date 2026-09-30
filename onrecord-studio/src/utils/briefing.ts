@@ -82,7 +82,9 @@ export function loadBriefingProject(
       opening: boundedText(parsed.opening, '', 8_000),
       requestedAction: boundedText(parsed.requestedAction, '', 8_000),
       evidence: Array.isArray(parsed.evidence)
-        ? parsed.evidence.filter(isBriefingEvidence).slice(0, 200)
+        // Keep the newest 200, the same end `addBriefingEvidence` keeps, so a reload shows the
+        // evidence that was on screen before it.
+        ? parsed.evidence.filter(isBriefingEvidence).slice(-200)
         : [],
       autoDrafted: typeof parsed.autoDrafted === 'boolean' ? parsed.autoDrafted : false,
       evidenceTruncated:
