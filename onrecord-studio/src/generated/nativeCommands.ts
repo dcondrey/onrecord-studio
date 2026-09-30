@@ -30,7 +30,7 @@ export interface NativeCommandMap {
   list_top_corpus_entities: { args: { limit?: number | null }; result: Types.CorpusEntityNode[] };
   get_corpus_entity_neighborhood: { args: { entityId: string; limit?: number | null }; result: Types.CorpusEntityNeighborhood | null };
   get_document_entity_truncations: { args: { documentId: number; portalKey: string }; result: string[] };
-  find_entity_paths: { args: { fromEntityId: string; toEntityId: string; maxHops?: number | null }; result: Types.EntityPathOutcome };
+  find_entity_paths: { args: { fromEntityId: string; toEntityId: string; maxHops?: number | null }; result: Types.EntityPath | null };
   list_entity_brokers: { args: { subjectScope?: string | null; limit?: number | null }; result: Types.EntityBroker[] };
   get_embedding_model_status: { args: NoArgs; result: Types.EmbeddingModelStatus };
   initialize_embedding_model: { args: NoArgs; result: Types.EmbeddingModelStatus };

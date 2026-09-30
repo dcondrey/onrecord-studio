@@ -33,8 +33,8 @@ pub use c2pa::{
 pub use corpus::{
     CorpusEntityEdge, CorpusEntityKind, CorpusEntityNeighborhood, CorpusEntityNode,
     CorpusEvidenceReference, CorpusIndexStatus, CorpusPattern, CorpusPatternKind,
-    CorpusPatternQuery, EntityBroker, EntityPath, EntityPathOutcome, EntityPathStep,
-    EntityResolutionBasis, EntityValidationGrade, RelationshipBasis, RelationshipKind,
+    CorpusPatternQuery, EntityBroker, EntityPath, EntityPathStep, EntityResolutionBasis,
+    EntityValidationGrade, RelationshipBasis, RelationshipKind,
 };
 pub use investigation::{
     AuxiliaryEventInput, AuxiliaryImportResult, AuxiliaryStreamKind, CaseEvidencePackageResult,
