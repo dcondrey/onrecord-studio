@@ -228,3 +228,12 @@ Suggestions per meeting are ranked by the number of distinct reason kinds and ca
 
 ### C. Public-comment drafts
 Each suggestion carries an editable draft. It quotes only cited passages: the item, the matched agenda sentences, and for figures the stated figure and the observed table value. A stored finding is named by id and basis, never quoted, so a finding headline cannot become the commenter's assertion. The comment deadline and instructions are quoted only from agenda sentences that name a comment and a deadline (or a way to submit); otherwise the draft says "not recorded". The draft names its bases and states that it does not characterize anyone's motives or the lawfulness of any action.
+
+## 12. Plain-Language Layer
+`src/content/plainLanguage.ts` gives every `FindingKind` and every `VerificationState` three short statements for a non-specialist: what was observed, what it does not show, and what to do next. The finding card and inbox row show them behind an "In plain words" disclosure (`PlainLanguageDisclosure`), collapsed by default.
+
+### A. What it does and does not claim
+* It explains a finding; it never classifies one. The basis sentence under the text is derived from `isLegalClaimKind`, the same source as the basis chip, so a pattern signal cannot be upgraded and a counted comparison cannot be softened. Confidence and citations are unchanged and remain visible.
+* The tables are `Record`s over `FindingKind` and `VerificationState`, so a new variant fails `tsc` until it has text. `scripts/check-help-coverage.mjs` fails on the same omission, and on a key with an empty field, without a build.
+* `src/tests/plainLanguage.test.tsx` rejects accusatory wording for every kind, rejects wording of violation or breach for a kind or state that is not a legal claim, and requires the `LatencyOutlier` explanation to say it is a comparison with peers.
+* An evidence gap is an untested route. It is never explained as a finding and never as evidence of compliance or non-compliance.
