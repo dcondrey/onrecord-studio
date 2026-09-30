@@ -175,6 +175,11 @@ pub struct DocumentProvenanceVerification {
     #[serde(default = "default_signature_verification")]
     pub signature_verification: SignatureVerificationState,
     pub signature_issuer: Option<String>,
+    /// Serial number of the signing certificate, distinguishing two certificates that happen to
+    /// share an issuer or organization name. `None` unless the signature actually validated -- see
+    /// [`Self::signature_issuer`].
+    #[serde(default)]
+    pub signing_certificate_serial_number: Option<String>,
     pub signing_timestamp: Option<String>,
     pub assertion_count: usize,
     pub invalid_assertion_count: usize,
@@ -249,6 +254,10 @@ pub struct ProvenanceVerificationRecord {
     pub manifest_present: bool,
     pub is_cryptographically_signed: bool,
     pub signature_issuer: Option<String>,
+    /// `None` on a row written before the field was recorded, or when the signature did not
+    /// validate.
+    #[serde(default)]
+    pub signing_certificate_serial_number: Option<String>,
     pub signing_timestamp: Option<String>,
     /// `None` on a row written before the field was recorded.
     pub assertion_count: Option<usize>,

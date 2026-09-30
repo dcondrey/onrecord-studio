@@ -67,6 +67,52 @@ pub fn portal_key(value: &str) -> Result<&str, AppError> {
     Ok(value)
 }
 
+/// Rejects a raw IPC-supplied filesystem path before it reaches disk I/O. The analytical import
+/// and export commands accept a path the user chose through a native file dialog, which can point
+/// anywhere on disk by design -- there is no managed directory to contain it in, unlike
+/// `validate_report_path` in `commands/export.rs`, which targets a fixed reports directory. This
+/// only closes the symlink indirection: a scripted or compromised IPC caller (not just the
+/// intended dialog flow) could otherwise point either command at a symlink planted somewhere
+/// reachable, redirecting an import read or an export overwrite to a file the user never chose.
+pub fn validate_filesystem_target_path<'a>(
+    value: &'a str,
+    label: &str,
+    maximum_bytes: usize,
+) -> Result<&'a str, AppError> {
+    let value = required_text(value, label, maximum_bytes)?;
+    if let Ok(metadata) = std::fs::symlink_metadata(value) {
+        if metadata.file_type().is_symlink() {
+            return Err(AppError::PortalSecurity(format!(
+                "{label} is a symbolic link, which this operation does not permit"
+            )));
+        }
+    }
+    Ok(value)
+}
+
+/// As [`validate_filesystem_target_path`], plus requires the path to already exist as a regular
+/// file. Import has nothing to read if the path is missing, a directory, or a special file;
+/// export may legitimately target a path that does not exist yet, so it stops at the symlink
+/// check.
+///
+/// Reuses [`crate::parsers::source::inspect_regular_file`] rather than re-checking symlink and
+/// regular-file status here: it is the same gate `import_analytical_csv` runs just before reading
+/// the file, so this only moves that check earlier -- to the IPC boundary, before the CSV/XLSX
+/// parsing machinery even starts -- instead of adding a second, independent implementation of it.
+pub fn validate_import_source_path<'a>(
+    value: &'a str,
+    label: &str,
+    maximum_bytes: usize,
+) -> Result<&'a str, AppError> {
+    let value = required_text(value, label, maximum_bytes)?;
+    crate::parsers::source::inspect_regular_file(
+        Path::new(value),
+        "IMPORT",
+        crate::storage::tabular::MAX_SOURCE_BYTES,
+    )?;
+    Ok(value)
+}
+
 pub fn optional_portal_key(value: Option<String>) -> Result<Option<String>, AppError> {
     value
         .map(|value| {

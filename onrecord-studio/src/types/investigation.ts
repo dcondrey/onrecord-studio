@@ -113,12 +113,6 @@ export interface SourcePurge {
   localPaths: string[];
 }
 
-
-export interface PortalSyncStart {
-  portal: PortalRegistration;
-  syncRunId: string;
-}
-
 export interface RateLimitPolicy {
   burstCapacity: number;
   refillTokensPerSecond: number;
@@ -218,6 +212,8 @@ export interface DocumentProvenanceVerification {
   isCryptographicallySigned: boolean;
   signatureVerification: SignatureVerificationState;
   signatureIssuer: string | null;
+  /** Serial number of the signing certificate. `null` unless the signature actually validated. */
+  signingCertificateSerialNumber: string | null;
   signingTimestamp: string | null;
   assertionCount: number;
   invalidAssertionCount: number;
@@ -255,6 +251,7 @@ export interface ProvenanceVerificationRecord {
   manifestPresent: boolean;
   isCryptographicallySigned: boolean;
   signatureIssuer: string | null;
+  signingCertificateSerialNumber: string | null;
   signingTimestamp: string | null;
   assertionCount: number | null;
   invalidAssertionCount: number;
@@ -278,7 +275,6 @@ export interface PiiMaskResult {
     characterEnd: number;
     matchedCharacterCount: number;
     confidenceBasisPoints: number;
-    evidenceSha256: string;
   }>;
 }
 

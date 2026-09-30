@@ -756,7 +756,7 @@ impl ApiClient {
             ("nonce", connector.nonce.as_str()),
             ("skipBreadcrumbs", "1"),
         ];
-        let response = self
+        let (response, _host_permit) = self
             .execute_with_retries(&endpoint, "Google Drive connector request", || {
                 self.send_wordpress_google_drive_request(endpoint.clone(), &form)
             })
@@ -767,6 +767,7 @@ impl ApiClient {
             "Google Drive folder listing",
         )
         .await?;
+        drop(_host_permit);
         decode_wordpress_google_drive_listing(&bytes)
     }
 
@@ -1075,8 +1076,8 @@ impl ApiClient {
         &self,
         endpoint: Url,
         form: &[(&str, &str)],
-    ) -> Result<reqwest::Response, RetryDisposition> {
-        let _host_permit = self.reserve_host_slot(&endpoint).await?;
+    ) -> Result<(reqwest::Response, HostPermit), RetryDisposition> {
+        let host_permit = self.reserve_host_slot(&endpoint).await?;
         let response = self
             .client
             .post(endpoint.clone())
@@ -1105,7 +1106,7 @@ impl ApiClient {
             )));
         }
         validate_success_status("Google Drive connector endpoint", &endpoint, &response)?;
-        Ok(response)
+        Ok((response, host_permit))
     }
 
     async fn send_get_following_safe_redirects(
@@ -2840,7 +2841,7 @@ fn is_public_ipv4(address: Ipv4Addr) -> bool {
         || address.is_multicast()
         || a == 0
         || (a == 100 && (64..=127).contains(&b))
-        || (a == 192 && b == 0)
+        || (a == 192 && b == 0 && address.octets()[2] == 0)
         || (a == 192 && b == 0 && address.octets()[2] == 2)
         || (a == 198 && (b == 18 || b == 19))
         || (a == 198 && b == 51 && address.octets()[2] == 100)
@@ -4013,6 +4014,20 @@ mod url_security_tests {
             let address = Ipv4Addr::from(octets);
             assert!(is_public_ipv4(address), "{address} should be public");
         }
+    }
+
+    // SECURITY(security): only 192.0.0.0/24 (IETF Protocol Assignments) and 192.0.2.0/24
+    // (TEST-NET-1) are reserved inside 192.0.0.0/16; every other address in that block is
+    // ordinary allocated unicast space. Over-blocking the whole /16 would refuse a legitimate
+    // portal hosted there, which is exactly as much a correctness bug as under-blocking is a
+    // security one.
+    #[test]
+    fn only_the_reserved_192_0_slash24s_are_non_public() {
+        assert!(!is_public_ipv4(Ipv4Addr::new(192, 0, 0, 1)));
+        assert!(!is_public_ipv4(Ipv4Addr::new(192, 0, 2, 1)));
+        assert!(is_public_ipv4(Ipv4Addr::new(192, 0, 1, 1)));
+        assert!(is_public_ipv4(Ipv4Addr::new(192, 0, 3, 1)));
+        assert!(is_public_ipv4(Ipv4Addr::new(192, 0, 255, 1)));
     }
 
     // SECURITY(security): an IPv6 wrapper must not launder a private IPv4 destination. Each of

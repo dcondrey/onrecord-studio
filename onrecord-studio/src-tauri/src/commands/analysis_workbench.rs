@@ -1,4 +1,6 @@
-use crate::commands::validation::{required_text, validate_text};
+use crate::commands::validation::{
+    required_text, validate_filesystem_target_path, validate_import_source_path, validate_text,
+};
 use crate::error::AppError;
 use crate::storage::sqlite::DuckDbRepository;
 use crate::types::{
@@ -13,7 +15,7 @@ pub async fn import_analytical_dataset(
     repository: State<'_, DuckDbRepository>,
 ) -> Result<AnalyticalImportResult, AppError> {
     required_text(&input.display_name, "Dataset display name", 256)?;
-    required_text(&input.local_path, "Dataset file path", 4096)?;
+    validate_import_source_path(&input.local_path, "Dataset file path", 4096)?;
     if let Some(uri) = &input.source_uri {
         let url = reqwest::Url::parse(required_text(uri, "Original source URL", 4096)?).map_err(
             |_| AppError::DataParsing("Original source URL must be an absolute URL".into()),
@@ -84,8 +86,90 @@ pub async fn export_analytical_sql_csv(
     repository: State<'_, DuckDbRepository>,
 ) -> Result<SqlExportResult, AppError> {
     validate_text(&sql, "SQL", 64 * 1024)?;
-    required_text(&output_path, "Export path", 4096)?;
+    validate_filesystem_target_path(&output_path, "Export path", 4096)?;
     repository
         .export_restricted_sql_csv(&sql, &output_path, limit.unwrap_or(10_000))
         .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn export_path_validation_rejects_a_symlinked_target() {
+        let directory = tempfile::tempdir().unwrap();
+        let real = directory.path().join("real.csv");
+        std::fs::write(&real, b"data").unwrap();
+        let link = directory.path().join("link.csv");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        #[cfg(unix)]
+        {
+            let error =
+                validate_filesystem_target_path(link.to_str().unwrap(), "Export path", 4096)
+                    .unwrap_err();
+            assert!(
+                error.to_string().contains("symbolic link"),
+                "unexpected error: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn export_path_validation_accepts_a_target_that_does_not_exist_yet() {
+        let directory = tempfile::tempdir().unwrap();
+        let target = directory.path().join("new-export.csv");
+        assert!(
+            validate_filesystem_target_path(target.to_str().unwrap(), "Export path", 4096).is_ok()
+        );
+    }
+
+    #[test]
+    fn import_path_validation_rejects_a_path_that_does_not_exist() {
+        let directory = tempfile::tempdir().unwrap();
+        let missing = directory.path().join("missing.csv");
+        let error =
+            validate_import_source_path(missing.to_str().unwrap(), "Dataset file path", 4096)
+                .unwrap_err();
+        assert!(
+            error.to_string().contains("IMPORT_INSPECTION_FAILED"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn import_path_validation_rejects_a_directory() {
+        let directory = tempfile::tempdir().unwrap();
+        let error = validate_import_source_path(
+            directory.path().to_str().unwrap(),
+            "Dataset file path",
+            4096,
+        )
+        .unwrap_err();
+        assert!(
+            error.to_string().contains("regular, non-symlink file"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn import_path_validation_rejects_a_symlinked_source() {
+        let directory = tempfile::tempdir().unwrap();
+        let real = directory.path().join("real.csv");
+        std::fs::write(&real, b"data").unwrap();
+        let link = directory.path().join("link.csv");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        #[cfg(unix)]
+        {
+            let error =
+                validate_import_source_path(link.to_str().unwrap(), "Dataset file path", 4096)
+                    .unwrap_err();
+            assert!(
+                error.to_string().contains("non-symlink"),
+                "unexpected error: {error}"
+            );
+        }
+    }
 }

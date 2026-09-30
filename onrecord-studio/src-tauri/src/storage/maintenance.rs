@@ -201,14 +201,20 @@ impl DuckDbRepository {
             source_file_name: Some(candidate.file_name.clone()),
             expected_source_sha256: candidate.source_sha256,
         };
-        match self.import_analytical_csv(input).await {
+        // The snapshot write and its origin receipt must commit or roll back together: a crash
+        // between two separate transactions would leave a snapshot on disk that later
+        // maintenance/purge logic cannot tell apart from one nobody ever recorded an origin for.
+        let origin = (candidate.portal_key.clone(), candidate.document_id);
+        match self
+            .import_analytical_csv_recording_origin(input, Some(origin))
+            .await
+        {
             Ok(result) => {
-                let snapshot = result.snapshot_id.clone();
-                self.query_connection("Record automatic import origin", move |conn| {
-                    conn.execute("INSERT INTO data_maintenance_origins VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING", params![snapshot, candidate.portal_key, candidate.document_id]).map_err(storage)?;
-                    reconcile_city_finance_exports(conn)?;
-                    Ok(())
-                }).await?;
+                self.query_connection(
+                    "Verify published finance export coverage",
+                    reconcile_city_finance_exports,
+                )
+                .await?;
                 self.record_maintenance(key, "IMPORTED", format!("{}: {} rows imported, {} rejected. {}", candidate.file_name, result.imported_rows, result.rejected_rows, result.schema_warnings.join(" ")), 24).await?;
             },
             Err(error) => self.record_maintenance(key, "IMPORT_NEEDS_REVIEW", format!("{}: {error}. Other files continue; this file retries in 24 hours or when its source hash changes.", candidate.file_name), 24).await?,

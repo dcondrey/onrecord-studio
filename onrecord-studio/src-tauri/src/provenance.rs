@@ -64,6 +64,10 @@ pub struct AssetProvenance {
     pub manifest_present: bool,
     pub validation: Option<ManifestValidation>,
     pub signature_issuer: Option<String>,
+    /// Stable identifier for the signing certificate (its serial number), distinguishing two
+    /// certificates that happen to share an issuer or organization name. Gated the same way as
+    /// [`Self::signature_issuer`]: `None` unless the signature actually validated.
+    pub signing_certificate_serial_number: Option<String>,
     pub signing_timestamp: Option<String>,
     pub claim_generator: Option<String>,
     pub assertions: Vec<AssetAssertion>,
@@ -85,12 +89,14 @@ impl AssetProvenance {
     }
 
     /// Whether the asset carries a signature claim at all.
+    ///
+    /// Deliberately independent of [`Self::signature_issuer`], which is now gated to `Some` only
+    /// on a validated signature: an *invalid* manifest still claims a signature (that is what
+    /// failed to validate), so basing this on the issuer would render that claim as an absence.
+    /// `validation` is set whenever `c2pa::Reader` actually parsed and assessed a claim's
+    /// signature, which is exactly this condition, regardless of what it concluded.
     pub fn claims_signature(&self) -> bool {
-        self.signature_issuer.is_some()
-            || matches!(
-                self.validation,
-                Some(ManifestValidation::Valid | ManifestValidation::Trusted)
-            )
+        self.validation.is_some()
     }
 
     pub fn invalid_assertion_count(&self) -> usize {
@@ -195,7 +201,17 @@ fn from_reader(reader: &c2pa::Reader) -> AssetProvenance {
     );
     let active = reader.active_manifest();
     let claim_generator = active.and_then(|manifest| manifest.claim_generator().map(String::from));
-    let signature_issuer = active.and_then(|manifest| manifest.issuer());
+    // A cert-derived identity is only meaningful once the signature naming it has actually
+    // validated: surfacing an issuer or serial number read out of an Invalid manifest would render
+    // a claim the validation step already rejected as though it were confirmed. `is_tamper_evident`
+    // is exactly that condition (`Valid` or `Trusted`), already computed above.
+    let signature_issuer = active
+        .and_then(|manifest| manifest.issuer())
+        .filter(|_| is_tamper_evident);
+    let signing_certificate_serial_number = active
+        .and_then(|manifest| manifest.signature_info())
+        .and_then(|info| info.cert_serial_number.clone())
+        .filter(|_| is_tamper_evident);
     let actor_identifier = claim_generator
         .clone()
         .or_else(|| signature_issuer.clone())
@@ -264,14 +280,14 @@ fn from_reader(reader: &c2pa::Reader) -> AssetProvenance {
             });
         }
     }
-    let validation_statuses = reader
-        .validation_status()
-        .unwrap_or_default()
+    let top_level_statuses = reader.validation_status().unwrap_or_default();
+    let top_level_statuses_truncated = top_level_statuses.len() > MAX_STATUSES;
+    let validation_statuses = top_level_statuses
         .iter()
         .take(MAX_STATUSES)
         .map(validation_status_description)
         .collect::<Vec<_>>();
-    truncated |= reader.validation_status().unwrap_or_default().len() > MAX_STATUSES;
+    truncated |= top_level_statuses_truncated;
     let certificate_chain_trusted = validation == ManifestValidation::Trusted;
     let certificate_chain_diagnostics = if certificate_chain_trusted {
         vec!["The signing certificate chained to a configured trust anchor".to_string()]
@@ -298,7 +314,7 @@ fn from_reader(reader: &c2pa::Reader) -> AssetProvenance {
              relied on"
                 .to_string(),
         );
-        for status in reader.validation_status().unwrap_or_default() {
+        for status in top_level_statuses.iter().take(MAX_STATUSES) {
             findings.push(format!(
                 "C2PA validation status '{}'{}",
                 status.code(),
@@ -306,6 +322,15 @@ fn from_reader(reader: &c2pa::Reader) -> AssetProvenance {
                     .explanation()
                     .map(|explanation| format!(": {explanation}"))
                     .unwrap_or_default()
+            ));
+        }
+        if top_level_statuses_truncated {
+            // Absence-vs-measurement applies to what was dropped too: silently truncating findings
+            // would understate how broken the manifest is, exactly as `claim_graph.truncated` exists
+            // to say the claim graph itself was cut short.
+            findings.push(format!(
+                "{} additional C2PA validation status entries were omitted",
+                top_level_statuses.len() - MAX_STATUSES
             ));
         }
     } else if validation == ManifestValidation::Valid {
@@ -321,6 +346,7 @@ fn from_reader(reader: &c2pa::Reader) -> AssetProvenance {
         manifest_present: true,
         validation: Some(validation),
         signature_issuer,
+        signing_certificate_serial_number,
         signing_timestamp: active.and_then(|manifest| manifest.time()),
         claim_generator,
         assertions,
@@ -410,6 +436,12 @@ mod tests {
             SignatureVerificationState::Valid
         );
         assert!(intact.claims_signature());
+        // Every X.509 certificate carries a serial number, so a validated signature must surface
+        // it; this is the regression proof for the tampered case below.
+        assert!(
+            intact.signing_certificate_serial_number.is_some(),
+            "a validly signed manifest must surface the signing certificate's serial number"
+        );
         assert_eq!(intact.claim_graph.claims.len(), 1);
         assert!(intact.claim_graph.claims[0].is_active);
         assert!(intact.claim_graph.claims[0]
@@ -457,6 +489,25 @@ mod tests {
         assert!(
             !broken.findings.is_empty(),
             "an invalid manifest must explain itself"
+        );
+        // The cert bytes are untouched by tampering the asset -- only the hard-binding check
+        // fails -- so the SDK still parses the same issuer and serial number the intact read
+        // found. Surfacing either here would render a validation-rejected claim as though it were
+        // confirmed, which is exactly what the absence-vs-measurement gate on `from_reader` exists
+        // to prevent.
+        assert_eq!(
+            broken.signature_issuer, None,
+            "an invalid manifest's cert-derived issuer must read as absent, not as a name the \
+             validation step already rejected"
+        );
+        assert_eq!(
+            broken.signing_certificate_serial_number, None,
+            "an invalid manifest's cert-derived serial number must read as absent"
+        );
+        assert!(
+            broken.claims_signature(),
+            "an invalid manifest still claims a signature -- that is what failed to validate -- \
+             and must not read as though no signature was ever asserted"
         );
     }
 

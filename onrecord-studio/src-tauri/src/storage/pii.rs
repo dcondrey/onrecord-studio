@@ -1,5 +1,4 @@
 use crate::error::AppError;
-use crate::integrity::sha256_hex;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -38,7 +37,6 @@ pub struct PiiFinding {
     pub character_end: usize,
     pub matched_character_count: usize,
     pub confidence_basis_points: u16,
-    pub evidence_sha256: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -99,7 +97,6 @@ pub fn mask_pii(text: &str) -> Result<PiiMaskResult, AppError> {
             character_end: character_start + matched_character_count,
             matched_character_count,
             confidence_basis_points: candidate.confidence_basis_points,
-            evidence_sha256: sha256_hex(evidence.as_bytes()),
         });
         character_cursor += matched_character_count;
         copied_until = candidate.end;
@@ -203,8 +200,12 @@ pub fn mask_json_pii(value: &serde_json::Value) -> Result<serde_json::Value, App
 fn detect_ssns(text: &str) -> Vec<Candidate> {
     lexical_chunks(text)
         .into_iter()
-        .filter_map(|(start, end)| {
-            let candidate = &text[start..end];
+        .filter_map(|(chunk_start, chunk_end)| {
+            // A hyphen glued to the value ("SSN-123-45-6789") is a separator, not part of it.
+            let chunk = &text[chunk_start..chunk_end];
+            let candidate = chunk.trim_matches('-');
+            let start = chunk_start + (chunk.len() - chunk.trim_start_matches('-').len());
+            let end = start + candidate.len();
             let digits = candidate
                 .bytes()
                 .filter(u8::is_ascii_digit)
@@ -369,11 +370,18 @@ fn detect_street_addresses(text: &str) -> Vec<Candidate> {
                 continue;
             }
             let mut end_index = suffix_index;
-            if tokens.get(end_index + 1).is_some_and(|token| {
-                units.contains(&token.normalized.as_str()) || token.text == "#"
-            }) && tokens.get(end_index + 2).is_some()
-            {
-                end_index += 2;
+            if let Some(next) = tokens.get(end_index + 1) {
+                if next.text.starts_with('#') && next.normalized.is_empty() {
+                    if tokens.get(end_index + 2).is_some() {
+                        end_index += 2;
+                    }
+                } else if next.text.starts_with('#') {
+                    end_index += 1;
+                } else if units.contains(&next.normalized.as_str())
+                    && tokens.get(end_index + 2).is_some()
+                {
+                    end_index += 2;
+                }
             }
             candidates.push(Candidate {
                 kind: PiiKind::PrivateStreetAddress,
@@ -399,9 +407,35 @@ fn select_non_overlapping_candidates(mut candidates: Vec<Candidate>) -> Vec<Cand
     for candidate in candidates {
         if let Some(previous) = selected.last_mut() {
             if candidate.start < previous.end {
-                if candidate.kind.priority() > previous.kind.priority() {
-                    *previous = candidate;
+                if candidate.kind == previous.kind {
+                    // Sliding phone windows over one digit run overlap without either being the
+                    // real number ("2023 619-555-0198"). Keeping only the earliest window
+                    // leaves the tail of the real number in cleartext, so the span is unioned.
+                    previous.end = previous.end.max(candidate.end);
+                } else if candidate.kind.priority() > previous.kind.priority() {
+                    // The higher-priority kind wins the label either way. Whether it also keeps
+                    // the wider span depends on where it sits: a phone-shaped unit number ends
+                    // its address ("125 Ocean View Drive Unit 619-555-0198"), so replacing the
+                    // address span with the phone span left the house number and street in
+                    // cleartext; the whole span is kept. But an address candidate that continues
+                    // past the phone ("(619) 555-0198, address 440 Cedar Avenue") only exists
+                    // because the address detector accepts arbitrary interior tokens, so keeping
+                    // its span would swallow the genuine address that follows and merge two
+                    // findings into one. `previous.start <= candidate.start` by sort order.
+                    let terminates_previous = candidate.end >= previous.end;
+                    if terminates_previous {
+                        previous.kind = candidate.kind;
+                        previous.confidence_basis_points = candidate.confidence_basis_points;
+                        previous.end = candidate.end;
+                    } else {
+                        *previous = candidate;
+                    }
                 }
+                // A later-starting lower-priority candidate is dropped, not unioned: the address
+                // detector accepts arbitrary tokens between a house number and a street suffix,
+                // so "(619) 555-0198, address 440 Cedar Avenue" yields a spurious address
+                // candidate starting inside the phone number. Extending the phone span by it
+                // would swallow the genuine "440 Cedar Avenue" finding that follows.
                 continue;
             }
         }
@@ -693,5 +727,71 @@ mod boundary_tests {
             masked.get("123-45-6789").is_some(),
             "keys are not masked by design"
         );
+    }
+
+    // SECURITY(pii): a spurious earlier phone window must not truncate the real number's mask.
+    #[test]
+    fn overlapping_phone_windows_mask_the_whole_number() {
+        for input in ["Dated 2023 619-555-0198 end", "Room 12 (619) 555-0198."] {
+            let result = mask_pii(input).expect("mask");
+            assert!(
+                !result.masked_text.contains("0198"),
+                "{}",
+                result.masked_text
+            );
+            assert!(
+                !result.masked_text.contains("98."),
+                "{}",
+                result.masked_text
+            );
+            assert!(!result.masked_text.contains("8."), "{}", result.masked_text);
+            assert_eq!(result.findings.len(), 1, "{:?}", result.findings);
+        }
+    }
+
+    #[test]
+    fn a_hyphen_glued_to_an_ssn_does_not_hide_it() {
+        let input = "SSN-123-45-6789-";
+        let result = mask_pii(input).expect("mask");
+        assert_eq!(result.masked_text, "SSN-[MASKED_SSN]-");
+        assert_eq!(
+            &input[result.findings[0].byte_start..result.findings[0].byte_end],
+            "123-45-6789"
+        );
+    }
+
+    #[test]
+    fn a_compact_unit_marker_is_part_of_the_masked_address() {
+        let result = mask_pii("x 440 Cedar Avenue #4 y").expect("mask");
+        assert_eq!(result.masked_text, "x [MASKED_PRIVATE_ADDRESS] y");
+    }
+
+    // SECURITY(pii): a higher-priority overlap used to replace a lower-priority finding's span
+    // outright instead of unioning it, so whatever part of the wider finding the narrower one
+    // didn't itself cover survived in cleartext. A street address whose unit number is
+    // phone-shaped is exactly that: the address candidate spans the whole "125 ... 619-555-0198"
+    // range, the phone candidate only spans "619-555-0198", and the phone wins on priority.
+    // Before the fix this masked only the phone digits and left the house number and street name
+    // ("125 Ocean View Drive Unit") in the clear.
+    #[test]
+    fn a_higher_priority_overlap_does_not_leave_the_rest_of_the_lower_priority_finding_unmasked() {
+        let input = "125 Ocean View Drive Unit 619-555-0198 filed today";
+        let result = mask_pii(input).expect("mask");
+        assert!(
+            !result.masked_text.contains("125"),
+            "{}",
+            result.masked_text
+        );
+        assert!(
+            !result.masked_text.contains("Ocean View"),
+            "{}",
+            result.masked_text
+        );
+        assert!(
+            !result.masked_text.contains("619-555-0198"),
+            "{}",
+            result.masked_text
+        );
+        assert_eq!(result.masked_text, "[MASKED_PHONE] filed today");
     }
 }

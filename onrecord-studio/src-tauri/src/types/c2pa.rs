@@ -185,6 +185,9 @@ pub struct ProvenanceManifest {
     pub is_cryptographically_signed: bool,
     /// Issuer named by the manifest row. Not authenticated against any certificate or trust list.
     pub signature_issuer: Option<String>,
+    /// Serial number of the signing certificate, distinguishing two certificates that share an
+    /// issuer or organization name.
+    pub signing_certificate_serial_number: Option<String>,
     /// Signing time named by the manifest. Not a trusted timestamp.
     pub signing_timestamp: Option<String>,
     pub assertions: Vec<C2pAssertion>,

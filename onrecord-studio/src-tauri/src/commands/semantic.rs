@@ -74,10 +74,14 @@ pub async fn hybrid_search(
     filter.date_from = optional_text(filter.date_from, "Date-from filter", 64)?;
     filter.date_to = optional_text(filter.date_to, "Date-to filter", 64)?;
     let limit = limit.unwrap_or(25).clamp(1, 100);
-    let semantic = index
-        .semantic_search(&query, filter.clone(), limit)
-        .await
-        .unwrap_or_default();
+    // Lexical-only retrieval is the documented mode before the embedding model is initialized,
+    // so that absence is decided here explicitly. Any other failure from the semantic side is a
+    // real error and must surface rather than read as "no semantic matches".
+    let semantic = if index.model_ready().await {
+        index.semantic_search(&query, filter.clone(), limit).await?
+    } else {
+        Vec::new()
+    };
     let passages = repository
         .search_document_passages(&query, filter.clone(), limit)
         .await?;

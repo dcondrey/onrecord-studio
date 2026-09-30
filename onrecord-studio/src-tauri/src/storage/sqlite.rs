@@ -1312,6 +1312,21 @@ impl DuckDbRepository {
         ] {
             ensure_column(conn, "provenance_verification_log", column, definition)?;
         }
+        // Distinguishes two certificates that happen to share an issuer/organization name; nullable
+        // with no default, per the absence-vs-measurement rule, since "not recorded" and "no serial
+        // on this certificate" are different facts.
+        ensure_column(
+            conn,
+            "provenance_manifests",
+            "signing_certificate_serial_number",
+            "TEXT",
+        )?;
+        ensure_column(
+            conn,
+            "provenance_verification_log",
+            "signing_certificate_serial_number",
+            "TEXT",
+        )?;
         conn.execute_batch(
             "CREATE INDEX IF NOT EXISTS idx_provenance_verification_document
              ON provenance_verification_log(document_id, portal_subdomain, verified_at DESC);",
@@ -1777,6 +1792,10 @@ impl DuckDbRepository {
         .await
     }
 
+    /// Test-only: production ingestion always persists frontier tasks in a batch via
+    /// [`Self::persist_ingestion_frontier_tasks`]; this singular form exists for tests that need
+    /// to seed or assert on one task at a time.
+    #[cfg(test)]
     pub async fn persist_ingestion_frontier_task(
         &self,
         run_id: &str,
@@ -2739,31 +2758,6 @@ impl DuckDbRepository {
         .await
     }
 
-    pub async fn insert_or_update_portal(&self, subdomain: &str) -> Result<(), AppError> {
-        let subdomain = subdomain.trim();
-        if subdomain.is_empty() {
-            return Err(AppError::DataParsing(
-                "Portal subdomain must not be empty".to_string(),
-            ));
-        }
-
-        let base_url = format!("https://{subdomain}.nextrequest.com");
-        let subdomain = subdomain.to_string();
-        self.query_connection("Insert or update portal", move |conn| {
-            conn.execute(
-                "INSERT INTO portals (subdomain, display_name, base_url)
-             VALUES (?1, ?2, ?3)
-             ON CONFLICT(subdomain) DO UPDATE SET base_url = excluded.base_url",
-                params![subdomain, subdomain, base_url],
-            )
-            .map_err(|error| {
-                AppError::Internal(format!("Failed to persist portal metadata: {error}"))
-            })?;
-            Ok(())
-        })
-        .await
-    }
-
     pub async fn insert_or_update_document(
         &self,
         subdomain: &str,
@@ -3171,47 +3165,6 @@ impl DuckDbRepository {
         .await
     }
 
-    /// Local document search query execution block.
-    pub async fn full_text_search(&self, query_string: &str) -> Result<Vec<u64>, AppError> {
-        let tokens = core_query_tokens(query_string)
-            .map_err(|message| AppError::DataParsing(message.to_string()))?;
-        if tokens.is_empty() {
-            return Ok(Vec::new());
-        }
-        let placeholders = (1..=tokens.len())
-            .map(|index| format!("?{index}"))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let required_tokens = tokens.len();
-        self.query_connection("Full-text search", move |conn| {
-            let query = format!(
-                "SELECT document_id
-                 FROM (
-                    SELECT document_id, portal_subdomain
-                    FROM document_search_tokens
-                    WHERE token IN ({placeholders})
-                    GROUP BY document_id, portal_subdomain
-                    HAVING COUNT(*) = {required_tokens}
-                 ) matching_documents
-                 GROUP BY document_id
-                 ORDER BY document_id"
-            );
-            let mut stmt = conn.prepare(&query).map_err(|e| {
-                AppError::Internal(format!("FTS statement initialization breakdown: {}", e))
-            })?;
-            let rows = stmt
-                .query_map(params_from_iter(tokens.iter()), |row| row.get::<_, u64>(0))
-                .map_err(|e| AppError::Internal(format!("Search execution query error: {}", e)))?;
-            rows.map(|id| {
-                id.map_err(|e| {
-                    AppError::Internal(format!("Failed to decode an FTS document identifier: {e}"))
-                })
-            })
-            .collect()
-        })
-        .await
-    }
-
     pub async fn list_vector_source_documents(
         &self,
     ) -> Result<Vec<VectorSourceDocument>, AppError> {
@@ -3294,6 +3247,21 @@ impl DuckDbRepository {
     pub async fn import_analytical_csv(
         &self,
         request: AnalyticalImportRequest,
+    ) -> Result<AnalyticalImportResult, AppError> {
+        self.import_analytical_csv_recording_origin(request, None)
+            .await
+    }
+
+    /// As [`Self::import_analytical_csv`], and when `automatic_origin` is given, also records the
+    /// `data_maintenance_origins` receipt for it inside the same transaction as the snapshot
+    /// write. The two have to commit or roll back together: a crash between two separate
+    /// transactions would leave a snapshot on disk with no origin receipt, which is exactly what
+    /// later maintenance and purge logic uses to tell an automatic import from an intentionally
+    /// partial manual one.
+    pub(crate) async fn import_analytical_csv_recording_origin(
+        &self,
+        request: AnalyticalImportRequest,
+        automatic_origin: Option<(String, u64)>,
     ) -> Result<AnalyticalImportResult, AppError> {
         let dataset_kind = request.dataset_kind.clone();
         let local_path = request.local_path.clone();
@@ -3495,6 +3463,7 @@ impl DuckDbRepository {
         let snapshot_for_tx = snapshot_id.clone();
         let table_for_tx = table_name.clone();
         let latest_view_for_tx = latest_view_name.clone();
+        let origin_for_tx = automatic_origin;
         self.query_connection("Analytical CSV import", move |conn| {
             let tx = conn.transaction().map_err(|error| AppError::Storage(format!("Failed to begin analytical import: {error}")))?;
             tx.execute(&format!("DROP TABLE IF EXISTS {}", quote_ident(&table_for_tx)), [])
@@ -3589,6 +3558,12 @@ impl DuckDbRepository {
             }
             ledger.flush().map_err(|error| AppError::Storage(format!("Failed to flush analytical row ledger: {error}")))?;
             drop(ledger);
+            if let Some((portal_key, document_id)) = origin_for_tx.as_ref() {
+                tx.execute(
+                    "INSERT INTO data_maintenance_origins VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING",
+                    params![snapshot_for_tx, portal_key, document_id],
+                ).map_err(|error| AppError::Storage(format!("Failed to record the automatic-import origin receipt: {error}")))?;
+            }
             tx.commit().map_err(|error| AppError::Storage(format!("Failed to commit analytical import: {error}")))?;
             Ok(())
         }).await?;
@@ -3820,15 +3795,14 @@ impl DuckDbRepository {
         // caller could point it at a symlink planted somewhere reachable to overwrite an
         // arbitrary file (e.g. a shell profile or LaunchAgents entry) through an indirection the
         // user never saw. Overwriting an existing *regular* file the user re-selected is a
-        // legitimate re-export and is intentionally still allowed.
-        if let Ok(metadata) = std::fs::symlink_metadata(output_path) {
-            if metadata.file_type().is_symlink() {
-                return Err(AppError::PortalSecurity(
-                    "The export target is a symbolic link, which this export does not permit"
-                        .to_string(),
-                ));
-            }
-        }
+        // legitimate re-export and is intentionally still allowed. The IPC command already runs
+        // this same check before the request reaches here; it is repeated at the point of the
+        // actual write, through the one shared implementation, rather than trusted from upstream.
+        crate::commands::validation::validate_filesystem_target_path(
+            output_path,
+            "Export path",
+            crate::commands::validation::MAXIMUM_PATH_BYTES,
+        )?;
         let mut writer = csv::Writer::from_path(output_path)
             .map_err(|error| AppError::Storage(format!("Failed to create CSV export: {error}")))?;
         writer
@@ -4845,62 +4819,6 @@ impl DuckDbRepository {
             documents_removed,
             requests_removed,
             local_paths,
-        })
-        })
-        .await
-    }
-
-    /// Submits manual case verification details and updates investigator flags.
-    pub async fn record_manual_case_audit(
-        &self,
-        audit_id: &str,
-        request_id: u64,
-        subdomain: &str,
-        notes: Option<&str>,
-        status: &str,
-        integrity_flags: &[String],
-    ) -> Result<(), AppError> {
-        let audit_id = audit_id.to_string();
-        let subdomain = subdomain.to_string();
-        let notes = notes.map(str::to_string);
-        let status = status.to_string();
-        let integrity_flags = integrity_flags.to_vec();
-        self.query_connection("Record manual case audit", move |conn| {
-        execute_transaction(conn, "manual case audit", |tx| {
-            tx.execute(
-            "INSERT INTO case_audits (audit_id, target_request_id, target_subdomain, auditor_notes, verified_at, verification_status)
-             VALUES (?1, ?2, ?3, ?4, strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'), ?5)
-             ON CONFLICT(audit_id) DO UPDATE SET
-                auditor_notes = excluded.auditor_notes,
-                verified_at = excluded.verified_at,
-                verification_status = excluded.verification_status",
-            params![audit_id, request_id, subdomain, notes, status],
-            ).map_err(|e| AppError::Internal(format!("Audit envelope update statement failure: {}", e)))?;
-
-            tx.execute(
-                "DELETE FROM document_integrity_flags WHERE audit_id = ?1",
-                params![audit_id],
-            )
-            .map_err(|e| {
-                AppError::Internal(format!("Failed to clear stale integrity parameters: {}", e))
-            })?;
-
-            let mut insert = tx
-                .prepare_cached(
-                    "INSERT INTO document_integrity_flags (audit_id, flag_type) VALUES (?1, ?2)",
-                )
-                .map_err(|e| {
-                    AppError::Internal(format!(
-                        "Failed to prepare case integrity parameters: {}",
-                        e
-                    ))
-                })?;
-            for flag in &integrity_flags {
-                insert.execute(params![audit_id, flag]).map_err(|e| {
-                    AppError::Internal(format!("Failed to map case integrity parameters: {}", e))
-                })?;
-            }
-            Ok(())
         })
         })
         .await
@@ -6231,6 +6149,9 @@ impl DuckDbRepository {
             is_cryptographically_signed: asset_provenance.claims_signature(),
             signature_verification,
             signature_issuer: asset_provenance.signature_issuer.clone(),
+            signing_certificate_serial_number: asset_provenance
+                .signing_certificate_serial_number
+                .clone(),
             signing_timestamp: asset_provenance.signing_timestamp.clone(),
             assertion_count,
             invalid_assertion_count,
@@ -6271,9 +6192,10 @@ impl DuckDbRepository {
                 chain_of_custody_confirmed, verification_errors_json,
                 recorded_digest_source, signature_verification, provenance_confidence,
                 text_projection_matches, evidence_file_present, assertion_count,
-                signature_issuer, signing_timestamp, text_projection_sha256
+                signature_issuer, signing_timestamp, text_projection_sha256,
+                signing_certificate_serial_number
              ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
-                       ?17, ?18, ?19, ?20, ?21)",
+                       ?17, ?18, ?19, ?20, ?21, ?22)",
                     params![
                         uuid::Uuid::new_v4().to_string(),
                         document_id,
@@ -6300,6 +6222,7 @@ impl DuckDbRepository {
                         result.signature_issuer,
                         result.signing_timestamp,
                         result.text_projection_sha256,
+                        result.signing_certificate_serial_number,
                     ],
                 )
                 .map_err(|error| {
@@ -6337,7 +6260,8 @@ impl DuckDbRepository {
                         chain_of_custody_confirmed, verification_errors_json,
                         recorded_digest_source, signature_verification, provenance_confidence,
                         text_projection_matches, evidence_file_present, assertion_count,
-                        signature_issuer, signing_timestamp, text_projection_sha256
+                        signature_issuer, signing_timestamp, text_projection_sha256,
+                        signing_certificate_serial_number
                      FROM provenance_verification_log
                      WHERE document_id = ?1 AND portal_subdomain = ?2
                      ORDER BY verified_at DESC, verification_id DESC
@@ -6537,6 +6461,7 @@ struct RawProvenanceVerificationRecord {
     signature_issuer: Option<String>,
     signing_timestamp: Option<String>,
     text_projection_sha256: Option<String>,
+    signing_certificate_serial_number: Option<String>,
 }
 
 /// Replaces the recorded manifest and assertions for a document with what the asset carries now.
@@ -6573,8 +6498,9 @@ fn record_asset_manifest(
     tx.execute(
         "INSERT INTO provenance_manifests (
             document_id, portal_subdomain, file_hash_sha256,
-            is_cryptographically_signed, signature_issuer, signing_timestamp
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            is_cryptographically_signed, signature_issuer, signing_timestamp,
+            signing_certificate_serial_number
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         params![
             document_id,
             portal_key,
@@ -6582,6 +6508,7 @@ fn record_asset_manifest(
             provenance.claims_signature(),
             provenance.signature_issuer,
             provenance.signing_timestamp,
+            provenance.signing_certificate_serial_number,
         ],
     )
     .map_err(|error| AppError::Provenance(format!("Failed to record the manifest: {error}")))?;
@@ -6636,6 +6563,7 @@ fn map_provenance_verification_record(
         signature_issuer: row.get(18)?,
         signing_timestamp: row.get(19)?,
         text_projection_sha256: row.get(20)?,
+        signing_certificate_serial_number: row.get(21)?,
     })
 }
 
@@ -6660,6 +6588,7 @@ fn convert_provenance_verification_record(
         manifest_present: raw.manifest_present,
         is_cryptographically_signed: raw.is_cryptographically_signed,
         signature_issuer: raw.signature_issuer,
+        signing_certificate_serial_number: raw.signing_certificate_serial_number,
         signing_timestamp: raw.signing_timestamp,
         assertion_count: raw
             .assertion_count
@@ -7906,10 +7835,12 @@ fn retire_fk_parent_rows(
     let transaction = conn.transaction().map_err(|error| {
         AppError::Storage(format!("Failed to open the {table} removal: {error}"))
     })?;
+    let quoted_table = quote_ident(table);
+    let quoted_column = quote_ident(column);
     for id in ids {
         transaction
             .execute(
-                &format!("DELETE FROM {table} WHERE {column} = ?1"),
+                &format!("DELETE FROM {quoted_table} WHERE {quoted_column} = ?1"),
                 params![id],
             )
             .map_err(|error| AppError::Storage(format!("{retry_message}: {error}")))?;
@@ -10779,6 +10710,108 @@ mod tests {
         );
     }
 
+    /// Reproduces a database written before the certificate-serial column existed, on both tables
+    /// it belongs to, and proves the upgrade adds it as a working, nullable column rather than
+    /// just making `run_migrations` stop erroring. A fresh database never exercises this path: the
+    /// base schema creates the column outright and `ensure_column` is a no-op.
+    ///
+    /// Builds the legacy shape directly (per CLAUDE.md) rather than dropping the column from an
+    /// already-migrated database: `provenance_assertions` carries a foreign key to
+    /// `provenance_manifests`, which is the same family of constraint that refuses `DROP COLUMN`
+    /// on `documents`/`portals`/`legal_statutes`, so stripping a column back out is not a safe way
+    /// to reproduce this shape. The primary key is kept because that foreign key needs it; the
+    /// (unrelated) foreign key to `documents` is omitted since this test never touches it.
+    #[tokio::test]
+    async fn signing_certificate_serial_number_is_added_to_a_database_that_predates_it() {
+        const LEGACY_PROVENANCE_TABLES: &str = "
+            CREATE TABLE provenance_manifests (
+                document_id BIGINT NOT NULL,
+                portal_subdomain TEXT NOT NULL,
+                file_hash_sha256 TEXT NOT NULL,
+                is_cryptographically_signed BIGINT DEFAULT 0,
+                signature_issuer TEXT,
+                signing_timestamp TEXT,
+                PRIMARY KEY (document_id, portal_subdomain)
+            );
+            CREATE TABLE provenance_verification_log (
+                verification_id TEXT PRIMARY KEY,
+                document_id BIGINT NOT NULL,
+                portal_subdomain TEXT NOT NULL,
+                verified_at TEXT NOT NULL,
+                expected_sha256 TEXT,
+                computed_sha256 TEXT NOT NULL,
+                hash_matches BIGINT NOT NULL,
+                manifest_present BIGINT NOT NULL,
+                is_cryptographically_signed BIGINT NOT NULL,
+                invalid_assertion_count BIGINT NOT NULL,
+                chain_of_custody_confirmed BIGINT NOT NULL,
+                verification_errors_json TEXT NOT NULL
+            );
+        ";
+
+        let repository =
+            DuckDbRepository::new(Path::new(":memory:")).expect("DuckDB core must open");
+        {
+            let connection = repository.conn.lock().await;
+            connection
+                .execute_batch(LEGACY_PROVENANCE_TABLES)
+                .expect("the pre-upgrade provenance shape must be creatable");
+            connection
+                .execute(
+                    "INSERT INTO provenance_manifests (
+                        document_id, portal_subdomain, file_hash_sha256,
+                        is_cryptographically_signed, signature_issuer, signing_timestamp
+                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    params![
+                        DOCUMENT_ID,
+                        PORTAL_SUBDOMAIN,
+                        "deadbeef",
+                        true,
+                        "Legacy Issuer",
+                        "2020-01-01T00:00:00Z",
+                    ],
+                )
+                .expect("a manifest recorded before the upgrade must insert");
+        }
+
+        repository.run_migrations(MIGRATION).await.expect(
+            "the upgrade path must add the certificate-serial columns to a populated database",
+        );
+
+        let connection = repository.conn.lock().await;
+        let restored: Option<String> = connection
+            .query_row(
+                "SELECT signing_certificate_serial_number FROM provenance_manifests
+                 WHERE document_id = ?1 AND portal_subdomain = ?2",
+                params![DOCUMENT_ID, PORTAL_SUBDOMAIN],
+                |row| row.get(0),
+            )
+            .expect("the pre-upgrade manifest row must remain readable");
+        assert_eq!(
+            restored, None,
+            "a manifest recorded before this column existed cannot be backfilled with a serial \
+             number"
+        );
+
+        connection
+            .execute(
+                "UPDATE provenance_manifests
+                 SET signing_certificate_serial_number = ?1
+                 WHERE document_id = ?2 AND portal_subdomain = ?3",
+                params!["01:23:45:67", DOCUMENT_ID, PORTAL_SUBDOMAIN],
+            )
+            .expect("the added column must accept a write");
+        let recorded: Option<String> = connection
+            .query_row(
+                "SELECT signing_certificate_serial_number FROM provenance_manifests
+                 WHERE document_id = ?1 AND portal_subdomain = ?2",
+                params![DOCUMENT_ID, PORTAL_SUBDOMAIN],
+                |row| row.get(0),
+            )
+            .expect("the written value must be readable");
+        assert_eq!(recorded, Some("01:23:45:67".to_string()));
+    }
+
     /// DuckDB's ADD COLUMN rule, measured against the linked library rather than carried over
     /// from a CLI or a release note. The shape of every `ensure_column` definition depends on it,
     /// and a future DuckDB bump that adds support should surface here rather than silently leave
@@ -11041,20 +11074,6 @@ mod tests {
             .await
             .expect("the drain must project the oversized document");
 
-        assert_eq!(
-            repository.full_text_search("alpha").await.unwrap(),
-            vec![DOCUMENT_ID as u64],
-            "a term inside the indexed prefix must still match"
-        );
-        assert!(
-            repository
-                .full_text_search("sentinelbeyondcap")
-                .await
-                .unwrap()
-                .is_empty(),
-            "a term past the cap is not in the projection"
-        );
-
         let connection = repository.conn.lock().await;
         let indexed_characters: Option<i64> = connection
             .query_row(
@@ -11169,7 +11188,6 @@ mod tests {
             .await
             .expect("the background drain must project the legacy row");
         assert_eq!(repository.pending_search_index_documents(), 0);
-        let document_id = DOCUMENT_ID as u64;
 
         {
             let connection = repository.conn.lock().await;
@@ -11200,24 +11218,6 @@ mod tests {
                 None,
                 25
             )
-            .await
-            .unwrap()
-            .is_empty());
-
-        assert!(repository
-            .full_text_search("ncampmen")
-            .await
-            .unwrap()
-            .is_empty());
-        assert_eq!(
-            repository
-                .full_text_search("encampment notice")
-                .await
-                .unwrap(),
-            vec![document_id]
-        );
-        assert!(repository
-            .full_text_search("encampment absent")
             .await
             .unwrap()
             .is_empty());
@@ -11898,14 +11898,6 @@ mod tests {
             assert_eq!(indexed_row.0, 1);
             assert_eq!(indexed_row.1, "sweep [REDACTED] [REDACTED]");
         }
-
-        assert_eq!(
-            repository
-                .full_text_search("sweep")
-                .await
-                .expect("search must succeed"),
-            vec![DOCUMENT_ID as u64]
-        );
     }
 
     #[tokio::test]
@@ -12032,31 +12024,6 @@ mod tests {
                 .expect("heavy flag count must decode");
             assert_eq!(heavy_flag_count, 0);
         }
-
-        assert!(repository
-            .full_text_search("sweep")
-            .await
-            .expect("old token search must succeed")
-            .is_empty());
-        assert_eq!(
-            repository
-                .full_text_search("retention")
-                .await
-                .expect("new token search must succeed"),
-            vec![DOCUMENT_ID as u64]
-        );
-        assert_eq!(
-            repository
-                .full_text_search("ordinary retention")
-                .await
-                .expect("all-term search must succeed"),
-            vec![DOCUMENT_ID as u64]
-        );
-        assert!(repository
-            .full_text_search("sweep retention")
-            .await
-            .expect("all-term search must succeed")
-            .is_empty());
     }
 
     #[tokio::test]

@@ -140,6 +140,12 @@ impl VectorIndex {
         .await?
     }
 
+    /// Whether a query can be embedded right now; the same condition [`Self::semantic_search`]
+    /// refuses on, without `model_status`'s artifact directory scan.
+    pub async fn model_ready(&self) -> bool {
+        self.model.lock().await.is_some()
+    }
+
     pub async fn model_status(&self) -> Result<EmbeddingModelStatus, AppError> {
         let (artifact_count, manifest_sha) = artifact_manifest(&self.cache_dir)?;
         let ready = self.model.lock().await.is_some();

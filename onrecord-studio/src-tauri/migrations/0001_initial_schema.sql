@@ -285,6 +285,7 @@ CREATE TABLE IF NOT EXISTS provenance_manifests (
     file_hash_sha256 TEXT NOT NULL,
     is_cryptographically_signed BIGINT DEFAULT 0,
     signature_issuer TEXT,
+    signing_certificate_serial_number TEXT,
     signing_timestamp TEXT,
     PRIMARY KEY (document_id, portal_subdomain),
     FOREIGN KEY (document_id, portal_subdomain) REFERENCES documents(id, portal_subdomain)
@@ -318,6 +319,7 @@ CREATE TABLE IF NOT EXISTS provenance_verification_log (
     evidence_file_present BOOLEAN,
     assertion_count BIGINT,
     signature_issuer TEXT,
+    signing_certificate_serial_number TEXT,
     signing_timestamp TEXT,
     text_projection_sha256 TEXT,
     -- Retained for compatibility. True only at TRUSTED_CHAIN_OF_CUSTODY, which no code path in
