@@ -336,6 +336,7 @@ pub(crate) fn purge_automatic_origins(
 ) -> Result<Vec<String>, AppError> {
     super::review::purge_review_references(conn, portal, document)?;
     super::monitoring::purge_monitoring_references(conn, portal, document)?;
+    super::watchlists::purge_watchlist_references(conn, portal, document)?;
     super::casework::purge_casework_references(conn, portal, document.map(|id| id as u64))?;
     super::research::purge_research_references(conn, portal, document)?;
     let mut retired = Vec::new();

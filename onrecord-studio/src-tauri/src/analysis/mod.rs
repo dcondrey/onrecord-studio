@@ -29,6 +29,7 @@ pub mod budget_lines;
 pub mod facility_coverage;
 
 pub mod monitoring;
+pub mod watchlists;
 
 pub mod assertion_index;
 

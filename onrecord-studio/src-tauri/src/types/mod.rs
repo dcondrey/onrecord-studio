@@ -88,6 +88,9 @@ pub use casework::*;
 pub mod monitoring;
 pub use monitoring::*;
 
+pub mod watchlists;
+pub use watchlists::*;
+
 pub mod story_desk;
 pub use story_desk::*;
 pub mod lead_dossier;

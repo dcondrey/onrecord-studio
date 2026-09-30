@@ -62,6 +62,7 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
     tauri::async_runtime::block_on(repository.initialize_review())?;
     tauri::async_runtime::block_on(repository.initialize_casework())?;
     tauri::async_runtime::block_on(repository.initialize_monitoring())?;
+    tauri::async_runtime::block_on(repository.initialize_watchlists())?;
     // Reclaims WAL growth from the previous session's writes before the queue runtime and
     // analytics nodes start making their own. Never fatal: a failed CHECKPOINT is a missed
     // housekeeping opportunity, not a reason to leave the whole application unlaunchable the way

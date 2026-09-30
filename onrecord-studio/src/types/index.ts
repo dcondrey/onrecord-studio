@@ -20,6 +20,7 @@ export * from "./financial";
 export * from "./facilities";
 export * from "./casework";
 export * from "./monitoring";
+export * from "./watchlists";
 
 export * from "./findings";
 export * from "./storyDesk";

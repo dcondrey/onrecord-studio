@@ -49,4 +49,6 @@ pub mod casework;
 
 pub mod monitoring;
 
+pub mod watchlists;
+
 pub mod findings;
