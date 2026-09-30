@@ -1,0 +1,56 @@
+[
+  {
+    "id": "starter-sets",
+    "title": "Starter sets",
+    "group": "Getting started",
+    "summary": "One-click bundles of public San Diego sources and public-records portals, added through the same path as a source you type in.",
+    "keywords": [
+      "starter",
+      "set",
+      "bundle",
+      "first run",
+      "budget",
+      "actuals",
+      "council",
+      "police",
+      "open data",
+      "records portal",
+      "nextrequest",
+      "public records act"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "Starter sets appear where you have no sources yet, and under Browse sources and add records. Each set lists its sources with what they are, who publishes them, what the publisher says about reuse, and the date the address was last checked."
+        ]
+      },
+      {
+        "heading": "Adding a set",
+        "items": [
+          "Choosing a set fetches nothing. A confirmation names every site that would be contacted; only Fetch starts the download.",
+          "Sources are added one at a time, each with the crawl limits of its built-in source entry.",
+          "A source already in your library is skipped, so adding a set again never makes a second copy."
+        ]
+      },
+      {
+        "heading": "When a source does not load",
+        "items": [
+          "It is marked Unavailable with the reason and recorded in the activity log. It is never shown as a source with no records.",
+          "The other sources in the set still run. Adding the set again retries only the sources that are not in your library.",
+          "Public-records portals are where a request is filed. Adding one collects requests and documents already released, not a request of yours."
+        ]
+      },
+      {
+        "heading": "What the dates mean",
+        "items": [
+          "Verified on a date means the address was fetched and matched its description that day. It does not mean the page still exists, is complete, or may be redistributed.",
+          "When no reuse terms were found the row says so. That is not permission."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": ["starter_sets"],
+    "related": ["sources"]
+  }
+]
