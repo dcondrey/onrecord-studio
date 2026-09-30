@@ -1639,12 +1639,15 @@ mod tests {
             "{beyond_evaluation:?}"
         );
 
-        let ambiguous = first("Total expenditures of $120 in FY 2023 were reported.");
+        // No fund is named and the budget role carries four distinct funds, so the claim cannot
+        // be bound. (The actual role holds a single fund, so an unstated fund binds to it there.)
+        let ambiguous = first("The adopted budget of $100 for FY 2023 was approved.");
+        let ambiguous_evaluation = evaluator
+            .evaluate(&repo, "sandiego", &ambiguous)
+            .await
+            .unwrap();
         assert!(matches!(
-            evaluator
-                .evaluate(&repo, "sandiego", &ambiguous)
-                .await
-                .unwrap(),
+            ambiguous_evaluation,
             ClaimEvaluation::Unreconciled {
                 reason: UnreconciledReason::AmbiguousScope,
                 ..
