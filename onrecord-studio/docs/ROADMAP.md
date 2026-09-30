@@ -848,20 +848,24 @@ masking step.
 Small, cross-file items that audits confirmed but left for a later pass; each has a design in
 the audit report it came from.
 
-- ChangeFeed's "new since you last looked" is almost always 0: the inbox bumps the watermark on
-  every counter-driven load and both reload on the same bump. Capture `lastFindingsSeenAt` into
-  a ref when ChangeFeed's own load begins, or move `markFindingsSeen` to mount/Refresh/dismiss.
-- `useAffiliationDisclosure` returns `null` both while loading and for no profile, so the inbox
-  lens says "No local profile is set" during load. Return a `loading|loaded|failed` status.
-- A `.msg` at `MAXIMUM_CONTAINER_DEPTH` sets `collect_attachments: false` and returns
-  `Searchable` with no record that attachments were withheld (the archive path says `Deferred`).
-- A `list_findings` load begun before a dismissal commits and resolving after it settles can
-  re-show that row until the next sweep.
-- queue.rs regions still not examined: `process_public_resource` HTML-link body,
-  `prepare_html_page_document` internals, and the catalog/ArcGIS response parsers in client.rs.
-- Frontend never audited: PostIngestBrief, ArtifactDrafts, IntentAnswerView, EvidenceBasis.
+- Eight components each call `list_findings` on the same `findingsRefreshRequests` bump
+  (ChangeFeed, FindingsInbox, PostIngestBrief, StoryDesk, BriefingWorkspace, SubjectDossier,
+  CrossCorpusExplorer, SelfReview). A store-level cache keyed by that counter, plus a
+  `count_findings` command for ChangeFeed, would cut the duplicate reads.
+- StoryDesk's "Add to briefing" lists up to 200 findings to find one by id; a `get_finding`
+  command (or an `id` field on `FindingsFilter`) replaces that.
+- `import_city_export` in `tests/detector_benchmark.rs` and `repository_with_city_exports` in
+  `claim_validation.rs` register snapshots the same way; one shared test helper belongs in the lib
+  behind `cfg(test)` or a `test-support` feature.
+- `ArtifactDrafts` puts `aria-label` on a role-less `div`; give it `role="region"` or drop the label.
 - No deterministic regression tests for the queue counter/refill fixes (needs repository fault
   injection).
+
+Closed on 2026-09-30 (commits 342735f..43da2f5): ChangeFeed watermark, lens loading status,
+`.msg` withheld-attachment record, dismissal race, crawled-page content type, CKAN/Socrata
+pagination on a withheld total, PostIngestBrief stale rows and `discoveredAfter` filter, palette
+live region, Story desk dossier button, and the claim-validation eval set
+(`tests/fixtures/claim-eval`, 17 hand-verified cases over real FY22–23 City exports).
 
 Product direction under discussion: rank leads by observable public-interest factors (a
 "Story desk"), ingest public statements as a source class and run claim-versus-record checks

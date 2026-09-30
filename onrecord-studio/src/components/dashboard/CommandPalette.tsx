@@ -291,6 +291,8 @@ export default function CommandPalette() {
 
   if (!isOpen) return null;
 
+  const answering = asking || askError !== null || answer !== null;
+
   return (
     <div
       className="app-backdrop fixed inset-0 z-[120] flex justify-center px-4 pt-[12vh] backdrop-blur-md"
@@ -323,7 +325,7 @@ export default function CommandPalette() {
         {/* The live region stays mounted while the palette is open: an answer that mounts its own
             live region already populated is not announced, so only its contents may change. */}
         <div aria-live="polite">
-          {(asking || askError !== null || answer !== null) && (
+          {answering && (
             <div id="command-results" className="max-h-[min(480px,62vh)] overflow-y-auto">
               {asking && <p className="px-6 py-8 text-center text-[13px] text-slate-300" role="status">Searching findings, the entity graph and document text…</p>}
               {askError !== null && (
@@ -333,7 +335,7 @@ export default function CommandPalette() {
             </div>
           )}
         </div>
-        {!(asking || askError !== null || answer !== null) && (
+        {!answering && (
         <div id="command-results" className="max-h-[min(480px,62vh)] overflow-y-auto p-2" role="listbox">
           {filteredActions.length === 0 ? (
             <div className="px-4 py-10 text-center">
@@ -376,7 +378,7 @@ export default function CommandPalette() {
         </div>
         )}
         <footer className="flex items-center justify-between border-t border-slate-800/70 px-4 py-2.5 text-[12px] text-slate-400">
-          <span>{answer !== null || asking || askError !== null ? 'Esc returns to commands' : 'OnRecord commands'}</span>
+          <span>{answering ? 'Esc returns to commands' : 'OnRecord commands'}</span>
           <span className="flex items-center gap-2"><Keycap>↑↓</Keycap> Navigate <Keycap>↵</Keycap> Open or ask</span>
         </footer>
       </section>

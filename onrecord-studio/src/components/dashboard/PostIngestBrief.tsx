@@ -16,6 +16,12 @@ import type { Finding, FindingCitation, FindingSeverity } from '../../types';
  * some persistent watermark: the intent is to surface *this ingest's* work, not the whole
  * backlog. The full backlog lives in FindingsInbox below.
  */
+// The brief is opened by App.tsx immediately after refresh_findings, but the detectors may have
+// discovered the ingested rows moments before the overlay itself opened. Widen the window to the
+// last 15 minutes so a ChangeFeed-scale ingest doesn't render "no new findings" when the corpus
+// obviously grew.
+const RECENT_WINDOW_MS = 15 * 60 * 1000;
+
 export default function PostIngestBrief() {
   const open = useAppStore((state) => state.postIngestBriefOpen);
   const close = useAppStore((state) => state.setPostIngestBriefOpen);
@@ -28,12 +34,6 @@ export default function PostIngestBrief() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const gate = useLatestRequestGate();
-
-  // The brief is opened by App.tsx immediately after refresh_findings, but the detectors may
-  // have discovered the ingested rows moments before the overlay itself opened. Widen the window
-  // to the last 15 minutes so a ChangeFeed-scale ingest doesn't render "no new findings" when
-  // the corpus obviously grew.
-  const window = 15 * 60 * 1000;
 
   useEffect(() => {
     if (open) {
@@ -53,7 +53,7 @@ export default function PostIngestBrief() {
     setError(null);
     // Filtered at the source: the backend ranks by severity before it limits, so without the
     // cutoff a new low-severity finding could sit behind forty older ones and never arrive.
-    const discoveredAfter = new Date(Math.max(0, openedAt - window)).toISOString();
+    const discoveredAfter = new Date(Math.max(0, openedAt - RECENT_WINDOW_MS)).toISOString();
     invokeCommand('list_findings', { filter: { discoveredAfter }, limit: 40 })
       .then((rows) => {
         if (!gate.isCurrent(request)) return;
@@ -66,7 +66,7 @@ export default function PostIngestBrief() {
       .finally(() => {
         if (gate.isCurrent(request)) setIsLoading(false);
       });
-  }, [gate, open, openedAt, window]);
+  }, [gate, open, openedAt]);
 
   useEffect(() => {
     load();
@@ -76,7 +76,7 @@ export default function PostIngestBrief() {
   if (!open) return null;
 
   const cutoff = openedAt ?? 0;
-  const cutoffWithWindow = Math.max(0, cutoff - window);
+  const cutoffWithWindow = Math.max(0, cutoff - RECENT_WINDOW_MS);
   const notable = findings
     .filter((finding) => {
       const discovered = Date.parse(finding.discoveredAt);
