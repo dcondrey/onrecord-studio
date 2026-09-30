@@ -85,6 +85,9 @@ pub use casework::*;
 pub mod monitoring;
 pub use monitoring::*;
 
+pub mod story_desk;
+pub use story_desk::*;
+
 pub mod profile;
 pub mod report;
 pub mod tracker;

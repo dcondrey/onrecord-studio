@@ -21,6 +21,7 @@ export * from "./casework";
 export * from "./monitoring";
 
 export * from "./findings";
+export * from "./storyDesk";
 
 export * from "./artifacts";
 

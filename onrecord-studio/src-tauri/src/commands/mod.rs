@@ -57,6 +57,7 @@ pub mod casework;
 pub mod monitoring;
 
 pub mod claim_checks;
+pub mod story_desk;
 pub mod findings;
 pub mod intent;
 pub mod redaction_inference;

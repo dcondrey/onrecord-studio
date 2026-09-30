@@ -243,7 +243,7 @@ export default function CommandPalette() {
         else openPalette();
         return;
       }
-      if (!isOpen && modified && /^[1-6]$/.test(event.key)) {
+      if (!isOpen && modified && /^[1-7]$/.test(event.key)) {
         event.preventDefault();
         setWorkspaceView(workspaceCommandRegistry[Number(event.key) - 1].view);
         return;

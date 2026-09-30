@@ -46,6 +46,8 @@ export const workspaceCommandRegistry: readonly WorkspaceCommandDefinition[] = [
   { id: 'workspace-evidence', view: 'evidence', label: 'Review evidence', navigationLabel: 'Evidence', detail: 'Search requests and inspect source records', icon: 'evidence', keywords: 'evidence workspace search case review', shortcutIndex: 4 },
   { id: 'workspace-activity', view: 'activity', label: 'View activity', navigationLabel: 'Activity', detail: 'Ingestion queues, throughput, and exceptions', icon: 'activity', keywords: 'activity workspace ingestion operations queues', shortcutIndex: 5 },
   { id: 'workspace-briefing', view: 'briefing', label: 'Build a briefing', navigationLabel: 'Briefing', detail: 'Turn cited evidence into a timed presentation', icon: 'clipboard', keywords: 'briefing presentation public comment outline claims citations', shortcutIndex: 6 },
+  // Shortcut keys index this array, so new views append rather than reorder the existing ones.
+  { id: 'workspace-story', view: 'story', label: 'Rank story leads', navigationLabel: 'Story desk', detail: 'Findings ordered by money, scale, contradiction and violation', icon: 'activity', keywords: 'story desk leads ranking newsworthy public interest findings', shortcutIndex: 7 },
 ] as const;
 
 export const themeCommandRegistry: readonly ThemeCommandDefinition[] = [

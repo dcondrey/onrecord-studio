@@ -395,7 +395,7 @@ function clamp(value: number, minimum: number, maximum: number) {
  * schema requires those identifiers to render local locators. A finding that has neither in
  * its subject or citations is dropped rather than silently attached to a placeholder request.
  */
-function findingToBriefingEvidence(finding: Finding): BriefingEvidence | null {
+export function findingToBriefingEvidence(finding: Finding): BriefingEvidence | null {
   const cite = finding.citations[0] ?? null;
   const portalKey = finding.subject.portalKey ?? cite?.portalKey ?? null;
   const requestId = finding.subject.requestId;

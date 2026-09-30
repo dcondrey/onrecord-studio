@@ -4,6 +4,7 @@ import type { WorkspaceView } from '../../store/useAppStore';
 
 const viewLabels: Record<WorkspaceView, string> = {
   overview: 'San Diego research desk',
+  story: 'Story desk',
   patterns: 'Corpus connections',
   analysis: 'Analysis workbench',
   evidence: 'Evidence workspace',

@@ -23,6 +23,7 @@ import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import ExtractionTerminal from '../documents/ExtractionTerminal';
 import MetadataCard from '../documents/MetadataCard';
 import BriefingWorkspace from './BriefingWorkspace';
+import StoryDesk from './StoryDesk';
 import { documentBriefingEvidence, requestBriefingEvidence } from '../../utils/briefing';
 import AnalysisWorkbench from './AnalysisWorkbench';
 
@@ -215,6 +216,10 @@ export default function MainLayout() {
 
   if (workspaceView === 'briefing') {
     return <BriefingWorkspace />;
+  }
+
+  if (workspaceView === 'story') {
+    return <StoryDesk />;
   }
 
   return (
