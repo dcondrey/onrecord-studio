@@ -9,13 +9,9 @@ import concepts from './topics-concepts.json';
 import account from './topics-account.json';
 import topicPacks from './topics-topic-packs.json';
 import plainLanguage from './topics-plain-language.json';
-
 import starterSets from './topics-starter-sets.json';
-
 import evidencePackets from './topics-evidence-packets.json';
-
 import bundle from './topics-bundle.json';
-
 import watchlists from './topics-watchlists.json';
 
 export type HelpGroup =
@@ -72,13 +68,9 @@ export const HELP_TOPICS = [
   ...account,
   ...topicPacks,
   ...plainLanguage,
-
   ...starterSets,
-
   ...evidencePackets,
-
   ...bundle,
-
   ...watchlists,
 ] as HelpTopic[];
 
