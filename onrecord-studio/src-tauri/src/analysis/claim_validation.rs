@@ -781,6 +781,78 @@ impl Evaluator {
             .any(|mapping| roles.contains(&mapping.role.as_str()))
     }
 
+    pub(crate) fn document_jurisdiction(&self, portal_key: &str) -> &'static str {
+        self.portal_jurisdictions
+            .get(portal_key)
+            .copied()
+            .unwrap_or(UNCLASSIFIED)
+    }
+
+    /// The (role, fiscal year) pairs the claim needs that no imported dataset from the document's
+    /// jurisdiction holds: the role is unmapped, mapped to data from elsewhere, or mapped with no
+    /// row for that year. A mapping without a fiscal-year column is skipped, because coverage that
+    /// cannot be read is not an absence.
+    pub(crate) async fn uncovered_years(
+        &self,
+        repository: &DuckDbRepository,
+        portal_key: &str,
+        claim: &QuantitativeClaim,
+    ) -> Result<Vec<(&'static str, i32)>, AppError> {
+        let Some(year) = claim.scope.fiscal_year else {
+            return Ok(Vec::new());
+        };
+        let needs = match claim.kind {
+            ClaimKind::BudgetBalance(_) => Vec::new(),
+            ClaimKind::WithinBudget(_) => {
+                vec![
+                    (Measure::Budget(Basis::Adopted), year),
+                    (Measure::Actual, year),
+                ]
+            }
+            ClaimKind::Total { measure, .. } => vec![(measure, year)],
+            ClaimKind::PercentChange {
+                measure,
+                previous_fiscal_year,
+                prior_year_cue,
+                ..
+            } => match previous_fiscal_year.or(prior_year_cue.then(|| year - 1)) {
+                Some(previous) => vec![(measure, year), (measure, previous)],
+                None => vec![(measure, year)],
+            },
+        };
+        let mut missing = Vec::new();
+        for (measure, year) in needs {
+            let Some(role) = measure.role() else {
+                continue;
+            };
+            let mapping = self
+                .workspace
+                .mappings
+                .iter()
+                .find(|mapping| mapping.role == role)
+                .filter(|_| self.check_jurisdiction(portal_key, role).is_ok());
+            // `check_jurisdiction` already rejected a mapping whose dataset was removed.
+            let covered = match mapping {
+                None => Some(false),
+                Some(mapping) => {
+                    let table = self
+                        .workspace
+                        .datasets
+                        .iter()
+                        .find(|dataset| dataset.snapshot_id == mapping.snapshot_id)
+                        .map_or("", |dataset| dataset.table_name.as_str());
+                    repository
+                        .financial_table_covers_year(mapping, table, year)
+                        .await?
+                }
+            };
+            if covered == Some(false) && !missing.contains(&(role, year)) {
+                missing.push((role, year));
+            }
+        }
+        Ok(missing)
+    }
+
     /// Confidence is derived from what the sentence itself pinned down: 6000 bp for a mismatch
     /// whose scope had to be completed from context, +1500 when the fund was stated, +1500 when
     /// the fiscal year was stated in the same sentence.
