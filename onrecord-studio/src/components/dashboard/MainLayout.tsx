@@ -24,6 +24,7 @@ import ExtractionTerminal from '../documents/ExtractionTerminal';
 import MetadataCard from '../documents/MetadataCard';
 import BriefingWorkspace from './BriefingWorkspace';
 import StoryDesk from './StoryDesk';
+import AgencyComparison from './AgencyComparison';
 import MeetingsView from './MeetingsView';
 import { documentBriefingEvidence, requestBriefingEvidence } from '../../utils/briefing';
 import AnalysisWorkbench from './AnalysisWorkbench';
@@ -225,6 +226,10 @@ export default function MainLayout() {
 
   if (workspaceView === 'meetings') {
     return <MeetingsView />;
+  }
+
+  if (workspaceView === 'compare') {
+    return <AgencyComparison />;
   }
 
   return (

@@ -32,7 +32,7 @@ export interface IngestionMetrics {
   bytesTransferred: number;
 }
 
-export type WorkspaceView = 'overview' | 'story' | 'patterns' | 'analysis' | 'evidence' | 'activity' | 'briefing' | 'meetings';
+export type WorkspaceView = 'overview' | 'story' | 'patterns' | 'analysis' | 'evidence' | 'activity' | 'briefing' | 'meetings' | 'compare';
 export type AppTheme = ThemePreference;
 export type AppMotion = MotionPreference;
 export type AppContrast = ContrastPreference;

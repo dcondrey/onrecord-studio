@@ -365,6 +365,50 @@
     ]
   },
   {
+    "id": "view-compare",
+    "title": "Compare agencies view",
+    "group": "Views",
+    "summary": "Every agency with an analytics profile, ranked across portals on measured closure latencies and counts.",
+    "keywords": [
+      "compare",
+      "agencies",
+      "ranking",
+      "closure days",
+      "z-score",
+      "outlier",
+      "portals"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "Compare agencies lists each agency profile the analytics pass produced, across every portal, and sorts it on one measured column: average closure days, closure sample size, performance z-score, statutory violation count and rate, suspiciously fast closures, requests processed, or documents released. Click a column heading to sort by it; click again to reverse. The portal filter narrows the table to one portal."
+        ]
+      },
+      {
+        "heading": "What a rank is",
+        "paragraphs": [
+          "A rank is a position on a measured latency or count. It is not a compliance judgment. Only the statutory violation column is a counted violation; every other column is a measurement. An agency whose z-score is at or above 2.0 is marked slower than peers, which says nothing about whether any statute was met. An agency with fewer than five measured closures is marked small sample because one closure moves its average.",
+          "An agency that has closed nothing measurable shows no measurable closure instead of a number. Zero days would be the fastest possible answer, and an agency that has never closed a request is not fast."
+        ]
+      },
+      {
+        "heading": "When the table is empty",
+        "paragraphs": [
+          "Profiles are computed when a source finishes syncing or an auxiliary event import completes. If none exist yet, sync a source from the San Diego desk or the sidebar and the table fills when analytics finishes."
+        ]
+      }
+    ],
+    "views": [
+      "compare"
+    ],
+    "findingKinds": [],
+    "commandGroups": [],
+    "related": [
+      "view-story",
+      "legal-vs-pattern"
+    ]
+  },
+  {
     "id": "view-meetings",
     "title": "Meetings view",
     "group": "Views",

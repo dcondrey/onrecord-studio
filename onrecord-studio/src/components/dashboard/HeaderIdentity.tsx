@@ -11,6 +11,7 @@ const viewLabels: Record<WorkspaceView, string> = {
   activity: 'Ingestion activity',
   briefing: 'Presentation briefing',
   meetings: 'Public meetings',
+  compare: 'Agency comparison',
 };
 
 /** The breadcrumb and title block at the left of the header: current view, active source, and its
