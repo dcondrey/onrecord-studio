@@ -3,7 +3,7 @@
 // A dossier assembled for finding A that resolves after the reader opened finding B would present
 // A's evidence chain and gaps as statements about B.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 vi.hoisted(() => {
   const entries = new Map<string, string>();
@@ -47,7 +47,10 @@ function dossier(findingId: string, headline: string) {
     related: [],
     relatedTruncated: false,
     falsification: { statement: 'The stated figure refers to a later revision of the data.', recordsToSeek: ['the report the statement drew its figure from'] },
-    gaps: [{ gap: 'notComputed', portalKey: 'sandiego', documentId: 9, reason: 'the document text could not be read: missing' }],
+    gaps: [
+      { gap: 'notComputed', portalKey: 'sandiego', documentId: 9, reason: 'the document text could not be read: missing' },
+      { gap: 'unreconciledClaim', portalKey: 'sandiego', documentId: 9, claimText: 'the adopted budget of $1.2 billion', reason: 'no matching column', detail: 'no imported table names a budget total' },
+    ],
     gapsTruncated: false,
     assembledAt: '2026-09-30T01:00:00Z',
   };
@@ -55,6 +58,7 @@ function dossier(findingId: string, headline: string) {
 
 vi.mock('../ipc', () => ({
   invokeCommand: (command: string, args?: { findingId?: string }) => {
+    if (command === 'draft_availability_for_finding') return Promise.resolve({ followup: true, appeal: false });
     if (command !== 'build_lead_dossier') return Promise.reject(new Error(`unexpected ${command}`));
     const id = args?.findingId ?? '';
     const answer = dossier(id, `Headline for ${id}`);
@@ -70,6 +74,7 @@ import LeadDossier from '../components/dashboard/LeadDossier';
 afterEach(() => {
   cleanup();
   bridge.gates.clear();
+  Object.assign(navigator, { clipboard: undefined });
   act(() => useAppStore.setState({ dossierFindingId: null }));
 });
 
@@ -82,6 +87,44 @@ describe('LeadDossier', () => {
     expect(screen.getByText(/later revision of the data/)).toBeTruthy();
     expect(screen.getByText(/figures not examined/)).toBeTruthy();
     expect(screen.queryByText(/Every figure found/)).toBeNull();
+  });
+
+  it('mounts the drafts panel for the finding below the evidence chain', async () => {
+    act(() => useAppStore.getState().openLeadDossier('finding-a'));
+    render(<LeadDossier />);
+    await screen.findByText('Headline for finding-a');
+    expect(screen.getByRole('region', { name: 'Drafted artifacts' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /draft records request/i })).toBeTruthy();
+  });
+
+  it('offers a request text per gap that quotes the claim and asks only for the records', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    act(() => useAppStore.getState().openLeadDossier('finding-a'));
+    render(<LeadDossier />);
+    await screen.findByText('Headline for finding-a');
+    const buttons = screen.getAllByRole('button', { name: 'Copy request text' });
+    expect(buttons).toHaveLength(2);
+    fireEvent.click(buttons[1]);
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    const text = writeText.mock.calls[0][0] as string;
+    expect(text).toContain('the adopted budget of $1.2 billion');
+    expect(text).toContain('confirmed or refuted');
+    expect(text).not.toMatch(/false|incorrect|wrong/i);
+    expect((await screen.findByRole('status')).textContent).toBe('Request text copied.');
+    expect(document.querySelector('pre')).toBeNull();
+  });
+
+  it('shows the request text for selection when the clipboard is unavailable', async () => {
+    Object.assign(navigator, { clipboard: undefined });
+    act(() => useAppStore.getState().openLeadDossier('finding-a'));
+    render(<LeadDossier />);
+    await screen.findByText('Headline for finding-a');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Copy request text' })[0]);
+    await screen.findByText(/Copying was blocked/);
+    const pre = document.querySelector('pre');
+    expect(pre?.textContent).toContain('document 9 held under sandiego');
+    expect(pre?.textContent).toContain('could not be read: missing');
   });
 
   it('discards a dossier that resolves after the reader opened another finding', async () => {

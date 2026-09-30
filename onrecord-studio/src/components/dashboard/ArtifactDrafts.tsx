@@ -66,6 +66,7 @@ export default function ArtifactDrafts({ findingId }: { findingId: string }) {
 
   return (
     <div
+      role="region"
       className="mt-2 rounded-lg border border-slate-800/70 bg-slate-950/40 p-3"
       aria-label="Drafted artifacts"
     >

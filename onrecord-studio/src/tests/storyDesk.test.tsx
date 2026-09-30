@@ -26,12 +26,17 @@ vi.hoisted(() => {
 
 const bridge = vi.hoisted(() => ({
   pending: [] as ((leads: unknown) => void)[],
+  availabilityRequests: [] as string[],
 }));
 
 vi.mock('../ipc', () => ({
   formatNativeError: (reason: unknown) => String(reason),
-  invokeCommand: (command: string) => {
+  invokeCommand: (command: string, args?: { findingId?: string }) => {
     if (command === 'build_lead_dossier') return new Promise(() => {});
+    if (command === 'draft_availability_for_finding') {
+      bridge.availabilityRequests.push(args?.findingId ?? '');
+      return Promise.resolve({ followup: true, appeal: false });
+    }
     if (command !== 'list_story_leads') return Promise.resolve([]);
     return new Promise((resolve) => bridge.pending.push(resolve));
   },
@@ -65,6 +70,7 @@ function lead(id: string, headline: string): StoryLead {
 afterEach(() => {
   cleanup();
   bridge.pending = [];
+  bridge.availabilityRequests = [];
 });
 
 describe('StoryDesk', () => {
@@ -90,6 +96,26 @@ describe('StoryDesk', () => {
     });
     expect(useAppStore.getState().dossierFindingId).toBe('b');
     act(() => useAppStore.getState().closeLeadDossier());
+  });
+
+  it('asks which drafts apply to a lead only once its draft toggle is opened', async () => {
+    render(<StoryDesk />);
+    await waitFor(() => expect(bridge.pending).toHaveLength(1));
+    act(() => bridge.pending[0]([lead('a', 'First lead'), lead('b', 'Second lead')]));
+    await screen.findByText('Second lead');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(bridge.availabilityRequests).toEqual([]);
+    expect(screen.queryByRole('region', { name: 'Drafted artifacts' })).toBeNull();
+    const summaries = screen.getAllByText('Draft a records request or appeal');
+    expect(summaries).toHaveLength(2);
+    act(() => {
+      summaries[1].click();
+    });
+    await screen.findByRole('button', { name: /draft records request/i });
+    expect(bridge.availabilityRequests).toEqual(['b']);
+    expect(screen.getAllByRole('region', { name: 'Drafted artifacts' })).toHaveLength(1);
   });
 
   it('discards a lead list that resolves after a findings refresh superseded it', async () => {

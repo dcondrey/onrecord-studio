@@ -81,6 +81,13 @@ afterEach(() => {
 });
 
 describe("<ArtifactDrafts />", () => {
+  test("the wrapper is a labelled region so its name is exposed", async () => {
+    mockIpc({});
+    render(<ArtifactDrafts findingId="finding-xyz" />);
+    expect(screen.getByRole("region", { name: "Drafted artifacts" })).toBeTruthy();
+    await screen.findByRole("button", { name: /draft records request/i });
+  });
+
   test("a pattern finding is offered a records request and no appeal", async () => {
     mockIpc({
       availability: () => Promise.resolve({ followup: true, appeal: false }),

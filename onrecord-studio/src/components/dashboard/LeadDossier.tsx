@@ -4,6 +4,7 @@ import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
 import type { DossierGap, EvidenceLink, LeadDossier as LeadDossierData } from '../../types';
 import { findingToBriefingEvidence } from './BriefingWorkspace';
+import ArtifactDrafts from './ArtifactDrafts';
 
 type DossierState =
   | { status: 'pending' }
@@ -77,6 +78,9 @@ export default function LeadDossier() {
               </ul>
             )}
           </Section>
+          <Section title="Draft from this finding">
+            <ArtifactDrafts findingId={state.dossier.finding.id} />
+          </Section>
           <Section title={`Related findings (${state.dossier.related.length}${state.dossier.relatedTruncated ? ', more not shown' : ''})`}>
             {state.dossier.related.length === 0 ? (
               <p className="text-slate-400">No other undismissed finding touches this request or these documents.</p>
@@ -101,8 +105,13 @@ export default function LeadDossier() {
             {state.dossier.gaps.length === 0 ? (
               <p className="text-slate-400">Every figure found in the cited documents could be checked against the imported tables, or none was found.</p>
             ) : (
-              <ul className="space-y-1">
-                {state.dossier.gaps.map((gap, index) => <li key={index}>{gapLine(gap)}</li>)}
+              <ul className="space-y-2">
+                {state.dossier.gaps.map((gap, index) => (
+                  <li key={index}>
+                    <p>{gapLine(gap)}</p>
+                    <GapRequest gap={gap} />
+                  </li>
+                ))}
               </ul>
             )}
           </Section>
@@ -132,6 +141,67 @@ function evidenceLine(link: EvidenceLink): string {
   const digest = link.rawFileSha256 ? ` · sha256 ${link.rawFileSha256.slice(0, 12)}…` : '';
   const quote = link.quote ? ` — “${link.quote}”` : '';
   return `${link.portalKey} / ${name}${agency}${span}${digest}${quote}`;
+}
+
+type CopyState = { kind: 'idle' } | { kind: 'copied' } | { kind: 'fallback'; text: string };
+
+/**
+ * Offers the records request that would close one gap. The text asks for the records that would
+ * confirm or refute the figure; it never states that the claim is wrong. Composed locally from the
+ * gap's own fields, so nothing in it goes beyond what the dossier recorded.
+ */
+function GapRequest({ gap }: { gap: DossierGap }) {
+  const [copy, setCopy] = useState<CopyState>({ kind: 'idle' });
+
+  const copyRequest = async () => {
+    const text = gapRequestText(gap);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopy({ kind: 'copied' });
+    } catch {
+      setCopy({ kind: 'fallback', text });
+    }
+  };
+
+  return (
+    <div className="mt-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => void copyRequest()}
+          className="focus-ring rounded-md border border-slate-800 px-2 py-0.5 text-[8px] font-medium text-slate-400 hover:text-slate-200"
+        >
+          Copy request text
+        </button>
+        {copy.kind === 'copied' && <span role="status" className="text-[8px] text-emerald-300">Request text copied.</span>}
+      </div>
+      {copy.kind === 'fallback' && (
+        <>
+          <p role="status" className="mt-1 text-[8px] text-amber-200">Copying was blocked by the system. Select the text below to copy it.</p>
+          <pre className="mt-1 whitespace-pre-wrap rounded-md border border-slate-800 bg-slate-950/60 p-2 text-[9px] text-slate-300">{copy.text}</pre>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** A neutral public-records request paragraph for the records that would close `gap`. */
+export function gapRequestText(gap: DossierGap): string {
+  const record = `document ${gap.documentId} held under ${gap.portalKey}`;
+  if (gap.gap === 'notComputed') {
+    return (
+      `I request a complete, readable electronic copy of ${record}, together with its metadata ` +
+      `(creation and revision dates, author or originating office, and the source of any figures it contains). ` +
+      `The copy available to me could not be examined (${gap.reason}), so the figures in it could not be checked ` +
+      `against the imported records. Please provide the record in a form that allows those figures to be confirmed or refuted.`
+    );
+  }
+  return (
+    `I request the dataset, tables, or working figures that support the following statement in ${record}: ` +
+    `"${gap.claimText}". The statement was compared against the imported records and could not be reconciled ` +
+    `(${gap.reason}: ${gap.detail}). Please provide the underlying records, including the source data, its date, ` +
+    `and any revision it reflects, in an electronic format if available, so that the stated figure can be confirmed or refuted.`
+  );
 }
 
 function gapLine(gap: DossierGap): string {

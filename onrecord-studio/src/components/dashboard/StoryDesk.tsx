@@ -6,6 +6,7 @@ import type { FindingKind, FindingSeverity, StoryLead } from '../../types';
 import { isLegalClaimKind } from '../../types/findings';
 import { findingToBriefingEvidence } from './BriefingWorkspace';
 import LeadDossier from './LeadDossier';
+import ArtifactDrafts from './ArtifactDrafts';
 
 type DeskState =
   | { status: 'PENDING' }
@@ -161,6 +162,7 @@ export default function StoryDesk() {
                     </span>
                   )}
                 </div>
+                <LeadDraftToggle findingId={lead.findingId} />
               </li>
             ))}
           </ol>
@@ -168,6 +170,28 @@ export default function StoryDesk() {
       </div>
       <LeadDossier />
     </main>
+  );
+}
+
+/**
+ * Keeps the desk compact: the drafts panel mounts only once the reader opens it, so the desk does
+ * not ask the backend which drafts apply to every ranked lead on load.
+ */
+function LeadDraftToggle({ findingId }: { findingId: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <details open={open} className="mt-3 text-[10px]">
+      <summary
+        onClick={(event) => {
+          event.preventDefault();
+          setOpen((current) => !current);
+        }}
+        className="focus-ring cursor-pointer select-none text-slate-400 hover:text-slate-200"
+      >
+        Draft a records request or appeal
+      </summary>
+      {open && <ArtifactDrafts findingId={findingId} />}
+    </details>
   );
 }
 
