@@ -124,7 +124,8 @@ impl DraftFamily {
             | FindingKind::CrossCorpusSharedLanguage
             | FindingKind::CrossCorpusTemporalShift
             | FindingKind::CrossCorpusOrphanTopic
-            | FindingKind::CrossCorpusReusedDenialGrounds => Self::NoDraft,
+            | FindingKind::CrossCorpusReusedDenialGrounds
+            | FindingKind::CorrelatedFindings => Self::NoDraft,
         }
     }
 }

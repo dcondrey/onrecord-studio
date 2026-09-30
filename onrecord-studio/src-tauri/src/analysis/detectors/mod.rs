@@ -16,6 +16,7 @@ pub mod absence_of_records;
 pub mod boilerplate_denial;
 pub mod claim_data_mismatch;
 pub mod contradictory_statement;
+pub mod correlated_findings;
 pub mod cross_corpus_orphan_topic;
 pub mod cross_corpus_reused_denial_grounds;
 pub mod cross_corpus_shared_language;
@@ -141,6 +142,8 @@ pub async fn refresh_all_findings(
     );
     run_detector!(repository, summary, run_started, policy_violation);
     run_detector!(repository, summary, run_started, claim_data_mismatch);
+    // Last: correlates the settled output of every detector above.
+    run_detector!(repository, summary, run_started, correlated_findings);
 
     Ok(summary)
 }

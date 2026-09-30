@@ -180,6 +180,9 @@ pub enum FindingKind {
     /// budget or actuals table for the same fiscal year, fund and jurisdiction. A comparison of
     /// a sentence with a dataset, not a judgement of which is right.
     ClaimContradictsData,
+    /// Two or more findings of different kinds that name exactly the same document, request or
+    /// agency. Restates its members without adding a claim; confidence is the weakest member's.
+    CorrelatedFindings,
 }
 
 impl FindingKind {
@@ -207,6 +210,7 @@ impl FindingKind {
             Self::CrossCorpusReusedDenialGrounds => "CROSS_CORPUS_REUSED_DENIAL_GROUNDS",
             Self::PolicyViolationDetected => "POLICY_VIOLATION_DETECTED",
             Self::ClaimContradictsData => "CLAIM_CONTRADICTS_DATA",
+            Self::CorrelatedFindings => "CORRELATED_FINDINGS",
         }
     }
 
@@ -234,6 +238,7 @@ impl FindingKind {
             Self::CrossCorpusReusedDenialGrounds,
             Self::PolicyViolationDetected,
             Self::ClaimContradictsData,
+            Self::CorrelatedFindings,
         ]
         .into_iter()
         .find(|candidate| candidate.as_str() == value)
@@ -301,6 +306,8 @@ impl FindingKind {
             // A sentence disagreeing with a table is a pattern signal for review; which of the
             // two is wrong, and whether either breaks a rule, is not decided here.
             Self::ClaimContradictsData => false,
+            // Convergence of separate signals is not a violation; a legal member stays its own row.
+            Self::CorrelatedFindings => false,
         }
     }
 }

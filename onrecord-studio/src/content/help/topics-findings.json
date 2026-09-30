@@ -1022,5 +1022,48 @@
       "legal-vs-pattern",
       "findings-inbox"
     ]
+  },
+  {
+    "id": "finding-correlated-findings",
+    "title": "Correlated findings",
+    "group": "Finding kinds",
+    "summary": "Two or more findings of different kinds that name exactly the same document, request or agency.",
+    "keywords": [
+      "correlated findings",
+      "finding",
+      "kind",
+      "correlation",
+      "converge",
+      "same subject"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "Separate detectors that each flagged the same document, request or agency. Only an exact subject match counts; a document finding is never attributed to its agency by inference."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "That the signals share a cause. Each member keeps its own basis and stays in the inbox; a legal-claim member is not made stronger by appearing here."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is the weakest member's, and reads Unassessed when any member is unassessed."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "CORRELATED_FINDINGS"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
   }
 ]
