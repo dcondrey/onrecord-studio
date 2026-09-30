@@ -287,8 +287,202 @@ decide whether a portal key still names the same verified endpoint, and a mismat
 security refusal. Lifecycle state is carried beside it in `SavedSource`, never inside it, so a
 pause can never present itself as an endpoint that changed.
 
-## 8. Follow-up
+## 8. Signed chain-of-custody export
 
+`export_legal_brief` and `export_case_evidence_package` (`src-tauri/src/commands/export.rs`) both
+produce a `SignedPackage<T>` (`src-tauri/src/integrity.rs`): a manifest, the exact canonical bytes
+that were hashed and Ed25519-signed, and the signature. A verifier never re-serializes `manifest`
+to check the signature — it checks the embedded canonical bytes directly — because two JSON
+encoders are not guaranteed to produce identical bytes, and a chain-of-custody proof cannot depend
+on that agreement. `scripts/verify-evidence-package.mjs` verifies a package with no Rust toolchain
+and no trust in this application's own code, which is the actual point of a signature: a party who
+does not trust OnRecord Studio's export can still check what it produced.
+
+The signing key (`.onrecord-export-signing-key-v1`, alongside the report directory) is
+self-managed and local. Every package's `signature.identityAssurance` says so verbatim
+(`SELF_MANAGED_LOCAL_KEY_NOT_EXTERNALLY_ATTESTED`) so a reader cannot mistake it for a notarized or
+third-party-attested identity — the same distinction section 5 draws between `VERIFIED_SIGNATURE`
+and `TRUSTED_CHAIN_OF_CUSTODY` on the ingest side. The signature proves the exported bytes have not
+changed since this installation produced them; it never upgrades an `UNVERIFIED_PORTABLE` or
+`HISTORICAL_REPORT` citation into something proven, and a case export lists every such citation by
+name in `unverifiedCitationLabels` rather than folding it into a single verified/unverified bit.
+Neither export command claims the result is admissible in any court; that is a legal determination
+this software cannot make.
+
+`export_casework_packet` (`src-tauri/src/commands/casework.rs`) signs a portable case packet with
+the same local key, wrapping it in the same `SignedPackage<CaseworkPacket>` and reusing
+`verify_evidence_package`/`scripts/verify-evidence-package.mjs` unchanged — a case packet is just
+another `SignedPackage`, not a parallel format. `preview_casework_import` and
+`import_casework_packet` verify that signature before the repository ever sees the packet; a packet
+that is unsigned or was edited after signing is rejected outright rather than previewed with a
+warning. This is a breaking change: a packet exported before this signing was added has no
+signature and is now refused. Signing narrows, but does not close, the gap the repository's
+`contributor` warning names: it proves a packet's bytes are unaltered and came from whoever holds
+one specific installation's key — so two packets claiming the same contributor either share a key or
+one of the claims is false — but the key still identifies an installation, not a notarized
+real-world person. `CaseworkImportPreview.signerKeyId` and the imported case's event history both
+record which key produced an import, so that check survives past the review that first ran it.
+
+### The local export ledger
+
+`export_case_evidence_package_signed` (`src-tauri/src/storage/casework.rs`) reserves the next
+position in a per-case, append-only ledger (`casework_export_ledger`) inside the same transaction
+that reads the ledger's head and signs the manifest, so two exports racing for the same case can
+never fork it — the shared connection mutex behind `query_connection` serializes them, and
+`PRIMARY KEY(case_id,sequence)` is the second, independent guard if that assumption ever stops
+holding. Every manifest carries `ledgerSequence` and `previousExportSha256` (explicitly `null`,
+never omitted, only for sequence 1): a reader chains one export to the one before it by comparing
+`previousExportSha256` against the prior export's own `manifestSha256`. The chain is scoped per
+case, not global, on purpose — a recipient holding only one case's exports must be able to verify
+every link without a global chain forcing disclosure of unrelated cases, and a global chain would
+also have pulled in legal briefs and casework packets, which carry a different manifest shape and
+were never part of this design. Casework packets (`export_casework_packet`) are deliberately
+**not** part of this chain; they are a separate, independently signed and verified artifact
+(section 8 above).
+
+Reserving a sequence and durably writing the exported file are two different operations that can
+fail independently, so the ledger records their outcomes separately rather than conflating them:
+`casework_export_outcomes` is itself append-only (never `UPDATE`d), and a sequence with a
+reservation but no recorded outcome reads as `RESERVED` — "signed and chained, but never confirmed
+written" — not as `WRITTEN` or silently dropped. `case_export_chain` (surfaced in the UI's "View
+export chain") computes a `previousLinkValid` verdict per entry by comparing each entry's
+`previousManifestSha256`
+against its immediate predecessor's `manifestSha256`, so a reader gets a stated PASS/FAIL, not raw
+hex strings to eyeball. That in-app verdict is checked against this installation's own local
+`casework_export_ledger` table, which anyone with write access to the DuckDB file can edit; it
+proves the ledger is *internally consistent*, not that it has not been rewritten wholesale. The
+independently checkable claim is the one anchored in the signed files themselves — the standalone
+script's multi-file chain check, which only trusts bytes it can verify against an Ed25519
+signature, is the authoritative check for a party that does not trust this installation.
+
+`casework_events.payload_zstd` (one full compressed case snapshot per revision, forever) was
+removed as a write path: nothing in this application ever read it back, so it was pure storage
+growth with no reader. It is not dropped from the table — DuckDB's `DROP COLUMN` on an upgraded
+installation would destroy every existing user's already-recorded history irreversibly, which was
+never authorized — so the column stays and every new row writes an empty (zero-length) blob into
+it. An empty byte string is not valid zstd; `encode`/`decode` (`storage/casework.rs`) never round
+trip it as a value, so nothing can misread the empty placeholder as "an empty case." `author`,
+`summary`, and `recordedAt`, which the UI's contribution trail actually reads, are unaffected.
+`casework_cases.payload_zstd` (the current-state cache) and `casework_imports.payload_zstd` (full
+historical packets from external imports) are unrelated and unchanged.
+
+### Redaction-aware export
+
+`export_case_evidence_package`'s `withheldCitations` parameter (`{citationId, reason}[]`) removes
+the named citations from the manifest's `case.evidence` array and strips their ids from every
+citation-id list elsewhere in the case (questions, requests, productions, decisions, commitments),
+so the manifest never leaves a dangling reference to evidence it omits. `redact_case_for_export`
+requires a non-empty, non-duplicate reason per withheld id and rejects an id that does not resolve
+to a real citation — an export never ships a best-effort redaction. Each withheld citation is
+still named by label and reason inside the signed manifest's `withheldCitations` field, never
+silently dropped, and is excluded from both `verifiedCitationCount` and
+`unverifiedCitationLabels` — a withheld citation is not counted as anything.
+
+### Key rotation and revocation
+
+`rotate_signing_key` (`src-tauri/src/integrity.rs`) replaces this installation's active signing
+key and records the retired key's id in a local, signed revocation list
+(`.onrecord-export-signing-key-revocations-v1.json`, alongside the report directory, itself a
+`SignedPackage<SigningKeyRevocations>` signed by the *new* key). The retired key file is archived
+under a timestamped name via `hard_link`, never deleted and never reached by `rename`-ing the
+active key path away: `key_path` is only ever replaced by an atomic `rename` of a fully-staged
+replacement, so a concurrent `load_or_create_signing_key` call (or a mid-rotation crash) can never
+observe the active key file as briefly missing. The new revocation list is built, signed, and
+durably written (temp file + `rename`) *before* the old key is archived or the new key activated,
+so a failure at any point up to that write leaves the old key still fully active and the retired
+key nowhere recorded — never the reverse, where a compromise could be lost because the key was
+already rotated. The new key file is written with the same `0o600`-and-`fsync` discipline
+`load_or_create_signing_key` uses for a fresh key; it is never left at default (world-readable)
+permissions.
+
+`rotate_signing_key` and `mark_key_compromised` both read-modify-write this list, and the UI's
+shared `busy`/request-gate state does not actually serialize them the way it looks like it should:
+`open()` (switching the selected case) resets `busy` to `false` regardless of what is still in
+flight, so a user can re-enable and click "Rotate key" while a "mark compromised" write from before
+the switch is still pending. Two such calls reading the list before either has written it back would
+let the second write silently discard the first call's entry — including a COMPROMISED entry a
+concurrent rotation raced out, which is the same severity-downgrade this document treats as a defect
+everywhere else. A process-wide `tokio::sync::Mutex<()>` (`integrity::REVOCATION_WRITE_LOCK`) now
+serializes every read-modify-write of this list within one process, held across the load, sign, and
+durable-write `.await` points of both functions; a regression test
+(`concurrent_mark_compromised_and_rotate_do_not_lose_either_entrys_write`) runs both concurrently on
+a multi-thread runtime and was proven against the actual race by temporarily removing the lock. This
+in-process lock is layered under `acquire_cross_process_revocation_lock`, an OS-level advisory
+`flock`/`LockFileEx` on a dedicated `.onrecord-export-signing-key-revocations-v1.lock` file (not the
+revocations file itself, since that file is replaced via `rename` on every write and a lock on an
+inode a write discards would stop protecting anything after the first write). Both functions hold
+both locks for the same critical section, so two separate app instances — or processes — writing the
+same report directory are now serialized too, not only two calls within one process.
+
+Every entry carries a `status`: `RETIRED` (routine hygiene rotation — packages the old key already
+signed remain trusted; shown for information only) or `COMPROMISED` (the key itself is no longer
+trusted, and every package it ever signed, past or future, must fail verification). All three
+verification paths — `verify_evidence_package`, `verify_and_unwrap_packet`, and the standalone
+`.mjs` script's `--revocations` flag — share this distinction via `integrity::check_revocation`
+and fail closed on it: only an exact `"RETIRED"` status is treated as informational, and anything
+else (a typo, a future status value, corrupted data) reads as compromised, never as silently
+trusted. The `.mjs` script cannot read this installation's local state, so `--revocations` takes a
+copy of the distributed list file, verifies the list's own signature and that its `entries` came
+from the verified canonical bytes (not the adjacent unsigned `manifest` field, which an attacker
+could edit without touching the signed bytes) before trusting a single entry in it, and rejects a
+file that is unsigned, tampered, or not actually a revocation list (its `schemaVersion` must be
+`onrecord-signing-key-revocations-v1`) rather than silently treating it as absent. `casework_imports`
+gained a structured `signerKeyId` column (upgrade-safe `ALTER TABLE ADD COLUMN`, type only, per
+CLAUDE.md's DuckDB constraint rules): `compromised_case_imports` (`commands/casework.rs`)
+cross-references it against the revocation list whenever a case is opened, and flags any already-
+imported revision whose signer was later marked compromised — the case content itself may still be
+accurate; the warning says only that the channel it arrived through is no longer trusted.
+
+**Recovering from a corrupt or unreadable revocation list**: `load_revocations` treats a missing
+file as an empty list (an installation that has never rotated its key), but a file that exists and
+fails to parse or verify is a hard error, and every verification and casework import fails closed
+while it persists — this is deliberate (a torn or tampered revocation list must never be silently
+treated as "no revocations"). The only safe recovery is restoring a valid copy of
+`.onrecord-export-signing-key-revocations-v1.json` — from a backup, or from a copy already
+distributed to a recipient via `--revocations`. **Do not delete it as a recovery step.** Deleting it
+resets the list to empty, which makes every previously COMPROMISED key read as never revoked.
+`integrity::mark_key_compromised` (exposed as `mark_signing_key_compromised`, with a "Mark
+compromised…" action per entry in the rotation UI) escalates a key this installation has *already*
+recorded — typically a routinely `RETIRED` key later found to be compromised — to `COMPROMISED`
+without another rotation; it is not a rebuild tool, since it requires an existing entry for that
+`key_id` and refuses to invent one. A wholly deleted or unrecoverable list is still a known gap:
+there is no path to reconstruct entries this installation never wrote down elsewhere, so the same
+backup/redistribution recovery above remains the only option. Note also that the revocation list's
+signature only proves *a* key this installation once held signed it — a recipient checking
+`--revocations` is trusting the list's signer key implicitly, not verifying it is bound to a
+specific installation identity; comparing the signer key id against one obtained through a separate
+trusted channel is the recipient's responsibility, the same as for any manifest signer.
+
+## 9. Follow-up
+
+- **Measured, not implemented: `documents_fts.extracted_text` deduplication.** Against the real
+  installation's corpus (`~/Library/Application Support/com.onrecord.studio/onrecord_studio_core.db`,
+  measured 2026-09-29: 90 rows in `documents`, of which 84 have a non-null `extracted_text`), total
+  extracted-text bytes equal unique extracted-text bytes exactly — zero duplicate documents.
+  Deduplicating would have required rewriting 10+ direct-column read sites (full-text search,
+  `SUBSTR`-offset chunk extraction, the orphan audit, purge) for a measured benefit of zero on this
+  corpus. Not implemented; the same measurement should be redone if the corpus composition changes
+  materially (e.g., the same agenda re-ingested across portals).
+  Separately: `pragma_storage_info` shows this column stored `Uncompressed` in practice, contrary to
+  an earlier assumption that DuckDB's default column compression already covered it (FSST does not
+  currently apply here — an earlier answer claiming it already covered this column was wrong).
+  Measured directly (same corpus and snapshot, same 84 rows, 365,086,281 raw UTF-8 bytes of
+  concatenated `extracted_text`): standalone zstd over that text compresses to a 4.15:1 ratio (75.9%
+  smaller) at level 3, and 6.38:1 (84.3% smaller) at level 19 — a real, substantial, and currently
+  unclaimed lever, distinct from the zero-benefit dedup finding above. Not implemented, and two
+  claims below this point are unverified, not established, and should not be treated as fact without
+  checking DuckDB's storage-compression documentation for this exact `duckdb` crate version
+  (`1.10505.0` in `Cargo.lock`) and this database's `storage_compatibility_version`: whether DuckDB's
+  own automatic compression selection can already apply zstd to a column like this one (if so, the
+  lever may be far cheaper than a hand-rolled column codec — the `Uncompressed` result above may
+  reflect the analyzer's choice for this data, not an absence of the capability), and whether `lance`
+  addresses this same gap (not evaluated in this session). `async-duckdb` does not address this gap
+  regardless: it changes connection/query concurrency, not on-disk column compression.
+- **Not measured: embedding chunk deduplication or quantization.** The installation's
+  `onrecord_studio_vectors.db` was 12 KB at measurement time — no real embedding corpus exists yet
+  to measure duplicate-chunk rate or f16/f32 top-k overlap against. Revisit once real usage
+  populates it; implementing either change against no data would be a guess, not an engineering
+  decision.
 - Model an explicit, sourced determination event in ingestion and promote both statutory paths off
   the activity proxy.
 - Give the core a persistent DuckDB token index and route `full_text_search` through a sanitizer

@@ -53,6 +53,8 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::corpus::get_corpus_index_status,
         commands::corpus::list_top_corpus_entities,
         commands::corpus::get_corpus_entity_neighborhood,
+        commands::corpus::find_entity_paths,
+        commands::corpus::list_entity_brokers,
         commands::semantic::get_embedding_model_status,
         commands::semantic::initialize_embedding_model,
         commands::semantic::get_embedding_index_status,
@@ -76,6 +78,7 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::casework::export_casework_packet,
         commands::casework::preview_casework_import,
         commands::casework::import_casework_packet,
+        commands::casework::compromised_case_imports,
         commands::monitoring::get_monitoring_status,
         commands::monitoring::refresh_monitoring_now,
         commands::monitoring::save_monitoring_coverage,
@@ -94,6 +97,12 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::analysis_workbench::export_analytical_sql_csv,
         commands::query::query_audit_records,
         commands::export::export_legal_brief,
+        commands::export::export_case_evidence_package,
+        commands::export::case_export_chain,
+        commands::export::rotate_export_signing_key,
+        commands::export::mark_signing_key_compromised,
+        commands::export::get_signing_key_revocations,
+        commands::export::verify_evidence_package,
         commands::investigation::get_agency_performance_profiles,
         commands::investigation::get_cross_agency_correlations,
         commands::investigation::import_auxiliary_events,
@@ -113,7 +122,13 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::investigation::verify_document_redaction_integrity,
         commands::investigation::carve_document_version_history,
         commands::investigation::audit_document_residual_evidence,
-        commands::runtime::get_ocr_capability
+        commands::runtime::get_ocr_capability,
+        commands::findings::refresh_findings,
+        commands::findings::list_findings,
+        commands::findings::dismiss_finding,
+        commands::redaction_inference::infer_redaction,
+        commands::artifacts::draft_followup_from_finding,
+        commands::artifacts::draft_appeal_from_finding
     ];
     native_handler(invoke)
 }

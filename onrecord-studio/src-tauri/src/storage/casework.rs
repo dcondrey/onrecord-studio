@@ -1,22 +1,33 @@
 use super::sqlite::DuckDbRepository;
 use crate::{
     error::AppError,
-    integrity::sha256_hex,
+    integrity::{sha256_hex, sign_package, verify_package, SignedPackage},
     types::{casework::*, research::*},
 };
 use duckdb::{params, Connection, OptionalExt};
+use ed25519_dalek::SigningKey;
 use std::{
     collections::{BTreeMap, BTreeSet},
     io::Read,
 };
 
 const MAX_PACKET: usize = 2_000_000;
+/// Bumped from v1 to v2 alongside the ledger and redaction fields below; both landed in the same
+/// bump per CLAUDE.md's schema-version guidance, since both change the signed manifest shape.
+pub(crate) const CASE_EVIDENCE_PACKAGE_SCHEMA: &str = "onrecord-case-evidence-package-v2";
+/// `outcome` values for `casework_export_outcomes`. A reservation with no outcome row at all is a
+/// third, implicit state ("reserved, not confirmed written") that `case_export_chain` reports
+/// explicitly rather than folding into either of these.
+pub(crate) const EXPORT_OUTCOME_WRITTEN: &str = "WRITTEN";
+pub(crate) const EXPORT_OUTCOME_FAILED: &str = "FAILED";
 const SCHEMA: &str = "
 CREATE TABLE IF NOT EXISTS casework_cases(id TEXT PRIMARY KEY,report_id TEXT NOT NULL,topic TEXT NOT NULL,disposition TEXT NOT NULL,revision BIGINT NOT NULL,payload_zstd BLOB NOT NULL,updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS casework_events(case_id TEXT NOT NULL,revision BIGINT NOT NULL,author TEXT NOT NULL,recorded_at TEXT NOT NULL,summary TEXT NOT NULL,payload_zstd BLOB NOT NULL,PRIMARY KEY(case_id,revision));
 CREATE TABLE IF NOT EXISTS casework_sources(case_id TEXT NOT NULL,portal_key TEXT NOT NULL,document_id BIGINT NOT NULL,source_sha256 TEXT NOT NULL,PRIMARY KEY(case_id,portal_key,document_id));
 CREATE TABLE IF NOT EXISTS casework_origins(case_id TEXT PRIMARY KEY,base_revision BIGINT NOT NULL,base_sha256 TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS casework_imports(case_id TEXT NOT NULL,revision BIGINT NOT NULL,packet_sha256 TEXT NOT NULL,payload_zstd BLOB NOT NULL,PRIMARY KEY(case_id,revision));
+CREATE TABLE IF NOT EXISTS casework_export_ledger(case_id TEXT NOT NULL,sequence BIGINT NOT NULL,manifest_sha256 TEXT NOT NULL,previous_manifest_sha256 TEXT,signer_key_id TEXT NOT NULL,reserved_at TEXT NOT NULL,PRIMARY KEY(case_id,sequence),UNIQUE(manifest_sha256));
+CREATE TABLE IF NOT EXISTS casework_export_outcomes(case_id TEXT NOT NULL,sequence BIGINT NOT NULL,outcome TEXT NOT NULL,detail TEXT,recorded_at TEXT NOT NULL);
 ";
 fn storage(e: impl std::fmt::Display) -> AppError {
     AppError::Storage(e.to_string())
@@ -768,6 +779,13 @@ fn write_case(
     case.updated_at = now();
     let blob = encode(case)?;
     conn.execute("INSERT INTO casework_cases VALUES (?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(id) DO UPDATE SET disposition=excluded.disposition,revision=excluded.revision,payload_zstd=excluded.payload_zstd,updated_at=excluded.updated_at",params![case.id,case.report_id,case.topic,case.disposition,case.revision,blob,case.updated_at]).map_err(storage)?;
+    // `payload_zstd` used to carry a full compressed snapshot of the case on every revision,
+    // forever — nothing in this application ever reads it back (grepped and confirmed); only
+    // author/summary/recorded_at power the UI's contribution trail. A case edited 200 times wrote
+    // 200 full copies for no reader. Going forward this writes an empty placeholder instead of
+    // dropping the column: existing installs keep every historical snapshot they already have
+    // (DROP COLUMN would destroy it irreversibly on upgrade, which was never authorized), and the
+    // schema needs no upgrade migration that could fail and block startup.
     conn.execute(
         "INSERT INTO casework_events VALUES (?1,?2,?3,?4,?5,?6)",
         params![
@@ -776,7 +794,7 @@ fn write_case(
             author,
             case.updated_at,
             summary,
-            blob
+            Vec::<u8>::new()
         ],
     )
     .map_err(storage)?;
@@ -818,6 +836,73 @@ fn content_hash(case: &CaseworkCase) -> Result<String, AppError> {
     copy.created_at.clear();
     copy.updated_at.clear();
     Ok(sha256_hex(&serde_json::to_vec(&copy).map_err(storage)?))
+}
+/// Removes each requested citation from the case's evidence array and strips its id from every
+/// citation-id list elsewhere in the case (questions, requests, productions, decisions,
+/// commitments), so a chain-of-custody export never leaves a dangling reference to evidence it
+/// omits. Each withheld citation is named by label and reason in the returned list instead — never
+/// silently dropped. Every requested id must resolve to a real citation with a non-empty, distinct
+/// reason, or the whole export is rejected rather than shipping a best-effort redaction.
+fn redact_case_for_export(
+    mut case: CaseworkCase,
+    withheld: &[WithheldCitationRequest],
+) -> Result<(CaseworkCase, Vec<WithheldCitation>), AppError> {
+    if withheld.is_empty() {
+        return Ok((case, Vec::new()));
+    }
+    let mut withheld_citations = Vec::with_capacity(withheld.len());
+    let mut ids = BTreeSet::new();
+    for request in withheld {
+        let reason = request.reason.trim();
+        if reason.is_empty() {
+            return Err(invalid("Every withheld citation needs a non-empty reason."));
+        }
+        if !ids.insert(request.citation_id.clone()) {
+            return Err(invalid("The same citation was withheld more than once."));
+        }
+        let citation = case
+            .evidence
+            .iter()
+            .find(|c| c.id == request.citation_id)
+            .ok_or_else(|| {
+                invalid("A withheld citation id does not match this case's evidence.")
+            })?;
+        withheld_citations.push(WithheldCitation {
+            label: citation.label.clone(),
+            reason: reason.to_string(),
+        });
+    }
+    case.evidence.retain(|c| !ids.contains(&c.id));
+    let strip = |list: &mut Vec<String>| list.retain(|id| !ids.contains(id));
+    for question in &mut case.questions {
+        strip(&mut question.citation_ids);
+        strip(&mut question.counter_citation_ids);
+    }
+    for request in &mut case.requests {
+        strip(&mut request.citation_ids);
+        for production in &mut request.productions {
+            strip(&mut production.citation_ids);
+        }
+    }
+    for decision in &mut case.decisions {
+        strip(&mut decision.citation_ids);
+        strip(&mut decision.outcome_citation_ids);
+    }
+    for commitment in &mut case.commitments {
+        strip(&mut commitment.citation_ids);
+        strip(&mut commitment.completion_citation_ids);
+    }
+    Ok((case, withheld_citations))
+}
+fn evidence_rollup(case: &CaseworkCase) -> (usize, Vec<String>) {
+    let unverified_citation_labels: Vec<String> = case
+        .evidence
+        .iter()
+        .filter(|citation| citation.verification != "SAVED_REPORT")
+        .map(|citation| format!("{} ({})", citation.label, citation.verification))
+        .collect();
+    let verified_citation_count = case.evidence.len() - unverified_citation_labels.len();
+    (verified_citation_count, unverified_citation_labels)
 }
 fn packet_preview(
     conn: &Connection,
@@ -861,13 +946,32 @@ fn packet_preview(
         warnings,
         case: packet.case.clone(),
         contributor: packet.contributor.clone(),
+        signer_key_id: None,
     };
     Ok((packet, preview))
+}
+/// DuckDB's `ALTER TABLE ADD COLUMN` refuses any constraint (CLAUDE.md), so this carries a type
+/// only, and is idempotent so a fresh install (where `CREATE TABLE IF NOT EXISTS` already created
+/// the column) and an upgraded one converge on the same shape.
+fn ensure_casework_imports_signer_column(conn: &Connection) -> Result<(), AppError> {
+    let has_column: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='casework_imports' AND column_name='signer_key_id')",
+            [],
+            |r| r.get(0),
+        )
+        .map_err(storage)?;
+    if has_column {
+        return Ok(());
+    }
+    conn.execute_batch("ALTER TABLE casework_imports ADD COLUMN signer_key_id TEXT")
+        .map_err(storage)
 }
 impl DuckDbRepository {
     pub async fn initialize_casework(&self) -> Result<(), AppError> {
         self.query_connection("Initialize durable casework", |conn| {
-            conn.execute_batch(SCHEMA).map_err(storage)
+            conn.execute_batch(SCHEMA).map_err(storage)?;
+            ensure_casework_imports_signer_column(conn)
         })
         .await
     }
@@ -977,6 +1081,176 @@ if case.report_id!=prior.report_id||case.topic!=prior.topic{return Err(invalid("
         })
         .await
     }
+    /// Redacts, signs, and atomically reserves the next position in this case's local export
+    /// ledger for a chain-of-custody package, all inside one transaction. Reading the ledger head,
+    /// building the manifest (which embeds that head's hash), signing it, and inserting the
+    /// reservation must happen together: splitting the head-read from the insert would let two
+    /// concurrent exports both see the same head and both attempt the next sequence. The shared
+    /// connection mutex behind `query_connection` is what actually prevents that fork here, not a
+    /// database-level retry loop — see `PRIMARY KEY(case_id,sequence)` on the ledger table, which
+    /// exists as a second, independent guard in case that assumption ever stops holding.
+    pub(crate) async fn export_case_evidence_package_signed(
+        &self,
+        case_id: String,
+        generated_at: String,
+        withheld: Vec<WithheldCitationRequest>,
+        signing_key: SigningKey,
+    ) -> Result<SignedPackage<CaseEvidenceManifest>, AppError> {
+        self.query_connection("Reserve and sign chain-of-custody export", move |conn| {
+            let case = read_case(conn, &case_id)?.ok_or_else(|| invalid("Case not found."))?;
+            let (redacted_case, withheld_citations) = redact_case_for_export(case, &withheld)?;
+            let (verified_citation_count, unverified_citation_labels) =
+                evidence_rollup(&redacted_case);
+            let tx = conn.transaction().map_err(storage)?;
+            let head: Option<(u64, String)> = tx
+                .query_row(
+                    "SELECT sequence,manifest_sha256 FROM casework_export_ledger WHERE case_id=?1 ORDER BY sequence DESC LIMIT 1",
+                    params![case_id],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .optional()
+                .map_err(storage)?;
+            let sequence = head.as_ref().map(|(s, _)| s + 1).unwrap_or(1);
+            let previous_export_sha256 = head.map(|(_, hash)| hash);
+            let manifest = CaseEvidenceManifest {
+                schema_version: CASE_EVIDENCE_PACKAGE_SCHEMA.to_string(),
+                generated_at,
+                case: redacted_case,
+                verified_citation_count,
+                unverified_citation_labels,
+                withheld_citations,
+                previous_export_sha256,
+                ledger_sequence: sequence,
+            };
+            let package = sign_package(manifest, &signing_key).map_err(invalid)?;
+            verify_package(&package).map_err(invalid)?;
+            tx.execute(
+                "INSERT INTO casework_export_ledger VALUES (?1,?2,?3,?4,?5,?6)",
+                params![
+                    case_id,
+                    sequence,
+                    package.manifest_sha256,
+                    package.manifest.previous_export_sha256,
+                    package.signature.signer_key_id,
+                    now()
+                ],
+            )
+            .map_err(storage)?;
+            tx.commit().map_err(storage)?;
+            Ok(package)
+        })
+        .await
+    }
+    /// Appends the outcome of a reserved export — never updates the reservation row — so a crash
+    /// between signing and this call leaves a truthful "reserved, not confirmed written" gap
+    /// (`case_export_chain` reports it as such) rather than a row silently rewritten in place.
+    pub async fn record_case_export_outcome(
+        &self,
+        case_id: String,
+        sequence: u64,
+        outcome: &'static str,
+        detail: Option<String>,
+    ) -> Result<(), AppError> {
+        self.query_connection("Record chain-of-custody export outcome", move |conn| {
+            conn.execute(
+                "INSERT INTO casework_export_outcomes VALUES (?1,?2,?3,?4,?5)",
+                params![case_id, sequence, outcome, detail, now()],
+            )
+            .map_err(storage)?;
+            Ok(())
+        })
+        .await
+    }
+    /// The case's local export ledger, oldest first, joined with each entry's most recently
+    /// recorded outcome (if any). Chain continuity — every entry's `previousManifestSha256`
+    /// matching the prior entry's `manifestSha256`, and only the first entry's being absent — is
+    /// checkable by any reader of this list without trusting this installation, the same way
+    /// `verify_package` needs no trust from the process that produced the package it checks.
+    /// Every revision's recorded signer for this case's imported packets (`None` for a packet
+    /// imported before item 5 added the column, or one that was never signed). The command layer
+    /// cross-references this against the local revocation list, so an already-imported case can be
+    /// flagged if its signer is later marked compromised — the reason this column exists at all.
+    pub async fn case_import_signers(
+        &self,
+        case_id: String,
+    ) -> Result<Vec<(u64, Option<String>)>, AppError> {
+        self.query_connection("Read casework import signers", move |conn| {
+            conn.prepare(
+                "SELECT revision,signer_key_id FROM casework_imports WHERE case_id=?1 ORDER BY revision",
+            )
+            .map_err(storage)?
+            .query_map(params![case_id], |r| Ok((r.get(0)?, r.get(1)?)))
+            .map_err(storage)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(storage)
+        })
+        .await
+    }
+    pub async fn case_export_chain(
+        &self,
+        case_id: String,
+    ) -> Result<Vec<CaseExportLedgerEntry>, AppError> {
+        self.query_connection("Read chain-of-custody export ledger", move |conn| {
+            let mut statement = conn
+                .prepare(
+                    "SELECT sequence,manifest_sha256,previous_manifest_sha256,signer_key_id,reserved_at FROM casework_export_ledger WHERE case_id=?1 ORDER BY sequence",
+                )
+                .map_err(storage)?;
+            let reservations = statement
+                .query_map(params![case_id], |r| {
+                    Ok((
+                        r.get::<_, u64>(0)?,
+                        r.get::<_, String>(1)?,
+                        r.get::<_, Option<String>>(2)?,
+                        r.get::<_, String>(3)?,
+                        r.get::<_, String>(4)?,
+                    ))
+                })
+                .map_err(storage)?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(storage)?;
+            drop(statement);
+            let mut entries = Vec::with_capacity(reservations.len());
+            let mut prior_manifest_sha256: Option<String> = None;
+            for (sequence, manifest_sha256, previous_manifest_sha256, signer_key_id, reserved_at) in
+                reservations
+            {
+                let outcome: Option<(String, Option<String>, String)> = conn
+                    .query_row(
+                        "SELECT outcome,detail,recorded_at FROM casework_export_outcomes WHERE case_id=?1 AND sequence=?2 ORDER BY recorded_at DESC LIMIT 1",
+                        params![case_id, sequence],
+                        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                    )
+                    .optional()
+                    .map_err(storage)?;
+                let (outcome_state, outcome_detail, outcome_recorded_at) = match outcome {
+                    Some((outcome, detail, recorded_at)) => (outcome, detail, Some(recorded_at)),
+                    None => ("RESERVED".to_string(), None, None),
+                };
+                // Sequence 1 has no predecessor (valid by definition); every later entry's link is
+                // valid only if it names exactly the immediately preceding entry's manifest hash —
+                // computed here so a reader gets a stated verdict, not raw hex strings to compare.
+                let previous_link_valid = match &prior_manifest_sha256 {
+                    None => previous_manifest_sha256.is_none(),
+                    Some(prior) => previous_manifest_sha256.as_deref() == Some(prior.as_str()),
+                };
+                prior_manifest_sha256 = Some(manifest_sha256.clone());
+                entries.push(CaseExportLedgerEntry {
+                    sequence,
+                    manifest_sha256,
+                    previous_manifest_sha256,
+                    signer_key_id,
+                    reserved_at,
+                    outcome: outcome_state,
+                    outcome_detail,
+                    outcome_recorded_at,
+                    previous_link_valid,
+                });
+            }
+            Ok(entries)
+        })
+        .await
+    }
     pub async fn preview_casework_import(
         &self,
         payload: String,
@@ -992,11 +1266,12 @@ if case.report_id!=prior.report_id||case.topic!=prior.topic{return Err(invalid("
         expected_revision: Option<u64>,
         packet_sha256: String,
         author: String,
+        signer_key_id: Option<String>,
     ) -> Result<CaseworkCase, AppError> {
         author_valid(&author)?;
         self.query_connection("Apply reviewed case import",move|conn|{let(packet,preview)=packet_preview(conn,&payload)?;if preview.packet_sha256!=packet_sha256||preview.local_revision!=expected_revision{return Err(invalid("The packet or local case changed after preview. Preview it again."));}
 if preview.mode=="CONFLICT"{return Err(invalid("This import conflicts with local work. It was not applied; compare the versions and merge selected changes into the local case."));}
-if preview.mode=="IDENTICAL"{return read_case(conn,&packet.case.id)?.ok_or_else(||invalid("Case disappeared."));}let mut case=packet.case.clone();case.revision=preview.local_revision.unwrap_or(0);let tx=conn.transaction().map_err(storage)?;write_case(&tx,&mut case,&author,&format!("Imported packet {} from claimed contributor {}; {} supplied history entries are unverified.",preview.packet_sha256,packet.contributor,packet.history.len()))?;tx.execute("INSERT INTO casework_origins VALUES (?1,?2,?3) ON CONFLICT DO NOTHING",params![case.id,packet.base_revision,packet.base_sha256]).map_err(storage)?;tx.execute("INSERT INTO casework_imports VALUES (?1,?2,?3,?4)",params![case.id,case.revision,preview.packet_sha256,encode(&packet)?]).map_err(storage)?;tx.commit().map_err(storage)?;Ok(case)}).await
+if preview.mode=="IDENTICAL"{return read_case(conn,&packet.case.id)?.ok_or_else(||invalid("Case disappeared."));}let mut case=packet.case.clone();case.revision=preview.local_revision.unwrap_or(0);let tx=conn.transaction().map_err(storage)?;let provenance=match &signer_key_id{Some(key_id)=>format!("Imported packet {} from claimed contributor {} (Ed25519-signed by local key {key_id}); {} supplied history entries are unverified.",preview.packet_sha256,packet.contributor,packet.history.len()),None=>format!("Imported packet {} from claimed contributor {}; {} supplied history entries are unverified.",preview.packet_sha256,packet.contributor,packet.history.len())};write_case(&tx,&mut case,&author,&provenance)?;tx.execute("INSERT INTO casework_origins VALUES (?1,?2,?3) ON CONFLICT DO NOTHING",params![case.id,packet.base_revision,packet.base_sha256]).map_err(storage)?;tx.execute("INSERT INTO casework_imports VALUES (?1,?2,?3,?4,?5)",params![case.id,case.revision,preview.packet_sha256,encode(&packet)?,signer_key_id]).map_err(storage)?;tx.commit().map_err(storage)?;Ok(case)}).await
     }
     pub async fn casework_research_context(
         &self,
@@ -1211,6 +1486,527 @@ mod tests {
                 .synthesis
                 .title,
             "Reconcile shelter reporting"
+        );
+        assert!(
+            conn.query_row(
+                "SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='casework_imports' AND column_name='signer_key_id')",
+                [],
+                |r| r.get::<_, bool>(0)
+            )
+            .unwrap(),
+            "the upgrade must add the structured signer_key_id column item 5 relies on to flag \
+             already-imported packets from a since-revoked key"
+        );
+    }
+    /// CLAUDE.md: "every test here opens a fresh database, so nothing about an upgraded one is
+    /// covered by default." Builds the pre-ledger casework schema directly (the five tables that
+    /// shipped before item 3 of the chain-of-custody work) rather than stripping columns from a
+    /// current database, and confirms `initialize_casework` adds the ledger tables cleanly and
+    /// idempotently on top of real rows.
+    #[tokio::test]
+    async fn export_ledger_tables_are_added_to_a_database_that_predates_them() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("pre-ledger.db");
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE casework_cases(id TEXT PRIMARY KEY,report_id TEXT NOT NULL,topic TEXT NOT NULL,disposition TEXT NOT NULL,revision BIGINT NOT NULL,payload_zstd BLOB NOT NULL,updated_at TEXT NOT NULL);
+                 CREATE TABLE casework_events(case_id TEXT NOT NULL,revision BIGINT NOT NULL,author TEXT NOT NULL,recorded_at TEXT NOT NULL,summary TEXT NOT NULL,payload_zstd BLOB NOT NULL,PRIMARY KEY(case_id,revision));
+                 CREATE TABLE casework_sources(case_id TEXT NOT NULL,portal_key TEXT NOT NULL,document_id BIGINT NOT NULL,source_sha256 TEXT NOT NULL,PRIMARY KEY(case_id,portal_key,document_id));
+                 CREATE TABLE casework_origins(case_id TEXT PRIMARY KEY,base_revision BIGINT NOT NULL,base_sha256 TEXT NOT NULL);
+                 CREATE TABLE casework_imports(case_id TEXT NOT NULL,revision BIGINT NOT NULL,packet_sha256 TEXT NOT NULL,payload_zstd BLOB NOT NULL,PRIMARY KEY(case_id,revision));",
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO casework_cases VALUES ('legacy-case','','','OPEN',1,?1,'2026-01-01') ON CONFLICT DO NOTHING",
+                params![encode(&CaseworkCase {
+                    id: "legacy-case".into(),
+                    disposition: "OPEN".into(),
+                    revision: 1,
+                    ..Default::default()
+                })
+                .unwrap()],
+            )
+            .unwrap();
+            // A real pre-ledger installation has real event and import history with real
+            // payload_zstd snapshots already written. The upgrade must not destroy them: nothing
+            // here authorizes deleting existing evidence history, only stopping new growth.
+            conn.execute(
+                "INSERT INTO casework_events VALUES ('legacy-case',1,'Investigator','2026-01-01','Opened the case',?1)",
+                params![b"legacy snapshot bytes".to_vec()],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO casework_imports VALUES ('legacy-case',1,'deadbeef',?1)",
+                params![b"legacy packet bytes".to_vec()],
+            )
+            .unwrap();
+        }
+        let db = DuckDbRepository::new(&path).unwrap();
+        db.initialize_casework().await.unwrap();
+        db.initialize_casework().await.unwrap();
+        let conn = db.analytics_connection().await.unwrap();
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM casework_export_ledger", [], |r| r
+                .get::<_, u64>(0))
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM casework_export_outcomes", [], |r| r
+                .get::<_, u64>(
+                0
+            ))
+            .unwrap(),
+            0
+        );
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM casework_cases WHERE id='legacy-case'",
+                [],
+                |r| r.get::<_, u64>(0)
+            )
+            .unwrap(),
+            1,
+            "the upgrade must not disturb a real pre-ledger case row"
+        );
+        assert_eq!(
+            conn.query_row(
+                "SELECT author,summary,payload_zstd FROM casework_events WHERE case_id='legacy-case' AND revision=1",
+                [],
+                |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Vec<u8>>(2)?))
+            )
+            .unwrap(),
+            (
+                "Investigator".to_string(),
+                "Opened the case".to_string(),
+                b"legacy snapshot bytes".to_vec()
+            ),
+            "the upgrade must not delete or alter a pre-existing event's snapshot"
+        );
+        assert_eq!(
+            conn.query_row(
+                "SELECT packet_sha256,payload_zstd FROM casework_imports WHERE case_id='legacy-case' AND revision=1",
+                [],
+                |r| Ok((r.get::<_, String>(0)?, r.get::<_, Vec<u8>>(1)?))
+            )
+            .unwrap(),
+            ("deadbeef".to_string(), b"legacy packet bytes".to_vec()),
+            "the upgrade must not delete or alter a pre-existing imported packet"
+        );
+        assert_eq!(
+            conn.query_row(
+                "SELECT signer_key_id FROM casework_imports WHERE case_id='legacy-case' AND revision=1",
+                [],
+                |r| r.get::<_, Option<String>>(0)
+            )
+            .unwrap(),
+            None,
+            "a packet imported before item 5 has no recorded signer, which is absence, not an \
+             empty string — the new column must read back as null for it"
+        );
+    }
+    #[test]
+    fn evidence_rollup_names_every_non_saved_report_citation_and_never_folds_it_into_verified() {
+        let case = CaseworkCase {
+            evidence: vec![
+                CaseworkCitation {
+                    label: "Confirmed budget line".into(),
+                    verification: "SAVED_REPORT".into(),
+                    ..Default::default()
+                },
+                CaseworkCitation {
+                    label: "Superseded agenda quote".into(),
+                    verification: "HISTORICAL_REPORT".into(),
+                    ..Default::default()
+                },
+                CaseworkCitation {
+                    label: "Imported from another install".into(),
+                    verification: "UNVERIFIED_PORTABLE".into(),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        let (verified_citation_count, unverified_citation_labels) = evidence_rollup(&case);
+        assert_eq!(verified_citation_count, 1);
+        assert_eq!(
+            unverified_citation_labels,
+            vec![
+                "Superseded agenda quote (HISTORICAL_REPORT)".to_string(),
+                "Imported from another install (UNVERIFIED_PORTABLE)".to_string(),
+            ]
+        );
+    }
+    #[test]
+    fn redact_case_for_export_removes_evidence_and_scrubs_every_citation_id_reference() {
+        let case = CaseworkCase {
+            evidence: vec![
+                CaseworkCitation {
+                    id: "keep".into(),
+                    label: "Keep me".into(),
+                    quote: "q1".into(),
+                    verification: "SAVED_REPORT".into(),
+                    ..Default::default()
+                },
+                CaseworkCitation {
+                    id: "drop".into(),
+                    label: "Sensitive source".into(),
+                    quote: "q2".into(),
+                    verification: "UNVERIFIED_PORTABLE".into(),
+                    ..Default::default()
+                },
+            ],
+            questions: vec![CaseworkQuestion {
+                citation_ids: vec!["keep".into(), "drop".into()],
+                counter_citation_ids: vec!["drop".into()],
+                ..Default::default()
+            }],
+            requests: vec![CaseworkRequest {
+                citation_ids: vec!["drop".into()],
+                productions: vec![CaseworkProduction {
+                    citation_ids: vec!["drop".into(), "keep".into()],
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+            decisions: vec![CaseworkDecision {
+                citation_ids: vec!["drop".into()],
+                outcome_citation_ids: vec!["keep".into()],
+                ..Default::default()
+            }],
+            commitments: vec![CaseworkCommitment {
+                citation_ids: vec!["drop".into()],
+                completion_citation_ids: vec!["keep".into()],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let withheld = vec![WithheldCitationRequest {
+            citation_id: "drop".into(),
+            reason: "Ongoing personnel investigation.".into(),
+        }];
+        let (redacted, withheld_citations) = redact_case_for_export(case, &withheld).unwrap();
+        assert_eq!(redacted.evidence.len(), 1);
+        assert_eq!(redacted.evidence[0].id, "keep");
+        assert_eq!(
+            withheld_citations,
+            vec![WithheldCitation {
+                label: "Sensitive source".into(),
+                reason: "Ongoing personnel investigation.".into(),
+            }]
+        );
+        assert_eq!(redacted.questions[0].citation_ids, vec!["keep".to_string()]);
+        assert!(redacted.questions[0].counter_citation_ids.is_empty());
+        assert!(redacted.requests[0].citation_ids.is_empty());
+        assert_eq!(
+            redacted.requests[0].productions[0].citation_ids,
+            vec!["keep".to_string()]
+        );
+        assert!(redacted.decisions[0].citation_ids.is_empty());
+        assert_eq!(
+            redacted.decisions[0].outcome_citation_ids,
+            vec!["keep".to_string()]
+        );
+        assert!(redacted.commitments[0].citation_ids.is_empty());
+        assert_eq!(
+            redacted.commitments[0].completion_citation_ids,
+            vec!["keep".to_string()]
+        );
+    }
+    #[test]
+    fn redact_case_for_export_rejects_empty_reason_unknown_id_and_duplicate_withholding() {
+        let case = CaseworkCase {
+            evidence: vec![CaseworkCitation {
+                id: "c1".into(),
+                label: "L".into(),
+                quote: "q".into(),
+                verification: "SAVED_REPORT".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        assert!(redact_case_for_export(
+            case.clone(),
+            &[WithheldCitationRequest {
+                citation_id: "c1".into(),
+                reason: "  ".into(),
+            }],
+        )
+        .is_err());
+        assert!(redact_case_for_export(
+            case.clone(),
+            &[WithheldCitationRequest {
+                citation_id: "missing".into(),
+                reason: "Because.".into(),
+            }],
+        )
+        .is_err());
+        assert!(redact_case_for_export(
+            case,
+            &[
+                WithheldCitationRequest {
+                    citation_id: "c1".into(),
+                    reason: "First.".into(),
+                },
+                WithheldCitationRequest {
+                    citation_id: "c1".into(),
+                    reason: "Second.".into(),
+                },
+            ],
+        )
+        .is_err());
+    }
+    /// Two exports fired concurrently against the same case must still serialize into a single,
+    /// unforked chain: sequences 1 and 2, with #2's `previousManifestSha256` matching #1's
+    /// `manifestSha256`. This is the scenario `PRIMARY KEY(case_id,sequence)` and the
+    /// read-build-sign-insert-in-one-transaction design exist to guarantee.
+    #[tokio::test]
+    async fn concurrent_exports_serialize_into_a_correctly_linked_chain_without_forking() {
+        let db = setup(false).await;
+        let conn = db.analytics_connection().await.unwrap();
+        let mut case = CaseworkCase {
+            id: "case-concurrent".into(),
+            title: "Concurrency fixture".into(),
+            evidence: vec![CaseworkCitation {
+                id: "c1".into(),
+                label: "Portable claim".into(),
+                quote: "A claim.".into(),
+                verification: "UNVERIFIED_PORTABLE".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        write_case(&conn, &mut case, "Fixture author", "Created").unwrap();
+        let (first, second) = tokio::join!(
+            db.export_case_evidence_package_signed(
+                "case-concurrent".into(),
+                "2026-09-29T00:00:00Z".into(),
+                Vec::new(),
+                SigningKey::from_bytes(&[2_u8; 32]),
+            ),
+            db.export_case_evidence_package_signed(
+                "case-concurrent".into(),
+                "2026-09-29T00:00:01Z".into(),
+                Vec::new(),
+                SigningKey::from_bytes(&[2_u8; 32]),
+            ),
+        );
+        let first = first.unwrap();
+        let second = second.unwrap();
+        let mut sequences = vec![
+            first.manifest.ledger_sequence,
+            second.manifest.ledger_sequence,
+        ];
+        sequences.sort_unstable();
+        assert_eq!(
+            sequences,
+            vec![1, 2],
+            "two concurrent exports must land on distinct, consecutive sequence numbers"
+        );
+        let chain = db
+            .case_export_chain("case-concurrent".into())
+            .await
+            .unwrap();
+        assert_eq!(chain.len(), 2);
+        assert_eq!(chain[0].sequence, 1);
+        assert!(chain[0].previous_manifest_sha256.is_none());
+        assert_eq!(chain[1].sequence, 2);
+        assert_eq!(
+            chain[1].previous_manifest_sha256.as_deref(),
+            Some(chain[0].manifest_sha256.as_str()),
+            "the later export must chain to the earlier one, whichever finished signing first"
+        );
+    }
+    /// A ledger entry with no recorded outcome is neither "written" nor "failed" — it is "reserved,
+    /// not confirmed written," the state a crash between signing and the outcome append leaves
+    /// behind. `case_export_chain` must report that state explicitly rather than defaulting it to
+    /// either extreme, and must report a genuinely failed write as failed, not silently as reserved.
+    #[tokio::test]
+    async fn case_export_chain_reports_reserved_written_and_failed_outcomes_truthfully() {
+        let db = setup(false).await;
+        let conn = db.analytics_connection().await.unwrap();
+        let mut case = CaseworkCase {
+            id: "case-outcomes".into(),
+            title: "Outcome fixture".into(),
+            evidence: vec![CaseworkCitation {
+                id: "c1".into(),
+                label: "L".into(),
+                quote: "q".into(),
+                verification: "UNVERIFIED_PORTABLE".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        write_case(&conn, &mut case, "Fixture author", "Created").unwrap();
+        db.export_case_evidence_package_signed(
+            "case-outcomes".into(),
+            "t1".into(),
+            Vec::new(),
+            SigningKey::from_bytes(&[4_u8; 32]),
+        )
+        .await
+        .unwrap();
+        db.export_case_evidence_package_signed(
+            "case-outcomes".into(),
+            "t2".into(),
+            Vec::new(),
+            SigningKey::from_bytes(&[4_u8; 32]),
+        )
+        .await
+        .unwrap();
+        db.record_case_export_outcome(
+            "case-outcomes".into(),
+            2,
+            EXPORT_OUTCOME_WRITTEN,
+            Some("/tmp/out.json".into()),
+        )
+        .await
+        .unwrap();
+        db.export_case_evidence_package_signed(
+            "case-outcomes".into(),
+            "t3".into(),
+            Vec::new(),
+            SigningKey::from_bytes(&[4_u8; 32]),
+        )
+        .await
+        .unwrap();
+        db.record_case_export_outcome(
+            "case-outcomes".into(),
+            3,
+            EXPORT_OUTCOME_FAILED,
+            Some("disk full".into()),
+        )
+        .await
+        .unwrap();
+
+        let chain = db.case_export_chain("case-outcomes".into()).await.unwrap();
+        assert_eq!(chain.len(), 3);
+        assert_eq!(chain[0].outcome, "RESERVED");
+        assert!(chain[0].outcome_detail.is_none());
+        assert_eq!(chain[1].outcome, "WRITTEN");
+        assert_eq!(chain[1].outcome_detail.as_deref(), Some("/tmp/out.json"));
+        assert_eq!(chain[2].outcome, "FAILED");
+        assert_eq!(chain[2].outcome_detail.as_deref(), Some("disk full"));
+        assert!(chain[0].previous_manifest_sha256.is_none());
+        assert_eq!(
+            chain[1].previous_manifest_sha256.as_deref(),
+            Some(chain[0].manifest_sha256.as_str())
+        );
+        assert_eq!(
+            chain[2].previous_manifest_sha256.as_deref(),
+            Some(chain[1].manifest_sha256.as_str())
+        );
+        assert!(chain[0].previous_link_valid);
+        assert!(chain[1].previous_link_valid);
+        assert!(chain[2].previous_link_valid);
+    }
+    /// `case_export_chain` must actually catch a broken link, not just report the raw hashes for a
+    /// human to eyeball. Proven by directly corrupting a ledger row's `previous_manifest_sha256`
+    /// with an `UPDATE` — the same tamper shape a compromised or buggy write would produce — and
+    /// showing only the corrupted entry (not its neighbors) reads as invalid.
+    #[tokio::test]
+    async fn case_export_chain_flags_a_tampered_link() {
+        let db = setup(false).await;
+        let conn = db.analytics_connection().await.unwrap();
+        let mut case = CaseworkCase {
+            id: "case-tamper".into(),
+            title: "Tamper fixture".into(),
+            evidence: vec![CaseworkCitation {
+                id: "c1".into(),
+                label: "L".into(),
+                quote: "q".into(),
+                verification: "UNVERIFIED_PORTABLE".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        write_case(&conn, &mut case, "Fixture author", "Created").unwrap();
+        for timestamp in ["t1", "t2", "t3"] {
+            db.export_case_evidence_package_signed(
+                "case-tamper".into(),
+                timestamp.into(),
+                Vec::new(),
+                SigningKey::from_bytes(&[9_u8; 32]),
+            )
+            .await
+            .unwrap();
+        }
+        conn.execute(
+            "UPDATE casework_export_ledger SET previous_manifest_sha256='0'||previous_manifest_sha256 WHERE case_id='case-tamper' AND sequence=2",
+            [],
+        )
+        .unwrap();
+        let chain = db.case_export_chain("case-tamper".into()).await.unwrap();
+        assert!(chain[0].previous_link_valid, "sequence 1 was not touched");
+        assert!(
+            !chain[1].previous_link_valid,
+            "sequence 2's corrupted previous hash must be caught"
+        );
+        assert!(
+            chain[2].previous_link_valid,
+            "sequence 3's own link to sequence 2's real manifest hash was not touched by this \
+             tamper and must still verify independently — the corruption is localized to the \
+             specific broken pair, not smeared across the whole chain"
+        );
+    }
+    /// Locks the cross-language contract the standalone Node verifier depends on: this exact case
+    /// (persisted through the real repository, not hand-built in memory, so `refresh_evidence`'s
+    /// validation is what produced these fields), signed with this exact key at this exact
+    /// timestamp, must always serialize to these exact committed bytes. CLAUDE.md: hand-maintained
+    /// cross-language contracts are "checked, not trusted." If this test fails after a deliberate
+    /// schema change, regenerate the fixture from this same setup and update
+    /// `scripts/verify-evidence-package.mjs` and its gate test together.
+    #[tokio::test]
+    async fn case_evidence_package_bytes_match_the_committed_cross_language_fixture() {
+        let db = setup(true).await;
+        let conn = db.analytics_connection().await.unwrap();
+        let report = fixture_report();
+        let saved = canonical_citation(
+            &report,
+            &report.evidence[0],
+            "Provider shall deliver monthly occupied bed-night reports for FY2025.",
+        );
+        let portable = CaseworkCitation {
+            id: "portable-1".into(),
+            label: "Imported from another install".into(),
+            quote: "A claim from a peer packet.".into(),
+            verification: "UNVERIFIED_PORTABLE".into(),
+            ..Default::default()
+        };
+        let mut case = CaseworkCase {
+            id: "case-1".into(),
+            title: "Fixture case".into(),
+            evidence: vec![saved, portable],
+            ..Default::default()
+        };
+        write_case(&conn, &mut case, "Fixture author", "Created fixture case").unwrap();
+        // `write_case` stamps real wall-clock time into `updated_at`; pin it to a fixed value
+        // directly in storage afterward so this byte-for-byte fixture stays reproducible across
+        // every run, not just the one that happened to generate the committed file.
+        case.updated_at = "2026-09-28T00:00:00Z".to_string();
+        conn.execute(
+            "UPDATE casework_cases SET updated_at=?1, payload_zstd=?2 WHERE id=?3",
+            params![case.updated_at, encode(&case).unwrap(), case.id],
+        )
+        .unwrap();
+        let key = SigningKey::from_bytes(&[3_u8; 32]);
+        let package = db
+            .export_case_evidence_package_signed(
+                "case-1".into(),
+                "2026-09-28T00:00:00Z".into(),
+                Vec::new(),
+                key,
+            )
+            .await
+            .unwrap();
+        verify_package(&package).expect("the generated fixture must self-verify");
+        let bytes = serde_json::to_vec_pretty(&package).unwrap();
+        let committed = include_bytes!("../../tests/fixtures/chain-of-custody-fixture.json");
+        assert_eq!(
+            String::from_utf8_lossy(&bytes),
+            String::from_utf8_lossy(committed),
+            "the signed package's byte layout has changed; see this test's doc comment"
         );
     }
     #[tokio::test]
@@ -1427,7 +2223,8 @@ mod tests {
                 payload.clone(),
                 preview.local_revision,
                 preview.packet_sha256,
-                "Local editor".into()
+                "Local editor".into(),
+                None
             )
             .await
             .is_err());
@@ -1459,6 +2256,7 @@ mod tests {
                 preview.local_revision,
                 preview.packet_sha256,
                 "Receiving editor".into(),
+                Some("fixture-signer-key".into()),
             )
             .await
             .unwrap();
@@ -1486,6 +2284,11 @@ mod tests {
         assert!(remote.casework_state().await.unwrap().events[0]
             .summary
             .contains("claimed contributor Partner"));
+        // Recording the verified signer key in the event history is what turns "contributor" from
+        // a free-text label into something a later reader can cross-check against other packets.
+        assert!(remote.casework_state().await.unwrap().events[0]
+            .summary
+            .contains("Ed25519-signed by local key fixture-signer-key"));
         let conn = remote.analytics_connection().await.unwrap();
         conn.execute("UPDATE documents SET visibility='private' WHERE id=1", [])
             .unwrap();
@@ -1498,7 +2301,7 @@ mod tests {
         let db = setup(true).await;
         let case = db.create_casework_case("report-1".into()).await.unwrap();
         let conn = db.analytics_connection().await.unwrap();
-        conn.execute("INSERT INTO casework_events SELECT 'other-case',range,'Other desk','2099-01-01','Unrelated activity',?1 FROM range(1,1002)", params![encode(&case).unwrap()]).unwrap();
+        conn.execute("INSERT INTO casework_events SELECT 'other-case',range,'Other desk','2099-01-01','Unrelated activity',?1 FROM range(1,1002)", params![Vec::<u8>::new()]).unwrap();
         let packet: CaseworkPacket = serde_json::from_str(
             &db.export_casework_packet(case.id.clone(), "Editor".into())
                 .await
@@ -1507,7 +2310,7 @@ mod tests {
         .unwrap();
         assert_eq!(packet.history.len(), 1);
         assert_eq!(packet.history[0].author, "Research workspace");
-        conn.execute("INSERT INTO casework_events SELECT ?1,range,'Investigator','2026-09-27','Case activity',?2 FROM range(2,1002)", params![case.id,encode(&case).unwrap()]).unwrap();
+        conn.execute("INSERT INTO casework_events SELECT ?1,range,'Investigator','2026-09-27','Case activity',?2 FROM range(2,1002)", params![case.id, Vec::<u8>::new()]).unwrap();
         let error = db
             .export_casework_packet(case.id.clone(), "Editor".into())
             .await

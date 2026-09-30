@@ -8,6 +8,7 @@ import FinancialInvestigationsPanel from './FinancialInvestigationsPanel';
 import MonitoringPanel from './MonitoringPanel';
 import EvidenceReviewPanel from './EvidenceReviewPanel';
 import InvestigationEvaluationPanel from './InvestigationEvaluationPanel';
+import PackageVerifier from './PackageVerifier';
 
 const tabs = ['Cases and follow-through', 'Spending and outcomes', 'Coverage and changes', 'Evidence review', 'Usefulness'] as const;
 type Tab = typeof tabs[number];
@@ -33,6 +34,7 @@ export default function ProfessionalWorkbench({ initialReportId = '', initialTab
   return <section className="app-panel p-4 sm:p-5" aria-label="Investigation workbench">
     <div className="mb-4"><div className="app-eyebrow">Investigation workbench</div><h2 className="mt-1 text-xl font-semibold text-slate-100">Turn discoveries into a documented case</h2></div>
     <div role="tablist" aria-label="Investigation tools" className="mb-5 flex flex-wrap gap-2">{tabs.map(value => <button type="button" key={value} role="tab" aria-selected={value === tab} className={`rounded-lg border px-3 py-2 text-xs ${value === tab ? 'border-cyan-400/40 bg-cyan-400/10 text-cyan-100' : 'border-slate-700 text-slate-400'}`} onClick={() => { setTab(value); if (value === 'Evidence review') setRefresh(n => n + 1); }}>{value}</button>)}</div>
+    <div className="mb-5"><PackageVerifier /></div>
     <div role="tabpanel" aria-label={tab}>
       {tab === tabs[0] && <CaseworkPanel onSelectCase={(id, topic, selectedReportId) => { setCaseContext(current => current.id === id && current.topic === topic && current.reportId === selectedReportId ? current : { id, topic, reportId: selectedReportId }); if (selectedReportId) setReportId(selectedReportId); }} />}
       {tab === tabs[1] && <FinancialInvestigationsPanel />}

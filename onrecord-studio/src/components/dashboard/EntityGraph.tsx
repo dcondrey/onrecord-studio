@@ -6,6 +6,8 @@ import type {
   CorpusEntityKind,
   CorpusEntityNeighborhood,
   CorpusEntityNode,
+  EntityPath,
+  RelationshipKind,
 } from '../../types';
 import { cn } from '../../utils/cn';
 import AnalyticsUnavailable from '../charts/AnalyticsUnavailable';
@@ -24,6 +26,10 @@ const kindLabels: Record<CorpusEntityKind, string> = {
   ACRONYM: 'Acronym',
   ORGANIZATION: 'Organization',
   MONEY: 'Amount',
+  PERSON: 'Person',
+  ROLE: 'Role',
+  POSITION: 'Position',
+  DOCUMENT_CLASS: 'Document class',
 };
 
 const kindColors: Record<CorpusEntityKind, string> = {
@@ -35,6 +41,38 @@ const kindColors: Record<CorpusEntityKind, string> = {
   ACRONYM: 'var(--viz-emerald)',
   ORGANIZATION: 'var(--viz-emerald)',
   MONEY: 'var(--viz-red)',
+  PERSON: 'var(--viz-cyan)',
+  ROLE: 'var(--viz-indigo)',
+  POSITION: 'var(--viz-purple)',
+  DOCUMENT_CLASS: 'var(--viz-amber)',
+};
+
+/**
+ * Stroke pattern per relationship kind. Drawn onto every incident arc so a `CoOccurrence`
+ * derivation and a `SignedBy` claim from the text never render alike.
+ *  - CO_OCCURRENCE stays dashed (this app derived it and can re-derive it).
+ *  - Typed edges use distinct dash rhythms; a solid line is reserved for OBSERVED-basis rows.
+ */
+const kindStrokePattern: Record<RelationshipKind, string | undefined> = {
+  CO_OCCURRENCE: '4 4',
+  SIGNED_BY: '6 2 2 2',
+  APPROVED: '10 3',
+  CITES: '2 3',
+  PROMISES: '8 4 2 4',
+  DELIVERED: '12 3 2 3',
+  SUPERSEDES: '1 3',
+  AMENDS: '6 3 1 3',
+};
+
+const kindDescriptions: Record<RelationshipKind, string> = {
+  CO_OCCURRENCE: 'co-occurrence',
+  SIGNED_BY: 'signed by',
+  APPROVED: 'approved',
+  CITES: 'cites',
+  PROMISES: 'promises',
+  DELIVERED: 'delivered',
+  SUPERSEDES: 'supersedes',
+  AMENDS: 'amends',
 };
 
 interface PlacedEdge {
@@ -80,11 +118,15 @@ function truncateLabel(value: string) {
 
 export default function EntityGraph() {
   const gate = useLatestRequestGate();
+  const pathGate = useLatestRequestGate();
   const [seeds, setSeeds] = useState<CorpusEntityNode[]>([]);
   const [neighborhood, setNeighborhood] = useState<CorpusEntityNeighborhood | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [missing, setMissing] = useState(false);
+  const [pathTargetId, setPathTargetId] = useState('');
+  const [pathResult, setPathResult] = useState<EntityPath | null | undefined>(undefined);
+  const [pathError, setPathError] = useState<string | null>(null);
 
   useEffect(() => {
     const token = gate.begin();
@@ -204,9 +246,13 @@ export default function EntityGraph() {
                 y2={y}
                 stroke="var(--chart-grid)"
                 strokeWidth={Math.min(3.5, 0.8 + edge.sharedDocumentCount * 0.35)}
-                // Dashed is not decoration. A computed edge and an observed one must never read
-                // the same, and every edge the index writes today is computed.
-                strokeDasharray={edge.basis === 'COMPUTED' ? '4 4' : undefined}
+                // Stroke pattern is not decoration: it carries the relationship kind. A
+                // co-occurrence (this app's derivation) must not draw the same as a signed-by
+                // (a claim the text made). An OBSERVED-basis row overrides to solid — an edge the
+                // documents themselves recorded, not one this app derived.
+                strokeDasharray={
+                  edge.basis === 'OBSERVED' ? undefined : kindStrokePattern[edge.kind]
+                }
                 strokeOpacity={0.55}
               />
             ))}
@@ -262,8 +308,74 @@ export default function EntityGraph() {
               {edgeCount} neighbours
               {edgesTruncated ? ' (list cut at the limit)' : ''}
             </span>
-            <span className="ml-auto">Dashed arc: computed. Dashed outline: unverified.</span>
+            <span className="ml-auto">
+              Stroke rhythm carries edge kind. Dashed outline: unverified. Solid: observed.
+            </span>
           </div>
+
+          <form
+            className="mt-2 flex flex-wrap items-center gap-2 border-t border-slate-800 pt-2 text-[9px]"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!selectedId || !pathTargetId.trim()) return;
+              const token = pathGate.begin();
+              setPathError(null);
+              setPathResult(undefined);
+              invokeCommand('find_entity_paths', {
+                fromEntityId: selectedId,
+                toEntityId: pathTargetId.trim(),
+                maxHops: 4,
+              })
+                .then((result) => {
+                  if (!pathGate.isCurrent(token)) return;
+                  setPathResult(result);
+                })
+                .catch((reason: unknown) => {
+                  if (!pathGate.isCurrent(token)) return;
+                  setPathError(String(reason));
+                });
+            }}
+          >
+            <label className="font-mono text-slate-400" htmlFor="entity-path-target">
+              Find path to entity id:
+            </label>
+            <input
+              id="entity-path-target"
+              type="text"
+              value={pathTargetId}
+              onChange={(event) => setPathTargetId(event.target.value)}
+              className="min-w-[220px] flex-1 rounded border border-slate-800 bg-slate-900/60 px-2 py-1 font-mono text-[9px] text-slate-100"
+              placeholder="paste the neighbour id from another view"
+            />
+            <button
+              type="submit"
+              className="rounded border border-slate-700 bg-slate-800/80 px-2 py-1 font-mono text-[9px] text-slate-200 hover:border-slate-500"
+            >
+              Trace
+            </button>
+            {pathError && <span className="text-rose-400">{pathError}</span>}
+            {pathResult === null && (
+              <span className="text-slate-400">
+                No path within 4 hops. The two entities are not connected in this corpus.
+              </span>
+            )}
+            {pathResult && (
+              <span className="w-full font-mono text-slate-300">
+                {pathResult.hops} hops{' '}
+                {pathResult.weakestConfidenceBasisPoints != null
+                  ? `· weakest edge ${(pathResult.weakestConfidenceBasisPoints / 100).toFixed(1)}%`
+                  : ''}{' '}
+                ·{' '}
+                {pathResult.steps
+                  .map((step, index) =>
+                    index === 0
+                      ? step.neighbor.displayValue
+                      : `→ [${kindDescriptions[step.edgeKind]}] ${step.neighbor.displayValue}`,
+                  )
+                  .join(' ')}
+              </span>
+            )}
+          </form>
         </>
       )}
     </section>

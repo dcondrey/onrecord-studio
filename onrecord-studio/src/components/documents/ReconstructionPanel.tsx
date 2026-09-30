@@ -1,37 +1,33 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { invokeCommand } from '../../ipc';
+import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { ReconstructionCitation, ReconstructionFinding, ReconstructionReport } from '../../types';
 
 export default function ReconstructionPanel({ documentId, portalKey }: { documentId: number; portalKey: string }) {
   const identity = `${portalKey}:${documentId}`;
-  const activeIdentity = useRef(identity);
-  activeIdentity.current = identity;
-  const generation = useRef(0);
+  const gate = useLatestRequestGate();
   const [report, setReport] = useState<ReconstructionReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [contextQuote, setContextQuote] = useState('');
   const [fixedWidth, setFixedWidth] = useState(false);
   useEffect(() => {
-    generation.current += 1;
+    gate.invalidate();
     setReport(null); setError(null); setBusy(false); setContextQuote(''); setFixedWidth(false);
-    return () => { generation.current += 1; };
-  }, [identity]);
+  }, [identity, gate]);
 
   async function compare() {
-    const requestedIdentity = identity;
-    const requestedGeneration = ++generation.current;
-    const isCurrent = () => activeIdentity.current === requestedIdentity && generation.current === requestedGeneration;
+    const request = gate.begin();
     setBusy(true); setError(null); setReport(null);
     try {
       const result = await invokeCommand('reconstruct_document_context', { documentId, portalKey, options: { contextQuote: contextQuote.trim() || null, fixedWidthMasks: fixedWidth } });
-      if (!isCurrent()) return;
+      if (!gate.isCurrent(request)) return;
       setReport(result);
     } catch (reason) {
-      if (!isCurrent()) return;
+      if (!gate.isCurrent(request)) return;
       setError(String(reason));
     } finally {
-      if (isCurrent()) setBusy(false);
+      if (gate.isCurrent(request)) setBusy(false);
     }
   }
 

@@ -19,3 +19,9 @@ export * from "./review";
 export * from "./financial";
 export * from "./casework";
 export * from "./monitoring";
+
+export * from "./findings";
+
+export * from "./artifacts";
+
+export * from "./redactionInference";

@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { invokeCommand } from '../../ipc';
+import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { EvidenceBundle, EvidenceClass, RedactionIntegrityReport, RedactionPageFinding } from '../../types';
 import { cn } from '../../utils/cn';
 
@@ -13,18 +14,18 @@ export default function UnredactorPanel({ documentId, portalKey }: { documentId:
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const reviewStorageKey = `onrecord:redaction-review:${portalKey}:${documentId}`;
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>(() => readReviewNotes(reviewStorageKey));
-  const scanGeneration = useRef(0);
+  const gate = useLatestRequestGate();
   const coverageLimited = report !== null && !report.coverageComplete;
 
   useEffect(() => {
-    scanGeneration.current += 1;
+    gate.invalidate();
     setIsScanning(false);
     setReport(null);
     setEvidence(null);
     setError(null);
     setElapsedSeconds(0);
     setReviewNotes(readReviewNotes(reviewStorageKey));
-  }, [documentId, portalKey]);
+  }, [documentId, portalKey, gate]);
 
   useEffect(() => {
     if (!isScanning) return;
@@ -34,7 +35,7 @@ export default function UnredactorPanel({ documentId, portalKey }: { documentId:
   }, [isScanning]);
 
   const scan = async () => {
-    const generation = ++scanGeneration.current;
+    const request = gate.begin();
     setIsScanning(true);
     setReport(null);
     setEvidence(null);
@@ -45,15 +46,15 @@ export default function UnredactorPanel({ documentId, portalKey }: { documentId:
         invokeCommand('verify_document_redaction_integrity', { documentId, portalKey }),
         invokeCommand('audit_document_residual_evidence', { documentId, portalKey, includeHypotheses: true }),
       ]);
-      if (generation === scanGeneration.current) {
+      if (gate.isCurrent(request)) {
         setReport(result);
         setEvidence(bundle);
         setEvidenceClass(firstPopulatedEvidenceClass(bundle));
       }
     } catch (reason) {
-      if (generation === scanGeneration.current) setError(String(reason));
+      if (gate.isCurrent(request)) setError(String(reason));
     } finally {
-      if (generation === scanGeneration.current) setIsScanning(false);
+      if (gate.isCurrent(request)) setIsScanning(false);
     }
   };
 

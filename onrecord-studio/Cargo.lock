@@ -4322,6 +4322,7 @@ dependencies = [
  "lopdf",
  "msg_parser",
  "png 0.18.1",
+ "rand 0.8.8",
  "regex",
  "reqwest 0.13.4",
  "rusqlite",

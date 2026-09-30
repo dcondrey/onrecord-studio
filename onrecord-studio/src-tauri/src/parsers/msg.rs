@@ -321,13 +321,13 @@ fn attachment_id(source_document_id: u64, chain: &str, name: &str, bytes: &[u8])
 }
 
 fn collect_attachments(
-    message: &Outlook,
+    message: Outlook,
     source_document_id: u64,
     parent_chain: &str,
     attachments: &mut Vec<PendingAttachment>,
     total_bytes: &mut u64,
 ) -> Result<(), AppError> {
-    for (index, attachment) in message.attachments.iter().enumerate() {
+    for (index, attachment) in message.attachments.into_iter().enumerate() {
         if attachments.len() >= MAX_ATTACHMENT_COUNT {
             return Err(AppError::DataParsing(format!(
                 "MSG_ATTACHMENT_COUNT_EXCEEDED: attachment count exceeds {MAX_ATTACHMENT_COUNT}"
@@ -388,7 +388,7 @@ fn collect_attachments(
             file_name,
             content_type,
             description: format!("Outlook attachment at {chain}"),
-            bytes: attachment.payload_bytes.clone(),
+            bytes: attachment.payload_bytes,
         });
     }
 
@@ -415,7 +415,7 @@ fn parse_message(
     let mut total_bytes = 0u64;
     if collect_nested_attachments {
         collect_attachments(
-            &message,
+            message,
             source_document_id,
             "message",
             &mut attachments,

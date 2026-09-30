@@ -5,7 +5,7 @@ use crate::error::AppError;
 use crate::storage::corpus::CorpusIndex;
 use crate::types::{
     CorpusEntityNeighborhood, CorpusEntityNode, CorpusIndexStatus, CorpusPattern,
-    CorpusPatternQuery,
+    CorpusPatternQuery, EntityBroker, EntityPath,
 };
 use tauri::State;
 
@@ -51,5 +51,37 @@ pub async fn get_corpus_entity_neighborhood(
 ) -> Result<Option<CorpusEntityNeighborhood>, AppError> {
     index
         .entity_neighborhood(entity_id, limit.unwrap_or(24))
+        .await
+}
+
+/// Shortest path between two entities, up to `max_hops` edges.
+///
+/// `None` when the ids name entities that exist but the graph does not connect them within the
+/// budget — a real answer distinct from an error. `Some(EntityPath { hops: 0, .. })` when
+/// `from_entity_id == to_entity_id`, so a reader distinguishes "same node" from "unreachable".
+#[tauri::command]
+pub async fn find_entity_paths(
+    from_entity_id: String,
+    to_entity_id: String,
+    max_hops: Option<usize>,
+    index: State<'_, CorpusIndex>,
+) -> Result<Option<EntityPath>, AppError> {
+    index
+        .find_entity_paths(from_entity_id, to_entity_id, max_hops.unwrap_or(4))
+        .await
+}
+
+/// Entities information flows through, ranked by an approximation of betweenness centrality.
+///
+/// Every row states `is_approximation = true` — the score is weighted degree, not computed
+/// betweenness. A reader must not present this as a defended centrality measure.
+#[tauri::command]
+pub async fn list_entity_brokers(
+    subject_scope: Option<String>,
+    limit: Option<usize>,
+    index: State<'_, CorpusIndex>,
+) -> Result<Vec<EntityBroker>, AppError> {
+    index
+        .list_entity_brokers(optional_portal_key(subject_scope)?, limit.unwrap_or(12))
         .await
 }

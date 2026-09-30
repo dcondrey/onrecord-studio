@@ -60,12 +60,27 @@ ${configFields.map((field) => `  ${field.name}?: ${rustTypeToTs(field.rustType).
 }
 `;
 
+const c2pa = read('src-tauri/src/types/c2pa.rs');
+const portal = read('src-tauri/src/types/portal.rs');
+const investigationTypes = read('src-tauri/src/types/investigation.rs');
+const investigationEnums = [
+  { name: 'ProvenanceConfidence', source: c2pa },
+  { name: 'RecordedDigestSource', source: c2pa },
+  { name: 'SignatureVerificationState', source: c2pa },
+  { name: 'SourceKind', source: portal },
+  { name: 'StatutoryExtensionReason', source: investigationTypes },
+  { name: 'AuxiliaryStreamKind', source: investigationTypes },
+].map(({ name, source }) => ({ name, values: enumAsStrValues(source, name) }));
+const investigationEnumsOutput = `${banner('Rust ProvenanceConfidence, RecordedDigestSource, SignatureVerificationState, SourceKind, StatutoryExtensionReason, and AuxiliaryStreamKind')}${investigationEnums.map(({ name, values }) => `export type ${name} =\n${values.map((value) => `  | '${value}'`).join('\n')};`).join('\n\n')}
+`;
+
 emit('nativeCommands.ts', nativeOutput);
 emit('ingestionTelemetry.ts', telemetryOutput);
 emit('auditContracts.ts', auditOutput);
 emit('analysisConfig.ts', analysisOutput);
+emit('investigationEnums.ts', investigationEnumsOutput);
 
-if (!checkOnly) globalThis.console.log(`Generated ${nativeCommands.length} native commands, ${progressVariants.length} telemetry variants, ${verificationStates.length} verification states, and AnalysisConfig.`);
+if (!checkOnly) globalThis.console.log(`Generated ${nativeCommands.length} native commands, ${progressVariants.length} telemetry variants, ${verificationStates.length} verification states, AnalysisConfig, and ${investigationEnums.length} investigation enums.`);
 
 function emit(name, content) {
   const path = join(generatedRoot, name);
@@ -165,9 +180,28 @@ function parseStructVariants(body) {
 function parseUnitVariants(body) {
   return body
     .replace(/\/\/\/[^\n]*/g, '')
+    .replace(/#\[[^\]]+\]/g, '')
     .split(',')
     .map((value) => value.trim())
     .filter((value) => /^[A-Z][A-Za-z0-9]*$/.test(value));
+}
+
+// Reads the wire value straight from each variant's own `Self::Variant => "VALUE"` arm in its
+// `as_str()` impl, rather than re-deriving SCREAMING_SNAKE_CASE from the PascalCase variant name:
+// a variant like `Municipal311` doesn't case-convert losslessly (it needs `MUNICIPAL_311`, not
+// `MUNICIPAL311`), so the source of truth already written in Rust is more reliable than a second
+// case-conversion implementation here.
+function enumAsStrValues(source, enumName) {
+  const variantNames = parseUnitVariants(blockAfter(source, `pub enum ${enumName}`));
+  const implBody = blockAfter(source, `impl ${enumName}`);
+  const values = new Map(
+    [...implBody.matchAll(/Self::([A-Za-z0-9]+)\s*=>\s*"([A-Z0-9_]+)"/g)].map((match) => [match[1], match[2]]),
+  );
+  return variantNames.map((name) => {
+    const value = values.get(name);
+    if (!value) throw new Error(`No as_str() mapping found for ${enumName}::${name}.`);
+    return value;
+  });
 }
 
 function camel(value) { return value.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase()).replace(/^([A-Z])/, (letter) => letter.toLowerCase()); }

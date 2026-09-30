@@ -23,6 +23,8 @@ export interface NativeCommandMap {
   get_corpus_index_status: { args: NoArgs; result: Types.CorpusIndexStatus };
   list_top_corpus_entities: { args: { limit?: number | null }; result: Types.CorpusEntityNode[] };
   get_corpus_entity_neighborhood: { args: { entityId: string; limit?: number | null }; result: Types.CorpusEntityNeighborhood | null };
+  find_entity_paths: { args: { fromEntityId: string; toEntityId: string; maxHops?: number | null }; result: Types.EntityPath | null };
+  list_entity_brokers: { args: { subjectScope?: string | null; limit?: number | null }; result: Types.EntityBroker[] };
   get_embedding_model_status: { args: NoArgs; result: Types.EmbeddingModelStatus };
   initialize_embedding_model: { args: NoArgs; result: Types.EmbeddingModelStatus };
   get_embedding_index_status: { args: NoArgs; result: Types.EmbeddingIndexStatus };
@@ -46,6 +48,7 @@ export interface NativeCommandMap {
   export_casework_packet: { args: { caseId: string; contributor: string }; result: string };
   preview_casework_import: { args: { payload: string }; result: Types.CaseworkImportPreview };
   import_casework_packet: { args: { payload: string; expectedRevision?: number | null; packetSha256: string; author: string }; result: Types.CaseworkCase };
+  compromised_case_imports: { args: { caseId: string }; result: Types.CompromisedImportWarning[] };
   get_monitoring_status: { args: { topic: string; caseId?: string | null }; result: Types.MonitoringStatus };
   refresh_monitoring_now: { args: { topic: string; caseId?: string | null }; result: Types.MonitoringStatus };
   save_monitoring_coverage: { args: { expectation: Types.CoverageExpectation }; result: null };
@@ -64,6 +67,12 @@ export interface NativeCommandMap {
   export_analytical_sql_csv: { args: { sql: string; outputPath: string; limit?: number | null }; result: Types.SqlExportResult };
   query_audit_records: { args: { searchTerm: string; portalKey?: string | null; agencyId?: number | null; status?: string | null; policyDeviation?: string | null; limit?: number | null }; result: Types.RequestSearchResult[] };
   export_legal_brief: { args: { requestId: number; portalKey: string; targetPath?: string | null; authorName?: string | null }; result: Types.LegalBriefExportResult };
+  export_case_evidence_package: { args: { caseId: string; targetPath?: string | null; withheldCitations: Types.WithheldCitationRequest[] }; result: Types.CaseEvidencePackageResult };
+  case_export_chain: { args: { caseId: string }; result: Types.CaseExportLedgerEntry[] };
+  rotate_export_signing_key: { args: { reason: string; compromised: boolean }; result: Types.SigningKeyRotationResult };
+  mark_signing_key_compromised: { args: { keyId: string; reason: string }; result: null };
+  get_signing_key_revocations: { args: NoArgs; result: Types.SigningKeyRevocations };
+  verify_evidence_package: { args: { payload: string }; result: Types.PackageVerificationResult };
   get_agency_performance_profiles: { args: { config?: Types.AnalysisConfig | null }; result: Types.AgencyPerformanceProfile[] };
   get_cross_agency_correlations: { args: { portalKey?: string | null; minimumComplaints?: number | null; resultLimit?: number | null; windowHours?: number | null }; result: Types.CrossAgencyCorrelation[] };
   import_auxiliary_events: { args: { portalKey?: string | null; sourceKind: Types.AuxiliaryStreamKind; displayName: string; sourceUri?: string | null; events: Types.AuxiliaryEventInput[] }; result: Types.AuxiliaryImportResult };
@@ -84,4 +93,10 @@ export interface NativeCommandMap {
   carve_document_version_history: { args: { documentId: number; portalKey: string }; result: Types.RecoveredVersionProfile };
   audit_document_residual_evidence: { args: { documentId: number; portalKey: string; includeHypotheses?: boolean | null }; result: Types.EvidenceBundle };
   get_ocr_capability: { args: NoArgs; result: Types.OcrCapability };
+  refresh_findings: { args: NoArgs; result: Types.RefreshFindingsSummary };
+  list_findings: { args: { filter?: Types.FindingsFilter | null; limit?: number | null }; result: Types.Finding[] };
+  dismiss_finding: { args: { id: string }; result: null };
+  infer_redaction: { args: { documentId: number; portalKey: string; spanStart: number; spanEnd: number }; result: Types.InferenceReport };
+  draft_followup_from_finding: { args: { findingId: string; jurisdiction?: string | null }; result: Types.DraftedArtifact };
+  draft_appeal_from_finding: { args: { findingId: string; jurisdiction?: string | null }; result: Types.DraftedArtifact };
 }

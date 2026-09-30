@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import {
   buildBriefingMarkdown,
@@ -9,6 +9,11 @@ import { cn } from '../../utils/cn';
 import { focusSourceComposer } from '../../utils/sanDiego';
 import Icon from '../ui/icons';
 import { INVESTIGATION_TOPICS } from '../../utils/investigations';
+import { invokeCommand } from '../../ipc';
+import type { Finding } from '../../types';
+
+const AUTO_DRAFT_LABEL_PREFIX = '[Auto-drafted from finding]';
+const AUTO_DRAFT_ID_PREFIX = 'auto-draft:';
 
 interface ResearchLane {
   title: string;
@@ -51,7 +56,35 @@ export default function BriefingWorkspace() {
   const setActivePortal = useAppStore((state) => state.setActivePortal);
   const setSelectedRequest = useAppStore((state) => state.setSelectedRequest);
   const setPortalUrlDraft = useAppStore((state) => state.setPortalUrlDraft);
+  const addBriefingEvidence = useAppStore((state) => state.addBriefingEvidence);
   const [exported, setExported] = useState(false);
+  const autoDraftedRef = useRef(false);
+  const [autoDraftError, setAutoDraftError] = useState<string | null>(null);
+
+  // When a user opens the briefing workspace and nothing is saved, populate a draft from the top
+  // findings the detectors have surfaced. The user can edit, promote, or delete every drafted
+  // item — the promotion checklist below still requires an operator's judgment to publish. This
+  // is the autonomy override for the workspace that previously refused to fill anything.
+  useEffect(() => {
+    if (autoDraftedRef.current) return;
+    if (project.evidence.length > 0) {
+      autoDraftedRef.current = true;
+      return;
+    }
+    autoDraftedRef.current = true;
+    invokeCommand('list_findings', { filter: null, limit: 20 })
+      .then((rows) => {
+        const drafted = rows
+          .map((row) => findingToBriefingEvidence(row))
+          .filter((item): item is BriefingEvidence => item !== null);
+        for (const item of drafted) addBriefingEvidence(item);
+      })
+      .catch((reason) => {
+        setAutoDraftError(String(reason));
+      });
+  }, [addBriefingEvidence, project.evidence.length]);
+
+  const hasAutoDraftedItems = project.evidence.some((item) => item.id.startsWith(AUTO_DRAFT_ID_PREFIX));
 
   const readiness = useMemo(() => {
     const checks = [
@@ -172,13 +205,26 @@ export default function BriefingWorkspace() {
                 <div className="m-4 grid min-h-48 place-items-center rounded-xl border border-dashed border-slate-800 bg-slate-950/20 p-6 text-center">
                   <div className="max-w-md">
                     <Icon name="evidence" className="mx-auto h-6 w-6 text-slate-400" />
-                    <h3 className="mt-3 text-[11px] font-semibold text-slate-300">No presentation evidence saved yet</h3>
-                    <p className="mt-1.5 text-[9px] leading-relaxed text-slate-400">Run a focused search, select a request, and choose “Save lead to briefing.” Open a document and search within it to save a masked excerpt at an exact local character offset.</p>
+                    <h3 className="mt-3 text-[11px] font-semibold text-slate-300">
+                      {autoDraftError
+                        ? 'Auto-draft unavailable — start manually.'
+                        : 'Drafting from detector findings…'}
+                    </h3>
+                    <p className="mt-1.5 text-[9px] leading-relaxed text-slate-400">
+                      {autoDraftError
+                        ? `We couldn't populate a starting draft (${autoDraftError}). Run a focused search, select a request, and choose "Save lead to briefing" — or open Evidence and add manually.`
+                        : 'The workspace populates with the most notable findings from your data. You review and promote what belongs in the briefing.'}
+                    </p>
                     <button type="button" onClick={() => setWorkspaceView('evidence')} className="focus-ring mt-3 rounded-lg border border-indigo-400/25 bg-indigo-500/10 px-3 py-2 text-[9px] font-semibold text-indigo-200">Open Evidence</button>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-3 p-4">
+                  {hasAutoDraftedItems && (
+                    <div role="status" className="rounded-lg border border-cyan-400/20 bg-cyan-500/[0.05] px-3 py-2 text-[9px] text-cyan-200">
+                      Auto-drafted from your top findings. Edit, remove, or promote each item before you present.
+                    </div>
+                  )}
                   {project.evidence.map((item, index) => (
                     <EvidenceCard
                       key={item.id}
@@ -229,7 +275,7 @@ export default function BriefingWorkspace() {
             </section>
 
             <section className="app-panel overflow-hidden">
-              <SectionHeader step="C" title="Promotion standard" detail="The app never upgrades a lead automatically." />
+              <SectionHeader step="C" title="Promotion standard" detail="The app auto-drafts a starting briefing; you still decide what gets promoted to Ready." />
               <ul className="space-y-2 p-4 text-[9px] leading-relaxed text-slate-400">
                 <Check done={project.evidence.length > 0}>At least one traceable request or excerpt is saved.</Check>
                 <Check done={project.evidence.some((item) => item.kind === 'DOCUMENT_EXCERPT')}>At least one claim reaches the underlying document, not only request metadata.</Check>
@@ -314,4 +360,42 @@ function fileStem(value: string) {
 
 function clamp(value: number, minimum: number, maximum: number) {
   return Number.isFinite(value) ? Math.min(maximum, Math.max(minimum, value)) : minimum;
+}
+
+/**
+ * Turns a detector finding into a starter briefing entry. Only findings that resolve to a
+ * concrete request (portalKey + requestId) become drafted evidence, because the briefing's
+ * schema requires those identifiers to render local locators. A finding that has neither in
+ * its subject or citations is dropped rather than silently attached to a placeholder request.
+ */
+function findingToBriefingEvidence(finding: Finding): BriefingEvidence | null {
+  const cite = finding.citations[0] ?? null;
+  const portalKey = finding.subject.portalKey ?? cite?.portalKey ?? null;
+  const requestId = finding.subject.requestId;
+  // Requests are the anchor a briefing renders. Citations only carry documentIds, not requestIds,
+  // so if the finding's subject has no requestId we keep it out of the auto-draft rather than
+  // fabricating an anchor.
+  if (!portalKey || requestId === null) return null;
+  const documentId = finding.subject.documentId ?? cite?.documentId ?? null;
+  const label = `${AUTO_DRAFT_LABEL_PREFIX} ${finding.headline}`.slice(0, 240);
+  const excerpt = cite?.quote ?? finding.explanation;
+  return {
+    id: `${AUTO_DRAFT_ID_PREFIX}${finding.id}`,
+    kind: documentId === null ? 'REQUEST' : 'DOCUMENT_EXCERPT',
+    portalKey,
+    requestId,
+    documentId,
+    fileName: null,
+    characterOffset: cite?.characterStart ?? null,
+    sourceUrl: null,
+    agencyName: '',
+    label,
+    recordedAt: finding.discoveredAt,
+    excerpt: excerpt.slice(0, 4_000),
+    rawFileSha256: null,
+    claim: finding.explanation.slice(0, 4_000),
+    note: '',
+    readiness: 'LEAD',
+    addedAt: finding.discoveredAt,
+  };
 }

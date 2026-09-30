@@ -274,15 +274,16 @@ fn validate_finding(
     validate_citations(&finding.counter_evidence, evidence)?;
     // Relative effective-year qualifiers change whether a service change has happened.
     // Do not accept an interpretation that silently drops a quoted before/after/until.
-    let condition =
+    static CONDITION: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
         regex::Regex::new(r"(?i)\b(after|before|until)\s+(?:FY\s*|fiscal\s+year\s*)(20\d{2})\b")
-            .expect("fiscal effective-date qualifier");
-    let interpreted = condition
+            .expect("fiscal effective-date qualifier")
+    });
+    let interpreted = CONDITION
         .captures_iter(&finding.interpretation)
         .map(|m| format!("{}:{}", m[1].to_lowercase(), &m[2]))
         .collect::<HashSet<_>>();
     for cite in &finding.citations {
-        for qualifier in condition.captures_iter(&cite.quote) {
+        for qualifier in CONDITION.captures_iter(&cite.quote) {
             let key = format!("{}:{}", qualifier[1].to_lowercase(), &qualifier[2]);
             if !interpreted.contains(&key) {
                 return Err(AppError::DataParsing(format!("Interpretation must preserve the cited effective-date condition '{}' and explicitly resolve any conflicting period, rather than treating a future change as current.",&qualifier[0])));

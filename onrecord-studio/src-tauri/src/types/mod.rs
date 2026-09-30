@@ -32,13 +32,15 @@ pub use c2pa::{
 pub use corpus::{
     CorpusEntityEdge, CorpusEntityKind, CorpusEntityNeighborhood, CorpusEntityNode,
     CorpusEvidenceReference, CorpusIndexStatus, CorpusPattern, CorpusPatternKind,
-    CorpusPatternQuery, EntityResolutionBasis, EntityValidationGrade, RelationshipBasis,
+    CorpusPatternQuery, EntityBroker, EntityPath, EntityPathStep, EntityResolutionBasis,
+    EntityValidationGrade, MoneyContext, RelationshipBasis, RelationshipKind,
 };
 pub use investigation::{
-    AuxiliaryEventInput, AuxiliaryImportResult, AuxiliaryStreamKind, CrossAgencyCorrelation,
-    DocumentProvenanceVerification, DocumentTextChunk, LegalBriefExportResult,
-    ProvenanceClaimGraph, ProvenanceClaimNode, ProvenanceIngredientEdge,
-    ProvenanceVerificationRecord, RequestDocumentSummary, RequestSearchResult,
+    AuxiliaryEventInput, AuxiliaryImportResult, AuxiliaryStreamKind, CaseEvidencePackageResult,
+    CrossAgencyCorrelation, DocumentProvenanceVerification, DocumentTextChunk,
+    LegalBriefExportResult, PackageVerificationResult, ProvenanceClaimGraph, ProvenanceClaimNode,
+    ProvenanceIngredientEdge, ProvenanceVerificationRecord, RequestDocumentSummary,
+    RequestSearchResult, RevokedSigningKey, SigningKeyRevocations, SigningKeyRotationResult,
     StatutoryExtensionReason, StatutoryExtensionRecord,
 };
 pub use legal::{

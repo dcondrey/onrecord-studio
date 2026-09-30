@@ -1,0 +1,68 @@
+{
+  "manifestCanonicalBase64": "eyJzY2hlbWFWZXJzaW9uIjoib25yZWNvcmQtY2FzZS1ldmlkZW5jZS1wYWNrYWdlLXYyIiwiZ2VuZXJhdGVkQXQiOiIyMDI2LTA5LTI4VDAwOjAwOjAwWiIsImNhc2UiOnsiaWQiOiJjYXNlLTEiLCJyZXBvcnRJZCI6IiIsInRvcGljIjoiIiwidGl0bGUiOiJGaXh0dXJlIGNhc2UiLCJvd25lciI6IiIsImRpc3Bvc2l0aW9uIjoiIiwicmV2aXNpb24iOjEsImNyZWF0ZWRBdCI6IiIsInVwZGF0ZWRBdCI6IjIwMjYtMDktMjhUMDA6MDA6MDBaIiwicXVlc3Rpb25zIjpbXSwicmVxdWVzdHMiOltdLCJkZWNpc2lvbnMiOltdLCJjb21taXRtZW50cyI6W10sImV2aWRlbmNlIjpbeyJpZCI6InJlcG9ydC0xOmUxOmRkNTQzY2FjMjAyMiIsInJlcG9ydElkIjoicmVwb3J0LTEiLCJldmlkZW5jZUlkIjoiZTEiLCJsYWJlbCI6IlNoZWx0ZXIgY29udHJhY3QgYW5kIGFnZW5kYSIsInF1b3RlIjoiUHJvdmlkZXIgc2hhbGwgZGVsaXZlciBtb250aGx5IG9jY3VwaWVkIGJlZC1uaWdodCByZXBvcnRzIGZvciBGWTIwMjUuIiwic291cmNlVXJsIjoiaHR0cHM6Ly93d3cuc2FuZGllZ28uZ292L2ZpeHR1cmUucGRmIiwic291cmNlU2hhMjU2IjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYSIsInNvdXJjZVJlZmVyZW5jZXMiOltdLCJwb3J0YWxLZXkiOiJjaXR5IiwiZG9jdW1lbnRJZCI6MSwiY2hhcmFjdGVyT2Zmc2V0IjowLCJ2ZXJpZmljYXRpb24iOiJTQVZFRF9SRVBPUlQifSx7ImlkIjoicG9ydGFibGUtMSIsInJlcG9ydElkIjoiIiwiZXZpZGVuY2VJZCI6IiIsImxhYmVsIjoiSW1wb3J0ZWQgZnJvbSBhbm90aGVyIGluc3RhbGwiLCJxdW90ZSI6IkEgY2xhaW0gZnJvbSBhIHBlZXIgcGFja2V0LiIsInNvdXJjZVVybCI6bnVsbCwic291cmNlU2hhMjU2IjoiIiwic291cmNlUmVmZXJlbmNlcyI6W10sInBvcnRhbEtleSI6bnVsbCwiZG9jdW1lbnRJZCI6bnVsbCwiY2hhcmFjdGVyT2Zmc2V0IjpudWxsLCJ2ZXJpZmljYXRpb24iOiJVTlZFUklGSUVEX1BPUlRBQkxFIn1dLCJub3RlcyI6IiJ9LCJ2ZXJpZmllZENpdGF0aW9uQ291bnQiOjEsInVudmVyaWZpZWRDaXRhdGlvbkxhYmVscyI6WyJJbXBvcnRlZCBmcm9tIGFub3RoZXIgaW5zdGFsbCAoVU5WRVJJRklFRF9QT1JUQUJMRSkiXSwid2l0aGhlbGRDaXRhdGlvbnMiOltdLCJwcmV2aW91c0V4cG9ydFNoYTI1NiI6bnVsbCwibGVkZ2VyU2VxdWVuY2UiOjF9",
+  "manifestSha256": "cbf314bdcfe84ee8f9e5b95be293dad654f5fe4c6b761899511c195b24a39524",
+  "manifest": {
+    "schemaVersion": "onrecord-case-evidence-package-v2",
+    "generatedAt": "2026-09-28T00:00:00Z",
+    "case": {
+      "id": "case-1",
+      "reportId": "",
+      "topic": "",
+      "title": "Fixture case",
+      "owner": "",
+      "disposition": "",
+      "revision": 1,
+      "createdAt": "",
+      "updatedAt": "2026-09-28T00:00:00Z",
+      "questions": [],
+      "requests": [],
+      "decisions": [],
+      "commitments": [],
+      "evidence": [
+        {
+          "id": "report-1:e1:dd543cac2022",
+          "reportId": "report-1",
+          "evidenceId": "e1",
+          "label": "Shelter contract and agenda",
+          "quote": "Provider shall deliver monthly occupied bed-night reports for FY2025.",
+          "sourceUrl": "https://www.sandiego.gov/fixture.pdf",
+          "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceReferences": [],
+          "portalKey": "city",
+          "documentId": 1,
+          "characterOffset": 0,
+          "verification": "SAVED_REPORT"
+        },
+        {
+          "id": "portable-1",
+          "reportId": "",
+          "evidenceId": "",
+          "label": "Imported from another install",
+          "quote": "A claim from a peer packet.",
+          "sourceUrl": null,
+          "sourceSha256": "",
+          "sourceReferences": [],
+          "portalKey": null,
+          "documentId": null,
+          "characterOffset": null,
+          "verification": "UNVERIFIED_PORTABLE"
+        }
+      ],
+      "notes": ""
+    },
+    "verifiedCitationCount": 1,
+    "unverifiedCitationLabels": [
+      "Imported from another install (UNVERIFIED_PORTABLE)"
+    ],
+    "withheldCitations": [],
+    "previousExportSha256": null,
+    "ledgerSequence": 1
+  },
+  "signature": {
+    "algorithm": "Ed25519",
+    "publicKeyHex": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1",
+    "signerKeyId": "b62e867fa2f33afe62d5d6b1642e1621d543307846b2a57b897e710919b76709",
+    "signatureHex": "ea1e4889b6cbbf1f50513d6813ce98ce708ac6201fc26592369fe2dbe5751ada180436491b9852ea8ec2687abeeb3cf8abafdd9b9c4fd28eb422d714ad28ca0a",
+    "identityAssurance": "SELF_MANAGED_LOCAL_KEY_NOT_EXTERNALLY_ATTESTED"
+  }
+}

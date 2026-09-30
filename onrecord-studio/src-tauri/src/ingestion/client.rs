@@ -1,6 +1,7 @@
 //! Hardened HTTP discovery and bounded ingestion for public-record portals.
 
 use crate::error::AppError;
+use crate::ingestion::backoff;
 use crate::ingestion::host_policy::{
     HostGovernor, HostPermit, HostStopReason, RequestRefusal, RobotsRules,
     DEFAULT_HOST_CONCURRENCY, DEFAULT_HOST_INTERVAL, DEFAULT_HOST_REQUEST_BUDGET,
@@ -1038,7 +1039,8 @@ impl ApiClient {
         OperationFuture: Future<Output = Result<T, RetryDisposition>>,
     {
         let maximum_attempts = self.config.max_retries.saturating_add(1);
-        let mut delay_ms = self.config.retry_initial_delay_ms.max(1);
+        let retry_base = Duration::from_millis(self.config.retry_initial_delay_ms.max(1));
+        let retry_cap = Duration::from_millis(self.config.retry_max_delay_ms.max(1));
         let mut last_error = None;
         for attempt in 0..maximum_attempts {
             if attempt > 0 {
@@ -1055,11 +1057,10 @@ impl ApiClient {
                     if attempt + 1 >= maximum_attempts {
                         break;
                     }
-                    let wait = retry_after.unwrap_or_else(|| Duration::from_millis(delay_ms));
+                    let wait = retry_after.unwrap_or_else(|| {
+                        backoff::exponential_delay(attempt as u64, retry_base, retry_cap)
+                    });
                     tokio::time::sleep(wait.min(Duration::from_secs(60))).await;
-                    delay_ms = delay_ms
-                        .saturating_mul(2)
-                        .min(self.config.retry_max_delay_ms.max(1));
                 }
             }
         }

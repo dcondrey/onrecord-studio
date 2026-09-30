@@ -147,6 +147,16 @@ pub fn read_asset_provenance(path: &Path) -> Result<AssetProvenance, AppError> {
     // The context is also where a trust anchor list would be supplied to make `Trusted` reachable.
     // None is supplied and there is nowhere to configure one, so this build tops out at `Valid`.
     match c2pa::Reader::from_context(c2pa::Context::new()).with_file(path) {
+        // When no manifest is embedded in the asset's own bytes, the SDK falls back to a
+        // same-named sidecar (`<stem>.c2pa`) if one exists next to the file. That sidecar is not
+        // bound to the hashed asset bytes by anything this check controls: anyone with write
+        // access to the evidence directory (the exact threat level `DigestMismatch` exists to
+        // catch) can drop one next to an untouched, legitimate file, signed with any key, and have
+        // it read back as a verified signature indistinguishable from a genuinely embedded,
+        // third-party manifest — worst when no ingestion digest was ever recorded, since then
+        // nothing else in `classify_confidence` catches it either. Treated exactly like no
+        // manifest being found at all: this check only ever trusts what is embedded in the asset.
+        Ok(reader) if !reader.is_embedded() => Ok(AssetProvenance::default()),
         Ok(reader) => Ok(from_reader(&reader)),
         // Most released records carry no provenance at all, and many arrive in containers the SDK
         // does not parse. Neither is a defect in the document or a failure of the check.
@@ -448,6 +458,63 @@ mod tests {
             !broken.findings.is_empty(),
             "an invalid manifest must explain itself"
         );
+    }
+
+    /// Without the `is_embedded()` guard, the C2PA SDK falls back to a same-named `<stem>.c2pa`
+    /// sidecar file when nothing is embedded in the asset itself. Proves the actual attack: an
+    /// untouched, never-signed asset sitting next to a validly-signed sidecar manifest must not
+    /// read back as a verified, embedded signature — anyone with write access to the evidence
+    /// directory could otherwise drop a sidecar next to a legitimate file and have it read as a
+    /// verified signature indistinguishable from a genuinely embedded one.
+    #[test]
+    fn a_sidecar_manifest_next_to_an_untouched_asset_is_never_trusted_as_embedded() {
+        let directory = tempfile::tempdir().expect("temp dir must be created");
+        let source = directory.path().join("source.svg");
+        std::fs::write(&source, ONE_PIXEL_SVG).expect("source asset must be written");
+
+        // Sign into a throwaway embedded copy purely to obtain the manifest bytes `sign_file`
+        // hands back; the embedded copy itself is never used or read by this test.
+        let throwaway_embedded = directory.path().join("throwaway-embedded.svg");
+        let signer = c2pa::EphemeralSigner::new("onrecord-studio.test")
+            .expect("an ephemeral signing chain must be generated");
+        let mut builder = c2pa::Builder::from_context(c2pa::Context::new())
+            .with_definition(
+                r#"{
+                "claim_generator_info": [{ "name": "onrecord-studio", "version": "0.0.0-test" }],
+                "assertions": [
+                    {
+                        "label": "c2pa.actions.v2",
+                        "data": {
+                            "actions": [
+                                {
+                                    "action": "c2pa.created",
+                                    "digitalSourceType": "http://cv.iptc.org/newscodes/digitalsourcetype/digitalCapture"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }"#,
+            )
+            .expect("the manifest definition must parse");
+        let manifest_bytes = builder
+            .sign_file(&signer, &source, &throwaway_embedded)
+            .expect("signing must succeed");
+
+        // The attack: an untouched copy of the real asset (byte-identical to `source`, never
+        // signed) sitting next to a same-stem `.c2pa` sidecar carrying a validly signed manifest
+        // that was never bound to these particular bytes by anything this check controls.
+        let victim = directory.path().join("victim.svg");
+        std::fs::write(&victim, ONE_PIXEL_SVG).expect("victim asset must be written");
+        std::fs::write(victim.with_extension("c2pa"), &manifest_bytes)
+            .expect("sidecar manifest must be written");
+
+        let result = read_asset_provenance(&victim).expect("reading must not fail");
+        assert!(
+            !result.manifest_present,
+            "a sidecar manifest must never be read as though it were embedded in the asset"
+        );
+        assert_eq!(result.validation, None);
     }
 
     /// A file with no embedded provenance is not a failure, and must not be reported as a manifest.

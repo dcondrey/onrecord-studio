@@ -1,5 +1,6 @@
 //! Rebuildable local embedding projection.
 
+use crate::blocking::spawn_with;
 use crate::error::AppError;
 use crate::integrity::sha256_hex;
 use crate::types::{
@@ -43,6 +44,17 @@ pub struct VectorSourceDocument {
     pub raw_file_sha256: String,
     pub extracted_text_sha256: String,
     pub text: String,
+}
+
+struct SkipCheckFields {
+    portal_key: String,
+    document_id: u64,
+    jurisdiction: String,
+    agency_name: String,
+    title: String,
+    publication_date: Option<String>,
+    observation_date: Option<String>,
+    effective_date: Option<String>,
 }
 
 #[derive(Clone)]
@@ -109,6 +121,23 @@ impl VectorIndex {
             failed_documents: Arc::new(AtomicUsize::new(0)),
             last_error: Arc::new(Mutex::new(None)),
         })
+    }
+
+    /// Runs a synchronous DuckDB operation on a blocking worker rather than directly in the async
+    /// body, mirroring `DuckDbRepository::query_connection` (`storage/sqlite.rs`). Holding the
+    /// connection lock while running a blocking DuckDB call straight on a tokio worker thread
+    /// blocks that worker for the query's duration; this moves the call off it instead.
+    async fn query_connection<T, F>(&self, operation: &'static str, query: F) -> Result<T, AppError>
+    where
+        T: Send + 'static,
+        F: FnOnce(&mut Connection) -> Result<T, AppError> + Send + 'static,
+    {
+        let connection = Arc::clone(&self.connection);
+        spawn_with(operation, AppError::Internal, move || {
+            let mut connection = connection.blocking_lock();
+            query(&mut connection)
+        })
+        .await?
     }
 
     pub async fn model_status(&self) -> Result<EmbeddingModelStatus, AppError> {
@@ -181,18 +210,21 @@ impl VectorIndex {
         &self,
         total_source_documents: usize,
     ) -> Result<EmbeddingIndexStatus, AppError> {
-        let connection = self.connection.lock().await;
-        let (documents, chunks) = connection
-            .query_row(
-                "SELECT
+        let (documents, chunks) = self
+            .query_connection("Read embedding status", |connection| {
+                connection
+                    .query_row(
+                        "SELECT
                     (SELECT COUNT(DISTINCT portal_key || '|' || document_id) FROM embedding_chunks),
                     (SELECT COUNT(*) FROM embedding_chunks)",
-                [],
-                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
-            )
-            .map_err(|error| {
-                AppError::Storage(format!("Failed to read embedding status: {error}"))
-            })?;
+                        [],
+                        |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to read embedding status: {error}"))
+                    })
+            })
+            .await?;
         let indexed_document_count = documents.max(0) as usize;
         Ok(EmbeddingIndexStatus {
             indexed_document_count,
@@ -231,10 +263,11 @@ impl VectorIndex {
             })?;
             normalize(first)
         };
-        let connection = self.connection.lock().await;
-        let mut statement = connection
-            .prepare(
-                "SELECT stable_id, portal_key, request_id, document_id, file_name, title,
+        let results = self
+            .query_connection("Semantic search", move |connection| {
+                let mut statement = connection
+                    .prepare(
+                        "SELECT stable_id, portal_key, request_id, document_id, file_name, title,
                         agency_name, jurisdiction, document_type, publication_date,
                         observation_date, effective_date, character_start, character_end,
                         excerpt, vector
@@ -245,118 +278,121 @@ impl VectorIndex {
                    AND (?5 IS NULL OR LOWER(jurisdiction) = LOWER(?5))
                    AND (?6 IS NULL OR LOWER(COALESCE(document_type, '')) = LOWER(?6))
                  ORDER BY stable_id",
-            )
-            .map_err(|error| {
-                AppError::Storage(format!("Failed to prepare semantic search: {error}"))
-            })?;
-        let portal = filter
-            .portal_key
-            .clone()
-            .filter(|value| !value.trim().is_empty());
-        let agency = filter
-            .agency_name
-            .clone()
-            .filter(|value| !value.trim().is_empty());
-        let jurisdiction = filter
-            .jurisdiction
-            .clone()
-            .filter(|value| !value.trim().is_empty());
-        let doc_type = filter
-            .document_type
-            .clone()
-            .filter(|value| !value.trim().is_empty());
-        let rows = statement
-            .query_map(
-                params![
-                    EMBEDDING_MODEL_ID,
-                    EMBEDDING_MODEL_REVISION,
-                    portal,
-                    agency,
-                    jurisdiction,
-                    doc_type
-                ],
-                |row| {
-                    let blob: Vec<u8> = row.get(15)?;
-                    Ok((
-                        row.get::<_, String>(0)?,
-                        row.get::<_, String>(1)?,
-                        row.get::<_, u64>(2)?,
-                        row.get::<_, u64>(3)?,
-                        row.get::<_, String>(4)?,
-                        row.get::<_, String>(5)?,
-                        row.get::<_, String>(6)?,
-                        row.get::<_, String>(7)?,
-                        row.get::<_, Option<String>>(8)?,
-                        row.get::<_, Option<String>>(9)?,
-                        row.get::<_, Option<String>>(10)?,
-                        row.get::<_, Option<String>>(11)?,
-                        row.get::<_, i64>(12)?,
-                        row.get::<_, i64>(13)?,
-                        row.get::<_, String>(14)?,
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to prepare semantic search: {error}"))
+                    })?;
+                let portal = filter
+                    .portal_key
+                    .clone()
+                    .filter(|value| !value.trim().is_empty());
+                let agency = filter
+                    .agency_name
+                    .clone()
+                    .filter(|value| !value.trim().is_empty());
+                let jurisdiction = filter
+                    .jurisdiction
+                    .clone()
+                    .filter(|value| !value.trim().is_empty());
+                let doc_type = filter
+                    .document_type
+                    .clone()
+                    .filter(|value| !value.trim().is_empty());
+                let rows = statement
+                    .query_map(
+                        params![
+                            EMBEDDING_MODEL_ID,
+                            EMBEDDING_MODEL_REVISION,
+                            portal,
+                            agency,
+                            jurisdiction,
+                            doc_type
+                        ],
+                        |row| {
+                            let blob: Vec<u8> = row.get(15)?;
+                            Ok((
+                                row.get::<_, String>(0)?,
+                                row.get::<_, String>(1)?,
+                                row.get::<_, u64>(2)?,
+                                row.get::<_, u64>(3)?,
+                                row.get::<_, String>(4)?,
+                                row.get::<_, String>(5)?,
+                                row.get::<_, String>(6)?,
+                                row.get::<_, String>(7)?,
+                                row.get::<_, Option<String>>(8)?,
+                                row.get::<_, Option<String>>(9)?,
+                                row.get::<_, Option<String>>(10)?,
+                                row.get::<_, Option<String>>(11)?,
+                                row.get::<_, i64>(12)?,
+                                row.get::<_, i64>(13)?,
+                                row.get::<_, String>(14)?,
+                                blob,
+                            ))
+                        },
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to execute semantic search: {error}"))
+                    })?;
+                let mut results = Vec::new();
+                for row in rows {
+                    let (
+                        stable_id,
+                        portal_key,
+                        request_id,
+                        document_id,
+                        file_name,
+                        title,
+                        agency_name,
+                        jurisdiction,
+                        document_type,
+                        publication_date,
+                        observation_date,
+                        effective_date,
+                        start,
+                        end,
+                        excerpt,
                         blob,
-                    ))
-                },
-            )
-            .map_err(|error| {
-                AppError::Storage(format!("Failed to execute semantic search: {error}"))
-            })?;
-        let mut results = Vec::new();
-        for row in rows {
-            let (
-                stable_id,
-                portal_key,
-                request_id,
-                document_id,
-                file_name,
-                title,
-                agency_name,
-                jurisdiction,
-                document_type,
-                publication_date,
-                observation_date,
-                effective_date,
-                start,
-                end,
-                excerpt,
-                blob,
-            ) = row.map_err(|error| {
-                AppError::Storage(format!("Failed to read semantic result: {error}"))
-            })?;
-            if !date_filter_matches(
-                &publication_date,
-                &observation_date,
-                &effective_date,
-                &filter,
-            ) {
-                continue;
-            }
-            let vector = decode_vector(&blob)?;
-            let score = dot(&query_embedding, &vector);
-            results.push(HybridSearchResult {
-                stable_id,
-                portal_key,
-                request_id,
-                document_id,
-                file_name,
-                title,
-                agency_name,
-                jurisdiction,
-                document_type,
-                publication_date,
-                observation_date,
-                effective_date,
-                character_start: start.max(0) as usize,
-                character_end: end.max(0) as usize,
-                excerpt,
-                lexical_rank: None,
-                semantic_score: Some(score as f64),
-                fused_score: score as f64,
-                retrieval_status: "SEMANTIC_READY".to_string(),
-            });
-        }
-        results.sort_by(|left, right| right.fused_score.total_cmp(&left.fused_score));
-        dedupe_results(&mut results);
-        results.truncate(limit);
+                    ) = row.map_err(|error| {
+                        AppError::Storage(format!("Failed to read semantic result: {error}"))
+                    })?;
+                    if !date_filter_matches(
+                        &publication_date,
+                        &observation_date,
+                        &effective_date,
+                        &filter,
+                    ) {
+                        continue;
+                    }
+                    let vector = decode_vector(&blob)?;
+                    let score = dot(&query_embedding, &vector);
+                    results.push(HybridSearchResult {
+                        stable_id,
+                        portal_key,
+                        request_id,
+                        document_id,
+                        file_name,
+                        title,
+                        agency_name,
+                        jurisdiction,
+                        document_type,
+                        publication_date,
+                        observation_date,
+                        effective_date,
+                        character_start: start.max(0) as usize,
+                        character_end: end.max(0) as usize,
+                        excerpt,
+                        lexical_rank: None,
+                        semantic_score: Some(score as f64),
+                        fused_score: score as f64,
+                        retrieval_status: "SEMANTIC_READY".to_string(),
+                    });
+                }
+                results.sort_by(|left, right| right.fused_score.total_cmp(&left.fused_score));
+                dedupe_results(&mut results);
+                results.truncate(limit);
+                Ok(results)
+            })
+            .await?;
         Ok(results)
     }
 
@@ -367,17 +403,20 @@ impl VectorIndex {
     ) -> Result<EmbeddingIndexReport, AppError> {
         self.initialize_model().await?;
         if rebuild {
-            let connection = self.connection.lock().await;
-            connection
-                .execute("DELETE FROM embedding_chunks", [])
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to clear vector projection: {error}"))
-                })?;
-            connection
-                .execute("DELETE FROM embedding_document_state", [])
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to clear vector state: {error}"))
-                })?;
+            self.query_connection("Clear vector projection", |connection| {
+                connection
+                    .execute("DELETE FROM embedding_chunks", [])
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to clear vector projection: {error}"))
+                    })?;
+                connection
+                    .execute("DELETE FROM embedding_document_state", [])
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to clear vector state: {error}"))
+                    })?;
+                Ok(())
+            })
+            .await?;
         }
         let mut report = EmbeddingIndexReport {
             indexed_documents: 0,
@@ -416,37 +455,54 @@ impl VectorIndex {
         document: VectorSourceDocument,
     ) -> Result<IndexOneOutcome, AppError> {
         let content_hash = document.extracted_text_sha256.clone();
-        {
-            let connection = self.connection.lock().await;
-            let current = connection
-                .query_row(
-                    "SELECT content_sha256 FROM embedding_document_state
+        let skip_check = SkipCheckFields {
+            portal_key: document.portal_key.clone(),
+            document_id: document.document_id,
+            jurisdiction: document.jurisdiction.clone(),
+            agency_name: document.agency_name.clone(),
+            title: document.title.clone(),
+            publication_date: document.publication_date.clone(),
+            observation_date: document.observation_date.clone(),
+            effective_date: document.effective_date.clone(),
+        };
+        let content_hash_for_check = content_hash.clone();
+        let skipped = self
+            .query_connection("Inspect embedding state", move |connection| {
+                let content_hash = content_hash_for_check;
+                let current = connection
+                    .query_row(
+                        "SELECT content_sha256 FROM embedding_document_state
                      WHERE portal_key = ?1 AND document_id = ?2 AND model_id = ?3
                        AND model_revision = ?4 AND chunking_version = ?5",
-                    params![
-                        document.portal_key,
-                        document.document_id,
-                        EMBEDDING_MODEL_ID,
-                        EMBEDDING_MODEL_REVISION,
-                        EMBEDDING_CHUNKING_VERSION
-                    ],
-                    |row| row.get::<_, String>(0),
-                )
-                .optional()
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to inspect embedding state: {error}"))
-                })?;
-            if current.as_deref() == Some(&content_hash) {
-                // Source attribution may be corrected even when the extracted text is unchanged.
-                connection.execute("UPDATE embedding_chunks SET jurisdiction = ?1, agency_name = ?2,
+                        params![
+                            skip_check.portal_key,
+                            skip_check.document_id,
+                            EMBEDDING_MODEL_ID,
+                            EMBEDDING_MODEL_REVISION,
+                            EMBEDDING_CHUNKING_VERSION
+                        ],
+                        |row| row.get::<_, String>(0),
+                    )
+                    .optional()
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to inspect embedding state: {error}"))
+                    })?;
+                if current.as_deref() == Some(&content_hash) {
+                    // Source attribution may be corrected even when the extracted text is unchanged.
+                    connection.execute("UPDATE embedding_chunks SET jurisdiction = ?1, agency_name = ?2,
                     title = ?3, publication_date = ?4, observation_date = ?5, effective_date = ?6
                     WHERE portal_key = ?7 AND document_id = ?8 AND model_id = ?9 AND model_revision = ?10",
-                    params![document.jurisdiction, document.agency_name, document.title,
-                        document.publication_date, document.observation_date, document.effective_date,
-                        document.portal_key, document.document_id, EMBEDDING_MODEL_ID, EMBEDDING_MODEL_REVISION])
+                    params![skip_check.jurisdiction, skip_check.agency_name, skip_check.title,
+                        skip_check.publication_date, skip_check.observation_date, skip_check.effective_date,
+                        skip_check.portal_key, skip_check.document_id, EMBEDDING_MODEL_ID, EMBEDDING_MODEL_REVISION])
                     .map_err(|error| AppError::Storage(format!("Failed to refresh indexed source attribution: {error}")))?;
-                return Ok(IndexOneOutcome::Skipped);
-            }
+                    return Ok(true);
+                }
+                Ok(false)
+            })
+            .await?;
+        if skipped {
+            return Ok(IndexOneOutcome::Skipped);
         }
 
         let chunks = chunk_text(&document.text);
@@ -476,31 +532,37 @@ impl VectorIndex {
             )));
         }
 
-        let mut connection = self.connection.lock().await;
-        let tx = connection.transaction().map_err(|error| {
-            AppError::Storage(format!("Failed to begin vector transaction: {error}"))
-        })?;
-        tx.execute(
-            "DELETE FROM embedding_chunks
+        let chunk_count = self
+            .query_connection("Store document embeddings", move |connection| {
+                let tx = connection.transaction().map_err(|error| {
+                    AppError::Storage(format!("Failed to begin vector transaction: {error}"))
+                })?;
+                tx.execute(
+                    "DELETE FROM embedding_chunks
              WHERE portal_key = ?1 AND document_id = ?2
                AND model_id = ?3 AND model_revision = ?4",
-            params![
-                document.portal_key,
-                document.document_id,
-                EMBEDDING_MODEL_ID,
-                EMBEDDING_MODEL_REVISION
-            ],
-        )
-        .map_err(|error| AppError::Storage(format!("Failed to replace old embeddings: {error}")))?;
-        for (chunk, vector) in chunks.iter().zip(embeddings) {
-            let vector = encode_vector(&normalize(vector));
-            let stable_id = format!(
-                "{}:{}:{}:{}",
-                document.portal_key, document.document_id, chunk.start, EMBEDDING_MODEL_REVISION
-            );
-            let chunk_hash = sha256_hex(chunk.text.as_bytes());
-            tx.execute(
-                "INSERT INTO embedding_chunks (
+                    params![
+                        document.portal_key,
+                        document.document_id,
+                        EMBEDDING_MODEL_ID,
+                        EMBEDDING_MODEL_REVISION
+                    ],
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to replace old embeddings: {error}"))
+                })?;
+                for (chunk, vector) in chunks.iter().zip(embeddings) {
+                    let vector = encode_vector(&normalize(vector));
+                    let stable_id = format!(
+                        "{}:{}:{}:{}",
+                        document.portal_key,
+                        document.document_id,
+                        chunk.start,
+                        EMBEDDING_MODEL_REVISION
+                    );
+                    let chunk_hash = sha256_hex(chunk.text.as_bytes());
+                    tx.execute(
+                        "INSERT INTO embedding_chunks (
                     stable_id, portal_key, request_id, document_id, file_name, title,
                     agency_name, jurisdiction, document_type, publication_date, observation_date,
                     effective_date, character_start, character_end, excerpt, content_sha256,
@@ -509,39 +571,39 @@ impl VectorIndex {
                  ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14,
                            ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24,
                            strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'))",
-                params![
-                    stable_id,
-                    document.portal_key,
-                    document.request_id,
-                    document.document_id,
-                    document.file_name,
-                    document.title,
-                    document.agency_name,
-                    document.jurisdiction,
-                    document.document_type,
-                    document.publication_date,
-                    document.observation_date,
-                    document.effective_date,
-                    chunk.start as i64,
-                    chunk.end as i64,
-                    chunk.text,
-                    content_hash,
-                    chunk_hash,
-                    EMBEDDING_MODEL_ID,
-                    EMBEDDING_MODEL_REVISION,
-                    EMBEDDING_DIMENSION as i64,
-                    EMBEDDING_DISTANCE_METRIC,
-                    EMBEDDING_NORMALIZATION,
-                    EMBEDDING_CHUNKING_VERSION,
-                    vector,
-                ],
-            )
-            .map_err(|error| {
-                AppError::Storage(format!("Failed to store embedding chunk: {error}"))
-            })?;
-        }
-        tx.execute(
-            "INSERT INTO embedding_document_state (
+                        params![
+                            stable_id,
+                            document.portal_key,
+                            document.request_id,
+                            document.document_id,
+                            document.file_name,
+                            document.title,
+                            document.agency_name,
+                            document.jurisdiction,
+                            document.document_type,
+                            document.publication_date,
+                            document.observation_date,
+                            document.effective_date,
+                            chunk.start as i64,
+                            chunk.end as i64,
+                            chunk.text,
+                            content_hash,
+                            chunk_hash,
+                            EMBEDDING_MODEL_ID,
+                            EMBEDDING_MODEL_REVISION,
+                            EMBEDDING_DIMENSION as i64,
+                            EMBEDDING_DISTANCE_METRIC,
+                            EMBEDDING_NORMALIZATION,
+                            EMBEDDING_CHUNKING_VERSION,
+                            vector,
+                        ],
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to store embedding chunk: {error}"))
+                    })?;
+                }
+                tx.execute(
+                    "INSERT INTO embedding_document_state (
                 portal_key, document_id, content_sha256, raw_file_sha256, model_id,
                 model_revision, dimension, distance_metric, normalization, chunking_version,
                 chunk_count, indexed_at
@@ -552,35 +614,39 @@ impl VectorIndex {
                            raw_file_sha256 = excluded.raw_file_sha256,
                            chunk_count = excluded.chunk_count,
                            indexed_at = excluded.indexed_at",
-            params![
-                document.portal_key,
-                document.document_id,
-                content_hash,
-                document.raw_file_sha256,
-                EMBEDDING_MODEL_ID,
-                EMBEDDING_MODEL_REVISION,
-                EMBEDDING_DIMENSION as i64,
-                EMBEDDING_DISTANCE_METRIC,
-                EMBEDDING_NORMALIZATION,
-                EMBEDDING_CHUNKING_VERSION,
-                chunks.len() as i64,
-            ],
-        )
-        .map_err(|error| {
-            AppError::Storage(format!("Failed to store embedding document state: {error}"))
-        })?;
-        tx.commit().map_err(|error| {
-            AppError::Storage(format!("Failed to commit vector transaction: {error}"))
-        })?;
-        Ok(IndexOneOutcome::Indexed(chunks.len()))
+                    params![
+                        document.portal_key,
+                        document.document_id,
+                        content_hash,
+                        document.raw_file_sha256,
+                        EMBEDDING_MODEL_ID,
+                        EMBEDDING_MODEL_REVISION,
+                        EMBEDDING_DIMENSION as i64,
+                        EMBEDDING_DISTANCE_METRIC,
+                        EMBEDDING_NORMALIZATION,
+                        EMBEDDING_CHUNKING_VERSION,
+                        chunks.len() as i64,
+                    ],
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to store embedding document state: {error}"))
+                })?;
+                tx.commit().map_err(|error| {
+                    AppError::Storage(format!("Failed to commit vector transaction: {error}"))
+                })?;
+                Ok(chunks.len())
+            })
+            .await?;
+        Ok(IndexOneOutcome::Indexed(chunk_count))
     }
 
     async fn record_model_manifest(&self) -> Result<(), AppError> {
         let (count, hash) = artifact_manifest(&self.cache_dir)?;
-        let connection = self.connection.lock().await;
-        connection
-            .execute(
-                "INSERT INTO embedding_model_manifests (
+        let cache_dir = self.cache_dir.display().to_string();
+        self.query_connection("Record embedding model manifest", move |connection| {
+            connection
+                .execute(
+                    "INSERT INTO embedding_model_manifests (
                     model_id, model_revision, dimension, distance_metric, normalization,
                     cache_dir, artifact_count, artifact_manifest_sha256, recorded_at
                  ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8,
@@ -589,21 +655,23 @@ impl VectorIndex {
                  DO UPDATE SET artifact_count = excluded.artifact_count,
                                artifact_manifest_sha256 = excluded.artifact_manifest_sha256,
                                recorded_at = excluded.recorded_at",
-                params![
-                    EMBEDDING_MODEL_ID,
-                    EMBEDDING_MODEL_REVISION,
-                    EMBEDDING_DIMENSION as i64,
-                    EMBEDDING_DISTANCE_METRIC,
-                    EMBEDDING_NORMALIZATION,
-                    self.cache_dir.display().to_string(),
-                    count as i64,
-                    hash,
-                ],
-            )
-            .map_err(|error| {
-                AppError::Storage(format!("Failed to record model manifest: {error}"))
-            })?;
-        Ok(())
+                    params![
+                        EMBEDDING_MODEL_ID,
+                        EMBEDDING_MODEL_REVISION,
+                        EMBEDDING_DIMENSION as i64,
+                        EMBEDDING_DISTANCE_METRIC,
+                        EMBEDDING_NORMALIZATION,
+                        cache_dir,
+                        count as i64,
+                        hash,
+                    ],
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to record model manifest: {error}"))
+                })?;
+            Ok(())
+        })
+        .await
     }
 }
 

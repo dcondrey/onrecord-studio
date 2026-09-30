@@ -3,6 +3,7 @@
 use crate::blocking::spawn as spawn_blocking;
 use crate::error::AppError;
 use crate::file_name::sanitized_component;
+use crate::ingestion::backoff;
 use crate::ingestion::client::ApiClient;
 use crate::ingestion::client::{
     DataCatalogEndpoint, PublicEmbeddedConnector, PublicResourceInspection, PublicResourceKind,
@@ -37,6 +38,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
+use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{mpsc, watch, Mutex, RwLock, Semaphore};
 use uuid::Uuid;
@@ -2040,10 +2042,12 @@ async fn worker_loop(
 }
 
 fn durable_retry_delay_seconds(attempt: u64) -> u64 {
-    1_u64
-        .checked_shl(attempt.saturating_sub(1).min(5) as u32)
-        .unwrap_or(30)
-        .min(30)
+    backoff::exponential_delay(
+        attempt.saturating_sub(1),
+        Duration::from_secs(1),
+        Duration::from_secs(30),
+    )
+    .as_secs()
 }
 
 fn durable_retry_delay_for_error(error: &AppError, attempt: u64, jitter_seed: u64) -> Option<u64> {

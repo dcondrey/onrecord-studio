@@ -245,9 +245,13 @@ fn detect_phone_numbers(text: &str) -> Vec<Candidate> {
         .char_indices()
         .chain(std::iter::once((text.len(), '\0')))
     {
-        let allowed = character.is_ascii_digit()
-            || matches!(character, '+' | '(' | ')' | '-' | '.' | ' ')
-            || character.is_ascii_alphabetic();
+        // Letters must never extend a phone segment: a run of digits/punctuation bounded only by
+        // non-digit, non-phone-punctuation characters (crucially including ordinary letters) is
+        // what keeps two unrelated numbers in the same sentence ("Item 605 ... budget of 4500")
+        // from being merged into one digit run and read as a single 10-digit phone-shaped window.
+        // Previously allowing letters here let the segment span whole sentences of prose.
+        let allowed =
+            character.is_ascii_digit() || matches!(character, '+' | '(' | ')' | '-' | '.' | ' ');
         if allowed {
             segment_start.get_or_insert(index);
             continue;
@@ -498,6 +502,44 @@ mod tests {
         assert!(!result.masked_text.contains("123-45-6789"));
         assert!(!result.masked_text.contains("555-0198"));
         assert!(!result.masked_text.contains("440 Cedar"));
+    }
+
+    /// The phone detector's segment used to include ordinary letters, so an entire sentence of
+    /// prose became one digit run: the tail of "605", all of "2023", and the head of "4500"
+    /// formed a spurious 10-digit NANP-shaped window spanning three unrelated numbers, and
+    /// ordinary case-number/year/budget prose was masked as a phone number that was never there.
+    #[test]
+    fn does_not_fabricate_a_phone_number_from_unrelated_digits_in_the_same_sentence() {
+        let input = "Item 605 approved 2023 budget of 4500";
+        let result = mask_pii(input).unwrap();
+        assert!(
+            result.findings.is_empty(),
+            "no real phone number exists in this text; got {:?}",
+            result.findings
+        );
+        assert_eq!(result.masked_text, input);
+    }
+
+    /// The same over-permissive segmentation let a spurious cross-word digit run ("4412" +
+    /// "619") start earlier than the real phone number and win the overlap tie-break by position,
+    /// masking a bogus span while leaking the real number's last digit in cleartext.
+    #[test]
+    fn detects_the_real_phone_number_and_not_a_cross_word_digit_run_that_starts_earlier() {
+        let input = "Room 4412 call 619-555-0198";
+        let result = mask_pii(input).unwrap();
+        assert_eq!(result.findings.len(), 1, "findings: {:?}", result.findings);
+        assert_eq!(
+            &input[result.findings[0].byte_start..result.findings[0].byte_end],
+            "619-555-0198"
+        );
+        assert!(
+            !result.masked_text.contains("0198"),
+            "the real phone number must be masked"
+        );
+        assert!(
+            result.masked_text.contains("Room 4412"),
+            "the unrelated room number must survive untouched"
+        );
     }
 
     #[test]

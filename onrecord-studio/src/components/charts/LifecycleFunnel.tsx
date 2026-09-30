@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import AnalyticsUnavailable from './AnalyticsUnavailable';
 import { cn } from '../../utils/cn';
+import { ShapeGlyph } from '../ui/shapeGlyph';
 
 export default function LifecycleFunnel() {
   const profiles = useAppStore((state) => state.agencyProfiles);
@@ -76,7 +77,7 @@ export default function LifecycleFunnel() {
 function FlagMark({ label }: { label: string }) {
   return (
     <svg viewBox="-6 -6 12 12" className="h-2 w-2 shrink-0" role="img" aria-label={label}>
-      <polygon points="0,-5 4.6,3.9 -4.6,3.9" fill="currentColor" />
+      <ShapeGlyph shape="triangle" cx={0} cy={0} radius={5} fill="currentColor" />
     </svg>
   );
 }

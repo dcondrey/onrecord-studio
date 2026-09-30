@@ -45,5 +45,12 @@ export interface CaseworkLead {
 export interface CaseworkState { availableEvidence: CaseworkCitation[]; cases: CaseworkCase[]; events: CaseworkEvent[]; leads: CaseworkLead[] }
 export interface CaseworkImportPreview {
   mode: string; localRevision: number | null; packetSha256: string; warnings: string[];
-  case: CaseworkCase; contributor: string;
+  case: CaseworkCase; contributor: string; signerKeyId: string | null;
 }
+export interface WithheldCitationRequest { citationId: string; reason: string }
+export interface CaseExportLedgerEntry {
+  sequence: number; manifestSha256: string; previousManifestSha256: string | null;
+  signerKeyId: string; reservedAt: string; outcome: string;
+  outcomeDetail: string | null; outcomeRecordedAt: string | null; previousLinkValid: boolean;
+}
+export interface CompromisedImportWarning { revision: number; signerKeyId: string; revokedAt: string; reason: string }

@@ -11,6 +11,17 @@ pub enum CorpusEntityKind {
     Acronym,
     Organization,
     Money,
+    /// A human actor. Distinct from `EmailAddress` because one person may hold several addresses
+    /// or none; policy-vs-practice reasoning has to name the person, not the mailbox.
+    Person,
+    /// A named function ("Chief Executive", "Records Officer") independent of the person filling
+    /// it. Needed so an org chart claim can be checked against operational signers.
+    Role,
+    /// A named seat that ties a `Role` to a specific unit ("Records Officer for Department X").
+    Position,
+    /// A document's role in a policy-vs-practice comparison — policy vs. record vs. response vs.
+    /// minutes vs. contract vs. denial vs. budget vs. other. Authoritative from observational.
+    DocumentClass,
 }
 
 impl CorpusEntityKind {
@@ -24,6 +35,78 @@ impl CorpusEntityKind {
             Self::Acronym => "ACRONYM",
             Self::Organization => "ORGANIZATION",
             Self::Money => "MONEY",
+            Self::Person => "PERSON",
+            Self::Role => "ROLE",
+            Self::Position => "POSITION",
+            Self::DocumentClass => "DOCUMENT_CLASS",
+        }
+    }
+}
+
+/// The role a `Money` mention plays in the document it appears in.
+///
+/// `Money` entities are shared across documents (a shared amount is a graph edge), but the same
+/// amount can be an invoice line in one document, a budget appropriation in another, and a
+/// payment record in a third — and the point of the reasoning is often "the same number, three
+/// different ledgers". The context lives on the mention, not on the entity.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum MoneyContext {
+    Invoice,
+    Approval,
+    Budget,
+    Payment,
+    Other,
+}
+
+impl MoneyContext {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Invoice => "INVOICE",
+            Self::Approval => "APPROVAL",
+            Self::Budget => "BUDGET",
+            Self::Payment => "PAYMENT",
+            Self::Other => "OTHER",
+        }
+    }
+}
+
+/// What an edge is claiming, not merely that it exists.
+///
+/// `CoOccurrence` is the current default: two entities appeared near each other in one segment,
+/// which the app derived and can re-derive. The other variants encode edges the text actually
+/// carried — a signature line for `SignedBy`, an approval sentence for `Approved`, a statute
+/// citation for `Cites`. `Promises` and `Delivered` are the anchor of policy-vs-practice
+/// comparison: a document that says an obligation was undertaken vs. a document that says it was
+/// fulfilled. `Supersedes` and `Amends` carry temporal replacement between two documents.
+///
+/// A reader that draws a `CoOccurrence` edge alike to a `SignedBy` edge makes a claim about the
+/// world the app did not — the same failure `RelationshipBasis` guards against, one dimension
+/// down. Distance in the graph does not equal semantic strength.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum RelationshipKind {
+    CoOccurrence,
+    SignedBy,
+    Approved,
+    Cites,
+    Promises,
+    Delivered,
+    Supersedes,
+    Amends,
+}
+
+impl RelationshipKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::CoOccurrence => "CO_OCCURRENCE",
+            Self::SignedBy => "SIGNED_BY",
+            Self::Approved => "APPROVED",
+            Self::Cites => "CITES",
+            Self::Promises => "PROMISES",
+            Self::Delivered => "DELIVERED",
+            Self::Supersedes => "SUPERSEDES",
+            Self::Amends => "AMENDS",
         }
     }
 }
@@ -241,8 +324,72 @@ pub struct CorpusEntityNode {
 pub struct CorpusEntityEdge {
     pub neighbor: CorpusEntityNode,
     pub basis: RelationshipBasis,
+    /// What the edge is claiming. `CoOccurrence` is the default: the app derived it. Typed
+    /// variants (`SignedBy`, `Cites`, `Promises`, `Delivered`, `Supersedes`, `Amends`,
+    /// `Approved`) mean the text actually carried that relationship. A reader that renders
+    /// them alike drops the difference between "were near each other in one paragraph" and
+    /// "one signed the other into effect".
+    pub kind: RelationshipKind,
     pub shared_document_count: u64,
     pub confidence_basis_points: u16,
+    /// RFC 3339 UTC. Inclusive lower bound on the edge's temporal validity, when the segment
+    /// carried a date; `None` when it did not. Never populated to a default value — an unknown
+    /// validity and one that starts at the epoch are not the same claim.
+    #[serde(default)]
+    pub valid_from: Option<String>,
+    /// RFC 3339 UTC. Inclusive upper bound on the edge's temporal validity, or `None` for open-
+    /// ended / unknown. Distinguishing absent from "still valid" belongs to the reader, not the
+    /// schema.
+    #[serde(default)]
+    pub valid_until: Option<String>,
+}
+
+/// One step along a path returned by [`crate::storage::corpus::CorpusIndex::find_entity_paths`].
+///
+/// The `neighbor` is the node this step arrived at; the incoming `edge_kind`, `edge_basis`, and
+/// `shared_document_count` describe the arc traversed. The step at index 0 in a path is the
+/// starting entity itself with `edge_kind = CoOccurrence` and `shared_document_count = 0` as a
+/// sentinel — a callsite that would treat the origin's edge as real should reject step 0
+/// explicitly rather than relying on the sentinel to be safe.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EntityPathStep {
+    pub neighbor: CorpusEntityNode,
+    pub edge_kind: RelationshipKind,
+    pub edge_basis: RelationshipBasis,
+    pub shared_document_count: u64,
+}
+
+/// A path of entities linking `from` to `to`, ordered by traversal.
+///
+/// `hops` is `steps.len() - 1` for a caller that just wants length. Confidence is the weakest
+/// edge in the path — a path is only as strong as its weakest arc, and reporting the strongest
+/// would flatter chains held together by one thin edge.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EntityPath {
+    pub steps: Vec<EntityPathStep>,
+    pub hops: usize,
+    /// Basis points. The minimum `edge_confidence` across steps > 0. `None` if the path is
+    /// trivial (start == end); a zero-hop path is a real answer but has no edge to be as strong
+    /// as, so absence is honest.
+    pub weakest_confidence_basis_points: Option<u16>,
+}
+
+/// An entity ranked by how much information flows through it in the current graph.
+///
+/// `brokerage_score` is a degree-based approximation of betweenness centrality: real betweenness
+/// on a graph this size is O(V*E) per source and unaffordable in a bounded query. The score
+/// counts weighted incident-edge strength — high-degree, high-shared-document nodes score
+/// highest. `is_approximation = true` on every row so a reader never mistakes this for a
+/// computed centrality measure it would defend in court.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EntityBroker {
+    pub entity: CorpusEntityNode,
+    pub brokerage_score: u64,
+    pub distinct_neighbors: u64,
+    pub is_approximation: bool,
 }
 
 /// The subgraph around one entity.

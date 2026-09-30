@@ -1,5 +1,6 @@
 //! Secure portal discovery, traffic shaping, scheduling, and extraction pipelines.
 
+pub(crate) mod backoff;
 pub mod client;
 pub mod host_policy;
 pub mod limiter;

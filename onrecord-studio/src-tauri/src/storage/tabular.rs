@@ -350,6 +350,24 @@ fn workbook(bytes: &[u8], worksheet: Option<&str>) -> Result<PreparedTable, AppE
             )))
         }
     };
+    // `worksheet_range` allocates a dense matrix spanning the sheet's bounding box before it
+    // returns, so `check_size` below runs far too late for xlsx: a two-cell sheet holding only
+    // A1 and XFD1048576 spans over 17 billion cells, and the allocation failure aborts the whole
+    // process rather than raising a catchable error. Measure the real extent by streaming cells
+    // first (allocates nothing per cell) and reject before calling `worksheet_range` at all. xls/
+    // xlsb/ods expose no streaming reader and build the same dense matrix regardless, but their
+    // formats cap the legacy grid at 65,536 x 256, bounding the worst case near 536 MB rather
+    // than unbounded, so `check_size` after allocation is an acceptable (if slower) backstop
+    // there — matching the same tradeoff already made in `parsers::excel`.
+    if let calamine::Sheets::Xlsx(xlsx) = &mut book {
+        let extent = crate::parsers::excel::measure_xlsx_extent(xlsx, &name)
+            .map_err(|e| invalid(format!("Worksheet: {e}")))?;
+        if extent > MAX_CELLS as u64 {
+            return Err(invalid(format!(
+                "Worksheet spans {extent} cells; limit is {MAX_CELLS}"
+            )));
+        }
+    }
     let range = book
         .worksheet_range(&name)
         .map_err(|e| invalid(format!("Worksheet: {e}")))?;

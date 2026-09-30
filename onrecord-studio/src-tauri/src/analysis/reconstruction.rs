@@ -3,7 +3,7 @@
 use crate::{error::AppError, integrity::sha256_hex, storage::pii::mask_pii, types::*};
 use chrono::NaiveDate;
 use regex::Regex;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::LazyLock;
 
 pub const VERSION: &str = "cross-record-constraints-v1";
@@ -346,8 +346,17 @@ fn numeric_findings(
     options: &ReconstructionOptions,
 ) -> Vec<ReconstructionFinding> {
     let observations: Vec<_> = documents.iter().flat_map(|d| numbers(d)).collect();
+    let mut pattern_regex_cache: HashMap<String, Regex> = HashMap::new();
+    let mut compiled_pattern = |pattern: &str| -> Regex {
+        pattern_regex_cache
+            .entry(pattern.to_string())
+            .or_insert_with(|| {
+                Regex::new(&numeric_pattern(pattern, options.fixed_width_masks)).unwrap()
+            })
+            .clone()
+    };
     numbers(target).into_iter().filter(|o| MASK.is_match(&o.pattern)).take(24).map(|clue| {
-        let constraint = Regex::new(&numeric_pattern(&clue.pattern, options.fixed_width_masks)).unwrap();
+        let constraint = compiled_pattern(&clue.pattern);
         let (left,right) = window(&target.text, clue.start, clue.end, 200);
         let cite = target.cite(left,right);
         let mut candidates = vec![];
@@ -361,7 +370,7 @@ fn numeric_findings(
                 candidates.push(ReconstructionCandidate { value: other.pattern.clone(), evidence, supports: vec![link, "A related record publishes the complete value.".into()], limitations: vec!["Record linkage uses matching nearby keys; confirm the original records refer to the same transaction/version.".into()], contradicted: !constraint.is_match(&other_clean) });
                 continue;
             }
-            let other_constraint = Regex::new(&numeric_pattern(&other.pattern, options.fixed_width_masks)).unwrap();
+            let other_constraint = compiled_pattern(&other.pattern);
             let mut proposals = BTreeSet::new();
             if options.fixed_width_masks {
                 if let Some(merged) = merge_fixed_masks(&clue.pattern, &other.pattern) { proposals.insert(merged); }

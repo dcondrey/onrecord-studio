@@ -3,6 +3,7 @@ import { useAppStore } from '../../store/useAppStore';
 import type { AgencyPerformanceProfile } from '../../types';
 import { cn } from '../../utils/cn';
 import Icon from '../ui/icons';
+import { ShapeGlyph } from '../ui/shapeGlyph';
 import AnalyticsUnavailable from './AnalyticsUnavailable';
 
 type Severity = 'typical' | 'elevated' | 'critical';
@@ -292,13 +293,8 @@ function LegendDot({ severity, label }: { severity: Severity; label: string }) {
 // Each band carries its own outline, so the map stays readable when the three accent colors are
 // indistinguishable to the reader: circle for typical, triangle for elevated, diamond for critical.
 function SeverityMark({ severity, cx, cy, radius, ...visual }: { severity: Severity; cx: number; cy: number; radius: number } & Omit<SVGProps<SVGGeometryElement>, 'ref'>) {
-  if (severity === 'critical') {
-    return <polygon points={`${cx},${cy - radius} ${cx + radius},${cy} ${cx},${cy + radius} ${cx - radius},${cy}`} {...visual} />;
-  }
-  if (severity === 'elevated') {
-    return <polygon points={`${cx},${cy - radius} ${cx + radius * 0.92},${cy + radius * 0.78} ${cx - radius * 0.92},${cy + radius * 0.78}`} {...visual} />;
-  }
-  return <circle cx={cx} cy={cy} r={radius} {...visual} />;
+  const shape = severity === 'critical' ? 'diamond' : severity === 'elevated' ? 'triangle' : 'circle';
+  return <ShapeGlyph shape={shape} cx={cx} cy={cy} radius={radius} {...visual} />;
 }
 
 function severityColor(severity: Severity) {

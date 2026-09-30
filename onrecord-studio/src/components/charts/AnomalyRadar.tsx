@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import type { AgencyPerformanceProfile } from '../../types';
+import { ShapeGlyph } from '../ui/shapeGlyph';
 import AnalyticsUnavailable from './AnalyticsUnavailable';
+
+type SeverityBand = 'typical' | 'elevated' | 'critical';
 
 interface ArcDatum {
   key: string;
@@ -13,7 +16,14 @@ interface ArcDatum {
   innerRadius: number;
   outerRadius: number;
   color: string;
+  severity: SeverityBand;
   profile: AgencyPerformanceProfile | null;
+}
+
+// Mirrors PerformanceScatter's severity vocabulary: triangle for elevated, diamond for critical.
+// Typical arcs get no glyph, since the wedge shape itself already reads as the unmarked case.
+function severityBand(severity: number): SeverityBand {
+  return severity >= 0.5 ? 'critical' : severity > 0.2 ? 'elevated' : 'typical';
 }
 
 const palette = ['var(--viz-indigo)', 'var(--viz-cyan)', 'var(--viz-purple)', 'var(--viz-amber)', 'var(--viz-emerald)'];
@@ -90,6 +100,7 @@ export default function AnomalyRadar() {
         innerRadius: 35,
         outerRadius: 65,
         color: palette[portalIndex % palette.length],
+        severity: 'typical',
         profile: null,
       });
       let agencyCursor = portalStart;
@@ -103,6 +114,7 @@ export default function AnomalyRadar() {
               + profile.suspiciousFastClosureCount / Math.max(1, profile.totalRequestsProcessed),
           );
           const base = palette[portalIndex % palette.length];
+          const band = severityBand(severity);
           result.push({
             key: `${portalKey}-${profile.agencyId}`,
             label: profile.agencyName,
@@ -115,7 +127,8 @@ export default function AnomalyRadar() {
             // Alarm colour follows the severity, not the agency's position in the list: parity
             // gave two agencies with identical deviation different colours, which reads as a
             // difference in the evidence.
-            color: severity >= 0.5 ? 'var(--viz-red)' : severity > 0.2 ? 'var(--viz-amber)' : base,
+            color: band === 'critical' ? 'var(--viz-red)' : band === 'elevated' ? 'var(--viz-amber)' : base,
+            severity: band,
             profile,
           });
           agencyCursor += sweep;
@@ -175,26 +188,41 @@ export default function AnomalyRadar() {
       </div>
       <div className="grid flex-1 grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_160px]">
         <svg viewBox="0 0 240 240" className="mx-auto h-full max-h-[280px] w-full max-w-[320px]" aria-label="Multi-portal department deviation sunburst">
-          {arcs.map((arc) => (
-            <path
-              key={arc.key}
-              d={arcPath(arc.startAngle, arc.endAngle, arc.innerRadius, arc.outerRadius)}
-              fill={arc.color}
-              fillOpacity={focused?.key === arc.key ? 1 : arc.profile ? 0.88 : 0.72}
-              stroke="var(--chart-background)"
-              strokeWidth="1.5"
-              className="cursor-pointer outline-none transition-opacity hover:opacity-100 focus:opacity-100"
-              role="button"
-              tabIndex={0}
-              aria-label={`Filter ${arc.label}`}
-              onMouseEnter={() => setFocused(arc)}
-              onFocus={() => setFocused(arc)}
-              onClick={() => activate(arc)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') activate(arc);
-              }}
-            />
-          ))}
+          {arcs.map((arc) => {
+            const mid = point((arc.innerRadius + arc.outerRadius) / 2, (arc.startAngle + arc.endAngle) / 2);
+            return (
+              <g key={arc.key}>
+                <path
+                  d={arcPath(arc.startAngle, arc.endAngle, arc.innerRadius, arc.outerRadius)}
+                  fill={arc.color}
+                  fillOpacity={focused?.key === arc.key ? 1 : arc.profile ? 0.88 : 0.72}
+                  stroke="var(--chart-background)"
+                  strokeWidth="1.5"
+                  className="cursor-pointer outline-none transition-opacity hover:opacity-100 focus:opacity-100"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Filter ${arc.label}${arc.severity === 'typical' ? '' : `, ${arc.severity}`}`}
+                  onMouseEnter={() => setFocused(arc)}
+                  onFocus={() => setFocused(arc)}
+                  onClick={() => activate(arc)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') activate(arc);
+                  }}
+                />
+                {arc.severity !== 'typical' && (
+                  <ShapeGlyph
+                    shape={arc.severity === 'critical' ? 'diamond' : 'triangle'}
+                    cx={mid.x}
+                    cy={mid.y}
+                    radius={5}
+                    fill="var(--chart-background)"
+                    pointerEvents="none"
+                    aria-hidden="true"
+                  />
+                )}
+              </g>
+            );
+          })}
           <circle cx="120" cy="120" r="29" fill="var(--chart-center)" stroke="var(--chart-grid)" />
           <text x="120" y="116" textAnchor="middle" fill="var(--text-muted)" fontSize="11" fontWeight="700">AUDIT</text>
           <text x="120" y="130" textAnchor="middle" fill="var(--chart-axis)" fontSize="11">{weightMode === 'volume' ? 'VOLUME' : 'SEVERITY'}</text>

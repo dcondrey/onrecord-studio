@@ -207,7 +207,7 @@ pub fn extract_spreadsheet_layers<P: AsRef<Path>>(file_path: P) -> Result<String
 /// Measured by streaming the cell records rather than reading the declared `<dimension>`, because
 /// that attribute is advisory: real government workbooks frequently disagree with it, and a
 /// hand-crafted file can omit it entirely.
-fn measure_xlsx_extent<RS>(
+pub(crate) fn measure_xlsx_extent<RS>(
     workbook: &mut calamine::Xlsx<RS>,
     sheet_name: &str,
 ) -> Result<u64, calamine::XlsxError>

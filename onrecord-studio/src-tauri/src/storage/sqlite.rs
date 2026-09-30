@@ -515,8 +515,26 @@ pub(crate) fn analytical_query_provenance(
 fn json_cell_to_csv(value: &serde_json::Value) -> String {
     match value {
         serde_json::Value::Null => String::new(),
-        serde_json::Value::String(value) => value.clone(),
+        serde_json::Value::String(value) => sanitize_csv_string_cell(value),
         other => other.to_string(),
+    }
+}
+
+/// Neutralizes spreadsheet formula/DDE injection: a cell value beginning with `=`, `+`, `-`, or
+/// `@` is interpreted as a formula by Excel/Sheets/LibreOffice, not as literal text, when the CSV
+/// is opened by a human reviewer. This application treats exported cell content as externally
+/// supplied evidence (portal-sourced request titles/descriptions, imported analytical data), not
+/// as internally generated text, so a crafted record could otherwise execute a formula or DDE
+/// command in the reviewer's spreadsheet application. A leading apostrophe forces text
+/// interpretation in every mainstream spreadsheet application and is invisible in the rendered
+/// cell. Restricted to strings only — a number never carries untrusted text, and quoting a
+/// negative number's leading `-` would corrupt it into a non-numeric text cell for this
+/// application's own financial exports.
+fn sanitize_csv_string_cell(value: &str) -> String {
+    if value.starts_with(['=', '+', '-', '@']) {
+        format!("'{value}")
+    } else {
+        value.to_string()
     }
 }
 
@@ -898,6 +916,23 @@ impl DuckDbRepository {
         })
     }
 
+    /// Flushes DuckDB's write-ahead log into the main database file. Called once at startup,
+    /// after every other `initialize_*` call, so a session that made heavy writes (casework
+    /// revisions, document ingestion, purges) does not leave the `.wal` file to grow unbounded
+    /// across the next launch — `legacy_import.rs`'s one-off post-copy `CHECKPOINT` is the proven
+    /// precedent this mirrors. Deliberately does *not* run `VACUUM`: this DuckDB version's actual
+    /// space-reclamation behavior for `VACUUM` was not verified against current documentation, and
+    /// CLAUDE.md requires verifying unfamiliar API behavior rather than assuming it, so an
+    /// unconfirmed call was left out rather than shipped as a guess.
+    pub async fn checkpoint(&self) -> Result<(), AppError> {
+        self.query_connection("Checkpoint the database file", |conn| {
+            conn.execute_batch("CHECKPOINT;").map_err(|error| {
+                AppError::Storage(format!("Failed to checkpoint the database: {error}"))
+            })
+        })
+        .await
+    }
+
     /// Opens an additional connection to the *same live* DuckDB instance.
     ///
     /// Analytics engines must obtain their connection here. A connection that instead opens or
@@ -1032,13 +1067,119 @@ impl DuckDbRepository {
         .await
     }
 
+    /// Find documents in the corpus whose extracted text mentions terms overlapping with a
+    /// redaction's context, excluding the redacted document itself. Returns per-hit
+    /// `(portal_key, document_id, excerpt, matched_term_count, total_term_count)`.
+    ///
+    /// The excerpt is a bounded prefix so the caller isn't handed a whole document and can render
+    /// the match trail without a second round-trip. Case-insensitive substring matching per term;
+    /// deliberately lightweight — this feeds the redaction-inference engine's lexical fallback
+    /// when the fastembed model isn't initialized.
+    pub async fn find_redaction_context_matches(
+        &self,
+        exclude_document_id: i64,
+        terms: Vec<String>,
+        limit: usize,
+    ) -> Result<Vec<(String, i64, String, u32, u32)>, AppError> {
+        if terms.is_empty() {
+            return Ok(Vec::new());
+        }
+        let term_count = u32::try_from(terms.len()).unwrap_or(u32::MAX);
+        let limit_i64 = i64::try_from(limit.max(1)).unwrap_or(i64::MAX);
+        self.query_connection("Find redaction context matches", move |connection| {
+            // Build a WHERE clause requiring the extracted text to LIKE-match at least the first
+            // term (a strong filter), and rank hits by how many additional terms match. Only the
+            // first term is a hard filter to keep the SQL bounded; the caller passes terms in
+            // order of specificity, so the first is usually the highest-signal.
+            let mut sql = String::from(
+                "SELECT documents.portal_subdomain, documents.id, \
+                        SUBSTR(documents_fts.extracted_text, 1, 400) AS excerpt",
+            );
+            for (i, _) in terms.iter().enumerate() {
+                use std::fmt::Write;
+                let _ = write!(
+                    sql,
+                    ", CASE WHEN LOWER(documents_fts.extracted_text) LIKE '%' || ?{} || '%' THEN 1 ELSE 0 END",
+                    i + 3
+                );
+            }
+            sql.push_str(
+                " FROM documents \
+                 INNER JOIN documents_fts \
+                    ON documents_fts.document_id = documents.id \
+                   AND documents_fts.portal_subdomain = documents.portal_subdomain \
+                 WHERE documents.id <> ?1 \
+                   AND LOWER(TRIM(documents.visibility)) = 'public' \
+                   AND LENGTH(documents_fts.extracted_text) > 0 \
+                   AND LOWER(documents_fts.extracted_text) LIKE '%' || ?3 || '%' \
+                 LIMIT ?2",
+            );
+            let mut statement = connection.prepare(&sql).map_err(|error| {
+                AppError::Storage(format!(
+                    "Failed to prepare redaction-context-match query: {error}"
+                ))
+            })?;
+            // Bind exclude id, limit, then each term.
+            let mut params_vec: Vec<duckdb::types::Value> = Vec::with_capacity(2 + terms.len());
+            params_vec.push(exclude_document_id.into());
+            params_vec.push(limit_i64.into());
+            for term in &terms {
+                params_vec.push(term.clone().into());
+            }
+            let param_refs: Vec<&dyn duckdb::ToSql> =
+                params_vec.iter().map(|v| v as &dyn duckdb::ToSql).collect();
+            let column_count = 3 + terms.len();
+            let rows = statement
+                .query_map(param_refs.as_slice(), |row| {
+                    let portal_key: String = row.get(0)?;
+                    let document_id: i64 = row.get(1)?;
+                    let excerpt: String = row.get(2)?;
+                    let mut matched: u32 = 0;
+                    for i in 3..column_count {
+                        let hit: i64 = row.get(i)?;
+                        if hit != 0 {
+                            matched += 1;
+                        }
+                    }
+                    Ok((portal_key, document_id, excerpt, matched))
+                })
+                .map_err(|error| {
+                    AppError::Storage(format!(
+                        "Failed to execute redaction-context-match query: {error}"
+                    ))
+                })?;
+            let mut out: Vec<(String, i64, String, u32, u32)> = Vec::new();
+            for row in rows {
+                let (portal_key, document_id, excerpt, matched) = row.map_err(|error| {
+                    AppError::Storage(format!(
+                        "Failed to decode redaction-context-match row: {error}"
+                    ))
+                })?;
+                out.push((portal_key, document_id, excerpt, matched, term_count));
+            }
+            // Prefer hits with more matched terms.
+            out.sort_by_key(|(_, _, _, matched, _)| std::cmp::Reverse(*matched));
+            Ok(out)
+        })
+        .await
+    }
+
     /// Run embedded raw text scripts to establish layout boundaries.
-    pub async fn run_migrations(&self, migration_sql: &str) -> Result<(), AppError> {
-        let conn = self.conn.lock().await;
+    pub async fn run_migrations(&self, migration_sql: &'static str) -> Result<(), AppError> {
+        let pending = self
+            .query_connection("Run schema migrations", move |conn| {
+                Self::run_migrations_sync(conn, migration_sql)
+            })
+            .await?;
+        self.search_index_pending.store(pending, Ordering::Relaxed);
+        Ok(())
+    }
+
+    fn run_migrations_sync(conn: &mut Connection, migration_sql: &str) -> Result<u64, AppError> {
         // Legacy repair must precede the idempotent base script; `ensure_column` calls that follow
         // are compatibility shims for databases created by older, partially versioned builds.
-        prepare_legacy_legal_schema(&conn)?;
-        reject_narrow_identifier_core(&conn)?;
+        prepare_legacy_legal_schema(conn)?;
+        reject_narrow_identifier_core(conn)?;
         conn.execute_batch(migration_sql).map_err(|e| {
             AppError::Internal(format!(
                 "Failed to execute initialization migrations: {}",
@@ -1063,32 +1204,32 @@ impl DuckDbRepository {
         // they are live protection on a fresh install; deleting them so the two paths match would
         // trade a real guarantee for symmetry.
         ensure_column(
-            &conn,
+            conn,
             "document_search_index_state",
             "indexed_characters",
             "BIGINT",
         )?;
-        ensure_column(&conn, "portals", "origin_url", "TEXT DEFAULT ''")?;
-        ensure_column(&conn, "portals", "requests_endpoint", "TEXT DEFAULT ''")?;
+        ensure_column(conn, "portals", "origin_url", "TEXT DEFAULT ''")?;
+        ensure_column(conn, "portals", "requests_endpoint", "TEXT DEFAULT ''")?;
         ensure_column(
-            &conn,
+            conn,
             "portals",
             "requests_pointer",
             "TEXT DEFAULT '/requests'",
         )?;
-        ensure_column(&conn, "portals", "metadata_pointer", "TEXT")?;
-        ensure_column(&conn, "portals", "page_parameter", "TEXT DEFAULT 'page'")?;
+        ensure_column(conn, "portals", "metadata_pointer", "TEXT")?;
+        ensure_column(conn, "portals", "page_parameter", "TEXT DEFAULT 'page'")?;
         ensure_column(
-            &conn,
+            conn,
             "portals",
             "page_size_parameter",
             "TEXT DEFAULT 'per_page'",
         )?;
-        ensure_column(&conn, "portals", "verified_at", "TEXT")?;
-        ensure_column(&conn, "portals", "health_status", "TEXT DEFAULT 'verified'")?;
-        ensure_column(&conn, "portals", "last_error", "TEXT")?;
+        ensure_column(conn, "portals", "verified_at", "TEXT")?;
+        ensure_column(conn, "portals", "health_status", "TEXT DEFAULT 'verified'")?;
+        ensure_column(conn, "portals", "last_error", "TEXT")?;
         ensure_column(
-            &conn,
+            conn,
             "portals",
             "source_kind",
             "TEXT DEFAULT 'NEXT_REQUEST'",
@@ -1097,9 +1238,9 @@ impl DuckDbRepository {
         // 'ACTIVE' is the fact about it rather than a stand-in for one that was never recorded.
         // Readers still coalesce, because DuckDB's own backfill for an added column is what this
         // depends on and it is not worth trusting silently.
-        ensure_column(&conn, "portals", "lifecycle_state", "TEXT DEFAULT 'ACTIVE'")?;
+        ensure_column(conn, "portals", "lifecycle_state", "TEXT DEFAULT 'ACTIVE'")?;
         ensure_column(
-            &conn,
+            conn,
             "source_connector_recipes",
             "publisher_pattern",
             "TEXT",
@@ -1108,9 +1249,9 @@ impl DuckDbRepository {
         // recorded no submitted URL, and no string stands in for one. It cannot be backfilled
         // from `root_url` either -- that is the URL *after* redirects, so copying it would assert
         // the submission did not redirect, which is the one case this column exists to record.
-        ensure_column(&conn, "source_connector_recipes", "submitted_url", "TEXT")?;
+        ensure_column(conn, "source_connector_recipes", "submitted_url", "TEXT")?;
         ensure_column(
-            &conn,
+            conn,
             "source_connector_recipes",
             "reuse_approved",
             "BIGINT DEFAULT 0",
@@ -1119,7 +1260,7 @@ impl DuckDbRepository {
         // the only honest way to say that. 1 and 50 are legal windows, so defaulting to them would
         // make "never chosen" indistinguishable from "chosen to be the same as the built-in".
         ensure_column(
-            &conn,
+            conn,
             "source_connector_recipes",
             "metadata_page_window_json",
             "TEXT",
@@ -1127,13 +1268,13 @@ impl DuckDbRepository {
         // These admission counters bound an interrupted crawl across process restarts. Older runs
         // predate durable counting, so zero is the only evidence-backed backfill available.
         ensure_column(
-            &conn,
+            conn,
             "portal_sync_runs",
             "crawl_pages_started",
             "BIGINT DEFAULT 0",
         )?;
         ensure_column(
-            &conn,
+            conn,
             "portal_sync_runs",
             "resources_started",
             "BIGINT DEFAULT 0",
@@ -1155,7 +1296,7 @@ impl DuckDbRepository {
             "provenance_confidence",
         ] {
             ensure_column(
-                &conn,
+                conn,
                 "provenance_verification_log",
                 column,
                 "TEXT DEFAULT 'UNCLASSIFIED_LEGACY_RECORD'",
@@ -1169,7 +1310,7 @@ impl DuckDbRepository {
             ("signing_timestamp", "TEXT"),
             ("text_projection_sha256", "TEXT"),
         ] {
-            ensure_column(&conn, "provenance_verification_log", column, definition)?;
+            ensure_column(conn, "provenance_verification_log", column, definition)?;
         }
         conn.execute_batch(
             "CREATE INDEX IF NOT EXISTS idx_provenance_verification_document
@@ -1184,27 +1325,32 @@ impl DuckDbRepository {
         // column existed, or a row imported from a legacy core, genuinely has no recorded digest
         // for its text projection, and a verification must say so rather than invent one.
         ensure_column(
-            &conn,
+            conn,
             "documents",
             "extracted_text_projection_sha256",
             "TEXT",
         )?;
-        ensure_column(&conn, "requests", "neighborhood_block", "TEXT")?;
-        ensure_column(&conn, "requests", "determination_at", "TEXT")?;
-        ensure_column(&conn, "requests", "determination_source", "TEXT")?;
+        ensure_column(conn, "requests", "neighborhood_block", "TEXT")?;
+        ensure_column(conn, "requests", "determination_at", "TEXT")?;
+        ensure_column(conn, "requests", "determination_source", "TEXT")?;
+        // Nullable on purpose — NULL means "no attribution recorded" and reads differently from a
+        // filled string. The differential-treatment detector runs and emits nothing when no rows
+        // carry attribution; population of this field belongs to ingestion adapters that can
+        // actually derive it.
+        ensure_column(conn, "requests", "requester_attribution", "TEXT")?;
         ensure_column(
-            &conn,
+            conn,
             "cross_correlation_alerts",
             "complaint_count",
             "BIGINT DEFAULT 0",
         )?;
         ensure_column(
-            &conn,
+            conn,
             "cross_correlation_alerts",
             "correlation_window_hours",
             "BIGINT DEFAULT 48",
         )?;
-        ensure_column(&conn, "documents", "raw_file_sha256", "TEXT")?;
+        ensure_column(conn, "documents", "raw_file_sha256", "TEXT")?;
         // Same rule as the portals block above. The base schema bounds these three; an upgraded
         // database carries the DEFAULT but not the range check.
         //
@@ -1212,38 +1358,38 @@ impl DuckDbRepository {
         // identical -- not "never computed", and a document that predates this column was never
         // assessed. Backfilling it to 0.0 would state the strongest possible uniformity signal
         // about a file nothing ever read. NULL is representable and says exactly that.
-        ensure_column(&conn, "documents", "shannon_entropy", "REAL")?;
+        ensure_column(conn, "documents", "shannon_entropy", "REAL")?;
         // The other two keep DEFAULT 0. 0 sampled bytes genuinely means no bytes were sampled,
         // and 0 density is the correct default claim: nothing was flagged. Neither is a
         // measurement standing in for an absence.
         ensure_column(
-            &conn,
+            conn,
             "documents",
             "entropy_sample_bytes",
             "BIGINT DEFAULT 0",
         )?;
         ensure_column(
-            &conn,
+            conn,
             "documents",
             "suspicious_data_density",
             "BIGINT DEFAULT 0",
         )?;
         ensure_column(
-            &conn,
+            conn,
             "documents",
             "extraction_status",
             "TEXT DEFAULT 'PENDING'",
         )?;
-        ensure_column(&conn, "documents", "extraction_format", "TEXT")?;
-        ensure_column(&conn, "documents", "extraction_deferred_reason", "TEXT")?;
-        ensure_column(&conn, "documents", "retention_eligible_at", "TEXT")?;
+        ensure_column(conn, "documents", "extraction_format", "TEXT")?;
+        ensure_column(conn, "documents", "extraction_deferred_reason", "TEXT")?;
+        ensure_column(conn, "documents", "retention_eligible_at", "TEXT")?;
         for column in [
             "package_path",
             "package_sha256",
             "signature_algorithm",
             "signer_key_id",
         ] {
-            ensure_column(&conn, "report_exports", column, "TEXT")?;
+            ensure_column(conn, "report_exports", column, "TEXT")?;
         }
         conn.execute_batch(
             "UPDATE documents
@@ -1264,8 +1410,8 @@ impl DuckDbRepository {
                 "Failed to backfill document extraction state: {error}"
             ))
         })?;
-        backfill_legal_authority_versions(&conn)?;
-        migrate_archived_statutory_findings(&conn)?;
+        backfill_legal_authority_versions(conn)?;
+        migrate_archived_statutory_findings(conn)?;
         conn.execute_batch(
             "CREATE INDEX IF NOT EXISTS idx_requests_neighborhood_time
              ON requests(neighborhood_block, created_at);
@@ -1283,12 +1429,9 @@ impl DuckDbRepository {
         // window: doing it here means the application shows no window at all until it finishes.
         // The migration therefore only counts the arrears; `backfill_search_token_index` drains
         // them in the background, and a search refuses while the count is above zero.
-        self.search_index_pending.store(
-            count_pending_search_index_documents(&conn)?,
-            Ordering::Relaxed,
-        );
-        verify_logical_relations(&conn)?;
-        Ok(())
+        let pending = count_pending_search_index_documents(conn)?;
+        verify_logical_relations(conn)?;
+        Ok(pending)
     }
 
     /// Documents still missing from the search token projection. Zero means a search covers the
@@ -1310,14 +1453,16 @@ impl DuckDbRepository {
     pub async fn backfill_search_token_index(&self) -> Result<u64, AppError> {
         let mut completed = 0_u64;
         loop {
-            let processed = {
-                let mut conn = self.conn.lock().await;
-                match backfill_search_token_batch(&mut conn) {
-                    Ok(processed) => processed,
-                    Err(error) => {
-                        self.search_index_stalled.store(true, Ordering::Relaxed);
-                        return Err(error);
-                    }
+            let processed = match self
+                .query_connection("Backfill search token batch", |conn| {
+                    backfill_search_token_batch(conn)
+                })
+                .await
+            {
+                Ok(processed) => processed,
+                Err(error) => {
+                    self.search_index_stalled.store(true, Ordering::Relaxed);
+                    return Err(error);
                 }
             };
             if processed == 0 {
@@ -1346,9 +1491,10 @@ impl DuckDbRepository {
         portal: &PortalRegistration,
     ) -> Result<(), AppError> {
         validate_portal_registration(portal)?;
-        let conn = self.conn.lock().await;
-        conn.execute(
-            "INSERT INTO portals (
+        let portal = portal.clone();
+        self.query_connection("Provision portal partition", move |conn| {
+            conn.execute(
+                "INSERT INTO portals (
                 subdomain, display_name, base_url, origin_url, requests_endpoint,
                 requests_pointer, metadata_pointer, page_parameter, page_size_parameter,
                 verified_at, source_kind, health_status, last_error, lifecycle_state
@@ -1371,24 +1517,26 @@ impl DuckDbRepository {
                 -- re-added source stays filtered out of every listing and re-adding it looks
                 -- like it did nothing at all.
                 lifecycle_state = 'ACTIVE'",
-            params![
-                portal.portal_key,
-                portal.display_name,
-                portal.canonical_url,
-                portal.origin_url,
-                portal.api_layout.requests_endpoint,
-                portal.api_layout.requests_pointer,
-                portal.api_layout.metadata_pointer,
-                portal.api_layout.page_parameter,
-                portal.api_layout.page_size_parameter,
-                portal.verified_at,
-                portal.source_kind.as_str(),
-            ],
-        )
-        .map_err(|error| {
-            AppError::Storage(format!("Failed to provision portal partition: {error}"))
-        })?;
-        Ok(())
+                params![
+                    portal.portal_key,
+                    portal.display_name,
+                    portal.canonical_url,
+                    portal.origin_url,
+                    portal.api_layout.requests_endpoint,
+                    portal.api_layout.requests_pointer,
+                    portal.api_layout.metadata_pointer,
+                    portal.api_layout.page_parameter,
+                    portal.api_layout.page_size_parameter,
+                    portal.verified_at,
+                    portal.source_kind.as_str(),
+                ],
+            )
+            .map_err(|error| {
+                AppError::Storage(format!("Failed to provision portal partition: {error}"))
+            })?;
+            Ok(())
+        })
+        .await
     }
 
     pub async fn begin_portal_sync_run(
@@ -1401,15 +1549,21 @@ impl DuckDbRepository {
                 "Portal sync run identifiers must not be empty".to_string(),
             ));
         }
-        let conn = self.conn.lock().await;
-        conn.execute(
-            "INSERT INTO portal_sync_runs (
+        let run_id = run_id.to_string();
+        let portal_key = portal_key.to_string();
+        self.query_connection("Begin portal sync run", move |conn| {
+            conn.execute(
+                "INSERT INTO portal_sync_runs (
                 run_id, portal_subdomain, started_at, status
              ) VALUES (?1, ?2, strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'), 'RUNNING')",
-            params![run_id, portal_key],
-        )
-        .map_err(|error| AppError::Storage(format!("Failed to begin portal sync run: {error}")))?;
-        Ok(())
+                params![run_id, portal_key],
+            )
+            .map_err(|error| {
+                AppError::Storage(format!("Failed to begin portal sync run: {error}"))
+            })?;
+            Ok(())
+        })
+        .await
     }
 
     pub async fn ingestion_scheduler_counts(
@@ -1417,20 +1571,24 @@ impl DuckDbRepository {
         run_id: &str,
         portal_key: &str,
     ) -> Result<IngestionSchedulerCounts, AppError> {
-        let conn = self.conn.lock().await;
-        let (crawl_pages_started, resources_started): (i64, i64) = conn
-            .query_row(
-                "SELECT crawl_pages_started, resources_started
+        let run_id = run_id.to_string();
+        let portal_key = portal_key.to_string();
+        let (crawl_pages_started, resources_started): (i64, i64) = self
+            .query_connection("Read ingestion scheduler counters", move |conn| {
+                conn.query_row(
+                    "SELECT crawl_pages_started, resources_started
                  FROM portal_sync_runs
                  WHERE run_id = ?1 AND portal_subdomain = ?2",
-                params![run_id, portal_key],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .map_err(|error| {
-                AppError::Storage(format!(
-                    "Failed to load ingestion scheduler counters: {error}"
-                ))
-            })?;
+                    params![run_id, portal_key],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!(
+                        "Failed to load ingestion scheduler counters: {error}"
+                    ))
+                })
+            })
+            .await?;
         Ok(IngestionSchedulerCounts {
             crawl_pages_started: u64::try_from(crawl_pages_started).map_err(|_| {
                 AppError::Storage("Stored crawl page counter was negative".to_string())
@@ -1477,40 +1635,49 @@ impl DuckDbRepository {
                 "Ingestion scheduler budget exceeds DuckDB capacity".to_string(),
             )
         })?;
-        let conn = self.conn.lock().await;
-        let statement = format!(
-            "UPDATE portal_sync_runs
+        let run_id = run_id.to_string();
+        let portal_key = portal_key.to_string();
+        let current = self
+            .query_connection("Reserve ingestion scheduler capacity", move |conn| {
+                let statement = format!(
+                    "UPDATE portal_sync_runs
              SET {counter_column} = {counter_column} + 1
              WHERE run_id = ?1 AND portal_subdomain = ?2 AND status = 'RUNNING'
                AND {counter_column} < ?3"
-        );
-        let updated = conn
-            .execute(&statement, params![run_id, portal_key, maximum])
-            .map_err(|error| {
-                AppError::Storage(format!(
-                    "Failed to reserve ingestion scheduler capacity: {error}"
-                ))
-            })?;
-        if updated == 0 {
-            return Ok(None);
-        }
-        let current: i64 = conn
-            .query_row(
-                &format!(
-                    "SELECT {counter_column} FROM portal_sync_runs
+                );
+                let updated = conn
+                    .execute(&statement, params![run_id, portal_key, maximum])
+                    .map_err(|error| {
+                        AppError::Storage(format!(
+                            "Failed to reserve ingestion scheduler capacity: {error}"
+                        ))
+                    })?;
+                if updated == 0 {
+                    return Ok(None);
+                }
+                let current: i64 = conn
+                    .query_row(
+                        &format!(
+                            "SELECT {counter_column} FROM portal_sync_runs
                      WHERE run_id = ?1 AND portal_subdomain = ?2"
-                ),
-                params![run_id, portal_key],
-                |row| row.get(0),
-            )
-            .map_err(|error| {
-                AppError::Storage(format!(
-                    "Failed to read reserved ingestion scheduler capacity: {error}"
-                ))
-            })?;
-        Ok(Some(u64::try_from(current).map_err(|_| {
-            AppError::Storage("Stored ingestion scheduler counter was negative".to_string())
-        })?))
+                        ),
+                        params![run_id, portal_key],
+                        |row| row.get(0),
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!(
+                            "Failed to read reserved ingestion scheduler capacity: {error}"
+                        ))
+                    })?;
+                Ok(Some(current))
+            })
+            .await?;
+        Ok(match current {
+            Some(current) => Some(u64::try_from(current).map_err(|_| {
+                AppError::Storage("Stored ingestion scheduler counter was negative".to_string())
+            })?),
+            None => None,
+        })
     }
 
     pub async fn record_source_task_failure(
@@ -1524,11 +1691,14 @@ impl DuckDbRepository {
         let error_message = error.to_string();
         let retryable = error.is_retryable();
         let repairable = error.is_source_repairable();
-        let mut conn = self.conn.lock().await;
-        execute_transaction(&mut conn, "source task failure recording", |transaction| {
-            transaction
-                .execute(
-                    "INSERT INTO source_ingestion_failures (
+        let run_id = run_id.to_string();
+        let source_key = source_key.to_string();
+        let target_id = target_id.to_string();
+        self.query_connection("Record source task failure", move |conn| {
+            execute_transaction(conn, "source task failure recording", |transaction| {
+                transaction
+                    .execute(
+                        "INSERT INTO source_ingestion_failures (
                         run_id, source_key, target_id, error_type, error_message,
                         retryable, repairable
                      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
@@ -1538,35 +1708,37 @@ impl DuckDbRepository {
                         repairable = excluded.repairable,
                         occurrences = source_ingestion_failures.occurrences + 1,
                         last_occurred_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')",
-                    params![
-                        run_id,
-                        source_key,
-                        target_id,
-                        error_type,
-                        error_message,
-                        retryable,
-                        repairable
-                    ],
-                )
-                .map_err(|database_error| {
-                    AppError::Storage(format!(
-                        "Failed to record source ingestion failure: {database_error}"
-                    ))
-                })?;
-            transaction
-                .execute(
-                    "UPDATE portals
+                        params![
+                            run_id,
+                            source_key,
+                            target_id,
+                            error_type,
+                            error_message,
+                            retryable,
+                            repairable
+                        ],
+                    )
+                    .map_err(|database_error| {
+                        AppError::Storage(format!(
+                            "Failed to record source ingestion failure: {database_error}"
+                        ))
+                    })?;
+                transaction
+                    .execute(
+                        "UPDATE portals
                      SET health_status = 'degraded', last_error = ?1
                      WHERE subdomain = ?2",
-                    params![error_message, source_key],
-                )
-                .map_err(|database_error| {
-                    AppError::Storage(format!(
-                        "Failed to update source health after a task failure: {database_error}"
-                    ))
-                })?;
-            Ok(())
+                        params![error_message, source_key],
+                    )
+                    .map_err(|database_error| {
+                        AppError::Storage(format!(
+                            "Failed to update source health after a task failure: {database_error}"
+                        ))
+                    })?;
+                Ok(())
+            })
         })
+        .await
     }
 
     /// Persists a failure that happens before startup recovery can create a replacement run.
@@ -1581,25 +1753,28 @@ impl DuckDbRepository {
         error: &AppError,
     ) -> Result<(), AppError> {
         let message = format!("Startup recovery failed during {stage}: {error}");
-        let conn = self.conn.lock().await;
-        let updated = conn
-            .execute(
-                "UPDATE portals
+        let source_key = source_key.to_string();
+        self.query_connection("Record source recovery failure", move |conn| {
+            let updated = conn
+                .execute(
+                    "UPDATE portals
                  SET health_status = 'degraded', last_error = ?1
                  WHERE subdomain = ?2",
-                params![message, source_key],
-            )
-            .map_err(|database_error| {
-                AppError::Storage(format!(
-                    "Failed to persist startup recovery failure for {source_key}: {database_error}"
-                ))
-            })?;
-        if updated != 1 {
-            return Err(AppError::Storage(format!(
-                "Cannot persist startup recovery failure for unknown source '{source_key}'"
-            )));
-        }
-        Ok(())
+                    params![message, source_key],
+                )
+                .map_err(|database_error| {
+                    AppError::Storage(format!(
+                        "Failed to persist startup recovery failure for {source_key}: {database_error}"
+                    ))
+                })?;
+            if updated != 1 {
+                return Err(AppError::Storage(format!(
+                    "Cannot persist startup recovery failure for unknown source '{source_key}'"
+                )));
+            }
+            Ok(())
+        })
+        .await
     }
 
     pub async fn persist_ingestion_frontier_task(
@@ -1609,20 +1784,26 @@ impl DuckDbRepository {
         target_id: &str,
         payload_json: &str,
     ) -> Result<bool, AppError> {
-        let conn = self.conn.lock().await;
-        let inserted = conn
-            .execute(
-                "INSERT OR IGNORE INTO ingestion_task_frontier (
+        let run_id = run_id.to_string();
+        let source_key = source_key.to_string();
+        let target_id = target_id.to_string();
+        let payload_json = payload_json.to_string();
+        self.query_connection("Persist ingestion frontier task", move |conn| {
+            let inserted = conn
+                .execute(
+                    "INSERT OR IGNORE INTO ingestion_task_frontier (
                     run_id, source_key, target_id, payload_json
                  ) VALUES (?1, ?2, ?3, ?4)",
-                params![run_id, source_key, target_id, payload_json],
-            )
-            .map_err(|error| {
-                AppError::Storage(format!(
-                    "Failed to persist a bounded ingestion frontier task: {error}"
-                ))
-            })?;
-        Ok(inserted == 1)
+                    params![run_id, source_key, target_id, payload_json],
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!(
+                        "Failed to persist a bounded ingestion frontier task: {error}"
+                    ))
+                })?;
+            Ok(inserted == 1)
+        })
+        .await
     }
 
     pub async fn persist_ingestion_frontier_tasks(
@@ -1639,32 +1820,37 @@ impl DuckDbRepository {
                 "A single ingestion frontier batch may not exceed 100000 tasks".to_string(),
             ));
         }
-        let mut conn = self.conn.lock().await;
-        execute_transaction(&mut conn, "ingestion frontier batch", |transaction| {
-            let mut statement = transaction
-                .prepare_cached(
-                    "INSERT OR IGNORE INTO ingestion_task_frontier (
+        let run_id = run_id.to_string();
+        let source_key = source_key.to_string();
+        let tasks = tasks.to_vec();
+        self.query_connection("Persist ingestion frontier batch", move |conn| {
+            execute_transaction(conn, "ingestion frontier batch", |transaction| {
+                let mut statement = transaction
+                    .prepare_cached(
+                        "INSERT OR IGNORE INTO ingestion_task_frontier (
                         run_id, source_key, target_id, payload_json
                      ) VALUES (?1, ?2, ?3, ?4)",
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!(
-                        "Failed to prepare ingestion frontier batch: {error}"
-                    ))
-                })?;
-            let mut inserted = 0_u64;
-            for (target_id, payload_json) in tasks {
-                let changed = statement
-                    .execute(params![run_id, source_key, target_id, payload_json])
+                    )
                     .map_err(|error| {
                         AppError::Storage(format!(
-                            "Failed to persist ingestion frontier batch task '{target_id}': {error}"
+                            "Failed to prepare ingestion frontier batch: {error}"
                         ))
                     })?;
-                inserted = inserted.saturating_add(changed as u64);
-            }
-            Ok(inserted)
+                let mut inserted = 0_u64;
+                for (target_id, payload_json) in &tasks {
+                    let changed = statement
+                        .execute(params![run_id, source_key, target_id, payload_json])
+                        .map_err(|error| {
+                            AppError::Storage(format!(
+                            "Failed to persist ingestion frontier batch task '{target_id}': {error}"
+                        ))
+                        })?;
+                    inserted = inserted.saturating_add(changed as u64);
+                }
+                Ok(inserted)
+            })
         })
+        .await
     }
 
     pub async fn claim_ingestion_frontier_task(
@@ -1672,8 +1858,10 @@ impl DuckDbRepository {
         run_id: &str,
         source_key: &str,
     ) -> Result<Option<ClaimedIngestionTask>, AppError> {
-        let mut conn = self.conn.lock().await;
-        execute_transaction(&mut conn, "ingestion frontier claim", |transaction| {
+        let run_id = run_id.to_string();
+        let source_key = source_key.to_string();
+        self.query_connection("Claim ingestion frontier task", move |conn| {
+        execute_transaction(conn, "ingestion frontier claim", |transaction| {
             transaction
                 .execute(
                     "UPDATE ingestion_task_frontier
@@ -1738,6 +1926,8 @@ impl DuckDbRepository {
                 attempts: attempts.saturating_add(1),
             }))
         })
+        })
+        .await
     }
 
     pub async fn defer_ingestion_frontier_task(
@@ -1746,55 +1936,59 @@ impl DuckDbRepository {
         delay_seconds: u64,
     ) -> Result<(), AppError> {
         let delay_modifier = format!("+{} seconds", delay_seconds.clamp(1, 300));
-        let conn = self.conn.lock().await;
-        let changed = conn
-            .execute(
-                "UPDATE ingestion_task_frontier
+        self.query_connection("Defer ingestion frontier task", move |conn| {
+            let changed = conn
+                .execute(
+                    "UPDATE ingestion_task_frontier
                  SET status = 'LEASED',
                      lease_expires_at = strftime(now() + CAST(?2 AS INTERVAL), '%Y-%m-%dT%H:%M:%S.%fZ'),
                      updated_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
                  WHERE frontier_id = ?1 AND status = 'LEASED'",
-                params![frontier_id, delay_modifier],
-            )
-            .map_err(|error| {
-                AppError::Storage(format!(
-                    "Failed to defer ingestion frontier task {frontier_id}: {error}"
-                ))
-            })?;
-        if changed != 1 {
-            return Err(AppError::Storage(format!(
-                "Ingestion frontier task {frontier_id} was missing during retry scheduling"
-            )));
-        }
-        Ok(())
+                    params![frontier_id, delay_modifier],
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!(
+                        "Failed to defer ingestion frontier task {frontier_id}: {error}"
+                    ))
+                })?;
+            if changed != 1 {
+                return Err(AppError::Storage(format!(
+                    "Ingestion frontier task {frontier_id} was missing during retry scheduling"
+                )));
+            }
+            Ok(())
+        })
+        .await
     }
 
     pub async fn complete_ingestion_frontier_task(&self, frontier_id: i64) -> Result<(), AppError> {
-        let conn = self.conn.lock().await;
-        let deleted = conn
-            .execute(
-                "DELETE FROM ingestion_task_frontier WHERE frontier_id = ?1",
-                params![frontier_id],
-            )
-            .map_err(|error| {
-                AppError::Storage(format!(
-                    "Failed to acknowledge ingestion frontier task {frontier_id}: {error}"
-                ))
-            })?;
-        if deleted != 1 {
-            return Err(AppError::Storage(format!(
-                "Ingestion frontier task {frontier_id} was missing during acknowledgement"
-            )));
-        }
-        Ok(())
+        self.query_connection("Complete ingestion frontier task", move |conn| {
+            let deleted = conn
+                .execute(
+                    "DELETE FROM ingestion_task_frontier WHERE frontier_id = ?1",
+                    params![frontier_id],
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!(
+                        "Failed to acknowledge ingestion frontier task {frontier_id}: {error}"
+                    ))
+                })?;
+            if deleted != 1 {
+                return Err(AppError::Storage(format!(
+                    "Ingestion frontier task {frontier_id} was missing during acknowledgement"
+                )));
+            }
+            Ok(())
+        })
+        .await
     }
 
     pub async fn recover_interrupted_source_keys(&self) -> Result<Vec<String>, AppError> {
-        let mut conn = self.conn.lock().await;
-        execute_transaction(&mut conn, "interrupted ingestion recovery", |transaction| {
-            let mut statement = transaction
-                .prepare(
-                    "SELECT candidate_key FROM (
+        self.query_connection("Recover interrupted source keys", |conn| {
+            execute_transaction(conn, "interrupted ingestion recovery", |transaction| {
+                let mut statement = transaction
+                    .prepare(
+                        "SELECT candidate_key FROM (
                          SELECT source_key AS candidate_key FROM ingestion_task_frontier
                          UNION
                          SELECT portal_subdomain AS candidate_key FROM portal_sync_runs
@@ -1803,41 +1997,43 @@ impl DuckDbRepository {
                      JOIN portals ON portals.subdomain = candidates.candidate_key
                      WHERE COALESCE(portals.lifecycle_state, 'ACTIVE') = 'ACTIVE'
                      ORDER BY 1",
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!(
-                        "Failed to prepare interrupted source recovery: {error}"
-                    ))
-                })?;
-            let keys = statement
-                .query_map([], |row| row.get::<_, String>(0))
-                .map_err(|error| {
-                    AppError::Storage(format!(
-                        "Failed to query interrupted source recovery: {error}"
-                    ))
-                })?
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|error| {
-                    AppError::Storage(format!(
-                        "Failed to read interrupted source recovery: {error}"
-                    ))
-                })?;
-            drop(statement);
-            transaction
-                .execute(
-                    "UPDATE portal_sync_runs
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!(
+                            "Failed to prepare interrupted source recovery: {error}"
+                        ))
+                    })?;
+                let keys = statement
+                    .query_map([], |row| row.get::<_, String>(0))
+                    .map_err(|error| {
+                        AppError::Storage(format!(
+                            "Failed to query interrupted source recovery: {error}"
+                        ))
+                    })?
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|error| {
+                        AppError::Storage(format!(
+                            "Failed to read interrupted source recovery: {error}"
+                        ))
+                    })?;
+                drop(statement);
+                transaction
+                    .execute(
+                        "UPDATE portal_sync_runs
                      SET status = 'INTERRUPTED',
                          completed_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
                      WHERE status = 'RUNNING'",
-                    [],
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!(
-                        "Failed to mark interrupted ingestion runs: {error}"
-                    ))
-                })?;
-            Ok(keys)
+                        [],
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!(
+                            "Failed to mark interrupted ingestion runs: {error}"
+                        ))
+                    })?;
+                Ok(keys)
+            })
         })
+        .await
     }
 
     /// Hands every frontier row no live run owns to `new_run_id`.
@@ -1853,11 +2049,13 @@ impl DuckDbRepository {
         source_key: &str,
         new_run_id: &str,
     ) -> Result<u64, AppError> {
-        let mut conn = self.conn.lock().await;
-        execute_transaction(&mut conn, "orphaned frontier adoption", |transaction| {
-            let inherited_counts: (i64, i64) = transaction
-                .query_row(
-                    "SELECT
+        let source_key = source_key.to_string();
+        let new_run_id = new_run_id.to_string();
+        self.query_connection("Adopt orphaned frontier tasks", move |conn| {
+            execute_transaction(conn, "orphaned frontier adoption", |transaction| {
+                let inherited_counts: (i64, i64) = transaction
+                    .query_row(
+                        "SELECT
                         COALESCE(MAX(previous.crawl_pages_started), 0),
                         COALESCE(MAX(previous.resources_started), 0)
                      FROM portal_sync_runs previous
@@ -1868,39 +2066,39 @@ impl DuckDbRepository {
                            WHERE frontier.run_id = previous.run_id
                              AND frontier.source_key = ?1
                        )",
-                    params![source_key],
-                    |row| Ok((row.get(0)?, row.get(1)?)),
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!(
-                        "Failed to recover ingestion scheduler counters: {error}"
-                    ))
-                })?;
-            let counter_update = transaction
-                .execute(
-                    "UPDATE portal_sync_runs
+                        params![source_key],
+                        |row| Ok((row.get(0)?, row.get(1)?)),
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!(
+                            "Failed to recover ingestion scheduler counters: {error}"
+                        ))
+                    })?;
+                let counter_update = transaction
+                    .execute(
+                        "UPDATE portal_sync_runs
                      SET crawl_pages_started = ?1, resources_started = ?2
                      WHERE run_id = ?3 AND portal_subdomain = ?4 AND status = 'RUNNING'",
-                    params![
-                        inherited_counts.0,
-                        inherited_counts.1,
-                        new_run_id,
-                        source_key
-                    ],
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!(
-                        "Failed to restore ingestion scheduler counters: {error}"
-                    ))
-                })?;
-            if counter_update != 1 {
-                return Err(AppError::Storage(format!(
-                    "New ingestion run '{new_run_id}' was unavailable during frontier adoption"
-                )));
-            }
-            let adopted = transaction
-                .execute(
-                    "UPDATE ingestion_task_frontier
+                        params![
+                            inherited_counts.0,
+                            inherited_counts.1,
+                            new_run_id,
+                            source_key
+                        ],
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!(
+                            "Failed to restore ingestion scheduler counters: {error}"
+                        ))
+                    })?;
+                if counter_update != 1 {
+                    return Err(AppError::Storage(format!(
+                        "New ingestion run '{new_run_id}' was unavailable during frontier adoption"
+                    )));
+                }
+                let adopted = transaction
+                    .execute(
+                        "UPDATE ingestion_task_frontier
                      SET run_id = ?1, status = 'PENDING', lease_expires_at = NULL,
                          updated_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
                      WHERE source_key = ?2
@@ -1914,32 +2112,36 @@ impl DuckDbRepository {
                              AND current_frontier.source_key = ingestion_task_frontier.source_key
                              AND current_frontier.target_id = ingestion_task_frontier.target_id
                        )",
-                    params![new_run_id, source_key],
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to adopt orphaned ingestion tasks: {error}"))
-                })?;
-            transaction
-                .execute(
-                    "DELETE FROM ingestion_task_frontier
+                        params![new_run_id, source_key],
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!(
+                            "Failed to adopt orphaned ingestion tasks: {error}"
+                        ))
+                    })?;
+                transaction
+                    .execute(
+                        "DELETE FROM ingestion_task_frontier
                      WHERE source_key = ?1
                        AND run_id IN (
                            SELECT run_id FROM portal_sync_runs
                            WHERE portal_subdomain = ?1 AND status <> 'RUNNING'
                        )",
-                    params![source_key],
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!(
-                        "Failed to remove duplicate orphaned ingestion tasks: {error}"
-                    ))
-                })?;
-            u64::try_from(adopted).map_err(|_| {
-                AppError::Storage(
-                    "Adopted ingestion frontier count exceeds supported capacity".to_string(),
-                )
+                        params![source_key],
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!(
+                            "Failed to remove duplicate orphaned ingestion tasks: {error}"
+                        ))
+                    })?;
+                u64::try_from(adopted).map_err(|_| {
+                    AppError::Storage(
+                        "Adopted ingestion frontier count exceeds supported capacity".to_string(),
+                    )
+                })
             })
         })
+        .await
     }
 
     /// Whether `run_id` still holds a frontier row for this source whose target identifier begins
@@ -1960,21 +2162,26 @@ impl DuckDbRepository {
         source_key: &str,
         target_prefix: &str,
     ) -> Result<bool, AppError> {
-        let conn = self.conn.lock().await;
-        conn.query_row(
-            "SELECT EXISTS (
+        let run_id = run_id.to_string();
+        let source_key = source_key.to_string();
+        let target_prefix = target_prefix.to_string();
+        self.query_connection("Read ingestion frontier prefix", move |conn| {
+            conn.query_row(
+                "SELECT EXISTS (
                  SELECT 1 FROM ingestion_task_frontier
                  WHERE run_id = ?1 AND source_key = ?2
                    AND starts_with(target_id, ?3)
              )",
-            params![run_id, source_key, target_prefix],
-            |row| row.get::<_, bool>(0),
-        )
-        .map_err(|error| {
-            AppError::Storage(format!(
-                "Failed to read the ingestion frontier for source '{source_key}': {error}"
-            ))
+                params![run_id, source_key, target_prefix],
+                |row| row.get::<_, bool>(0),
+            )
+            .map_err(|error| {
+                AppError::Storage(format!(
+                    "Failed to read the ingestion frontier for source '{source_key}': {error}"
+                ))
+            })
         })
+        .await
     }
 
     /// Records the crawl policy and repair guidance an operator supplied for one source.
@@ -1997,8 +2204,8 @@ impl DuckDbRepository {
         crawl_policy: &CrawlPolicy,
         guidance: &SourceGuidance,
     ) -> Result<(), AppError> {
-        let source_key = portal.portal_key.as_str();
-        let root_url = portal.canonical_url.as_str();
+        let source_key = portal.portal_key.clone();
+        let root_url = portal.canonical_url.clone();
         let submitted_url = normalized_submitted_url(submitted_url);
         let crawl_policy_json = serde_json::to_string(crawl_policy).map_err(|error| {
             AppError::DataParsing(format!("Failed to encode source crawl policy: {error}"))
@@ -2006,40 +2213,41 @@ impl DuckDbRepository {
         let guidance_json = serde_json::to_string(guidance).map_err(|error| {
             AppError::DataParsing(format!("Failed to encode source repair guidance: {error}"))
         })?;
-        let publisher_pattern = publisher_pattern_for_url(root_url);
-        let mut conn = self.conn.lock().await;
-        execute_transaction(&mut conn, "source connector recipe", |transaction| {
-            // `root_url` is UNIQUE and the upsert below targets `source_key`, so a row holding
-            // this URL under a *different* key fails the insert and takes the source start down
-            // with it. Two keys can reach one URL: the public-source key is a digest over the
-            // source kind and the final URL, so a reclassified source at an unchanged URL
-            // produces the pair, and `portals.base_url` is not UNIQUE, so a URL that later
-            // discovers as NextRequest registers a second key beside the first.
-            //
-            // The row being written is the one the operator is starting now, so the other is the
-            // one to lose. That does cost a still-registered source at the same URL its stored
-            // guidance, which is the lesser of the two: the alternative is that the start the
-            // operator asked for fails outright. It is lost only if the row replacing it is
-            // actually written, which is why the two statements share a transaction rather than
-            // running in order.
-            //
-            // `submitted_url` is deliberately not cleared the same way. It carries no UNIQUE, so
-            // no insert can collide on it, and dropping another source's row for sharing a pasted
-            // string would destroy that source's guidance to satisfy nothing.
-            transaction
-                .execute(
-                    "DELETE FROM source_connector_recipes
+        let publisher_pattern = publisher_pattern_for_url(&root_url);
+        let reuse_for_publisher_pattern = guidance.reuse_for_publisher_pattern;
+        self.query_connection("Save source connector recipe", move |conn| {
+            execute_transaction(conn, "source connector recipe", |transaction| {
+                // `root_url` is UNIQUE and the upsert below targets `source_key`, so a row holding
+                // this URL under a *different* key fails the insert and takes the source start down
+                // with it. Two keys can reach one URL: the public-source key is a digest over the
+                // source kind and the final URL, so a reclassified source at an unchanged URL
+                // produces the pair, and `portals.base_url` is not UNIQUE, so a URL that later
+                // discovers as NextRequest registers a second key beside the first.
+                //
+                // The row being written is the one the operator is starting now, so the other is the
+                // one to lose. That does cost a still-registered source at the same URL its stored
+                // guidance, which is the lesser of the two: the alternative is that the start the
+                // operator asked for fails outright. It is lost only if the row replacing it is
+                // actually written, which is why the two statements share a transaction rather than
+                // running in order.
+                //
+                // `submitted_url` is deliberately not cleared the same way. It carries no UNIQUE, so
+                // no insert can collide on it, and dropping another source's row for sharing a pasted
+                // string would destroy that source's guidance to satisfy nothing.
+                transaction
+                    .execute(
+                        "DELETE FROM source_connector_recipes
                      WHERE root_url = ?1 AND source_key <> ?2",
-                    params![root_url, source_key],
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!(
-                        "Failed to clear a superseded source connector recipe: {error}"
-                    ))
-                })?;
-            transaction
-                .execute(
-                    "INSERT INTO source_connector_recipes (
+                        params![root_url, source_key],
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!(
+                            "Failed to clear a superseded source connector recipe: {error}"
+                        ))
+                    })?;
+                transaction
+                    .execute(
+                        "INSERT INTO source_connector_recipes (
                 source_key, root_url, submitted_url, recipe_version, publisher_pattern,
                 reuse_approved, crawl_policy_json, guidance_json, updated_at
              ) VALUES (?1, ?2, ?3, 2, ?4, ?5, ?6, ?7,
@@ -2053,21 +2261,25 @@ impl DuckDbRepository {
                 crawl_policy_json = excluded.crawl_policy_json,
                 guidance_json = excluded.guidance_json,
                 updated_at = excluded.updated_at",
-                    params![
-                        source_key,
-                        root_url,
-                        submitted_url,
-                        publisher_pattern,
-                        guidance.reuse_for_publisher_pattern,
-                        crawl_policy_json,
-                        guidance_json
-                    ],
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to save source connector recipe: {error}"))
-                })?;
-            Ok(())
+                        params![
+                            source_key,
+                            root_url,
+                            submitted_url,
+                            publisher_pattern,
+                            reuse_for_publisher_pattern,
+                            crawl_policy_json,
+                            guidance_json
+                        ],
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!(
+                            "Failed to save source connector recipe: {error}"
+                        ))
+                    })?;
+                Ok(())
+            })
         })
+        .await
     }
 
     /// Records the metadata page window an operator chose for a portal's API path.
@@ -2093,8 +2305,8 @@ impl DuckDbRepository {
         submitted_url: &str,
         window: MetadataPageWindow,
     ) -> Result<(), AppError> {
-        let source_key = portal.portal_key.as_str();
-        let root_url = portal.canonical_url.as_str();
+        let source_key = portal.portal_key.clone();
+        let root_url = portal.canonical_url.clone();
         let submitted_url = normalized_submitted_url(submitted_url);
         let window_json = serde_json::to_string(&window).map_err(|error| {
             AppError::DataParsing(format!("Failed to encode metadata page window: {error}"))
@@ -2106,25 +2318,25 @@ impl DuckDbRepository {
         let guidance_json = serde_json::to_string(&SourceGuidance::default()).map_err(|error| {
             AppError::DataParsing(format!("Failed to encode source repair guidance: {error}"))
         })?;
-        let publisher_pattern = publisher_pattern_for_url(root_url);
-        let mut conn = self.conn.lock().await;
-        execute_transaction(&mut conn, "source metadata page window", |transaction| {
-            // Same `root_url` collision the recipe writer clears, for the same reason, under the
-            // same transaction.
-            transaction
-                .execute(
-                    "DELETE FROM source_connector_recipes
+        let publisher_pattern = publisher_pattern_for_url(&root_url);
+        self.query_connection("Save source metadata page window", move |conn| {
+            execute_transaction(conn, "source metadata page window", |transaction| {
+                // Same `root_url` collision the recipe writer clears, for the same reason, under the
+                // same transaction.
+                transaction
+                    .execute(
+                        "DELETE FROM source_connector_recipes
                      WHERE root_url = ?1 AND source_key <> ?2",
-                    params![root_url, source_key],
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!(
-                        "Failed to clear a superseded source connector recipe: {error}"
-                    ))
-                })?;
-            transaction
-                .execute(
-                    "INSERT INTO source_connector_recipes (
+                        params![root_url, source_key],
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!(
+                            "Failed to clear a superseded source connector recipe: {error}"
+                        ))
+                    })?;
+                transaction
+                    .execute(
+                        "INSERT INTO source_connector_recipes (
                 source_key, root_url, submitted_url, recipe_version, publisher_pattern,
                 reuse_approved, crawl_policy_json, guidance_json, metadata_page_window_json,
                 updated_at
@@ -2135,21 +2347,23 @@ impl DuckDbRepository {
                 submitted_url = excluded.submitted_url,
                 metadata_page_window_json = excluded.metadata_page_window_json,
                 updated_at = excluded.updated_at",
-                    params![
-                        source_key,
-                        root_url,
-                        submitted_url,
-                        publisher_pattern,
-                        crawl_policy_json,
-                        guidance_json,
-                        window_json
-                    ],
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to save metadata page window: {error}"))
-                })?;
-            Ok(())
+                        params![
+                            source_key,
+                            root_url,
+                            submitted_url,
+                            publisher_pattern,
+                            crawl_policy_json,
+                            guidance_json,
+                            window_json
+                        ],
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to save metadata page window: {error}"))
+                    })?;
+                Ok(())
+            })
         })
+        .await
     }
 
     /// Resolves a source's recipe by its primary key.
@@ -2368,8 +2582,11 @@ impl DuckDbRepository {
         let failures = i64::try_from(failures).map_err(|_| {
             AppError::Storage("Portal failure count exceeds SQLite capacity".to_string())
         })?;
-        let mut conn = self.conn.lock().await;
-        execute_transaction(&mut conn, "portal sync finalization", |transaction| {
+        let run_id = run_id.to_string();
+        let portal_key = portal_key.to_string();
+        let status = status.to_string();
+        self.query_connection("Finish portal sync run", move |conn| {
+        execute_transaction(conn, "portal sync finalization", |transaction| {
             let updated = transaction
                 .execute(
                     "UPDATE portal_sync_runs SET
@@ -2412,6 +2629,8 @@ impl DuckDbRepository {
                 })?;
             Ok(())
         })
+        })
+        .await
     }
 
     /// Records whether a saved source still synchronizes, and returns whether a source by that
@@ -2421,16 +2640,19 @@ impl DuckDbRepository {
         source_key: &str,
         state: SourceLifecycleState,
     ) -> Result<bool, AppError> {
-        let conn = self.conn.lock().await;
-        let updated = conn
-            .execute(
-                "UPDATE portals SET lifecycle_state = ?2 WHERE subdomain = ?1",
-                params![source_key, state.as_str()],
-            )
-            .map_err(|error| {
-                AppError::Storage(format!("Failed to record source lifecycle state: {error}"))
-            })?;
-        Ok(updated > 0)
+        let source_key = source_key.to_string();
+        self.query_connection("Set source lifecycle state", move |conn| {
+            let updated = conn
+                .execute(
+                    "UPDATE portals SET lifecycle_state = ?2 WHERE subdomain = ?1",
+                    params![source_key, state.as_str()],
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to record source lifecycle state: {error}"))
+                })?;
+            Ok(updated > 0)
+        })
+        .await
     }
 
     /// `None` distinguishes "no source by this key" from any lifecycle state a source can hold.
@@ -2460,35 +2682,41 @@ impl DuckDbRepository {
     /// Only a withdrawal calls this. A pause must not, because the frontier is the entire
     /// difference between resuming a crawl and restarting it.
     pub async fn discard_source_frontier(&self, source_key: &str) -> Result<u64, AppError> {
-        let conn = self.conn.lock().await;
-        let discarded = conn
-            .execute(
-                "DELETE FROM ingestion_task_frontier WHERE source_key = ?1",
-                params![source_key],
-            )
-            .map_err(|error| {
-                AppError::Storage(format!("Failed to discard source frontier: {error}"))
-            })?;
-        u64::try_from(discarded).map_err(|_| {
-            AppError::Storage("Discarded frontier count exceeds supported capacity".to_string())
+        let source_key = source_key.to_string();
+        self.query_connection("Discard source frontier", move |conn| {
+            let discarded = conn
+                .execute(
+                    "DELETE FROM ingestion_task_frontier WHERE source_key = ?1",
+                    params![source_key],
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to discard source frontier: {error}"))
+                })?;
+            u64::try_from(discarded).map_err(|_| {
+                AppError::Storage("Discarded frontier count exceeds supported capacity".to_string())
+            })
         })
+        .await
     }
 
     /// Forgets the learned crawl recipe for a source. Withdrawing a source withdraws the
     /// instructions for crawling it; re-adding it later must re-derive them rather than silently
     /// reuse a recipe the operator believed they had discarded.
     pub async fn delete_source_connector_recipe(&self, source_key: &str) -> Result<(), AppError> {
-        let conn = self.conn.lock().await;
-        conn.execute(
-            "DELETE FROM source_connector_recipes WHERE source_key = ?1",
-            params![source_key],
-        )
-        .map_err(|error| {
-            AppError::Storage(format!(
-                "Failed to discard source connector recipe: {error}"
-            ))
-        })?;
-        Ok(())
+        let source_key = source_key.to_string();
+        self.query_connection("Delete source connector recipe", move |conn| {
+            conn.execute(
+                "DELETE FROM source_connector_recipes WHERE source_key = ?1",
+                params![source_key],
+            )
+            .map_err(|error| {
+                AppError::Storage(format!(
+                    "Failed to discard source connector recipe: {error}"
+                ))
+            })?;
+            Ok(())
+        })
+        .await
     }
 
     /// How many ingested documents a source withdrawal leaves behind.
@@ -2520,17 +2748,20 @@ impl DuckDbRepository {
         }
 
         let base_url = format!("https://{subdomain}.nextrequest.com");
-        let conn = self.conn.lock().await;
-        conn.execute(
-            "INSERT INTO portals (subdomain, display_name, base_url)
+        let subdomain = subdomain.to_string();
+        self.query_connection("Insert or update portal", move |conn| {
+            conn.execute(
+                "INSERT INTO portals (subdomain, display_name, base_url)
              VALUES (?1, ?2, ?3)
              ON CONFLICT(subdomain) DO UPDATE SET base_url = excluded.base_url",
-            params![subdomain, subdomain, base_url],
-        )
-        .map_err(|error| {
-            AppError::Internal(format!("Failed to persist portal metadata: {error}"))
-        })?;
-        Ok(())
+                params![subdomain, subdomain, base_url],
+            )
+            .map_err(|error| {
+                AppError::Internal(format!("Failed to persist portal metadata: {error}"))
+            })?;
+            Ok(())
+        })
+        .await
     }
 
     pub async fn insert_or_update_document(
@@ -2539,9 +2770,11 @@ impl DuckDbRepository {
         request_id: u64,
         document: &DocumentMetadata,
     ) -> Result<(), AppError> {
-        let conn = self.conn.lock().await;
-        conn.execute(
-            "INSERT INTO documents (
+        let subdomain = subdomain.to_string();
+        let document = document.clone();
+        self.query_connection("Insert or update document", move |conn| {
+            conn.execute(
+                "INSERT INTO documents (
                 id, request_id, portal_subdomain, file_name, file_size, description,
                 content_type, download_url, visibility, created_at, updated_at, local_path,
                 extracted_text_sha256, was_ocr_processed
@@ -2556,31 +2789,33 @@ impl DuckDbRepository {
                 visibility = excluded.visibility,
                 updated_at = excluded.updated_at,
                 local_path = COALESCE(excluded.local_path, documents.local_path)",
-            params![
-                document.id,
-                request_id,
-                subdomain,
-                document.file_name,
-                document.file_size,
-                document.description,
-                document.content_type,
-                document.download_url,
-                document.visibility,
-                document.created_at,
-                document.updated_at,
-                document.local_path,
-                document.extracted_text_sha256,
-                if document.was_ocr_processed {
-                    1_i64
-                } else {
-                    0_i64
-                },
-            ],
-        )
-        .map_err(|error| {
-            AppError::Internal(format!("Failed to persist document metadata: {error}"))
-        })?;
-        Ok(())
+                params![
+                    document.id,
+                    request_id,
+                    subdomain,
+                    document.file_name,
+                    document.file_size,
+                    document.description,
+                    document.content_type,
+                    document.download_url,
+                    document.visibility,
+                    document.created_at,
+                    document.updated_at,
+                    document.local_path,
+                    document.extracted_text_sha256,
+                    if document.was_ocr_processed {
+                        1_i64
+                    } else {
+                        0_i64
+                    },
+                ],
+            )
+            .map_err(|error| {
+                AppError::Internal(format!("Failed to persist document metadata: {error}"))
+            })?;
+            Ok(())
+        })
+        .await
     }
 
     pub async fn mark_document_downloaded(
@@ -2607,9 +2842,10 @@ impl DuckDbRepository {
                 "Document size {raw_file_size} cannot be persisted: {error}"
             ))
         })?;
-        let local_path = local_path.to_str().ok_or_else(|| {
-            AppError::DataParsing("Document path must be valid UTF-8".to_string())
-        })?;
+        let local_path = local_path
+            .to_str()
+            .ok_or_else(|| AppError::DataParsing("Document path must be valid UTF-8".to_string()))?
+            .to_string();
         let raw_file_sha256 = normalize_sha256(raw_file_sha256)?;
         let (entropy_sample_bytes, suspicious_data_density) = validate_entropy_metadata(
             shannon_entropy,
@@ -2617,8 +2853,9 @@ impl DuckDbRepository {
             raw_file_size,
             suspicious_data_density,
         )?;
-        let mut conn = self.conn.lock().await;
-        execute_transaction(&mut conn, "document download finalization", |tx| {
+        let subdomain = subdomain.to_string();
+        self.query_connection("Mark document downloaded", move |conn| {
+        execute_transaction(conn, "document download finalization", |tx| {
             let updated = tx
                 .execute(
                     "UPDATE documents SET file_size = ?1, local_path = ?2, raw_file_sha256 = ?3,
@@ -2652,9 +2889,11 @@ impl DuckDbRepository {
                     "Document download update affected {updated} rows for {subdomain}/{document_id}"
                 )));
             }
-            synchronize_density_audit(tx, document_id, subdomain)?;
+            synchronize_density_audit(tx, document_id, &subdomain)?;
             Ok(())
         })
+        })
+        .await
     }
 
     pub async fn mark_document_extraction_state(
@@ -2686,32 +2925,38 @@ impl DuckDbRepository {
         let document_id = i64::try_from(document_id).map_err(|_| {
             AppError::DataParsing("Document identifier exceeds DuckDB capacity".to_string())
         })?;
-        let conn = self.conn.lock().await;
-        let updated = conn
-            .execute(
-                "UPDATE documents
+        let status = status.to_string();
+        let portal_subdomain = portal_subdomain.to_string();
+        let format = format.map(str::to_string);
+        let deferred_reason = deferred_reason.map(str::to_string);
+        self.query_connection("Mark document extraction state", move |conn| {
+            let updated = conn
+                .execute(
+                    "UPDATE documents
                  SET extraction_status = ?1, extraction_format = ?2,
                      extraction_deferred_reason = ?3
                  WHERE id = ?4 AND portal_subdomain = ?5",
-                params![
-                    status,
-                    format,
-                    deferred_reason,
-                    document_id,
-                    portal_subdomain
-                ],
-            )
-            .map_err(|error| {
-                AppError::Storage(format!(
-                    "Failed to persist document extraction state: {error}"
-                ))
-            })?;
-        if updated != 1 {
-            return Err(AppError::Storage(format!(
+                    params![
+                        status,
+                        format,
+                        deferred_reason,
+                        document_id,
+                        portal_subdomain
+                    ],
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!(
+                        "Failed to persist document extraction state: {error}"
+                    ))
+                })?;
+            if updated != 1 {
+                return Err(AppError::Storage(format!(
                 "Document extraction state update affected {updated} rows for {portal_subdomain}/{document_id}"
             )));
-        }
-        Ok(())
+            }
+            Ok(())
+        })
+        .await
     }
 
     /// Commits a PublicRequest object and its sub-relations inside an isolated ACID transaction block.
@@ -2720,144 +2965,150 @@ impl DuckDbRepository {
         subdomain: &str,
         request: &PublicRequest,
     ) -> Result<(), AppError> {
-        let mut conn = self.conn.lock().await;
-        execute_transaction(&mut conn, "request persistence", |tx| {
-            if let Some(ref agency) = request.agency {
-                tx.execute(
-                    "INSERT INTO agencies (id, portal_subdomain, name, department_name)
+        let subdomain = subdomain.to_string();
+        let request = request.clone();
+        self.query_connection("Insert or update request", move |conn| {
+            execute_transaction(conn, "request persistence", |tx| {
+                if let Some(ref agency) = request.agency {
+                    tx.execute(
+                        "INSERT INTO agencies (id, portal_subdomain, name, department_name)
                  VALUES (?1, ?2, ?3, ?4)
                  ON CONFLICT(id, portal_subdomain) DO UPDATE SET
                     name = excluded.name,
                     department_name = excluded.department_name",
-                    params![agency.id, subdomain, agency.name, agency.department_name],
-                )
-                .map_err(|e| {
-                    AppError::Internal(format!("Agency mapping write block failed: {}", e))
-                })?;
-            }
+                        params![agency.id, subdomain, agency.name, agency.department_name],
+                    )
+                    .map_err(|e| {
+                        AppError::Internal(format!("Agency mapping write block failed: {}", e))
+                    })?;
+                }
 
-            if let Some(ref category) = request.category {
-                tx.execute(
-                    "INSERT INTO categories (id, portal_subdomain, name)
+                if let Some(ref category) = request.category {
+                    tx.execute(
+                        "INSERT INTO categories (id, portal_subdomain, name)
                  VALUES (?1, ?2, ?3)
                  ON CONFLICT(id, portal_subdomain) DO UPDATE SET name = excluded.name",
-                    params![category.id, subdomain, category.name],
-                )
-                .map_err(|e| {
-                    AppError::Internal(format!("Category mapping write block failed: {}", e))
-                })?;
-            }
+                        params![category.id, subdomain, category.name],
+                    )
+                    .map_err(|e| {
+                        AppError::Internal(format!("Category mapping write block failed: {}", e))
+                    })?;
+                }
 
-            let request_updated = tx
-                .execute(
-                    "UPDATE requests SET
+                let request_updated = tx
+                    .execute(
+                        "UPDATE requests SET
                 rpid = ?3, title = ?4, description = ?5, status = ?6,
                 current_status_id = ?7, updated_at = ?8, closed_at = ?9,
                 due_date = ?10, neighborhood_block = COALESCE(?11, neighborhood_block),
                 agency_id = ?12, category_id = ?13,
                 determination_at = ?14, determination_source = ?15
              WHERE id = ?1 AND portal_subdomain = ?2",
-                    params![
-                        request.id,
-                        subdomain,
-                        request.rpid,
-                        request.title,
-                        request.description,
-                        request.status,
-                        request.current_status_id,
-                        request.updated_at,
-                        request.closed_at,
-                        request.due_date,
-                        request.neighborhood_block,
-                        request.agency.as_ref().map(|a| a.id),
-                        request.category.as_ref().map(|c| c.id),
-                        request.determination_at,
-                        request.determination_source,
-                    ],
-                )
-                .map_err(|e| {
-                    AppError::Internal(format!("Main case envelope update failure: {}", e))
-                })?;
-            if request_updated == 0 {
-                tx.execute(
-                    "INSERT INTO requests (
+                        params![
+                            request.id,
+                            subdomain,
+                            request.rpid,
+                            request.title,
+                            request.description,
+                            request.status,
+                            request.current_status_id,
+                            request.updated_at,
+                            request.closed_at,
+                            request.due_date,
+                            request.neighborhood_block,
+                            request.agency.as_ref().map(|a| a.id),
+                            request.category.as_ref().map(|c| c.id),
+                            request.determination_at,
+                            request.determination_source,
+                        ],
+                    )
+                    .map_err(|e| {
+                        AppError::Internal(format!("Main case envelope update failure: {}", e))
+                    })?;
+                if request_updated == 0 {
+                    tx.execute(
+                        "INSERT INTO requests (
                 id, portal_subdomain, rpid, title, description, status, current_status_id,
                 created_at, updated_at, closed_at, due_date, neighborhood_block,
                 agency_id, category_id, determination_at, determination_source
              ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
              ",
-                    params![
-                        request.id,
-                        subdomain,
-                        request.rpid,
-                        request.title,
-                        request.description,
-                        request.status,
-                        request.current_status_id,
-                        request.created_at,
-                        request.updated_at,
-                        request.closed_at,
-                        request.due_date,
-                        request.neighborhood_block,
-                        request.agency.as_ref().map(|a| a.id),
-                        request.category.as_ref().map(|c| c.id),
-                        request.determination_at,
-                        request.determination_source,
-                    ],
-                )
-                .map_err(|e| {
-                    AppError::Internal(format!(
-                        "Main case envelope transaction write failure: {}",
-                        e
-                    ))
-                })?;
-            }
+                        params![
+                            request.id,
+                            subdomain,
+                            request.rpid,
+                            request.title,
+                            request.description,
+                            request.status,
+                            request.current_status_id,
+                            request.created_at,
+                            request.updated_at,
+                            request.closed_at,
+                            request.due_date,
+                            request.neighborhood_block,
+                            request.agency.as_ref().map(|a| a.id),
+                            request.category.as_ref().map(|c| c.id),
+                            request.determination_at,
+                            request.determination_source,
+                        ],
+                    )
+                    .map_err(|e| {
+                        AppError::Internal(format!(
+                            "Main case envelope transaction write failure: {}",
+                            e
+                        ))
+                    })?;
+                }
 
-            let mut request_text = String::with_capacity(
-                request.title.as_deref().map(str::len).unwrap_or(0)
-                    + request.description.as_deref().map(str::len).unwrap_or(0)
-                    + 1,
-            );
-            if let Some(title) = &request.title {
-                request_text.push_str(title);
-            }
-            request_text.push(' ');
-            if let Some(description) = &request.description {
-                request_text.push_str(description);
-            }
-            let keyword_counts = extract_enforcement_keyword_counts(&request_text);
-            tx.execute(
-                "DELETE FROM request_keyword_signals
-             WHERE request_id = ?1 AND portal_subdomain = ?2",
-                params![request.id, subdomain],
-            )
-            .map_err(|error| {
-                AppError::Storage(format!(
-                    "Failed to refresh request keyword signals: {error}"
-                ))
-            })?;
-            for (keyword, match_count) in keyword_counts {
-                let match_count = i64::try_from(match_count).map_err(|_| {
-                    AppError::Storage("Request keyword count exceeds SQLite capacity".to_string())
-                })?;
+                let mut request_text = String::with_capacity(
+                    request.title.as_deref().map(str::len).unwrap_or(0)
+                        + request.description.as_deref().map(str::len).unwrap_or(0)
+                        + 1,
+                );
+                if let Some(title) = &request.title {
+                    request_text.push_str(title);
+                }
+                request_text.push(' ');
+                if let Some(description) = &request.description {
+                    request_text.push_str(description);
+                }
+                let keyword_counts = extract_enforcement_keyword_counts(&request_text);
                 tx.execute(
-                    "INSERT INTO request_keyword_signals (
-                    request_id, portal_subdomain, keyword, match_count
-                 ) VALUES (?1, ?2, ?3, ?4)",
-                    params![request.id, subdomain, keyword, match_count],
+                    "DELETE FROM request_keyword_signals
+             WHERE request_id = ?1 AND portal_subdomain = ?2",
+                    params![request.id, subdomain],
                 )
                 .map_err(|error| {
-                    AppError::Storage(format!("Failed to persist request keyword signal: {error}"))
+                    AppError::Storage(format!(
+                        "Failed to refresh request keyword signals: {error}"
+                    ))
                 })?;
-            }
+                for (keyword, match_count) in keyword_counts {
+                    let match_count = i64::try_from(match_count).map_err(|_| {
+                        AppError::Storage(
+                            "Request keyword count exceeds SQLite capacity".to_string(),
+                        )
+                    })?;
+                    tx.execute(
+                        "INSERT INTO request_keyword_signals (
+                    request_id, portal_subdomain, keyword, match_count
+                 ) VALUES (?1, ?2, ?3, ?4)",
+                        params![request.id, subdomain, keyword, match_count],
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!(
+                            "Failed to persist request keyword signal: {error}"
+                        ))
+                    })?;
+                }
 
-            if let Some(extension) = &request.statutory_extension {
-                upsert_statutory_extension(tx, request.id, subdomain, extension)?;
-            }
+                if let Some(extension) = &request.statutory_extension {
+                    upsert_statutory_extension(tx, request.id, &subdomain, extension)?;
+                }
 
-            for doc in &request.documents {
-                tx.execute(
-                    "INSERT INTO documents (
+                for doc in &request.documents {
+                    tx.execute(
+                        "INSERT INTO documents (
                     id, request_id, portal_subdomain, file_name, file_size, description,
                     content_type, download_url, visibility, created_at, updated_at
                  ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
@@ -2868,54 +3119,56 @@ impl DuckDbRepository {
                         ELSE excluded.file_size
                     END,
                     updated_at = excluded.updated_at",
-                    params![
-                        doc.id,
-                        request.id,
-                        subdomain,
-                        doc.file_name,
-                        doc.file_size,
-                        doc.description,
-                        doc.content_type,
-                        doc.download_url,
-                        doc.visibility,
-                        doc.created_at,
-                        doc.updated_at,
-                        DOWNLOAD_STATUS_COMPLETED,
-                    ],
-                )
-                .map_err(|e| {
-                    AppError::Internal(format!("Document attachment matrix sync error: {}", e))
-                })?;
-            }
+                        params![
+                            doc.id,
+                            request.id,
+                            subdomain,
+                            doc.file_name,
+                            doc.file_size,
+                            doc.description,
+                            doc.content_type,
+                            doc.download_url,
+                            doc.visibility,
+                            doc.created_at,
+                            doc.updated_at,
+                            DOWNLOAD_STATUS_COMPLETED,
+                        ],
+                    )
+                    .map_err(|e| {
+                        AppError::Internal(format!("Document attachment matrix sync error: {}", e))
+                    })?;
+                }
 
-            let audit_id = format!("auto-{}-{}", subdomain, request.id);
-            let mut timeline_flags = Vec::with_capacity(DERIVED_TIMELINE_FLAG_TYPES.len());
-            for anomaly_type in &request.timeline_anomalies {
-                if let Some(known_flag) = DERIVED_TIMELINE_FLAG_TYPES
-                    .iter()
-                    .copied()
-                    .find(|known_flag| anomaly_type == known_flag)
-                {
-                    if !timeline_flags.contains(&known_flag) {
-                        timeline_flags.push(known_flag);
+                let audit_id = format!("auto-{}-{}", subdomain, request.id);
+                let mut timeline_flags = Vec::with_capacity(DERIVED_TIMELINE_FLAG_TYPES.len());
+                for anomaly_type in &request.timeline_anomalies {
+                    if let Some(known_flag) = DERIVED_TIMELINE_FLAG_TYPES
+                        .iter()
+                        .copied()
+                        .find(|known_flag| anomaly_type == known_flag)
+                    {
+                        if !timeline_flags.contains(&known_flag) {
+                            timeline_flags.push(known_flag);
+                        }
                     }
                 }
-            }
-            synchronize_timeline_audit(tx, &audit_id, request.id, subdomain, &timeline_flags)?;
-            let statutory_analysis =
-                crate::analysis::evaluate_statutory_compliance_with_determination_at(
-                    request.id,
-                    &request.created_at,
-                    Some(&request.updated_at),
-                    request.closed_at.as_deref(),
-                    request.determination_at.as_deref(),
-                    request.determination_source.as_deref(),
-                    request.statutory_extension.as_ref(),
-                    &chrono::Utc::now().to_rfc3339(),
-                )?;
-            synchronize_cpra_finding(tx, request.id, subdomain, &statutory_analysis)?;
-            Ok(())
+                synchronize_timeline_audit(tx, &audit_id, request.id, &subdomain, &timeline_flags)?;
+                let statutory_analysis =
+                    crate::analysis::evaluate_statutory_compliance_with_determination_at(
+                        request.id,
+                        &request.created_at,
+                        Some(&request.updated_at),
+                        request.closed_at.as_deref(),
+                        request.determination_at.as_deref(),
+                        request.determination_source.as_deref(),
+                        request.statutory_extension.as_ref(),
+                        &chrono::Utc::now().to_rfc3339(),
+                    )?;
+                synchronize_cpra_finding(tx, request.id, &subdomain, &statutory_analysis)?;
+                Ok(())
+            })
         })
+        .await
     }
 
     /// Local document search query execution block.
@@ -3561,6 +3814,21 @@ impl DuckDbRepository {
         limit: usize,
     ) -> Result<SqlExportResult, AppError> {
         let result = self.execute_restricted_sql(sql, limit).await?;
+        // A symlink at the target path would redirect this write to a location the caller never
+        // actually chose — the real frontend only ever populates this path from a native Save
+        // dialog, but the IPC boundary itself enforces nothing, so a compromised or scripted
+        // caller could point it at a symlink planted somewhere reachable to overwrite an
+        // arbitrary file (e.g. a shell profile or LaunchAgents entry) through an indirection the
+        // user never saw. Overwriting an existing *regular* file the user re-selected is a
+        // legitimate re-export and is intentionally still allowed.
+        if let Ok(metadata) = std::fs::symlink_metadata(output_path) {
+            if metadata.file_type().is_symlink() {
+                return Err(AppError::PortalSecurity(
+                    "The export target is a symbolic link, which this export does not permit"
+                        .to_string(),
+                ));
+            }
+        }
         let mut writer = csv::Writer::from_path(output_path)
             .map_err(|error| AppError::Storage(format!("Failed to create CSV export: {error}")))?;
         writer
@@ -4018,180 +4286,190 @@ impl DuckDbRepository {
             ));
         }
 
-        let mut conn = self.conn.lock().await;
-        execute_transaction(&mut conn, "document extraction finalization", |tx| {
-            let analytical_state = tx
-                .query_row(
-                    "SELECT
-                requests.id,
-                requests.created_at,
-                requests.updated_at,
-                requests.closed_at,
-                requests.status,
-                documents.file_name
-             FROM documents
-             INNER JOIN requests
-                ON requests.id = documents.request_id
-               AND requests.portal_subdomain = documents.portal_subdomain
-             WHERE documents.id = ?1 AND documents.portal_subdomain = ?2",
-                    params![document_id, subdomain],
-                    map_request_analytical_state,
-                )
-                .map_err(|error| match error {
-                    duckdb::Error::QueryReturnedNoRows => AppError::Internal(format!(
-                        "Document {} for portal '{}' does not exist or has no associated request",
-                        doc_id, subdomain
-                    )),
-                    other => AppError::Internal(format!(
-                        "Failed to load document analytical context: {}",
-                        other
-                    )),
-                })?;
+        // The heavy-redaction density check is a pure function of the extracted text; computing it
+        // before the connection lock keeps `text_content` from having to cross into the closure
+        // (which would require an owned copy of the entire extracted body). If the check errors,
+        // no state has been written yet, matching the original transaction's roll-back behavior.
+        let text_content_has_heavy_redaction = has_heavy_redaction_density(text_content)?;
 
-            let request_has_heavy_redaction = if has_heavy_redaction_density(text_content)? {
-                true
-            } else {
-                let mut statement = tx
-                    .prepare(
-                        "SELECT documents_fts.extracted_text
+        let subdomain = subdomain.to_string();
+        let stored_path = stored_path.to_string();
+        self.query_connection("Document extraction finalization", move |conn| {
+            execute_transaction(conn, "document extraction finalization", |tx| {
+                let analytical_state = tx
+                    .query_row(
+                        "SELECT
+                    requests.id,
+                    requests.created_at,
+                    requests.updated_at,
+                    requests.closed_at,
+                    requests.status,
+                    documents.file_name
                  FROM documents
-                 INNER JOIN documents_fts
-                    ON documents_fts.document_id = documents.id
-                   AND documents_fts.portal_subdomain = documents.portal_subdomain
-                 WHERE documents.request_id = ?1
-                   AND documents.portal_subdomain = ?2
-                   AND documents.id <> ?3",
+                 INNER JOIN requests
+                    ON requests.id = documents.request_id
+                   AND requests.portal_subdomain = documents.portal_subdomain
+                 WHERE documents.id = ?1 AND documents.portal_subdomain = ?2",
+                        params![document_id, subdomain],
+                        map_request_analytical_state,
                     )
-                    .map_err(|e| {
-                        AppError::Internal(format!(
-                            "Failed to prepare request redaction scan: {}",
-                            e
-                        ))
+                    .map_err(|error| match error {
+                        duckdb::Error::QueryReturnedNoRows => AppError::Internal(format!(
+                            "Document {} for portal '{}' does not exist or has no associated request",
+                            doc_id, subdomain
+                        )),
+                        other => AppError::Internal(format!(
+                            "Failed to load document analytical context: {}",
+                            other
+                        )),
                     })?;
-                let indexed_text_rows = statement
-                    .query_map(
-                        params![analytical_state.request_id, subdomain, document_id],
-                        |row| row.get::<_, String>(0),
-                    )
-                    .map_err(|e| {
-                        AppError::Internal(format!(
-                            "Failed to execute request redaction scan: {}",
-                            e
-                        ))
-                    })?;
-                let mut heavy_redaction_found = false;
-                for indexed_text in indexed_text_rows {
-                    let indexed_text = indexed_text.map_err(|e| {
-                        AppError::Internal(format!(
-                            "Failed to decode indexed text during redaction scan: {}",
-                            e
-                        ))
-                    })?;
-                    if has_heavy_redaction_density(&indexed_text)? {
-                        heavy_redaction_found = true;
-                        break;
-                    }
-                }
-                heavy_redaction_found
-            };
-            let audit_id = format!("auto-{}-{}", subdomain, analytical_state.request_id);
 
-            let updated_documents = tx
-                .execute(
-                    "UPDATE documents SET
-                file_size = ?1,
-                local_path = ?2,
-                extracted_text_sha256 = ?3,
-                raw_file_sha256 = ?4,
-                was_ocr_processed = ?5,
-                shannon_entropy = ?6,
-                entropy_sample_bytes = ?7,
-                suspicious_data_density = ?8,
-                download_status = ?9,
-                extracted_text_projection_sha256 = ?12,
-                extraction_status = 'SEARCHABLE', extraction_format = NULL,
-                extraction_deferred_reason = NULL,
-                retention_eligible_at = CASE WHEN (raw_file_sha256 IS DISTINCT FROM ?4 OR extraction_deferred_reason LIKE 'REFERENCE_ONLY:%')
-                    AND EXISTS (SELECT 1 FROM data_maintenance_policy WHERE singleton
-                        AND json_extract_string(policy_json, '$.retentionMode') = 'REFERENCE_ONLY'
-                        AND json_extract_string(policy_json, '$.enabled') = 'true')
-                    THEN strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ') ELSE retention_eligible_at END
-             WHERE id = ?10 AND portal_subdomain = ?11",
-                    params![
-                        stored_file_size,
-                        stored_path,
-                        normalized_sha256,
-                        normalized_raw_file_sha256,
-                        if was_ocr { 1_i64 } else { 0_i64 },
-                        shannon_entropy,
-                        entropy_sample_bytes,
-                        suspicious_data_density,
-                        DOWNLOAD_STATUS_COMPLETED,
-                        document_id,
-                        subdomain,
-                        projection_sha256,
-                    ],
+                let request_has_heavy_redaction = if text_content_has_heavy_redaction {
+                    true
+                } else {
+                    let mut statement = tx
+                        .prepare(
+                            "SELECT documents_fts.extracted_text
+                     FROM documents
+                     INNER JOIN documents_fts
+                        ON documents_fts.document_id = documents.id
+                       AND documents_fts.portal_subdomain = documents.portal_subdomain
+                     WHERE documents.request_id = ?1
+                       AND documents.portal_subdomain = ?2
+                       AND documents.id <> ?3",
+                        )
+                        .map_err(|e| {
+                            AppError::Internal(format!(
+                                "Failed to prepare request redaction scan: {}",
+                                e
+                            ))
+                        })?;
+                    let indexed_text_rows = statement
+                        .query_map(
+                            params![analytical_state.request_id, subdomain, document_id],
+                            |row| row.get::<_, String>(0),
+                        )
+                        .map_err(|e| {
+                            AppError::Internal(format!(
+                                "Failed to execute request redaction scan: {}",
+                                e
+                            ))
+                        })?;
+                    let mut heavy_redaction_found = false;
+                    for indexed_text in indexed_text_rows {
+                        let indexed_text = indexed_text.map_err(|e| {
+                            AppError::Internal(format!(
+                                "Failed to decode indexed text during redaction scan: {}",
+                                e
+                            ))
+                        })?;
+                        if has_heavy_redaction_density(&indexed_text)? {
+                            heavy_redaction_found = true;
+                            break;
+                        }
+                    }
+                    heavy_redaction_found
+                };
+                let audit_id = format!("auto-{}-{}", subdomain, analytical_state.request_id);
+
+                let updated_documents = tx
+                    .execute(
+                        "UPDATE documents SET
+                    file_size = ?1,
+                    local_path = ?2,
+                    extracted_text_sha256 = ?3,
+                    raw_file_sha256 = ?4,
+                    was_ocr_processed = ?5,
+                    shannon_entropy = ?6,
+                    entropy_sample_bytes = ?7,
+                    suspicious_data_density = ?8,
+                    download_status = ?9,
+                    extracted_text_projection_sha256 = ?12,
+                    extraction_status = 'SEARCHABLE', extraction_format = NULL,
+                    extraction_deferred_reason = NULL,
+                    retention_eligible_at = CASE WHEN (raw_file_sha256 IS DISTINCT FROM ?4 OR extraction_deferred_reason LIKE 'REFERENCE_ONLY:%')
+                        AND EXISTS (SELECT 1 FROM data_maintenance_policy WHERE singleton
+                            AND json_extract_string(policy_json, '$.retentionMode') = 'REFERENCE_ONLY'
+                            AND json_extract_string(policy_json, '$.enabled') = 'true')
+                        THEN strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ') ELSE retention_eligible_at END
+                 WHERE id = ?10 AND portal_subdomain = ?11",
+                        params![
+                            stored_file_size,
+                            stored_path,
+                            normalized_sha256,
+                            normalized_raw_file_sha256,
+                            if was_ocr { 1_i64 } else { 0_i64 },
+                            shannon_entropy,
+                            entropy_sample_bytes,
+                            suspicious_data_density,
+                            DOWNLOAD_STATUS_COMPLETED,
+                            document_id,
+                            subdomain,
+                            projection_sha256,
+                        ],
+                    )
+                    .map_err(|e| {
+                        AppError::Internal(format!("Failed to update document metadata record: {}", e))
+                    })?;
+
+                if updated_documents != 1 {
+                    return Err(AppError::Internal(format!(
+                        "Document extraction update affected {} rows for document {} in portal '{}'",
+                        updated_documents, doc_id, subdomain
+                    )));
+                }
+
+                let request_has_suspicious_data_density =
+                    request_has_suspicious_density(tx, analytical_state.request_id, &subdomain)?;
+                let derived_flags = derive_integrity_flags(
+                    &analytical_state,
+                    request_has_heavy_redaction,
+                    request_has_suspicious_data_density,
+                );
+                let verification_status = if derived_flags.is_empty() {
+                    VERIFICATION_STATUS_COMPLIANT
+                } else {
+                    VERIFICATION_STATUS_ANOMALY
+                };
+
+                upsert_automatic_case_audit(
+                    tx,
+                    &audit_id,
+                    analytical_state.request_id,
+                    &subdomain,
+                    "Automatically derived during document extraction finalization",
+                    verification_status,
+                    true,
                 )
-                .map_err(|e| {
-                    AppError::Internal(format!("Failed to update document metadata record: {}", e))
+                .map_err(|error| {
+                    AppError::Internal(format!(
+                        "Failed to synchronize automatic case audit state: {error}"
+                    ))
                 })?;
 
-            if updated_documents != 1 {
-                return Err(AppError::Internal(format!(
-                    "Document extraction update affected {} rows for document {} in portal '{}'",
-                    updated_documents, doc_id, subdomain
-                )));
-            }
+                replace_managed_integrity_flags(
+                    tx,
+                    &audit_id,
+                    &DERIVED_DOCUMENT_FLAG_TYPES,
+                    &derived_flags,
+                )?;
 
-            let request_has_suspicious_data_density =
-                request_has_suspicious_density(tx, analytical_state.request_id, subdomain)?;
-            let derived_flags = derive_integrity_flags(
-                &analytical_state,
-                request_has_heavy_redaction,
-                request_has_suspicious_data_density,
-            );
-            let verification_status = if derived_flags.is_empty() {
-                VERIFICATION_STATUS_COMPLIANT
-            } else {
-                VERIFICATION_STATUS_ANOMALY
-            };
-
-            upsert_automatic_case_audit(
-                tx,
-                &audit_id,
-                analytical_state.request_id,
-                subdomain,
-                "Automatically derived during document extraction finalization",
-                verification_status,
-                true,
-            )
-            .map_err(|error| {
-                AppError::Internal(format!(
-                    "Failed to synchronize automatic case audit state: {error}"
-                ))
-            })?;
-
-            replace_managed_integrity_flags(
-                tx,
-                &audit_id,
-                &DERIVED_DOCUMENT_FLAG_TYPES,
-                &derived_flags,
-            )?;
-
-            synchronize_fts_row(
-                tx,
-                document_id,
-                subdomain,
-                analytical_state.file_name.as_deref(),
-                &cleaned_text,
-            )?;
-            let request_id = u64::try_from(analytical_state.request_id).map_err(|_| {
-                AppError::Storage("Document request identifier was negative".to_string())
-            })?;
-            synchronize_policy_evidence_gaps(tx, request_id, subdomain)?;
-            update_automatic_audit_status(tx, &audit_id)?;
-            Ok(())
+                synchronize_fts_row(
+                    tx,
+                    document_id,
+                    &subdomain,
+                    analytical_state.file_name.as_deref(),
+                    &cleaned_text,
+                )?;
+                let request_id = u64::try_from(analytical_state.request_id).map_err(|_| {
+                    AppError::Storage("Document request identifier was negative".to_string())
+                })?;
+                synchronize_policy_evidence_gaps(tx, request_id, &subdomain)?;
+                update_automatic_audit_status(tx, &audit_id)?;
+                Ok(())
+            })
         })
+        .await
     }
 
     /// The owning agency's name and department, joined into one searchable label, for the
@@ -4264,22 +4542,25 @@ impl DuckDbRepository {
                 "Document identifier cannot be represented by SQLite: {error}"
             ))
         })?;
-        let conn = self.conn.lock().await;
-        let removed = conn
-            .execute(
-                "DELETE FROM documents
+        let subdomain = subdomain.to_string();
+        self.query_connection("Delete unextracted document", move |conn| {
+            let removed = conn
+                .execute(
+                    "DELETE FROM documents
                  WHERE id = ?1 AND portal_subdomain = ?2
                    AND NOT EXISTS (
                      SELECT 1 FROM documents_fts
                      WHERE documents_fts.document_id = documents.id
                        AND documents_fts.portal_subdomain = documents.portal_subdomain
                    )",
-                params![document_id, subdomain],
-            )
-            .map_err(|error| {
-                AppError::Internal(format!("Failed to discard refused document: {error}"))
-            })?;
-        Ok(removed > 0)
+                    params![document_id, subdomain],
+                )
+                .map_err(|error| {
+                    AppError::Internal(format!("Failed to discard refused document: {error}"))
+                })?;
+            Ok(removed > 0)
+        })
+        .await
     }
 
     /// Hard-deletes one document and every row derived from it.
@@ -4300,27 +4581,30 @@ impl DuckDbRepository {
                 "Document identifier cannot be represented by the core database: {error}"
             ))
         })?;
-        let mut conn = self.conn.lock().await;
-        let transaction = conn.transaction().map_err(|error| {
-            AppError::Storage(format!(
-                "Failed to open a document purge transaction: {error}"
-            ))
-        })?;
-        let (purge, retired_snapshots) =
-            purge_document_rows(&transaction, subdomain, stored_id, document_id)?;
-        transaction.commit().map_err(|error| {
-            AppError::Storage(format!("Failed to commit a document purge: {error}"))
-        })?;
-        retire_fk_parent_rows(
-            &mut conn,
-            "analytical_snapshots",
-            "snapshot_id",
-            &retired_snapshots,
-            "Purged an analytical snapshot's rows but could not remove its snapshot record, \
+        let subdomain = subdomain.to_string();
+        self.query_connection("Purge document", move |conn| {
+            let transaction = conn.transaction().map_err(|error| {
+                AppError::Storage(format!(
+                    "Failed to open a document purge transaction: {error}"
+                ))
+            })?;
+            let (purge, retired_snapshots) =
+                purge_document_rows(&transaction, &subdomain, stored_id, document_id)?;
+            transaction.commit().map_err(|error| {
+                AppError::Storage(format!("Failed to commit a document purge: {error}"))
+            })?;
+            retire_fk_parent_rows(
+                conn,
+                "analytical_snapshots",
+                "snapshot_id",
+                &retired_snapshots,
+                "Purged an analytical snapshot's rows but could not remove its snapshot record, \
              so it is still listed with nothing under it. Running the purge again is safe \
              and finishes it",
-        )?;
-        Ok(purge)
+            )?;
+            Ok(purge)
+        })
+        .await
     }
 
     /// Hard-deletes a source and everything ingested under it, including the `portals` row.
@@ -4377,7 +4661,9 @@ impl DuckDbRepository {
     }
 
     pub async fn purge_source(&self, source_key: &str) -> Result<SourcePurge, AppError> {
-        let mut conn = self.conn.lock().await;
+        let source_key = source_key.to_string();
+        self.query_connection("Purge source", move |conn| {
+        let source_key = source_key.as_str();
         let transaction = conn.transaction().map_err(|error| {
             AppError::Storage(format!(
                 "Failed to open a source purge transaction: {error}"
@@ -4534,7 +4820,7 @@ impl DuckDbRepository {
             AppError::Storage(format!("Failed to commit a source purge: {error}"))
         })?;
         retire_fk_parent_rows(
-            &mut conn,
+            conn,
             "analytical_snapshots",
             "snapshot_id",
             &retired_snapshots,
@@ -4543,7 +4829,7 @@ impl DuckDbRepository {
              and finishes it",
         )?;
         retire_fk_parent_rows(
-            &mut conn,
+            conn,
             "portals",
             "subdomain",
             &[source_key.to_string()],
@@ -4560,6 +4846,8 @@ impl DuckDbRepository {
             requests_removed,
             local_paths,
         })
+        })
+        .await
     }
 
     /// Submits manual case verification details and updates investigator flags.
@@ -4572,8 +4860,13 @@ impl DuckDbRepository {
         status: &str,
         integrity_flags: &[String],
     ) -> Result<(), AppError> {
-        let mut conn = self.conn.lock().await;
-        execute_transaction(&mut conn, "manual case audit", |tx| {
+        let audit_id = audit_id.to_string();
+        let subdomain = subdomain.to_string();
+        let notes = notes.map(str::to_string);
+        let status = status.to_string();
+        let integrity_flags = integrity_flags.to_vec();
+        self.query_connection("Record manual case audit", move |conn| {
+        execute_transaction(conn, "manual case audit", |tx| {
             tx.execute(
             "INSERT INTO case_audits (audit_id, target_request_id, target_subdomain, auditor_notes, verified_at, verification_status)
              VALUES (?1, ?2, ?3, ?4, strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'), ?5)
@@ -4602,13 +4895,15 @@ impl DuckDbRepository {
                         e
                     ))
                 })?;
-            for flag in integrity_flags {
+            for flag in &integrity_flags {
                 insert.execute(params![audit_id, flag]).map_err(|e| {
                     AppError::Internal(format!("Failed to map case integrity parameters: {}", e))
                 })?;
             }
             Ok(())
         })
+        })
+        .await
     }
 
     /// Every source the operator still holds, paused ones included.
@@ -4689,8 +4984,12 @@ impl DuckDbRepository {
                 "Statutory extension evidence must identify its notice source".to_string(),
             ));
         }
-        let conn = self.conn.lock().await;
-        upsert_statutory_extension(&conn, request_id, portal_key, extension)
+        let portal_key = portal_key.to_string();
+        let extension = extension.clone();
+        self.query_connection("Record statutory extension", move |conn| {
+            upsert_statutory_extension(conn, request_id, &portal_key, &extension)
+        })
+        .await
     }
 
     /// Reads back the one extension recorded for a request, if any.
@@ -4704,28 +5003,31 @@ impl DuckDbRepository {
         request_id: u64,
         portal_key: &str,
     ) -> Result<Option<StatutoryExtensionRecord>, AppError> {
-        let conn = self.conn.lock().await;
-        let row = conn
-            .query_row(
-                "SELECT notice_at, expected_determination_at, reason, notice_source
+        let portal_key = portal_key.to_string();
+        let row = self
+            .query_connection("Load statutory extension", move |conn| {
+                conn.query_row(
+                    "SELECT notice_at, expected_determination_at, reason, notice_source
                  FROM statutory_extensions
                  WHERE request_id = ?1 AND portal_subdomain = ?2",
-                params![request_id, portal_key],
-                |row| {
-                    Ok((
-                        row.get::<_, String>(0)?,
-                        row.get::<_, String>(1)?,
-                        row.get::<_, String>(2)?,
-                        row.get::<_, String>(3)?,
+                    params![request_id, portal_key],
+                    |row| {
+                        Ok((
+                            row.get::<_, String>(0)?,
+                            row.get::<_, String>(1)?,
+                            row.get::<_, String>(2)?,
+                            row.get::<_, String>(3)?,
+                        ))
+                    },
+                )
+                .optional()
+                .map_err(|error| {
+                    AppError::Storage(format!(
+                        "Failed to read statutory extension evidence: {error}"
                     ))
-                },
-            )
-            .optional()
-            .map_err(|error| {
-                AppError::Storage(format!(
-                    "Failed to read statutory extension evidence: {error}"
-                ))
-            })?;
+                })
+            })
+            .await?;
         row.map(
             |(notice_at, expected_determination_at, reason, notice_source)| {
                 Ok(StatutoryExtensionRecord {
@@ -4782,18 +5084,25 @@ impl DuckDbRepository {
         }
         flags.sort();
         flags.dedup();
-        let known_flags = flags.iter().map(String::as_str).collect::<Vec<_>>();
-        let mut conn = self.conn.lock().await;
-        execute_transaction(&mut conn, "timeline audit refresh", |tx| {
-            synchronize_timeline_audit(
-                tx,
-                &format!("auto-{portal_key}-{request_id}"),
-                request_id,
-                portal_key,
-                &known_flags,
-            )?;
-            synchronize_cpra_finding(tx, request_id, portal_key, &statutory)
-        })?;
+        let known_flags = flags
+            .iter()
+            .map(|flag| flag.as_str().to_string())
+            .collect::<Vec<_>>();
+        let portal_key_owned = portal_key.to_string();
+        self.query_connection("Refresh request timeline audit", move |conn| {
+            execute_transaction(conn, "timeline audit refresh", |tx| {
+                let known_flags = known_flags.iter().map(String::as_str).collect::<Vec<_>>();
+                synchronize_timeline_audit(
+                    tx,
+                    &format!("auto-{portal_key_owned}-{request_id}"),
+                    request_id,
+                    &portal_key_owned,
+                    &known_flags,
+                )?;
+                synchronize_cpra_finding(tx, request_id, &portal_key_owned, &statutory)
+            })
+        })
+        .await?;
         Ok(flags)
     }
 
@@ -4825,7 +5134,7 @@ impl DuckDbRepository {
         let mut rejected_count = 0_usize;
         for event in events {
             if validate_auxiliary_event(event).is_ok() {
-                accepted.push(event);
+                accepted.push(event.clone());
             } else {
                 rejected_count += 1;
             }
@@ -4836,10 +5145,14 @@ impl DuckDbRepository {
             ));
         }
 
-        let mut conn = self.conn.lock().await;
-        execute_transaction(&mut conn, "auxiliary import", |tx| {
-            tx.execute(
-                "INSERT INTO auxiliary_data_sources (
+        let portal_key = portal_key.map(str::to_string);
+        let display_name = display_name.to_string();
+        let source_uri = source_uri.map(str::to_string);
+        let source_sha256 = source_sha256.to_string();
+        self.query_connection("Import auxiliary events", move |conn| {
+            execute_transaction(conn, "auxiliary import", |tx| {
+                tx.execute(
+                    "INSERT INTO auxiliary_data_sources (
                 source_id, portal_subdomain, source_kind, display_name, source_uri,
                 source_sha256, imported_at, record_count
              ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
@@ -4848,43 +5161,43 @@ impl DuckDbRepository {
                 source_uri = excluded.source_uri,
                 imported_at = excluded.imported_at,
                 record_count = excluded.record_count",
-                params![
-                    source_id,
-                    portal_key,
-                    source_kind.as_str(),
-                    display_name.trim(),
-                    source_uri,
-                    source_sha256,
-                    imported_at,
-                    accepted.len(),
-                ],
-            )
-            .map_err(|error| {
-                AppError::Storage(format!("Failed to persist auxiliary source: {error}"))
-            })?;
+                    params![
+                        source_id,
+                        portal_key,
+                        source_kind.as_str(),
+                        display_name.trim(),
+                        source_uri,
+                        source_sha256,
+                        imported_at,
+                        accepted.len(),
+                    ],
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to persist auxiliary source: {error}"))
+                })?;
 
-            let mut imported_count = 0_usize;
-            let mut updated_count = 0_usize;
-            for event in accepted {
-                let existed = tx
-                    .query_row(
-                        "SELECT EXISTS(
+                let mut imported_count = 0_usize;
+                let mut updated_count = 0_usize;
+                for event in accepted {
+                    let existed = tx
+                        .query_row(
+                            "SELECT EXISTS(
                         SELECT 1 FROM auxiliary_events WHERE source_id = ?1 AND external_id = ?2
                      )",
-                        params![source_id, event.external_id],
-                        |row| row.get::<_, bool>(0),
-                    )
-                    .map_err(|error| {
-                        AppError::Storage(format!("Failed to inspect auxiliary event: {error}"))
-                    })?;
-                let source_payload =
-                    serde_json::to_string(&event.source_payload).map_err(|error| {
-                        AppError::DataParsing(format!(
-                            "Failed to encode auxiliary payload: {error}"
-                        ))
-                    })?;
-                tx.execute(
-                    "INSERT INTO auxiliary_events (
+                            params![source_id, event.external_id],
+                            |row| row.get::<_, bool>(0),
+                        )
+                        .map_err(|error| {
+                            AppError::Storage(format!("Failed to inspect auxiliary event: {error}"))
+                        })?;
+                    let source_payload =
+                        serde_json::to_string(&event.source_payload).map_err(|error| {
+                            AppError::DataParsing(format!(
+                                "Failed to encode auxiliary payload: {error}"
+                            ))
+                        })?;
+                    tx.execute(
+                        "INSERT INTO auxiliary_events (
                     source_id, external_id, occurred_at, neighborhood_block, event_type,
                     description, latitude, longitude, source_payload_json
                  ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
@@ -4897,35 +5210,37 @@ impl DuckDbRepository {
                     longitude = excluded.longitude,
                     source_payload_json = excluded.source_payload_json,
                     imported_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')",
-                    params![
-                        source_id,
-                        event.external_id,
-                        event.occurred_at,
-                        normalize_neighborhood(&event.neighborhood_block),
-                        event.event_type.trim(),
-                        event.description,
-                        event.latitude,
-                        event.longitude,
-                        source_payload,
-                    ],
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to persist auxiliary event: {error}"))
-                })?;
-                if existed {
-                    updated_count += 1;
-                } else {
-                    imported_count += 1;
+                        params![
+                            source_id,
+                            event.external_id,
+                            event.occurred_at,
+                            normalize_neighborhood(&event.neighborhood_block),
+                            event.event_type.trim(),
+                            event.description,
+                            event.latitude,
+                            event.longitude,
+                            source_payload,
+                        ],
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to persist auxiliary event: {error}"))
+                    })?;
+                    if existed {
+                        updated_count += 1;
+                    } else {
+                        imported_count += 1;
+                    }
                 }
-            }
-            Ok(AuxiliaryImportResult {
-                source_id,
-                imported_count,
-                updated_count,
-                rejected_count,
-                source_sha256: source_sha256.to_string(),
+                Ok(AuxiliaryImportResult {
+                    source_id,
+                    imported_count,
+                    updated_count,
+                    rejected_count,
+                    source_sha256: source_sha256.to_string(),
+                })
             })
         })
+        .await
     }
 
     pub async fn import_legal_authority(
@@ -4934,43 +5249,50 @@ impl DuckDbRepository {
         parsed: &ParsedLegalAuthority,
     ) -> Result<LegalAuthorityImportResult, AppError> {
         let imported_at = chrono::Utc::now().to_rfc3339();
-        let statute_id = input.statute_id.trim();
+        let statute_id = input.statute_id.trim().to_string();
         let source_uri = input
             .canonical_source_uri
             .as_deref()
             .map(str::trim)
-            .filter(|value| !value.is_empty());
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
         let effective_from = input
             .effective_from
             .as_deref()
             .map(str::trim)
-            .filter(|value| !value.is_empty());
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
         let effective_to = input
             .effective_to
             .as_deref()
             .map(str::trim)
-            .filter(|value| !value.is_empty());
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
         let mandated_deadline_days = input.mandated_deadline_days.map(i64::from);
-        let inserted_new_version = {
-            let mut conn = self.conn.lock().await;
-            execute_transaction(&mut conn, "legal authority import", |tx| {
-                let inserted_new_version = tx
-                    .query_row(
-                        "SELECT NOT EXISTS(
+        let input = input.clone();
+        let parsed = parsed.clone();
+        let statute_id_for_summary = statute_id.clone();
+        let inserted_new_version = self
+            .query_connection("Import legal authority", move |conn| {
+                let statute_id = statute_id.as_str();
+                execute_transaction(conn, "legal authority import", |tx| {
+                    let inserted_new_version = tx
+                        .query_row(
+                            "SELECT NOT EXISTS(
                     SELECT 1 FROM legal_statute_versions
                     WHERE statute_id = ?1 AND content_sha256 = ?2
                  )",
-                        params![statute_id, parsed.content_sha256],
-                        |row| row.get::<_, bool>(0),
-                    )
-                    .map_err(|error| {
-                        AppError::Storage(format!(
-                            "Failed to inspect legal authority version: {error}"
-                        ))
-                    })?;
+                            params![statute_id, parsed.content_sha256],
+                            |row| row.get::<_, bool>(0),
+                        )
+                        .map_err(|error| {
+                            AppError::Storage(format!(
+                                "Failed to inspect legal authority version: {error}"
+                            ))
+                        })?;
 
-                tx.execute(
-                    "INSERT INTO legal_statutes (
+                    tx.execute(
+                        "INSERT INTO legal_statutes (
                 statute_id, jurisdiction, statute_citation, title, authority_kind, full_text,
                 mandated_deadline_days, canonical_source_uri, current_version_id,
                 content_sha256, effective_from, effective_to, imported_at, updated_at
@@ -4988,28 +5310,28 @@ impl DuckDbRepository {
                 effective_from = excluded.effective_from,
                 effective_to = excluded.effective_to,
                 updated_at = excluded.updated_at",
-                    params![
-                        statute_id,
-                        input.jurisdiction.trim(),
-                        input.statute_citation.trim(),
-                        input.title.trim(),
-                        input.authority_kind.as_str(),
-                        parsed.normalized_text,
-                        mandated_deadline_days,
-                        source_uri,
-                        parsed.version_id,
-                        parsed.content_sha256,
-                        effective_from,
-                        effective_to,
-                        imported_at,
-                    ],
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to persist legal authority: {error}"))
-                })?;
+                        params![
+                            statute_id,
+                            input.jurisdiction.trim(),
+                            input.statute_citation.trim(),
+                            input.title.trim(),
+                            input.authority_kind.as_str(),
+                            parsed.normalized_text,
+                            mandated_deadline_days,
+                            source_uri,
+                            parsed.version_id,
+                            parsed.content_sha256,
+                            effective_from,
+                            effective_to,
+                            imported_at,
+                        ],
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to persist legal authority: {error}"))
+                    })?;
 
-                tx.execute(
-                    "INSERT INTO legal_statute_versions (
+                    tx.execute(
+                        "INSERT INTO legal_statute_versions (
                 version_id, statute_id, full_text, content_sha256, effective_from,
                 effective_to, source_uri, imported_at
              ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
@@ -5017,125 +5339,132 @@ impl DuckDbRepository {
                 effective_from = excluded.effective_from,
                 effective_to = excluded.effective_to,
                 source_uri = excluded.source_uri",
-                    params![
-                        parsed.version_id,
-                        statute_id,
-                        parsed.normalized_text,
-                        parsed.content_sha256,
-                        effective_from,
-                        effective_to,
-                        source_uri,
-                        imported_at,
-                    ],
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!(
-                        "Failed to persist legal authority version: {error}"
-                    ))
-                })?;
+                        params![
+                            parsed.version_id,
+                            statute_id,
+                            parsed.normalized_text,
+                            parsed.content_sha256,
+                            effective_from,
+                            effective_to,
+                            source_uri,
+                            imported_at,
+                        ],
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!(
+                            "Failed to persist legal authority version: {error}"
+                        ))
+                    })?;
 
-                tx.execute(
-                    "DELETE FROM legal_provisions_fts WHERE version_id = ?1",
-                    params![parsed.version_id],
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to clear legal provision index: {error}"))
-                })?;
-                tx.execute(
-                    "DELETE FROM legal_provisions WHERE version_id = ?1",
-                    params![parsed.version_id],
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to clear legal provisions: {error}"))
-                })?;
-                for provision in &parsed.provisions {
-                    let ordinal = i64::try_from(provision.ordinal).map_err(|_| {
-                        AppError::Storage(
-                            "Legal provision ordinal exceeds SQLite capacity".to_string(),
-                        )
-                    })?;
-                    let heading_level = i64::try_from(provision.heading_level).map_err(|_| {
-                        AppError::Storage("Legal heading level exceeds SQLite capacity".to_string())
-                    })?;
-                    let token_count = i64::try_from(provision.token_count).map_err(|_| {
-                        AppError::Storage(
-                            "Legal provision token count exceeds SQLite capacity".to_string(),
-                        )
+                    tx.execute(
+                        "DELETE FROM legal_provisions_fts WHERE version_id = ?1",
+                        params![parsed.version_id],
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to clear legal provision index: {error}"))
                     })?;
                     tx.execute(
-                        "INSERT INTO legal_provisions (
+                        "DELETE FROM legal_provisions WHERE version_id = ?1",
+                        params![parsed.version_id],
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to clear legal provisions: {error}"))
+                    })?;
+                    for provision in &parsed.provisions {
+                        let ordinal = i64::try_from(provision.ordinal).map_err(|_| {
+                            AppError::Storage(
+                                "Legal provision ordinal exceeds SQLite capacity".to_string(),
+                            )
+                        })?;
+                        let heading_level =
+                            i64::try_from(provision.heading_level).map_err(|_| {
+                                AppError::Storage(
+                                    "Legal heading level exceeds SQLite capacity".to_string(),
+                                )
+                            })?;
+                        let token_count = i64::try_from(provision.token_count).map_err(|_| {
+                            AppError::Storage(
+                                "Legal provision token count exceeds SQLite capacity".to_string(),
+                            )
+                        })?;
+                        tx.execute(
+                            "INSERT INTO legal_provisions (
                     provision_id, version_id, statute_id, ordinal, heading_level,
                     heading_path, title, provision_text, token_count, content_sha256
                  ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-                        params![
-                            provision.provision_id,
-                            parsed.version_id,
-                            statute_id,
-                            ordinal,
-                            heading_level,
-                            provision.heading_path,
-                            provision.title,
-                            provision.provision_text,
-                            token_count,
-                            provision.content_sha256,
-                        ],
-                    )
-                    .map_err(|error| {
-                        AppError::Storage(format!("Failed to persist legal provision: {error}"))
-                    })?;
-                    tx.execute(
-                        "INSERT INTO legal_provisions_fts (
+                            params![
+                                provision.provision_id,
+                                parsed.version_id,
+                                statute_id,
+                                ordinal,
+                                heading_level,
+                                provision.heading_path,
+                                provision.title,
+                                provision.provision_text,
+                                token_count,
+                                provision.content_sha256,
+                            ],
+                        )
+                        .map_err(|error| {
+                            AppError::Storage(format!("Failed to persist legal provision: {error}"))
+                        })?;
+                        tx.execute(
+                            "INSERT INTO legal_provisions_fts (
                     provision_id, version_id, statute_id, title, heading_path, provision_text
                  ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                        params![
-                            provision.provision_id,
-                            parsed.version_id,
-                            statute_id,
-                            provision.title,
-                            provision.heading_path,
-                            provision.provision_text,
-                        ],
+                            params![
+                                provision.provision_id,
+                                parsed.version_id,
+                                statute_id,
+                                provision.title,
+                                provision.heading_path,
+                                provision.provision_text,
+                            ],
+                        )
+                        .map_err(|error| {
+                            AppError::Storage(format!("Failed to index legal provision: {error}"))
+                        })?;
+                    }
+
+                    tx.execute(
+                        "UPDATE legal_mandates SET enabled = 0 WHERE statute_id = ?1",
+                        params![statute_id],
                     )
                     .map_err(|error| {
-                        AppError::Storage(format!("Failed to index legal provision: {error}"))
+                        AppError::Storage(format!(
+                            "Failed to retire superseded legal mandates: {error}"
+                        ))
                     })?;
-                }
-
-                tx.execute(
-                    "UPDATE legal_mandates SET enabled = 0 WHERE statute_id = ?1",
-                    params![statute_id],
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!(
-                        "Failed to retire superseded legal mandates: {error}"
-                    ))
-                })?;
-                let version_suffix = parsed
-                    .version_id
-                    .rsplit('-')
-                    .next()
-                    .unwrap_or(parsed.version_id.as_str());
-                for mandate in &input.mandates {
-                    let mandate_id = format!(
-                        "{}:{}:{}",
-                        statute_id,
-                        mandate.mandate_id.trim(),
-                        &version_suffix[..version_suffix.len().min(12)]
-                    );
-                    let applicability_json = serde_json::to_string(&mandate.applicability_phrases)
+                    let version_suffix = parsed
+                        .version_id
+                        .rsplit('-')
+                        .next()
+                        .unwrap_or(parsed.version_id.as_str());
+                    for mandate in &input.mandates {
+                        let mandate_id = format!(
+                            "{}:{}:{}",
+                            statute_id,
+                            mandate.mandate_id.trim(),
+                            &version_suffix[..version_suffix.len().min(12)]
+                        );
+                        let applicability_json = serde_json::to_string(
+                            &mandate.applicability_phrases,
+                        )
                         .map_err(|error| {
                             AppError::DataParsing(format!(
                                 "Failed to encode mandate applicability phrases: {error}"
                             ))
                         })?;
-                    let evidence_json = serde_json::to_string(&mandate.required_evidence_phrases)
+                        let evidence_json = serde_json::to_string(
+                            &mandate.required_evidence_phrases,
+                        )
                         .map_err(|error| {
-                        AppError::DataParsing(format!(
-                            "Failed to encode mandate evidence phrases: {error}"
-                        ))
-                    })?;
-                    tx.execute(
-                        "INSERT INTO legal_mandates (
+                            AppError::DataParsing(format!(
+                                "Failed to encode mandate evidence phrases: {error}"
+                            ))
+                        })?;
+                        tx.execute(
+                            "INSERT INTO legal_mandates (
                     mandate_id, statute_id, version_id, title, description,
                     applicability_phrases_json, required_evidence_phrases_json,
                     severity, enabled, created_at
@@ -5147,26 +5476,29 @@ impl DuckDbRepository {
                     required_evidence_phrases_json = excluded.required_evidence_phrases_json,
                     severity = excluded.severity,
                     enabled = 1",
-                        params![
-                            mandate_id,
-                            statute_id,
-                            parsed.version_id,
-                            mandate.title.trim(),
-                            mandate.description.trim(),
-                            applicability_json,
-                            evidence_json,
-                            mandate.severity.as_str(),
-                            imported_at,
-                        ],
-                    )
-                    .map_err(|error| {
-                        AppError::Storage(format!("Failed to persist legal mandate: {error}"))
-                    })?;
-                }
-                Ok(inserted_new_version)
-            })?
-        };
-        let authority = self.load_legal_authority_summary(statute_id).await?;
+                            params![
+                                mandate_id,
+                                statute_id,
+                                parsed.version_id,
+                                mandate.title.trim(),
+                                mandate.description.trim(),
+                                applicability_json,
+                                evidence_json,
+                                mandate.severity.as_str(),
+                                imported_at,
+                            ],
+                        )
+                        .map_err(|error| {
+                            AppError::Storage(format!("Failed to persist legal mandate: {error}"))
+                        })?;
+                    }
+                    Ok(inserted_new_version)
+                })
+            })
+            .await?;
+        let authority = self
+            .load_legal_authority_summary(&statute_id_for_summary)
+            .await?;
         Ok(LegalAuthorityImportResult {
             authority,
             inserted_new_version,
@@ -5174,59 +5506,64 @@ impl DuckDbRepository {
     }
 
     pub async fn list_legal_authorities(&self) -> Result<Vec<LegalAuthoritySummary>, AppError> {
-        let conn = self.conn.lock().await;
-        let query = format!(
-            "{LEGAL_AUTHORITY_SUMMARY_SELECT}
+        self.query_connection("List legal authorities", |conn| {
+            let query = format!(
+                "{LEGAL_AUTHORITY_SUMMARY_SELECT}
              ORDER BY legal_statutes.jurisdiction COLLATE NOCASE,
                       legal_statutes.statute_citation COLLATE NOCASE"
-        );
-        let mut statement = conn.prepare(&query).map_err(|error| {
-            AppError::Storage(format!(
-                "Failed to prepare legal authority listing: {error}"
-            ))
-        })?;
-        let rows = statement
-            .query_map([], map_legal_authority_summary_row)
-            .map_err(|error| {
-                AppError::Storage(format!("Failed to query legal authorities: {error}"))
+            );
+            let mut statement = conn.prepare(&query).map_err(|error| {
+                AppError::Storage(format!(
+                    "Failed to prepare legal authority listing: {error}"
+                ))
             })?;
-        rows.map(|row| {
-            row.map_err(|error| {
-                AppError::Storage(format!("Failed to decode legal authority: {error}"))
+            let rows = statement
+                .query_map([], map_legal_authority_summary_row)
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to query legal authorities: {error}"))
+                })?;
+            rows.map(|row| {
+                row.map_err(|error| {
+                    AppError::Storage(format!("Failed to decode legal authority: {error}"))
+                })
+                .and_then(convert_legal_authority_summary)
             })
-            .and_then(convert_legal_authority_summary)
+            .collect()
         })
-        .collect()
+        .await
     }
 
     pub async fn list_legal_authority_versions(
         &self,
         statute_id: &str,
     ) -> Result<Vec<LegalAuthorityVersionSummary>, AppError> {
-        let conn = self.conn.lock().await;
-        let mut statement = conn
-            .prepare(
-                "SELECT version_id, statute_id, content_sha256, effective_from, effective_to,
+        let statute_id = statute_id.to_string();
+        self.query_connection("List legal authority versions", move |conn| {
+            let mut statement = conn
+                .prepare(
+                    "SELECT version_id, statute_id, content_sha256, effective_from, effective_to,
                         source_uri, imported_at
                  FROM legal_statute_versions
                  WHERE statute_id = ?1
                  ORDER BY imported_at DESC, version_id DESC
                  LIMIT 500",
-            )
-            .map_err(|error| {
-                AppError::Storage(format!("Failed to prepare legal version listing: {error}"))
-            })?;
-        let rows = statement
-            .query_map(params![statute_id], map_legal_authority_version_summary)
-            .map_err(|error| {
-                AppError::Storage(format!("Failed to query legal versions: {error}"))
-            })?;
-        rows.map(|row| {
-            row.map_err(|error| {
-                AppError::Storage(format!("Failed to decode legal version: {error}"))
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to prepare legal version listing: {error}"))
+                })?;
+            let rows = statement
+                .query_map(params![statute_id], map_legal_authority_version_summary)
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to query legal versions: {error}"))
+                })?;
+            rows.map(|row| {
+                row.map_err(|error| {
+                    AppError::Storage(format!("Failed to decode legal version: {error}"))
+                })
             })
+            .collect()
         })
-        .collect()
+        .await
     }
 
     pub async fn get_legal_authority_version(
@@ -5234,30 +5571,34 @@ impl DuckDbRepository {
         statute_id: &str,
         version_id: &str,
     ) -> Result<LegalAuthorityVersionDetail, AppError> {
-        let conn = self.conn.lock().await;
-        conn.query_row(
-            "SELECT version_id, statute_id, content_sha256, effective_from, effective_to,
+        let statute_id = statute_id.to_string();
+        let version_id = version_id.to_string();
+        self.query_connection("Get legal authority version", move |conn| {
+            conn.query_row(
+                "SELECT version_id, statute_id, content_sha256, effective_from, effective_to,
                     source_uri, imported_at, full_text
              FROM legal_statute_versions
              WHERE statute_id = ?1 AND version_id = ?2",
-            params![statute_id, version_id],
-            |row| {
-                Ok((
-                    map_legal_authority_version_summary(row)?,
-                    row.get::<_, String>(7)?,
+                params![statute_id, version_id],
+                |row| {
+                    Ok((
+                        map_legal_authority_version_summary(row)?,
+                        row.get::<_, String>(7)?,
+                    ))
+                },
+            )
+            .optional()
+            .map_err(|error| {
+                AppError::Storage(format!("Failed to read legal authority version: {error}"))
+            })?
+            .map(|(version, full_text)| LegalAuthorityVersionDetail { version, full_text })
+            .ok_or_else(|| {
+                AppError::DataParsing(format!(
+                    "Legal authority version '{version_id}' was not found for '{statute_id}'"
                 ))
-            },
-        )
-        .optional()
-        .map_err(|error| {
-            AppError::Storage(format!("Failed to read legal authority version: {error}"))
-        })?
-        .map(|(version, full_text)| LegalAuthorityVersionDetail { version, full_text })
-        .ok_or_else(|| {
-            AppError::DataParsing(format!(
-                "Legal authority version '{version_id}' was not found for '{statute_id}'"
-            ))
+            })
         })
+        .await
     }
 
     pub async fn evaluate_request_legal_compliance(
@@ -5265,12 +5606,14 @@ impl DuckDbRepository {
         request_id: u64,
         portal_key: &str,
     ) -> Result<LegalEvaluationResult, AppError> {
-        let state = {
-            let mut conn = self.conn.lock().await;
-            execute_transaction(&mut conn, "policy evaluation", |tx| {
-                synchronize_policy_evidence_gaps(tx, request_id, portal_key)
-            })?
-        };
+        let portal_key_owned = portal_key.to_string();
+        let state = self
+            .query_connection("Evaluate request legal compliance", move |conn| {
+                execute_transaction(conn, "policy evaluation", |tx| {
+                    synchronize_policy_evidence_gaps(tx, request_id, &portal_key_owned)
+                })
+            })
+            .await?;
         let findings = self
             .list_request_legal_findings(request_id, portal_key)
             .await?;
@@ -5291,10 +5634,11 @@ impl DuckDbRepository {
         request_id: u64,
         portal_key: &str,
     ) -> Result<Vec<LegalComplianceFinding>, AppError> {
-        let conn = self.conn.lock().await;
-        let mut statement = conn
-            .prepare(
-                "SELECT
+        let portal_key = portal_key.to_string();
+        self.query_connection("List request legal findings", move |conn| {
+            let mut statement = conn
+                .prepare(
+                    "SELECT
                     statutory_violations.violation_id, statutory_violations.request_id,
                     statutory_violations.portal_subdomain,
                     statutory_violations.matched_statute_id,
@@ -5325,22 +5669,24 @@ impl DuckDbRepository {
                     END,
                     statutory_violations.confidence_basis_points DESC,
                     statutory_violations.evaluated_at DESC",
-            )
-            .map_err(|error| {
-                AppError::Storage(format!("Failed to prepare legal findings query: {error}"))
-            })?;
-        let rows = statement
-            .query_map(params![request_id, portal_key], map_legal_finding_row)
-            .map_err(|error| {
-                AppError::Storage(format!("Failed to query legal findings: {error}"))
-            })?;
-        rows.map(|row| {
-            row.map_err(|error| {
-                AppError::Storage(format!("Failed to decode legal finding: {error}"))
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to prepare legal findings query: {error}"))
+                })?;
+            let rows = statement
+                .query_map(params![request_id, portal_key], map_legal_finding_row)
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to query legal findings: {error}"))
+                })?;
+            rows.map(|row| {
+                row.map_err(|error| {
+                    AppError::Storage(format!("Failed to decode legal finding: {error}"))
+                })
+                .and_then(convert_legal_finding)
             })
-            .and_then(convert_legal_finding)
+            .collect()
         })
-        .collect()
+        .await
     }
 
     pub async fn review_legal_finding(
@@ -5351,9 +5697,11 @@ impl DuckDbRepository {
         review_status: LegalFindingReviewStatus,
         reviewer_notes: Option<&str>,
     ) -> Result<Vec<LegalComplianceFinding>, AppError> {
-        {
-            let mut conn = self.conn.lock().await;
-            execute_transaction(&mut conn, "legal finding review", |tx| {
+        let violation_id = violation_id.to_string();
+        let portal_key_owned = portal_key.to_string();
+        let reviewer_notes = reviewer_notes.map(str::to_string);
+        self.query_connection("Review legal finding", move |conn| {
+            execute_transaction(conn, "legal finding review", |tx| {
                 let classification = tx
                     .query_row(
                         "SELECT classification
@@ -5361,12 +5709,12 @@ impl DuckDbRepository {
                      WHERE violation_id = ?1
                        AND request_id = ?2
                        AND portal_subdomain = ?3",
-                        params![violation_id, request_id, portal_key],
+                        params![violation_id, request_id, portal_key_owned],
                         |row| row.get::<_, String>(0),
                     )
                     .map_err(|error| match error {
                         duckdb::Error::QueryReturnedNoRows => AppError::Storage(format!(
-                        "Legal finding '{violation_id}' was not found for {portal_key}/{request_id}"
+                        "Legal finding '{violation_id}' was not found for {portal_key_owned}/{request_id}"
                     )),
                         other => AppError::Storage(format!(
                             "Failed to load the legal finding for review: {other}"
@@ -5389,7 +5737,7 @@ impl DuckDbRepository {
                             reviewer_notes,
                             violation_id,
                             request_id,
-                            portal_key,
+                            portal_key_owned,
                         ],
                     )
                     .map_err(|error| {
@@ -5401,11 +5749,12 @@ impl DuckDbRepository {
                     )));
                 }
                 if classification == FLAG_POTENTIAL_POLICY_VIOLATION {
-                    synchronize_policy_audit_alert(tx, request_id, portal_key)?;
+                    synchronize_policy_audit_alert(tx, request_id, &portal_key_owned)?;
                 }
                 Ok(())
-            })?;
-        }
+            })
+        })
+        .await?;
         self.list_request_legal_findings(request_id, portal_key)
             .await
     }
@@ -5414,20 +5763,23 @@ impl DuckDbRepository {
         &self,
         statute_id: &str,
     ) -> Result<LegalAuthoritySummary, AppError> {
-        let conn = self.conn.lock().await;
-        let query = format!(
-            "{LEGAL_AUTHORITY_SUMMARY_SELECT}
+        let statute_id = statute_id.to_string();
+        self.query_connection("Load legal authority summary", move |conn| {
+            let query = format!(
+                "{LEGAL_AUTHORITY_SUMMARY_SELECT}
              WHERE legal_statutes.statute_id = ?1"
-        );
-        let row = conn
-            .query_row(&query, params![statute_id], map_legal_authority_summary_row)
-            .map_err(|error| match error {
-                duckdb::Error::QueryReturnedNoRows => {
-                    AppError::Storage(format!("Legal authority '{statute_id}' was not found"))
-                }
-                other => AppError::Storage(format!("Failed to load legal authority: {other}")),
-            })?;
-        convert_legal_authority_summary(row)
+            );
+            let row = conn
+                .query_row(&query, params![statute_id], map_legal_authority_summary_row)
+                .map_err(|error| match error {
+                    duckdb::Error::QueryReturnedNoRows => {
+                        AppError::Storage(format!("Legal authority '{statute_id}' was not found"))
+                    }
+                    other => AppError::Storage(format!("Failed to load legal authority: {other}")),
+                })?;
+            convert_legal_authority_summary(row)
+        })
+        .await
     }
 
     pub async fn load_legal_brief_evidence(
@@ -5435,10 +5787,11 @@ impl DuckDbRepository {
         request_id: u64,
         portal_key: &str,
     ) -> Result<LegalBriefEvidence, AppError> {
-        let conn = self.conn.lock().await;
-        let row = conn
-            .query_row(
-                "SELECT
+        let portal_key = portal_key.to_string();
+        self.query_connection("Load legal brief evidence", move |conn| {
+            let row = conn
+                .query_row(
+                    "SELECT
                     requests.id, requests.portal_subdomain, portals.display_name,
                     portals.base_url, COALESCE(agencies.name, 'Unmapped Department'),
                     requests.rpid, COALESCE(requests.title, ''),
@@ -5457,97 +5810,101 @@ impl DuckDbRepository {
                     ON statutory_extensions.request_id = requests.id
                    AND statutory_extensions.portal_subdomain = requests.portal_subdomain
                  WHERE requests.id = ?1 AND requests.portal_subdomain = ?2",
-                params![request_id, portal_key],
-                map_legal_brief_row,
-            )
-            .map_err(|error| match error {
-                duckdb::Error::QueryReturnedNoRows => {
-                    AppError::Storage(format!("Request {portal_key}/{request_id} was not found"))
-                }
-                other => AppError::Storage(format!("Failed to load legal evidence: {other}")),
-            })?;
-        let extension = match (
-            row.extension_notice_at,
-            row.extension_expected_determination_at,
-            row.extension_reason,
-            row.extension_notice_source,
-        ) {
-            (
-                Some(notice_at),
-                Some(expected_determination_at),
-                Some(reason),
-                Some(notice_source),
-            ) => Some(StatutoryExtensionRecord {
-                notice_at,
-                expected_determination_at,
-                reason: parse_extension_reason(&reason)?,
-                notice_source,
-            }),
-            (None, None, None, None) => None,
-            _ => {
-                return Err(AppError::Storage(format!(
+                    params![request_id, portal_key],
+                    map_legal_brief_row,
+                )
+                .map_err(|error| match error {
+                    duckdb::Error::QueryReturnedNoRows => AppError::Storage(format!(
+                        "Request {portal_key}/{request_id} was not found"
+                    )),
+                    other => AppError::Storage(format!("Failed to load legal evidence: {other}")),
+                })?;
+            let extension = match (
+                row.extension_notice_at,
+                row.extension_expected_determination_at,
+                row.extension_reason,
+                row.extension_notice_source,
+            ) {
+                (
+                    Some(notice_at),
+                    Some(expected_determination_at),
+                    Some(reason),
+                    Some(notice_source),
+                ) => Some(StatutoryExtensionRecord {
+                    notice_at,
+                    expected_determination_at,
+                    reason: parse_extension_reason(&reason)?,
+                    notice_source,
+                }),
+                (None, None, None, None) => None,
+                _ => {
+                    return Err(AppError::Storage(format!(
                     "Request {portal_key}/{request_id} has incomplete statutory extension evidence"
                 )))
-            }
-        };
-        let mut flags_statement = conn
-            .prepare(
-                "SELECT DISTINCT document_integrity_flags.flag_type
+                }
+            };
+            let mut flags_statement = conn
+                .prepare(
+                    "SELECT DISTINCT document_integrity_flags.flag_type
                  FROM case_audits
                  INNER JOIN document_integrity_flags
                     ON document_integrity_flags.audit_id = case_audits.audit_id
                  WHERE case_audits.target_request_id = ?1
                    AND case_audits.target_subdomain = ?2
                  ORDER BY document_integrity_flags.flag_type",
-            )
-            .map_err(|error| {
-                AppError::Storage(format!("Failed to prepare evidence flags: {error}"))
-            })?;
-        let integrity_flags = flags_statement
-            .query_map(params![request_id, portal_key], |row| {
-                row.get::<_, String>(0)
-            })
-            .map_err(|error| AppError::Storage(format!("Failed to query evidence flags: {error}")))?
-            .map(|value| value.map_err(AppError::from))
-            .collect::<Result<Vec<_>, _>>()?;
-        let mut documents_statement = conn
-            .prepare(
-                "SELECT id, COALESCE(file_name, ''), file_size, visibility,
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to prepare evidence flags: {error}"))
+                })?;
+            let integrity_flags = flags_statement
+                .query_map(params![request_id, portal_key], |row| {
+                    row.get::<_, String>(0)
+                })
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to query evidence flags: {error}"))
+                })?
+                .map(|value| value.map_err(AppError::from))
+                .collect::<Result<Vec<_>, _>>()?;
+            let mut documents_statement = conn
+                .prepare(
+                    "SELECT id, COALESCE(file_name, ''), file_size, visibility,
                     raw_file_sha256, extracted_text_sha256, shannon_entropy,
                     entropy_sample_bytes, suspicious_data_density
                  FROM documents
                  WHERE request_id = ?1 AND portal_subdomain = ?2
                  ORDER BY id",
-            )
-            .map_err(|error| {
-                AppError::Storage(format!("Failed to prepare evidence documents: {error}"))
-            })?;
-        let documents = documents_statement
-            .query_map(params![request_id, portal_key], map_evidence_document_row)
-            .map_err(|error| {
-                AppError::Storage(format!("Failed to query evidence documents: {error}"))
-            })?
-            .map(|value| value.map_err(AppError::from))
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(LegalBriefEvidence {
-            request_id: row.request_id,
-            portal_key: row.portal_key,
-            portal_name: row.portal_name,
-            portal_url: row.portal_url,
-            agency_name: row.agency_name,
-            rpid: row.rpid,
-            title: row.title,
-            description: row.description,
-            status: row.status,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-            closed_at: row.closed_at,
-            determination_at: row.determination_at,
-            determination_source: row.determination_source,
-            extension,
-            integrity_flags,
-            documents,
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to prepare evidence documents: {error}"))
+                })?;
+            let documents = documents_statement
+                .query_map(params![request_id, portal_key], map_evidence_document_row)
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to query evidence documents: {error}"))
+                })?
+                .map(|value| value.map_err(AppError::from))
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(LegalBriefEvidence {
+                request_id: row.request_id,
+                portal_key: row.portal_key,
+                portal_name: row.portal_name,
+                portal_url: row.portal_url,
+                agency_name: row.agency_name,
+                rpid: row.rpid,
+                title: row.title,
+                description: row.description,
+                status: row.status,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+                closed_at: row.closed_at,
+                determination_at: row.determination_at,
+                determination_source: row.determination_source,
+                extension,
+                integrity_flags,
+                documents,
+            })
         })
+        .await
     }
 
     pub async fn synchronize_cross_correlation_alerts(
@@ -5573,9 +5930,10 @@ impl DuckDbRepository {
             }
         }
         let evaluated_at = chrono::Utc::now().to_rfc3339();
-        let mut conn = self.conn.lock().await;
-        execute_transaction(&mut conn, "correlation alert synchronization", |tx| {
-            for correlation in correlations {
+        let correlations = correlations.to_vec();
+        self.query_connection("Synchronize cross correlation alerts", move |conn| {
+        execute_transaction(conn, "correlation alert synchronization", |tx| {
+            for correlation in &correlations {
                 tx.execute(
                     "INSERT INTO cross_correlation_alerts (
                     request_id, portal_subdomain, neighborhood_block, complaint_count,
@@ -5644,6 +6002,8 @@ impl DuckDbRepository {
             }
             Ok(())
         })
+        })
+        .await
     }
 
     /// Resolves the evidence path recorded for a document, for the command layer to gate.
@@ -5688,53 +6048,56 @@ impl DuckDbRepository {
         portal_key: &str,
         evidence: ProvenanceEvidenceFile,
     ) -> Result<DocumentProvenanceVerification, AppError> {
-        let (context, current_text_projection_sha256) = {
-            let conn = self.conn.lock().await;
-            let context = conn
-                .query_row(
-                    // Only the ingestion digest and the projection digest are read here. Manifest
-                    // state used to come from `provenance_manifests` and is now validated live from
-                    // the asset, because a stored row describes what was true when it was written and
-                    // a verification has to describe the file in front of it.
-                    //
-                    // `expected_sha256` was `COALESCE(provenance_manifests.file_hash_sha256,
-                    // documents.raw_file_sha256)`. That was inert while nothing wrote manifests; once
-                    // they are written it would silently move every comparison off the digest recorded
-                    // at download onto one observed later, which is the wrong side of a substitution.
-                    "SELECT documents.raw_file_sha256,
+        let portal_key_owned = portal_key.to_string();
+        let (context, current_text_projection_sha256) = self
+            .query_connection("Load document provenance state", move |conn| {
+                let portal_key = portal_key_owned.as_str();
+                let context = conn
+                    .query_row(
+                        // Only the ingestion digest and the projection digest are read here. Manifest
+                        // state used to come from `provenance_manifests` and is now validated live from
+                        // the asset, because a stored row describes what was true when it was written and
+                        // a verification has to describe the file in front of it.
+                        //
+                        // `expected_sha256` was `COALESCE(provenance_manifests.file_hash_sha256,
+                        // documents.raw_file_sha256)`. That was inert while nothing wrote manifests; once
+                        // they are written it would silently move every comparison off the digest recorded
+                        // at download onto one observed later, which is the wrong side of a substitution.
+                        "SELECT documents.raw_file_sha256,
                     documents.extracted_text_projection_sha256
                  FROM documents
                  WHERE documents.id = ?1 AND documents.portal_subdomain = ?2",
-                    params![document_id, portal_key],
-                    map_provenance_row,
-                )
-                .map_err(|error| match error {
-                    duckdb::Error::QueryReturnedNoRows => AppError::Provenance(format!(
-                        "Document {portal_key}/{document_id} was not found"
-                    )),
-                    other => {
-                        AppError::Provenance(format!("Failed to load provenance state: {other}"))
-                    }
-                })?;
-            // Hashed inside the engine rather than in process: a large text projection should not
-            // have to be materialized here just to be digested.
-            let current_projection = conn
-                .query_row(
-                    "SELECT sha256(extracted_text)
+                        params![document_id, portal_key],
+                        map_provenance_row,
+                    )
+                    .map_err(|error| match error {
+                        duckdb::Error::QueryReturnedNoRows => AppError::Provenance(format!(
+                            "Document {portal_key}/{document_id} was not found"
+                        )),
+                        other => AppError::Provenance(format!(
+                            "Failed to load provenance state: {other}"
+                        )),
+                    })?;
+                // Hashed inside the engine rather than in process: a large text projection should not
+                // have to be materialized here just to be digested.
+                let current_projection = conn
+                    .query_row(
+                        "SELECT sha256(extracted_text)
                      FROM documents_fts
                      WHERE document_id = ?1 AND portal_subdomain = ?2",
-                    params![document_id, portal_key],
-                    |row| row.get::<_, Option<String>>(0),
-                )
-                .optional()
-                .map_err(|error| {
-                    AppError::Provenance(format!(
-                        "Failed to digest the extracted-text projection: {error}"
-                    ))
-                })?
-                .flatten();
-            (context, current_projection)
-        };
+                        params![document_id, portal_key],
+                        |row| row.get::<_, Option<String>>(0),
+                    )
+                    .optional()
+                    .map_err(|error| {
+                        AppError::Provenance(format!(
+                            "Failed to digest the extracted-text projection: {error}"
+                        ))
+                    })?
+                    .flatten();
+                Ok((context, current_projection))
+            })
+            .await?;
         // A document whose evidence file cannot be read is still verified and still logged. The
         // previous implementation returned an error here, so the one fact an investigator most
         // needs on the record -- that the file was gone when they checked -- was the one fact the
@@ -5881,25 +6244,27 @@ impl DuckDbRepository {
         let errors_json = serde_json::to_string(&result.verification_errors).map_err(|error| {
             AppError::Provenance(format!("Failed to encode verification errors: {error}"))
         })?;
-        let mut conn = self.conn.lock().await;
-        // The manifest tables record what the asset carried at this verification, and the log
-        // records the verification itself. They are written together so the log can never point at
-        // manifest state that was not committed.
-        let transaction = conn.transaction().map_err(|error| {
-            AppError::Provenance(format!(
-                "Failed to open the provenance transaction: {error}"
-            ))
-        })?;
-        record_asset_manifest(
-            &transaction,
-            document_id,
-            portal_key,
-            &result.computed_sha256,
-            &asset_provenance,
-        )?;
-        transaction
-            .execute(
-                "INSERT INTO provenance_verification_log (
+        let portal_key_owned = portal_key.to_string();
+        self.query_connection("Record document provenance verification", move |conn| {
+            let portal_key = portal_key_owned.as_str();
+            // The manifest tables record what the asset carried at this verification, and the log
+            // records the verification itself. They are written together so the log can never point at
+            // manifest state that was not committed.
+            let transaction = conn.transaction().map_err(|error| {
+                AppError::Provenance(format!(
+                    "Failed to open the provenance transaction: {error}"
+                ))
+            })?;
+            record_asset_manifest(
+                &transaction,
+                document_id,
+                portal_key,
+                &result.computed_sha256,
+                &asset_provenance,
+            )?;
+            transaction
+                .execute(
+                    "INSERT INTO provenance_verification_log (
                 verification_id, document_id, portal_subdomain, verified_at,
                 expected_sha256, computed_sha256, hash_matches, manifest_present,
                 is_cryptographically_signed, invalid_assertion_count,
@@ -5909,39 +6274,43 @@ impl DuckDbRepository {
                 signature_issuer, signing_timestamp, text_projection_sha256
              ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
                        ?17, ?18, ?19, ?20, ?21)",
-                params![
-                    uuid::Uuid::new_v4().to_string(),
-                    document_id,
-                    portal_key,
-                    chrono::Utc::now().to_rfc3339(),
-                    result.expected_sha256,
-                    result.computed_sha256,
-                    result.hash_matches,
-                    result.manifest_present,
-                    result.is_cryptographically_signed,
-                    result.invalid_assertion_count,
-                    result.chain_of_custody_confirmed,
-                    errors_json,
-                    result.recorded_digest_source.as_str(),
-                    result.signature_verification.as_str(),
-                    result.provenance_confidence.as_str(),
-                    result.text_projection_matches,
-                    result.evidence_file_present,
-                    i64::try_from(result.assertion_count).map_err(|_| {
-                        AppError::Provenance("Assertion count exceeds storage capacity".to_string())
-                    })?,
-                    result.signature_issuer,
-                    result.signing_timestamp,
-                    result.text_projection_sha256,
-                ],
-            )
-            .map_err(|error| {
-                AppError::Provenance(format!("Failed to append verification log: {error}"))
+                    params![
+                        uuid::Uuid::new_v4().to_string(),
+                        document_id,
+                        portal_key,
+                        chrono::Utc::now().to_rfc3339(),
+                        result.expected_sha256,
+                        result.computed_sha256,
+                        result.hash_matches,
+                        result.manifest_present,
+                        result.is_cryptographically_signed,
+                        result.invalid_assertion_count,
+                        result.chain_of_custody_confirmed,
+                        errors_json,
+                        result.recorded_digest_source.as_str(),
+                        result.signature_verification.as_str(),
+                        result.provenance_confidence.as_str(),
+                        result.text_projection_matches,
+                        result.evidence_file_present,
+                        i64::try_from(result.assertion_count).map_err(|_| {
+                            AppError::Provenance(
+                                "Assertion count exceeds storage capacity".to_string(),
+                            )
+                        })?,
+                        result.signature_issuer,
+                        result.signing_timestamp,
+                        result.text_projection_sha256,
+                    ],
+                )
+                .map_err(|error| {
+                    AppError::Provenance(format!("Failed to append verification log: {error}"))
+                })?;
+            transaction.commit().map_err(|error| {
+                AppError::Provenance(format!("Failed to commit the provenance record: {error}"))
             })?;
-        transaction.commit().map_err(|error| {
-            AppError::Provenance(format!("Failed to commit the provenance record: {error}"))
-        })?;
-        Ok(result)
+            Ok(result)
+        })
+        .await
     }
 
     /// Reads a document's verification history, newest first.
@@ -6007,31 +6376,34 @@ impl DuckDbRepository {
             serde_json::to_string(&result.included_violation_markers).map_err(|error| {
                 AppError::Export(format!("Failed to encode report markers: {error}"))
             })?;
-        let conn = self.conn.lock().await;
-        conn.execute(
-            "INSERT INTO report_exports (
+        let result = result.clone();
+        self.query_connection("Record report export", move |conn| {
+            conn.execute(
+                "INSERT INTO report_exports (
                 export_id, request_id, portal_subdomain, output_path, report_sha256,
                 package_path, package_sha256, signature_algorithm, signer_key_id,
                 generated_at, violation_markers_json
              ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
-            params![
-                uuid::Uuid::new_v4().to_string(),
-                result.request_id,
-                result.portal_key,
-                result.output_path,
-                result.report_sha256,
-                result.package_path,
-                result.package_sha256,
-                result.signature_algorithm,
-                result.signer_key_id,
-                result.generated_at,
-                markers,
-            ],
-        )
-        .map_err(|error| {
-            AppError::Export(format!("Failed to record report provenance: {error}"))
-        })?;
-        Ok(())
+                params![
+                    uuid::Uuid::new_v4().to_string(),
+                    result.request_id,
+                    result.portal_key,
+                    result.output_path,
+                    result.report_sha256,
+                    result.package_path,
+                    result.package_sha256,
+                    result.signature_algorithm,
+                    result.signer_key_id,
+                    result.generated_at,
+                    markers,
+                ],
+            )
+            .map_err(|error| {
+                AppError::Export(format!("Failed to record report provenance: {error}"))
+            })?;
+            Ok(())
+        })
+        .await
     }
 }
 
@@ -12179,5 +12551,99 @@ mod tests {
             )
             .expect("audit count must decode");
         assert_eq!(audit_count, 0);
+    }
+
+    /// `CHECKPOINT` only matters on a real file (an in-memory database has no WAL to flush), and
+    /// the real risk is a WAL flush leaving the live connection unusable afterward — so this opens
+    /// a file-backed repository, writes through it, checkpoints, and proves the same connection
+    /// still reads and writes correctly, not just that the call itself returned `Ok`.
+    #[tokio::test]
+    async fn checkpoint_flushes_the_wal_and_leaves_the_connection_usable() {
+        let directory = tempfile::tempdir().expect("temp dir must be created");
+        let path = directory.path().join("checkpoint-test.duckdb");
+        let repository = file_repository_with_document(&path).await;
+
+        repository
+            .checkpoint()
+            .await
+            .expect("checkpointing a real file-backed database must succeed");
+
+        let connection = repository.conn.lock().await;
+        let document_count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM documents", [], |row| row.get(0))
+            .expect("the connection must still serve queries after checkpointing");
+        assert_eq!(
+            document_count, 1,
+            "the pre-checkpoint write must be visible"
+        );
+        drop(connection);
+
+        assert!(
+            path.exists(),
+            "the checkpoint must not have replaced or removed the database file"
+        );
+    }
+
+    /// A symlink at the export target would redirect the write to a location the caller never
+    /// actually chose. Proves both halves: the export call itself is refused, and the file the
+    /// symlink actually points at is untouched, not just overwritten with different content.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn export_restricted_sql_csv_refuses_to_write_through_a_symlinked_target() {
+        let repository =
+            DuckDbRepository::new(Path::new(":memory:")).expect("DuckDB core must open");
+        repository
+            .run_migrations(MIGRATION)
+            .await
+            .expect("test migration must succeed");
+        let directory = tempfile::tempdir().expect("temp dir must be created");
+        let real_target = directory.path().join("real-secret.txt");
+        std::fs::write(&real_target, b"do not overwrite me").expect("seed file must be written");
+        let link_path = directory.path().join("export.csv");
+        std::os::unix::fs::symlink(&real_target, &link_path).expect("symlink must be created");
+
+        let error = repository
+            .export_restricted_sql_csv("SELECT 1 AS n", link_path.to_str().unwrap(), 10)
+            .await
+            .expect_err("a symlinked export target must be refused");
+        assert!(
+            error.to_string().contains("symbolic link"),
+            "unexpected error: {error}"
+        );
+        assert_eq!(
+            std::fs::read(&real_target).expect("real file must still exist"),
+            b"do not overwrite me",
+            "the file behind the symlink must be untouched"
+        );
+    }
+
+    /// Proves the CSV formula-injection guard by round-tripping an actual export: a string cell
+    /// beginning with `=` must land in the written file prefixed with an apostrophe, the standard
+    /// mitigation every mainstream spreadsheet application honors to force text interpretation.
+    #[tokio::test]
+    async fn export_restricted_sql_csv_neutralizes_a_formula_leading_cell() {
+        let repository =
+            DuckDbRepository::new(Path::new(":memory:")).expect("DuckDB core must open");
+        repository
+            .run_migrations(MIGRATION)
+            .await
+            .expect("test migration must succeed");
+        let directory = tempfile::tempdir().expect("temp dir must be created");
+        let output = directory.path().join("export.csv");
+
+        repository
+            .export_restricted_sql_csv(
+                "SELECT '=cmd|/c calc!A1' AS payload",
+                output.to_str().unwrap(),
+                10,
+            )
+            .await
+            .expect("export must succeed");
+
+        let written = std::fs::read_to_string(&output).expect("export file must be readable");
+        assert!(
+            written.contains("'=cmd|/c calc!A1"),
+            "a formula-leading cell must be prefixed with an apostrophe so it reads as text, got: {written}"
+        );
     }
 }

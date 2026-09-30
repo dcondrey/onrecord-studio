@@ -278,6 +278,73 @@ pub struct LegalBriefExportResult {
     pub signer_key_id: String,
     pub generated_at: String,
     pub included_violation_markers: Vec<String>,
+    pub verifier_script_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CaseEvidencePackageResult {
+    pub case_id: String,
+    pub case_revision: u64,
+    pub output_path: String,
+    pub package_sha256: String,
+    pub signature_algorithm: String,
+    pub signer_key_id: String,
+    pub generated_at: String,
+    pub verified_citation_count: usize,
+    pub unverified_citation_labels: Vec<String>,
+    pub withheld_citation_labels: Vec<String>,
+    pub ledger_sequence: u64,
+    pub previous_export_sha256: Option<String>,
+    pub verifier_script_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PackageVerificationResult {
+    pub schema_version: Option<String>,
+    pub canonical_bytes_hash_matches: bool,
+    pub signature_valid: bool,
+    pub manifest_matches_canonical_bytes: bool,
+    pub overall_passed: bool,
+    pub identity_assurance: Option<String>,
+    pub unverified_citation_labels: Vec<String>,
+    pub withheld_citation_labels: Vec<String>,
+    pub ledger_sequence: Option<u64>,
+    pub previous_export_sha256: Option<String>,
+    pub revoked_signer: Option<RevokedSigningKey>,
+    pub parse_error: Option<String>,
+}
+
+/// This installation's record that a local signing key was retired. Only meaningful locally, or
+/// where a recipient has separately been given this installation's distributed revocation file
+/// (`scripts/verify-evidence-package.mjs --revocations`) — it cannot describe a key belonging to
+/// any other installation.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RevokedSigningKey {
+    pub key_id: String,
+    pub revoked_at: String,
+    pub reason: String,
+    /// `"RETIRED"` (routine rotation — packages this key already signed stay trusted; this is
+    /// historical information, not a failure) or `"COMPROMISED"` (the key itself should no longer
+    /// be trusted — every package it signed, past or future, must read as failing verification).
+    /// Conflating the two would make routine key rotation retroactively fail every package a
+    /// installation ever exported, which is not what rotating a key for hygiene means.
+    pub status: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SigningKeyRevocations {
+    pub schema_version: String,
+    pub entries: Vec<RevokedSigningKey>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SigningKeyRotationResult {
+    pub retired_key_id: String,
+    pub new_key_id: String,
+    pub archived_key_path: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

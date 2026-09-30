@@ -220,7 +220,10 @@ free: two coders' span sets over identical immutable extractions compare exactly
 anchors are deterministic.
 
 Ground truth. The package format is real and its version string is
-`onrecord-evidence-package-v2`; raw storage is content-addressed and never overwritten. Three
+`onrecord-evidence-package-v3`, which embeds the exact signed byte sequence alongside the
+human-readable manifest so an independent verifier never has to trust that its own JSON encoder
+reproduces the same bytes another language's encoder did; raw storage is content-addressed and
+never overwritten. Three
 corrections bound the rest. The package ships a report plus digests, not evidence bytes, so an
 actual exchange needs the object-store payloads added to it. The layer annotations would anchor
 into is mutable: `documents_fts.extracted_text` is updated in place and deleted on removal, and

@@ -5,7 +5,8 @@ use crate::integrity::digest_hex;
 use crate::types::{
     CorpusEntityEdge, CorpusEntityKind, CorpusEntityNeighborhood, CorpusEntityNode,
     CorpusEvidenceReference, CorpusIndexStatus, CorpusPattern, CorpusPatternKind,
-    CorpusPatternQuery, EntityResolutionBasis, EntityValidationGrade, RelationshipBasis,
+    CorpusPatternQuery, EntityBroker, EntityPath, EntityPathStep, EntityResolutionBasis,
+    EntityValidationGrade, RelationshipBasis, RelationshipKind,
 };
 use duckdb::{params, Connection, OptionalExt, Transaction};
 use sha2::{Digest, Sha256};
@@ -35,7 +36,15 @@ const CORPUS_ALGORITHM_VERSION: &str = "deterministic-corpus-v3";
 /// the string (`EntityValidationGrade`), every entity records why its mentions were merged
 /// (`EntityResolutionBasis`), every edge records how it came to exist (`RelationshipBasis`), and
 /// `EMAIL_ADDRESS` and `MONEY` join the entity kinds.
-const CORPUS_SCHEMA_VERSION: i64 = 7;
+/// 8: the graph gets typed and temporal. New entity kinds `PERSON`, `ROLE`, `POSITION`,
+/// `DOCUMENT_CLASS` land — a policy-vs-practice comparator has to name the person or the
+/// document's role in the comparison, and the flat 8-kind vocabulary could not. Every edge
+/// now carries a `RelationshipKind` (`CoOccurrence` is the default and existing behaviour,
+/// the other seven describe what the text carried), plus nullable `valid_from`/`valid_until`
+/// so an edge inferred from a segment carrying a date can outlive its ingestion moment. See
+/// the `RelationshipKind` docstring for the semantic guard: a reader that draws a
+/// `CoOccurrence` edge alike to a `SignedBy` edge makes a claim the app never did.
+const CORPUS_SCHEMA_VERSION: i64 = 8;
 
 const WRITER_QUEUE_CAPACITY: usize = 64;
 const MAXIMUM_CONCURRENT_ANALYSES: usize = 4;
@@ -53,8 +62,11 @@ const MAXIMUM_TERMS_PER_DOCUMENT: usize = 96;
 const MAXIMUM_ENTITIES_PER_KIND: usize = 4_000;
 /// Every `kind` value ever passed to `push_entity`/`push_entity_with_display`. Used to seed the
 /// truncation map so a document's row set always states "not truncated" rather than omitting a kind
-/// that simply had nothing in it.
-const ENTITY_KINDS: [CorpusEntityKind; 8] = [
+/// that simply had nothing in it. `Person`/`Role`/`Position`/`DocumentClass` are on the list so
+/// their truncation rows exist by construction the moment an extractor for them lands; the current
+/// extraction pipeline does not populate them, so those rows read as "not truncated" against a
+/// zero-extraction pass, which is honest.
+const ENTITY_KINDS: [CorpusEntityKind; 12] = [
     CorpusEntityKind::Statute,
     CorpusEntityKind::Date,
     CorpusEntityKind::EmailDomain,
@@ -63,6 +75,10 @@ const ENTITY_KINDS: [CorpusEntityKind; 8] = [
     CorpusEntityKind::Acronym,
     CorpusEntityKind::Organization,
     CorpusEntityKind::Money,
+    CorpusEntityKind::Person,
+    CorpusEntityKind::Role,
+    CorpusEntityKind::Position,
+    CorpusEntityKind::DocumentClass,
 ];
 const MAXIMUM_TOKEN_CHARACTERS: usize = 96;
 const MAXIMUM_RELATIONSHIPS_PER_DOCUMENT: usize = 20_000;
@@ -250,6 +266,15 @@ struct AnalyzedRelationship {
     character_start: usize,
     character_end: usize,
     confidence_basis_points: u16,
+    /// What the edge claims. Populated by `analyze_relationships`; every edge the current
+    /// derivation writes is `CoOccurrence`. A later analyzer that identifies a signature line
+    /// or an approval sentence can emit the typed variants without a schema change.
+    kind: RelationshipKind,
+    /// RFC 3339 UTC when the edge starts to hold, when a date was extractable from the same
+    /// segment. `None` when no date accompanies the edge in text — absence is not zero.
+    valid_from: Option<String>,
+    /// Symmetric upper bound. `None` for open-ended edges; the reader distinguishes.
+    valid_until: Option<String>,
 }
 
 #[derive(Clone)]
@@ -525,7 +550,8 @@ impl CorpusIndex {
                     "SELECT neighbor.entity_id, neighbor.entity_kind, neighbor.display_value,
                             counts.document_count, MAX(GRADE_RANK),
                             COUNT(DISTINCT edge.portal_key || \'|\' || edge.document_id),
-                            MIN(edge.confidence_basis_points), MIN(edge.basis)
+                            MIN(edge.confidence_basis_points), MIN(edge.basis),
+                            MIN(edge.relationship_kind), MIN(edge.valid_from), MAX(edge.valid_until)
                      FROM corpus_entity_relationships edge
                      JOIN corpus_entities neighbor
                         ON neighbor.entity_id = CASE
@@ -555,6 +581,9 @@ impl CorpusIndex {
                         shared_document_count: row.get::<_, i64>(5)?.max(0) as u64,
                         confidence_basis_points: row.get::<_, i64>(6)?.clamp(0, 10_000) as u16,
                         basis: relationship_basis_from_str(&row.get::<_, String>(7)?),
+                        kind: relationship_kind_from_str(&row.get::<_, String>(8)?),
+                        valid_from: row.get::<_, Option<String>>(9)?,
+                        valid_until: row.get::<_, Option<String>>(10)?,
                     })
                 })
                 .map_err(|error| {
@@ -571,6 +600,210 @@ impl CorpusIndex {
                 edges,
                 truncated,
             }))
+        })
+        .await
+    }
+
+    /// Finds shortest paths between two entities, up to `max_hops` edges.
+    ///
+    /// Bounded BFS over `corpus_entity_relationships`. `max_hops` is clamped to 1..=6 because a
+    /// path any deeper than six through this graph is almost always a coincidence chain (three
+    /// documents sharing a date, sharing an email domain, sharing a URL host) rather than a
+    /// meaningful link, and letting the caller ask for arbitrary depth is a way to spend an hour
+    /// finding one.
+    ///
+    /// Returns the shortest path found, or `None` if the two nodes are disconnected within the
+    /// hop budget. `to == from` returns a zero-hop `EntityPath` with a single-step `steps` list,
+    /// so a reader can distinguish "same node" from "unreachable".
+    pub async fn find_entity_paths(
+        &self,
+        from_entity_id: String,
+        to_entity_id: String,
+        max_hops: usize,
+    ) -> Result<Option<EntityPath>, AppError> {
+        let max_hops = max_hops.clamp(1, 6);
+        self.read("Corpus entity path", move |connection| {
+            let start_node = load_entity_node(connection, &from_entity_id)?;
+            let end_node = load_entity_node(connection, &to_entity_id)?;
+            let (Some(start_node), Some(end_node)) = (start_node, end_node) else {
+                return Ok(None);
+            };
+            if from_entity_id == to_entity_id {
+                return Ok(Some(EntityPath {
+                    steps: vec![EntityPathStep {
+                        neighbor: start_node,
+                        edge_kind: RelationshipKind::CoOccurrence,
+                        edge_basis: RelationshipBasis::Computed,
+                        shared_document_count: 0,
+                    }],
+                    hops: 0,
+                    weakest_confidence_basis_points: None,
+                }));
+            }
+            // BFS. `parents` records each visited node's predecessor + the edge that reached it.
+            // Cap total nodes explored so a densely-connected graph doesn't turn one query into a
+            // corpus-wide scan.
+            const MAX_NODES_EXPLORED: usize = 10_000;
+            let mut parents: HashMap<String, (String, EdgeCarriage)> = HashMap::new();
+            let mut frontier: Vec<String> = vec![from_entity_id.clone()];
+            let mut explored: BTreeSet<String> = BTreeSet::from([from_entity_id.clone()]);
+            let mut found = false;
+            for _ in 0..max_hops {
+                if explored.len() >= MAX_NODES_EXPLORED {
+                    break;
+                }
+                let mut next_frontier: Vec<String> = Vec::new();
+                for node in &frontier {
+                    for (neighbor_id, carriage) in load_edge_carriages(connection, node)? {
+                        if explored.contains(&neighbor_id) {
+                            continue;
+                        }
+                        explored.insert(neighbor_id.clone());
+                        parents.insert(neighbor_id.clone(), (node.clone(), carriage));
+                        if neighbor_id == to_entity_id {
+                            found = true;
+                            break;
+                        }
+                        next_frontier.push(neighbor_id);
+                    }
+                    if found {
+                        break;
+                    }
+                }
+                if found {
+                    break;
+                }
+                if next_frontier.is_empty() {
+                    break;
+                }
+                frontier = next_frontier;
+            }
+            if !found {
+                return Ok(None);
+            }
+            // Walk parents back from end to start to reconstruct the path.
+            let mut reversed: Vec<(String, EdgeCarriage)> = Vec::new();
+            let mut cursor = to_entity_id.clone();
+            while cursor != from_entity_id {
+                let Some((parent, carriage)) = parents.get(&cursor) else {
+                    return Ok(None);
+                };
+                reversed.push((cursor.clone(), carriage.clone()));
+                cursor = parent.clone();
+            }
+            reversed.reverse();
+            let mut steps: Vec<EntityPathStep> = Vec::with_capacity(reversed.len() + 1);
+            steps.push(EntityPathStep {
+                neighbor: start_node,
+                edge_kind: RelationshipKind::CoOccurrence,
+                edge_basis: RelationshipBasis::Computed,
+                shared_document_count: 0,
+            });
+            let mut weakest: Option<u16> = None;
+            for (node_id, carriage) in &reversed {
+                let Some(node) = load_entity_node(connection, node_id)? else {
+                    continue;
+                };
+                weakest = Some(match weakest {
+                    Some(existing) => existing.min(carriage.confidence_basis_points),
+                    None => carriage.confidence_basis_points,
+                });
+                steps.push(EntityPathStep {
+                    neighbor: node,
+                    edge_kind: carriage.kind,
+                    edge_basis: carriage.basis,
+                    shared_document_count: carriage.shared_document_count,
+                });
+            }
+            let hops = steps.len().saturating_sub(1);
+            let last_is_end = steps.last().map(|step| step.neighbor.entity_id.as_str())
+                == Some(end_node.entity_id.as_str());
+            if !last_is_end {
+                return Ok(None);
+            }
+            Ok(Some(EntityPath {
+                steps,
+                hops,
+                weakest_confidence_basis_points: weakest,
+            }))
+        })
+        .await
+    }
+
+    /// Ranks entities by an approximation of betweenness centrality — the nodes information
+    /// flows through most.
+    ///
+    /// The score is a weighted-degree heuristic (`SUM(shared_document_count)` over incident
+    /// edges), not true betweenness — real betweenness is O(V*E) per source and unaffordable
+    /// inside a bounded read. Every row states `is_approximation = true` so a reader never
+    /// mistakes this for a computed centrality it would defend in court.
+    ///
+    /// `limit` clamped by `bounded_graph_limit`. A `subject_scope` (portal key) narrows the graph
+    /// to edges within one portal; `None` scores across the whole corpus.
+    pub async fn list_entity_brokers(
+        &self,
+        subject_scope: Option<String>,
+        limit: usize,
+    ) -> Result<Vec<EntityBroker>, AppError> {
+        let limit = bounded_graph_limit(limit)?;
+        self.read("Corpus entity brokerage", move |connection| {
+            let sql = "WITH incident AS (
+                SELECT entity.entity_id, entity.entity_kind, entity.display_value,
+                       counts.document_count,
+                       edge.confidence_basis_points, edge.left_entity_id, edge.right_entity_id
+                FROM corpus_entities entity
+                JOIN corpus_entity_document_counts counts ON counts.entity_id = entity.entity_id
+                JOIN corpus_entity_relationships edge
+                    ON (edge.left_entity_id = entity.entity_id
+                        OR edge.right_entity_id = entity.entity_id)
+                    AND (?1 IS NULL OR edge.portal_key = ?1)
+            ), aggregated AS (
+                SELECT incident.entity_id, incident.entity_kind, incident.display_value,
+                       incident.document_count,
+                       SUM(incident.confidence_basis_points) AS brokerage_score,
+                       COUNT(DISTINCT CASE
+                           WHEN incident.left_entity_id = incident.entity_id THEN incident.right_entity_id
+                           ELSE incident.left_entity_id
+                       END) AS distinct_neighbors
+                FROM incident
+                GROUP BY incident.entity_id, incident.entity_kind, incident.display_value,
+                         incident.document_count
+            )
+            SELECT aggregated.entity_id, aggregated.entity_kind, aggregated.display_value,
+                   aggregated.document_count, MAX(GRADE_RANK),
+                   aggregated.brokerage_score, aggregated.distinct_neighbors
+            FROM aggregated
+            JOIN corpus_entity_mentions mention ON mention.entity_id = aggregated.entity_id
+            GROUP BY aggregated.entity_id, aggregated.entity_kind, aggregated.display_value,
+                     aggregated.document_count, aggregated.brokerage_score,
+                     aggregated.distinct_neighbors
+            ORDER BY aggregated.brokerage_score DESC, aggregated.distinct_neighbors DESC,
+                     aggregated.display_value ASC
+            LIMIT ?2"
+                .replace("GRADE_RANK", GRADE_RANK_SQL);
+            let mut statement = connection.prepare(&sql).map_err(|error| {
+                AppError::Storage(format!("Failed to prepare broker ranking: {error}"))
+            })?;
+            let rows = statement
+                .query_map(params![subject_scope, limit as i64], |row| {
+                    let entity = read_entity_node(row)?;
+                    let brokerage_score = row.get::<_, i64>(5)?.max(0) as u64;
+                    let distinct_neighbors = row.get::<_, i64>(6)?.max(0) as u64;
+                    Ok(EntityBroker {
+                        entity,
+                        brokerage_score,
+                        distinct_neighbors,
+                        is_approximation: true,
+                    })
+                })
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to query broker ranking: {error}"))
+                })?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to read broker ranking: {error}"))
+                })?;
+            Ok(rows)
         })
         .await
     }
@@ -937,6 +1170,9 @@ fn analyze_relationships(entities: &[AnalyzedEntity]) -> (Vec<AnalyzedRelationsh
                     confidence_basis_points: left
                         .confidence_basis_points
                         .min(right.confidence_basis_points),
+                    kind: RelationshipKind::CoOccurrence,
+                    valid_from: None,
+                    valid_until: None,
                 });
             }
         }
@@ -2418,14 +2654,17 @@ fn insert_relationships(
                 document.document_id,
                 relationship.left_entity_id,
                 relationship.right_entity_id,
-                "CO_OCCURS_IN_SEGMENT",
+                relationship.kind.as_str(),
                 // Co-occurrence is a derivation this app performed and can re-derive. Calling it
-                // observed would make a claim the documents never made.
+                // observed would make a claim the documents never made. Typed variants written
+                // by a future emitter must still declare their own basis honestly.
                 RelationshipBasis::Computed.as_str(),
                 relationship.segment_index,
                 relationship.character_start,
                 relationship.character_end,
                 relationship.confidence_basis_points,
+                relationship.valid_from,
+                relationship.valid_until,
             ])
             .map_err(|error| {
                 AppError::Storage(format!("Failed to persist entity relationship: {error}"))
@@ -3269,8 +3508,93 @@ fn relationship_basis_from_str(value: &str) -> RelationshipBasis {
     }
 }
 
+/// An unrecognized stored kind reads as `CoOccurrence`, the weakest claim. A row this build does
+/// not understand must not be promoted to a typed claim like `SignedBy`, which would make an
+/// assertion about the world the text did not carry.
+fn relationship_kind_from_str(value: &str) -> RelationshipKind {
+    match value {
+        "SIGNED_BY" => RelationshipKind::SignedBy,
+        "APPROVED" => RelationshipKind::Approved,
+        "CITES" => RelationshipKind::Cites,
+        "PROMISES" => RelationshipKind::Promises,
+        "DELIVERED" => RelationshipKind::Delivered,
+        "SUPERSEDES" => RelationshipKind::Supersedes,
+        "AMENDS" => RelationshipKind::Amends,
+        _ => RelationshipKind::CoOccurrence,
+    }
+}
+
 fn entity_kind_from_str(value: &str) -> Option<CorpusEntityKind> {
     ENTITY_KINDS.into_iter().find(|kind| kind.as_str() == value)
+}
+
+/// A single BFS-visitable edge, carrying the fields the caller needs to reconstruct a path step.
+#[derive(Clone)]
+struct EdgeCarriage {
+    kind: RelationshipKind,
+    basis: RelationshipBasis,
+    confidence_basis_points: u16,
+    shared_document_count: u64,
+}
+
+/// Loads one entity node by id. `None` when the id names no entity (e.g. a stale UI selection
+/// after a corpus rebuild). Not an error — that state has to reach the reader as a real answer.
+fn load_entity_node(
+    connection: &Connection,
+    entity_id: &str,
+) -> Result<Option<CorpusEntityNode>, AppError> {
+    let sql = "SELECT entity.entity_id, entity.entity_kind, entity.display_value,
+                      counts.document_count, MAX(GRADE_RANK)
+               FROM corpus_entities entity
+               JOIN corpus_entity_document_counts counts ON counts.entity_id = entity.entity_id
+               JOIN corpus_entity_mentions mention ON mention.entity_id = entity.entity_id
+               WHERE entity.entity_id = ?1
+               GROUP BY entity.entity_id, entity.entity_kind, entity.display_value,
+                        counts.document_count"
+        .replace("GRADE_RANK", GRADE_RANK_SQL);
+    connection
+        .query_row(&sql, [entity_id], read_entity_node)
+        .optional()
+        .map_err(|error| AppError::Storage(format!("Failed to load an entity node: {error}")))
+}
+
+/// Loads the incident edges of one entity, one row per distinct neighbour, aggregated the same
+/// way `entity_neighborhood` aggregates. Used by BFS path search.
+fn load_edge_carriages(
+    connection: &Connection,
+    entity_id: &str,
+) -> Result<Vec<(String, EdgeCarriage)>, AppError> {
+    let mut statement = connection
+        .prepare(
+            "SELECT CASE WHEN edge.left_entity_id = ?1
+                        THEN edge.right_entity_id ELSE edge.left_entity_id END AS neighbor_id,
+                   MIN(edge.relationship_kind), MIN(edge.basis),
+                   MIN(edge.confidence_basis_points),
+                   COUNT(DISTINCT edge.portal_key || '|' || edge.document_id) AS shared_docs
+             FROM corpus_entity_relationships edge
+             WHERE edge.left_entity_id = ?1 OR edge.right_entity_id = ?1
+             GROUP BY neighbor_id
+             ORDER BY shared_docs DESC",
+        )
+        .map_err(|error| {
+            AppError::Storage(format!("Failed to prepare edge carriage query: {error}"))
+        })?;
+    let rows = statement
+        .query_map([entity_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                EdgeCarriage {
+                    kind: relationship_kind_from_str(&row.get::<_, String>(1)?),
+                    basis: relationship_basis_from_str(&row.get::<_, String>(2)?),
+                    confidence_basis_points: row.get::<_, i64>(3)?.clamp(0, 10_000) as u16,
+                    shared_document_count: row.get::<_, i64>(4)?.max(0) as u64,
+                },
+            ))
+        })
+        .map_err(|error| AppError::Storage(format!("Failed to query edge carriages: {error}")))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| AppError::Storage(format!("Failed to read edge carriages: {error}")))?;
+    Ok(rows)
 }
 
 /// Reads the five leading columns every graph query selects in the same order.
@@ -3414,7 +3738,7 @@ CREATE TABLE IF NOT EXISTS corpus_entities (
     entity_kind TEXT NOT NULL CHECK (
         entity_kind IN (
             'STATUTE', 'DATE', 'EMAIL_DOMAIN', 'EMAIL_ADDRESS', 'URL_HOST', 'ACRONYM',
-            'ORGANIZATION', 'MONEY'
+            'ORGANIZATION', 'MONEY', 'PERSON', 'ROLE', 'POSITION', 'DOCUMENT_CLASS'
         )
     ),
     normalized_value TEXT NOT NULL,
@@ -3468,7 +3792,16 @@ CREATE TABLE IF NOT EXISTS corpus_entity_relationships (
     document_id BIGINT NOT NULL,
     left_entity_id TEXT NOT NULL,
     right_entity_id TEXT NOT NULL,
-    relationship_kind TEXT NOT NULL CHECK (relationship_kind = 'CO_OCCURS_IN_SEGMENT'),
+    -- What the edge claims. CO_OCCURRENCE is the derivation this app performs today (two entities
+    -- appeared in the same segment). The other seven describe an edge the text actually carried:
+    -- SIGNED_BY / APPROVED / CITES / PROMISES / DELIVERED / SUPERSEDES / AMENDS. A reader must be
+    -- able to draw them apart, and the CHECK enumerates each so a legacy value cannot leak in.
+    relationship_kind TEXT NOT NULL CHECK (
+        relationship_kind IN (
+            'CO_OCCURRENCE', 'SIGNED_BY', 'APPROVED', 'CITES',
+            'PROMISES', 'DELIVERED', 'SUPERSEDES', 'AMENDS'
+        )
+    ),
     -- How this edge came to exist. Co-occurrence is COMPUTED and nothing else: the app derived it
     -- and can re-derive it, and it is not a statement that the two entities are related in the
     -- world. An observed edge (a message reply-to, an archive membership) and an investigator's
@@ -3479,6 +3812,11 @@ CREATE TABLE IF NOT EXISTS corpus_entity_relationships (
     character_start BIGINT NOT NULL,
     character_end BIGINT NOT NULL,
     confidence_basis_points BIGINT NOT NULL CHECK (confidence_basis_points BETWEEN 0 AND 10000),
+    -- RFC 3339 UTC bounds on the temporal validity the edge's segment carried. NULL is not zero:
+    -- it means the segment did not provide a date, not that the edge is valid from the epoch. A
+    -- reader that treats NULL as an open lower bound is making a claim the text did not.
+    valid_from TEXT,
+    valid_until TEXT,
     PRIMARY KEY (
         portal_key, document_id, left_entity_id, right_entity_id, relationship_kind, segment_index
     ),
@@ -3894,6 +4232,211 @@ mod tests {
             .collect::<Result<Vec<_>, _>>()
             .expect("the basis rows must read");
         assert_eq!(bases, vec!["COMPUTED".to_string()]);
+    }
+
+    /// The widened `entity_kind` CHECK admits the four new typed kinds, and the widened
+    /// `relationship_kind` CHECK admits every typed edge alongside `CO_OCCURRENCE`. The temporal
+    /// columns accept both NULL (the current extraction path, per absence-vs-measurement) and RFC
+    /// 3339 strings that a future emitter will populate. A schema change that silently rejects a
+    /// value the type layer says is valid fails at real ingestion and passes every in-memory
+    /// analysis test — the same failure mode as the widened bind parameters guarded above.
+    #[tokio::test]
+    async fn the_widened_schema_admits_the_new_kinds_and_temporal_edge_columns() {
+        let directory = tempdir().expect("temp dir must be created");
+        let path = directory.path().join("corpus.db");
+        let _index = CorpusIndex::open(&path).expect("the index must open");
+        let connection = Connection::open(&path).expect("the fresh index must open");
+        connection
+            .execute_batch(
+                "INSERT INTO corpus_documents VALUES
+                    ('records', 1, 100, repeat('a', 64), repeat('b', 64), 3, repeat('0', 16),
+                     FALSE, 'deterministic-corpus-v3', '2026-09-29T00:00:00Z');
+                 INSERT INTO corpus_entities VALUES
+                    ('e-person', 'PERSON', 'jane doe', 'Jane Doe', 'EXACT_NORMALIZED_MATCH'),
+                    ('e-role', 'ROLE', 'records officer', 'Records Officer',
+                        'EXACT_NORMALIZED_MATCH'),
+                    ('e-position', 'POSITION', 'records officer for it',
+                        'Records Officer, IT', 'EXACT_NORMALIZED_MATCH'),
+                    ('e-doc', 'DOCUMENT_CLASS', 'policy', 'Policy',
+                        'EXACT_NORMALIZED_MATCH');
+                 INSERT INTO corpus_entity_document_counts VALUES
+                    ('e-person', 1), ('e-role', 1), ('e-position', 1), ('e-doc', 1);
+                 INSERT INTO corpus_entity_mentions VALUES
+                    ('records', 100, 'e-person', 0, 0, 8, 5000,
+                        'test', 1, 'FORMAT_VALIDATED'),
+                    ('records', 100, 'e-role', 0, 10, 24, 5000,
+                        'test', 1, 'FORMAT_VALIDATED'),
+                    ('records', 100, 'e-position', 0, 26, 48, 5000,
+                        'test', 1, 'FORMAT_VALIDATED'),
+                    ('records', 100, 'e-doc', 0, 50, 55, 5000,
+                        'test', 1, 'FORMAT_VALIDATED');",
+            )
+            .expect("the widened CHECK must admit PERSON, ROLE, POSITION, DOCUMENT_CLASS");
+        // A single row per typed kind at increasing offsets so the primary key (which includes
+        // segment_index) does not force us to invent duplicates.
+        connection
+            .execute_batch(
+                "INSERT INTO corpus_entity_relationships VALUES
+                    ('records', 100, 'e-doc', 'e-person', 'SIGNED_BY', 'OBSERVED',
+                        0, 0, 20, 9000, '2024-01-15T00:00:00Z', NULL),
+                    ('records', 100, 'e-doc', 'e-role', 'PROMISES', 'OBSERVED',
+                        1, 0, 20, 8500, NULL, NULL),
+                    ('records', 100, 'e-doc', 'e-position', 'CO_OCCURRENCE', 'COMPUTED',
+                        2, 0, 20, 4000, NULL, '2026-12-31T23:59:59Z');",
+            )
+            .expect("the widened relationship_kind CHECK must admit SIGNED_BY, PROMISES, and NULL temporals");
+
+        // Read back through the code path the UI uses, so the SELECT and the deserializer are
+        // covered end-to-end.
+        let index = CorpusIndex::open(&path).expect("the index must reopen");
+        let neighborhood = index
+            .entity_neighborhood("e-doc".to_string(), 8)
+            .await
+            .expect("the neighborhood must read")
+            .expect("e-doc has neighbours");
+        assert_eq!(neighborhood.center.kind, CorpusEntityKind::DocumentClass);
+        assert_eq!(neighborhood.edges.len(), 3);
+        let kinds: Vec<RelationshipKind> = neighborhood
+            .edges
+            .iter()
+            .map(|edge| edge.kind)
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        assert!(kinds.contains(&RelationshipKind::SignedBy));
+        assert!(kinds.contains(&RelationshipKind::Promises));
+        assert!(kinds.contains(&RelationshipKind::CoOccurrence));
+        // Absence and measurement do not share a representation. The rows that had NULL temporals
+        // must read as None here, not as zero.
+        assert!(neighborhood
+            .edges
+            .iter()
+            .any(|edge| edge.valid_from.is_none() && edge.valid_until.is_none()));
+        assert!(neighborhood
+            .edges
+            .iter()
+            .any(|edge| edge.valid_from.as_deref() == Some("2024-01-15T00:00:00Z")));
+    }
+
+    /// `find_entity_paths` walks the graph honestly.
+    ///
+    /// Three documents form a chain: doc 1 pairs A with B, doc 2 pairs B with C, doc 3 pairs C
+    /// with D. So A→C exists at 2 hops through B, A→D at 3 hops through B and C, and E—an entity
+    /// that is not in any document—is unreachable. A hand-rolled entity chain (rather than
+    /// analyzing real text) keeps the topology testable: extractors change over time; this test
+    /// is not about them.
+    #[tokio::test]
+    async fn find_entity_paths_traces_a_connected_route_and_reports_unreachable_honestly() {
+        let directory = tempdir().expect("temp dir must be created");
+        let path = directory.path().join("corpus.db");
+        // Init schema, then drop the handle so the direct-SQL setup connection sees a fresh file
+        // without contending with a live reader — same pattern as the widened-schema test above.
+        let _ = CorpusIndex::open(&path).expect("the index must open");
+
+        // Direct SQL setup so the topology is exactly this: A-B-C-D on three documents, E
+        // isolated. The read path is what we are exercising.
+        {
+            let connection = Connection::open(&path).expect("the fresh index must open");
+            connection
+                .execute_batch(
+                    "INSERT INTO corpus_documents VALUES
+                        ('records', 1, 1, repeat('a', 64), repeat('a', 64), 3, repeat('0', 16),
+                            FALSE, 'test', '2026-09-29T00:00:00Z'),
+                        ('records', 2, 2, repeat('b', 64), repeat('b', 64), 3, repeat('0', 16),
+                            FALSE, 'test', '2026-09-29T00:00:00Z'),
+                        ('records', 3, 3, repeat('c', 64), repeat('c', 64), 3, repeat('0', 16),
+                            FALSE, 'test', '2026-09-29T00:00:00Z');
+                     INSERT INTO corpus_entities VALUES
+                        ('a', 'PERSON', 'a', 'A', 'EXACT_NORMALIZED_MATCH'),
+                        ('b', 'PERSON', 'b', 'B', 'EXACT_NORMALIZED_MATCH'),
+                        ('c', 'PERSON', 'c', 'C', 'EXACT_NORMALIZED_MATCH'),
+                        ('d', 'PERSON', 'd', 'D', 'EXACT_NORMALIZED_MATCH'),
+                        ('e', 'PERSON', 'e', 'E', 'EXACT_NORMALIZED_MATCH');
+                     INSERT INTO corpus_entity_document_counts VALUES
+                        ('a', 1), ('b', 2), ('c', 2), ('d', 1), ('e', 1);
+                     INSERT INTO corpus_entity_mentions VALUES
+                        ('records', 1, 'a', 0, 0, 1, 5000, 't', 1, 'FORMAT_VALIDATED'),
+                        ('records', 1, 'b', 0, 5, 6, 5000, 't', 1, 'FORMAT_VALIDATED'),
+                        ('records', 2, 'b', 0, 0, 1, 5000, 't', 1, 'FORMAT_VALIDATED'),
+                        ('records', 2, 'c', 0, 5, 6, 5000, 't', 1, 'FORMAT_VALIDATED'),
+                        ('records', 3, 'c', 0, 0, 1, 5000, 't', 1, 'FORMAT_VALIDATED'),
+                        ('records', 3, 'd', 0, 5, 6, 5000, 't', 1, 'FORMAT_VALIDATED'),
+                        ('records', 1, 'e', 0, 10, 11, 5000, 't', 1, 'FORMAT_VALIDATED');
+                     INSERT INTO corpus_entity_relationships VALUES
+                        ('records', 1, 'a', 'b', 'CO_OCCURRENCE', 'COMPUTED', 0, 0, 6, 5000,
+                            NULL, NULL),
+                        ('records', 2, 'b', 'c', 'CO_OCCURRENCE', 'COMPUTED', 0, 0, 6, 4000,
+                            NULL, NULL),
+                        ('records', 3, 'c', 'd', 'CO_OCCURRENCE', 'COMPUTED', 0, 0, 6, 4500,
+                            NULL, NULL);",
+                )
+                .expect("the topology fixture must apply");
+        }
+
+        // Re-open the index so the reader connection sees the direct-SQL setup.
+        let index = CorpusIndex::open(&path).expect("the index must reopen");
+
+        // A→C: exists at 2 hops through B.
+        let path_ac = index
+            .find_entity_paths("a".to_string(), "c".to_string(), 4)
+            .await
+            .expect("the path query must run")
+            .expect("A and C are connected");
+        assert_eq!(path_ac.hops, 2);
+        assert_eq!(path_ac.steps.first().unwrap().neighbor.entity_id, "a");
+        assert_eq!(path_ac.steps.last().unwrap().neighbor.entity_id, "c");
+        // Weakest edge on the path is B→C at 4000 bp.
+        assert_eq!(path_ac.weakest_confidence_basis_points, Some(4000));
+
+        // Same start and end is a real answer, not a failure.
+        let path_aa = index
+            .find_entity_paths("a".to_string(), "a".to_string(), 4)
+            .await
+            .expect("the path query must run")
+            .expect("A→A is trivially connected");
+        assert_eq!(path_aa.hops, 0);
+        assert_eq!(path_aa.steps.len(), 1);
+        assert!(path_aa.weakest_confidence_basis_points.is_none());
+
+        // Unreachable — E has no relationship rows — returns None.
+        let path_ae = index
+            .find_entity_paths("a".to_string(), "e".to_string(), 4)
+            .await
+            .expect("the path query must run");
+        assert!(
+            path_ae.is_none(),
+            "E is isolated, so the query has to say so honestly rather than fabricate a path",
+        );
+
+        // An unknown identifier returns None the same way `entity_neighborhood` does.
+        let path_ax = index
+            .find_entity_paths("a".to_string(), "no-such-entity".to_string(), 4)
+            .await
+            .expect("the path query must run");
+        assert!(path_ax.is_none());
+
+        // Brokers rank B and C above A/D/E because they are the graph's chokepoints.
+        let brokers = index
+            .list_entity_brokers(None, 5)
+            .await
+            .expect("the broker ranking must read");
+        assert!(!brokers.is_empty());
+        assert!(brokers.iter().all(|broker| broker.is_approximation));
+        let b_rank = brokers
+            .iter()
+            .position(|broker| broker.entity.entity_id == "b")
+            .expect("B is a chokepoint and must appear");
+        let c_rank = brokers
+            .iter()
+            .position(|broker| broker.entity.entity_id == "c")
+            .expect("C is a chokepoint and must appear");
+        let a_rank = brokers
+            .iter()
+            .position(|broker| broker.entity.entity_id == "a");
+        // B and C have two incident distinct neighbours each; A has only one.
+        if let Some(a_rank) = a_rank {
+            assert!(b_rank < a_rank || c_rank < a_rank);
+        }
     }
 
     /// The graph reads, over a corpus where the answer is countable by hand.

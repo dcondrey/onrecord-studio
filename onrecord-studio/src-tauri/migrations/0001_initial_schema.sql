@@ -151,7 +151,11 @@ CREATE TABLE IF NOT EXISTS requests (
     determination_at TEXT,
     determination_source TEXT,
     neighborhood_block TEXT,
-    
+    -- Optional label for the requester's class (e.g., 'journalist', 'organization', 'individual').
+    -- Nullable on purpose: NULL means "not recorded" and never means "individual" or any specific
+    -- class. Populated only where the ingestion adapter can derive it from the source portal.
+    requester_attribution TEXT,
+
     -- Relations
     agency_id BIGINT,
     category_id BIGINT,
@@ -686,3 +690,44 @@ CREATE TABLE IF NOT EXISTS data_maintenance_origins (
     document_id BIGINT NOT NULL,
     PRIMARY KEY (snapshot_id, portal_key, document_id)
 );
+
+-- ----------------------------------------------------------------------------
+-- 10. FINDINGS INBOX
+-- Universal shape every autonomous detector emits. One row = one statement the app believes is
+-- worth a user's attention. `id` is a deterministic content hash so a re-run over unchanged
+-- evidence upserts cleanly. `confidence_basis_points` is nullable *on purpose*: an unassessed
+-- finding (the detector had no numeric basis) is not the same as a computed-zero finding, and a
+-- DEFAULT 0 would collapse the two.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS findings (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    severity TEXT NOT NULL
+        CHECK (severity IN ('INFO', 'NOTABLE', 'SERIOUS', 'CRITICAL')),
+    confidence_basis_points INTEGER
+        CHECK (confidence_basis_points IS NULL
+            OR (confidence_basis_points >= 0 AND confidence_basis_points <= 10000)),
+    subject_portal_key TEXT,
+    subject_agency_id BIGINT,
+    subject_request_id BIGINT,
+    subject_document_id BIGINT,
+    subject_entity_id TEXT,
+    headline TEXT NOT NULL,
+    explanation TEXT NOT NULL,
+    citations_json TEXT NOT NULL DEFAULT '[]',
+    discovered_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL,
+    dismissed_at TEXT,
+    source_detector TEXT NOT NULL
+);
+-- Ranking sort: severity descending, then confidence descending (NULLs last), then freshness.
+CREATE INDEX IF NOT EXISTS idx_findings_ranking
+    ON findings(dismissed_at, severity, confidence_basis_points DESC, last_seen_at DESC);
+-- Per-detector sweeps use this when clearing stale rows.
+CREATE INDEX IF NOT EXISTS idx_findings_detector_last_seen
+    ON findings(source_detector, last_seen_at);
+-- Subject-anchored queries (dossier view later).
+CREATE INDEX IF NOT EXISTS idx_findings_subject_document
+    ON findings(subject_portal_key, subject_document_id);
+CREATE INDEX IF NOT EXISTS idx_findings_subject_agency
+    ON findings(subject_portal_key, subject_agency_id);

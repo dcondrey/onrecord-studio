@@ -85,6 +85,11 @@ interface AppState {
    */
   analyticsRefreshRequests: number;
   evidenceRefreshRequests: number;
+  /**
+   * Incremented after each ingest completion and by the explicit Refresh button so the findings
+   * inbox picks up the latest sweep without a race against the ingest hook.
+   */
+  findingsRefreshRequests: number;
   legalAuthorities: LegalAuthoritySummary[];
   activeLegalFindings: LegalComplianceFinding[];
   legalDataUpdatedAt: string | null;
@@ -101,6 +106,26 @@ interface AppState {
   pendingSourceRepair: SourceRepairNotice | null;
   patternEvidenceSelection: PatternEvidenceSelection | null;
   briefingProject: BriefingProject;
+  /**
+   * When set, the OverviewDashboard renders the SubjectDossier for this target. `entity` is a
+   * resolved entity id (safe to fetch directly). `name` is an unresolved free-text query that the
+   * dossier resolves via `list_top_corpus_entities` and disambiguates when it matches more than
+   * one entity.
+   */
+  subjectDossierTarget: { kind: 'entity' | 'name'; value: string } | null;
+  /**
+   * True when the post-ingest brief overlay should be visible. Set by `syncStopped` in App.tsx
+   * after `refresh_findings` completes; cleared when the user dismisses it or opens a specific
+   * finding.
+   */
+  postIngestBriefOpen: boolean;
+  /**
+   * ISO-8601 timestamp of the last moment the user visibly saw the findings inbox (its
+   * FindingsInbox mount, or a Refresh press, or a dismiss). Used by ChangeFeed to report "N new
+   * findings since you last opened." `null` means the user has never opened the inbox in this
+   * session — treat every finding as new.
+   */
+  lastFindingsSeenAt: string | null;
   setWorkspaceView: (view: WorkspaceView) => void;
   setTheme: (theme: AppTheme) => void;
   setMotion: (motion: AppMotion) => void;
@@ -132,6 +157,7 @@ interface AppState {
   setAnalyticsError: (message: string | null) => void;
   requestAnalyticsRefresh: () => void;
   requestEvidenceRefresh: () => void;
+  requestFindingsRefresh: () => void;
   setLegalAuthorities: (authorities: LegalAuthoritySummary[]) => void;
   setActiveLegalFindings: (findings: LegalComplianceFinding[]) => void;
   setSearchFilters: (
@@ -150,6 +176,10 @@ interface AppState {
   addBriefingEvidence: (evidence: BriefingEvidence) => void;
   updateBriefingEvidence: (id: string, patch: Pick<Partial<BriefingEvidence>, 'claim' | 'note' | 'readiness'>) => void;
   removeBriefingEvidence: (id: string) => void;
+  openSubjectDossier: (target: { kind: 'entity' | 'name'; value: string }) => void;
+  clearSubjectDossier: () => void;
+  setPostIngestBriefOpen: (open: boolean) => void;
+  markFindingsSeen: () => void;
 }
 
 const emptyMetrics = (): IngestionMetrics => ({
@@ -185,6 +215,7 @@ export const useAppStore = create<AppState>((set) => ({
   analyticsError: null,
   analyticsRefreshRequests: 0,
   evidenceRefreshRequests: 0,
+  findingsRefreshRequests: 0,
   legalAuthorities: [],
   activeLegalFindings: [],
   legalDataUpdatedAt: null,
@@ -202,6 +233,9 @@ export const useAppStore = create<AppState>((set) => ({
   briefingProject: loadBriefingProject(
     typeof window === 'undefined' ? undefined : window.localStorage,
   ),
+  subjectDossierTarget: null,
+  postIngestBriefOpen: false,
+  lastFindingsSeenAt: null,
   setWorkspaceView: (workspaceView) => set({ workspaceView, isSidebarOpen: false }),
   setTheme: (theme) => set({ theme }),
   setMotion: (motion) => set({ motion }),
@@ -348,6 +382,8 @@ export const useAppStore = create<AppState>((set) => ({
     set((state) => ({ analyticsRefreshRequests: state.analyticsRefreshRequests + 1 })),
   requestEvidenceRefresh: () =>
     set((state) => ({ evidenceRefreshRequests: state.evidenceRefreshRequests + 1 })),
+  requestFindingsRefresh: () =>
+    set((state) => ({ findingsRefreshRequests: state.findingsRefreshRequests + 1 })),
   setLegalAuthorities: (legalAuthorities) =>
     set({
       legalAuthorities: [...legalAuthorities].sort((left, right) =>
@@ -415,6 +451,10 @@ export const useAppStore = create<AppState>((set) => ({
     );
     return { briefingProject };
   }),
+  openSubjectDossier: (target) => set({ subjectDossierTarget: target }),
+  clearSubjectDossier: () => set({ subjectDossierTarget: null }),
+  setPostIngestBriefOpen: (postIngestBriefOpen) => set({ postIngestBriefOpen }),
+  markFindingsSeen: () => set({ lastFindingsSeenAt: new Date().toISOString() }),
 }));
 
 function readAudioAlertsPreference() {

@@ -110,6 +110,8 @@ function LicensedWorkspace() {
   const setPendingSourceRepair = useAppStore((state) => state.setPendingSourceRepair);
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
   const requestEvidenceRefresh = useAppStore((state) => state.requestEvidenceRefresh);
+  const requestFindingsRefresh = useAppStore((state) => state.requestFindingsRefresh);
+  const setPostIngestBriefOpen = useAppStore((state) => state.setPostIngestBriefOpen);
   const runtimeRefreshFailure = useRef<ReportedFailure | null>(null);
   const audioAlertsEnabled = useAppStore((state) => state.audioAlertsEnabled);
   const { triggerFailureAlert, triggerSuccessAlert } = useAudioAlerts(audioAlertsEnabled);
@@ -362,6 +364,21 @@ function LicensedWorkspace() {
           appendSyncLog(`${payload.payload.portalKey}: synchronization pool stopped.`);
           void refreshRuntimes();
           void refreshAnalytics();
+          // Autonomous: run all detectors against the corpus now that new records have landed,
+          // and bump the inbox counter so `FindingsInbox` re-reads the ranked list.
+          void invokeCommand('refresh_findings', {})
+            .catch((error: unknown) => {
+              appendSyncLog(`Findings refresh failed: ${String(error)}`);
+            })
+            .finally(() => {
+              requestFindingsRefresh();
+              // Surfacing without hunting: after ingest, open the post-ingest brief so a user who
+              // did nothing but add a source sees the newest findings without navigating. If the
+              // detector run failed the brief still opens; it renders the "no new findings" state
+              // rather than staying silent, which would otherwise look identical to a healthy
+              // ingest that surfaced nothing.
+              setPostIngestBriefOpen(true);
+            });
           triggerSuccessAlert();
           break;
         case 'taskFailed':
@@ -418,7 +435,7 @@ function LicensedWorkspace() {
       if (evidenceRefreshTimer !== null) window.clearTimeout(evidenceRefreshTimer);
       stopListening?.();
     };
-  }, [addBytesTransferred, appendSyncLog, incrementMetric, refreshAnalytics, refreshRuntimes, requestEvidenceRefresh, setPendingSourceRepair, setPortalSyncState, triggerFailureAlert, triggerSuccessAlert, upsertPortal]);
+  }, [addBytesTransferred, appendSyncLog, incrementMetric, refreshAnalytics, refreshRuntimes, requestEvidenceRefresh, requestFindingsRefresh, setPendingSourceRepair, setPortalSyncState, setPostIngestBriefOpen, triggerFailureAlert, triggerSuccessAlert, upsertPortal]);
 
   return (
     <div data-theme={resolvedTheme} data-platform={platform} className="app-theme flex h-screen w-screen overflow-hidden antialiased">

@@ -16,6 +16,11 @@ import AutomaticDiscovery from './AutomaticDiscovery';
 import { invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { AgencyPerformanceProfile } from '../../types';
+import FindingsInbox from './FindingsInbox';
+import ChangeFeed from './ChangeFeed';
+import SubjectDossier from './SubjectDossier';
+import PostIngestBrief from './PostIngestBrief';
+import CrossCorpusExplorer from './CrossCorpusExplorer';
 
 export default function OverviewDashboard() {
   const portals = useAppStore((state) => state.portals);
@@ -71,10 +76,15 @@ export default function OverviewDashboard() {
           <WorkspaceSourcesUnavailable detail={workspaceInitializationError} />
         ) : null}
 
+        <PostIngestBrief />
         {workbench ? <>
           <button type="button" className="analysis-button" onClick={() => setWorkbench(null)}>Return to investigation briefing</button>
           <ProfessionalWorkbench key={`${workbench.reportId}:${workbench.review}`} initialReportId={workbench.reportId} initialTab={workbench.review ? 'Evidence review' : 'Cases and follow-through'} />
         </> : <>
+          <SubjectDossier />
+          <ChangeFeed />
+          <FindingsInbox />
+          <CrossCorpusExplorer />
           <ResearchWorkspace onReview={(reportId) => setWorkbench({ reportId, review: true })} />
           <section className="app-panel flex flex-wrap items-center justify-between gap-3 p-4"><div><h3 className="text-sm font-semibold text-slate-200">Develop a lead into a durable case</h3><p className="mt-1 text-xs text-slate-400">Track requests, productions and commitments; reconcile spending; challenge the evidence.</p></div><button type="button" className="analysis-button" onClick={() => setWorkbench({ reportId: '', review: false })}>Open casework and research tools</button></section>
         </>}

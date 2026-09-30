@@ -29,6 +29,7 @@ export default function CommandPalette() {
   const setMotion = useAppStore((state) => state.setMotion);
   const setContrast = useAppStore((state) => state.setContrast);
   const toggleSidebarCollapsed = useAppStore((state) => state.toggleSidebarCollapsed);
+  const openSubjectDossier = useAppStore((state) => state.openSubjectDossier);
 
   const openPalette = () => {
     previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -72,6 +73,27 @@ export default function CommandPalette() {
       shortcut: `${modifier}N`,
       perform: focusSourceComposer,
     },
+    {
+      // Opens the subject dossier for a name the user types. The prompt is the native window
+      // one — the palette itself is a keyboard-first surface, and a full inline text step here
+      // would drift into Tier 5's intent-router territory, which is out of Wave 2E's scope.
+      id: 'open-subject-dossier',
+      label: 'Open subject dossier…',
+      detail: 'Stitch findings, entity graph, and provenance for one person, agency or record',
+      group: 'Navigate',
+      icon: 'evidence',
+      keywords: 'dossier subject entity person agency who look up investigate',
+      perform: () => {
+        if (typeof window === 'undefined') return;
+        const value = window.prompt(
+          'Subject to open dossier for (name, email, organization, or entity id):',
+        );
+        const trimmed = value?.trim();
+        if (!trimmed) return;
+        openSubjectDossier({ kind: 'name', value: trimmed });
+        setWorkspaceView('overview');
+      },
+    },
     ...themeCommandRegistry.map((command) => ({
       id: command.id,
       label: command.label,
@@ -99,7 +121,7 @@ export default function CommandPalette() {
       keywords: command.keywords,
       perform: () => setContrast(command.contrast),
     })),
-  ], [modifier, setContrast, setMotion, setTheme, setWorkspaceView, toggleSidebarCollapsed]);
+  ], [modifier, openSubjectDossier, setContrast, setMotion, setTheme, setWorkspaceView, toggleSidebarCollapsed]);
 
   const filteredActions = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();

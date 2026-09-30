@@ -3,13 +3,20 @@ use crate::commands::validation::{
     optional_text, portal_key as validate_portal_key, MAXIMUM_PATH_BYTES,
 };
 use crate::error::AppError;
-use crate::integrity::{digest_hex, sha256_hex};
+use crate::integrity::{
+    check_revocation, load_or_create_signing_key, load_revocations, rotate_signing_key, sha256_hex,
+    sign_package, verify_package, verify_package_detailed, SignedPackage, SIGNATURE_ALGORITHM,
+};
+use crate::storage::casework::{EXPORT_OUTCOME_FAILED, EXPORT_OUTCOME_WRITTEN};
 use crate::storage::pii::mask_pii;
 use crate::storage::sqlite::{DuckDbRepository, EvidenceDocument, LegalBriefEvidence};
-use crate::types::{LegalBriefExportResult, LegalComplianceFinding, TimelineAnomalyMarker};
-use ed25519_dalek::{Signer, SigningKey};
+use crate::types::casework::WithheldCitationRequest;
+use crate::types::{
+    CaseEvidencePackageResult, LegalBriefExportResult, LegalComplianceFinding,
+    PackageVerificationResult, SigningKeyRevocations, SigningKeyRotationResult,
+    TimelineAnomalyMarker,
+};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use tauri::State;
@@ -17,11 +24,18 @@ use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
 const REPORT_TEMPLATE: &str = include_str!("../../../templates/report_template.md");
+/// Embedded so an installed app can produce a package's verifier alongside it. The UI must never
+/// tell a reader to run a path that only exists in this repository's working tree — a court or an
+/// opposing party who receives an exported package has no checkout to run it from.
+const VERIFIER_SCRIPT: &str = include_str!("../../../scripts/verify-evidence-package.mjs");
+const VERIFIER_SCRIPT_FILE: &str = "verify-evidence-package.mjs";
 const MAXIMUM_REPORT_BYTES: usize = 32 * 1024 * 1024;
 const MAXIMUM_EVIDENCE_PACKAGE_BYTES: usize = 64 * 1024 * 1024;
-const EVIDENCE_PACKAGE_SCHEMA: &str = "onrecord-evidence-package-v2";
-const SIGNATURE_ALGORITHM: &str = "Ed25519";
-const SIGNING_KEY_FILE: &str = ".onrecord-export-signing-key-v1";
+const MAXIMUM_CASE_EVIDENCE_PACKAGE_BYTES: usize = 8 * 1024 * 1024;
+/// The larger of the two signed package types' own export limits, since a package handed back in
+/// for verification may be either kind.
+const MAXIMUM_VERIFIABLE_PACKAGE_BYTES: usize = MAXIMUM_EVIDENCE_PACKAGE_BYTES;
+const EVIDENCE_PACKAGE_SCHEMA: &str = "onrecord-evidence-package-v3";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -114,24 +128,6 @@ struct PackagedLegalFinding {
     evaluated_at: RecordedInstant,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-struct EvidencePackageSignature {
-    algorithm: String,
-    public_key_hex: String,
-    signer_key_id: String,
-    signature_hex: String,
-    identity_assurance: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-struct SignedEvidencePackage {
-    manifest_sha256: String,
-    manifest: EvidencePackageManifest,
-    signature: EvidencePackageSignature,
-}
-
 const TEMPLATE_VARIABLES: [&str; 25] = [
     "GENERATED_AT",
     "AGENCY_NAME",
@@ -218,7 +214,7 @@ pub async fn export_legal_brief(
             .to_string_lossy()
             .into_owned()
     });
-    let output_path = validate_report_path(&target_path, &report_directory).await?;
+    let output_path = validate_report_path(&target_path, &report_directory, "md").await?;
     let package_path = output_path.with_extension("evidence.json");
     if tokio::fs::try_exists(&package_path)
         .await
@@ -230,52 +226,58 @@ pub async fn export_legal_brief(
         )));
     }
     let signing_key = load_or_create_signing_key(&report_directory).await?;
-    let package = sign_evidence_package(
-        EvidencePackageManifest {
-            schema_version: EVIDENCE_PACKAGE_SCHEMA.to_string(),
-            generated_at: generated_at.clone(),
-            request_id,
-            portal_key: evidence.portal_key.clone(),
-            report: PackagedReport {
-                file_name: output_path
-                    .file_name()
-                    .and_then(|value| value.to_str())
-                    .unwrap_or("report.md")
-                    .to_string(),
-                media_type: "text/markdown; charset=utf-8".to_string(),
-                sha256: report_sha256.clone(),
-                content: report.clone(),
-            },
-            source_documents: evidence
-                .documents
-                .iter()
-                .map(|document| PackagedSourceDocument {
-                    document_id: document.document_id,
-                    file_size: document.file_size,
-                    visibility: document.visibility.clone(),
-                    raw_file_sha256: document.raw_file_sha256.clone(),
-                    extracted_text_sha256: document.extracted_text_sha256.clone(),
-                })
-                .collect(),
-            legal_authorities,
-            legal_findings: legal_findings
-                .iter()
-                .filter(|finding| matches!(finding.review_status.as_str(), "OPEN" | "CONFIRMED"))
-                .map(|finding| PackagedLegalFinding {
-                    violation_id: finding.violation_id.clone(),
-                    statute_id: finding.matched_statute_id.clone(),
-                    version_id: finding.matched_version_id.clone(),
-                    classification: finding.classification.clone(),
-                    confidence_basis_points: finding.confidence_basis_points,
-                    supporting_document_ids: finding.supporting_document_ids.clone(),
-                    review_status: finding.review_status.clone(),
-                    evaluated_at: RecordedInstant::from_stored(finding.evaluated_at.clone()),
-                })
-                .collect(),
-            violation_markers: markers.clone(),
+    let verifier_script_path = ensure_verifier_script(&report_directory).await?;
+    let manifest = validate_evidence_manifest(EvidencePackageManifest {
+        schema_version: EVIDENCE_PACKAGE_SCHEMA.to_string(),
+        generated_at: generated_at.clone(),
+        request_id,
+        portal_key: evidence.portal_key.clone(),
+        report: PackagedReport {
+            file_name: output_path
+                .file_name()
+                .and_then(|value| value.to_str())
+                .unwrap_or("report.md")
+                .to_string(),
+            media_type: "text/markdown; charset=utf-8".to_string(),
+            sha256: report_sha256.clone(),
+            content: report.clone(),
         },
-        &signing_key,
-    )?;
+        source_documents: evidence
+            .documents
+            .iter()
+            .map(|document| PackagedSourceDocument {
+                document_id: document.document_id,
+                file_size: document.file_size,
+                visibility: document.visibility.clone(),
+                raw_file_sha256: document.raw_file_sha256.clone(),
+                extracted_text_sha256: document.extracted_text_sha256.clone(),
+            })
+            .collect(),
+        legal_authorities,
+        legal_findings: legal_findings
+            .iter()
+            .filter(|finding| matches!(finding.review_status.as_str(), "OPEN" | "CONFIRMED"))
+            .map(|finding| PackagedLegalFinding {
+                violation_id: finding.violation_id.clone(),
+                statute_id: finding.matched_statute_id.clone(),
+                version_id: finding.matched_version_id.clone(),
+                classification: finding.classification.clone(),
+                confidence_basis_points: finding.confidence_basis_points,
+                supporting_document_ids: finding.supporting_document_ids.clone(),
+                review_status: finding.review_status.clone(),
+                evaluated_at: RecordedInstant::from_stored(finding.evaluated_at.clone()),
+            })
+            .collect(),
+        violation_markers: markers.clone(),
+    })?;
+    let package = sign_package(manifest, &signing_key).map_err(AppError::Export)?;
+    // Never ship a package this installation cannot itself re-verify: catches a signing defect
+    // before it reaches a reader who trusts the signature, not after.
+    verify_package(&package).map_err(|error| {
+        AppError::Export(format!(
+            "Freshly signed evidence package failed self-verification: {error}"
+        ))
+    })?;
     let package_bytes = serde_json::to_vec_pretty(&package)
         .map_err(|error| AppError::Export(format!("Failed to encode evidence package: {error}")))?;
     if package_bytes.len() > MAXIMUM_EVIDENCE_PACKAGE_BYTES {
@@ -304,6 +306,7 @@ pub async fn export_legal_brief(
         signer_key_id: package.signature.signer_key_id,
         generated_at,
         included_violation_markers: markers,
+        verifier_script_path: verifier_script_path.to_string_lossy().into_owned(),
     };
     if let Err(error) = repository.record_report_export(&result).await {
         let report_cleanup = tokio::fs::remove_file(&output_path).await.err();
@@ -316,6 +319,283 @@ pub async fn export_legal_brief(
         };
     }
     Ok(result)
+}
+
+/// Exports a case as a signed chain-of-custody package: the full case (fresh-read, so every
+/// citation's verification reflects current storage) plus every cited source document's hash,
+/// covered by the same Ed25519 signing key `export_legal_brief` uses. The signature proves the
+/// exported bytes have not changed since this installation produced them; it does not and cannot
+/// prove the underlying facts, so an `UNVERIFIED_PORTABLE` citation stays visibly unverified
+/// inside the package rather than being smoothed over by the presence of a signature.
+///
+/// Independent verification does not require this application: `scripts/verify-evidence-package.mjs`
+/// checks the signature and hashes from the exported file alone.
+#[tauri::command]
+pub async fn export_case_evidence_package(
+    case_id: String,
+    target_path: Option<String>,
+    withheld_citations: Vec<WithheldCitationRequest>,
+    repository: State<'_, DuckDbRepository>,
+    report_directory: State<'_, PathBuf>,
+) -> Result<CaseEvidencePackageResult, AppError> {
+    let target_path = optional_text(target_path, "Case export output path", MAXIMUM_PATH_BYTES)?;
+    let target_path = target_path.unwrap_or_else(|| {
+        let timestamp = chrono::Utc::now().format("%Y%m%dT%H%M%SZ");
+        report_directory
+            .join(format!("case-{case_id}-custody-{timestamp}.json"))
+            .to_string_lossy()
+            .into_owned()
+    });
+    // Resolved and checked for a pre-existing file *before* the export is signed and the ledger
+    // sequence reserved, so a bad output path (the overwhelmingly common failure) never burns a
+    // position in the case's append-only export chain.
+    let output_path = validate_report_path(&target_path, &report_directory, "json").await?;
+    let signing_key = load_or_create_signing_key(&report_directory).await?;
+    let verifier_script_path = ensure_verifier_script(&report_directory).await?;
+    let generated_at = chrono::Utc::now().to_rfc3339();
+    let package = repository
+        .export_case_evidence_package_signed(
+            case_id.clone(),
+            generated_at.clone(),
+            withheld_citations,
+            signing_key,
+        )
+        .await?;
+    let sequence = package.manifest.ledger_sequence;
+    let package_bytes = serde_json::to_vec_pretty(&package).map_err(|error| {
+        AppError::Export(format!(
+            "Failed to encode chain-of-custody package: {error}"
+        ))
+    })?;
+    if package_bytes.len() > MAXIMUM_CASE_EVIDENCE_PACKAGE_BYTES {
+        let _ = repository
+            .record_case_export_outcome(
+                case_id,
+                sequence,
+                EXPORT_OUTCOME_FAILED,
+                Some(format!(
+                    "Encoded package of {} bytes exceeds the {MAXIMUM_CASE_EVIDENCE_PACKAGE_BYTES}-byte limit.",
+                    package_bytes.len()
+                )),
+            )
+            .await;
+        return Err(AppError::Export(format!(
+            "Chain-of-custody export exceeds the {MAXIMUM_CASE_EVIDENCE_PACKAGE_BYTES}-byte limit"
+        )));
+    }
+    let package_sha256 = sha256_hex(&package_bytes);
+    if let Err(error) = commit_new_report(&output_path, &package_bytes).await {
+        // The ledger reservation for `sequence` now stands with no confirmed outcome; a chain
+        // reader must see it as "reserved, not written," never silently as delivered or as a gap
+        // that looks like a withheld export. Recording the failure is best-effort: if it too fails,
+        // `case_export_chain` already reports an outcome-less reservation the same honest way.
+        let _ = repository
+            .record_case_export_outcome(
+                case_id,
+                sequence,
+                EXPORT_OUTCOME_FAILED,
+                Some(error.to_string()),
+            )
+            .await;
+        return Err(error);
+    }
+    repository
+        .record_case_export_outcome(
+            case_id.clone(),
+            sequence,
+            EXPORT_OUTCOME_WRITTEN,
+            Some(output_path.to_string_lossy().into_owned()),
+        )
+        .await?;
+    Ok(CaseEvidencePackageResult {
+        case_id,
+        case_revision: package.manifest.case.revision,
+        output_path: output_path.to_string_lossy().into_owned(),
+        package_sha256,
+        signature_algorithm: SIGNATURE_ALGORITHM.to_string(),
+        signer_key_id: package.signature.signer_key_id,
+        generated_at,
+        verified_citation_count: package.manifest.verified_citation_count,
+        unverified_citation_labels: package.manifest.unverified_citation_labels,
+        withheld_citation_labels: package
+            .manifest
+            .withheld_citations
+            .iter()
+            .map(|w| format!("{} ({})", w.label, w.reason))
+            .collect(),
+        ledger_sequence: sequence,
+        previous_export_sha256: package.manifest.previous_export_sha256,
+        verifier_script_path: verifier_script_path.to_string_lossy().into_owned(),
+    })
+}
+
+/// Reads back this case's local export ledger for the "verify this chain" surface in the UI. Any
+/// reader can check the same continuity independently from the exported files themselves via
+/// `scripts/verify-evidence-package.mjs --chain`; this command exists so the desktop app can show
+/// it without asking someone to run Node against files they may not have all downloaded yet.
+#[tauri::command]
+pub async fn case_export_chain(
+    case_id: String,
+    repository: State<'_, DuckDbRepository>,
+) -> Result<Vec<crate::types::casework::CaseExportLedgerEntry>, AppError> {
+    repository.case_export_chain(case_id).await
+}
+
+/// Retires this installation's current export signing key and starts a new one. Every package
+/// exported before this call keeps verifying exactly as it did (the signature math over its own
+/// bytes never changes); what changes is that a *future* verification of one of those older
+/// packages will now also see the old key listed in `get_signing_key_revocations` and flag it,
+/// per `reason`. The old key file is archived, never deleted — see `rotate_signing_key`.
+#[tauri::command]
+pub async fn rotate_export_signing_key(
+    reason: String,
+    compromised: bool,
+    report_directory: State<'_, PathBuf>,
+) -> Result<SigningKeyRotationResult, AppError> {
+    rotate_signing_key(&report_directory, reason, compromised).await
+}
+
+/// Escalates a key already listed as retired (routine rotation) to compromised, without rotating
+/// the currently active key — the ordinary path when a compromise is discovered after the fact,
+/// which is not the same moment as when the key happened to be rotated.
+#[tauri::command]
+pub async fn mark_signing_key_compromised(
+    key_id: String,
+    reason: String,
+    report_directory: State<'_, PathBuf>,
+) -> Result<(), AppError> {
+    crate::integrity::mark_key_compromised(&report_directory, key_id, reason).await
+}
+
+/// This installation's local record of retired signing keys, for display in the UI. The
+/// distributable, independently verifiable form of the same data is the signed file at
+/// `report_directory`/`SIGNING_KEY_REVOCATIONS_FILE`, which a recipient can pass to
+/// `scripts/verify-evidence-package.mjs --revocations` without running this application.
+#[tauri::command]
+pub async fn get_signing_key_revocations(
+    report_directory: State<'_, PathBuf>,
+) -> Result<SigningKeyRevocations, AppError> {
+    load_revocations(&report_directory).await
+}
+
+/// Verifies a signed evidence or chain-of-custody package's own text content, exactly as
+/// `scripts/verify-evidence-package.mjs` does, so a recipient never needs Node installed just to
+/// check what they were given. Takes the raw file text the way `preview_casework_import` does,
+/// not a path, so the browser file input's `.text()` result works directly.
+#[tauri::command]
+pub async fn verify_evidence_package(
+    payload: String,
+    report_directory: State<'_, PathBuf>,
+) -> Result<PackageVerificationResult, AppError> {
+    verify_evidence_package_inner(payload, &report_directory).await
+}
+
+/// Split from the `#[tauri::command]` wrapper so tests can call it with a plain `&Path` — Tauri's
+/// `State` has no public test constructor in the version this crate uses.
+async fn verify_evidence_package_inner(
+    payload: String,
+    report_directory: &Path,
+) -> Result<PackageVerificationResult, AppError> {
+    if payload.len() > MAXIMUM_VERIFIABLE_PACKAGE_BYTES {
+        return Err(AppError::Export(format!(
+            "Package exceeds the {MAXIMUM_VERIFIABLE_PACKAGE_BYTES}-byte limit."
+        )));
+    }
+    let package: SignedPackage<serde_json::Value> = match serde_json::from_str(&payload) {
+        Ok(package) => package,
+        Err(error) => {
+            return Ok(PackageVerificationResult {
+                schema_version: None,
+                canonical_bytes_hash_matches: false,
+                signature_valid: false,
+                manifest_matches_canonical_bytes: false,
+                overall_passed: false,
+                identity_assurance: None,
+                unverified_citation_labels: Vec::new(),
+                withheld_citation_labels: Vec::new(),
+                ledger_sequence: None,
+                previous_export_sha256: None,
+                revoked_signer: None,
+                parse_error: Some(format!(
+                    "Not a signed package this application produces: {error}"
+                )),
+            })
+        }
+    };
+    let checks = verify_package_detailed(&package);
+    let schema_version = package
+        .manifest
+        .get("schemaVersion")
+        .and_then(|value| value.as_str())
+        .map(str::to_string);
+    let string_array = |field: &str| {
+        package
+            .manifest
+            .get(field)
+            .and_then(|value| value.as_array())
+            .map(|values| {
+                values
+                    .iter()
+                    .filter_map(|value| value.as_str().map(str::to_string))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
+    };
+    let unverified_citation_labels = string_array("unverifiedCitationLabels");
+    // `withheldCitations` is `[{label, reason}]` in the manifest, not a flat string list like the
+    // field above; a withheld citation must never be indistinguishable from an unverified one, so
+    // this is rendered as its own labeled list rather than folded into `unverified_citation_labels`.
+    let withheld_citation_labels = package
+        .manifest
+        .get("withheldCitations")
+        .and_then(|value| value.as_array())
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(|entry| {
+                    let label = entry.get("label")?.as_str()?;
+                    let reason = entry.get("reason")?.as_str()?;
+                    Some(format!("{label} ({reason})"))
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let ledger_sequence = package
+        .manifest
+        .get("ledgerSequence")
+        .and_then(|value| value.as_u64());
+    let previous_export_sha256 = package
+        .manifest
+        .get("previousExportSha256")
+        .and_then(|value| value.as_str())
+        .map(str::to_string);
+    // A revoked signer never fails the cryptographic checks above — the signature over these
+    // bytes is still mathematically valid. Whether that revocation fails the overall verdict
+    // depends on why the key was revoked: a routine, non-compromising rotation leaves every
+    // package that key already signed trusted (`RETIRED`, shown for information only); a
+    // compromised key fails everything it ever signed (`COMPROMISED`). Conflating the two would
+    // make ordinary key hygiene retroactively fail every package this installation ever exported.
+    let revocations = load_revocations(report_directory).await?;
+    let revoked_signer = check_revocation(&package.signature.signer_key_id, &revocations).cloned();
+    // Fail closed: only an exact "RETIRED" status is informational; anything else (a typo, a
+    // future status value, corrupted data) is treated as compromised, never silently trusted.
+    let signer_compromised = revoked_signer
+        .as_ref()
+        .is_some_and(|revoked| revoked.status != crate::integrity::REVOCATION_STATUS_RETIRED);
+    Ok(PackageVerificationResult {
+        schema_version,
+        canonical_bytes_hash_matches: checks.canonical_bytes_hash_matches,
+        signature_valid: checks.signature_valid,
+        manifest_matches_canonical_bytes: checks.manifest_matches_canonical_bytes,
+        overall_passed: checks.all_passed() && !signer_compromised,
+        identity_assurance: Some(package.signature.identity_assurance),
+        unverified_citation_labels,
+        withheld_citation_labels,
+        ledger_sequence,
+        previous_export_sha256,
+        revoked_signer,
+        parse_error: None,
+    })
 }
 
 async fn load_referenced_legal_authorities(
@@ -365,10 +645,9 @@ async fn load_referenced_legal_authorities(
     Ok(authorities)
 }
 
-fn sign_evidence_package(
+fn validate_evidence_manifest(
     manifest: EvidencePackageManifest,
-    signing_key: &SigningKey,
-) -> Result<SignedEvidencePackage, AppError> {
+) -> Result<EvidencePackageManifest, AppError> {
     if sha256_hex(manifest.report.content.as_bytes()) != manifest.report.sha256 {
         return Err(AppError::Export(
             "Evidence package report content does not match its SHA-256".to_string(),
@@ -390,98 +669,25 @@ fn sign_evidence_package(
             }
         }
     }
-    let manifest_bytes = serde_json::to_vec(&manifest)
-        .map_err(|error| AppError::Export(format!("Failed to encode package manifest: {error}")))?;
-    let manifest_sha256 = sha256_hex(&manifest_bytes);
-    let verifying_key = signing_key.verifying_key();
-    let public_key = verifying_key.to_bytes();
-    let signature = signing_key.sign(&manifest_bytes).to_bytes();
-    Ok(SignedEvidencePackage {
-        manifest_sha256,
-        manifest,
-        signature: EvidencePackageSignature {
-            algorithm: SIGNATURE_ALGORITHM.to_string(),
-            public_key_hex: digest_hex(public_key),
-            signer_key_id: sha256_hex(&public_key),
-            signature_hex: digest_hex(signature),
-            identity_assurance: "SELF_MANAGED_LOCAL_KEY_NOT_EXTERNALLY_ATTESTED".to_string(),
-        },
-    })
+    Ok(manifest)
 }
 
 fn is_sha256(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
-async fn load_or_create_signing_key(report_directory: &Path) -> Result<SigningKey, AppError> {
-    let key_path = report_directory.join(SIGNING_KEY_FILE);
-    match tokio::fs::read(&key_path).await {
-        Ok(bytes) => return signing_key_from_bytes(&bytes, &key_path),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => {
-            return Err(AppError::Export(format!(
-                "Failed to read the local export signing key: {error}"
-            )))
-        }
-    }
-
-    let mut entropy = Sha256::new();
-    entropy.update(Uuid::new_v4().as_bytes());
-    entropy.update(Uuid::new_v4().as_bytes());
-    entropy.update(
-        chrono::Utc::now()
-            .timestamp_nanos_opt()
-            .unwrap_or_default()
-            .to_le_bytes(),
-    );
-    let seed: [u8; 32] = entropy.finalize().into();
-
-    let mut options = tokio::fs::OpenOptions::new();
-    options.create_new(true).write(true);
-    #[cfg(unix)]
-    {
-        options.mode(0o600);
-    }
-    match options.open(&key_path).await {
-        Ok(mut file) => {
-            if let Err(error) = file.write_all(&seed).await {
-                drop(file);
-                let _ = tokio::fs::remove_file(&key_path).await;
-                return Err(AppError::Export(format!(
-                    "Failed to write the local export signing key: {error}"
-                )));
-            }
-            if let Err(error) = file.sync_all().await {
-                drop(file);
-                let _ = tokio::fs::remove_file(&key_path).await;
-                return Err(AppError::Export(format!(
-                    "Failed to sync the local export signing key: {error}"
-                )));
-            }
-            Ok(SigningKey::from_bytes(&seed))
-        }
-        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-            let bytes = tokio::fs::read(&key_path).await.map_err(|read_error| {
-                AppError::Export(format!(
-                    "The export signing key was created concurrently but could not be read: {read_error}"
-                ))
-            })?;
-            signing_key_from_bytes(&bytes, &key_path)
-        }
-        Err(error) => Err(AppError::Export(format!(
-            "Failed to create the local export signing key: {error}"
-        ))),
-    }
-}
-
-fn signing_key_from_bytes(bytes: &[u8], path: &Path) -> Result<SigningKey, AppError> {
-    let seed: [u8; 32] = bytes.try_into().map_err(|_| {
-        AppError::Export(format!(
-            "Export signing key '{}' must contain exactly 32 bytes",
-            path.display()
-        ))
-    })?;
-    Ok(SigningKey::from_bytes(&seed))
+/// Writes the standalone verifier next to the report directory so a signed package's recipient
+/// always has a runnable path, never a reference to this repository's working tree. Overwritten on
+/// every export rather than left stale, since the verifier ships with the app and can change
+/// between versions; it never depends on anything exported alongside it.
+async fn ensure_verifier_script(report_directory: &Path) -> Result<PathBuf, AppError> {
+    let path = report_directory.join(VERIFIER_SCRIPT_FILE);
+    tokio::fs::write(&path, VERIFIER_SCRIPT)
+        .await
+        .map_err(|error| {
+            AppError::Export(format!("Failed to write the verifier script: {error}"))
+        })?;
+    Ok(path)
 }
 
 fn reportable_markers(
@@ -754,17 +960,26 @@ fn validate_template_variables() -> Result<(), AppError> {
     Ok(())
 }
 
-async fn validate_report_path(value: &str, output_root: &Path) -> Result<PathBuf, AppError> {
+/// Shared by every export command that writes to the managed report directory. `allowed_extension`
+/// exists because each caller's output is a different, fixed format: `export_legal_brief` always
+/// writes `.md`, `export_case_evidence_package` always writes `.json`. This is not a general path
+/// validator; a caller that accepted either extension for both exports would let a legal brief
+/// silently overwrite where a chain-of-custody package was expected, or vice versa.
+async fn validate_report_path(
+    value: &str,
+    output_root: &Path,
+    allowed_extension: &str,
+) -> Result<PathBuf, AppError> {
     let path = PathBuf::from(value.trim());
     if path.as_os_str().is_empty()
         || !path
             .extension()
             .and_then(|value| value.to_str())
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("md"))
+            .is_some_and(|extension| extension.eq_ignore_ascii_case(allowed_extension))
     {
-        return Err(AppError::Export(
-            "Legal brief output must be a non-empty .md file path".to_string(),
-        ));
+        return Err(AppError::Export(format!(
+            "Output must be a non-empty .{allowed_extension} file path"
+        )));
     }
     if tokio::fs::try_exists(&path)
         .await
@@ -778,9 +993,7 @@ async fn validate_report_path(value: &str, output_root: &Path) -> Result<PathBuf
     let parent = path
         .parent()
         .filter(|value| !value.as_os_str().is_empty())
-        .ok_or_else(|| {
-            AppError::Export("Legal brief output must include a parent directory".to_string())
-        })?;
+        .ok_or_else(|| AppError::Export("Output must include a parent directory".to_string()))?;
     let parent = tokio::fs::canonicalize(parent).await.map_err(|error| {
         AppError::Export(format!("Report parent directory is inaccessible: {error}"))
     })?;
@@ -791,12 +1004,12 @@ async fn validate_report_path(value: &str, output_root: &Path) -> Result<PathBuf
         })?;
     if !parent.starts_with(&output_root) {
         return Err(AppError::Export(
-            "Legal brief exports are restricted to the managed report directory".to_string(),
+            "Exports are restricted to the managed report directory".to_string(),
         ));
     }
     let file_name = path
         .file_name()
-        .ok_or_else(|| AppError::Export("Legal brief output has no file name".to_string()))?;
+        .ok_or_else(|| AppError::Export("Output has no file name".to_string()))?;
     Ok(parent.join(file_name))
 }
 
@@ -842,33 +1055,18 @@ async fn commit_new_report(path: &Path, bytes: &[u8]) -> Result<(), AppError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+    use crate::storage::casework::CASE_EVIDENCE_PACKAGE_SCHEMA;
+    use crate::types::casework::{CaseworkCase, CaseworkCitation};
+    use ed25519_dalek::SigningKey;
 
-    fn decode_hex<const SIZE: usize>(value: &str) -> [u8; SIZE] {
-        assert_eq!(value.len(), SIZE * 2);
-        let mut bytes = [0_u8; SIZE];
-        for (index, byte) in bytes.iter_mut().enumerate() {
-            *byte = u8::from_str_radix(&value[index * 2..index * 2 + 2], 16).unwrap();
-        }
-        bytes
-    }
-
-    fn verifies(package: &SignedEvidencePackage) -> bool {
-        let manifest = serde_json::to_vec(&package.manifest).unwrap();
-        if sha256_hex(&manifest) != package.manifest_sha256 {
-            return false;
-        }
-        let public_key = decode_hex::<32>(&package.signature.public_key_hex);
-        let signature = decode_hex::<64>(&package.signature.signature_hex);
-        VerifyingKey::from_bytes(&public_key)
-            .and_then(|key| key.verify(&manifest, &Signature::from_bytes(&signature)))
-            .is_ok()
-    }
+    // The cross-language fixture test now lives in `storage::casework::tests`, alongside
+    // `export_case_evidence_package_signed` — the manifest it locks is built there, through the
+    // real repository (`read_case`/`refresh_evidence` and the export ledger), not hand-constructed.
 
     #[test]
     fn signed_package_is_externally_verifiable_and_tamper_evident() {
         let report = "# Evidence report\n".to_string();
-        let manifest = EvidencePackageManifest {
+        let manifest = validate_evidence_manifest(EvidencePackageManifest {
             schema_version: EVIDENCE_PACKAGE_SCHEMA.to_string(),
             generated_at: "2026-08-28T12:00:00Z".to_string(),
             request_id: 7,
@@ -889,10 +1087,11 @@ mod tests {
             legal_authorities: Vec::new(),
             legal_findings: Vec::new(),
             violation_markers: vec!["STATUTORY_LATENCY_VIOLATION".to_string()],
-        };
+        })
+        .unwrap();
         let key = SigningKey::from_bytes(&[7_u8; 32]);
-        let mut package = sign_evidence_package(manifest, &key).unwrap();
-        assert!(verifies(&package));
+        let mut package = sign_package(manifest, &key).unwrap();
+        assert!(verify_package(&package).is_ok());
         assert_eq!(
             package.signature.identity_assurance,
             "SELF_MANAGED_LOCAL_KEY_NOT_EXTERNALLY_ATTESTED"
@@ -902,7 +1101,156 @@ mod tests {
             .manifest
             .violation_markers
             .push("TAMPERED".to_string());
-        assert!(!verifies(&package));
+        assert!(verify_package(&package).is_err());
+    }
+
+    #[tokio::test]
+    async fn verify_evidence_package_reports_each_check_and_never_hides_an_unverified_citation() {
+        let manifest = crate::types::casework::CaseEvidenceManifest {
+            schema_version: CASE_EVIDENCE_PACKAGE_SCHEMA.to_string(),
+            generated_at: "2026-09-28T00:00:00Z".to_string(),
+            case: CaseworkCase {
+                evidence: vec![CaseworkCitation {
+                    label: "Imported claim".into(),
+                    verification: "UNVERIFIED_PORTABLE".into(),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            },
+            verified_citation_count: 0,
+            unverified_citation_labels: vec!["Imported claim (UNVERIFIED_PORTABLE)".to_string()],
+            withheld_citations: Vec::new(),
+            previous_export_sha256: None,
+            ledger_sequence: 1,
+        };
+        let key = SigningKey::from_bytes(&[5_u8; 32]);
+        let package = sign_package(manifest, &key).unwrap();
+        let payload = serde_json::to_string(&package).unwrap();
+        let directory = tempfile::tempdir().unwrap();
+
+        let passing = verify_evidence_package_inner(payload.clone(), directory.path())
+            .await
+            .unwrap();
+        assert!(passing.overall_passed);
+        assert!(passing.canonical_bytes_hash_matches);
+        assert!(passing.signature_valid);
+        assert!(passing.manifest_matches_canonical_bytes);
+        assert_eq!(
+            passing.identity_assurance.as_deref(),
+            Some("SELF_MANAGED_LOCAL_KEY_NOT_EXTERNALLY_ATTESTED")
+        );
+        assert_eq!(
+            passing.unverified_citation_labels,
+            vec!["Imported claim (UNVERIFIED_PORTABLE)".to_string()]
+        );
+        assert!(passing.revoked_signer.is_none());
+
+        let mut tampered: serde_json::Value = serde_json::from_str(&payload).unwrap();
+        tampered["manifest"]["verifiedCitationCount"] = serde_json::json!(999);
+        let failing = verify_evidence_package_inner(tampered.to_string(), directory.path())
+            .await
+            .unwrap();
+        assert!(!failing.overall_passed);
+        assert!(!failing.manifest_matches_canonical_bytes);
+        assert!(failing.parse_error.is_none());
+
+        let garbage = verify_evidence_package_inner("not json".to_string(), directory.path())
+            .await
+            .unwrap();
+        assert!(!garbage.overall_passed);
+        assert!(garbage.parse_error.is_some());
+    }
+
+    #[tokio::test]
+    async fn verify_evidence_package_flags_a_signer_this_installation_has_since_revoked() {
+        let directory = tempfile::tempdir().unwrap();
+        let manifest = crate::types::casework::CaseEvidenceManifest {
+            schema_version: CASE_EVIDENCE_PACKAGE_SCHEMA.to_string(),
+            generated_at: "2026-09-28T00:00:00Z".to_string(),
+            case: CaseworkCase::default(),
+            verified_citation_count: 0,
+            unverified_citation_labels: Vec::new(),
+            withheld_citations: Vec::new(),
+            previous_export_sha256: None,
+            ledger_sequence: 1,
+        };
+        let retired_key = SigningKey::from_bytes(&[6_u8; 32]);
+        let package = sign_package(manifest, &retired_key).unwrap();
+        let payload = serde_json::to_string(&package).unwrap();
+
+        // Simulate this installation having rotated away from `retired_key` for a real reason
+        // before the recipient ever gets around to verifying the package it signed. Seed the
+        // active key file with exactly `retired_key`'s bytes first, so rotation retires *that*
+        // key rather than some unrelated freshly generated one.
+        tokio::fs::write(
+            directory.path().join(crate::integrity::SIGNING_KEY_FILE),
+            retired_key.to_bytes(),
+        )
+        .await
+        .unwrap();
+        rotate_signing_key(directory.path(), "Suspected compromise.".to_string(), true)
+            .await
+            .unwrap();
+
+        let result = verify_evidence_package_inner(payload, directory.path())
+            .await
+            .unwrap();
+        assert!(result.canonical_bytes_hash_matches);
+        assert!(result.signature_valid);
+        assert!(
+            !result.overall_passed,
+            "a package signed by a revoked key must not read as passing overall"
+        );
+        assert_eq!(
+            result.revoked_signer.map(|r| r.reason),
+            Some("Suspected compromise.".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn verify_evidence_package_still_trusts_a_package_after_a_routine_non_compromising_rotation(
+    ) {
+        let directory = tempfile::tempdir().unwrap();
+        let manifest = crate::types::casework::CaseEvidenceManifest {
+            schema_version: CASE_EVIDENCE_PACKAGE_SCHEMA.to_string(),
+            generated_at: "2026-09-28T00:00:00Z".to_string(),
+            case: CaseworkCase::default(),
+            verified_citation_count: 0,
+            unverified_citation_labels: Vec::new(),
+            withheld_citations: Vec::new(),
+            previous_export_sha256: None,
+            ledger_sequence: 1,
+        };
+        let retiring_key = SigningKey::from_bytes(&[8_u8; 32]);
+        let package = sign_package(manifest, &retiring_key).unwrap();
+        let payload = serde_json::to_string(&package).unwrap();
+        tokio::fs::write(
+            directory.path().join(crate::integrity::SIGNING_KEY_FILE),
+            retiring_key.to_bytes(),
+        )
+        .await
+        .unwrap();
+        rotate_signing_key(
+            directory.path(),
+            "Routine hygiene rotation.".to_string(),
+            false,
+        )
+        .await
+        .unwrap();
+
+        let result = verify_evidence_package_inner(payload, directory.path())
+            .await
+            .unwrap();
+        assert!(
+            result.overall_passed,
+            "a routine, non-compromising key rotation must not retroactively fail every package \
+             the retired key already signed"
+        );
+        assert_eq!(
+            result.revoked_signer.map(|r| r.status),
+            Some(crate::integrity::REVOCATION_STATUS_RETIRED.to_string()),
+            "the retirement must still be visible for information, just not fail the verdict"
+        );
     }
 
     // REGRESSION(export): a legal brief copied `evaluated_at` and `imported_at` verbatim, so a row
@@ -932,21 +1280,6 @@ mod tests {
             serde_json::to_value(RecordedInstant::from_stored(recorded.clone())).unwrap(),
             serde_json::json!({ "kind": "INSTANT", "value": recorded }),
             "a parseable value is carried verbatim, not reformatted"
-        );
-    }
-
-    #[tokio::test]
-    async fn export_signing_key_is_created_once_and_reused() {
-        let directory = tempfile::tempdir().unwrap();
-        let first = load_or_create_signing_key(directory.path()).await.unwrap();
-        let second = load_or_create_signing_key(directory.path()).await.unwrap();
-        assert_eq!(first.verifying_key(), second.verifying_key());
-        assert_eq!(
-            tokio::fs::read(directory.path().join(SIGNING_KEY_FILE))
-                .await
-                .unwrap()
-                .len(),
-            32
         );
     }
 }

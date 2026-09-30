@@ -1,12 +1,13 @@
 import { cn } from '../../utils/cn';
+import { ShapeGlyph } from './shapeGlyph';
 
 export type StatusDotState = 'active' | 'idle' | 'error' | 'note';
 
-const SHAPE: Record<StatusDotState, { path: 'circle' | 'ring' | 'diamond' | 'bar'; className: string }> = {
-  active: { path: 'circle', className: 'text-emerald-400' },
-  idle: { path: 'ring', className: 'text-slate-400' },
-  error: { path: 'diamond', className: 'text-rose-400' },
-  note: { path: 'bar', className: 'text-cyan-400' },
+const SHAPE: Record<StatusDotState, { path: 'circle' | 'ring' | 'diamond' | 'bar'; radius: number; className: string }> = {
+  active: { path: 'circle', radius: 4.5, className: 'text-emerald-400' },
+  idle: { path: 'ring', radius: 3.8, className: 'text-slate-400' },
+  error: { path: 'diamond', radius: 5, className: 'text-rose-400' },
+  note: { path: 'bar', radius: 5, className: 'text-cyan-400' },
 };
 
 /**
@@ -19,7 +20,7 @@ const SHAPE: Record<StatusDotState, { path: 'circle' | 'ring' | 'diamond' | 'bar
  * correct only where the same state is already stated in adjacent text.
  */
 export default function StatusDot({ state, label, className }: { state: StatusDotState; label: string; className?: string }) {
-  const { path, className: tone } = SHAPE[state];
+  const { path, radius, className: tone } = SHAPE[state];
   return (
     <svg
       viewBox="-6 -6 12 12"
@@ -28,10 +29,15 @@ export default function StatusDot({ state, label, className }: { state: StatusDo
       aria-label={label || undefined}
       aria-hidden={label ? undefined : true}
     >
-      {path === 'circle' && <circle cx="0" cy="0" r="4.5" fill="currentColor" />}
-      {path === 'ring' && <circle cx="0" cy="0" r="3.8" fill="none" stroke="currentColor" strokeWidth="1.8" />}
-      {path === 'diamond' && <polygon points="0,-5 5,0 0,5 -5,0" fill="currentColor" />}
-      {path === 'bar' && <rect x="-5" y="-1.6" width="10" height="3.2" rx="1.2" fill="currentColor" />}
+      <ShapeGlyph
+        shape={path}
+        cx={0}
+        cy={0}
+        radius={radius}
+        fill={path === 'ring' ? 'none' : 'currentColor'}
+        stroke={path === 'ring' ? 'currentColor' : undefined}
+        strokeWidth={path === 'ring' ? 1.8 : undefined}
+      />
     </svg>
   );
 }

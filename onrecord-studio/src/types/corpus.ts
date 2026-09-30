@@ -59,7 +59,29 @@ export type CorpusEntityKind =
   | 'URL_HOST'
   | 'ACRONYM'
   | 'ORGANIZATION'
-  | 'MONEY';
+  | 'MONEY'
+  | 'PERSON'
+  | 'ROLE'
+  | 'POSITION'
+  | 'DOCUMENT_CLASS';
+
+/** The role a `MONEY` mention plays in the document it appears in. */
+export type MoneyContext = 'INVOICE' | 'APPROVAL' | 'BUDGET' | 'PAYMENT' | 'OTHER';
+
+/**
+ * What an edge claims. `CO_OCCURRENCE` is the derivation this app performs today; the seven
+ * others describe an edge the text actually carried. A reader must not draw a `CO_OCCURRENCE`
+ * alike to a `SIGNED_BY` — distance in the graph does not equal semantic strength.
+ */
+export type RelationshipKind =
+  | 'CO_OCCURRENCE'
+  | 'SIGNED_BY'
+  | 'APPROVED'
+  | 'CITES'
+  | 'PROMISES'
+  | 'DELIVERED'
+  | 'SUPERSEDES'
+  | 'AMENDS';
 
 /** How hard the extractor that produced a mention verified the string it matched. */
 export type EntityValidationGrade =
@@ -83,8 +105,13 @@ export interface CorpusEntityNode {
 export interface CorpusEntityEdge {
   neighbor: CorpusEntityNode;
   basis: RelationshipBasis;
+  kind: RelationshipKind;
   sharedDocumentCount: number;
   confidenceBasisPoints: number;
+  /** RFC 3339 UTC. `null` when the segment carried no date; absence is not zero. */
+  validFrom?: string | null;
+  /** Symmetric upper bound. `null` for open-ended / unknown. */
+  validUntil?: string | null;
 }
 
 export interface CorpusEntityNeighborhood {
@@ -92,4 +119,26 @@ export interface CorpusEntityNeighborhood {
   edges: CorpusEntityEdge[];
   /** The neighbour list hit its limit. A sparse entity and a cut one are different claims. */
   truncated: boolean;
+}
+
+export interface EntityPathStep {
+  neighbor: CorpusEntityNode;
+  edgeKind: RelationshipKind;
+  edgeBasis: RelationshipBasis;
+  sharedDocumentCount: number;
+}
+
+export interface EntityPath {
+  steps: EntityPathStep[];
+  hops: number;
+  /** Minimum edge confidence across steps > 0. `null` on a zero-hop path. */
+  weakestConfidenceBasisPoints?: number | null;
+}
+
+export interface EntityBroker {
+  entity: CorpusEntityNode;
+  brokerageScore: number;
+  distinctNeighbors: number;
+  /** Always true — this ranking is degree-weighted, not computed betweenness. */
+  isApproximation: boolean;
 }

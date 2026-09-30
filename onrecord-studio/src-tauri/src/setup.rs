@@ -62,6 +62,13 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
     tauri::async_runtime::block_on(repository.initialize_review())?;
     tauri::async_runtime::block_on(repository.initialize_casework())?;
     tauri::async_runtime::block_on(repository.initialize_monitoring())?;
+    // Reclaims WAL growth from the previous session's writes before the queue runtime and
+    // analytics nodes start making their own. Never fatal: a failed CHECKPOINT is a missed
+    // housekeeping opportunity, not a reason to leave the whole application unlaunchable the way
+    // an unguarded startup failure did for the corpus index before (see storage/corpus.rs).
+    if let Err(error) = tauri::async_runtime::block_on(repository.checkpoint()) {
+        eprintln!("Startup checkpoint failed (continuing without it): {error}");
+    }
 
     // Both analytics nodes read through live sibling connections to the repository's DuckDB
     // instance. Opening or attaching the core file separately would pin each node to the database

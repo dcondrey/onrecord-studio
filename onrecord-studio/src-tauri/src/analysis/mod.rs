@@ -30,3 +30,15 @@ pub mod review;
 pub mod financial;
 
 pub mod monitoring;
+
+pub mod assertion_index;
+
+pub mod finding;
+
+pub mod detectors;
+
+pub mod non_c2pa_provenance;
+
+pub mod redaction_inference;
+
+pub mod artifacts;

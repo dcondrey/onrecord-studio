@@ -5,6 +5,7 @@ import { invokeCommand } from '../../ipc';
 import type { EvidenceBundle, ForensicFinding, ProvenanceConfidence, ProvenanceVerificationRecord, RecoveredVersionProfile } from '../../types';
 import UnredactorPanel from './UnredactorPanel';
 import ReconstructionPanel from './ReconstructionPanel';
+import RedactionInferencePanel from './RedactionInferencePanel';
 
 interface DocumentViewerProps {
   documentId: number;
@@ -42,6 +43,7 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
   const [textPage, setTextPage] = useState(0);
   const [shareStatus, setShareStatus] = useState<string | null>(null);
   const [briefingStatus, setBriefingStatus] = useState<string | null>(null);
+  const [inferenceSpan, setInferenceSpan] = useState<{ start: number; end: number } | null>(null);
   const historyGate = useLatestRequestGate();
   const recoveryGate = useLatestRequestGate();
   const residualAuditGate = useLatestRequestGate();
@@ -259,13 +261,111 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
       {showVerificationHistory && <VerificationHistoryPanel records={verificationHistory} isLoading={isLoadingHistory} error={historyError} />}
       {(recoveryProfile || recoveryError) && <RevisionRecoveryPanel profile={recoveryProfile} error={recoveryError} />}
       {(residualAudit || residualAuditError) && <ResidualEvidencePanel bundle={residualAudit} error={residualAuditError} />}
-      {showRedactionAudit && <div className="max-h-[70vh] space-y-3 overflow-y-auto border-b border-slate-800 p-3"><ReconstructionPanel documentId={documentId} portalKey={portalKey} />{originalAvailable && fileName.toLocaleLowerCase().endsWith('.pdf') && <UnredactorPanel documentId={documentId} portalKey={portalKey} />}</div>}
+      {showRedactionAudit && (
+        <div className="max-h-[70vh] space-y-3 overflow-y-auto border-b border-slate-800 p-3">
+          <ReconstructionPanel documentId={documentId} portalKey={portalKey} />
+          {originalAvailable && fileName.toLocaleLowerCase().endsWith('.pdf') && (
+            <UnredactorPanel documentId={documentId} portalKey={portalKey} />
+          )}
+          <InferenceLauncher
+            textContent={textContent}
+            activeSpan={inferenceSpan}
+            onSelectSpan={setInferenceSpan}
+          />
+          {inferenceSpan && (
+            <RedactionInferencePanel
+              documentId={documentId}
+              portalKey={portalKey}
+              spanStart={inferenceSpan.start}
+              spanEnd={inferenceSpan.end}
+              onClose={() => setInferenceSpan(null)}
+            />
+          )}
+        </div>
+      )}
       <div className="min-h-0 flex-1 overflow-y-auto p-5 font-mono text-xs leading-relaxed text-slate-300 selection:bg-indigo-500/30">
         <HighlightedTextPage text={textContent} query={documentSearch} page={textPage} activeMatchIndex={selectedMatch} />
       </div>
       {pageCount > 1 && <div className="flex items-center justify-center gap-3 border-t border-slate-900 px-4 py-2 text-[9px] text-slate-400"><button type="button" disabled={textPage === 0} onClick={() => setTextPage((page) => Math.max(0, page - 1))} className="rounded border border-slate-800 px-2 py-1 disabled:opacity-40">Previous text page</button><span className="font-mono">{textPage + 1}/{pageCount}</span><button type="button" disabled={textPage + 1 >= pageCount} onClick={() => setTextPage((page) => Math.min(pageCount - 1, page + 1))} className="rounded border border-slate-800 px-2 py-1 disabled:opacity-40">Next text page</button></div>}
     </section>
   );
+}
+
+/**
+ * Small launcher that lists the redaction markers present in the extracted text and lets the
+ * user pick one to run inference against. It uses a light scan (`[REDACTED]`, `[WITHHELD]`,
+ * `(b)(6)`, block/underscore runs) that matches what the Rust engine's `scan_redaction_spans`
+ * looks for, so what's clickable here maps to what the backend can reason about.
+ */
+function InferenceLauncher({
+  textContent,
+  activeSpan,
+  onSelectSpan,
+}: {
+  textContent: string;
+  activeSpan: { start: number; end: number } | null;
+  onSelectSpan: (span: { start: number; end: number } | null) => void;
+}) {
+  const spans = useMemo(() => scanRedactionMarkers(textContent).slice(0, 20), [textContent]);
+  if (spans.length === 0) {
+    return (
+      <p className="text-[10px] text-slate-400">
+        No `[REDACTED]`, exemption tag, or block-run markers found in the extracted text of this document.
+      </p>
+    );
+  }
+  return (
+    <div className="rounded border border-slate-800 bg-slate-900/30 p-2">
+      <div className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+        Infer identity for a redaction
+      </div>
+      <ul className="mt-1 flex flex-wrap gap-1">
+        {spans.map((span) => {
+          const isActive = activeSpan?.start === span.start && activeSpan.end === span.end;
+          const label = textContent.slice(span.start, span.end).trim().slice(0, 24);
+          return (
+            <li key={`${span.start}-${span.end}`}>
+              <button
+                type="button"
+                onClick={() => onSelectSpan(isActive ? null : span)}
+                className={`rounded border px-2 py-1 text-[10px] ${
+                  isActive
+                    ? 'border-indigo-400 bg-indigo-500/20 text-indigo-100'
+                    : 'border-slate-800 text-slate-300'
+                }`}
+                aria-pressed={isActive}
+              >
+                {label || 'redaction'}
+                <span className="ml-1 text-slate-400">·{span.start}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function scanRedactionMarkers(text: string): { start: number; end: number }[] {
+  const spans: { start: number; end: number }[] = [];
+  const patterns = [/\[REDACTED\]/gi, /\[WITHHELD\]/gi, /\[EXEMPT\]/gi, /\(b\)\(\d\)(\([A-Za-z]\))?/g, /█{3,}|▓{3,}|■{3,}/g, /_{5,}/g, /X{5,}/g];
+  for (const pattern of patterns) {
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(text)) !== null) {
+      spans.push({ start: match.index, end: match.index + match[0].length });
+    }
+  }
+  spans.sort((a, b) => a.start - b.start);
+  const deduped: { start: number; end: number }[] = [];
+  for (const span of spans) {
+    const last = deduped[deduped.length - 1];
+    if (last && span.start <= last.end) {
+      last.end = Math.max(last.end, span.end);
+    } else {
+      deduped.push({ ...span });
+    }
+  }
+  return deduped;
 }
 
 function ProvenanceGraphPanel({ graph }: { graph: import('../../types').ProvenanceClaimGraph }) {

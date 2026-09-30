@@ -158,6 +158,76 @@ pub struct CaseworkPacket {
     pub case: CaseworkCase,
     pub history: Vec<CaseworkEvent>,
 }
+/// A frontend request to exclude one citation from a chain-of-custody export. `reason` must be
+/// non-empty: a withheld citation is recorded by label and reason in the signed manifest, never
+/// silently dropped (CLAUDE.md's absence rule applies here too — an omitted citation and a citation
+/// nobody asked to withhold cannot share a representation).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WithheldCitationRequest {
+    pub citation_id: String,
+    pub reason: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WithheldCitation {
+    pub label: String,
+    pub reason: String,
+}
+/// A case's full chain-of-custody export: the case itself (fresh-read, so every citation's
+/// `verification` reflects current storage, not a stale save) plus a rollup that a signature
+/// cannot be allowed to launder into looking authoritative. An `UNVERIFIED_PORTABLE` citation is
+/// exactly as unverified inside a signed package as outside one; the signature attests to who
+/// exported these bytes and that they have not changed since, never to the truth of an unverified
+/// claim within them. `previous_export_sha256` and `ledger_sequence` chain this export to the
+/// installation's local append-only export ledger, always present (null only for sequence 1) so a
+/// reader never has to guess whether the field was omitted or genuinely absent.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CaseEvidenceManifest {
+    pub schema_version: String,
+    pub generated_at: String,
+    pub case: CaseworkCase,
+    pub verified_citation_count: usize,
+    pub unverified_citation_labels: Vec<String>,
+    pub withheld_citations: Vec<WithheldCitation>,
+    pub previous_export_sha256: Option<String>,
+    pub ledger_sequence: u64,
+}
+/// One entry of a case's local export ledger, joined with its recorded outcome (if any). `outcome`
+/// is `"RESERVED"` when a sequence position was signed and committed to the chain but no outcome
+/// was ever appended — most likely a process crash or a file write that failed between signing and
+/// recording the result. That state must be surfaced as "reserved, not confirmed written," never
+/// silently treated as delivered.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CaseExportLedgerEntry {
+    pub sequence: u64,
+    pub manifest_sha256: String,
+    pub previous_manifest_sha256: Option<String>,
+    pub signer_key_id: String,
+    pub reserved_at: String,
+    pub outcome: String,
+    pub outcome_detail: Option<String>,
+    pub outcome_recorded_at: Option<String>,
+    /// `true` when this entry's `previousManifestSha256` matches the prior entry's
+    /// `manifestSha256` (or this is sequence 1, which has none). Computed here, not left for the
+    /// UI to eyeball hex strings against each other — "ship a way to actually verify the chain"
+    /// means the app states a verdict, not just prints the raw rows.
+    pub previous_link_valid: bool,
+}
+/// One previously imported revision of this case whose recorded signer this installation has
+/// since revoked. `signerKeyId.slice(0, 12)`-style identification only, never a claim about the
+/// content the import carried — the evidence itself may still be entirely accurate; this only
+/// says the *channel* it arrived through is no longer trusted.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CompromisedImportWarning {
+    pub revision: u64,
+    pub signer_key_id: String,
+    pub revoked_at: String,
+    pub reason: String,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CaseworkImportPreview {
@@ -167,4 +237,8 @@ pub struct CaseworkImportPreview {
     pub warnings: Vec<String>,
     pub case: CaseworkCase,
     pub contributor: String,
+    /// Set by the command layer once it has verified the packet's Ed25519 signature against its
+    /// embedded public key. `None` means the packet was not (or could not be) verified as signed;
+    /// the repository itself never sets this, since signing lives at the IPC boundary.
+    pub signer_key_id: Option<String>,
 }

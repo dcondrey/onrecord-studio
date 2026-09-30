@@ -71,91 +71,180 @@ pub(crate) fn sdhc_board_attachment(
 }
 
 /// Publisher scope comes from the registered source, never a substring in a request ID or title.
+/// Hostname sets mapped to the jurisdiction/publisher label shown throughout the app. Onboarding a
+/// new city that publishes through the same platforms (Socrata, CKAN, ArcGIS Hub, Granicus,
+/// NextRequest — the adapters in this file are vendor-specific, not city-specific) needs only a
+/// new entry here, not a new adapter or a change to any caller. Two entries (`ssl.netfile.com`,
+/// `mccmeetingspublic.blob.core.usgovcloudapi.net`) are shared hosting platforms that carry more
+/// than one publisher's data, so they additionally match on a path prefix; every other entry is a
+/// plain hostname set.
+const JURISDICTION_HOSTNAMES: &[(&[&str], &str)] = &[
+    (
+        &[
+            "sandiego.gov",
+            "data.sandiego.gov",
+            "budget.sandiego.gov",
+            "sandiego.nextrequest.com",
+            "sandiego.hylandcloud.com",
+            "sandiego.granicus.com",
+            "efile.sandiego.gov",
+            "insidesandiego.org",
+            "thinkblue.org",
+            "sdcers.gov",
+        ],
+        "City of San Diego",
+    ),
+    (
+        &[
+            "sandiegocounty.gov",
+            "pra.sandiegocounty.gov",
+            "engage.sandiegocounty.gov",
+            "data.sandiegocounty.gov",
+            "sandiegocounty.budget.socrata.com",
+            "sdvote.com",
+            "sdarcc.gov",
+            "sdcera.org",
+        ],
+        "San Diego County",
+    ),
+    (&["sdsheriff.gov"], "San Diego County Sheriff"),
+    (&["sdcda.org"], "San Diego County District Attorney"),
+    (
+        &["sandiegohousingcommission.nextrequest.com", "sdhc.org"],
+        "San Diego Housing Commission",
+    ),
+    (
+        &[
+            "sandag.org",
+            "opendata.sandag.org",
+            "sdgis-sandag.opendata.arcgis.com",
+        ],
+        "SANDAG / SanGIS",
+    ),
+    (
+        &[
+            "data.ca.gov",
+            "waterboards.ca.gov",
+            "hcd.ca.gov",
+            "information.auditor.ca.gov",
+        ],
+        "California",
+    ),
+    (&["hud.gov", "data.transportation.gov"], "United States"),
+    (
+        &[
+            "catalog.data.gov",
+            "data.sandiegodata.org",
+            "opendatasandiego.com",
+        ],
+        "Multi-publisher catalogs",
+    ),
+    (&["sdmts.com"], "San Diego Metropolitan Transit System"),
+    (&["escondido.gov", "escondido.org"], "City of Escondido"),
+    (
+        &["sandiegounified.org"],
+        "San Diego Unified School District",
+    ),
+    (&["powayusd.com"], "Poway Unified School District"),
+    (&["data.sdcoe.net"], "San Diego County Office of Education"),
+    (
+        &[
+            "library.ucsd.edu",
+            "massive-ftp.ucsd.edu",
+            "homelessnesshub.ucsd.edu",
+            "datanexus.ucsd.edu",
+            "hhubsandiego-ucsdonline.hub.arcgis.com",
+        ],
+        "UC San Diego",
+    ),
+    (
+        &["humandynamics.sdsu.edu", "asir.sdsu.edu"],
+        "San Diego State University",
+    ),
+    (
+        &["ppic.org", "csh.org"],
+        "Research and policy organizations",
+    ),
+    (
+        &[
+            "voiceofsandiego.org",
+            "kpbs.org",
+            "fox5sandiego.com",
+            "calmatters.org",
+            "timesofsandiego.com",
+            "cbs8.com",
+            "inewsource.org",
+            "thecoastnews.com",
+            "sdvoice.info",
+            "axios.com",
+        ],
+        "News publishers",
+    ),
+    (
+        &[
+            "transparenthomelessdata.com",
+            "san-diego-homelessness-analytics.vercel.app",
+        ],
+        "Independent dashboards",
+    ),
+    (&["sdapcd.org"], "San Diego Air Pollution Control District"),
+    (
+        &[
+            "arjis.org",
+            "livewellsd.org",
+            "rtfhsd.org",
+            "211sandiego.org",
+            "projectcleanwater.org",
+            "sdirwmp.org",
+            "innovate78.com",
+            "elcajoncollaborative.org",
+            "luckyduckfoundation.org",
+            "sdrescue.org",
+            "downtownsandiego.org",
+        ],
+        "San Diego regional organizations",
+    ),
+];
+
+/// Shared hosting platforms where the hostname alone is not enough: a path prefix identifies which
+/// publisher's data is being read. Checked only when no plain hostname entry above matched.
+const JURISDICTION_HOST_PATH_PREFIXES: &[(&str, &str, &str)] = &[
+    (
+        "ssl.netfile.com",
+        "/static/agency/csd/",
+        "City of San Diego",
+    ),
+    (
+        "mccmeetingspublic.blob.core.usgovcloudapi.net",
+        "/escondidca-meet-",
+        "City of Escondido",
+    ),
+];
+
 pub(crate) fn source_jurisdiction(source: &str) -> &'static str {
     let Ok(url) = Url::parse(source) else {
         return "Unclassified source";
     };
-    match url
+    let host = url
         .host_str()
         .unwrap_or_default()
-        .trim_start_matches("www.")
+        .trim_start_matches("www.");
+    if let Some((_, jurisdiction)) = JURISDICTION_HOSTNAMES
+        .iter()
+        .find(|(hosts, _)| hosts.contains(&host))
     {
-        "sandiego.gov"
-        | "data.sandiego.gov"
-        | "budget.sandiego.gov"
-        | "sandiego.nextrequest.com"
-        | "sandiego.hylandcloud.com"
-        | "sandiego.granicus.com"
-        | "efile.sandiego.gov"
-        | "insidesandiego.org"
-        | "thinkblue.org"
-        | "sdcers.gov" => "City of San Diego",
-        "sandiegocounty.gov"
-        | "pra.sandiegocounty.gov"
-        | "engage.sandiegocounty.gov"
-        | "data.sandiegocounty.gov"
-        | "sandiegocounty.budget.socrata.com"
-        | "sdvote.com"
-        | "sdarcc.gov"
-        | "sdcera.org" => "San Diego County",
-        "sdsheriff.gov" => "San Diego County Sheriff",
-        "sdcda.org" => "San Diego County District Attorney",
-        "sandiegohousingcommission.nextrequest.com" | "sdhc.org" => "San Diego Housing Commission",
-        "sandag.org" | "opendata.sandag.org" | "sdgis-sandag.opendata.arcgis.com" => {
-            "SANDAG / SanGIS"
-        }
-        "data.ca.gov" | "waterboards.ca.gov" | "hcd.ca.gov" | "information.auditor.ca.gov" => {
-            "California"
-        }
-        "hud.gov" | "data.transportation.gov" => "United States",
-        "catalog.data.gov" | "data.sandiegodata.org" | "opendatasandiego.com" => {
-            "Multi-publisher catalogs"
-        }
-        "sdmts.com" => "San Diego Metropolitan Transit System",
-        "escondido.gov" | "escondido.org" => "City of Escondido",
-        "sandiegounified.org" => "San Diego Unified School District",
-        "powayusd.com" => "Poway Unified School District",
-        "data.sdcoe.net" => "San Diego County Office of Education",
-        "library.ucsd.edu"
-        | "massive-ftp.ucsd.edu"
-        | "homelessnesshub.ucsd.edu"
-        | "datanexus.ucsd.edu"
-        | "hhubsandiego-ucsdonline.hub.arcgis.com" => "UC San Diego",
-        "humandynamics.sdsu.edu" | "asir.sdsu.edu" => "San Diego State University",
-        "ppic.org" | "csh.org" => "Research and policy organizations",
-        "voiceofsandiego.org"
-        | "kpbs.org"
-        | "fox5sandiego.com"
-        | "calmatters.org"
-        | "timesofsandiego.com"
-        | "cbs8.com"
-        | "inewsource.org"
-        | "thecoastnews.com"
-        | "sdvoice.info"
-        | "axios.com" => "News publishers",
-        "transparenthomelessdata.com" | "san-diego-homelessness-analytics.vercel.app" => {
-            "Independent dashboards"
-        }
-        "sdapcd.org" => "San Diego Air Pollution Control District",
-        "arjis.org"
-        | "livewellsd.org"
-        | "rtfhsd.org"
-        | "211sandiego.org"
-        | "projectcleanwater.org"
-        | "sdirwmp.org"
-        | "innovate78.com"
-        | "elcajoncollaborative.org"
-        | "luckyduckfoundation.org"
-        | "sdrescue.org"
-        | "downtownsandiego.org" => "San Diego regional organizations",
-        "ssl.netfile.com" if url.path().starts_with("/static/agency/csd/") => "City of San Diego",
-        "mccmeetingspublic.blob.core.usgovcloudapi.net"
-            if url.path().starts_with("/escondidca-meet-") =>
-        {
-            "City of Escondido"
-        }
-        _ => "Unclassified source",
+        return jurisdiction;
     }
+    if let Some((_, _, jurisdiction)) =
+        JURISDICTION_HOST_PATH_PREFIXES
+            .iter()
+            .find(|(prefix_host, path_prefix, _)| {
+                *prefix_host == host && url.path().starts_with(path_prefix)
+            })
+    {
+        return jurisdiction;
+    }
+    "Unclassified source"
 }
 
 pub(crate) fn is_publication_site(url: &Url) -> bool {

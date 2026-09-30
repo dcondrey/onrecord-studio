@@ -1,4 +1,30 @@
 export type { IngestionTelemetry, IngestionTelemetryEvent } from '../generated/ingestionTelemetry';
+/**
+ * `ProvenanceConfidence` mirrors the Rust confidence ladder: how much a provenance result is worth
+ * as evidence, ordered weakest to strongest. Read this before any boolean on
+ * `DocumentProvenanceVerification` — the booleans mix checks this application performed with
+ * claims it merely read out of local storage, and only the ladder distinguishes them.
+ * `RecordedDigestSource` is which recorded digest the stored bytes were compared against.
+ * `SignatureVerificationState` is whether a manifest signature was actually checked, and what the
+ * check said. `SourceKind`, `StatutoryExtensionReason`, and `AuxiliaryStreamKind` mirror their
+ * respective Rust enums.
+ */
+import type {
+  ProvenanceConfidence,
+  RecordedDigestSource,
+  SignatureVerificationState,
+  SourceKind,
+  StatutoryExtensionReason,
+  AuxiliaryStreamKind,
+} from '../generated/investigationEnums';
+export type {
+  ProvenanceConfidence,
+  RecordedDigestSource,
+  SignatureVerificationState,
+  SourceKind,
+  StatutoryExtensionReason,
+  AuxiliaryStreamKind,
+};
 
 export interface PortalApiLayout {
   requestsEndpoint: string;
@@ -87,16 +113,6 @@ export interface SourcePurge {
   localPaths: string[];
 }
 
-export type SourceKind =
-  | 'NEXT_REQUEST'
-  | 'WEB_CRAWL'
-  | 'DIRECT_FILE'
-  | 'OPEN_DATA_CATALOG'
-  | 'ARC_GIS'
-  | 'TABLEAU'
-  | 'GOOGLE_DRIVE'
-  | 'LOCAL_FILE'
-  | 'PASTED_CONTENT';
 
 export interface PortalSyncStart {
   portal: PortalRegistration;
@@ -138,27 +154,12 @@ export interface StoppedHost {
   reason: string;
 }
 
-export type StatutoryExtensionReason =
-  | 'SEPARATE_FIELD_FACILITIES'
-  | 'VOLUMINOUS_RECORDS'
-  | 'INTERAGENCY_CONSULTATION'
-  | 'DATA_COMPILATION'
-  | 'CYBERATTACK_SYSTEMS_UNAVAILABLE'
-  | 'DECLARED_EMERGENCY_OPERATIONAL_IMPACT';
-
 export interface StatutoryExtensionRecord {
   noticeAt: string;
   expectedDeterminationAt: string;
   reason: StatutoryExtensionReason;
   noticeSource: string;
 }
-
-export type AuxiliaryStreamKind =
-  | 'MUNICIPAL_311'
-  | 'CODE_ENFORCEMENT'
-  | 'POLICE_DISPATCH'
-  | 'SANITATION_OPERATIONS'
-  | 'CUSTOM';
 
 export type JsonValue =
   | string
@@ -200,29 +201,6 @@ export interface RequestSearchResult {
   documentCount: number;
   integrityFlags: string[];
 }
-
-/**
- * How much a provenance result is worth as evidence, ordered weakest to strongest.
- *
- * Mirrors the Rust `ProvenanceConfidence` ladder. Read this before any boolean on
- * `DocumentProvenanceVerification`: the booleans mix checks this application performed with claims
- * it merely read out of local storage, and only the ladder distinguishes them.
- */
-export type ProvenanceConfidence =
-  | 'EVIDENCE_FILE_UNAVAILABLE'
-  | 'DIGEST_MISMATCH'
-  | 'NO_RECORDED_DIGEST'
-  | 'RECORDED_CLAIM_ONLY'
-  | 'LOCAL_DIGEST_MATCH'
-  | 'VERIFIED_SIGNATURE'
-  /** Requires a configured trust anchor. This build supplies none, so it never reports this. */
-  | 'TRUSTED_CHAIN_OF_CUSTODY';
-
-/** Which recorded digest the stored bytes were compared against. */
-export type RecordedDigestSource = 'NONE' | 'PROVENANCE_MANIFEST' | 'INGESTION_RECORD';
-
-/** Whether a manifest signature was actually checked, and what the check said. */
-export type SignatureVerificationState = 'NOT_ATTEMPTED' | 'VALID' | 'INVALID';
 
 export interface DocumentProvenanceVerification {
   documentId: number;
@@ -315,7 +293,43 @@ export interface LegalBriefExportResult {
   signerKeyId: string;
   generatedAt: string;
   includedViolationMarkers: string[];
+  verifierScriptPath: string;
 }
+
+export interface CaseEvidencePackageResult {
+  caseId: string;
+  caseRevision: number;
+  outputPath: string;
+  packageSha256: string;
+  signatureAlgorithm: string;
+  signerKeyId: string;
+  generatedAt: string;
+  verifiedCitationCount: number;
+  unverifiedCitationLabels: string[];
+  withheldCitationLabels: string[];
+  ledgerSequence: number;
+  previousExportSha256: string | null;
+  verifierScriptPath: string;
+}
+
+export interface PackageVerificationResult {
+  schemaVersion: string | null;
+  canonicalBytesHashMatches: boolean;
+  signatureValid: boolean;
+  manifestMatchesCanonicalBytes: boolean;
+  overallPassed: boolean;
+  identityAssurance: string | null;
+  unverifiedCitationLabels: string[];
+  withheldCitationLabels: string[];
+  ledgerSequence: number | null;
+  previousExportSha256: string | null;
+  revokedSigner: RevokedSigningKey | null;
+  parseError: string | null;
+}
+
+export interface RevokedSigningKey { keyId: string; revokedAt: string; reason: string; status: string }
+export interface SigningKeyRevocations { schemaVersion: string; entries: RevokedSigningKey[] }
+export interface SigningKeyRotationResult { retiredKeyId: string; newKeyId: string; archivedKeyPath: string }
 
 export interface RequestDocumentSummary {
   documentId: number;
