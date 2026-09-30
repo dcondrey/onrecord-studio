@@ -61,6 +61,7 @@ fn documents(visibility: &str, text: Option<&str>) -> SourceDocuments {
             raw_file_sha256: Some("a".repeat(64)),
             extracted_text_projection_sha256: None,
             text: text.map(str::to_string),
+            download_url: None,
         },
     );
     map

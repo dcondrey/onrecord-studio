@@ -4,6 +4,7 @@
 
 pub mod builder;
 pub mod output;
+pub mod packet;
 pub mod source;
 
 use crate::error::AppError;
@@ -25,6 +26,13 @@ pub struct SourceDocument {
     pub raw_file_sha256: Option<String>,
     pub extracted_text_projection_sha256: Option<String>,
     pub text: Option<String>,
+    pub download_url: Option<String>,
+}
+
+impl SourceDocument {
+    pub fn is_public(&self) -> bool {
+        self.visibility.trim().eq_ignore_ascii_case("public")
+    }
 }
 
 pub type SourceDocuments = HashMap<(String, i64), SourceDocument>;

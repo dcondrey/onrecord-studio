@@ -500,3 +500,39 @@ trusted channel is the recipient's responsibility, the same as for any manifest 
   recorded after receipt. The `evidence_summary` prose discloses the basis, so this is not a silent
   mislabel, but a provisional finding exported to a legal brief should not carry the same
   confidence as a completed one. This is the compliance analogue of section 5.
+
+## 10. Citable evidence packets
+
+`export_evidence_packet` (`commands/report.rs`, `report/packet.rs`) writes a Markdown file to read
+and cite and a JSON file with the same content, into the managed report directory. It is built
+from `report::builder::build_manifest`, the same pass the signed verifiable report uses, so the
+basis label, the unassessed-versus-measured confidence state, the quote check against stored text,
+PII masking, the 50-citation cap and the withholding of inference hypotheses, dismissed findings
+and non-public excerpts are one implementation, not two.
+
+What a claim carries: the basis in words (`ReportEvidenceBasis::label`, derived from
+`FindingKind::is_legal_claim`, never chosen by the caller); the detector slug and the detector's own
+explanation as the account of what was compared; the confidence as observed, where `Not assessed`
+is never rendered as a number; and per source the file and extracted-text digests, the download URL,
+the character range and the excerpt with its check status. Every field not recorded reads `not
+recorded`. "What this does not show" is generated only from what was observed for that claim
+(unchecked or withheld excerpt, missing digest or URL, no citation, no assessed confidence), plus
+the fixed limit of its basis. The download URL is taken from `documents.download_url`, for public
+documents only, with the query string and fragment removed because a signed query string can be a
+bearer token. No per-document retrieval time is stored, so none is claimed.
+
+**Gaps are never claims.** `PacketGap` shares no field with `PacketClaim` (no basis, severity or
+confidence), renders under its own heading, and is not counted in the claim total. Gaps come from
+`gaps::collect` without queueing acquisition, filtered to the detectors that produced a claim. A
+detector whose sweep failed is named in the limitations, so an empty list is never the only signal.
+An empty list is worded as "not a statement that none exist".
+
+**Reproducibility.** `content_sha256` is the SHA-256 of the compact JSON of `PacketContent`:
+schema version, portal scope, claims sorted by finding id, gaps sorted by key, withheld counts and
+limitations. It excludes `generated_at`, every finding timestamp (`last_seen_at` moves on each
+refresh), the author and the build version, so regenerating from unchanged findings gives the same
+hash, and a changed quote, confidence, claim or gap gives a different one. Not assessed and measured
+zero hash differently. A recipient recomputes it from the JSON (`report::packet::hash_matches`).
+Limits: the packet is unsigned, so the hash shows change and not authorship; detectors are
+identified by slug only because no detector version is recorded, and a different program build can
+produce different content from the same findings (`build_version` is recorded but not hashed).
