@@ -1,0 +1,53 @@
+[
+  {
+    "id": "plain-language-layer",
+    "title": "In plain words",
+    "group": "Concepts",
+    "summary": "A short, non-technical reading of each finding: what was observed, what it does not show, and what to do next.",
+    "keywords": [
+      "plain words",
+      "plain language",
+      "explain",
+      "explanation",
+      "non specialist",
+      "what does this mean",
+      "finding",
+      "verification state",
+      "disclosure"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "Every finding in the inbox and in the post-ingest brief has an In plain words button. It opens three short statements: what was observed, what it does not show, and what to do next."
+        ]
+      },
+      {
+        "heading": "What it does not change",
+        "items": [
+          "The basis label, the confidence meter and the citations are unchanged, and stay visible whether or not the explanation is open.",
+          "The explanation never decides whether a finding is a legal claim. That comes from the finding kind, as it does for the basis label.",
+          "A pattern signal is described as a reason to look. It is never described as an accusation, a violation or a legal conclusion."
+        ]
+      },
+      {
+        "heading": "Verification states",
+        "paragraphs": [
+          "Each verification state has the same three statements in the app's text tables, ready for any screen that shows a state. A slower-than-peers result is explained as a comparison with other agencies, with no statute involved. Only a counted comparison is explained as one."
+        ]
+      },
+      {
+        "heading": "An evidence gap is not a finding",
+        "paragraphs": [
+          "A gap says a check could not be run for lack of records. It is never explained as a result, and never as a sign that an agency did or did not comply."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  }
+]

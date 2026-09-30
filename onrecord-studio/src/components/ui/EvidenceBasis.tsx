@@ -2,6 +2,7 @@ import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'rea
 import { ShapeGlyph, type GlyphShape } from './shapeGlyph';
 import { cn } from '../../utils/cn';
 import { isLegalClaimKind } from '../../types/findings';
+import { PLAIN_FINDING_TEXT } from '../../content/plainLanguage';
 import type { Finding, FindingCitation, FindingConfidence, FindingKind } from '../../types/findings';
 import type { EntityValidationGrade, RelationshipBasis, RelationshipKind } from '../../types/corpus';
 
@@ -295,6 +296,54 @@ export function EvidenceTrace({
   );
 }
 
+/**
+ * Inline plain-language reading of a finding kind, collapsed by default. The basis sentence comes
+ * from `isLegalClaimKind`, the same source as the chip above it, so this text can neither upgrade
+ * a pattern signal nor soften a counted comparison.
+ */
+export function PlainLanguageDisclosure({ kind, label }: { kind: FindingKind; label: string }) {
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+  const text = PLAIN_FINDING_TEXT[kind];
+  const basis = isLegalClaimKind(kind)
+    ? 'Basis: a counted comparison against a stated rule. It is not a court finding.'
+    : 'Basis: a pattern signal, not a legal claim. It is a reason to look, not a conclusion.';
+  return (
+    <div className="text-[9px]">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={panelId}
+        aria-label={`In plain words: ${label}`}
+        onClick={() => setOpen((current) => !current)}
+        className="focus-ring inline-flex items-center gap-1 rounded-md border border-slate-600 px-1.5 py-1 font-semibold text-slate-200 transition hover:border-cyan-400/60"
+      >
+        <span aria-hidden="true">{open ? '−' : '+'}</span>
+        In plain words
+      </button>
+      {open && (
+        <div id={panelId} role="group" aria-label={`Plain-language explanation of ${label}`} className="mt-1 rounded-lg border border-slate-700 bg-slate-950/80 p-2 text-slate-300">
+          <dl className="flex flex-col gap-1 leading-relaxed">
+            <div>
+              <dt className="font-semibold text-slate-100">What was observed</dt>
+              <dd>{text.observed}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-slate-100">What it does not show</dt>
+              <dd>{text.notShown}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-slate-100">What to do next</dt>
+              <dd>{text.next}</dd>
+            </div>
+          </dl>
+          <p className="mt-1">{basis}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Basis chip, confidence meter, and trace for one finding, as a unit. */
 export function FindingEvidence({
   finding,
@@ -315,6 +364,7 @@ export function FindingEvidence({
         citations={finding.citations}
         onOpenSource={onOpenSource}
       />
+      <PlainLanguageDisclosure kind={finding.kind} label={finding.headline} />
     </div>
   );
 }
