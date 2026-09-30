@@ -9,6 +9,7 @@ const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS financial_mappings (role TEXT P
 pub const ROLES: &[&str] = &[
     "budget",
     "actual",
+    "revenue",
     "encumbrance",
     "contract",
     "amendment",
@@ -49,6 +50,8 @@ pub const FIELDS: &[&str] = &[
     "eligible_program",
     "transfer",
     "funding_duration",
+    "transaction_date",
+    "approval",
 ];
 fn error(e: impl std::fmt::Display) -> AppError {
     AppError::Storage(e.to_string())
@@ -62,7 +65,7 @@ fn literal(value: &str) -> String {
 fn requirements(role: &str) -> Vec<&'static str> {
     match role {
         "budget" => vec!["fy", "fund", "account", "amount", "basis"],
-        "actual" | "encumbrance" => vec!["fy", "fund", "account", "amount"],
+        "actual" | "encumbrance" | "revenue" => vec!["fy", "fund", "account", "amount"],
         "contract" => vec!["fy", "fund", "contract_id", "vendor_id", "amount", "status"],
         "amendment" => vec![
             "fy",
@@ -265,12 +268,17 @@ fn query(mapping: &FinancialMapping, table: &str, scope: &FinancialScope) -> Str
     if official && ["budget", "actual", "encumbrance"].contains(&mapping.role.as_str()) {
         filters.push("account LIKE '5%'".into());
     }
+    // The same exports carry revenue under 4xxxx accounts; a revenue role mapped to one of them
+    // must not net service expenditure into receipts.
+    if official && mapping.role == "revenue" {
+        filters.push("account LIKE '4%'".into());
+    }
     let filter = if filters.is_empty() {
         "TRUE".into()
     } else {
         filters.join(" AND ")
     };
-    if ["budget", "actual", "encumbrance"].contains(&mapping.role.as_str()) {
+    if ["budget", "actual", "revenue", "encumbrance"].contains(&mapping.role.as_str()) {
         let dimensions = FIELDS
             .iter()
             .filter(|f| !matches!(**f, "amount" | "quantity" | "denominator"))
@@ -521,7 +529,7 @@ impl DuckDbRepository {
             // A ledger without a department column cannot honor the department scope; its totals
             // would be whole-fund amounts labelled as the selected department.
             let department_unscoped = scope.department.is_some()
-                && ["budget", "actual", "encumbrance"].contains(&mapping.role.as_str())
+                && ["budget", "actual", "revenue", "encumbrance"].contains(&mapping.role.as_str())
                 && !mapping.columns.contains_key("department");
             if department_unscoped {
                 limitations.push(format!("{}: the source has no mapped department column, so the department scope was not applied. Totals and comparisons requiring department coverage are withheld.",mapping.role));

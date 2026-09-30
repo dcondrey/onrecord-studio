@@ -49,6 +49,7 @@ impl Basis {
 pub enum Measure {
     Budget(Basis),
     Actual,
+    Revenue,
     /// An amount in a budget sentence that names neither budget nor actual spending.
     Unstated,
 }
@@ -58,6 +59,7 @@ impl Measure {
         match self {
             Self::Budget(_) => Some("budget"),
             Self::Actual => Some("actual"),
+            Self::Revenue => Some("revenue"),
             Self::Unstated => None,
         }
     }
@@ -66,6 +68,7 @@ impl Measure {
         match self {
             Self::Budget(basis) => format!("{} budget", basis.stored()),
             Self::Actual => "actual expenditures".to_string(),
+            Self::Revenue => "revenue".to_string(),
             Self::Unstated => "an unstated measure".to_string(),
         }
     }
@@ -435,7 +438,7 @@ fn has_dollar_amount(text: &str) -> bool {
 /// fraction, then an optional magnitude word. A sentence naming two amounts ("grew from $1.0
 /// million to $1.2 million") states a comparison, not one total, so it yields no amount: picking
 /// either figure would bind it to the sentence's fiscal year and contradict a correct document.
-fn scan_money(sentence: &str, hedge: Hedge) -> Option<Money> {
+pub(crate) fn scan_money(sentence: &str, hedge: Hedge) -> Option<Money> {
     let dollar = sentence.find('$')?;
     let rest = &sentence[dollar + 1..];
     let (whole, fraction, consumed) = scan_number(rest)?;
@@ -904,15 +907,20 @@ impl Evaluator {
         let unreconciled =
             |reason, detail: String| Ok(ClaimEvaluation::Unreconciled { reason, detail });
         let (measures, previous_year) = match claim.kind {
-            // Revenue is not a mapped financial role and no mapping declares a revenue-versus-
-            // expenditure distinction, so a balance claim has nothing to compare against.
+            // A balance is revenue against expenditure, so it needs a dataset mapped to each; an
+            // account-number convention is never inferred to split one table into both.
             ClaimKind::BudgetBalance(_) => {
-                return unreconciled(
-                    UnreconciledReason::UnsupportedClaim,
-                    "no mapped role distinguishes revenue from expenditure, so a balance, surplus or deficit cannot be computed from expenditure tables alone".to_string(),
-                )
+                if !(self.has_any_role(&["revenue"]) && self.has_any_role(&["actual"])) {
+                    return unreconciled(
+                        UnreconciledReason::UnsupportedClaim,
+                        "no dataset is mapped to both the revenue and actual roles, so a balance, surplus or deficit cannot be computed".to_string(),
+                    );
+                }
+                (vec![Measure::Revenue, Measure::Actual], None)
             }
-            ClaimKind::WithinBudget(_) => (vec![Measure::Budget(Basis::Adopted), Measure::Actual], None),
+            ClaimKind::WithinBudget(_) => {
+                (vec![Measure::Budget(Basis::Adopted), Measure::Actual], None)
+            }
             ClaimKind::Total { measure, .. } => (vec![measure], None),
             ClaimKind::PercentChange {
                 measure,
@@ -921,7 +929,10 @@ impl Evaluator {
                 ..
             } => {
                 let Some(fiscal_year) = claim.scope.fiscal_year else {
-                    return unreconciled(UnreconciledReason::MissingFiscalYear, "the claim states no fiscal year".to_string());
+                    return unreconciled(
+                        UnreconciledReason::MissingFiscalYear,
+                        "the claim states no fiscal year".to_string(),
+                    );
                 };
                 let previous = match previous_fiscal_year {
                     Some(year) => year,
@@ -929,7 +940,8 @@ impl Evaluator {
                     None => {
                         return unreconciled(
                             UnreconciledReason::MissingFiscalYear,
-                            "a change needs both years: none is stated for the comparison year".to_string(),
+                            "a change needs both years: none is stated for the comparison year"
+                                .to_string(),
                         )
                     }
                 };
@@ -1184,7 +1196,73 @@ impl Evaluator {
                     previous,
                 )
             }
-            ClaimKind::BudgetBalance(_) => unreachable!("returned above"),
+            ClaimKind::BudgetBalance(state) => {
+                let revenue = totals["revenue"];
+                let actual = totals["actual"];
+                let surplus = revenue.saturating_sub(actual);
+                let observed = format!(
+                    "revenue {} against actual expenditures {} ({} of {})",
+                    AssertionValue::Cents(revenue).display(),
+                    AssertionValue::Cents(actual).display(),
+                    if surplus < 0 {
+                        "a deficit"
+                    } else {
+                        "a surplus"
+                    },
+                    AssertionValue::Cents(surplus.saturating_abs()).display()
+                );
+                // Each state names the gap it asserts; a stated amount is held to its own rounding
+                // band, a bare word only to the sign ("balanced" also admits an exactly even year).
+                let (claimed, gap, amount) = match state {
+                    BalanceState::Balanced => (
+                        "a balanced budget: revenue at or above expenditures".to_string(),
+                        surplus,
+                        None,
+                    ),
+                    BalanceState::Surplus(amount) => ("a surplus".to_string(), surplus, amount),
+                    BalanceState::Deficit(amount) => (
+                        "a deficit".to_string(),
+                        actual.saturating_sub(revenue),
+                        amount,
+                    ),
+                };
+                let (claimed, band, outside) = match amount {
+                    Some(amount) => {
+                        let (lower, upper) = money_band(amount);
+                        (
+                            format!(
+                                "{claimed} of {}",
+                                AssertionValue::Cents(amount.cents).display()
+                            ),
+                            describe_band(amount.cents, lower, upper),
+                            gap < lower || gap > upper,
+                        )
+                    }
+                    None => (
+                        claimed,
+                        "the sign of revenue minus expenditures".to_string(),
+                        if matches!(state, BalanceState::Balanced) {
+                            gap < 0
+                        } else {
+                            gap <= 0
+                        },
+                    ),
+                };
+                verdict(
+                    claimed,
+                    observed,
+                    band,
+                    if outside {
+                        match amount {
+                            Some(amount) => gap.saturating_sub(amount.cents),
+                            None => gap,
+                        }
+                    } else {
+                        0
+                    },
+                    revenue,
+                )
+            }
         })
     }
 }
@@ -1578,6 +1656,74 @@ mod tests {
         }
         drop(conn);
         (temp, repo)
+    }
+
+    /// A revenue export mapped explicitly, the way an operator would; the official 4xxxx filter
+    /// keeps the 5001 row out of the revenue total.
+    async fn add_revenue_export(repo: &DuckDbRepository) {
+        let conn = repo.analytics_connection().await.unwrap();
+        conn.execute_batch("CREATE TABLE analysis_fin_revenue(report_fy INTEGER,fund_number VARCHAR,account_number VARCHAR,funds_center_number VARCHAR,dept_name VARCHAR,amount DECIMAL(28,4));
+          INSERT INTO analysis_fin_revenue VALUES (23,'100000','4001','001','Police',200.00),(23,'100000','5001','001','Police',50.00);").unwrap();
+        conn.execute("INSERT INTO analytical_snapshots(snapshot_id,dataset_kind,display_name,table_name,source_uri,local_path,source_sha256,retrieved_at,validation_summary_json,imported_rows) VALUES ('revenue','OPERATING_BUDGET','revenue','analysis_fin_revenue','https://seshat.datasd.org/revenue/revenue_datasd.csv','/fixture',repeat('b',64),'2026-09-26','{}',2)",[]).unwrap();
+        for (ordinal, (name, kind)) in [
+            ("report_fy", "TEXT"),
+            ("fund_number", "TEXT"),
+            ("account_number", "TEXT"),
+            ("funds_center_number", "TEXT"),
+            ("dept_name", "TEXT"),
+            ("amount", "DECIMAL"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            conn.execute("INSERT INTO analytical_columns(snapshot_id,table_name,column_name,logical_type,ordinal) VALUES ('revenue','analysis_fin_revenue',?1,?2,?3)",params![name,kind,ordinal as i64 + 1]).unwrap();
+        }
+        drop(conn);
+        repo.save_financial_mapping(crate::types::FinancialMapping {
+            role: "revenue".to_string(),
+            snapshot_id: "revenue".to_string(),
+            columns: [
+                ("fy", "report_fy"),
+                ("fund", "fund_number"),
+                ("account", "account_number"),
+                ("department", "dept_name"),
+                ("amount", "amount"),
+            ]
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
+            currency: Some("USD".to_string()),
+            agency: None,
+        })
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn balance_claims_evaluate_against_a_mapped_revenue_role() {
+        let (_temp, repo) = repository_with_city_exports().await;
+        add_revenue_export(&repo).await;
+        let mut evaluator = Evaluator::load(&repo).await.unwrap();
+        let first = |text: &str| extract_claims(text).into_iter().next().unwrap();
+        // Revenue 200.00 against actual expenditures 120.03.
+        let balanced = first("The FY 2023 budget was balanced with no deficit in fund 100000.");
+        let evaluation = evaluator
+            .evaluate(&repo, "sandiego", &balanced)
+            .await
+            .unwrap();
+        assert!(
+            matches!(evaluation, ClaimEvaluation::Consistent { ref observed, .. } if observed.contains("a surplus of $79.97")),
+            "{evaluation:?}"
+        );
+        let deficit = first("The FY 2023 deficit in fund 100000 was $500.");
+        let evaluation = evaluator
+            .evaluate(&repo, "sandiego", &deficit)
+            .await
+            .unwrap();
+        assert!(
+            matches!(evaluation, ClaimEvaluation::Mismatch { ref claimed, ref band, .. } if claimed == "a deficit of $500.00" && band == "±$0.50"),
+            "{evaluation:?}"
+        );
     }
 
     #[tokio::test]
