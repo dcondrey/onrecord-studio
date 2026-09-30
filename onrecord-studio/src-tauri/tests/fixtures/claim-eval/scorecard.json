@@ -1,0 +1,158 @@
+{
+  "evalSet": "claim-eval",
+  "totals": [
+    {
+      "expected": "consistent",
+      "passed": 7,
+      "total": 7
+    },
+    {
+      "expected": "mismatch",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "expected": "unreconciled",
+      "passed": 5,
+      "total": 5
+    }
+  ],
+  "cases": [
+    {
+      "id": "library-actual-exact",
+      "text": "The Library Department spent $67.6 million in fiscal year 2023 from fund 100000.",
+      "expected": "consistent",
+      "outcome": "consistent",
+      "observed": "actual expenditures of $67586967.00",
+      "passed": true
+    },
+    {
+      "id": "library-adopted-exact",
+      "text": "The adopted budget of $66.8 million for FY 2023 funded the Library Department in fund 100000.",
+      "expected": "consistent",
+      "outcome": "consistent",
+      "observed": "adopted budget of $66823341.00",
+      "passed": true
+    },
+    {
+      "id": "police-actual-exact",
+      "text": "Police Department actual expenditures of $588.9 million in FY 2023 were charged to fund 100000.",
+      "expected": "consistent",
+      "outcome": "consistent",
+      "observed": "actual expenditures of $588906166.00",
+      "passed": true
+    },
+    {
+      "id": "library-actual-understated",
+      "text": "The Library Department spent $65 million in FY 2023 from fund 100000.",
+      "expected": "mismatch",
+      "outcome": "mismatch",
+      "observed": "actual expenditures of $67586967.00",
+      "passed": true
+    },
+    {
+      "id": "police-adopted-overstated",
+      "text": "The adopted budget of $600 million for FY 2023 funded the Police Department in fund 100000.",
+      "expected": "mismatch",
+      "outcome": "mismatch",
+      "observed": "adopted budget of $584706166.00",
+      "passed": true
+    },
+    {
+      "id": "library-within-budget-false",
+      "text": "Library Department expenditures remained within budget in FY 2023 for fund 100000.",
+      "expected": "mismatch",
+      "outcome": "mismatch",
+      "observed": "adopted budget $66823341.00 against actual expenditures $67586967.00",
+      "passed": true
+    },
+    {
+      "id": "police-over-budget-true",
+      "text": "The Police Department exceeded its budget in FY 2023 in fund 100000.",
+      "expected": "consistent",
+      "outcome": "consistent",
+      "observed": "adopted budget $584706166.00 against actual expenditures $588906166.00",
+      "passed": true
+    },
+    {
+      "id": "library-spending-growth",
+      "text": "Total spending by the Library Department in FY 2023 increased by 10.4% from the prior year.",
+      "expected": "consistent",
+      "outcome": "consistent",
+      "observed": "actual expenditures changed by +10.38% ($61226563.00 to $67586967.00)",
+      "passed": true
+    },
+    {
+      "id": "police-spending-growth-false",
+      "text": "Total spending by the Police Department in FY 2023 increased by 5% from the prior year.",
+      "expected": "mismatch",
+      "outcome": "mismatch",
+      "observed": "actual expenditures changed by -2.53% ($604197963.00 to $588906166.00)",
+      "passed": true
+    },
+    {
+      "id": "police-adopted-decline",
+      "text": "The adopted budget for the Police Department decreased by 1.4% in FY 2023 from the prior year.",
+      "expected": "consistent",
+      "outcome": "consistent",
+      "observed": "adopted budget changed by -1.44% ($593292386.00 to $584706166.00)",
+      "passed": true
+    },
+    {
+      "id": "library-deficit-exact",
+      "text": "Fund 100000 closed FY 2023 with a deficit of $64.4 million for the Library Department.",
+      "expected": "consistent",
+      "outcome": "consistent",
+      "observed": "revenue $3194254.00 against actual expenditures $67586967.00 (a deficit of $64392713.00)",
+      "passed": true
+    },
+    {
+      "id": "police-surplus-false",
+      "text": "The Police Department reported a surplus of $2 million in fund 100000 for FY 2023.",
+      "expected": "mismatch",
+      "outcome": "mismatch",
+      "observed": "revenue $47805183.00 against actual expenditures $588906166.00 (a deficit of $541100983.00)",
+      "passed": true
+    },
+    {
+      "id": "department-absent-from-data",
+      "text": "The Fire-Rescue Department spent $350 million in FY 2023 from fund 100000.",
+      "expected": "unreconciled",
+      "outcome": "unreconciled",
+      "observed": "no department in the data matches 'fire rescue'",
+      "passed": true
+    },
+    {
+      "id": "year-absent-from-data",
+      "text": "The Library Department spent $70 million in FY 2021 from fund 100000.",
+      "expected": "unreconciled",
+      "outcome": "unreconciled",
+      "observed": "the actual rows for FY 2021, fund 100000, department Library are partial, truncated or unparsable",
+      "passed": true
+    },
+    {
+      "id": "proposed-basis-not-exported",
+      "text": "The proposed budget of $70 million for FY 2023 funds the Library Department in fund 100000.",
+      "expected": "unreconciled",
+      "outcome": "unreconciled",
+      "observed": "the budget rows for FY 2023, fund 100000, department Library are partial, truncated or unparsable",
+      "passed": true
+    },
+    {
+      "id": "fund-named-not-numbered",
+      "text": "The adopted budget of $66.8 million for FY 2023 funded the Library Department in the General Fund.",
+      "expected": "unreconciled",
+      "outcome": "unreconciled",
+      "observed": "no fund in the data matches 'general fund'",
+      "passed": true
+    },
+    {
+      "id": "no-fiscal-year",
+      "text": "The Library Department spent $67.6 million from fund 100000.",
+      "expected": "unreconciled",
+      "outcome": "unreconciled",
+      "observed": "the claim states no fiscal year",
+      "passed": true
+    }
+  ]
+}

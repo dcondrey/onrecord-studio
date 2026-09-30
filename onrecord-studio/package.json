@@ -7,6 +7,8 @@
     "dev": "vite",
     "check:ipc": "node scripts/check-ipc-contract.mjs",
     "check:help": "node scripts/check-help-coverage.mjs",
+    "build:methods": "node scripts/build-methods.mjs",
+    "check:methods": "node scripts/build-methods.mjs --check",
     "capture:help-screenshots": "node scripts/capture-help-screenshots.mjs",
     "check:app-store-config": "node scripts/prepare-app-store.mjs --check",
     "check:direct-config": "node scripts/prepare-direct.mjs --check && node scripts/notarize-direct.mjs --check",

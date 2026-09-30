@@ -848,18 +848,26 @@ masking step.
 Small, cross-file items that audits confirmed but left for a later pass; each has a design in
 the audit report it came from.
 
-- Eight components each call `list_findings` on the same `findingsRefreshRequests` bump
-  (ChangeFeed, FindingsInbox, PostIngestBrief, StoryDesk, BriefingWorkspace, SubjectDossier,
-  CrossCorpusExplorer, SelfReview). A store-level cache keyed by that counter, plus a
-  `count_findings` command for ChangeFeed, would cut the duplicate reads.
-- StoryDesk's "Add to briefing" lists up to 200 findings to find one by id; a `get_finding`
-  command (or an `id` field on `FindingsFilter`) replaces that.
+- `useFindings` (src/hooks) now carries the shared loader; FindingsInbox, PostIngestBrief,
+  StoryDesk, BriefingWorkspace, SubjectDossier and SelfReview still load on their own. Move them
+  over one at a time (each has bespoke filtering or dismissal state).
 - `import_city_export` in `tests/detector_benchmark.rs` and `repository_with_city_exports` in
   `claim_validation.rs` register snapshots the same way; one shared test helper belongs in the lib
-  behind `cfg(test)` or a `test-support` feature.
-- `ArtifactDrafts` puts `aria-label` on a role-less `div`; give it `role="region"` or drop the label.
+  behind a `test-support` feature (a self dev-dependency enabling it).
+- Claim eval set covers the evaluator only; a second tier that stores a memo document and runs
+  the `claim_data_mismatch` sweep end to end is still open.
+- Periodic portal re-crawl: build it on the peer session's watchlist storage once that lands; do
+  not add a second diff store.
+- Signed, importable case bundle: casework portable packets already sign and import; what is
+  missing is carrying finding dismissals and the briefing project inside the packet.
 - No deterministic regression tests for the queue counter/refill fixes (needs repository fault
   injection).
+
+Closed on 2026-09-30 (second batch): `count_findings` and `FindingsFilter.id`; Story desk and
+dossier draft records requests (10da52e); cross-agency comparison view (604a610); response-time
+claim detector (§12 of analysis_methods.md); redaction-consistency detector and the
+`REDACTION_INCONSISTENT_ACROSS_RELEASES` kind (§13); methods page `docs/METHODS.md` built by
+`scripts/build-methods.mjs` from the eval scorecards.
 
 Closed on 2026-09-30 (commits 342735f..43da2f5): ChangeFeed watermark, lens loading status,
 `.msg` withheld-attachment record, dismissal race, crawled-page content type, CKAN/Socrata
