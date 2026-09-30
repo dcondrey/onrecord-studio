@@ -42,6 +42,10 @@ export default function FindingsInbox() {
   // still carries the row (the backend has not committed the dismissal yet), and must not re-show
   // a finding the user has already removed.
   const pendingDismissals = useRef(new Set<string>());
+  // Ids whose dismissal committed while a list load was in flight. That load was answered from
+  // the pre-dismissal state, so its rows are filtered too; a load begun after the commit clears
+  // the id, since the backend answered it after the row was gone.
+  const settledDismissals = useRef(new Set<string>());
   const lensEnabled = useProfileLensStore((state) => state.lensEnabled);
   const setLensEnabled = useProfileLensStore((state) => state.setLensEnabled);
   const setSelfReviewOpen = useProfileLensStore((state) => state.setSelfReviewOpen);
@@ -56,12 +60,18 @@ export default function FindingsInbox() {
 
   const loadFindings = useCallback(() => {
     const request = listGate.begin();
+    const settledBeforeLoad = [...settledDismissals.current];
     setIsLoading(true);
     setLoadError(null);
     invokeCommand('list_findings', { filter: null, limit: 50 })
       .then((rows) => {
         if (!listGate.isCurrent(request)) return;
-        setFindings(rows.filter((row) => !pendingDismissals.current.has(row.id)));
+        setFindings(
+          rows.filter(
+            (row) => !pendingDismissals.current.has(row.id) && !settledDismissals.current.has(row.id),
+          ),
+        );
+        for (const id of settledBeforeLoad) settledDismissals.current.delete(id);
         // The user is looking at the inbox. Bump the watermark so ChangeFeed knows the difference
         // between findings that arrived while they weren't looking and findings they've already
         // been shown. Only on a successful load — a failed fetch is not "seen."
@@ -109,6 +119,7 @@ export default function FindingsInbox() {
       setFindings((rows) => rows.filter((row) => row.id !== id));
       try {
         await invokeCommand('dismiss_finding', { id });
+        settledDismissals.current.add(id);
       } catch (reason) {
         // Roll back by re-inserting this one row into whatever list is current. Restoring the
         // snapshot captured at click time would resurrect siblings dismissed since, and would

@@ -304,6 +304,32 @@ describe('FindingsInbox', () => {
     expect(screen.getByRole('alert').textContent).toMatch(/dismiss unavailable/);
   });
 
+  it('does not re-show a row whose dismissal committed while a list load was in flight', async () => {
+    bridge.listRows = [sampleFinding({ id: 'gone', headline: 'Dismissed mid-load' })];
+    await act(async () => {
+      render(<FindingsInbox />);
+    });
+    await waitFor(() => {
+      expect(screen.getByText('Dismissed mid-load')).toBeTruthy();
+    });
+    // A reload starts (an ingest finished) and is answered from the pre-dismissal state.
+    const staleList = deferred<unknown[]>();
+    bridge.override.list_findings = () => staleList.promise;
+    await act(async () => {
+      useAppStore.getState().requestFindingsRefresh();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /dismiss finding: dismissed mid-load/i }));
+    });
+    await waitFor(() => {
+      expect(screen.queryByText('Dismissed mid-load')).toBeNull();
+    });
+    await act(async () => {
+      staleList.resolve([sampleFinding({ id: 'gone', headline: 'Dismissed mid-load' })]);
+    });
+    expect(screen.queryByText('Dismissed mid-load')).toBeNull();
+  });
+
   it('does not overwrite a newer list with the pre-dismiss snapshot when a rejected dismissal rolls back', async () => {
     bridge.listRows = [
       sampleFinding({ id: 'kept', headline: 'Kept across sweeps' }),
