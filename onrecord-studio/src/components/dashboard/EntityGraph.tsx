@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { invokeCommand } from '../../ipc';
+import { useEffect, useRef, useState } from 'react';
+import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type {
   CorpusEntityEdge,
@@ -10,12 +10,31 @@ import type {
   RelationshipKind,
 } from '../../types';
 import { cn } from '../../utils/cn';
+import { useProfileLensStore } from '../../store/useProfileLensStore';
+import { useAffiliationDisclosure } from '../account/useProfile';
 import AnalyticsUnavailable from '../charts/AnalyticsUnavailable';
+import { ShapeGlyph } from '../ui/shapeGlyph';
+import {
+  ConfidenceMeter,
+  EdgeBasisChip,
+  EvidenceTrace,
+  ValidationGradeChip,
+  edgeExplanation,
+  edgeVisual,
+  gradeGlyphShape,
+  gradeLabel,
+} from '../ui/EvidenceBasis';
 
 const VIEWPORT = 460;
 const CENTRE = VIEWPORT / 2;
 const INNER_RADIUS = 74;
 const OUTER_RADIUS = 196;
+/** Side margin inside the viewBox so a label beside an outer node is never cut at the edge. */
+const LABEL_ROOM = 120;
+/** Relation markers sit past the centre label instead of on top of it. */
+const LABEL_POSITION = 0.78;
+/** A backing outline keeps a label legible where it crosses an arc or another label. */
+const HALO = { stroke: 'var(--chart-center)', strokeWidth: 3, paintOrder: 'stroke', strokeLinejoin: 'round' } as const;
 
 const kindLabels: Record<CorpusEntityKind, string> = {
   STATUTE: 'Authority',
@@ -45,23 +64,6 @@ const kindColors: Record<CorpusEntityKind, string> = {
   ROLE: 'var(--viz-indigo)',
   POSITION: 'var(--viz-purple)',
   DOCUMENT_CLASS: 'var(--viz-amber)',
-};
-
-/**
- * Stroke pattern per relationship kind. Drawn onto every incident arc so a `CoOccurrence`
- * derivation and a `SignedBy` claim from the text never render alike.
- *  - CO_OCCURRENCE stays dashed (this app derived it and can re-derive it).
- *  - Typed edges use distinct dash rhythms; a solid line is reserved for OBSERVED-basis rows.
- */
-const kindStrokePattern: Record<RelationshipKind, string | undefined> = {
-  CO_OCCURRENCE: '4 4',
-  SIGNED_BY: '6 2 2 2',
-  APPROVED: '10 3',
-  CITES: '2 3',
-  PROMISES: '8 4 2 4',
-  DELIVERED: '12 3 2 3',
-  SUPERSEDES: '1 3',
-  AMENDS: '6 3 1 3',
 };
 
 const kindDescriptions: Record<RelationshipKind, string> = {
@@ -116,17 +118,44 @@ function truncateLabel(value: string) {
   return value.length > 28 ? `${value.slice(0, 27)}…` : value;
 }
 
+/**
+ * A neighbourhood answer records the entity it was requested for. The render derives everything
+ * from `answer.entityId === selectedId`, so a selection change with no request yet issued, or one
+ * whose request is still in flight, reads as pending rather than as the previous entity's verdict.
+ * `neighborhood: null` is the index saying the entity is gone; a pending request says nothing.
+ */
+interface NeighborhoodAnswer {
+  entityId: string;
+  neighborhood: CorpusEntityNeighborhood | null;
+}
+
+interface PathRequest {
+  fromEntityId: string;
+  toEntityId: string;
+}
+
+/** Same discipline for a traced path: the origin is the centre at submit time, and the result is only a statement about that pair. */
+type PathAnswer =
+  | { request: PathRequest; kind: 'pending' }
+  | { request: PathRequest; kind: 'found'; path: EntityPath }
+  | { request: PathRequest; kind: 'none' }
+  | { request: PathRequest; kind: 'failed'; message: string };
+
 export default function EntityGraph() {
   const gate = useLatestRequestGate();
+  const lensEnabled = useProfileLensStore((state) => state.lensEnabled);
+  const { disclosure } = useAffiliationDisclosure();
+  const isOwn = (entityId: string) => disclosure?.ownEntityIds.includes(entityId) ?? false;
+  // Dimming applies only when the lens is on and at least one node is confirmed as yours.
+  const dimOthers = lensEnabled && (disclosure?.ownEntityIds.length ?? 0) > 0;
   const pathGate = useLatestRequestGate();
+  const drawingRef = useRef<HTMLDivElement>(null);
   const [seeds, setSeeds] = useState<CorpusEntityNode[]>([]);
-  const [neighborhood, setNeighborhood] = useState<CorpusEntityNeighborhood | null>(null);
+  const [answer, setAnswer] = useState<NeighborhoodAnswer | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
-  const [missing, setMissing] = useState(false);
   const [pathTargetId, setPathTargetId] = useState('');
-  const [pathResult, setPathResult] = useState<EntityPath | null | undefined>(undefined);
-  const [pathError, setPathError] = useState<string | null>(null);
+  const [pathAnswer, setPathAnswer] = useState<PathAnswer | null>(null);
 
   useEffect(() => {
     const token = gate.begin();
@@ -148,17 +177,30 @@ export default function EntityGraph() {
     // resolves after the investigator has clicked through to another node would otherwise be
     // published as that node's relationships, which is a false statement about the corpus.
     const token = gate.begin();
-    invokeCommand('get_corpus_entity_neighborhood', { entityId: selectedId, limit: 18 })
+    const entityId = selectedId;
+    invokeCommand('get_corpus_entity_neighborhood', { entityId, limit: 18 })
       .then((result) => {
         if (!gate.isCurrent(token)) return;
-        setMissing(result === null);
-        setNeighborhood(result);
+        setAnswer({ entityId, neighborhood: result });
       })
       .catch(() => {
         if (!gate.isCurrent(token)) return;
         setFailed(true);
       });
   }, [selectedId, gate]);
+
+  // Only an answer for the entity now selected is a statement about it. Anything else is pending.
+  const current = answer !== null && answer.entityId === selectedId ? answer : null;
+  const neighborhood = current?.neighborhood ?? null;
+  const missing = current !== null && current.neighborhood === null;
+  const pathView = pathAnswer !== null && pathAnswer.request.fromEntityId === selectedId ? pathAnswer : null;
+
+  // On a narrow screen the drawing scrolls sideways; start with the centre entity in view.
+  const centredOn = neighborhood?.center.entityId ?? null;
+  useEffect(() => {
+    const el = drawingRef.current;
+    if (el) el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2;
+  }, [centredOn]);
 
   if (failed) {
     return (
@@ -184,8 +226,9 @@ export default function EntityGraph() {
         <div>
           <div className="app-eyebrow">Entity graph</div>
           <div className="mt-1 text-[10px] text-slate-400">
-            Every arc here is co-occurrence in one segment: a derivation this app performed and can
-            re-derive, not a relationship the documents asserted. Distance reads shared documents.
+            Dotted arcs with a hollow marker are co-occurrence: proximity this app derived, not a
+            relationship the documents stated. Labelled arcs with a solid diamond are relations read
+            from the text. Distance reads shared documents.
           </div>
         </div>
         <div className="rounded border border-slate-800 bg-slate-900/60 px-2 py-1 font-mono text-[9px] text-slate-400">
@@ -199,8 +242,11 @@ export default function EntityGraph() {
             key={seed.entityId}
             type="button"
             onClick={() => setSelectedId(seed.entityId)}
+            data-own-organization={isOwn(seed.entityId) ? 'true' : undefined}
             className={cn(
-              'rounded border px-2 py-1 font-mono text-[9px] transition-colors',
+              'focus-ring rounded border px-2 py-1 font-mono text-[9px] transition-colors',
+              isOwn(seed.entityId) && 'ring-1 ring-cyan-400/60',
+              dimOthers && !isOwn(seed.entityId) && 'opacity-40',
               seed.entityId === selectedId
                 ? 'border-slate-500 bg-slate-800 text-slate-100'
                 : 'border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-600',
@@ -222,46 +268,92 @@ export default function EntityGraph() {
             </div>
           </div>
         </div>
-      ) : missing || !centre ? (
+      ) : missing ? (
         <div className="mt-6 grid flex-1 place-items-center text-center">
           <div className="max-w-xs text-[9px] leading-relaxed text-slate-400">
             That entity is no longer in the index. A corpus rebuild discards every entity
             identifier, so this is a stale selection rather than an isolated node.
           </div>
         </div>
+      ) : !centre ? (
+        <div className="mt-6 grid flex-1 place-items-center text-center" aria-busy="true">
+          <div className="max-w-xs text-[9px] leading-relaxed text-slate-400">
+            Reading the neighbourhood from the corpus index. Nothing is known about this entity's
+            relationships until it answers.
+          </div>
+        </div>
       ) : (
         <>
+          <div
+            ref={drawingRef}
+            className="focus-ring mt-3 overflow-x-auto"
+            tabIndex={0}
+            role="region"
+            aria-label="Entity graph drawing; scrolls sideways on narrow screens"
+          >
           <svg
-            viewBox={`0 0 ${VIEWPORT} ${VIEWPORT}`}
-            className="mt-3 h-[430px] w-full"
+            viewBox={`${-LABEL_ROOM} 0 ${VIEWPORT + LABEL_ROOM * 2} ${VIEWPORT}`}
+            className="h-[430px] w-full min-w-[640px]"
             role="img"
             aria-label={`Entities co-occurring with ${centre.displayValue}`}
           >
-            {placed.map(({ edge, x, y }) => (
-              <line
-                key={`edge-${edge.neighbor.entityId}`}
-                x1={CENTRE}
-                y1={CENTRE}
-                x2={x}
-                y2={y}
-                stroke="var(--chart-grid)"
-                strokeWidth={Math.min(3.5, 0.8 + edge.sharedDocumentCount * 0.35)}
-                // Stroke pattern is not decoration: it carries the relationship kind. A
-                // co-occurrence (this app's derivation) must not draw the same as a signed-by
-                // (a claim the text made). An OBSERVED-basis row overrides to solid — an edge the
-                // documents themselves recorded, not one this app derived.
-                strokeDasharray={
-                  edge.basis === 'OBSERVED' ? undefined : kindStrokePattern[edge.kind]
-                }
-                strokeOpacity={0.55}
-              />
-            ))}
+            {placed.map(({ edge, x, y }) => {
+              const visual = edgeVisual(edge.kind, edge.basis);
+              const mx = CENTRE + (x - CENTRE) * LABEL_POSITION;
+              const my = CENTRE + (y - CENTRE) * LABEL_POSITION;
+              return (
+                <g key={`edge-${edge.neighbor.entityId}`} data-edge-family={visual.family}>
+                  <line
+                    x1={CENTRE}
+                    y1={CENTRE}
+                    x2={x}
+                    y2={y}
+                    stroke="var(--chart-grid)"
+                    strokeWidth={Math.min(3.5, 0.8 + edge.sharedDocumentCount * 0.35)}
+                    strokeDasharray={visual.dash}
+                    strokeOpacity={visual.opacity}
+                  />
+                  <g className="text-slate-200">
+                    <ShapeGlyph
+                      shape={visual.markerShape}
+                      cx={mx}
+                      cy={my}
+                      radius={3.6}
+                      fill={visual.family === 'typed' ? 'currentColor' : 'var(--chart-center)'}
+                      stroke="currentColor"
+                      strokeWidth={1.2}
+                    />
+                  </g>
+                  {visual.family === 'typed' && (
+                    <text x={mx + 6} y={my - 4} className="fill-slate-200 text-[8px] font-semibold" {...HALO}>
+                      {visual.label}
+                    </text>
+                  )}
+                </g>
+              );
+            })}
             {placed.map(({ edge, x, y, anchor }) => (
               <g
                 key={`node-${edge.neighbor.entityId}`}
                 onClick={() => setSelectedId(edge.neighbor.entityId)}
-                className="cursor-pointer"
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    setSelectedId(edge.neighbor.entityId);
+                  }
+                }}
+                tabIndex={0}
+                role="button"
+                aria-label={`${edge.neighbor.displayValue}: ${kindLabels[edge.neighbor.kind]}, ${gradeLabel(edge.neighbor.validationGrade)}, ${edgeVisual(edge.kind, edge.basis).label}. Select to centre the graph on it.`}
+                className={cn(
+                  'cursor-pointer focus:outline-none focus-visible:[&>circle:first-of-type]:stroke-white',
+                  dimOthers && !isOwn(edge.neighbor.entityId) && 'opacity-40',
+                )}
+                data-own-organization={isOwn(edge.neighbor.entityId) ? 'true' : undefined}
               >
+                {isOwn(edge.neighbor.entityId) && (
+                  <circle cx={x} cy={y} r={nodeRadius(edge.neighbor) + 4} fill="none" stroke="rgb(34 211 238)" strokeWidth={1.5} />
+                )}
                 <circle
                   cx={x}
                   cy={y}
@@ -274,11 +366,23 @@ export default function EntityGraph() {
                   strokeDasharray={edge.neighbor.validationGrade === 'PATTERN_ONLY' ? '3 3' : undefined}
                   strokeWidth={1.4}
                 />
+                <g className="text-slate-100">
+                  <ShapeGlyph
+                    shape={gradeGlyphShape(edge.neighbor.validationGrade)}
+                    cx={x + nodeRadius(edge.neighbor) * 0.75}
+                    cy={y - nodeRadius(edge.neighbor) * 0.75}
+                    radius={4}
+                    fill={edge.neighbor.validationGrade === 'PATTERN_ONLY' ? 'var(--chart-center)' : 'currentColor'}
+                    stroke="currentColor"
+                    strokeWidth={1.2}
+                  />
+                </g>
                 <text
                   x={anchor === 'end' ? x - nodeRadius(edge.neighbor) - 5 : x + nodeRadius(edge.neighbor) + 5}
                   y={y + 3}
                   textAnchor={anchor}
                   className="fill-slate-300 text-[9px]"
+                  {...HALO}
                 >
                   {truncateLabel(edge.neighbor.displayValue)}
                 </text>
@@ -290,26 +394,47 @@ export default function EntityGraph() {
               r={nodeRadius(centre) + 4}
               fill="var(--chart-center)"
               stroke={kindColors[centre.kind]}
-              strokeWidth={2}
+              strokeWidth={isOwn(centre.entityId) ? 4 : 2}
+              data-own-organization={isOwn(centre.entityId) ? 'true' : undefined}
             />
-            <text x={CENTRE} y={CENTRE + 4} textAnchor="middle" className="fill-slate-100 text-[10px] font-semibold">
+            <text x={CENTRE} y={CENTRE + 4} textAnchor="middle" className="fill-slate-100 text-[10px] font-semibold" {...HALO}>
               {truncateLabel(centre.displayValue)}
             </text>
           </svg>
+          </div>
+
+          <ul className="mt-2 flex flex-col gap-1.5" aria-label="Relationships and their evidence basis">
+            {placed.map(({ edge }) => (
+              <li key={`basis-${edge.neighbor.entityId}`} className="rounded-lg border border-slate-800 p-2">
+                <div className="flex flex-wrap items-center gap-2 text-[10px]">
+                  <span className="font-semibold text-slate-100">{edge.neighbor.displayValue}</span>
+                  <EdgeBasisChip kind={edge.kind} basis={edge.basis} />
+                  <ValidationGradeChip grade={edge.neighbor.validationGrade} />
+                  <ConfidenceMeter confidence={{ kind: 'MEASURED', basisPoints: edge.confidenceBasisPoints }} />
+                </div>
+                <div className="mt-1">
+                  <EvidenceTrace
+                    label={`${centre.displayValue} and ${edge.neighbor.displayValue}`}
+                    explanation={edgeExplanation(edge.kind, edge.basis, edge.sharedDocumentCount)}
+                    citations={[]}
+                    emptyNote="The index stores document counts for this link, not source passages. Search the shared documents in the evidence view to read the text."
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
 
           <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-slate-800 pt-2 text-[9px] text-slate-400">
             <span>
-              {kindLabels[centre.kind]} · {centre.documentCount} documents ·{' '}
-              {centre.validationGrade === 'PATTERN_ONLY'
-                ? 'pattern only, a lead'
-                : centre.validationGrade.toLowerCase().replace(/_/g, ' ')}
+              {kindLabels[centre.kind]} · {centre.documentCount} documents
             </span>
+            <ValidationGradeChip grade={centre.validationGrade} />
             <span className="font-mono">
               {edgeCount} neighbours
               {edgesTruncated ? ' (list cut at the limit)' : ''}
             </span>
             <span className="ml-auto">
-              Stroke rhythm carries edge kind. Dashed outline: unverified. Solid: observed.
+              Node badge shape carries validation grade; hollow badge with dashed outline is a lead.
             </span>
           </div>
 
@@ -317,22 +442,19 @@ export default function EntityGraph() {
             className="mt-2 flex flex-wrap items-center gap-2 border-t border-slate-800 pt-2 text-[9px]"
             onSubmit={(event) => {
               event.preventDefault();
-              if (!selectedId || !pathTargetId.trim()) return;
+              const toEntityId = pathTargetId.trim();
+              if (!selectedId || !toEntityId) return;
+              const request: PathRequest = { fromEntityId: selectedId, toEntityId };
               const token = pathGate.begin();
-              setPathError(null);
-              setPathResult(undefined);
-              invokeCommand('find_entity_paths', {
-                fromEntityId: selectedId,
-                toEntityId: pathTargetId.trim(),
-                maxHops: 4,
-              })
+              setPathAnswer({ request, kind: 'pending' });
+              invokeCommand('find_entity_paths', { ...request, maxHops: 4 })
                 .then((result) => {
                   if (!pathGate.isCurrent(token)) return;
-                  setPathResult(result);
+                  setPathAnswer(result ? { request, kind: 'found', path: result } : { request, kind: 'none' });
                 })
                 .catch((reason: unknown) => {
                   if (!pathGate.isCurrent(token)) return;
-                  setPathError(String(reason));
+                  setPathAnswer({ request, kind: 'failed', message: formatNativeError(reason) });
                 });
             }}
           >
@@ -344,29 +466,37 @@ export default function EntityGraph() {
               type="text"
               value={pathTargetId}
               onChange={(event) => setPathTargetId(event.target.value)}
-              className="min-w-[220px] flex-1 rounded border border-slate-800 bg-slate-900/60 px-2 py-1 font-mono text-[9px] text-slate-100"
+              className="focus-ring min-w-[220px] flex-1 rounded border border-slate-800 bg-slate-900/60 px-2 py-1 font-mono text-[9px] text-slate-100"
               placeholder="paste the neighbour id from another view"
             />
             <button
               type="submit"
-              className="rounded border border-slate-700 bg-slate-800/80 px-2 py-1 font-mono text-[9px] text-slate-200 hover:border-slate-500"
+              className="focus-ring rounded border border-slate-700 bg-slate-800/80 px-2 py-1 font-mono text-[9px] text-slate-200 hover:border-slate-500"
             >
               Trace
             </button>
-            {pathError && <span className="text-rose-400">{pathError}</span>}
-            {pathResult === null && (
-              <span className="text-slate-400">
-                No path within 4 hops. The two entities are not connected in this corpus.
+            {pathView?.kind === 'pending' && (
+              <span className="text-slate-400" aria-busy="true">
+                Tracing from {centre.displayValue} to {pathView.request.toEntityId}.
               </span>
             )}
-            {pathResult && (
+            {pathView?.kind === 'failed' && <span className="text-rose-400">{pathView.message}</span>}
+            {pathView?.kind === 'none' && (
+              // The index answers `null` both when an id is not in it and when no path exists, so
+              // this cannot be stated as "not connected" alone.
+              <span className="text-slate-400">
+                No path within 4 hops from {centre.displayValue} to {pathView.request.toEntityId}: either
+                that id is not in the index, or the two entities are not connected in this corpus.
+              </span>
+            )}
+            {pathView?.kind === 'found' && (
               <span className="w-full font-mono text-slate-300">
-                {pathResult.hops} hops{' '}
-                {pathResult.weakestConfidenceBasisPoints != null
-                  ? `· weakest edge ${(pathResult.weakestConfidenceBasisPoints / 100).toFixed(1)}%`
+                {pathView.path.hops} hops{' '}
+                {pathView.path.weakestConfidenceBasisPoints != null
+                  ? `· weakest edge ${(pathView.path.weakestConfidenceBasisPoints / 100).toFixed(1)}%`
                   : ''}{' '}
                 ·{' '}
-                {pathResult.steps
+                {pathView.path.steps
                   .map((step, index) =>
                     index === 0
                       ? step.neighbor.displayValue
