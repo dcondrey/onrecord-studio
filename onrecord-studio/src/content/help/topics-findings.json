@@ -1117,5 +1117,99 @@
       "findings-inbox",
       "finding-claim-contradicts-data"
     ]
+  },
+  {
+    "id": "finding-encampment-notice-shortfall",
+    "title": "Encampment cleanup came sooner than the required notice",
+    "group": "Finding kinds",
+    "summary": "A counted comparison: an encampment notice records a posting date and a cleanup date fewer calendar days apart than the minimum notice period the agency's own policy, or a stored authority for the same jurisdiction, states.",
+    "keywords": [
+      "encampment notice shortfall",
+      "finding",
+      "kind",
+      "encampment",
+      "sweep",
+      "abatement",
+      "cleanup",
+      "notice",
+      "posting",
+      "homeless",
+      "counted",
+      "legal claim"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "A released document about an encampment that states when the notice was posted, or issued when no posting date is given, and when the cleanup was set, counted in calendar days against a minimum notice period. The minimum comes from a policy of the same agency in force on the posting date, or from an authority already stored in the legal library whose own text is about encampment notice and whose jurisdiction matches the portal's. The detector never supplies a minimum of its own."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "When the notice was physically posted or the cleanup actually happened beyond what the documents state. Periods stated in hours or business days are not compared, and a missing date is reported as not recorded, never as zero. When the dates conflict, the earliest posting and the latest cleanup are used, so a finding survives the most generous reading."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Legal claim: counted violation. Confidence is full only when the posting date, the cleanup date and the rule's effective date were all stated, and is lower for each that was not."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "ENCAMPMENT_NOTICE_SHORTFALL"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-encampment-notice-stated-shortfall",
+    "title": "Encampment notice states a shorter period than required",
+    "group": "Finding kinds",
+    "summary": "An encampment notice that states a calendar-day notice period shorter than the minimum the agency's own policy, or a stored authority for the same jurisdiction, states, when the notice does not record both a posting and a cleanup date.",
+    "keywords": [
+      "encampment notice stated shortfall",
+      "finding",
+      "kind",
+      "encampment",
+      "sweep",
+      "abatement",
+      "notice period",
+      "homeless"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "A notice whose own words give a shorter period, such as two days to vacate, than a minimum stated by the agency's policy or a stored authority. It compares one statement with another."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "How much notice was actually given. The notice does not record both dates, so the period actually given is not recorded and nothing is counted. Periods stated in hours or business days are not compared."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is measured and lower when the rule's effective date or the notice's own date is not stated."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "ENCAMPMENT_NOTICE_STATED_SHORTFALL"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
   }
 ]

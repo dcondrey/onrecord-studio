@@ -356,6 +356,33 @@ static TEMPLATES: LazyLock<Vec<ArtifactTemplate>> = LazyLock::new(|| {
                 [YOUR NAME]",
             cited_authorities: &BOILERPLATE_FOLLOWUP_AUTHORITIES,
         },
+        ArtifactTemplate {
+            id: "cpra_followup_encampment_notice_v1",
+            kind: ArtifactKind::FollowupRequest,
+            jurisdiction: "US-CA",
+            applicable_finding_kinds: &[
+                FindingKind::EncampmentNoticeShortfall,
+                FindingKind::EncampmentNoticeStatedShortfall,
+            ],
+            subject: "Follow-up request: posting and cleanup records for an encampment notice",
+            body: "Date: {TODAY}\n\
+                To: {AGENCY_LABEL}\n\
+                Re: Follow-up to {REQUEST_LABEL}\n\n\
+                Under the California Public Records Act, I am writing about a released encampment \
+                notice and the minimum notice period that applies to it:\n\n\
+                {FINDING_HEADLINE}\n\n\
+                {FINDING_EXPLANATION}\n\n\
+                The statements, with their locations:\n\
+                {EVIDENCE_BULLETS}\n\n\
+                Under {AUTHORITY_CITATIONS}, I am requesting the records that show when this \
+                notice was posted at the site and when the cleanup took place: posting logs or \
+                photographs, the cleanup or abatement schedule, work orders, and any record of a \
+                rescheduled date. I am also requesting the notice procedure in force on the \
+                posting date. This request only asks for the records.\n\n\
+                Sincerely,\n\
+                [YOUR NAME]",
+            cited_authorities: &GENERIC_CPRA_FOLLOWUP_AUTHORITIES,
+        },
         // --- Generic CPRA fallback follow-up: applies to any finding kind not caught above. ---
         ArtifactTemplate {
             id: "cpra_followup_generic_v1",

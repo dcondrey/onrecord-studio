@@ -218,6 +218,13 @@ pub enum FindingKind {
     /// A fund's imported actual spending is at least the threshold share above its adopted amount
     /// for the year. Adopted is not the revised authority, so this is not an appropriation test.
     FundActualAboveAdopted,
+    /// An encampment notice whose recorded posting (or notice) date and recorded cleanup date are
+    /// fewer calendar days apart than the minimum the agency's own policy, or a stored notice
+    /// authority of the same jurisdiction, states. A counted comparison of stated dates.
+    EncampmentNoticeShortfall,
+    /// An encampment notice that states a calendar-day notice period shorter than that minimum,
+    /// without both dates recorded. One statement against another; a pattern signal.
+    EncampmentNoticeStatedShortfall,
 }
 
 impl FindingKind {
@@ -260,6 +267,8 @@ impl FindingKind {
             Self::DepartmentSpendingYearOverYear => "DEPARTMENT_SPENDING_YEAR_OVER_YEAR",
             Self::OvertimeAboveAdoptedLine => "OVERTIME_ABOVE_ADOPTED_LINE",
             Self::FundActualAboveAdopted => "FUND_ACTUAL_ABOVE_ADOPTED",
+            Self::EncampmentNoticeShortfall => "ENCAMPMENT_NOTICE_SHORTFALL",
+            Self::EncampmentNoticeStatedShortfall => "ENCAMPMENT_NOTICE_STATED_SHORTFALL",
         }
     }
 
@@ -302,6 +311,8 @@ impl FindingKind {
             Self::DepartmentSpendingYearOverYear,
             Self::OvertimeAboveAdoptedLine,
             Self::FundActualAboveAdopted,
+            Self::EncampmentNoticeShortfall,
+            Self::EncampmentNoticeStatedShortfall,
         ]
         .into_iter()
         .find(|candidate| candidate.as_str() == value)
@@ -393,6 +404,10 @@ impl FindingKind {
             Self::DepartmentSpendingYearOverYear => false,
             Self::OvertimeAboveAdoptedLine => false,
             Self::FundActualAboveAdopted => false,
+            // Two recorded dates counted against a stated minimum notice period.
+            Self::EncampmentNoticeShortfall => true,
+            // A stated period against a stated minimum, with the period actually given unrecorded.
+            Self::EncampmentNoticeStatedShortfall => false,
         }
     }
 }

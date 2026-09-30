@@ -24,6 +24,7 @@ pub mod cross_corpus_shared_language;
 pub mod cross_corpus_temporal_shift;
 pub mod differential_treatment;
 pub mod email_thread_gap;
+pub mod encampment_notice;
 pub mod evasion_late_arriving_records;
 pub mod evasion_paraphrased_denials;
 pub mod evasion_redaction_at_limit;
@@ -148,6 +149,7 @@ pub async fn refresh_all_findings(
     run_detector!(repository, summary, run_started, spending_cases);
     run_detector!(repository, summary, run_started, practice_departure);
     run_detector!(repository, summary, run_started, budget_line_comparison);
+    run_detector!(repository, summary, run_started, encampment_notice);
     // Last: correlates the settled output of every detector above.
     run_detector!(repository, summary, run_started, correlated_findings);
 

@@ -1641,12 +1641,12 @@ const MONTH_NAMES: [(&str, u32); 12] = [
 ];
 
 /// A date recognised in the text, together with what the parse had to assume to read it.
-struct MatchedDate {
+pub(crate) struct MatchedDate {
     /// Length of the surface form. Every form recognised here is ASCII, so this is both the byte
     /// length and the character length, which is what lets the scan advance both counters by one
     /// value.
-    length: usize,
-    date: chrono::NaiveDate,
+    pub(crate) length: usize,
+    pub(crate) date: chrono::NaiveDate,
     confidence_basis_points: u16,
 }
 
@@ -1712,7 +1712,7 @@ fn extract_dates(
     }
 }
 
-fn match_date(rest: &str) -> Option<MatchedDate> {
+pub(crate) fn match_date(rest: &str) -> Option<MatchedDate> {
     match_iso_date(rest)
         .or_else(|| match_month_first_date(rest))
         .or_else(|| match_day_first_date(rest))
