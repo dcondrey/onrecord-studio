@@ -137,7 +137,16 @@ pub enum TopicFindingBasis {
 pub fn finding_basis(kind: FindingKind) -> TopicFindingBasis {
     use FindingKind as K;
     match kind {
-        K::PolicyViolationDetected => TopicFindingBasis::Counted,
+        K::PolicyViolationDetected
+        | K::PracticeDepartureCounted
+        | K::ContractCeilingExceeded
+        | K::PaymentOutsideContractTerm
+        | K::AppropriationExceeded
+        | K::RestrictedFundOffProgram
+        | K::ApprovalThresholdExceeded
+        | K::SplitPurchaseProhibitedByPolicy => TopicFindingBasis::Counted,
+        // The document states departures from its own rule without a count.
+        K::PracticeDepartureStated => TopicFindingBasis::Stated,
         K::HeldBackResponse
         | K::BoilerplateDenial
         | K::JustInTimeCompliance
@@ -158,7 +167,11 @@ pub fn finding_basis(kind: FindingKind) -> TopicFindingBasis {
         | K::CrossCorpusTemporalShift
         | K::CrossCorpusOrphanTopic
         | K::CrossCorpusReusedDenialGrounds
-        | K::ClaimContradictsData => TopicFindingBasis::Pattern,
+        | K::ClaimContradictsData
+        | K::CorrelatedFindings
+        | K::PaymentWithoutContractRecord
+        | K::ApprovalRecordAbsent
+        | K::SplitPurchasePattern => TopicFindingBasis::Pattern,
     }
 }
 
@@ -622,6 +635,11 @@ mod tests {
             FindingKind::ClaimContradictsData,
             FindingKind::ContradictoryStatement,
             FindingKind::DifferentialTreatment,
+            FindingKind::PracticeDepartureCounted,
+            FindingKind::PracticeDepartureStated,
+            FindingKind::ContractCeilingExceeded,
+            FindingKind::SplitPurchasePattern,
+            FindingKind::SplitPurchaseProhibitedByPolicy,
         ] {
             assert_eq!(
                 finding_basis(kind) == TopicFindingBasis::Counted,
