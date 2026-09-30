@@ -40,8 +40,41 @@ pub mod regenerated_response;
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RefreshSummary {
     pub detectors_run: usize,
+    pub detectors_failed: usize,
     pub findings_recorded: usize,
     pub stale_cleared: usize,
+}
+
+/// Runs one detector, records its findings, and sweeps its superseded rows. A detector that errs
+/// is counted as failed and its stale rows are left alone, since an absent result is not proof
+/// the finding no longer holds.
+macro_rules! run_detector {
+    ($repository:expr, $summary:expr, $run_started:expr, $module:ident) => {{
+        $summary.detectors_run += 1;
+        let outcome: Result<(usize, usize), AppError> = async {
+            let findings = $module::run($repository).await?;
+            let recorded = if findings.is_empty() {
+                0
+            } else {
+                $repository.record_findings(findings).await?
+            };
+            let cleared = $repository
+                .clear_stale_findings($module::SLUG.to_string(), $run_started)
+                .await?;
+            Ok((recorded, cleared))
+        }
+        .await;
+        match outcome {
+            Ok((recorded, cleared)) => {
+                $summary.findings_recorded += recorded;
+                $summary.stale_cleared += cleared;
+            }
+            Err(error) => {
+                $summary.detectors_failed += 1;
+                eprintln!("detector {} failed: {error}", $module::SLUG);
+            }
+        }
+    }};
 }
 
 /// Runs every registered detector against the repository, upserts their findings, and clears
@@ -51,232 +84,63 @@ pub async fn refresh_all_findings(
 ) -> Result<RefreshSummary, AppError> {
     let run_started = chrono::Utc::now();
     let mut summary = RefreshSummary::default();
-
-    // held_back_response
-    summary.detectors_run += 1;
-    let findings = held_back_response::run(repository).await?;
-    if !findings.is_empty() {
-        summary.findings_recorded += repository.record_findings(findings).await?;
-    }
-    summary.stale_cleared += repository
-        .clear_stale_findings(held_back_response::SLUG.to_string(), run_started)
-        .await?;
-
-    // boilerplate_denial
-    summary.detectors_run += 1;
-    let findings = boilerplate_denial::run(repository).await?;
-    if !findings.is_empty() {
-        summary.findings_recorded += repository.record_findings(findings).await?;
-    }
-    summary.stale_cleared += repository
-        .clear_stale_findings(boilerplate_denial::SLUG.to_string(), run_started)
-        .await?;
-
-    // just_in_time_compliance
-    summary.detectors_run += 1;
-    let findings = just_in_time_compliance::run(repository).await?;
-    if !findings.is_empty() {
-        summary.findings_recorded += repository.record_findings(findings).await?;
-    }
-    summary.stale_cleared += repository
-        .clear_stale_findings(just_in_time_compliance::SLUG.to_string(), run_started)
-        .await?;
-
-    // extension_abuse
-    summary.detectors_run += 1;
-    let findings = extension_abuse::run(repository).await?;
-    if !findings.is_empty() {
-        summary.findings_recorded += repository.record_findings(findings).await?;
-    }
-    summary.stale_cleared += repository
-        .clear_stale_findings(extension_abuse::SLUG.to_string(), run_started)
-        .await?;
-
-    // contradictory_statement (Wave 2A)
-    summary.detectors_run += 1;
-    let findings = contradictory_statement::run(repository).await?;
-    if !findings.is_empty() {
-        summary.findings_recorded += repository.record_findings(findings).await?;
-    }
-    summary.stale_cleared += repository
-        .clear_stale_findings(contradictory_statement::SLUG.to_string(), run_started)
-        .await?;
-
-    // no_records_contradicted (Wave 2A)
-    summary.detectors_run += 1;
-    let findings = no_records_contradicted::run(repository).await?;
-    if !findings.is_empty() {
-        summary.findings_recorded += repository.record_findings(findings).await?;
-    }
-    summary.stale_cleared += repository
-        .clear_stale_findings(no_records_contradicted::SLUG.to_string(), run_started)
-        .await?;
-
-    // absence_of_records (Wave 2D)
-    summary.detectors_run += 1;
-    let findings = absence_of_records::run(repository).await?;
-    if !findings.is_empty() {
-        summary.findings_recorded += repository.record_findings(findings).await?;
-    }
-    summary.stale_cleared += repository
-        .clear_stale_findings(absence_of_records::SLUG.to_string(), run_started)
-        .await?;
-
-    // differential_treatment (Wave 2D)
-    summary.detectors_run += 1;
-    let findings = differential_treatment::run(repository).await?;
-    if !findings.is_empty() {
-        summary.findings_recorded += repository.record_findings(findings).await?;
-    }
-    summary.stale_cleared += repository
-        .clear_stale_findings(differential_treatment::SLUG.to_string(), run_started)
-        .await?;
-
-    // metadata_vs_content (Wave 2D)
-    summary.detectors_run += 1;
-    let findings = metadata_vs_content::run(repository).await?;
-    if !findings.is_empty() {
-        summary.findings_recorded += repository.record_findings(findings).await?;
-    }
-    summary.stale_cleared += repository
-        .clear_stale_findings(metadata_vs_content::SLUG.to_string(), run_started)
-        .await?;
-
-    // regenerated_response (Wave 2C)
-    summary.detectors_run += 1;
-    let findings = regenerated_response::run(repository).await?;
-    if !findings.is_empty() {
-        summary.findings_recorded += repository.record_findings(findings).await?;
-    }
-    summary.stale_cleared += repository
-        .clear_stale_findings(regenerated_response::SLUG.to_string(), run_started)
-        .await?;
-
-    // email_thread_gap (Wave 2C)
-    summary.detectors_run += 1;
-    let findings = email_thread_gap::run(repository).await?;
-    if !findings.is_empty() {
-        summary.findings_recorded += repository.record_findings(findings).await?;
-    }
-    summary.stale_cleared += repository
-        .clear_stale_findings(email_thread_gap::SLUG.to_string(), run_started)
-        .await?;
-
-    // evasion_paraphrased_denials (Wave 6)
-    summary.detectors_run += 1;
-    let findings = evasion_paraphrased_denials::run(repository).await?;
-    if !findings.is_empty() {
-        summary.findings_recorded += repository.record_findings(findings).await?;
-    }
-    summary.stale_cleared += repository
-        .clear_stale_findings(evasion_paraphrased_denials::SLUG.to_string(), run_started)
-        .await?;
-
-    // evasion_round_number_thresholds (Wave 6)
-    summary.detectors_run += 1;
-    let findings = evasion_round_number_thresholds::run(repository).await?;
-    if !findings.is_empty() {
-        summary.findings_recorded += repository.record_findings(findings).await?;
-    }
-    summary.stale_cleared += repository
-        .clear_stale_findings(
-            evasion_round_number_thresholds::SLUG.to_string(),
-            run_started,
-        )
-        .await?;
-
-    // evasion_redaction_at_limit (Wave 6)
-    summary.detectors_run += 1;
-    let findings = evasion_redaction_at_limit::run(repository).await?;
-    if !findings.is_empty() {
-        summary.findings_recorded += repository.record_findings(findings).await?;
-    }
-    summary.stale_cleared += repository
-        .clear_stale_findings(evasion_redaction_at_limit::SLUG.to_string(), run_started)
-        .await?;
-
-    // evasion_late_arriving_records (Wave 6)
-    summary.detectors_run += 1;
-    let findings = evasion_late_arriving_records::run(repository).await?;
-    if !findings.is_empty() {
-        summary.findings_recorded += repository.record_findings(findings).await?;
-    }
-    summary.stale_cleared += repository
-        .clear_stale_findings(evasion_late_arriving_records::SLUG.to_string(), run_started)
-        .await?;
-
-    // inferred_redaction_identity (Wave 9)
-    summary.detectors_run += 1;
-    let findings = inferred_redaction_identity::run(repository).await?;
-    if !findings.is_empty() {
-        summary.findings_recorded += repository.record_findings(findings).await?;
-    }
-    summary.stale_cleared += repository
-        .clear_stale_findings(inferred_redaction_identity::SLUG.to_string(), run_started)
-        .await?;
-
-    // cross_corpus_shared_language (Wave 8)
-    summary.detectors_run += 1;
-    let findings = cross_corpus_shared_language::run(repository).await?;
-    if !findings.is_empty() {
-        summary.findings_recorded += repository.record_findings(findings).await?;
-    }
-    summary.stale_cleared += repository
-        .clear_stale_findings(cross_corpus_shared_language::SLUG.to_string(), run_started)
-        .await?;
-
-    // cross_corpus_temporal_shift (Wave 8)
-    summary.detectors_run += 1;
-    let findings = cross_corpus_temporal_shift::run(repository).await?;
-    if !findings.is_empty() {
-        summary.findings_recorded += repository.record_findings(findings).await?;
-    }
-    summary.stale_cleared += repository
-        .clear_stale_findings(cross_corpus_temporal_shift::SLUG.to_string(), run_started)
-        .await?;
-
-    // cross_corpus_orphan_topic (Wave 8)
-    summary.detectors_run += 1;
-    let findings = cross_corpus_orphan_topic::run(repository).await?;
-    if !findings.is_empty() {
-        summary.findings_recorded += repository.record_findings(findings).await?;
-    }
-    summary.stale_cleared += repository
-        .clear_stale_findings(cross_corpus_orphan_topic::SLUG.to_string(), run_started)
-        .await?;
-
-    // cross_corpus_reused_denial_grounds (Wave 8)
-    summary.detectors_run += 1;
-    let findings = cross_corpus_reused_denial_grounds::run(repository).await?;
-    if !findings.is_empty() {
-        summary.findings_recorded += repository.record_findings(findings).await?;
-    }
-    summary.stale_cleared += repository
-        .clear_stale_findings(
-            cross_corpus_reused_denial_grounds::SLUG.to_string(),
-            run_started,
-        )
-        .await?;
-
-    // policy_violation (Wave 4)
-    summary.detectors_run += 1;
-    let findings = policy_violation::run(repository).await?;
-    if !findings.is_empty() {
-        summary.findings_recorded += repository.record_findings(findings).await?;
-    }
-    summary.stale_cleared += repository
-        .clear_stale_findings(policy_violation::SLUG.to_string(), run_started)
-        .await?;
-
-    // claim_data_mismatch
-    summary.detectors_run += 1;
-    let findings = claim_data_mismatch::run(repository).await?;
-    if !findings.is_empty() {
-        summary.findings_recorded += repository.record_findings(findings).await?;
-    }
-    summary.stale_cleared += repository
-        .clear_stale_findings(claim_data_mismatch::SLUG.to_string(), run_started)
-        .await?;
+    run_detector!(repository, summary, run_started, held_back_response);
+    run_detector!(repository, summary, run_started, boilerplate_denial);
+    run_detector!(repository, summary, run_started, just_in_time_compliance);
+    run_detector!(repository, summary, run_started, extension_abuse);
+    run_detector!(repository, summary, run_started, contradictory_statement);
+    run_detector!(repository, summary, run_started, no_records_contradicted);
+    run_detector!(repository, summary, run_started, absence_of_records);
+    run_detector!(repository, summary, run_started, differential_treatment);
+    run_detector!(repository, summary, run_started, metadata_vs_content);
+    run_detector!(repository, summary, run_started, regenerated_response);
+    run_detector!(repository, summary, run_started, email_thread_gap);
+    run_detector!(
+        repository,
+        summary,
+        run_started,
+        evasion_paraphrased_denials
+    );
+    run_detector!(
+        repository,
+        summary,
+        run_started,
+        evasion_round_number_thresholds
+    );
+    run_detector!(repository, summary, run_started, evasion_redaction_at_limit);
+    run_detector!(
+        repository,
+        summary,
+        run_started,
+        evasion_late_arriving_records
+    );
+    run_detector!(
+        repository,
+        summary,
+        run_started,
+        inferred_redaction_identity
+    );
+    run_detector!(
+        repository,
+        summary,
+        run_started,
+        cross_corpus_shared_language
+    );
+    run_detector!(
+        repository,
+        summary,
+        run_started,
+        cross_corpus_temporal_shift
+    );
+    run_detector!(repository, summary, run_started, cross_corpus_orphan_topic);
+    run_detector!(
+        repository,
+        summary,
+        run_started,
+        cross_corpus_reused_denial_grounds
+    );
+    run_detector!(repository, summary, run_started, policy_violation);
+    run_detector!(repository, summary, run_started, claim_data_mismatch);
 
     Ok(summary)
 }
