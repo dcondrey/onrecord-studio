@@ -1,0 +1,62 @@
+[
+  {
+    "id": "watchlists",
+    "title": "Watchlist",
+    "group": "Findings",
+    "summary": "Save an agency, a person or entity, a topic, a search, or a source, and see what changed for it since the last check.",
+    "keywords": [
+      "watch",
+      "watchlist",
+      "follow",
+      "change",
+      "changes",
+      "since last",
+      "new documents",
+      "resolved",
+      "baseline",
+      "no data",
+      "stopped responding",
+      "redacted",
+      "figure"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "Add a watch on the Overview, under the change strip. Choose what it follows: an agency by name, a person or entity by the name in document text, a topic, a search of up to 8 words, or one source. A check runs by itself after each refresh, and Check now runs it on demand. A check reads the records already stored here and fetches nothing."
+        ]
+      },
+      {
+        "heading": "What a check reports",
+        "items": [
+          "Documents: new documents in scope, and documents no longer listed. A document can leave the list after a retention purge, a visibility change or a removed source; that does not show the agency withdrew it.",
+          "Findings: new findings, and findings no longer emitted by their detector. A finding that stops appearing has not been shown corrected, and a dismissed finding is not counted as resolved.",
+          "Figures: a money or outcome statement that was replaced in a later captured version of a document, or added or dropped. Capture time is not publication or effective time.",
+          "Redaction: a request in scope that newly carries a heavy-redaction flag. The flag is a structural signal about the released files, not a finding that redaction was improper.",
+          "Source: a source whose latest completed sync finished with errors after an earlier clean one, or the reverse. This reports the sync outcome, not why a source failed."
+        ]
+      },
+      {
+        "heading": "No data is not no change",
+        "items": [
+          "Every change states the value before, the value now, when each was observed, and the basis. A blank before means the baseline did not contain the subject.",
+          "The first check of a watch records a baseline and reports no changes.",
+          "A dimension a check could not observe says No data this run, with the reason: no captured version to compare, no redaction audit for the requests in scope, no sync run since the baseline, or a scope too large to read. It is never shown as unchanged, and the baseline is kept, so the next check that does observe it compares against the last real observation and shows that observation's time.",
+          "Checking again without new data records nothing twice."
+        ]
+      },
+      {
+        "heading": "Limits",
+        "items": [
+          "Up to 50 watches. A watch's kind and target cannot be edited; add a new one instead.",
+          "A person or entity watch matches the stored text of public documents; a document without stored text is not matched. The topic scan lists at most 500 documents and 500 findings per topic, so a topic watch on a topic with more than 500 tagged documents or findings reports No data for them rather than a partial list. The same applies when the scan reaches its own document limit.",
+          "A scope of more than 20,000 documents, or a findings table of more than 50,000 rows, also reports No data; narrow the watch.",
+          "Removing a source, or deleting a document under Collection, coverage and storage, discards what the watches recorded from it: its entries in each baseline, and, for a removed source, its recorded changes. The deleted records then leave the scope without being reported as withdrawn."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": ["watchlists"],
+    "related": ["coverage-monitoring", "topic-packs", "findings-inbox"]
+  }
+]

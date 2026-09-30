@@ -8,6 +8,7 @@ import spending from './topics-spending.json';
 import concepts from './topics-concepts.json';
 import account from './topics-account.json';
 import topicPacks from './topics-topic-packs.json';
+import watchlists from './topics-watchlists.json';
 
 export type HelpGroup =
   | 'Getting started'
@@ -62,6 +63,7 @@ export const HELP_TOPICS = [
   ...concepts,
   ...account,
   ...topicPacks,
+  ...watchlists,
 ] as HelpTopic[];
 
 export function findHelpTopic(id: string): HelpTopic | undefined {

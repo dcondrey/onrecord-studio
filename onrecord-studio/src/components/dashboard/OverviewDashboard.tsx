@@ -18,6 +18,7 @@ import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { AgencyPerformanceProfile } from '../../types';
 import FindingsInbox from './FindingsInbox';
 import ChangeFeed from './ChangeFeed';
+import WatchlistPanel from './WatchlistPanel';
 import SubjectDossier from './SubjectDossier';
 import PostIngestBrief from './PostIngestBrief';
 import CrossCorpusExplorer from './CrossCorpusExplorer';
@@ -84,6 +85,7 @@ export default function OverviewDashboard() {
         </> : <>
           <SubjectDossier />
           <ChangeFeed />
+          <WatchlistPanel />
           <FindingsInbox />
           <CrossCorpusExplorer />
           <ResearchWorkspace onReview={(reportId) => setWorkbench({ reportId, review: true })} />
