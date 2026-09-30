@@ -1304,4 +1304,80 @@ mod tests {
             "A new next test is meaningful case state"
         );
     }
+
+    #[tokio::test]
+    async fn an_uncovered_claimed_year_is_one_gap_queued_once_and_only_under_collection_opt_in() {
+        let temp = tempfile::tempdir().unwrap();
+        let db = DuckDbRepository::new(temp.path().join("core.db")).unwrap();
+        db.run_migrations(include_str!("../../migrations/0001_initial_schema.sql"))
+            .await
+            .unwrap();
+        let portal: crate::types::PortalRegistration = serde_json::from_value(json!({"portalKey":"sandiego", "displayName":"City of San Diego", "canonicalUrl":"https://sandiego.nextrequest.com", "originUrl":"https://sandiego.nextrequest.com", "verifiedAt":"2026-09-13T00:00:00Z", "sourceKind":"NEXT_REQUEST", "apiLayout":{"requestsEndpoint":"https://sandiego.nextrequest.com/api", "requestsPointer":"/resources", "pageParameter":"page", "pageSizeParameter":"limit"}})).unwrap();
+        db.insert_or_update_portal_registration(&portal)
+            .await
+            .unwrap();
+        db.initialize_research().await.unwrap();
+        let conn = db.analytics_connection().await.unwrap();
+        conn.execute("INSERT INTO requests(id,portal_subdomain,title,status,created_at,updated_at) VALUES (1,'sandiego','Budget memo','closed','2026-09-26','2026-09-26')",[]).unwrap();
+        conn.execute("INSERT INTO documents(id,request_id,portal_subdomain,file_name,download_url,visibility,created_at,updated_at,raw_file_sha256,extracted_text_sha256,extraction_status) VALUES (1,1,'sandiego','memo.pdf','https://sandiego.nextrequest.com/memo.pdf','public','2026-09-26','2026-09-26',repeat('a',64),repeat('b',64),'SEARCHABLE')",[]).unwrap();
+        conn.execute("INSERT INTO documents_fts(document_id,portal_subdomain,file_name,extracted_text) VALUES (1,'sandiego','memo.pdf','The adopted budget of $4,250,000 for FY 2023 was approved for fund 100000. The adopted budget of $4,300,000 for FY 2023 was later cited again.')",[]).unwrap();
+        drop(conn);
+
+        let (found, errors) = crate::analysis::gaps::collect(&db).await;
+        assert!(errors.is_empty(), "{errors:?}");
+        let keys: Vec<&str> = found.iter().map(|gap| gap.key.as_str()).collect();
+        assert_eq!(keys, ["claim_data_mismatch:budget:FY2023"]);
+
+        let queued = || async {
+            let conn = db.analytics_connection().await.unwrap();
+            let mut statement = conn
+                .prepare("SELECT url, state, detail, CAST(next_attempt_at AS VARCHAR) FROM research_sources ORDER BY url")
+                .unwrap();
+            statement
+                .query_map([], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                    ))
+                })
+                .unwrap()
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap()
+        };
+        let base = db.research_policy().await.unwrap();
+        for (enabled, auto_collect) in [(false, true), (true, false)] {
+            db.save_research_policy(ResearchPolicy {
+                enabled,
+                auto_collect,
+                ..base.clone()
+            })
+            .await
+            .unwrap();
+            analyze_new_evidence(&db, &mut None).await.unwrap();
+            assert!(
+                queued().await.is_empty(),
+                "enabled={enabled} auto_collect={auto_collect}"
+            );
+        }
+
+        db.save_research_policy(ResearchPolicy {
+            enabled: true,
+            auto_collect: true,
+            ..base
+        })
+        .await
+        .unwrap();
+        analyze_new_evidence(&db, &mut None).await.unwrap();
+        let first = queued().await;
+        let urls: Vec<&str> = first.iter().map(|row| row.0.as_str()).collect();
+        assert_eq!(
+            urls,
+            crate::analysis::gaps::GapRole::Appropriations.catalog_urls()
+        );
+        assert!(first.iter().all(|row| row.1 == "QUEUED"));
+        analyze_new_evidence(&db, &mut None).await.unwrap();
+        assert_eq!(queued().await, first, "a second refresh queues nothing new");
+    }
 }

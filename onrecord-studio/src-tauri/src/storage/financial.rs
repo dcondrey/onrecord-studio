@@ -473,6 +473,26 @@ impl DuckDbRepository {
         }).await?;
         self.financial_workspace().await
     }
+    /// Whether the mapped table holds any row for the fiscal year, under the same fiscal-year
+    /// normalization the investigation filters on. `None` when no fiscal-year column is mapped.
+    pub(crate) async fn financial_table_covers_year(
+        &self,
+        mapping: &FinancialMapping,
+        table_name: &str,
+        fiscal_year: i32,
+    ) -> Result<Option<bool>, AppError> {
+        if !mapping.columns.contains_key("fy") {
+            return Ok(None);
+        }
+        let sql = format!(
+            "SELECT 1 FROM {} WHERE {} = {fiscal_year}",
+            quote(table_name),
+            expression(mapping, "fy")
+        );
+        Ok(Some(
+            !self.execute_restricted_sql(&sql, 1).await?.rows.is_empty(),
+        ))
+    }
     pub async fn run_financial_investigation(
         &self,
         scope: FinancialScope,

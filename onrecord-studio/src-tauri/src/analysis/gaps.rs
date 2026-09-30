@@ -111,6 +111,9 @@ pub struct EvidenceGapView {
     pub sources: Vec<String>,
 }
 
+/// Each resolve queues at most this many sources; the rest wait for the next refresh.
+const MAX_QUEUED_PER_RESOLVE: usize = 8;
+
 fn label_for(url: &str) -> Option<&'static str> {
     SOURCES.iter().find(|(_, u)| *u == url).map(|(l, _)| *l)
 }
@@ -143,6 +146,10 @@ pub async fn collect(repository: &DuckDbRepository) -> (Vec<EvidenceGap>, Vec<St
     match financial_gaps(repository).await {
         Ok(found) => gaps.extend(found),
         Err(error) => errors.push(format!("financial gap sweep failed: {error}")),
+    }
+    match crate::analysis::detectors::claim_data_mismatch::gaps(repository).await {
+        Ok(found) => gaps.extend(found),
+        Err(error) => errors.push(format!("claim_data_mismatch gap sweep failed: {error}")),
     }
     let mut seen = HashSet::new();
     gaps.retain(|gap| seen.insert(gap.key.clone()));
@@ -213,6 +220,7 @@ pub async fn resolve(
             .any(|s| same_url(&s.registration.canonical_url, url))
     };
     let mut views = Vec::new();
+    let mut queued: HashSet<&str> = HashSet::new();
     for gap in gaps {
         let urls = gap.role.catalog_urls();
         let mut acquiring = false;
@@ -224,9 +232,18 @@ pub async fn resolve(
                 Some((state, elapsed)) if state == "REGISTERED" => {
                     acquiring |= !elapsed;
                 }
+                // Already waiting for `collect_one`; rewriting it would only reset its place.
+                Some((state, _)) if state == "QUEUED" || state == "STARTING" => {
+                    acquiring = true;
+                }
                 _ => {
                     acquiring = true;
-                    if queue && repository.research_source_due(url).await? {
+                    if queue
+                        && !queued.contains(url)
+                        && queued.len() < MAX_QUEUED_PER_RESOLVE
+                        && repository.research_source_due(url).await?
+                    {
+                        queued.insert(url);
                         repository
                             .record_research_source(
                                 ResearchSourceStatus {
