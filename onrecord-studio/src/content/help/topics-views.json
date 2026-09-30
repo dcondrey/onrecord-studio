@@ -317,5 +317,51 @@
       "view-evidence",
       "document-viewer"
     ]
+  },
+  {
+    "id": "view-story",
+    "title": "Story desk view",
+    "group": "Views",
+    "summary": "Findings ranked by observable factors, with the fact behind each factor shown.",
+    "keywords": [
+      "story desk",
+      "leads",
+      "ranking",
+      "attention score",
+      "public interest",
+      "newsworthy"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "Story desk orders undismissed findings by what the records show: money at stake, how many documents, requests and agencies repeat the pattern, a record contradicting a statement, a counted violation, evidence strength and freshness."
+        ]
+      },
+      {
+        "heading": "What the score is",
+        "paragraphs": [
+          "The attention score ranks where to look first. It is not a measure of newsworthiness and not a claim about any record. Each lead is labelled either counted violation or pattern signal; only a counted violation may use the word."
+        ]
+      },
+      {
+        "heading": "Actions",
+        "items": [
+          "Inspect opens the evidence view filtered to the lead's agency.",
+          "Add to briefing copies the finding's evidence into the briefing; a lead with no request anchor cannot be added.",
+          "Refresh re-ranks from the current findings."
+        ]
+      }
+    ],
+    "views": [
+      "story"
+    ],
+    "findingKinds": [],
+    "commandGroups": [
+      "story_desk"
+    ],
+    "related": [
+      "findings-inbox",
+      "legal-vs-pattern"
+    ]
   }
 ]
