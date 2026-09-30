@@ -25,7 +25,9 @@ export default function StarterSets() {
     const request = registryGate.begin();
     invokeCommand('list_starter_sets', {})
       .then((value) => {
-        if (registryGate.isCurrent(request)) setReport(value);
+        if (!registryGate.isCurrent(request)) return;
+        if (Array.isArray(value?.sets)) setReport(value);
+        else setError('The registry returned an unreadable response.');
       })
       .catch((reason) => {
         if (registryGate.isCurrent(request)) setError(formatNativeError(reason));
@@ -92,7 +94,7 @@ export default function StarterSets() {
           );
         })}
       </div>
-      <p className="text-[11px] text-slate-500">Registry version {report.registryVersion}. Verification dates record one check, not a promise the page is still there.</p>
+      <p className="text-[11px] text-slate-400">Registry version {report.registryVersion}. Verification dates record one check, not a promise the page is still there.</p>
     </section>
   );
 }
@@ -109,7 +111,7 @@ function EntryRow({ entry, saved, status }: { entry: StarterEntry; saved: boolea
           : saved ? <span className="text-slate-400">In your library</span> : null}
       </div>
       <div className="text-slate-400">{entry.what} {entry.publisher}. Verified {entry.verifiedAsOf}.</div>
-      <div className="text-slate-500">{entry.termsNote ?? 'No reuse terms were found; check the publisher before redistributing.'}</div>
+      <div className="text-slate-400">{entry.termsNote ?? 'No reuse terms were found; check the publisher before redistributing.'}</div>
     </li>
   );
 }
