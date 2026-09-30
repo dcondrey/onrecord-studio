@@ -84,7 +84,7 @@ export default function LeadDossier() {
               <ul className="space-y-1">
                 {state.dossier.related.map((related) => (
                   <li key={related.id}>
-                    <span className="text-slate-500">{related.basis === 'SAME_REQUEST' ? 'same request' : 'same document'}</span> · {related.headline}
+                    <span className="text-slate-400">{related.basis === 'SAME_REQUEST' ? 'same request' : 'same document'}</span> · {related.headline}
                   </li>
                 ))}
               </ul>

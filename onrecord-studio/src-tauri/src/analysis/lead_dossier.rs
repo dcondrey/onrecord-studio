@@ -127,6 +127,7 @@ async fn related_findings(
                     document_id: None,
                     source_detector: None,
                     include_dismissed: None,
+                    discovered_after: None,
                 },
                 MAX_RELATED + 1,
             )
@@ -143,6 +144,7 @@ async fn related_findings(
                     document_id: Some(document_id.1),
                     source_detector: None,
                     include_dismissed: None,
+                    discovered_after: None,
                 },
                 MAX_RELATED + 1,
             )

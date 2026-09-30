@@ -320,15 +320,20 @@ export default function CommandPalette() {
           <Keycap>Esc</Keycap>
         </div>
 
-        {asking || askError !== null || answer !== null ? (
-          <div id="command-results" className="max-h-[min(480px,62vh)] overflow-y-auto">
-            {asking && <p className="px-6 py-8 text-center text-[13px] text-slate-300" role="status">Searching findings, the entity graph and document text…</p>}
-            {askError !== null && (
-              <p className="px-6 py-8 text-center text-[13px] text-slate-300" role="alert">The question could not be answered: {askError}</p>
-            )}
-            {answer !== null && <IntentAnswerView answer={answer} onChooseOption={chooseOption} />}
-          </div>
-        ) : (
+        {/* The live region stays mounted while the palette is open: an answer that mounts its own
+            live region already populated is not announced, so only its contents may change. */}
+        <div aria-live="polite">
+          {(asking || askError !== null || answer !== null) && (
+            <div id="command-results" className="max-h-[min(480px,62vh)] overflow-y-auto">
+              {asking && <p className="px-6 py-8 text-center text-[13px] text-slate-300" role="status">Searching findings, the entity graph and document text…</p>}
+              {askError !== null && (
+                <p className="px-6 py-8 text-center text-[13px] text-slate-300" role="alert">The question could not be answered: {askError}</p>
+              )}
+              {answer !== null && <IntentAnswerView answer={answer} onChooseOption={chooseOption} />}
+            </div>
+          )}
+        </div>
+        {!(asking || askError !== null || answer !== null) && (
         <div id="command-results" className="max-h-[min(480px,62vh)] overflow-y-auto p-2" role="listbox">
           {filteredActions.length === 0 ? (
             <div className="px-4 py-10 text-center">

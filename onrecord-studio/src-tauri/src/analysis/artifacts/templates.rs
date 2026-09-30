@@ -106,6 +106,8 @@ static CPRA_FOLLOWUPS: &[FindingKind] = &[
     FindingKind::ContradictoryStatement,
     FindingKind::NoRecordsContradictedByRelease,
     FindingKind::PolicyViolationDetected,
+    FindingKind::PracticeDepartureCounted,
+    FindingKind::PracticeDepartureStated,
 ];
 
 static POLICY_APPEAL_AUTHORITIES: [StaticAuthority; 1] = [CPRA_DEADLINE];
@@ -240,6 +242,35 @@ static TEMPLATES: LazyLock<Vec<ArtifactTemplate>> = LazyLock::new(|| {
                 published data. The two may differ for a legitimate reason, such as a different \
                 basis, scope, rounding convention or a later revision; this request only asks \
                 which figures apply and how they were reached.\n\n\
+                Sincerely,\n\
+                [YOUR NAME]",
+            cited_authorities: &GENERIC_CPRA_FOLLOWUP_AUTHORITIES,
+        },
+        ArtifactTemplate {
+            id: "cpra_followup_practice_departure_v1",
+            kind: ArtifactKind::FollowupRequest,
+            jurisdiction: "US-CA",
+            applicable_finding_kinds: &[
+                FindingKind::PracticeDepartureCounted,
+                FindingKind::PracticeDepartureStated,
+            ],
+            subject: "Follow-up request: records behind a stated departure from a written practice rule",
+            body: "Date: {TODAY}\n\
+                To: {AGENCY_LABEL}\n\
+                Re: Follow-up to {REQUEST_LABEL}\n\n\
+                Under the California Public Records Act, I am writing about two released records: \
+                a written policy that states a rule about a practice, and a record that states \
+                the rule was not followed:\n\n\
+                {FINDING_HEADLINE}\n\n\
+                {FINDING_EXPLANATION}\n\n\
+                The statements, with their locations:\n\
+                {EVIDENCE_BULLETS}\n\n\
+                I am asking the agency to provide the audit, review or report from which the \
+                second statement was taken, the underlying case or incident records it counted, \
+                and any record of the agency's response to it, including corrective action. Under \
+                {AUTHORITY_CITATIONS}, I am also requesting any later version of the policy. This \
+                request only asks for the records; it does not assert that any conduct was \
+                unlawful.\n\n\
                 Sincerely,\n\
                 [YOUR NAME]",
             cited_authorities: &GENERIC_CPRA_FOLLOWUP_AUTHORITIES,

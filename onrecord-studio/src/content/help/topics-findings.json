@@ -1067,6 +1067,100 @@
     ]
   },
   {
+    "id": "finding-practice-departure-counted",
+    "title": "Policy rule, documented departure with a count",
+    "group": "Finding kinds",
+    "summary": "A practice rule in an agency's own policy, and a document from the same agency that states how many cases did not follow it.",
+    "keywords": [
+      "practice departure counted",
+      "finding",
+      "kind",
+      "policy",
+      "practice",
+      "audit",
+      "body-worn camera",
+      "use of force",
+      "pursuit",
+      "count",
+      "own rule"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "A policy sentence that states a duty about a practice, such as activating a body-worn camera, reviewing a use of force, or authorizing a pursuit, paired with a sentence in another document of the same agency that says N of M cases did not follow it. Both sentences are cited. The compliance rate shown is computed only from the counts the document states; no count is inferred."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "That the conduct was unlawful or wrongful, or why the rule was not followed. It compares what two documents state and reads only documents already ingested: it does not count incidents, does not check a stated count against incident records, and finding nothing is not evidence of compliance. A policy that states it is superseded, a different agency's documents, documents dated before the policy took effect, and sentences that negate, recommend, or hypothesize are excluded. When the policy states no effective date, or the departure sentence states no date, the posting date is used, the finding says so, and confidence is lower."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Legal claim: counted violation. The count is the source document's own and is not recounted. Confidence is derived from what was observed: a stated count, the same agency, and stated dates raise it."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "PRACTICE_DEPARTURE_COUNTED"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-practice-departure-stated",
+    "title": "Policy rule, documented departure without a count",
+    "group": "Finding kinds",
+    "summary": "A practice rule in an agency's own policy, and a document from the same agency that states the rule was not followed, without saying how often.",
+    "keywords": [
+      "practice departure stated",
+      "finding",
+      "kind",
+      "policy",
+      "practice",
+      "audit",
+      "noncompliance",
+      "own rule",
+      "pattern"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "A policy sentence that states a duty about a practice, paired with a sentence in another document of the same agency that says the rule was not followed but gives no count. Both sentences are cited."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "That the conduct was unlawful or wrongful, how often it happened, or why. It compares what two documents state and reads only documents already ingested: it does not count incidents, does not check a stated count against incident records, and finding nothing is not evidence of compliance. A policy that states it is superseded, a different agency's documents, documents dated before the policy took effect, and sentences that negate, recommend, or hypothesize are excluded. When the policy states no effective date, or the departure sentence states no date, the posting date is used, the finding says so, and confidence is lower."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is measured from what was observed and is lower than for a counted departure."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "PRACTICE_DEPARTURE_STATED"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
     "id": "finding-budget-line-comparisons",
     "title": "Budget line comparisons",
     "group": "Finding kinds",

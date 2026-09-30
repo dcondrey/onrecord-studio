@@ -29,17 +29,32 @@ export default function PostIngestBrief() {
   const [error, setError] = useState<string | null>(null);
   const gate = useLatestRequestGate();
 
+  // The brief is opened by App.tsx immediately after refresh_findings, but the detectors may
+  // have discovered the ingested rows moments before the overlay itself opened. Widen the window
+  // to the last 15 minutes so a ChangeFeed-scale ingest doesn't render "no new findings" when
+  // the corpus obviously grew.
+  const window = 15 * 60 * 1000;
+
   useEffect(() => {
-    if (open) setOpenedAt((current) => current ?? Date.now());
-    else setOpenedAt(null);
+    if (open) {
+      setOpenedAt((current) => current ?? Date.now());
+    } else {
+      setOpenedAt(null);
+      // The rows belonged to the ingest that just closed. Keeping them would show them again,
+      // as this ingest's work, when the next one opens the brief before its own load resolves.
+      setFindings([]);
+    }
   }, [open]);
 
   const load = useCallback(() => {
-    if (!open) return;
+    if (!open || openedAt === null) return;
     const request = gate.begin();
     setIsLoading(true);
     setError(null);
-    invokeCommand('list_findings', { filter: null, limit: 40 })
+    // Filtered at the source: the backend ranks by severity before it limits, so without the
+    // cutoff a new low-severity finding could sit behind forty older ones and never arrive.
+    const discoveredAfter = new Date(Math.max(0, openedAt - window)).toISOString();
+    invokeCommand('list_findings', { filter: { discoveredAfter }, limit: 40 })
       .then((rows) => {
         if (!gate.isCurrent(request)) return;
         setFindings(rows);
@@ -51,7 +66,7 @@ export default function PostIngestBrief() {
       .finally(() => {
         if (gate.isCurrent(request)) setIsLoading(false);
       });
-  }, [gate, open]);
+  }, [gate, open, openedAt, window]);
 
   useEffect(() => {
     load();
@@ -61,11 +76,6 @@ export default function PostIngestBrief() {
   if (!open) return null;
 
   const cutoff = openedAt ?? 0;
-  // The brief is opened by App.tsx immediately after refresh_findings, but the detectors may
-  // have discovered the ingested rows moments before the overlay itself opened. Widen the window
-  // to the last 15 minutes so a ChangeFeed-scale ingest doesn't render "no new findings" when
-  // the corpus obviously grew.
-  const window = 15 * 60 * 1000;
   const cutoffWithWindow = Math.max(0, cutoff - window);
   const notable = findings
     .filter((finding) => {
@@ -100,9 +110,11 @@ export default function PostIngestBrief() {
           <div className="min-w-0">
             <div className="app-eyebrow text-cyan-300/70">Just landed</div>
             <h2 id="post-ingest-brief-title" className="mt-1 text-[14px] font-semibold text-slate-100">
-              {notable.length === 0
-                ? 'Ingest complete. Nothing notable surfaced in the new data.'
-                : `${notable.length} new finding${notable.length === 1 ? '' : 's'} from this ingest`}
+              {error !== null && notable.length === 0
+                ? 'Ingest complete. The new findings could not be read.'
+                : notable.length === 0
+                  ? 'Ingest complete. Nothing notable surfaced in the new data.'
+                  : `${notable.length} new finding${notable.length === 1 ? '' : 's'} from this ingest`}
             </h2>
             {error && (
               <p role="alert" className="mt-1 text-[9px] text-rose-300">
@@ -124,7 +136,9 @@ export default function PostIngestBrief() {
           </p>
         ) : notable.length === 0 ? (
           <p className="text-[10px] text-slate-400">
-            The findings inbox below carries anything the detectors have surfaced on prior data.
+            {error !== null
+              ? 'Whether this ingest surfaced anything is not known until the findings load.'
+              : 'The findings inbox below carries anything the detectors have surfaced on prior data.'}
           </p>
         ) : (
           <ul className="grid gap-2 md:grid-cols-2 xl:grid-cols-3" aria-label="New findings from this ingest">

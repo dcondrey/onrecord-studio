@@ -5,6 +5,7 @@ import { useAppStore } from '../../store/useAppStore';
 import type { FindingKind, FindingSeverity, StoryLead } from '../../types';
 import { isLegalClaimKind } from '../../types/findings';
 import { findingToBriefingEvidence } from './BriefingWorkspace';
+import LeadDossier from './LeadDossier';
 
 type DeskState =
   | { status: 'PENDING' }
@@ -25,6 +26,7 @@ export default function StoryDesk() {
   const setSearchFilters = useAppStore((s) => s.setSearchFilters);
   const setWorkspaceView = useAppStore((s) => s.setWorkspaceView);
   const addBriefingEvidence = useAppStore((s) => s.addBriefingEvidence);
+  const openLeadDossier = useAppStore((s) => s.openLeadDossier);
 
   const load = useCallback(() => {
     const token = gate.begin();
@@ -120,7 +122,7 @@ export default function StoryDesk() {
                     <h3 className="mt-1 text-[12px] font-semibold text-slate-200">{lead.headline}</h3>
                   </div>
                   <div className="text-right">
-                    <div className="text-[9px] uppercase tracking-wider text-slate-500">Attention score</div>
+                    <div className="text-[9px] uppercase tracking-wider text-slate-400">Attention score</div>
                     <div className="font-mono text-sm text-slate-200" aria-label="Attention score">
                       {(lead.publicInterest.totalBasisPoints / 100).toFixed(1)}
                     </div>
@@ -134,7 +136,7 @@ export default function StoryDesk() {
                       className="rounded-full border border-slate-700 px-2 py-0.5 text-[9px] text-slate-300"
                     >
                       <span className="font-semibold">{factor.name}</span> +{(factor.basisPoints / 100).toFixed(0)}
-                      <span className="text-slate-500"> · {factor.evidence}</span>
+                      <span className="text-slate-400"> · {factor.evidence}</span>
                     </li>
                   ))}
                 </ul>
@@ -145,8 +147,16 @@ export default function StoryDesk() {
                   <button type="button" onClick={() => void addToBriefing(lead)} className="focus-ring rounded-lg border border-indigo-400/25 bg-indigo-500/10 px-2.5 py-1 font-semibold text-indigo-200">
                     Add to briefing
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => openLeadDossier(lead.findingId)}
+                    aria-label={`Assemble dossier: ${lead.headline}`}
+                    className="focus-ring rounded-lg border border-slate-700 px-2.5 py-1 font-semibold text-slate-300 hover:border-cyan-400/40"
+                  >
+                    Assemble dossier
+                  </button>
                   {lead.relatedFindingIds.length > 0 && (
-                    <span className="text-slate-500">
+                    <span className="text-slate-400">
                       {lead.relatedFindingIds.length} related finding{lead.relatedFindingIds.length === 1 ? '' : 's'} on the same subject
                     </span>
                   )}
@@ -156,6 +166,7 @@ export default function StoryDesk() {
           </ol>
         )}
       </div>
+      <LeadDossier />
     </main>
   );
 }

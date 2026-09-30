@@ -95,6 +95,18 @@ describe('ChangeFeed', () => {
     render(<ChangeFeed />);
     await screen.findByText(/1 new finding since you last opened/);
   });
+
+  it('keeps counting against the watermark captured when its load began', async () => {
+    bridge.rows = [sample('new', '2026-09-15T00:00:00Z')];
+    render(<ChangeFeed />);
+    await screen.findByText(/1 new finding since you last opened/);
+    // FindingsInbox marks the findings seen once its own load of the same refresh settles.
+    act(() => {
+      useAppStore.setState({ lastFindingsSeenAt: '2026-09-20T00:00:00Z' });
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.getByText(/1 new finding since you last opened/)).toBeTruthy();
+  });
 });
 
 describe('ChangeFeed statutory violations', () => {

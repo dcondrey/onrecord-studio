@@ -99,7 +99,7 @@ export interface IntentAnswerViewProps {
 
 export default function IntentAnswerView({ answer, onChooseOption }: IntentAnswerViewProps) {
   return (
-    <div className="space-y-2.5 p-2" aria-live="polite">
+    <div className="space-y-2.5 p-2">
       <div className="px-2 pt-1">
         <div className="flex items-center gap-2">
           <span className="rounded-full border border-slate-600 px-1.5 py-0.5 text-[10px] font-semibold text-slate-300">

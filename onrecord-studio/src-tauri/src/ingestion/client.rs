@@ -1339,7 +1339,9 @@ pub struct DataCatalogDownload {
 pub struct DataCatalogPage {
     pub downloads: Vec<DataCatalogDownload>,
     pub next_cursor: Option<String>,
-    pub asset_count: usize,
+    /// The catalog's own total, when it reported one. `None` is "not reported", never zero: a
+    /// page count is not a corpus count, and paging must not stop on a total the index withheld.
+    pub asset_count: Option<usize>,
     pub assets_without_downloads: BTreeMap<String, u64>,
     pub foreign_domain_assets: u64,
 }
@@ -1502,7 +1504,10 @@ fn decode_ckan_page(value: &Value, cursor: Option<&str>) -> Result<DataCatalogPa
         .ok_or_else(|| {
             AppError::DataParsing("The CKAN catalog page omitted its result list".to_string())
         })?;
-    let asset_count = result.get("count").and_then(Value::as_u64).unwrap_or(0) as usize;
+    let asset_count = result
+        .get("count")
+        .and_then(Value::as_u64)
+        .map(|count| count as usize);
     let start = cursor
         .and_then(|value| value.parse::<usize>().ok())
         .unwrap_or(0);
@@ -1558,8 +1563,12 @@ fn decode_ckan_page(value: &Value, cursor: Option<&str>) -> Result<DataCatalogPa
         }
     }
     let consumed = start.saturating_add(packages.len());
-    page.next_cursor =
-        (!packages.is_empty() && consumed < asset_count).then(|| consumed.to_string());
+    // Without a reported total, a full page is the only sign that more may follow.
+    let more = match asset_count {
+        Some(count) => consumed < count,
+        None => packages.len() >= CATALOG_PAGE_SIZE,
+    };
+    page.next_cursor = (!packages.is_empty() && more).then(|| consumed.to_string());
     Ok(page)
 }
 
@@ -1574,17 +1583,21 @@ fn decode_socrata_page(value: &Value, domain: &str) -> Result<DataCatalogPage, A
         asset_count: value
             .get("resultSetSize")
             .and_then(Value::as_u64)
-            .unwrap_or(0) as usize,
+            .map(|count| count as usize),
         ..DataCatalogPage::default()
     };
     let mut last_identifier = None;
+    let mut unidentified = 0_u64;
     for entry in results {
-        let Some(resource) = entry.get("resource") else {
+        let Some(identifier) = entry
+            .get("resource")
+            .and_then(|resource| resource.get("id"))
+            .and_then(Value::as_str)
+        else {
+            unidentified += 1;
             continue;
         };
-        let Some(identifier) = resource.get("id").and_then(Value::as_str) else {
-            continue;
-        };
+        let resource = &entry["resource"];
         last_identifier = Some(identifier.to_string());
         // `domains` and `search_context` are advisory. A portal that ignores them answers with
         // another domain's assets, which is how a scoped catalog read turns back into an
@@ -1633,7 +1646,20 @@ fn decode_socrata_page(value: &Value, domain: &str) -> Result<DataCatalogPage, A
             byte_count: None,
         });
     }
-    page.next_cursor = (!results.is_empty()).then_some(last_identifier).flatten();
+    if unidentified > 0 {
+        page.assets_without_downloads
+            .insert("socrata-entry-without-identifier".to_string(), unidentified);
+    }
+    // The scroll cursor is the last identifier on the page. A non-empty page whose entries carry
+    // none cannot be advanced past, and ending the scroll there would report the catalog as
+    // exhausted when it was not read.
+    if !results.is_empty() && last_identifier.is_none() {
+        return Err(AppError::DataParsing(
+            "The Socrata catalog page carried no asset identifiers, so the scroll cannot continue"
+                .to_string(),
+        ));
+    }
+    page.next_cursor = last_identifier;
     Ok(page)
 }
 
@@ -3281,7 +3307,7 @@ mod tests {
                 .expect("CKAN replay fixture must parse");
         let ckan_page = decode_ckan_page(&ckan, None).expect("CKAN replay must decode");
         assert_eq!(ckan_page.downloads.len(), 1);
-        assert_eq!(ckan_page.asset_count, 2);
+        assert_eq!(ckan_page.asset_count, Some(2));
 
         let socrata: Value =
             serde_json::from_str(include_str!("../../fixtures/open-data/socrata-page.json"))
@@ -3504,7 +3530,7 @@ mod tests {
             }
         });
         let page = decode_ckan_page(&body, Some("100")).unwrap();
-        assert_eq!(page.asset_count, 4570);
+        assert_eq!(page.asset_count, Some(4570));
         assert_eq!(page.downloads.len(), 1);
         assert_eq!(page.downloads[0].media_type.as_deref(), Some("text/csv"));
         assert_eq!(page.downloads[0].byte_count, Some(136_203_124));
@@ -3526,6 +3552,25 @@ mod tests {
             decode_ckan_page(&tail, Some("4569")).unwrap().next_cursor,
             None
         );
+
+        // A catalog that withholds its total has not said the corpus is exhausted: a full page
+        // keeps paging, and only a short page ends it.
+        let package = serde_json::json!({"name": "x", "resources": []});
+        let full = serde_json::json!({
+            "success": true,
+            "result": {"results": vec![package.clone(); CATALOG_PAGE_SIZE]}
+        });
+        let page = decode_ckan_page(&full, Some("200")).unwrap();
+        assert_eq!(page.asset_count, None);
+        assert_eq!(page.next_cursor.as_deref(), Some("300"));
+        let short = serde_json::json!({
+            "success": true,
+            "result": {"results": [package]}
+        });
+        assert_eq!(
+            decode_ckan_page(&short, Some("300")).unwrap().next_cursor,
+            None
+        );
     }
 
     #[test]
@@ -3545,7 +3590,7 @@ mod tests {
             ]
         });
         let page = decode_socrata_page(&body, "data.cityofnewyork.us").unwrap();
-        assert_eq!(page.asset_count, 3016);
+        assert_eq!(page.asset_count, Some(3016));
         assert_eq!(
             page.downloads
                 .iter()
@@ -3570,6 +3615,26 @@ mod tests {
                 .next_cursor,
             None
         );
+
+        // An entry without an identifier is counted, not dropped; a page made only of them
+        // cannot be scrolled past and is an error rather than a silent end of the catalog.
+        let mixed = serde_json::json!({
+            "results": [
+                {"metadata": {"domain": "data.cityofnewyork.us"}, "resource": {"type": "dataset"}},
+                {"metadata": {"domain": "data.cityofnewyork.us"},
+                 "resource": {"id": "8wbx-tsch", "type": "dataset", "name": "Named"}}
+            ]
+        });
+        let page = decode_socrata_page(&mixed, "data.cityofnewyork.us").unwrap();
+        assert_eq!(page.asset_count, None);
+        assert_eq!(
+            page.assets_without_downloads
+                .get("socrata-entry-without-identifier"),
+            Some(&1)
+        );
+        assert_eq!(page.next_cursor.as_deref(), Some("8wbx-tsch"));
+        let unidentified = serde_json::json!({"results": [{"resource": {"type": "dataset"}}]});
+        assert!(decode_socrata_page(&unidentified, "data.cityofnewyork.us").is_err());
     }
 
     #[test]

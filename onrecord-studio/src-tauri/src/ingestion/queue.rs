@@ -2603,11 +2603,16 @@ async fn process_data_catalog_page(
             endpoint.platform.as_str(),
             endpoint.domain
         ),
-        format!(
-            "{} index reporting {} assets",
-            endpoint.platform.as_str(),
-            page.asset_count
-        ),
+        match page.asset_count {
+            Some(count) => format!(
+                "{} index reporting {count} assets",
+                endpoint.platform.as_str()
+            ),
+            None => format!(
+                "{} index reporting no asset total",
+                endpoint.platform.as_str()
+            ),
+        },
     )
     .await?;
     let mut tasks = Vec::new();
@@ -2839,7 +2844,10 @@ async fn prepare_html_page_document(
         file_name: Some(file_name),
         file_size: Some(body.len() as u64),
         description: Some(format!("Crawled HTML page: {}", inspection.final_url)),
-        content_type: Some("text/html".to_string()),
+        // The server's declared type, or none. The `.html` file name already routes extraction;
+        // asserting `text/html` for a body the server never described would be a claim the
+        // record does not support, and the stored type gates PDF-only detectors downstream.
+        content_type: inspection.content_type.clone(),
         download_url: Some(inspection.final_url.clone()),
         created_at: now.clone(),
         updated_at: now,
@@ -4558,8 +4566,20 @@ async fn extract_document(
                 Vec::new()
             };
             enqueue_tasks_resilient(context, attachment_tasks).await?;
-            let text = [payload.metadata_summary, payload.body_text]
-                .into_iter()
+            // The body is still evidence, so this is not deferred like an archive at the same
+            // depth; but the record must say the attachments exist and were not followed.
+            let withheld_note = (payload.withheld_attachment_count > 0).then(|| {
+                format!(
+                    "{} attachment(s) not extracted: maximum nested-container depth reached.",
+                    payload.withheld_attachment_count
+                )
+            });
+            let text = [
+                payload.metadata_summary,
+                payload.body_text,
+                withheld_note.unwrap_or_default(),
+            ]
+            .into_iter()
                 .filter(|value| !value.trim().is_empty())
                 .collect::<Vec<_>>()
                 .join("\n\n");

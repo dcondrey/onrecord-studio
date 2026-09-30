@@ -18,6 +18,7 @@
 use crate::{
     analysis::{
         assertion_index::{extract_assertions, Assertion, AssertionPredicate},
+        document_class::{classify, DocumentClass},
         finding::{
             finding_id, Finding, FindingCitation, FindingConfidence, FindingKind, FindingSeverity,
             FindingSubject,
@@ -47,6 +48,9 @@ struct SourcedAssertion {
     request_id: i64,
     file_name: Option<String>,
     likely_authoritative: bool,
+    /// The document is an official statement (press release, budget message, minutes) rather
+    /// than a released record.
+    is_statement: bool,
     assertion: Assertion,
 }
 
@@ -62,6 +66,8 @@ pub async fn run(repository: &DuckDbRepository) -> Result<Vec<Finding>, AppError
                 request_id: document.request_id,
                 file_name: document.file_name.clone(),
                 likely_authoritative: infer_authoritative(&document.file_name),
+                is_statement: classify(document.file_name.as_deref(), &document.text)
+                    .is_some_and(DocumentClass::is_statement),
                 assertion,
             };
             by_group.entry(key).or_default().push(sourced);
@@ -186,15 +192,37 @@ fn build_finding(
     );
 
     let display_subject = subject.replace("::", " ");
+    let statement_versus_record = a.is_statement != b.is_statement;
     let headline = format!(
-        "'{display_subject}' {label}: {a} in one document, {b} in another",
+        "{prefix}'{display_subject}' {label}: {a} in one document, {b} in another",
+        prefix = if statement_versus_record {
+            "Official statement vs released record: "
+        } else {
+            ""
+        },
         label = predicate.as_label(),
         a = a.assertion.value.display(),
         b = b.assertion.value.display(),
     );
+    let statement_note = if statement_versus_record {
+        let (statement, record) = if a.is_statement { (a, b) } else { (b, a) };
+        format!(
+            " '{}' is the official statement and '{}' is the released record.",
+            statement
+                .file_name
+                .clone()
+                .unwrap_or_else(|| format!("document {}", statement.document_id)),
+            record
+                .file_name
+                .clone()
+                .unwrap_or_else(|| format!("document {}", record.document_id)),
+        )
+    } else {
+        String::new()
+    };
     let explanation = format!(
         "The corpus contains {distinct} documents that state a {label} for '{display_subject}', \
-         and they disagree. '{a_file}' (request {a_req}) reports {a_val}; '{b_file}' \
+         and they disagree.{statement_note} '{a_file}' (request {a_req}) reports {a_val}; '{b_file}' \
          (request {b_req}) reports {b_val}. Contradictions between two authoritative-looking \
          documents are surfaced at higher severity; drift between routine correspondence is \
          surfaced at lower severity.",
@@ -297,6 +325,7 @@ mod tests {
             request_id: req,
             file_name: Some(name.to_string()),
             likely_authoritative: auth,
+            is_statement: false,
             assertion: Assertion {
                 subject: "records retention policy".to_string(),
                 predicate: AssertionPredicate::RetentionPeriod,
@@ -342,6 +371,42 @@ mod tests {
         assert!(finding.explanation.contains("personnel_policy.pdf"));
     }
 
+    #[test]
+    fn a_statement_against_a_record_is_labelled_and_two_records_are_not() {
+        let build = |statement: bool| {
+            let mut first = sourced(
+                "p",
+                5,
+                301,
+                "press_release.pdf",
+                false,
+                AssertionValue::Days(30),
+            );
+            first.is_statement = statement;
+            let second = sourced(
+                "p",
+                6,
+                302,
+                "letter_april.pdf",
+                false,
+                AssertionValue::Days(60),
+            );
+            build_finding(
+                "response_time_commitment",
+                AssertionPredicate::ResponseTimeCommitment,
+                vec![first, second],
+            )
+            .expect("must fire")
+        };
+        let mixed = build(true);
+        assert!(mixed
+            .headline
+            .starts_with("Official statement vs released record: "));
+        assert!(mixed
+            .explanation
+            .contains("'press_release.pdf' is the official statement and 'letter_april.pdf' is the released record"));
+        assert!(!build(false).headline.starts_with("Official statement"));
+    }
     #[test]
     fn build_finding_notable_when_documents_are_correspondence() {
         let rows = vec![

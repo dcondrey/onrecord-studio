@@ -31,6 +31,7 @@ const bridge = vi.hoisted(() => ({
 vi.mock('../ipc', () => ({
   formatNativeError: (reason: unknown) => String(reason),
   invokeCommand: (command: string) => {
+    if (command === 'build_lead_dossier') return new Promise(() => {});
     if (command !== 'list_story_leads') return Promise.resolve([]);
     return new Promise((resolve) => bridge.pending.push(resolve));
   },
@@ -77,6 +78,18 @@ describe('StoryDesk', () => {
     expect(screen.getByText(/largest figure named/)).toBeTruthy();
     expect(screen.getByText(/pattern signal/)).toBeTruthy();
     expect(screen.getByText(/1 related finding/)).toBeTruthy();
+  });
+
+  it('opens the dossier for the lead whose button was pressed', async () => {
+    render(<StoryDesk />);
+    await waitFor(() => expect(bridge.pending).toHaveLength(1));
+    act(() => bridge.pending[0]([lead('a', 'First lead'), lead('b', 'Second lead')]));
+    await screen.findByText('Second lead');
+    act(() => {
+      screen.getByRole('button', { name: 'Assemble dossier: Second lead' }).click();
+    });
+    expect(useAppStore.getState().dossierFindingId).toBe('b');
+    act(() => useAppStore.getState().closeLeadDossier());
   });
 
   it('discards a lead list that resolves after a findings refresh superseded it', async () => {

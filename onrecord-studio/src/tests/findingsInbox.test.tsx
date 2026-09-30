@@ -66,6 +66,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 import FindingsInbox from '../components/dashboard/FindingsInbox';
 import { useAppStore } from '../store/useAppStore';
+import { useProfileLensStore } from '../store/useProfileLensStore';
 import type { Finding } from '../types';
 
 function deferred<T>() {
@@ -122,6 +123,29 @@ describe('FindingsInbox', () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  it('does not report "no local profile" while the disclosure is still loading', async () => {
+    const pending = deferred<unknown>();
+    bridge.override.get_affiliation_disclosure = () => pending.promise;
+    useProfileLensStore.setState({ lensEnabled: true });
+    await act(async () => {
+      render(<FindingsInbox />);
+    });
+    expect(screen.getByText(/reading the local profile/i)).toBeTruthy();
+    expect(screen.queryByText(/no local profile is set/i)).toBeNull();
+    await act(async () => {
+      pending.resolve({
+        status: 'UNSET',
+        sentence: null,
+        affiliations: [],
+        ownPortalKeys: [],
+        ownAgencies: [],
+        ownEntityIds: [],
+      });
+    });
+    expect(screen.getByText(/no local profile is set/i)).toBeTruthy();
+    useProfileLensStore.setState({ lensEnabled: false });
   });
 
   it('renders the empty-state prompt when no findings are returned', async () => {
@@ -278,6 +302,32 @@ describe('FindingsInbox', () => {
     // `second` was dismissed on the backend; the rollback of `first` must not resurrect it.
     expect(screen.queryByText('Second to dismiss')).toBeNull();
     expect(screen.getByRole('alert').textContent).toMatch(/dismiss unavailable/);
+  });
+
+  it('does not re-show a row whose dismissal committed while a list load was in flight', async () => {
+    bridge.listRows = [sampleFinding({ id: 'gone', headline: 'Dismissed mid-load' })];
+    await act(async () => {
+      render(<FindingsInbox />);
+    });
+    await waitFor(() => {
+      expect(screen.getByText('Dismissed mid-load')).toBeTruthy();
+    });
+    // A reload starts (an ingest finished) and is answered from the pre-dismissal state.
+    const staleList = deferred<unknown[]>();
+    bridge.override.list_findings = () => staleList.promise;
+    await act(async () => {
+      useAppStore.getState().requestFindingsRefresh();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /dismiss finding: dismissed mid-load/i }));
+    });
+    await waitFor(() => {
+      expect(screen.queryByText('Dismissed mid-load')).toBeNull();
+    });
+    await act(async () => {
+      staleList.resolve([sampleFinding({ id: 'gone', headline: 'Dismissed mid-load' })]);
+    });
+    expect(screen.queryByText('Dismissed mid-load')).toBeNull();
   });
 
   it('does not overwrite a newer list with the pre-dismiss snapshot when a rejected dismissal rolls back', async () => {

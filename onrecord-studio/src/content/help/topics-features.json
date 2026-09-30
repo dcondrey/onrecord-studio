@@ -532,6 +532,76 @@
     ]
   },
   {
+    "id": "claim-checks",
+    "title": "Check figures in a document",
+    "group": "Findings",
+    "summary": "Compares dollar figures and balance statements in one document with the tables you imported.",
+    "keywords": [
+      "check figures",
+      "claim checks",
+      "claims",
+      "statement",
+      "mismatch",
+      "consistent",
+      "document viewer"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "Check figures, in the document viewer, reads the document's masked text, extracts figures it can tie to a scope, and compares each with the imported financial tables. Each result is consistent, a mismatch showing claimed against observed with the query ids behind it, or not checkable."
+        ]
+      },
+      {
+        "heading": "Limits",
+        "paragraphs": [
+          "A mismatch says the stated figure differs from the imported rows, not why. Text beyond the first 250,000 characters or more than 300 claims is skipped and reported as truncated. A check sees only what you imported."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [
+      "claim_checks"
+    ],
+    "related": [
+      "legal-vs-pattern"
+    ]
+  },
+  {
+    "id": "lead-dossier",
+    "title": "Lead dossier",
+    "group": "Findings",
+    "summary": "Assembles one finding with its evidence chain, related findings, a falsification test and the gaps in the record.",
+    "keywords": [
+      "lead dossier",
+      "evidence chain",
+      "falsification",
+      "gaps",
+      "related findings"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "A dossier gathers the cited evidence for one finding, other findings that share its subject, what would disprove it, and what the record does not contain. Each list reports when it was truncated."
+        ]
+      },
+      {
+        "heading": "Limits",
+        "paragraphs": [
+          "A dossier organizes recorded facts. It does not establish cause, intent or wrongdoing."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [
+      "lead_dossier"
+    ],
+    "related": [
+      "legal-vs-pattern"
+    ]
+  },
+  {
     "id": "facility-coverage",
     "title": "Facility coverage",
     "group": "Concepts",
