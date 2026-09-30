@@ -1,4 +1,4 @@
-import type { RequestSearchResult } from '../types';
+import type { RequestSearchResult, TopicFindingBasis, TopicFindingMatch, TopicPackView } from '../types';
 
 export const BRIEFING_STORAGE_KEY = 'onrecord:briefing-project:v1';
 
@@ -222,6 +222,60 @@ export function buildBriefingMarkdown(project: BriefingProject, generatedAt = ne
     'Evidence-status labels are the operator’s assessments. Request records and excerpts remain traceable to the local OnRecord locator above; a saved lead is not independently corroborated merely because it appears in this outline.',
     '',
   ].join('\n');
+}
+
+export const TOPIC_BASIS_LABELS: Record<TopicFindingBasis, string> = {
+  COUNTED: 'Counted violation',
+  STATED: 'Stated in the record',
+  PATTERN: 'Pattern signal, not a legal claim',
+};
+
+/**
+ * A briefing of one topic's findings, for `buildBriefingMarkdown`. Citations are written as
+ * locators only: a detector's quote has not been masked or checked against the stored text, so it
+ * stays out of an exported file.
+ */
+export function topicBriefingProject(topic: TopicPackView, now = new Date()): BriefingProject {
+  return {
+    ...createDefaultBriefingProject(now),
+    title: `${topic.title}: findings briefing`,
+    objective: `Findings whose subject is a request or document tagged "${topic.title}" by its own wording (${topic.cues.join(', ')}).`,
+    evidence: topic.findings.map((match) => topicFindingEvidence(match, now)),
+    autoDrafted: true,
+  };
+}
+
+function topicFindingEvidence({ basis, anchorRequestId, finding }: TopicFindingMatch, now: Date): BriefingEvidence {
+  const confidence = finding.confidence.kind === 'MEASURED'
+    ? [`Measured confidence: ${Math.round(finding.confidence.basisPoints / 100)}%`]
+    : [];
+  const citations = finding.citations.length === 0
+    ? ['Citations: none recorded.']
+    : ['Citations:', ...finding.citations.map((citation) => {
+      const range = citation.characterStart === null
+        ? ''
+        : ` / characters ${citation.characterStart}${citation.characterEnd === null ? '' : `–${citation.characterEnd}`}`;
+      return `- ${citation.portalKey} / document ${citation.documentId}${range}${citation.label ? ` (${citation.label})` : ''}`;
+    })];
+  return {
+    id: `topic-finding:${finding.id}`,
+    kind: finding.subject.documentId === null ? 'REQUEST' : 'DOCUMENT_EXCERPT',
+    portalKey: finding.subject.portalKey ?? '',
+    requestId: anchorRequestId,
+    documentId: finding.subject.documentId,
+    fileName: null,
+    characterOffset: null,
+    sourceUrl: null,
+    agencyName: 'Not recorded on the finding',
+    label: finding.headline,
+    recordedAt: finding.lastSeenAt,
+    excerpt: '',
+    rawFileSha256: null,
+    claim: `${TOPIC_BASIS_LABELS[basis]}: ${finding.headline}`,
+    note: [`Basis: ${TOPIC_BASIS_LABELS[basis]}.`, ...confidence, finding.explanation, ...citations].join('\n'),
+    readiness: 'LEAD',
+    addedAt: now.toISOString(),
+  };
 }
 
 export function localDateInput(date: Date): string {

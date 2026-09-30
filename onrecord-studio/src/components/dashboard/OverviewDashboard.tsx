@@ -21,6 +21,7 @@ import ChangeFeed from './ChangeFeed';
 import SubjectDossier from './SubjectDossier';
 import PostIngestBrief from './PostIngestBrief';
 import CrossCorpusExplorer from './CrossCorpusExplorer';
+import TopicPacks from './TopicPacks';
 
 export default function OverviewDashboard() {
   const portals = useAppStore((state) => state.portals);
@@ -88,6 +89,7 @@ export default function OverviewDashboard() {
           <ResearchWorkspace onReview={(reportId) => setWorkbench({ reportId, review: true })} />
           <section className="app-panel flex flex-wrap items-center justify-between gap-3 p-4"><div><h3 className="text-sm font-semibold text-slate-200">Develop a lead into a durable case</h3><p className="mt-1 text-xs text-slate-400">Track requests, productions and commitments; reconcile spending; challenge the evidence.</p></div><button type="button" className="analysis-button" onClick={() => setWorkbench({ reportId: '', review: false })}>Open casework and research tools</button></section>
         </>}
+        <ToolDrawer label="Topics: encampments, belongings, police spending, public restrooms"><TopicPacks /></ToolDrawer>
         <ToolDrawer label="Plan an investigation or draft a request manually"><InvestigationDesk /></ToolDrawer>
         <ToolDrawer label="Collection, coverage and storage"><AutomaticDiscovery /><div className="mt-4"><DataMaintenance /></div></ToolDrawer>
         <ToolDrawer label="Browse sources and add records"><SanDiegoWorkspace /></ToolDrawer>

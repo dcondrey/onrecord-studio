@@ -50,6 +50,7 @@ pub mod typed_edges;
 
 pub mod finding;
 pub mod gaps;
+pub mod topic_packs;
 
 pub mod detectors;
 

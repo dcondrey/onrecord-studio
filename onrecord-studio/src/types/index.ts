@@ -36,3 +36,5 @@ export * from "./profile";
 export * from "./tracker";
 
 export * from "./leadDossier";
+
+export * from "./topics";
