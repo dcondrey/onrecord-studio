@@ -4558,8 +4558,20 @@ async fn extract_document(
                 Vec::new()
             };
             enqueue_tasks_resilient(context, attachment_tasks).await?;
-            let text = [payload.metadata_summary, payload.body_text]
-                .into_iter()
+            // The body is still evidence, so this is not deferred like an archive at the same
+            // depth; but the record must say the attachments exist and were not followed.
+            let withheld_note = (payload.withheld_attachment_count > 0).then(|| {
+                format!(
+                    "{} attachment(s) not extracted: maximum nested-container depth reached.",
+                    payload.withheld_attachment_count
+                )
+            });
+            let text = [
+                payload.metadata_summary,
+                payload.body_text,
+                withheld_note.unwrap_or_default(),
+            ]
+            .into_iter()
                 .filter(|value| !value.trim().is_empty())
                 .collect::<Vec<_>>()
                 .join("\n\n");

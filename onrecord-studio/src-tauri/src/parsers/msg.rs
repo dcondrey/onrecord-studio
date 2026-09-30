@@ -25,6 +25,9 @@ pub struct ExtractedEmailPayload {
     pub metadata: EmailMetadata,
     pub metadata_summary: String,
     pub attachment_documents: Vec<ExtractedEmailDocument>,
+    /// Attachments the message carries that were not extracted because the caller asked for
+    /// none. Zero when attachments were collected or the message has none.
+    pub withheld_attachment_count: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -43,6 +46,7 @@ struct ParsedMessagePayload {
     metadata: EmailMetadata,
     metadata_summary: String,
     attachments: Vec<PendingAttachment>,
+    withheld_attachment_count: usize,
 }
 
 struct PendingAttachment {
@@ -413,6 +417,7 @@ fn parse_message(
     let metadata_summary = build_metadata_summary(&metadata);
     let mut attachments = Vec::new();
     let mut total_bytes = 0u64;
+    let mut withheld_attachment_count = 0;
     if collect_nested_attachments {
         collect_attachments(
             message,
@@ -421,6 +426,8 @@ fn parse_message(
             &mut attachments,
             &mut total_bytes,
         )?;
+    } else {
+        withheld_attachment_count = message.attachments.len();
     }
 
     Ok(ParsedMessagePayload {
@@ -428,6 +435,7 @@ fn parse_message(
         metadata,
         metadata_summary,
         attachments,
+        withheld_attachment_count,
     })
 }
 
@@ -617,6 +625,7 @@ pub async fn extract_msg_layers<P: AsRef<Path>>(
         metadata: parsed.metadata,
         metadata_summary: parsed.metadata_summary,
         attachment_documents,
+        withheld_attachment_count: parsed.withheld_attachment_count,
     })
 }
 
@@ -891,6 +900,19 @@ mod tests {
             Some("2026-08-24T20:15:00Z")
         );
         assert_eq!(extracted.attachment_documents.len(), 1);
+        assert_eq!(extracted.withheld_attachment_count, 0);
+
+        let withheld = extract_msg_layers(
+            &message_path,
+            MsgExtractionContext {
+                source_document: &source_document,
+                cache_directory: &attachment_cache,
+                collect_attachments: false,
+            },
+        )
+        .await?;
+        assert!(withheld.attachment_documents.is_empty());
+        assert_eq!(withheld.withheld_attachment_count, 1);
 
         let queued_document = extracted.attachment_documents[0].metadata.clone();
         assert_eq!(queued_document.file_name.as_deref(), Some("evidence.txt"));
