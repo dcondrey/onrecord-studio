@@ -25,6 +25,8 @@ pub mod review;
 
 pub mod financial;
 
+pub mod facility_coverage;
+
 pub mod monitoring;
 
 pub mod assertion_index;

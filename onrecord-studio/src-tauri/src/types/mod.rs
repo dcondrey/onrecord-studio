@@ -78,6 +78,9 @@ pub mod review;
 pub mod financial;
 pub use financial::*;
 
+pub mod facilities;
+pub use facilities::*;
+
 pub mod casework;
 pub use casework::*;
 

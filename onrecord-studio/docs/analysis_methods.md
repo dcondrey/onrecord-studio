@@ -128,3 +128,23 @@ so `$1.2 billion` is consistent with any total in $[\$1.15\text{B}, \$1.25\text{
 * A claim that cannot be bound is **unreconciled**, never a contradiction: no dataset for the jurisdiction, ambiguous fund or department, no fiscal year, no stated budget-versus-actual basis, a partial or rejected-row dataset, or a claim kind the data cannot support. Balance, surplus and deficit claims are unreconciled today because no mapped role distinguishes revenue from expenditure; an account-number convention is not inferred.
 * Confidence is derived from what was observed: 6000 basis points for a mismatch whose scope was completed from context, +1500 when the sentence named the fund, +1500 when it stated the fiscal year itself rather than inheriting the heading's. A complete dataset is a precondition, not a bonus. Confidence is unassessed whenever the claim is unreconciled.
 * Consistent and unreconciled outcomes are returned by the sweep alongside mismatches so a reader can see what was checked and what could not be; only mismatches are stored as findings.
+
+## 6. Facility Coverage From Imported Facility Lists
+
+`analysis/facility_coverage.rs` (hours grammar and per-area arithmetic), `storage/facilities.rs` (mapping, area membership), commands `get_facility_coverage` and `save_facility_coverage_mapping`. This is a descriptive view. It produces no finding and no confidence value.
+
+### A. Input
+An agency facility list is imported through the ordinary analytical import (`REGIONAL_DATA`). A `FacilityCoverageMapping`, stored per snapshot in `facility_coverage_mappings`, names the source columns: facility name (required), address or latitude and longitude (at least one), and optionally a facility id, daily open hours and category. When a category column is mapped the user lists the category values that identify a public restroom (exact match, case ignored); a row with no recorded category is not counted and the report states how many such rows exist. Without a category column every row is counted.
+
+Areas are supplied by the user and stored in the same mapping: a name plus exactly one of an inclusive latitude/longitude box or a list of facility ids. A box needs mapped coordinates; rows whose coordinates do not cast to a finite number are reported as `locationNotRecorded` and fall inside no box. Addresses are never geocoded. Listed ids that match no counted row are reported per area.
+
+### B. Hours grammar
+Each hours value is one of three states: **recorded**, **uninterpretable**, or **not recorded** (blank). Recorded forms, after lowercasing and removing whitespace: `closed` (recorded, open no minutes); `24 hours`, `24hrs`, `24/7`, `open 24 hours` (open all 1440 minutes); or one or more ranges separated by `,` or `;`, each `start-end` or `start to end`. An endpoint is `HH:MM` on a 24-hour clock (`24:00` allowed only as an end), `h[:mm]am|pm`, `noon`, or `midnight`. A bare hour without minutes or a meridiem (`8-5`) is uninterpretable. An end of `00:00`, `24:00`, `12am` or `midnight` means minute 1440. An end before the start wraps: `20:00-02:00` is `[1200,1440) ∪ [0,120)`. A range whose start equals its end (`00:00-00:00`) is uninterpretable, as is any weekday-qualified, seasonal, or descriptive schedule. If any range in a value fails, the whole value is uninterpretable.
+
+### C. Per-area arithmetic
+Minutes are the unit; the view renders them as hours. For each area, over facilities with **recorded** hours only:
+$$\text{open\_minutes\_covered} = \left|\{\,m \in [0,1440) : \exists f,\ m \in \text{open}(f)\,\}\right|, \qquad \text{minutes\_with\_none\_open} = 1440 - \text{open\_minutes\_covered}$$
+Both are absent (`null`, shown as "not recorded") when the area has no facility with recorded hours, including an area with zero facilities; they are never 0 or 1440 by default. The area row also reports counts of public restrooms, with recorded hours, with uninterpretable hours, and with hours not recorded, so a reader can see how much of the area the time figures describe. A facility whose hours are uninterpretable or not recorded may be open during a minute counted as having none open.
+
+### D. What the view does not claim
+It does not state that a facility was actually open, that a closure occurred, or that any commitment was broken. A comparison against a documented service commitment would be a separate, counted evaluation; none is performed here.

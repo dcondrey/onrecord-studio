@@ -18,6 +18,7 @@ import type {
 import Icon from '../ui/icons';
 import BudgetComparison from './BudgetComparison';
 import DataDiscovery from './DataDiscovery';
+import FacilityCoveragePanel from './FacilityCoveragePanel';
 import { useAppStore } from '../../store/useAppStore';
 import AutomaticDiscovery from './AutomaticDiscovery';
 import { useAutomaticDiscovery } from './AutomaticDiscoveryProvider';
@@ -336,6 +337,10 @@ export default function AnalysisWorkbench() {
               setSql(query);
               void runGatedSql('Comparing budget and actuals', query);
             }} />
+          </Panel>}
+
+          {schema && <Panel title="Facility coverage" icon="database">
+            <FacilityCoveragePanel schema={schema} />
           </Panel>}
 
           <Panel title="SQL Analysis" icon="database">

@@ -530,5 +530,43 @@
       "sources",
       "data-handling"
     ]
+  },
+  {
+    "id": "facility-coverage",
+    "title": "Facility coverage",
+    "group": "Concepts",
+    "summary": "Count public restrooms and their recorded daily open hours per area you define.",
+    "keywords": [
+      "facility",
+      "facilities",
+      "restroom",
+      "restrooms",
+      "bathroom",
+      "toilet",
+      "hours",
+      "open hours",
+      "downtown",
+      "area",
+      "bounding box",
+      "coverage"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "Import an agency's facility list as a table in Analysis, then open Facility coverage, choose the table and map its columns: facility name, an address or latitude and longitude, daily open hours, and optionally an id and a category. When a category column is mapped, list the category values that mean a public restroom; otherwise every row is counted. Define each area yourself, either as a latitude/longitude box (edges included) or as a list of facility ids. Areas are never guessed and addresses are never geocoded.",
+          "For each area the table shows the number of public restrooms, how many have recorded daily hours, how many have hours that could not be read, how many have no hours recorded, the part of a 24-hour day in which at least one facility with recorded hours is open, and the time in which none of them is open. Only recorded hours enter that arithmetic. When no facility in an area has recorded hours, both time figures read \"not recorded\" rather than 0 or 24 hours. Facilities with unrecorded or unreadable hours may be open when none of the recorded ones are.",
+          "Hours are read as one daily schedule: ranges such as 06:00-22:00 or 6am-10pm, several ranges separated by commas, \"24 hours\", \"24/7\" and \"Closed\". A range ending at midnight ends at the end of the day, and a range such as 20:00-02:00 wraps past midnight. Weekday-specific schedules, \"dawn to dusk\" and a range whose start equals its end are counted as unreadable. This view describes the list. It is not a finding and does not establish that a commitment was broken."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [
+      "facilities"
+    ],
+    "related": [
+      "view-analysis",
+      "measured-vs-unassessed"
+    ]
   }
 ]
