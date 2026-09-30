@@ -8,15 +8,23 @@ use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
 pub async fn validate_output_path(value: &str, output_root: &Path) -> Result<PathBuf, AppError> {
+    validate_output_path_with_extension(value, output_root, "html").await
+}
+
+pub async fn validate_output_path_with_extension(
+    value: &str,
+    output_root: &Path,
+    required_extension: &str,
+) -> Result<PathBuf, AppError> {
     let path = PathBuf::from(value.trim());
     if !path
         .extension()
         .and_then(|value| value.to_str())
-        .is_some_and(|extension| extension.eq_ignore_ascii_case("html"))
+        .is_some_and(|extension| extension.eq_ignore_ascii_case(required_extension))
     {
-        return Err(AppError::Export(
-            "Output must be a non-empty .html file path".to_string(),
-        ));
+        return Err(AppError::Export(format!(
+            "Output must be a non-empty .{required_extension} file path"
+        )));
     }
     if tokio::fs::try_exists(&path)
         .await

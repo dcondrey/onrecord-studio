@@ -41,7 +41,8 @@ pub async fn load_source_documents(
                                 WHERE f.document_id = d.id
                                   AND f.portal_subdomain = d.portal_subdomain
                                 LIMIT 1
-                            ) END
+                            ) END,
+                            d.download_url
                      FROM documents d
                      WHERE d.id = ?1 AND d.portal_subdomain = ?2",
                 )
@@ -58,10 +59,11 @@ pub async fn load_source_documents(
                             row.get::<_, Option<String>>(2)?,
                             row.get::<_, Option<String>>(3)?,
                             row.get::<_, Option<String>>(4)?,
+                            row.get::<_, Option<String>>(5)?,
                         ))
                     },
                 );
-                let (file_name, visibility, raw, projection, text) = match row {
+                let (file_name, visibility, raw, projection, text, download_url) = match row {
                     Ok(row) => row,
                     Err(duckdb::Error::QueryReturnedNoRows) => continue,
                     Err(error) => return Err(AppError::Storage(error.to_string())),
@@ -84,6 +86,7 @@ pub async fn load_source_documents(
                         raw_file_sha256: digest_or_none(raw),
                         extracted_text_projection_sha256: digest_or_none(projection),
                         text,
+                        download_url,
                     },
                 );
             }

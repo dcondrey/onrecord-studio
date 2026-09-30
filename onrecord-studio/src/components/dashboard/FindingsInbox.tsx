@@ -9,6 +9,7 @@ import { FindingEvidence } from '../ui/EvidenceBasis';
 import ArtifactDrafts from './ArtifactDrafts';
 import EvidenceGaps from './EvidenceGaps';
 import LeadDossier from './LeadDossier';
+import EvidencePacketExport from './EvidencePacketExport';
 import VerifiableReportExport from './VerifiableReportExport';
 import { useProfileLensStore } from '../../store/useProfileLensStore';
 import { touchesOwnOrganization, useAffiliationDisclosure } from '../account/useProfile';
@@ -206,6 +207,9 @@ export default function FindingsInbox() {
           <summary className="focus-ring cursor-pointer font-semibold">Export a verifiable report of these findings</summary>
           <div className="mt-2">
             <VerifiableReportExport />
+            <div className="mt-2">
+              <EvidencePacketExport />
+            </div>
           </div>
         </details>
       )}
@@ -358,6 +362,7 @@ function FindingRow({
       {expanded && (
         <div id={`finding-drafts-${finding.id}`}>
           <ArtifactDrafts findingId={finding.id} />
+          {isTauri() && <EvidencePacketExport findingIds={[finding.id]} />}
         </div>
       )}
     </li>

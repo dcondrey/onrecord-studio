@@ -26,6 +26,15 @@ pub struct ManifestOptions {
     pub disclosure: DisclosureContext,
 }
 
+/// Limitations that describe the signed HTML report's signature. The evidence packet is unsigned
+/// and leaves these out.
+pub const SIGNATURE_LIMITATIONS: [&str; 2] = [
+    "The signature shows this file is unchanged since it was signed by the holder of the \
+     embedded key. It does not say who that is: the key is generated and held locally and is \
+     not externally attested.",
+    "This page cannot check whether the signing key has since been revoked.",
+];
+
 #[derive(Default)]
 struct Withholdings(BTreeMap<WithheldReason, usize>);
 
@@ -73,12 +82,11 @@ pub fn build_manifest(
             &mut omitted_citations,
         )?);
     }
-    let mut limitations = vec![
-        "The signature shows this file is unchanged since it was signed by the holder of the \
-         embedded key. It does not say who that is: the key is generated and held locally and is \
-         not externally attested."
-            .to_string(),
-        "This page cannot check whether the signing key has since been revoked.".to_string(),
+    let mut limitations: Vec<String> = SIGNATURE_LIMITATIONS
+        .iter()
+        .map(|line| (*line).to_string())
+        .collect();
+    limitations.extend([
         "Personal-information masking is structural (Social Security numbers, telephone numbers, \
          street addresses). It is not a guarantee that no sensitive value remains; review before \
          publishing."
@@ -86,7 +94,7 @@ pub fn build_manifest(
         "A pattern signal is not a legal conclusion. Only a counted violation is presented as a \
          legal claim."
             .to_string(),
-    ];
+    ]);
     if let Some(sentence) = options.disclosure.sentence() {
         limitations.insert(0, sentence.to_string());
     }

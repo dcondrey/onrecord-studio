@@ -1,0 +1,61 @@
+[
+  {
+    "id": "evidence-packets",
+    "title": "Evidence packets",
+    "group": "Findings",
+    "summary": "A Markdown file and a JSON file for citing findings: each claim with its basis, sources, quoted excerpts, the detector's own account, confidence and what it does not show, plus a content hash.",
+    "keywords": [
+      "evidence",
+      "packet",
+      "cite",
+      "citation",
+      "journalist",
+      "export",
+      "hash",
+      "reproduce",
+      "gap",
+      "markdown"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "In the Findings inbox, open Export a verifiable report, then Export evidence packet for the list, or expand one finding and use Export evidence packet there. The app writes two files into its report folder: a Markdown file to read and cite, and a JSON file with the same content."
+        ]
+      },
+      {
+        "heading": "What each claim carries",
+        "items": [
+          "Its basis, stated in words: a counted violation (a counted comparison against a rule or commitment the record states) or a pattern signal (evidence for review, not a legal conclusion).",
+          "The detector's name and the detector's own account of what it compared or counted.",
+          "The confidence as observed: a measured percentage, or Not assessed, which is not a score of zero.",
+          "Each source document: file name, file and extracted-text digests, download address and character range where recorded, and the quoted excerpt with whether it was checked against stored text. Anything not recorded says so.",
+          "What this does not show, built from what was actually observed for that claim."
+        ]
+      },
+      {
+        "heading": "Gaps are not findings",
+        "paragraphs": [
+          "Routes the app identified but could not test are listed in their own section, only for the detectors behind the claims. A gap has no basis and no confidence, and is never counted as a claim. An empty gap list does not mean none exist, and a failed gap check is stated in the limitations."
+        ]
+      },
+      {
+        "heading": "Regenerating and comparing",
+        "paragraphs": [
+          "The content hash is the SHA-256 of the packet's content. It does not change when the packet is regenerated from unchanged findings, whatever the time or order, and it changes when a quote, a confidence, a claim or a gap changes. The packet is not signed, so the hash shows a change but not who made the packet. Detectors are identified by name only; no detector version is recorded, and a different program build can produce different content."
+        ]
+      },
+      {
+        "heading": "What is left out",
+        "paragraphs": [
+          "Guesses about who a redaction hides and dismissed findings are never included. Excerpts, names and addresses from documents that are not public are not included. Download addresses lose anything after a question mark. Personal information in quotes is masked structurally, which is not a guarantee: review before publishing."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [],
+    "related": [
+      "topic-packs"
+    ]
+  }
+]

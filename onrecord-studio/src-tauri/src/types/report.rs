@@ -16,6 +16,19 @@ pub enum ReportEvidenceBasis {
     PatternSignal,
 }
 
+impl ReportEvidenceBasis {
+    /// The sentence a reader sees beside a claim. Fixed wording, so every rendering of a claim
+    /// states its basis the same way.
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::CountedViolation => {
+                "Counted violation: a counted comparison against a rule or commitment the record itself states"
+            }
+            Self::PatternSignal => "Pattern signal: evidence for review, not a legal conclusion",
+        }
+    }
+}
+
 /// Mirrors `FindingConfidence` with an explicit wire shape so a verifier in another language can
 /// tell "not assessed" from a measured zero without inferring from a missing field.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -141,6 +154,18 @@ pub struct VerifiableReportManifest {
     pub claims: Vec<ReportClaim>,
     pub withheld: Vec<WithheldItem>,
     pub limitations: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EvidencePacketExportResult {
+    pub markdown_path: String,
+    pub json_path: String,
+    pub content_sha256: String,
+    pub claim_count: usize,
+    pub gap_count: usize,
+    pub withheld_count: usize,
+    pub generated_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

@@ -136,6 +136,23 @@ describe('VerifiableReportExport mount', () => {
   });
 });
 
+describe('EvidencePacketExport mount', () => {
+  it('renders in the findings inbox and exports only on click', async () => {
+    render(<FindingsInbox />);
+    const button = await screen.findByRole('button', { name: 'Export evidence packet', hidden: true });
+    expect(bridge.calls).not.toContain('export_evidence_packet');
+    fireEvent.click(button);
+    await waitFor(() => expect(bridge.calls).toContain('export_evidence_packet'));
+  });
+
+  it('is absent outside Tauri', async () => {
+    bridge.tauri = false;
+    render(<FindingsInbox />);
+    await waitFor(() => expect(bridge.calls).toContain('list_findings'));
+    expect(screen.queryByRole('button', { name: 'Export evidence packet', hidden: true })).toBeNull();
+  });
+});
+
 describe('Cmd/Ctrl+6', () => {
   it('opens the Briefing view', () => {
     act(() => useAppStore.setState({ workspaceView: 'overview' }));
