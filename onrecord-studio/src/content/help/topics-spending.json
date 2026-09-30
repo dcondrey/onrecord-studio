@@ -1,0 +1,418 @@
+[
+  {
+    "id": "finding-contract-ceiling-exceeded",
+    "title": "Payments above the contract ceiling",
+    "group": "Finding kinds",
+    "summary": "Posted payments on one contract that add up to more than its executed ceiling: the base amount plus executed amendments, with the amendment register complete.",
+    "keywords": [
+      "contract ceiling exceeded",
+      "finding",
+      "kind",
+      "contract",
+      "ceiling",
+      "payment",
+      "amendment",
+      "overpayment",
+      "spending"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "Posted payments in the imported ledger exceed the contract's own recorded ceiling. Every input is a cited row: the contract, each amendment and each payment. Every cited row is shown with the query id that produced it, and each query can be re-run in the financial workbench."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "Why the money was paid, whether an unrecorded amendment, credit or pass-through explains it, or that anything was wasted or unlawful. Payments in other funds or years outside the retrieved scope can change the true total. Finding nothing is not evidence of compliance: the check sees only the tables and documents already imported."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Legal claim: counted violation. This is a counted comparison of recorded rows with a written limit, ceiling or rule, with every input recorded; it states what the records show against what the document or ledger states. Confidence is derived from what was observed and is never 100 percent because other funds, earlier years and unrecorded approvals sit outside the retrieved rows."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "CONTRACT_CEILING_EXCEEDED"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-payment-outside-contract-term",
+    "title": "Payments outside the contract term",
+    "group": "Finding kinds",
+    "summary": "Posted payments dated before a contract's recorded start date or after its recorded end date.",
+    "keywords": [
+      "payment outside contract term",
+      "finding",
+      "kind",
+      "contract",
+      "term",
+      "payment date",
+      "start date",
+      "end date",
+      "spending"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "The recorded transaction date falls outside the recorded term. A payment after the end date is compared only when an executed amendment register states each amendment's own end date, because an extension would change the answer. Every cited row is shown with the query id that produced it, and each query can be re-run in the financial workbench."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "That the service was not delivered in the term. A transaction date can be a posting date for earlier work. Without a recorded term, transaction date or amendment end date the check is reported as missing evidence, not skipped. Finding nothing is not evidence of compliance: the check sees only the tables and documents already imported."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Legal claim: counted violation. This is a counted comparison of recorded rows with a written limit, ceiling or rule, with every input recorded; it states what the records show against what the document or ledger states. Confidence is derived from what was observed and is never 100 percent because other funds, earlier years and unrecorded approvals sit outside the retrieved rows."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "PAYMENT_OUTSIDE_CONTRACT_TERM"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-payment-without-contract-record",
+    "title": "Payments to a vendor with no contract record",
+    "group": "Finding kinds",
+    "summary": "Posted payments to a vendor that neither the contract register's vendors nor the payments' contract ids name, while the register is complete.",
+    "keywords": [
+      "payment without contract record",
+      "finding",
+      "kind",
+      "contract",
+      "vendor",
+      "payment",
+      "register",
+      "absence",
+      "spending"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "An absence between two imported tables: the payment ledger names a vendor the contract register does not. Every cited row is shown with the query id that produced it, and each query can be re-run in the financial workbench."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "That a contract was required or missing. Registers often omit small purchases, purchase orders and grants, and vendors can carry different identifiers in different systems. This is a labelled pattern, never a violation. Finding nothing is not evidence of compliance: the check sees only the tables and documents already imported."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is derived from what was observed and stays low."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "PAYMENT_WITHOUT_CONTRACT_RECORD"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-appropriation-exceeded",
+    "title": "Spending above the revised appropriation",
+    "group": "Finding kinds",
+    "summary": "Recorded actual spending, or actual plus open encumbrances, above the recorded revised appropriation for one fund, fiscal year and canonical account.",
+    "keywords": [
+      "appropriation exceeded",
+      "finding",
+      "kind",
+      "appropriation",
+      "budget",
+      "revised",
+      "actual",
+      "encumbrance",
+      "overspend",
+      "spending"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "The ledgers state a revised appropriation and a larger amount spent or committed for the same fund, year and account. Conflicting account crosswalks block the comparison. Every cited row is shown with the query id that produced it, and each query can be re-run in the financial workbench."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "That the spending was unauthorized. A dated transfer or supplemental appropriation may be missing from the revised rows, and open encumbrances may double count amounts already paid, which lowers the confidence shown. Adopted amounts alone are never treated as the limit; a ledger with no revised rows is reported as missing evidence. Finding nothing is not evidence of compliance: the check sees only the tables and documents already imported."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Legal claim: counted violation. This is a counted comparison of recorded rows with a written limit, ceiling or rule, with every input recorded; it states what the records show against what the document or ledger states. Confidence is derived from what was observed and is never 100 percent because other funds, earlier years and unrecorded approvals sit outside the retrieved rows."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "APPROPRIATION_EXCEEDED"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-restricted-fund-off-program",
+    "title": "Restricted fund spent on an unnamed program",
+    "group": "Finding kinds",
+    "summary": "Actual spending from a fund recorded as restricted, on a program the restriction register does not name.",
+    "keywords": [
+      "restricted fund off program",
+      "finding",
+      "kind",
+      "restriction",
+      "restricted fund",
+      "program",
+      "eligible",
+      "grant",
+      "spending"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "The restriction register lists the programs a restricted fund may be spent on, and actual expenditure rows for the same fund and year carry another program. Program identifiers are matched exactly. Every cited row is shown with the query id that produced it, and each query can be re-run in the financial workbench."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "That the fund was misused. The two tables may name the same program differently, and a restriction may permit a class of programs. Rows with no program are not counted. Mixed or unrecognized classifications, or a restriction that names no program, are reported as missing evidence. Finding nothing is not evidence of compliance: the check sees only the tables and documents already imported."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Legal claim: counted violation. This is a counted comparison of recorded rows with a written limit, ceiling or rule, with every input recorded; it states what the records show against what the document or ledger states. Confidence is derived from what was observed and is never 100 percent because other funds, earlier years and unrecorded approvals sit outside the retrieved rows."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "RESTRICTED_FUND_OFF_PROGRAM"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-approval-threshold-exceeded",
+    "title": "Amounts above a stated approval limit, recorded as not approved",
+    "group": "Finding kinds",
+    "summary": "Rows above an approval limit the agency's own policy states, whose approval value explicitly records that no approval was obtained.",
+    "keywords": [
+      "approval threshold exceeded",
+      "finding",
+      "kind",
+      "approval",
+      "threshold",
+      "policy",
+      "council",
+      "purchase",
+      "limit",
+      "spending"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "Three things are all cited: the policy sentence stating the limit, the rows above it, and an approval value that says no approval was obtained. The row must be dated on or after the policy's effective date; when the policy states none, its upload date is used and confidence is lower. Every cited row is shown with the query id that produced it, and each query can be re-run in the financial workbench."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "That the purchase was improper. Approval may be recorded elsewhere, and the policy may have an exception or delegation the extracted sentence does not state; sentences containing exceptions are not extracted. A blank approval cell is a missing record, reported separately as a pattern. Finding nothing is not evidence of compliance: the check sees only the tables and documents already imported."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Legal claim: counted violation. This is a counted comparison of recorded rows with a written limit, ceiling or rule, with every input recorded; it states what the records show against what the document or ledger states. Confidence is derived from what was observed and is never 100 percent because other funds, earlier years and unrecorded approvals sit outside the retrieved rows."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "APPROVAL_THRESHOLD_EXCEEDED"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-approval-record-absent",
+    "title": "Amounts above a stated approval limit, no approval recorded",
+    "group": "Finding kinds",
+    "summary": "Rows above an approval limit the agency's own policy states, whose approval cell is blank or not applicable.",
+    "keywords": [
+      "approval record absent",
+      "finding",
+      "kind",
+      "approval",
+      "blank",
+      "policy",
+      "limit",
+      "missing record",
+      "spending"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "A missing record: the policy states a limit and the table records no approval for rows above it. Every cited row is shown with the query id that produced it, and each query can be re-run in the financial workbench."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "That approval was not obtained. A blank cell does not say so. This is a labelled pattern with low confidence; request the approval records. Finding nothing is not evidence of compliance: the check sees only the tables and documents already imported."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is derived from what was observed and stays low."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "APPROVAL_RECORD_ABSENT"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-split-purchase-pattern",
+    "title": "Payments clustered under a stated limit",
+    "group": "Finding kinds",
+    "summary": "At least three payments to one vendor within 14 days, each within 10 percent below a limit the agency's policy states, whose sum exceeds that limit.",
+    "keywords": [
+      "split purchase pattern",
+      "finding",
+      "kind",
+      "split purchase",
+      "threshold",
+      "vendor",
+      "cluster",
+      "policy",
+      "spending"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "A clustering pattern. The window, margin and minimum count are fixed in the detector and are stated in the finding. Every cited row is shown with the query id that produced it, and each query can be re-run in the financial workbench."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "That a purchase was split. Installments, recurring services and round pricing produce the same pattern. The policy sentence cited does not forbid splitting, so this is never presented as a breach. Finding nothing is not evidence of compliance: the check sees only the tables and documents already imported."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is derived from what was observed and stays low."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "SPLIT_PURCHASE_PATTERN"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-split-purchase-prohibited-by-policy",
+    "title": "Clustered payments where the policy forbids splitting",
+    "group": "Finding kinds",
+    "summary": "The same clustering, where the same policy document also states that dividing a purchase to stay under a limit is prohibited, and the payments fall after it took effect.",
+    "keywords": [
+      "split purchase prohibited by policy",
+      "finding",
+      "kind",
+      "split purchase",
+      "prohibited",
+      "policy",
+      "threshold",
+      "vendor",
+      "spending"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "The clustering and the policy's own prohibition are both cited. Every cited row is shown with the query id that produced it, and each query can be re-run in the financial workbench."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "That the payments were one purchase divided; the ledger does not record that. Each payment may have been approved separately. Finding nothing is not evidence of compliance: the check sees only the tables and documents already imported."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Legal claim: counted violation. This is a counted comparison of recorded rows with a written limit, ceiling or rule, with every input recorded; it states what the records show against what the document or ledger states. Confidence is derived from what was observed and is never 100 percent because other funds, earlier years and unrecorded approvals sit outside the retrieved rows."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "SPLIT_PURCHASE_PROHIBITED_BY_POLICY"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  }
+]

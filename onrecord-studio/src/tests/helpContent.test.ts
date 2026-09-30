@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { HELP_GROUP_ORDER, HELP_TOPICS, findHelpTopic, helpTopicForView } from '../content/help';
 import { workspaceCommandRegistry } from '../commands/registry';
 import { HELP_SHOTS } from '../components/help/shots';
+import { LEGAL_CLAIM_KINDS } from '../types/findings';
 
 const text = (id: string) => {
   const topic = findHelpTopic(id);
@@ -38,6 +39,6 @@ describe('help content', () => {
 
   it('labels exactly the kinds the app treats as legal claims', () => {
     const legal = HELP_TOPICS.filter((entry) => text(entry.id).includes('Basis: Legal claim: counted violation'));
-    expect(legal.flatMap((entry) => entry.findingKinds)).toEqual(['POLICY_VIOLATION_DETECTED']);
+    expect(legal.flatMap((entry) => entry.findingKinds).sort()).toEqual([...LEGAL_CLAIM_KINDS].sort());
   });
 });

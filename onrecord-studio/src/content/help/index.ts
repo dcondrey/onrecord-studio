@@ -4,6 +4,7 @@ import start from './topics-start.json';
 import views from './topics-views.json';
 import features from './topics-features.json';
 import findings from './topics-findings.json';
+import spending from './topics-spending.json';
 import concepts from './topics-concepts.json';
 import account from './topics-account.json';
 
@@ -56,6 +57,7 @@ export const HELP_TOPICS = [
   ...views,
   ...features,
   ...findings,
+  ...spending,
   ...concepts,
   ...account,
 ] as HelpTopic[];

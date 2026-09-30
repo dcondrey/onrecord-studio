@@ -34,7 +34,18 @@ export type FindingKind =
   | 'CROSS_CORPUS_REUSED_DENIAL_GROUNDS'
   | 'POLICY_VIOLATION_DETECTED'
   | 'CLAIM_CONTRADICTS_DATA'
-  | 'CORRELATED_FINDINGS';
+  | 'CORRELATED_FINDINGS'
+  | 'PRACTICE_DEPARTURE_COUNTED'
+  | 'PRACTICE_DEPARTURE_STATED'
+  | 'CONTRACT_CEILING_EXCEEDED'
+  | 'PAYMENT_OUTSIDE_CONTRACT_TERM'
+  | 'PAYMENT_WITHOUT_CONTRACT_RECORD'
+  | 'APPROPRIATION_EXCEEDED'
+  | 'RESTRICTED_FUND_OFF_PROGRAM'
+  | 'APPROVAL_THRESHOLD_EXCEEDED'
+  | 'APPROVAL_RECORD_ABSENT'
+  | 'SPLIT_PURCHASE_PATTERN'
+  | 'SPLIT_PURCHASE_PROHIBITED_BY_POLICY';
 
 /**
  * How a finding's confidence was derived. `UNASSESSED` distinguishes an unmeasured rung from a
@@ -111,7 +122,16 @@ export interface RefreshFindingsSummary {
  * `FindingKind::is_legal_claim` in `analysis/finding.rs`; every other kind is a pattern or
  * statistical signal and must not be presented as a legal claim.
  */
-export const LEGAL_CLAIM_KINDS: readonly FindingKind[] = ['POLICY_VIOLATION_DETECTED'];
+export const LEGAL_CLAIM_KINDS: readonly FindingKind[] = [
+  'POLICY_VIOLATION_DETECTED',
+  'PRACTICE_DEPARTURE_COUNTED',
+  'CONTRACT_CEILING_EXCEEDED',
+  'PAYMENT_OUTSIDE_CONTRACT_TERM',
+  'APPROPRIATION_EXCEEDED',
+  'RESTRICTED_FUND_OFF_PROGRAM',
+  'APPROVAL_THRESHOLD_EXCEEDED',
+  'SPLIT_PURCHASE_PROHIBITED_BY_POLICY',
+];
 
 export function isLegalClaimKind(kind: FindingKind): boolean {
   return LEGAL_CLAIM_KINDS.includes(kind);
