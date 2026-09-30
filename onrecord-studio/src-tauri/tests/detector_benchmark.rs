@@ -12,12 +12,19 @@
 //! `analysis::detectors::refresh_all_findings`; `registry_matches_refresh_all_findings` fails if
 //! they drift.
 
+use onrecord_studio_lib::analysis::claim_validation::{
+    extract_claims, ClaimEvaluation, Evaluator, UnreconciledReason,
+};
 use onrecord_studio_lib::analysis::detectors::*;
 use onrecord_studio_lib::analysis::finding::Finding;
 use onrecord_studio_lib::error::AppError;
 use onrecord_studio_lib::storage::sqlite::DuckDbRepository;
+use onrecord_studio_lib::types::{FinancialMapping, PortalRegistration};
+use serde::Deserialize;
 use serde_json::json;
+use std::collections::BTreeMap;
 use std::future::Future;
+use std::path::Path;
 use std::pin::Pin;
 use std::time::Instant;
 
@@ -105,4 +112,193 @@ async fn detector_benchmark() {
     }
     std::fs::write(&out, serde_json::to_vec_pretty(&report).unwrap()).unwrap();
     println!("wrote {out}");
+}
+
+/// One hand-verified memo sentence over the real City exports in `fixtures/claim-eval`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EvalCase {
+    id: String,
+    text: String,
+    expected: String,
+    #[serde(default)]
+    reason: Option<String>,
+    #[serde(default)]
+    observed_contains: Option<String>,
+}
+
+fn unreconciled_reason_name(reason: &UnreconciledReason) -> &'static str {
+    match reason {
+        UnreconciledReason::NoMappedDataset => "NoMappedDataset",
+        UnreconciledReason::AmbiguousScope => "AmbiguousScope",
+        UnreconciledReason::MissingFiscalYear => "MissingFiscalYear",
+        UnreconciledReason::PartialOrRejectedRows => "PartialOrRejectedRows",
+        UnreconciledReason::UnsupportedClaim => "UnsupportedClaim",
+    }
+}
+
+/// Registers a sliced City export under the snapshot id and source URI the automatic budget
+/// and actual mappings key on, exactly as an operator's import would leave it.
+async fn import_city_export(
+    repo: &DuckDbRepository,
+    snapshot_id: &str,
+    table: &str,
+    source_uri: &str,
+    csv: &Path,
+) {
+    let conn = repo.analytics_connection().await.unwrap();
+    let path = csv.to_str().expect("fixture path is UTF-8");
+    assert!(
+        !path.contains('\''),
+        "fixture path must not contain a quote: {path}"
+    );
+    conn.execute_batch(&format!(
+        "CREATE TABLE {table} AS SELECT * FROM read_csv('{path}', all_varchar = true, header = true)"
+    ))
+    .unwrap();
+    let rows: i64 = conn
+        .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    conn.execute(
+        "INSERT INTO analytical_snapshots(snapshot_id,dataset_kind,display_name,table_name,source_uri,local_path,source_sha256,retrieved_at,validation_summary_json,imported_rows) VALUES (?1,'OPERATING_BUDGET',?1,?2,?3,?4,repeat('0',64),'2026-09-30','{}',?5)",
+        duckdb::params![snapshot_id, table, source_uri, path, rows],
+    )
+    .unwrap();
+    let mut statement = conn
+        .prepare("SELECT column_name, ordinal_position FROM information_schema.columns WHERE table_name = ?1 ORDER BY ordinal_position")
+        .unwrap();
+    let columns = statement
+        .query_map(duckdb::params![table], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    for (name, ordinal) in columns {
+        conn.execute(
+            "INSERT INTO analytical_columns(snapshot_id,table_name,column_name,logical_type,ordinal) VALUES (?1,?2,?3,'TEXT',?4)",
+            duckdb::params![snapshot_id, table, name, ordinal],
+        )
+        .unwrap();
+    }
+}
+
+/// Every sentence in `fixtures/claim-eval/cases.json` must evaluate to its verified outcome
+/// against the real FY22–23 General Fund rows for the Library and Police departments. The
+/// scorecard it prints is the claim-validation benchmark; a change to extraction, binding or
+/// the bands that moves any case is a change to what the detector tells a reader.
+#[tokio::test]
+async fn claim_validation_eval_set() {
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/claim-eval");
+    let cases: Vec<EvalCase> =
+        serde_json::from_str(&std::fs::read_to_string(fixtures.join("cases.json")).unwrap())
+            .unwrap();
+    assert!(!cases.is_empty());
+
+    let temp = tempfile::tempdir().unwrap();
+    let repo = DuckDbRepository::new(temp.path().join("core.db")).unwrap();
+    repo.run_migrations(include_str!("../migrations/0001_initial_schema.sql"))
+        .await
+        .unwrap();
+    let portal: PortalRegistration = serde_json::from_value(json!({
+        "portalKey": "sandiego", "displayName": "City of San Diego",
+        "canonicalUrl": "https://sandiego.nextrequest.com", "originUrl": "https://sandiego.nextrequest.com",
+        "verifiedAt": "2026-09-13T00:00:00Z", "sourceKind": "NEXT_REQUEST",
+        "apiLayout": {"requestsEndpoint": "https://sandiego.nextrequest.com/api", "requestsPointer": "/resources",
+                      "pageParameter": "page", "pageSizeParameter": "limit"}
+    }))
+    .unwrap();
+    repo.insert_or_update_portal_registration(&portal)
+        .await
+        .unwrap();
+    import_city_export(
+        &repo,
+        "budget",
+        "analysis_eval_budget",
+        "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+        &fixtures.join("budget_operating_datasd_fy22-23_gf_library_police.csv"),
+    )
+    .await;
+    import_city_export(
+        &repo,
+        "actual",
+        "analysis_eval_actual",
+        "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv",
+        &fixtures.join("actuals_operating_datasd_fy22-23_gf_library_police.csv"),
+    )
+    .await;
+    // The actuals export carries receipts under 4xxxxx accounts; an operator maps it to the
+    // revenue role explicitly, and the official-export filter keeps expenditure rows out.
+    repo.save_financial_mapping(FinancialMapping {
+        role: "revenue".to_string(),
+        snapshot_id: "actual".to_string(),
+        columns: [
+            ("fy", "report_fy"),
+            ("fund", "fund_number"),
+            ("account", "account_number"),
+            ("department", "dept_name"),
+            ("amount", "amount"),
+        ]
+        .into_iter()
+        .map(|(field, column)| (field.to_string(), column.to_string()))
+        .collect::<BTreeMap<_, _>>(),
+        currency: Some("USD".to_string()),
+        agency: Some("City of San Diego".to_string()),
+    })
+    .await
+    .unwrap();
+
+    let mut evaluator = Evaluator::load(&repo).await.unwrap();
+    let mut failures = Vec::new();
+    let mut tally: BTreeMap<&str, (usize, usize)> = BTreeMap::new();
+    for case in &cases {
+        let claims = extract_claims(&case.text);
+        let entry = tally.entry(case.expected.as_str()).or_default();
+        entry.1 += 1;
+        let [claim] = claims.as_slice() else {
+            failures.push(format!(
+                "{}: extracted {} claims, expected exactly one",
+                case.id,
+                claims.len()
+            ));
+            continue;
+        };
+        let evaluation = evaluator.evaluate(&repo, "sandiego", claim).await.unwrap();
+        let (outcome, observed, reason) = match &evaluation {
+            ClaimEvaluation::Consistent { observed, .. } => ("consistent", observed.as_str(), None),
+            ClaimEvaluation::Mismatch { observed, .. } => ("mismatch", observed.as_str(), None),
+            ClaimEvaluation::Unreconciled { reason, detail } => (
+                "unreconciled",
+                detail.as_str(),
+                Some(unreconciled_reason_name(reason)),
+            ),
+        };
+        let mut problems = Vec::new();
+        if outcome != case.expected {
+            problems.push(format!("outcome {outcome}, expected {}", case.expected));
+        }
+        if let Some(expected_reason) = &case.reason {
+            if reason != Some(expected_reason.as_str()) {
+                problems.push(format!("reason {reason:?}, expected {expected_reason}"));
+            }
+        }
+        if let Some(fragment) = &case.observed_contains {
+            if !observed.contains(fragment) {
+                problems.push(format!("observed '{observed}' lacks '{fragment}'"));
+            }
+        }
+        if problems.is_empty() {
+            entry.0 += 1;
+            println!("ok   {:<32} {outcome:<12} {observed}", case.id);
+        } else {
+            println!("FAIL {:<32} {}", case.id, problems.join("; "));
+            failures.push(format!("{}: {}", case.id, problems.join("; ")));
+        }
+    }
+    for (expected, (passed, total)) in &tally {
+        println!("{expected:<12} {passed}/{total}");
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
