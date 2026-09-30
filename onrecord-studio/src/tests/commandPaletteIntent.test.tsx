@@ -254,6 +254,19 @@ describe('CommandPalette intent router', () => {
     expect(bridge.pending[1].utterance).toBe('why did request 42 miss its deadline');
   });
 
+  it('ignores the Enter and arrow keys that commit or steer an IME composition', () => {
+    render(<CommandPalette />);
+    const input = openPalette();
+    type(input, 'who signed for the City Attorney');
+    fireEvent.keyDown(window, { key: 'ArrowDown', isComposing: true });
+    fireEvent.keyDown(window, { key: 'Enter', isComposing: true });
+    expect(bridge.invoked).toHaveLength(0);
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(screen.getAllByRole('option')[0].getAttribute('aria-selected')).toBe('true');
+    pressEnter();
+    expect(bridge.invoked).toHaveLength(1);
+  });
+
   it('shows a native failure instead of an empty answer', async () => {
     render(<CommandPalette />);
     type(openPalette(), 'who signed for the City Attorney');

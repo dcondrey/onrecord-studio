@@ -232,6 +232,9 @@ export default function CommandPalette() {
 
   useEffect(() => {
     const handleKeyboard = (event: KeyboardEvent) => {
+      // Enter and the arrows steer an IME composition before the text is committed. Acting on
+      // them would run the highlighted command on text the user has not finished typing.
+      if (event.isComposing || event.keyCode === 229) return;
       const modified = isApplePlatform() ? event.metaKey : event.ctrlKey;
       const key = event.key.toLocaleLowerCase();
       if (modified && key === 'k') {
