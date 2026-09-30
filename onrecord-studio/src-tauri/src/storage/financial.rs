@@ -1,5 +1,8 @@
 use crate::{
-    analysis::financial, error::AppError, integrity::sha256_hex, storage::sqlite::DuckDbRepository,
+    analysis::{budget_lines, financial},
+    error::AppError,
+    integrity::sha256_hex,
+    storage::sqlite::DuckDbRepository,
     types::*,
 };
 use duckdb::params;
@@ -234,6 +237,85 @@ fn expression(mapping: &FinancialMapping, field: &str) -> String {
         "NULL".into()
     }
 }
+/// Both known City exports contain revenue and expense rows. Expense investigations must not
+/// silently net tax receipts against service expenditure.
+fn official_city_export(mapping: &FinancialMapping) -> bool {
+    mapping
+        .columns
+        .get("account")
+        .is_some_and(|c| c == "account_number")
+        && mapping.columns.get("fy").is_some_and(|c| c == "report_fy")
+}
+
+fn mapped_select(mapping: &FinancialMapping, fields: &[&str]) -> String {
+    fields
+        .iter()
+        .map(|field| format!("{} AS {}", expression(mapping, field), quote(field)))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// Totals by agency, currency, year, fund, department and basis, or by account as well for the
+/// given accounts. Rows missing any grouping value form their own group, so an unbound row is
+/// visible to the comparison instead of dropped; a group with an unparsable amount sums to NULL.
+fn budget_line_query(
+    mapping: &FinancialMapping,
+    table: &str,
+    accounts: Option<&BTreeSet<String>>,
+) -> String {
+    let selected = mapped_select(
+        mapping,
+        &[
+            "agency",
+            "currency",
+            "fy",
+            "fund",
+            "department",
+            "basis",
+            "account",
+            "amount",
+        ],
+    );
+    let mut dimensions = vec!["agency", "currency", "fy", "fund", "department", "basis"];
+    let mut filters = vec!["TRUE".to_string()];
+    if official_city_export(mapping) {
+        filters.push("account LIKE '5%'".into());
+    }
+    if mapping.role == "budget" {
+        filters.push("(basis IS NULL OR lower(basis) = 'adopted')".into());
+    }
+    if let Some(accounts) = accounts {
+        let list = accounts
+            .iter()
+            .map(|a| literal(a))
+            .collect::<Vec<_>>()
+            .join(",");
+        filters.push(format!("account IN ({list})"));
+        dimensions.push("account");
+    }
+    let dimensions = dimensions.join(",");
+    format!(
+        "WITH mapped AS (SELECT {selected} FROM {}) SELECT {dimensions}, CASE WHEN COUNT(*)=COUNT(amount) THEN SUM(amount) END AS amount, COUNT(*) AS _source_rows FROM mapped WHERE {} GROUP BY {dimensions} ORDER BY {dimensions}",
+        quote(table),
+        filters.join(" AND ")
+    )
+}
+
+fn account_label_query(mapping: &FinancialMapping, table: &str) -> String {
+    let selected = mapped_select(mapping, &["account", "account_label"]);
+    let filter = if official_city_export(mapping) {
+        "account LIKE '5%'"
+    } else {
+        "TRUE"
+    };
+    format!(
+        "WITH mapped AS (SELECT {selected} FROM {}) SELECT DISTINCT account, account_label FROM mapped WHERE {filter} ORDER BY account, account_label",
+        quote(table)
+    )
+}
+
+const BUDGET_LINE_ROW_CAP: usize = 10_000;
+
 fn query(mapping: &FinancialMapping, table: &str, scope: &FinancialScope) -> String {
     let selected = FIELDS
         .iter()
@@ -258,14 +340,9 @@ fn query(mapping: &FinancialMapping, table: &str, scope: &FinancialScope) -> Str
             filters.push(format!("department = {}", literal(department)));
         }
     }
-    // Both known City exports contain revenue and expense rows. Expense investigations must
-    // not silently net tax receipts against service expenditure.
-    let official = mapping
-        .columns
-        .get("account")
-        .is_some_and(|c| c == "account_number")
-        && mapping.columns.get("fy").is_some_and(|c| c == "report_fy");
-    if official && ["budget", "actual", "encumbrance"].contains(&mapping.role.as_str()) {
+    if official_city_export(mapping)
+        && ["budget", "actual", "encumbrance"].contains(&mapping.role.as_str())
+    {
         filters.push("account LIKE '5%'".into());
     }
     // The same exports carry revenue under 4xxxx accounts; a revenue role mapped to one of them
@@ -328,12 +405,7 @@ fn history_query(mapping: &FinancialMapping, table: &str, scope: &FinancialScope
             filters.push(format!("department={}", literal(department)));
         }
     }
-    if mapping
-        .columns
-        .get("account")
-        .is_some_and(|v| v == "account_number")
-        && mapping.columns.get("fy").is_some_and(|v| v == "report_fy")
-    {
+    if official_city_export(mapping) {
         filters.push("account LIKE '5%'".into());
     }
     let dimensions = "agency,fy,fund,department,currency,funding_duration";
@@ -613,6 +685,145 @@ impl DuckDbRepository {
             .run_financial_investigation(input.scope.clone())
             .await?;
         financial::scenario(&report, &input)
+    }
+
+    /// Reads the budget and actual roles for `analysis::budget_lines`. Any cut-short read, partial
+    /// snapshot or rejected row marks the role incomplete rather than yielding a smaller total.
+    pub async fn budget_line_data(&self) -> Result<budget_lines::LineData, AppError> {
+        let workspace = self.financial_workspace().await?;
+        let schema = self.analytical_schema().await?;
+        let mut data = budget_lines::LineData::default();
+        let mut sources = vec![];
+        let mut identities = vec![];
+        for mapping in workspace
+            .mappings
+            .iter()
+            .filter(|m| ["budget", "actual"].contains(&m.role.as_str()))
+        {
+            let Some(dataset) = schema
+                .datasets
+                .iter()
+                .find(|d| d.snapshot_id == mapping.snapshot_id)
+            else {
+                continue;
+            };
+            identities.push((
+                dataset.snapshot_id.clone(),
+                dataset.table_name.clone(),
+                dataset.source_sha256.clone(),
+            ));
+            let mut role = budget_lines::RoleData {
+                dataset: dataset.display_name.clone(),
+                source_sha256: dataset.source_sha256.clone(),
+                incomplete: (dataset.partial_dataset || dataset.rejected_rows > 0).then(|| {
+                    format!(
+                        "the {} dataset '{}' is partial or has {} rejected rows",
+                        mapping.role, dataset.display_name, dataset.rejected_rows
+                    )
+                }),
+                department_mapped: mapping.columns.contains_key("department"),
+                labels: Err(format!(
+                    "the {} dataset has no mapped account label, so no overtime line can be identified",
+                    mapping.role
+                )),
+                totals: vec![],
+                overtime: vec![],
+                query_ids: vec![],
+            };
+            let sql = budget_line_query(mapping, &dataset.table_name, None);
+            role.totals = self
+                .budget_line_records(&mut role, &sql, &mapping.role, dataset)
+                .await?;
+            if mapping.columns.contains_key("account_label") {
+                let result = self
+                    .execute_restricted_sql(
+                        &account_label_query(mapping, &dataset.table_name),
+                        BUDGET_LINE_ROW_CAP,
+                    )
+                    .await?;
+                role.labels = if result.truncated {
+                    Err(format!(
+                        "the {} dataset has more account labels than can be read",
+                        mapping.role
+                    ))
+                } else {
+                    Ok(result
+                        .rows
+                        .iter()
+                        .map(|row| {
+                            (
+                                row.first().and_then(value_string),
+                                row.get(1).and_then(value_string),
+                            )
+                        })
+                        .collect())
+                };
+            }
+            sources.push((mapping.clone(), dataset.clone()));
+            data.roles.insert(mapping.role.clone(), role);
+        }
+        if let Ok((accounts, _)) = budget_lines::overtime_accounts(&data) {
+            if !accounts.is_empty() {
+                for (mapping, dataset) in &sources {
+                    let sql = budget_line_query(mapping, &dataset.table_name, Some(&accounts));
+                    let mut role = data.roles.remove(&mapping.role).expect("read above");
+                    role.overtime = self
+                        .budget_line_records(&mut role, &sql, &mapping.role, dataset)
+                        .await?;
+                    data.roles.insert(mapping.role.clone(), role);
+                }
+            }
+        }
+        self.query_connection("Validate budget line sources", move |conn| {
+            validate_financial_sources(conn, &identities)
+        })
+        .await?;
+        Ok(data)
+    }
+
+    async fn budget_line_records(
+        &self,
+        role: &mut budget_lines::RoleData,
+        sql: &str,
+        role_name: &str,
+        dataset: &AnalyticalDatasetSummary,
+    ) -> Result<Vec<FinancialRecord>, AppError> {
+        let query_id = sha256_hex(sql.as_bytes());
+        let result = self
+            .execute_restricted_sql(sql, BUDGET_LINE_ROW_CAP)
+            .await?;
+        if result.truncated && role.incomplete.is_none() {
+            role.incomplete = Some(format!(
+                "the dataset '{}' has more grouped rows than one read returns",
+                dataset.display_name
+            ));
+        }
+        let records = result
+            .rows
+            .iter()
+            .map(|row| FinancialRecord {
+                role: role_name.to_string(),
+                values: result
+                    .columns
+                    .iter()
+                    .zip(row)
+                    .filter(|(column, _)| FIELDS.contains(&column.as_str()))
+                    .map(|(column, value)| (column.clone(), value_string(value)))
+                    .collect(),
+                source_rows: result
+                    .columns
+                    .iter()
+                    .position(|c| c == "_source_rows")
+                    .and_then(|i| value_string(&row[i]))
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(1),
+                citation_id: sha256_hex(
+                    format!("{query_id}:{}", serde_json::Value::Array(row.clone())).as_bytes(),
+                ),
+            })
+            .collect();
+        role.query_ids.push(query_id);
+        Ok(records)
     }
 }
 

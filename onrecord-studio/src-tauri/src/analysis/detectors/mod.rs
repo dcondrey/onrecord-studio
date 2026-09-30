@@ -14,6 +14,7 @@ use crate::{error::AppError, storage::DuckDbRepository};
 
 pub mod absence_of_records;
 pub mod boilerplate_denial;
+pub mod budget_line_comparison;
 pub mod claim_data_mismatch;
 pub mod contradictory_statement;
 pub mod correlated_findings;
@@ -146,6 +147,7 @@ pub async fn refresh_all_findings(
     run_detector!(repository, summary, run_started, claim_data_mismatch);
     run_detector!(repository, summary, run_started, spending_cases);
     run_detector!(repository, summary, run_started, practice_departure);
+    run_detector!(repository, summary, run_started, budget_line_comparison);
     // Last: correlates the settled output of every detector above.
     run_detector!(repository, summary, run_started, correlated_findings);
 

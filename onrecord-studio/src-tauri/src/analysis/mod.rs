@@ -26,6 +26,7 @@ pub mod review;
 pub mod financial;
 
 pub mod facility_coverage;
+pub mod budget_lines;
 
 pub mod monitoring;
 

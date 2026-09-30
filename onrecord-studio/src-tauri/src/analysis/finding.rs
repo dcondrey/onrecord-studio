@@ -209,6 +209,15 @@ pub enum FindingKind {
     SplitPurchasePattern,
     /// The same clustering where the agency's own policy forbids dividing a purchase to stay under a limit and the payments fall in force. Whether it was one purchase is not recorded in the ledger.
     SplitPurchaseProhibitedByPolicy,
+    /// A department's imported actual spending moved by at least the threshold share of its
+    /// previous fiscal year's, both years read in full. A counted change, not an explanation.
+    DepartmentSpendingYearOverYear,
+    /// Imported actual spending on an account labelled overtime is at least the threshold share
+    /// above the adopted amount for the same account, fund, department and year.
+    OvertimeAboveAdoptedLine,
+    /// A fund's imported actual spending is at least the threshold share above its adopted amount
+    /// for the year. Adopted is not the revised authority, so this is not an appropriation test.
+    FundActualAboveAdopted,
 }
 
 impl FindingKind {
@@ -248,6 +257,9 @@ impl FindingKind {
             Self::ApprovalRecordAbsent => "APPROVAL_RECORD_ABSENT",
             Self::SplitPurchasePattern => "SPLIT_PURCHASE_PATTERN",
             Self::SplitPurchaseProhibitedByPolicy => "SPLIT_PURCHASE_PROHIBITED_BY_POLICY",
+            Self::DepartmentSpendingYearOverYear => "DEPARTMENT_SPENDING_YEAR_OVER_YEAR",
+            Self::OvertimeAboveAdoptedLine => "OVERTIME_ABOVE_ADOPTED_LINE",
+            Self::FundActualAboveAdopted => "FUND_ACTUAL_ABOVE_ADOPTED",
         }
     }
 
@@ -287,6 +299,9 @@ impl FindingKind {
             Self::ApprovalRecordAbsent,
             Self::SplitPurchasePattern,
             Self::SplitPurchaseProhibitedByPolicy,
+            Self::DepartmentSpendingYearOverYear,
+            Self::OvertimeAboveAdoptedLine,
+            Self::FundActualAboveAdopted,
         ]
         .into_iter()
         .find(|candidate| candidate.as_str() == value)
@@ -373,6 +388,11 @@ impl FindingKind {
             Self::ApprovalRecordAbsent => false,
             Self::SplitPurchasePattern => false,
             Self::SplitPurchaseProhibitedByPolicy => true,
+            // Differences between two imported totals. Adopted is not the revised authority and
+            // a year-over-year change breaks no rule, so none of these is a legal claim.
+            Self::DepartmentSpendingYearOverYear => false,
+            Self::OvertimeAboveAdoptedLine => false,
+            Self::FundActualAboveAdopted => false,
         }
     }
 }

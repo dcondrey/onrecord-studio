@@ -1065,5 +1065,57 @@
       "legal-vs-pattern",
       "findings-inbox"
     ]
+  },
+  {
+    "id": "finding-budget-line-comparisons",
+    "title": "Budget line comparisons",
+    "group": "Finding kinds",
+    "summary": "Three counted comparisons over the imported budget and actuals tables: a department's actual spending against its previous fiscal year, spending on an overtime account against its adopted line, and a fund's actual spending against its adopted amount.",
+    "keywords": [
+      "budget",
+      "actuals",
+      "overtime",
+      "adopted",
+      "year over year",
+      "department",
+      "fund",
+      "police",
+      "spending"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "Department spending year over year: a department's imported actual spending in one fund changed by at least 10% from the previous fiscal year, in either direction.",
+          "Overtime above adopted line: actual spending on an account whose label names overtime, in both tables, is at least 5% above the adopted amount for the same account, fund, department and year.",
+          "Fund actual above adopted: a fund's actual spending for a year is at least 5% above its adopted amount."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "Why the amounts differ, or that any rule was broken. Adopted is the original appropriation, not the revised authority, so spending above it is not an appropriation overrun.",
+          "Nothing is computed from a table that is partial, has rejected rows, or was read only in part, or from rows that name no fiscal year, fund, department, budget basis or amount. Those totals are unreconciled: no number and no finding."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is 90% for the fund and department comparisons and 80% for overtime, whose line is identified by its account label. The explanation names the datasets and query ids used."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "DEPARTMENT_SPENDING_YEAR_OVER_YEAR",
+      "OVERTIME_ABOVE_ADOPTED_LINE",
+      "FUND_ACTUAL_ABOVE_ADOPTED"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox",
+      "finding-claim-contradicts-data"
+    ]
   }
 ]
