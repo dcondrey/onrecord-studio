@@ -1,6 +1,7 @@
 pub mod agenda;
 pub mod budget;
 pub mod evidence;
+pub mod meetings;
 pub mod model;
 pub mod retrieval;
 

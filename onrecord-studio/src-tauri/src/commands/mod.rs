@@ -56,6 +56,8 @@ pub mod casework;
 
 pub mod monitoring;
 
+pub mod meetings;
+
 pub mod claim_checks;
 pub mod findings;
 pub mod intent;

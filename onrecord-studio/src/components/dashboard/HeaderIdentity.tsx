@@ -10,6 +10,7 @@ const viewLabels: Record<WorkspaceView, string> = {
   evidence: 'Evidence workspace',
   activity: 'Ingestion activity',
   briefing: 'Presentation briefing',
+  meetings: 'Public meetings',
 };
 
 /** The breadcrumb and title block at the left of the header: current view, active source, and its

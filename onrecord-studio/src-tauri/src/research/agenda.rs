@@ -60,7 +60,7 @@ static AGENDA_IDENTITY: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)\bcouncil\s+agenda\b").unwrap());
 static CITY_IDENTITY: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)\bcity\s+of\s+san\s+diego\b").unwrap());
-static ITEMS: LazyLock<Regex> = LazyLock::new(|| {
+pub(crate) static ITEMS: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)\b(?P<label>ITEM\s*[-–]?\s*(?P<number>[0-9]{1,5}[A-Z]?))\s*:").unwrap()
 });
 static HEADER_DATE: LazyLock<Regex> = LazyLock::new(|| {
@@ -117,45 +117,64 @@ fn dated_heading(text: &str, first_item: usize) -> Option<(NaiveDate, std::ops::
     {
         return None;
     }
-    let mut found = None;
+    match heading_date(header) {
+        HeadingDate::Recorded(date, range) => Some((date, range)),
+        HeadingDate::Conflicting | HeadingDate::Absent => None,
+    }
+}
+
+/// A meeting date read from a heading. Every weekday/full-date phrase in the heading must name
+/// the same, internally consistent date; anything else is `Conflicting`, never a best guess.
+pub(crate) enum HeadingDate {
+    Recorded(NaiveDate, std::ops::Range<usize>),
+    Conflicting,
+    Absent,
+}
+
+pub(crate) fn heading_date(header: &str) -> HeadingDate {
+    const MONTHS: [&str; 12] = [
+        "january",
+        "february",
+        "march",
+        "april",
+        "may",
+        "june",
+        "july",
+        "august",
+        "september",
+        "october",
+        "november",
+        "december",
+    ];
+    let mut found: Option<(NaiveDate, std::ops::Range<usize>)> = None;
     for captures in HEADER_DATE.captures_iter(header) {
-        let month = [
-            "january",
-            "february",
-            "march",
-            "april",
-            "may",
-            "june",
-            "july",
-            "august",
-            "september",
-            "october",
-            "november",
-            "december",
-        ]
-        .iter()
-        .position(|m| captures["month"].eq_ignore_ascii_case(m))? as u32
-            + 1;
-        let date = NaiveDate::from_ymd_opt(
-            captures["year"].parse().ok()?,
-            month,
-            captures["day"].parse().ok()?,
-        )?;
-        if !date
-            .format("%A")
-            .to_string()
-            .eq_ignore_ascii_case(&captures["weekday"])
-        {
-            return None;
-        }
+        let date = MONTHS
+            .iter()
+            .position(|m| captures["month"].eq_ignore_ascii_case(m))
+            .and_then(|month| {
+                NaiveDate::from_ymd_opt(
+                    captures["year"].parse().ok()?,
+                    month as u32 + 1,
+                    captures["day"].parse().ok()?,
+                )
+            });
+        let Some(date) = date.filter(|date| {
+            date.format("%A")
+                .to_string()
+                .eq_ignore_ascii_case(&captures["weekday"])
+        }) else {
+            return HeadingDate::Conflicting;
+        };
         if found.as_ref().is_some_and(|(prior, _)| *prior != date) {
-            return None;
+            return HeadingDate::Conflicting;
         }
         if found.is_none() {
-            found = Some((date, captures.get(0)?.range()));
+            found = Some((date, captures.get(0).expect("whole match").range()));
         }
     }
-    found
+    found.map_or(HeadingDate::Absent, |(date, range)| {
+        HeadingDate::Recorded(date, range)
+    })
 }
 
 fn passage(

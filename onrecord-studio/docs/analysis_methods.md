@@ -145,3 +145,27 @@ The score is a ranking heuristic over facts the detectors recorded. It is not a 
 `analysis/lead_dossier.rs`, served by `build_lead_dossier` and opened from a finding in the inbox.
 
 A dossier assembles what is already stored around one finding: the **evidence chain** (each cited span resolved to its document, request, agency and recorded digest, or marked unresolved), the **related findings** that touch the same request or the same documents, a **falsification test** (one fixed, kind-specific statement of what would disconfirm the lead and the records that would show it — an exhaustive table, so a new finding kind cannot ship without one), and the **gaps**: figures in the cited documents that could not be checked against the imported tables, each with its reason, and documents whose text could not be read at all. Nothing is persisted or inferred; a dossier restates observations and says what is missing. It is not a legal claim and uses no word of judgement.
+## 8. Meeting Calendar and Agenda Suggestions
+`research::meetings` builds a calendar of council, board and commission meetings from documents already ingested. It makes no network or model call.
+
+### A. What makes a meeting
+* A public document is a meeting document when its heading (or, without retained text, its file name or description) names a publishing body from the `BODIES` table and names itself as an agenda or minutes (whichever word appears first; `non-agenda` is not an agenda), or is a video (`video/*` content type, or `video`, `recording`, `webcast` in its name).
+* The date is read only from the heading: the text before the first `Item N:` heading, at most 12,000 characters. Every weekday-and-full-date phrase there must name the same date, and each weekday must match its date. One date is recorded, with a citation. No date, or disagreeing dates, yields `DATE_NOT_RECORDED` with a note saying which; a date is never taken from a file-name pattern, the body text, or another document. A minutes heading followed by an approval of earlier minutes that names a weekday date therefore reads as not recorded.
+* Agenda, minutes and video are one meeting only when they share the publisher's meeting identifier (`meetingId` on the City's agenda host), or name the same body with the same heading date in the same source. A document with no recorded date is its own meeting.
+* A meeting dated today or later is `UPCOMING`; earlier is `PAST`.
+
+### B. Suggestions for upcoming meetings
+Only complete agenda items are read: an item runs from its `Item N:` heading to the next one, so the last listed item, whose end is not proven, is not evaluated and a limitation says so. Every cue is a word-token phrase. A suggestion lists each reason with its basis and the agenda sentence it matched:
+
+| reason | matched against | basis |
+|---|---|---|
+| Investigation topic | the research topics' terms, inflections spelled out | Stated |
+| Watched agency / party | agencies in monitoring coverage expectations; responsible parties in casework commitments (names of two or more words) | Stated |
+| Stored finding subject | the agency a non-dismissed finding is about | Counted when the finding kind is a legal claim, otherwise Pattern |
+| Evidence gap | the record class an open gap needs | Stated; a gap is an untested route, never a finding |
+| Stated figure | `extract_claims` over the item, evaluated as in §5 | Counted when compared (consistent or mismatch), Stated when unreconciled; a figure with no mapped dataset is not a suggestion |
+
+Suggestions per meeting are ranked by the number of distinct reason kinds and capped at 12; a cap that drops items is recorded as a limitation.
+
+### C. Public-comment drafts
+Each suggestion carries an editable draft. It quotes only cited passages: the item, the matched agenda sentences, and for figures the stated figure and the observed table value. A stored finding is named by id and basis, never quoted, so a finding headline cannot become the commenter's assertion. The comment deadline and instructions are quoted only from agenda sentences that name a comment and a deadline (or a way to submit); otherwise the draft says "not recorded". The draft names its bases and states that it does not characterize anyone's motives or the lawfulness of any action.

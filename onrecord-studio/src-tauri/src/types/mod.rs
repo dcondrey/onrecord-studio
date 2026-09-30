@@ -89,6 +89,7 @@ pub mod story_desk;
 pub use story_desk::*;
 pub mod lead_dossier;
 pub use lead_dossier::*;
+pub mod meetings;
 
 pub mod profile;
 pub mod report;

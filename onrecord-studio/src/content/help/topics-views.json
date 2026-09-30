@@ -317,5 +317,58 @@
       "view-evidence",
       "document-viewer"
     ]
+  },
+  {
+    "id": "view-meetings",
+    "title": "Meetings view",
+    "group": "Views",
+    "summary": "A calendar of council, board and commission meetings found in collected agendas, minutes and videos, with cited items to watch and public-comment drafts.",
+    "keywords": [
+      "meetings",
+      "calendar",
+      "council",
+      "board",
+      "commission",
+      "agenda",
+      "minutes",
+      "video",
+      "public comment",
+      "items to watch"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "Meetings come only from documents already collected. A meeting's body and date are read from the heading of its own agenda, minutes or video. When no heading carries a single weekday and full date, the meeting is listed under Date not recorded rather than placed on a guessed day. A meeting on today's date counts as upcoming.",
+          "Agenda, minutes and video are grouped as one meeting only when they share the publisher's meeting identifier, or name the same body and the same heading date."
+        ]
+      },
+      {
+        "heading": "Items to watch",
+        "items": [
+          "Investigation topic: the item names a term of one of the research topics. Basis: Stated.",
+          "Watched agency or party: the item names an agency from your monitoring coverage expectations, or a responsible party from a casework commitment. Basis: Stated.",
+          "Stored finding subject: the item names the agency a stored finding is about. Basis: Counted for a counted legal comparison, Pattern for a pattern observation. The mention does not extend the finding to the item.",
+          "Evidence gap: the item names the kind of record an open gap needs. A gap is an untested route, never a finding.",
+          "Stated figure: the item states a budget or spending figure that the imported tables can be compared with. Counted when compared, Stated when the comparison could not be made."
+        ]
+      },
+      {
+        "heading": "Public-comment drafts",
+        "paragraphs": [
+          "Each item to watch carries an editable draft that quotes only the cited agenda text, names its basis, and gives the comment deadline and instructions only when an agenda records them; otherwise it says not recorded. Stored findings are referenced by id, not quoted. The draft does not characterize anyone's motives or the lawfulness of any action, and nothing is sent."
+        ]
+      }
+    ],
+    "views": [
+      "meetings"
+    ],
+    "findingKinds": [],
+    "commandGroups": [
+      "meetings"
+    ],
+    "related": [
+      "view-briefing",
+      "legal-vs-pattern"
+    ]
   }
 ]

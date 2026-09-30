@@ -24,6 +24,7 @@ import ExtractionTerminal from '../documents/ExtractionTerminal';
 import MetadataCard from '../documents/MetadataCard';
 import BriefingWorkspace from './BriefingWorkspace';
 import StoryDesk from './StoryDesk';
+import MeetingsView from './MeetingsView';
 import { documentBriefingEvidence, requestBriefingEvidence } from '../../utils/briefing';
 import AnalysisWorkbench from './AnalysisWorkbench';
 
@@ -220,6 +221,10 @@ export default function MainLayout() {
 
   if (workspaceView === 'story') {
     return <StoryDesk />;
+  }
+
+  if (workspaceView === 'meetings') {
+    return <MeetingsView />;
   }
 
   return (
