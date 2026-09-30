@@ -49,6 +49,8 @@ export interface NativeCommandMap {
   save_financial_mapping: { args: { mapping: Types.FinancialMapping }; result: Types.FinancialWorkspace };
   run_financial_investigation: { args: { scope: Types.FinancialScope }; result: Types.FinancialReport };
   evaluate_financial_scenario: { args: { input: Types.FinancialScenarioInput }; result: Types.FinancialScenario };
+  get_facility_coverage: { args: NoArgs; result: Types.FacilityCoverageWorkspace };
+  save_facility_coverage_mapping: { args: { mapping: Types.FacilityCoverageMapping }; result: Types.FacilityCoverageWorkspace };
   get_casework_state: { args: NoArgs; result: Types.CaseworkState };
   create_casework_case: { args: { reportId: string }; result: Types.CaseworkCase };
   save_casework_case: { args: { case: Types.CaseworkCase; expectedRevision: number; author: string }; result: Types.CaseworkCase };

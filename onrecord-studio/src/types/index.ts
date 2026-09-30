@@ -17,6 +17,7 @@ export * from './reconstruction';
 export * from "./review";
 
 export * from "./financial";
+export * from "./facilities";
 export * from "./casework";
 export * from "./monitoring";
 

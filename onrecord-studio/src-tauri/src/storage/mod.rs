@@ -43,6 +43,8 @@ pub mod review;
 
 pub mod financial;
 
+pub mod facilities;
+
 pub mod casework;
 
 pub mod monitoring;

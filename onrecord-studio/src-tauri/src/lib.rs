@@ -87,6 +87,8 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::financial::save_financial_mapping,
         commands::financial::run_financial_investigation,
         commands::financial::evaluate_financial_scenario,
+        commands::facilities::get_facility_coverage,
+        commands::facilities::save_facility_coverage_mapping,
         commands::casework::get_casework_state,
         commands::casework::create_casework_case,
         commands::casework::save_casework_case,
