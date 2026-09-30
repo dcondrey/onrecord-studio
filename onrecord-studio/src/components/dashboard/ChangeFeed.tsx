@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { invokeCommand } from '../../ipc';
 import { useAppStore } from '../../store/useAppStore';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
-import type { AgencyPerformanceProfile, Finding } from '../../types';
+import type { AgencyPerformanceProfile } from '../../types';
 
 /**
  * A compact strip above the findings inbox. Two numbers only: how many findings arrived since the
@@ -20,21 +20,25 @@ export default function ChangeFeed() {
   const activePortalKey = useAppStore((state) => state.activePortalKey);
   const setSearchFilters = useAppStore((state) => state.setSearchFilters);
   const setActivePortal = useAppStore((state) => state.setActivePortal);
-  const [findings, setFindings] = useState<Finding[]>([]);
-  // The watermark as it stood when this load began. FindingsInbox bumps `lastFindingsSeenAt`
-  // after its own load of the same refresh settles, so reading the live value would zero the
-  // count as soon as the inbox finished; the honest cutoff is the previous time the inbox loaded.
-  const [cutoffAt, setCutoffAt] = useState<string | null>(null);
+  // Both numbers come from one load so they describe the same moment. `null` until the first
+  // count resolves: the strip has nothing honest to say before then.
+  const [counts, setCounts] = useState<{ total: number; new: number } | null>(null);
   const gate = useLatestRequestGate();
 
   const load = useCallback(() => {
     const request = gate.begin();
+    // The watermark as it stood when this load began. FindingsInbox bumps `lastFindingsSeenAt`
+    // after its own load of the same refresh settles, so reading the live value would zero the
+    // count as soon as the inbox finished; the honest cutoff is the previous time the inbox loaded.
     const seenAtStart = useAppStore.getState().lastFindingsSeenAt;
-    invokeCommand('list_findings', { filter: null, limit: 200 })
-      .then((rows) => {
+    const cutoff = seenAtStart !== null && Number.isFinite(Date.parse(seenAtStart)) ? seenAtStart : null;
+    Promise.all([
+      invokeCommand('count_findings', { filter: null }),
+      cutoff === null ? null : invokeCommand('count_findings', { filter: { discoveredAfter: cutoff } }),
+    ])
+      .then(([total, since]) => {
         if (!gate.isCurrent(request)) return;
-        setFindings(rows);
-        setCutoffAt(seenAtStart);
+        setCounts({ total, new: since ?? total });
       })
       .catch(() => {
         // A ChangeFeed that can't count is a ChangeFeed that shouldn't invent a number. Leave the
@@ -48,16 +52,7 @@ export default function ChangeFeed() {
     return gate.invalidate;
   }, [findingsRefreshRequests, gate, load]);
 
-  const newFindingsCount = useMemo(() => {
-    if (findings.length === 0) return 0;
-    if (!cutoffAt) return findings.length;
-    const cutoff = Date.parse(cutoffAt);
-    if (!Number.isFinite(cutoff)) return findings.length;
-    return findings.filter((finding) => {
-      const discovered = Date.parse(finding.discoveredAt);
-      return Number.isFinite(discovered) && discovered > cutoff;
-    }).length;
-  }, [findings, cutoffAt]);
+  const newFindingsCount = counts?.new ?? 0;
 
   const statutoryCount = useMemo(() => countStatutoryViolations(agencyProfiles, activePortalKey), [
     agencyProfiles,
@@ -77,7 +72,7 @@ export default function ChangeFeed() {
     if (anchor) anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  if (findings.length === 0 && statutoryCount === null) return null;
+  if ((counts === null || counts.total === 0) && statutoryCount === null) return null;
 
   return (
     <section

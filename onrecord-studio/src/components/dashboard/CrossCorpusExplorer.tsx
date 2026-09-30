@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { invokeCommand } from '../../ipc';
-import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
+import { useCallback, useMemo } from 'react';
+import { useFindings } from '../../hooks/useFindings';
 import { useAppStore } from '../../store/useAppStore';
 import { ShapeGlyph, type GlyphShape } from '../ui/shapeGlyph';
 import type { Finding, FindingKind, FindingSeverity } from '../../types';
@@ -39,37 +38,13 @@ function isCrossCorpusKind(kind: FindingKind): kind is CrossCorpusKind {
 }
 
 export default function CrossCorpusExplorer() {
-  const [findings, setFindings] = useState<Finding[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const findingsRefreshRequests = useAppStore((state) => state.findingsRefreshRequests);
+  const load = useFindings(null, 200);
+  const findings = useMemo(() => load.findings.filter((row) => isCrossCorpusKind(row.kind)), [load.findings]);
+  const error = load.status === 'failed' ? load.message : null;
+  const isLoading = load.status === 'loading';
   const setActivePortal = useAppStore((state) => state.setActivePortal);
   const setSearchFilters = useAppStore((state) => state.setSearchFilters);
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
-  const gate = useLatestRequestGate();
-
-  const load = useCallback(() => {
-    const token = gate.begin();
-    setIsLoading(true);
-    setError(null);
-    invokeCommand('list_findings', { filter: null, limit: 200 })
-      .then((rows) => {
-        if (!gate.isCurrent(token)) return;
-        setFindings(rows.filter((row) => isCrossCorpusKind(row.kind)));
-      })
-      .catch((reason) => {
-        if (!gate.isCurrent(token)) return;
-        setError(String(reason));
-      })
-      .finally(() => {
-        if (gate.isCurrent(token)) setIsLoading(false);
-      });
-  }, [gate]);
-
-  useEffect(() => {
-    load();
-    return gate.invalidate;
-  }, [findingsRefreshRequests, gate, load]);
 
   // Build an agency-pair heatmap: rows = originating agency, cols = other agency mentioned in
   // headline text. Because backend citations don't carry a second agency id, we derive the

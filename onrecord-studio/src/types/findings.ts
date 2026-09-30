@@ -102,6 +102,8 @@ export interface FindingsFilter {
   includeDismissed?: boolean | null;
   /** RFC 3339 instant; only findings first discovered strictly after it. */
   discoveredAfter?: string | null;
+  /** Exactly one finding by id; a lookup, not a search. */
+  id?: string | null;
 }
 
 export type GapStatus = 'acquiring' | 'exhausted' | 'noAutomaticSource';

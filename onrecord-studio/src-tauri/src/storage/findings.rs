@@ -36,6 +36,54 @@ pub struct FindingsFilter {
     /// Only findings first discovered strictly after this instant. Applied before the severity
     /// ranking and limit, so a new low-severity finding is not hidden behind an older backlog.
     pub discovered_after: Option<DateTime<Utc>>,
+    /// Exactly one finding by id; a lookup, not a search.
+    pub id: Option<String>,
+}
+
+impl FindingsFilter {
+    /// Appends this filter's predicates to a query ending in `WHERE 1 = 1` and returns the
+    /// binds in the order the placeholders were numbered. Shared by list and count so the two
+    /// can never disagree about which rows a filter names.
+    fn append_where(self, sql: &mut String) -> Vec<Box<dyn duckdb::types::ToSql>> {
+        let mut binds: Vec<Box<dyn duckdb::types::ToSql>> = Vec::new();
+        if !self.include_dismissed.unwrap_or(false) {
+            sql.push_str(" AND dismissed_at IS NULL");
+        }
+        if let Some(portal) = self.portal_key {
+            sql.push_str(&format!(" AND subject_portal_key = ?{}", binds.len() + 1));
+            binds.push(Box::new(portal));
+        }
+        if let Some(agency) = self.agency_id {
+            sql.push_str(&format!(" AND subject_agency_id = ?{}", binds.len() + 1));
+            binds.push(Box::new(agency));
+        }
+        if let Some(request) = self.request_id {
+            sql.push_str(&format!(" AND subject_request_id = ?{}", binds.len() + 1));
+            binds.push(Box::new(request));
+        }
+        if let Some(document) = self.document_id {
+            sql.push_str(&format!(" AND subject_document_id = ?{}", binds.len() + 1));
+            binds.push(Box::new(document));
+        }
+        if let Some(detector) = self.source_detector {
+            sql.push_str(&format!(" AND source_detector = ?{}", binds.len() + 1));
+            binds.push(Box::new(detector));
+        }
+        if let Some(after) = self.discovered_after {
+            // The column holds RFC 3339 text; comparing as timestamps keeps a row written
+            // with a different offset or precision comparable, and drops an unparsable one.
+            sql.push_str(&format!(
+                " AND TRY_CAST(discovered_at AS TIMESTAMPTZ) > TRY_CAST(?{} AS TIMESTAMPTZ)",
+                binds.len() + 1
+            ));
+            binds.push(Box::new(after.to_rfc3339()));
+        }
+        if let Some(id) = self.id {
+            sql.push_str(&format!(" AND id = ?{}", binds.len() + 1));
+            binds.push(Box::new(id));
+        }
+        binds
+    }
 }
 
 impl DuckDbRepository {
@@ -100,6 +148,23 @@ impl DuckDbRepository {
         .await
     }
 
+    /// Number of findings the filter names, with no ranking or limit applied.
+    pub async fn count_findings(&self, filter: FindingsFilter) -> Result<u64, AppError> {
+        self.query_connection("Count findings", move |conn| {
+            let mut sql = String::from("SELECT COUNT(*) FROM findings WHERE 1 = 1");
+            let binds = filter.append_where(&mut sql);
+            let count: i64 = conn
+                .query_row(
+                    &sql,
+                    params_from_iter(binds.iter().map(|b| b.as_ref())),
+                    |row| row.get(0),
+                )
+                .map_err(storage)?;
+            Ok(u64::try_from(count).unwrap_or(0))
+        })
+        .await
+    }
+
     /// Returns findings ranked by (severity desc, confidence desc, freshness desc). Dismissed
     /// findings excluded unless `filter.include_dismissed = Some(true)`.
     pub async fn list_findings(
@@ -117,39 +182,7 @@ impl DuckDbRepository {
                  FROM findings
                  WHERE 1 = 1",
             );
-            let mut binds: Vec<Box<dyn duckdb::types::ToSql>> = Vec::new();
-            if !filter.include_dismissed.unwrap_or(false) {
-                sql.push_str(" AND dismissed_at IS NULL");
-            }
-            if let Some(portal) = filter.portal_key {
-                sql.push_str(&format!(" AND subject_portal_key = ?{}", binds.len() + 1));
-                binds.push(Box::new(portal));
-            }
-            if let Some(agency) = filter.agency_id {
-                sql.push_str(&format!(" AND subject_agency_id = ?{}", binds.len() + 1));
-                binds.push(Box::new(agency));
-            }
-            if let Some(request) = filter.request_id {
-                sql.push_str(&format!(" AND subject_request_id = ?{}", binds.len() + 1));
-                binds.push(Box::new(request));
-            }
-            if let Some(document) = filter.document_id {
-                sql.push_str(&format!(" AND subject_document_id = ?{}", binds.len() + 1));
-                binds.push(Box::new(document));
-            }
-            if let Some(detector) = filter.source_detector {
-                sql.push_str(&format!(" AND source_detector = ?{}", binds.len() + 1));
-                binds.push(Box::new(detector));
-            }
-            if let Some(after) = filter.discovered_after {
-                // The column holds RFC 3339 text; comparing as timestamps keeps a row written
-                // with a different offset or precision comparable, and drops an unparsable one.
-                sql.push_str(&format!(
-                    " AND TRY_CAST(discovered_at AS TIMESTAMPTZ) > TRY_CAST(?{} AS TIMESTAMPTZ)",
-                    binds.len() + 1
-                ));
-                binds.push(Box::new(after.to_rfc3339()));
-            }
+            let mut binds = filter.append_where(&mut sql);
             sql.push_str(
                 " ORDER BY CASE severity
                     WHEN 'CRITICAL' THEN 4
@@ -572,5 +605,40 @@ mod tests {
             .unwrap();
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].headline, "new info");
+        let counted = repo
+            .count_findings(FindingsFilter {
+                discovered_after: Some(cutoff),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        assert_eq!(counted, 1);
+        assert_eq!(
+            repo.count_findings(FindingsFilter::default())
+                .await
+                .unwrap(),
+            2
+        );
+    }
+
+    #[tokio::test]
+    async fn id_filter_names_exactly_one_finding() {
+        let repo = fresh_repo().await;
+        let one = sample_finding(1, "one", FindingSeverity::Notable);
+        let two = sample_finding(2, "two", FindingSeverity::Notable);
+        let wanted = two.id.clone();
+        repo.record_findings(vec![one, two]).await.unwrap();
+        let listed = repo
+            .list_findings(
+                FindingsFilter {
+                    id: Some(wanted.clone()),
+                    ..Default::default()
+                },
+                50,
+            )
+            .await
+            .unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].id, wanted);
     }
 }

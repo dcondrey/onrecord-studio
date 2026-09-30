@@ -128,6 +128,7 @@ async fn related_findings(
                     source_detector: None,
                     include_dismissed: None,
                     discovered_after: None,
+                    id: None,
                 },
                 MAX_RELATED + 1,
             )
@@ -145,6 +146,7 @@ async fn related_findings(
                     source_detector: None,
                     include_dismissed: None,
                     discovered_after: None,
+                    id: None,
                 },
                 MAX_RELATED + 1,
             )

@@ -62,8 +62,8 @@ export default function StoryDesk() {
       const token = gate.begin();
       try {
         const findings = await invokeCommand('list_findings', {
-          filter: { portalKey: lead.portalKey, requestId: lead.subject.requestId },
-          limit: 200,
+          filter: { id: lead.findingId },
+          limit: 1,
         });
         if (!gate.isCurrent(token)) return;
         const finding = findings.find((row) => row.id === lead.findingId);

@@ -54,6 +54,15 @@ pub async fn list_findings(
     repository.list_findings(filter, limit).await
 }
 
+/// The number of findings a filter names, for strips that show a count and never the rows.
+#[tauri::command]
+pub async fn count_findings(
+    filter: Option<FindingsFilter>,
+    repository: State<'_, DuckDbRepository>,
+) -> Result<u64, AppError> {
+    repository.count_findings(filter.unwrap_or_default()).await
+}
+
 #[tauri::command]
 pub async fn dismiss_finding(
     id: String,

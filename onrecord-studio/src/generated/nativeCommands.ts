@@ -109,6 +109,7 @@ export interface NativeCommandMap {
   list_story_leads: { args: { limit?: number | null }; result: Types.StoryLead[] };
   build_lead_dossier: { args: { findingId: string }; result: Types.LeadDossier };
   list_findings: { args: { filter?: Types.FindingsFilter | null; limit?: number | null }; result: Types.Finding[] };
+  count_findings: { args: { filter?: Types.FindingsFilter | null }; result: number };
   dismiss_finding: { args: { id: string }; result: null };
   list_topic_packs: { args: NoArgs; result: Types.TopicPacksReport };
   run_intent_query: { args: { utterance: string; limit?: number | null }; result: Types.IntentAnswer };

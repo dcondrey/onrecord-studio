@@ -27,8 +27,16 @@ const bridge = vi.hoisted(() => ({ rows: [] as unknown[] }));
 
 vi.mock('@tauri-apps/api/core', () => ({
   isTauri: () => false,
-  invoke: (command: string) => {
-    if (command === 'list_findings') return Promise.resolve(bridge.rows);
+  invoke: (command: string, args: { filter?: { discoveredAfter?: string } | null }) => {
+    // Counts the sample rows the way the backend's `discoveredAfter` predicate would.
+    if (command === 'count_findings') {
+      const after = args.filter?.discoveredAfter;
+      const cutoff = after ? Date.parse(after) : null;
+      const rows = bridge.rows as { discoveredAt: string }[];
+      return Promise.resolve(
+        cutoff === null ? rows.length : rows.filter((row) => Date.parse(row.discoveredAt) > cutoff).length,
+      );
+    }
     return Promise.resolve(null);
   },
 }));
