@@ -23,9 +23,20 @@ pub enum DocumentClass {
     Contract,
     Denial,
     Budget,
+    /// A press release, official statement, remarks, or meeting notice: what an agency said, as
+    /// opposed to a record of what it did. Agendas and minutes stay under `Minutes`; a budget book
+    /// stays under `Budget`. Both are also statement-side sources for claim checks.
+    PublicStatement,
 }
 
-const CLASS_CUES: [(DocumentClass, Phrases); 7] = [
+impl DocumentClass {
+    /// Whether a figure in this document is something the agency asserted rather than recorded.
+    pub fn is_statement(self) -> bool {
+        matches!(self, Self::PublicStatement | Self::Minutes)
+    }
+}
+
+const CLASS_CUES: [(DocumentClass, Phrases); 8] = [
     (
         DocumentClass::Policy,
         &[
@@ -98,6 +109,21 @@ const CLASS_CUES: [(DocumentClass, Phrases); 7] = [
             &["revenue"],
         ],
     ),
+    (
+        DocumentClass::PublicStatement,
+        &[
+            &["for", "immediate", "release"],
+            &["press", "release"],
+            &["news", "release"],
+            &["statement", "from"],
+            &["statement", "by"],
+            &["remarks"],
+            &["regular", "meeting", "of"],
+            &["special", "meeting", "of"],
+            &["budget", "message"],
+            &["state", "of", "the", "city"],
+        ],
+    ),
 ];
 
 pub fn classify(file_name: Option<&str>, text: &str) -> Option<DocumentClass> {
@@ -159,5 +185,26 @@ mod tests {
         assert_eq!(classify(None, "Lunch is at noon."), None);
         let letter = "In response to your request, the records are exempt from disclosure. No responsive records exist.";
         assert_eq!(classify(None, letter), Some(DocumentClass::Denial));
+    }
+
+    #[test]
+    fn press_releases_are_statements_and_agendas_stay_minutes() {
+        let release = "FOR IMMEDIATE RELEASE\nStatement from the Mayor on the adopted budget.\nThe City closed the year with no deficit.";
+        assert_eq!(
+            classify(Some("press-release.pdf"), release),
+            Some(DocumentClass::PublicStatement)
+        );
+        assert!(DocumentClass::PublicStatement.is_statement());
+        let agenda =
+            "Agenda: Regular Meeting of the City Council. Roll call. Minutes of the prior meeting.";
+        assert_eq!(classify(None, agenda), Some(DocumentClass::Minutes));
+        assert!(DocumentClass::Minutes.is_statement());
+    }
+
+    #[test]
+    fn a_denial_that_mentions_a_statement_is_not_a_public_statement() {
+        let letter = "In response to your request: this statement from the department confirms the records are exempt from disclosure and withheld in full.";
+        assert_eq!(classify(None, letter), Some(DocumentClass::Denial));
+        assert!(!DocumentClass::Denial.is_statement());
     }
 }

@@ -10,6 +10,7 @@ use crate::{
         claim_validation::{
             extract_claims, to_finding, ClaimContext, ClaimEvaluation, Evaluator, QuantitativeClaim,
         },
+        document_class::{classify, DocumentClass},
         finding::{Finding, FindingKind},
     },
     error::AppError,
@@ -35,6 +36,8 @@ pub async fn sweep(
     }
     let mut outcomes = Vec::new();
     'documents: for document in load_public_documents(repository, MAX_DOCUMENTS).await? {
+        let source_is_statement = classify(document.file_name.as_deref(), &document.text)
+            .is_some_and(DocumentClass::is_statement);
         for claim in extract_claims(&document.text) {
             if outcomes.len() >= MAX_CLAIMS {
                 break 'documents;
@@ -47,6 +50,7 @@ pub async fn sweep(
                 document_id: document.document_id,
                 request_id: document.request_id,
                 file_name: document.file_name.clone(),
+                source_is_statement,
             };
             outcomes.push((context, claim, evaluation));
         }

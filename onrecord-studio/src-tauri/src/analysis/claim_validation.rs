@@ -1366,11 +1366,15 @@ fn decimal_to_cents(text: &str) -> Option<i64> {
 }
 
 /// Where a claim was read from.
+#[derive(Debug, Clone)]
 pub struct ClaimContext {
     pub portal_key: String,
     pub document_id: i64,
     pub request_id: i64,
     pub file_name: Option<String>,
+    /// The document is something the agency said (a press release, statement, or minutes) rather
+    /// than a record of what it did; see `DocumentClass::is_statement`. Changes only the wording.
+    pub source_is_statement: bool,
 }
 
 /// Only a mismatch is a finding. Consistent and unreconciled outcomes are returned by the sweep
@@ -1418,6 +1422,22 @@ pub fn to_finding(
         .clone()
         .unwrap_or_else(|| format!("document {}", context.document_id));
     let now = Utc::now();
+    // A statement is what the agency said; a record is what it released. The comparison is the
+    // same either way, and neither wording decides which side is correct.
+    let (headline, source_label) = if context.source_is_statement {
+        (
+            format!(
+                "Official statement vs released record: '{file_name}' states {claimed}; the \
+                 released data shows {observed}"
+            ),
+            "official statement",
+        )
+    } else {
+        (
+            format!("'{file_name}' states {claimed}; the imported data shows {observed}"),
+            "document",
+        )
+    };
     Some(Finding {
         id,
         kind,
@@ -1427,10 +1447,10 @@ pub fn to_finding(
             claim.scope.fiscal_year_in_sentence,
         )),
         subject,
-        headline: format!("'{file_name}' states {claimed}; the imported data shows {observed}"),
+        headline,
         explanation: format!(
-            "The document states {claimed}, read as consistent with any total within {band}. The \
-             imported data bound to {bound_scope}, aggregated by the same queries the financial \
+            "The {source_label} states {claimed}, read as consistent with any total within {band}. \
+             The released data bound to {bound_scope}, aggregated by the same queries the financial \
              workbench cites, shows {observed}: a difference of {difference}, outside that band. \
              Re-run query id(s) {queries} in the analysis workbench to see the rows. This compares a \
              written statement with a released dataset; it does not decide which is correct, and a \
@@ -1693,7 +1713,7 @@ mod tests {
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect(),
             currency: Some("USD".to_string()),
-            agency: None,
+            agency: Some("City of San Diego".to_string()),
         })
         .await
         .unwrap();
@@ -1715,7 +1735,7 @@ mod tests {
             matches!(evaluation, ClaimEvaluation::Consistent { ref observed, .. } if observed.contains("a surplus of $79.97")),
             "{evaluation:?}"
         );
-        let deficit = first("The FY 2023 deficit in fund 100000 was $500.");
+        let deficit = first("Fund 100000 closed FY 2023 with a deficit of $500.");
         let evaluation = evaluator
             .evaluate(&repo, "sandiego", &deficit)
             .await
@@ -1765,7 +1785,37 @@ mod tests {
             document_id: 7,
             request_id: 3,
             file_name: Some("memo.pdf".into()),
+            source_is_statement: false,
         };
+        let statement_finding = to_finding(
+            &ClaimContext {
+                source_is_statement: true,
+                ..context.clone()
+            },
+            &mismatched,
+            &evaluation,
+            FindingKind::ClaimContradictsData,
+            "claim_data_mismatch",
+        )
+        .expect("a statement mismatch is a finding");
+        assert!(
+            statement_finding
+                .headline
+                .starts_with("Official statement vs released record"),
+            "{}",
+            statement_finding.headline
+        );
+        let statement_text = format!(
+            "{} {}",
+            statement_finding.headline, statement_finding.explanation
+        )
+        .to_lowercase();
+        for word in ["false", "lied", "misled"] {
+            assert!(
+                !statement_text.contains(word),
+                "statement finding says '{word}'"
+            );
+        }
         let finding = to_finding(
             &context,
             &mismatched,

@@ -193,7 +193,7 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
               <div>
                 <div className="app-eyebrow text-cyan-300/70">Add data</div>
                 <h2 id="paste-source-title" className="mt-1 text-sm font-semibold text-slate-100">Paste content to analyze</h2>
-                <p className="mt-1 text-[9px] text-slate-400">Text, CSV, JSON, XML, HTML, and tabular content are detected automatically.</p>
+                <p className="mt-1 text-[9px] text-slate-400">Text, CSV, JSON, XML, HTML, and tabular content are detected automatically. Paste a press release, agenda, minutes or budget message to check its figures against the released records.</p>
               </div>
               <button type="button" onClick={closePasteDialog} aria-label="Close paste dialog" className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-300"><Icon name="x" /></button>
             </div>
