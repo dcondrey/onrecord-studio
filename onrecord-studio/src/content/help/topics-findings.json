@@ -1,0 +1,1026 @@
+[
+  {
+    "id": "finding-held-back-response",
+    "title": "Held back response",
+    "group": "Finding kinds",
+    "summary": "A response document whose file modification time is well before its release, released close to the statutory deadline.",
+    "keywords": [
+      "held back response",
+      "finding",
+      "kind",
+      "held back",
+      "modification",
+      "timestamp",
+      "deadline",
+      "metadata",
+      "late release"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "A response document whose file modification time is well before its release, released close to the statutory deadline. This suggests the response was ready earlier."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "That the deadline was missed. It was met. This is a pattern about timing and intent, not a violation."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is shown only when it was measured, and reads Unassessed otherwise."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "HELD_BACK_RESPONSE"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-boilerplate-denial",
+    "title": "Boilerplate denial",
+    "group": "Finding kinds",
+    "summary": "Near-identical denial wording reused across unrelated requests within one agency, which can indicate stock refusals instead of individual review.",
+    "keywords": [
+      "boilerplate denial",
+      "finding",
+      "kind",
+      "boilerplate",
+      "denial",
+      "template",
+      "stock",
+      "same language",
+      "refusal"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "Near-identical denial wording reused across unrelated requests within one agency, which can indicate stock refusals instead of individual review."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "That any denial was improper. Reusing wording is a pattern, and the legal basis of each denial is not evaluated."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is shown only when it was measured, and reads Unassessed otherwise."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "BOILERPLATE_DENIAL"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-just-in-time-compliance",
+    "title": "Just-in-time compliance",
+    "group": "Finding kinds",
+    "summary": "An agency whose closures cluster in the last day before the statutory deadline at a rate materially above the population base rate.",
+    "keywords": [
+      "just in time compliance",
+      "finding",
+      "kind",
+      "last minute",
+      "deadline",
+      "clustered",
+      "closures",
+      "final day"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "An agency whose closures cluster in the last day before the statutory deadline at a rate materially above the population base rate."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "A violation. Every closure counted was within the deadline. It is a behavioral pattern."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is shown only when it was measured, and reads Unassessed otherwise."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "JUST_IN_TIME_COMPLIANCE"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-extension-abuse",
+    "title": "Extension pattern",
+    "group": "Finding kinds",
+    "summary": "One statutory extension reason accounts for the overwhelming majority of an agency's invoked extensions.",
+    "keywords": [
+      "extension abuse",
+      "finding",
+      "kind",
+      "extension",
+      "reason",
+      "ground",
+      "pretext",
+      "concentration"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "One statutory extension reason accounts for the overwhelming majority of an agency's invoked extensions."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "That any single extension was invalid. A valid extension is legitimate. Only the reliance on one ground is flagged."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is shown only when it was measured, and reads Unassessed otherwise."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "EXTENSION_ABUSE"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-absence-of-records",
+    "title": "Gap in a numbered sequence",
+    "group": "Finding kinds",
+    "summary": "A released set with self-labelled sequential numbers (invoices, memos, resolutions) whose numeric span exceeds what was released, with numbers missing from a tight sequence.",
+    "keywords": [
+      "absence of records",
+      "finding",
+      "kind",
+      "absence",
+      "missing",
+      "gap",
+      "sequence",
+      "numbering",
+      "withheld",
+      "omitted"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "A released set with self-labelled sequential numbers (invoices, memos, resolutions) whose numeric span exceeds what was released, with numbers missing from a tight sequence."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "That records were withheld. Numbers can be skipped for ordinary reasons. It is a lead to ask about."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is shown only when it was measured, and reads Unassessed otherwise."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "ABSENCE_OF_RECORDS"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-differential-treatment",
+    "title": "Differential treatment",
+    "group": "Finding kinds",
+    "summary": "Outcomes for requests attributed to one requester class that differ materially from the agency's own baseline: denial rate, latency or redaction density.",
+    "keywords": [
+      "differential treatment",
+      "finding",
+      "kind",
+      "differential",
+      "requester class",
+      "denial rate",
+      "latency",
+      "redaction density",
+      "baseline"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "Outcomes for requests attributed to one requester class that differ materially from the agency's own baseline: denial rate, latency or redaction density."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "Discrimination or a legal violation. Without a per-request statutory finding it is a statistical pattern."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is shown only when it was measured, and reads Unassessed otherwise."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "DIFFERENTIAL_TREATMENT"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-metadata-contradicts-content",
+    "title": "Metadata contradicts content",
+    "group": "Finding kinds",
+    "summary": "A document whose own metadata disagrees with its content, such as text citing events after its declared creation time, or a document marked Final that cites a later draft.",
+    "keywords": [
+      "metadata contradicts content",
+      "finding",
+      "kind",
+      "metadata",
+      "backdating",
+      "creation date",
+      "final",
+      "draft",
+      "amendment",
+      "signature"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "A document whose own metadata disagrees with its content, such as text citing events after its declared creation time, or a document marked Final that cites a later draft."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "Who changed the document or why. It is a pattern consistent with backdating or silent modification, and has innocent explanations too."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is shown only when it was measured, and reads Unassessed otherwise."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "METADATA_CONTRADICTS_CONTENT"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-regenerated-response",
+    "title": "Regenerated response",
+    "group": "Finding kinds",
+    "summary": "A response whose file metadata predates its release by weeks or months, with the metadata fields consistent with each other.",
+    "keywords": [
+      "regenerated response",
+      "finding",
+      "kind",
+      "regenerated",
+      "metadata",
+      "moddate",
+      "prepared earlier",
+      "weeks",
+      "months",
+      "office properties"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "A response whose file metadata predates its release by weeks or months, with the metadata fields consistent with each other. It does not require release near a deadline."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "That the response was intentionally delayed. Files are often edited or re-saved for unrelated reasons."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is shown only when it was measured, and reads Unassessed otherwise."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "REGENERATED_RESPONSE"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-email-thread-gap",
+    "title": "Email thread gap",
+    "group": "Finding kinds",
+    "summary": "A released .msg message that refers, through its reply headers, to a message that is not in the released set.",
+    "keywords": [
+      "email thread gap",
+      "finding",
+      "kind",
+      "email",
+      "thread",
+      "in-reply-to",
+      "references",
+      "message-id",
+      "correspondence",
+      "msg"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "A released .msg message that refers, through its reply headers, to a message that is not in the released set."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "What the missing message says, or that it is responsive. The released set is simply not the whole exchange."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is shown only when it was measured, and reads Unassessed otherwise."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "EMAIL_THREAD_GAP"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-contradictory-statement",
+    "title": "Contradictory statements",
+    "group": "Finding kinds",
+    "summary": "Two documents in the collection that assert the same subject and predicate with materially different values, for example a 3-year and a 7-year retention period.",
+    "keywords": [
+      "contradictory statement",
+      "finding",
+      "kind",
+      "contradiction",
+      "contradictory",
+      "inconsistent",
+      "retention",
+      "commitment",
+      "policy",
+      "conflict"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "Two documents in the collection that assert the same subject and predicate with materially different values, for example a 3-year and a 7-year retention period."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "Which statement is right, or that either is binding. It is an internal-consistency pattern."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is shown only when it was measured, and reads Unassessed otherwise."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "CONTRADICTORY_STATEMENT"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-no-records-contradicted-by-release",
+    "title": "No-records denial contradicted by other releases",
+    "group": "Finding kinds",
+    "summary": "A response saying no responsive records exist, while at least three other public documents released to different requesters mention the same topic.",
+    "keywords": [
+      "no records contradicted by release",
+      "finding",
+      "kind",
+      "no responsive records",
+      "unable to locate",
+      "denial",
+      "contradicted",
+      "topic",
+      "release"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "A response saying no responsive records exist, while at least three other public documents released to different requesters mention the same topic."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "That the denial was wrong. Scope and legal treatment differ, and the detector does not evaluate them."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is shown only when it was measured, and reads Unassessed otherwise."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "NO_RECORDS_CONTRADICTED_BY_RELEASE"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-evasion-paraphrased-denials",
+    "title": "Paraphrased denials",
+    "group": "Finding kinds",
+    "summary": "Denial language that is highly similar in vocabulary across distinct requests but has different surface phrasing, which would defeat a direct boilerplate match.",
+    "keywords": [
+      "evasion paraphrased denials",
+      "finding",
+      "kind",
+      "paraphrase",
+      "denial",
+      "evasion",
+      "similarity",
+      "shingle",
+      "wording"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "Denial language that is highly similar in vocabulary across distinct requests but has different surface phrasing, which would defeat a direct boilerplate match."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "Intent to evade. It is a pattern in wording and is not a legal claim."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is shown only when it was measured, and reads Unassessed otherwise."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "EVASION_PARAPHRASED_DENIALS"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-evasion-round-number-thresholds",
+    "title": "Releases just under round numbers",
+    "group": "Finding kinds",
+    "summary": "An agency's released-document counts cluster just below a round number such as 10, 25, 50, 100, 500 or 1,000, with few or none above it.",
+    "keywords": [
+      "evasion round number thresholds",
+      "finding",
+      "kind",
+      "round number",
+      "threshold",
+      "ceiling",
+      "10",
+      "25",
+      "50",
+      "100",
+      "release counts"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "An agency's released-document counts cluster just below a round number such as 10, 25, 50, 100, 500 or 1,000, with few or none above it."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "That releases were sized on purpose. Round-number clustering can have ordinary causes."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is shown only when it was measured, and reads Unassessed otherwise."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "EVASION_ROUND_NUMBER_THRESHOLDS"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-evasion-redaction-at-limit",
+    "title": "Redaction with no residual signals",
+    "group": "Finding kinds",
+    "summary": "Heavily redacted documents that show almost no structural residual signals across a meaningful sample.",
+    "keywords": [
+      "evasion redaction at limit",
+      "finding",
+      "kind",
+      "redaction",
+      "residual",
+      "leak",
+      "annotation",
+      "overlay",
+      "exemplary"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "Heavily redacted documents that show almost no structural residual signals across a meaningful sample. Either exemplary redaction practice, or redactions tuned to what the residual audit can see."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "Wrongdoing. Clean redaction is also what good practice looks like."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is shown only when it was measured, and reads Unassessed otherwise."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "EVASION_REDACTION_AT_LIMIT"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-evasion-late-arriving-records",
+    "title": "Records released after a no-records denial",
+    "group": "Finding kinds",
+    "summary": "A no-responsive-records denial followed by public releases from the same agency, dated after the determination, that match the denied request's topic vocabulary.",
+    "keywords": [
+      "evasion late arriving records",
+      "finding",
+      "kind",
+      "late",
+      "arriving",
+      "released after",
+      "denial",
+      "determination",
+      "appeal window"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "A no-responsive-records denial followed by public releases from the same agency, dated after the determination, that match the denied request's topic vocabulary."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "That the records were responsive to that request, or that the denial was in bad faith."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is shown only when it was measured, and reads Unassessed otherwise."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "EVASION_LATE_ARRIVING_RECORDS"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-redaction-candidate-inferred",
+    "title": "Inferred redaction candidate",
+    "group": "Finding kinds",
+    "summary": "A redaction with a likely candidate identity derived from surrounding context and at least three independent corroborating documents.",
+    "keywords": [
+      "redaction candidate inferred",
+      "finding",
+      "kind",
+      "redaction",
+      "inferred",
+      "identity",
+      "candidate",
+      "corroborating",
+      "hypothesis",
+      "lead"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "A redaction with a likely candidate identity derived from surrounding context and at least three independent corroborating documents."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "That the redacted identity is known. It is inference, not decryption, and is tagged as a hypothesis wherever it appears. Verifiable reports leave it out."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is shown only when it was measured, and reads Unassessed otherwise."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "REDACTION_CANDIDATE_INFERRED"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-cross-corpus-shared-language",
+    "title": "Shared language across agencies",
+    "group": "Finding kinds",
+    "summary": "The same denial paragraph appearing across multiple agencies, which can point to a shared template or circulating guidance.",
+    "keywords": [
+      "cross corpus shared language",
+      "finding",
+      "kind",
+      "cross corpus",
+      "shared language",
+      "template",
+      "copy",
+      "paste",
+      "agencies",
+      "denial paragraph"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "The same denial paragraph appearing across multiple agencies, which can point to a shared template or circulating guidance."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "Coordination. Shared wording can come from a public template or standard legal text."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is shown only when it was measured, and reads Unassessed otherwise."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "CROSS_CORPUS_SHARED_LANGUAGE"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-cross-corpus-temporal-shift",
+    "title": "Change in agency behavior",
+    "group": "Finding kinds",
+    "summary": "One agency's behavior stepping over a date: a large jump in heavy-redaction rate, or determination latency roughly doubling, found by a bounded change-point scan with minimum data on both sides.",
+    "keywords": [
+      "cross corpus temporal shift",
+      "finding",
+      "kind",
+      "temporal",
+      "shift",
+      "change point",
+      "redaction rate",
+      "latency",
+      "behavior change"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "One agency's behavior stepping over a date: a large jump in heavy-redaction rate, or determination latency roughly doubling, found by a bounded change-point scan with minimum data on both sides."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "Why the change happened. It marks when, not why."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is shown only when it was measured, and reads Unassessed otherwise."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "CROSS_CORPUS_TEMPORAL_SHIFT"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-cross-corpus-orphan-topic",
+    "title": "Orphan topic",
+    "group": "Finding kinds",
+    "summary": "A topic prominent in one agency's records and entirely absent from another agency's records in the same jurisdiction, when the second agency has enough requests to trust the absence.",
+    "keywords": [
+      "cross corpus orphan topic",
+      "finding",
+      "kind",
+      "orphan",
+      "topic",
+      "absent",
+      "scope",
+      "asymmetry",
+      "agency b"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "A topic prominent in one agency's records and entirely absent from another agency's records in the same jurisdiction, when the second agency has enough requests to trust the absence."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "That records are missing. Agencies have different functions."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is shown only when it was measured, and reads Unassessed otherwise."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "CROSS_CORPUS_ORPHAN_TOPIC"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-cross-corpus-reused-denial-grounds",
+    "title": "Reused extension ground",
+    "group": "Finding kinds",
+    "summary": "One statutory extension reason invoked across topically diverse requests, on top of the concentration test, which suggests a catch-all rationale.",
+    "keywords": [
+      "cross corpus reused denial grounds",
+      "finding",
+      "kind",
+      "reused",
+      "extension",
+      "grounds",
+      "entropy",
+      "catch-all",
+      "topics",
+      "diverse"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "One statutory extension reason invoked across topically diverse requests, on top of the concentration test, which suggests a catch-all rationale."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "That any extension was improper. It is a pattern signal."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is shown only when it was measured, and reads Unassessed otherwise."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "CROSS_CORPUS_REUSED_DENIAL_GROUNDS"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-policy-violation-detected",
+    "title": "Agency exceeded its own stated commitment",
+    "group": "Finding kinds",
+    "summary": "A counted comparison: a calendar-day response time that the agency's own policy document states, against how long requests to that agency in the same portal actually took after the policy took effect.",
+    "keywords": [
+      "policy violation detected",
+      "finding",
+      "kind",
+      "policy",
+      "violation",
+      "commitment",
+      "sla",
+      "stated",
+      "counted",
+      "legal claim"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "A counted comparison: a calendar-day response time that the agency's own policy document states, against how long requests to that agency in the same portal actually took after the policy took effect. Only a sourced determination event measures the period. Requests with a recorded statutory extension are excluded, and the policy applies only to the agency that issued it."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "A court finding. It is the one finding kind labelled Legal claim: counted violation, and it is a count against the agency's own words. When the policy states no effective date, the upload time is used, the finding says so, and confidence is lower."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Legal claim: counted violation. Confidence is derived from what the evaluation observed."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "POLICY_VIOLATION_DETECTED"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "finding-claim-contradicts-data",
+    "title": "Claim contradicts data",
+    "group": "Finding kinds",
+    "summary": "A quantitative statement in a released document, such as a total or a change, that falls outside the rounding band its own wording carries when checked against the imported budget or actuals table for the same fiscal year, fund and jurisdiction.",
+    "keywords": [
+      "claim contradicts data",
+      "finding",
+      "kind",
+      "claim",
+      "data",
+      "budget",
+      "actuals",
+      "figure",
+      "total",
+      "rounding",
+      "validation",
+      "number"
+    ],
+    "sections": [
+      {
+        "heading": "What it flags",
+        "paragraphs": [
+          "A quantitative statement in a released document, such as a total or a change, that falls outside the rounding band its own wording carries when checked against the imported budget or actuals table for the same fiscal year, fund and jurisdiction."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "Which side is right. It compares a sentence with a dataset. It only runs when a budget or actuals table has been imported, and unreconciled claims are not reported as contradictions."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is shown only when it was measured, and reads Unassessed otherwise."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "CLAIM_CONTRADICTS_DATA"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  }
+]

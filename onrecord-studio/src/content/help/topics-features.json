@@ -1,0 +1,534 @@
+[
+  {
+    "id": "findings-inbox",
+    "title": "Findings inbox",
+    "group": "Findings",
+    "summary": "The ranked list of everything the detectors surfaced, and how to act on a row.",
+    "keywords": [
+      "findings",
+      "inbox",
+      "detector",
+      "severity",
+      "rank",
+      "dismiss",
+      "refresh",
+      "lens",
+      "evidence gap",
+      "trace",
+      "why we believe this",
+      "citation"
+    ],
+    "screenshot": "findings",
+    "sections": [
+      {
+        "paragraphs": [
+          "Detectors run after every sync and when you press Refresh findings. Rows are ordered by severity (Critical, Serious, Notable, Info), then confidence, then freshness. Severity glyphs pair a shape with text, so colour is never the only signal."
+        ]
+      },
+      {
+        "heading": "On each row",
+        "items": [
+          "A basis chip says Legal claim: counted violation or Pattern signal, not a legal claim.",
+          "A confidence meter reads Unassessed or N% measured. Unassessed is not 0%.",
+          "Why we believe this opens the explanation and numbered citations: portal, document, character range and the quoted text. Open source document takes you to the source's records in Evidence.",
+          "Draft opens request or appeal drafts when the backend says a draft applies.",
+          "Dismiss removes a finding from the inbox and it stays dismissed. There is no undo control in the interface."
+        ]
+      },
+      {
+        "heading": "My organization",
+        "paragraphs": [
+          "If you declared an organization and confirmed a match, the lens filters to findings about it. It never changes ranking, confidence, severity or any statutory result."
+        ]
+      },
+      {
+        "heading": "Routes that cannot be tested yet",
+        "paragraphs": [
+          "Evidence gaps list checks the app could not run because the records are not collected yet, are not in the collected sources, or need a records request. A gap is not a finding and is not evidence of compliance."
+        ]
+      },
+      {
+        "heading": "Verifiable report",
+        "paragraphs": [
+          "Under the list, Export a verifiable report writes one HTML file that checks its own signature in the reader's browser. Quoted text is masked for personal information, hypotheses about redacted identities are left out, and the file lists what was withheld. The signature shows the file is unchanged. It does not identify who holds the signing key."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [
+      "findings",
+      "report"
+    ],
+    "related": [
+      "legal-vs-pattern",
+      "measured-vs-unassessed",
+      "evidence-ladder",
+      "request-drafts"
+    ]
+  },
+  {
+    "id": "request-drafts",
+    "title": "Request and appeal drafts",
+    "group": "Findings",
+    "summary": "Drafts the app prepares. Nothing is sent.",
+    "keywords": [
+      "draft",
+      "request",
+      "appeal",
+      "complaint",
+      "followup",
+      "template",
+      "disclosure",
+      "copy",
+      "download",
+      "investigation desk",
+      "statutory deadline appeal"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "A draft is plain text you edit, copy or download. The app has no email, portal or credential integration and never submits anything. You submit in the agency's own channel."
+        ]
+      },
+      {
+        "heading": "Where drafts come from",
+        "items": [
+          "Findings inbox, Draft: Draft records request and, when it applies, Draft appeal or complaint. Availability is decided by the backend. If a finding names no specific gap, no draft applies. A pattern finding is not offered an appeal.",
+          "Evidence, statutory latency flag: Draft statutory deadline appeal. The backend refuses when the determination date is only a proxy or the extension record is defective, and shows the refusal as is. A separate Generate administrative appeal draft action saves a report and signed package to files on disk.",
+          "San Diego view, Plan an investigation or draft a request manually: pick a topic, choose dates, prepare an editable request draft, and download it. Open City request portal opens the agency site in your browser."
+        ]
+      },
+      {
+        "heading": "Reading a draft",
+        "items": [
+          "Evidence basis says whether it rests on a pattern observation, a counted comparison against the agency's own stated commitment, or the statutory determination period.",
+          "Confidence is not assessed or a measured percentage.",
+          "Unknown to the app lists facts you must fill in before sending.",
+          "Citations and cited authorities are collapsible.",
+          "If you declared an affiliation, a locked Disclosure line is appended to every copy and download."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [
+      "artifacts"
+    ],
+    "related": [
+      "findings-inbox",
+      "statutory-deadlines",
+      "affiliation-profile"
+    ]
+  },
+  {
+    "id": "document-viewer",
+    "title": "Reading a document",
+    "group": "Findings",
+    "summary": "The document dialog: masked text, provenance badge, audits and the verification log.",
+    "keywords": [
+      "document",
+      "viewer",
+      "text",
+      "chunk",
+      "mask",
+      "pii",
+      "provenance",
+      "audit",
+      "residual",
+      "revision",
+      "incremental",
+      "verification log",
+      "digest",
+      "sha-256",
+      "excerpt",
+      "evidence link",
+      "reference only"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "The viewer shows the local extracted text in chunks of 100,000 characters. Structured personal information such as identifiers is masked, and the header counts masked values. Detection is pattern based, so masking is best effort. Nothing in this dialog alters the original file."
+        ]
+      },
+      {
+        "heading": "Toolbar",
+        "items": [
+          "Audit residual evidence: runs the collectors and reports Supported collector coverage complete or Coverage incomplete. An incomplete audit is not a negative finding.",
+          "Audit redactions: opens redaction tools (see Redaction tools).",
+          "Inspect revision history (PDF): reads earlier incremental saves. No earlier boundary does not rule out edits made before the file was created, and a boundary does not show that content was removed or concealed.",
+          "Verification log: every provenance check recorded for this document. An empty log is not a verification result.",
+          "Copy evidence link and Save excerpt to briefing."
+        ]
+      },
+      {
+        "heading": "Reference-only documents",
+        "paragraphs": [
+          "When the original file is not stored, the first four actions are disabled and the badge reads Original referenced, file verification unavailable."
+        ]
+      },
+      {
+        "heading": "Provenance badge",
+        "paragraphs": [
+          "The badge reports one rung of the provenance ladder. See Provenance and C2PA. Quoted text drifted means the extracted text no longer hashes to the digest recorded at extraction, even if the file itself is intact."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [],
+    "related": [
+      "provenance-c2pa",
+      "redaction-tools",
+      "view-evidence"
+    ]
+  },
+  {
+    "id": "legal-compliance",
+    "title": "Legal compliance panel and authority library",
+    "group": "Findings",
+    "summary": "Evaluate a request against a deadline rule and manage the authorities behind it.",
+    "keywords": [
+      "legal",
+      "compliance",
+      "authority",
+      "library",
+      "statute",
+      "ordinance",
+      "policy",
+      "extension",
+      "evaluate",
+      "review",
+      "confirm",
+      "reopen",
+      "version",
+      "mandate",
+      "rule"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "In the Evidence view, the Legal compliance panel for a selected request evaluates it and lists active legal findings. Incomplete evidence sets are deferred rather than classified."
+        ]
+      },
+      {
+        "heading": "Recording an extension",
+        "paragraphs": [
+          "Record notice stores what the agency claimed: when notice was given, the date it said it would respond by, the reason, and the source document. A request carries one extension and saving replaces it. Recording states what the agency claimed. Whether it moves the deadline is the evaluator's verdict on those dates. The app never fetches agency notices for you."
+        ]
+      },
+      {
+        "heading": "Findings",
+        "paragraphs": [
+          "Each finding can show days overdue, missing evidence phrases, and a comparison of authority and evidence. You can confirm, dismiss or reopen a finding and save a reviewer note. Your review is a record of your judgment and does not change the computed result."
+        ]
+      },
+      {
+        "heading": "Authority library",
+        "paragraphs": [
+          "Index statutes, ordinances or agency policies from a .md, .markdown or .txt file up to 8 MiB, or pasted text. Each gets a stable id, jurisdiction, citation, effective dates, an optional calendar-day deadline, and an official HTTPS address used as a label. Versions are content-addressed so you can compare text over time. Optional evidence rules match phrase sequences on word boundaries. Nothing is fetched from the address you enter."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [
+      "investigation"
+    ],
+    "related": [
+      "statutory-deadlines",
+      "view-evidence"
+    ]
+  },
+  {
+    "id": "redaction-tools",
+    "title": "Redaction tools",
+    "group": "Concepts",
+    "summary": "Connect clues across records and scan a PDF for overlay problems.",
+    "keywords": [
+      "redaction",
+      "reconstruction",
+      "unredact",
+      "overlay",
+      "clash",
+      "mask",
+      "clue",
+      "role holder",
+      "number fragment",
+      "integrity",
+      "pdf"
+    ],
+    "sections": [
+      {
+        "heading": "Connect redacted clues across records",
+        "paragraphs": [
+          "Compares public role holders, complementary number fragments, and unredacted versions of the same passage across retained text. Results are evidence-backed inferences and do not alter the original. Mask lengths stay unknown unless you confirm each block or X stands for exactly one character. Candidates contradicted by the constraints are marked."
+        ]
+      },
+      {
+        "heading": "PDF overlay integrity",
+        "paragraphs": [
+          "A conservative scan of vector shapes, the text layer and metadata. A potential clash means approximate text bounds intersect a dark shape or redaction annotation. Backgrounds and layout elements can trigger this, and concealed content has not been established. Permanently removed content cannot be recovered. Review notes you write record geometry only, not recovered text."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [
+      "reconstruction"
+    ],
+    "related": [
+      "redaction-inference",
+      "document-viewer"
+    ]
+  },
+  {
+    "id": "case-workbench",
+    "title": "Case workbench and casework",
+    "group": "Concepts",
+    "summary": "Persistent local cases, ranked leads, signed exports and shared packets.",
+    "keywords": [
+      "case",
+      "casework",
+      "workbench",
+      "lead",
+      "hypothesis",
+      "falsification",
+      "commitment",
+      "decision",
+      "packet",
+      "chain of custody",
+      "signing key",
+      "rotate",
+      "compromised",
+      "contributor"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "Open it from San Diego, Open casework and research tools. It needs the desktop app. Tabs: Cases and follow-through, Spending and outcomes, Coverage and changes, Evidence review, Usefulness. Above the tabs, a collapsed panel verifies signed packages."
+        ]
+      },
+      {
+        "heading": "Cases and follow-through",
+        "items": [
+          "A case holds questions, hypotheses, falsification tests, records requests, productions, dated decisions and commitments. The app does not send requests. Dates and submissions are entered from your own records.",
+          "Ranked leads explain public consequence, available records, changed findings and dated decision opportunities. Scores prioritize review. They do not establish wrongdoing or confidence.",
+          "Contributor names are labels of responsibility, not authenticated identities.",
+          "Save case revision needs a contributor label. Exports use only the last saved revision.",
+          "Export signed chain-of-custody package writes a signed file. View export chain shows whether every link matches the prior export's hash. Withheld citations stay named, with a reason.",
+          "Review a shared case packet previews before applying and preserves conflicting local work.",
+          "Export signing key: a routine rotation keeps earlier packages trusted. Marking a key compromised cannot be undone, and packages signed by it are then untrusted."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [
+      "casework"
+    ],
+    "related": [
+      "package-verification",
+      "evidence-review",
+      "spending-outcomes",
+      "coverage-monitoring"
+    ]
+  },
+  {
+    "id": "package-verification",
+    "title": "Exports and package verification",
+    "group": "Concepts",
+    "summary": "What the signed exports prove, and how to verify one.",
+    "keywords": [
+      "export",
+      "package",
+      "signature",
+      "verify",
+      "signed",
+      "sha-256",
+      "chain of custody",
+      "legal brief",
+      "key rotation",
+      "report"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "Signed exports let a reader confirm a file is unchanged since signing. A signature shows integrity. It does not identify who holds the signing key or show that the contents are true."
+        ]
+      },
+      {
+        "heading": "Verify a package",
+        "paragraphs": [
+          "Open a signed package (.json, up to 64 MB) in the verifier above the workbench tabs. The result is Overall: PASS, internally consistent and unaltered since signing, or Overall: FAIL, treat as unverified. Key status is reported separately: after a routine rotation earlier packages stay trusted. If the key was marked compromised, the signature can still be mathematically valid while the signer is no longer trusted, and the package should be treated as untrusted."
+        ]
+      },
+      {
+        "heading": "Exports in the app",
+        "items": [
+          "Administrative appeal draft (Evidence): a report and a signed package on disk.",
+          "Case chain-of-custody package (Casework).",
+          "Verifiable report (Findings inbox): an HTML file that checks its own signature in the browser."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [
+      "export"
+    ],
+    "related": [
+      "case-workbench",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "evidence-review",
+    "title": "Evidence review and usefulness",
+    "group": "Concepts",
+    "summary": "Challenge a saved investigation, record counterevidence, and assess usefulness.",
+    "keywords": [
+      "review",
+      "challenge",
+      "counterevidence",
+      "replay",
+      "disposition",
+      "relationship",
+      "usefulness",
+      "assessment",
+      "pilot",
+      "reviewer"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "Evidence review recomputes the quantities behind a saved investigation and lets you record a disposition, your reasoning and limits, what result would disprove the interpretation, and the counterevidence search you performed. Reviewer names are local attribution, not authenticated identities."
+        ]
+      },
+      {
+        "items": [
+          "Public relationships are cited records with effective periods. A name match or documented connection does not establish misconduct.",
+          "Usefulness records a human assessment of whether an investigation helped, with time spent and an optional baseline. Without a baseline, time saved is not estimated."
+        ]
+      },
+      {
+        "paragraphs": [
+          "A saved investigation is required. Autonomous research creates them."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [
+      "review"
+    ],
+    "related": [
+      "case-workbench",
+      "autonomous-research"
+    ]
+  },
+  {
+    "id": "spending-outcomes",
+    "title": "Spending and outcomes",
+    "group": "Concepts",
+    "summary": "Reconcile budget, actuals, encumbrances, contracts and outcomes for a fund.",
+    "keywords": [
+      "financial",
+      "spending",
+      "budget",
+      "actuals",
+      "encumbrance",
+      "contract",
+      "amendment",
+      "outcome",
+      "fund",
+      "denominator",
+      "crosswalk",
+      "restriction"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "This tab calculates over records you entered or imported: adopted funding history, spending, actual expenditures, open encumbrances, executed contracts and amendments, service outcomes, an account crosswalk and fund restrictions. Results are calculations. They do not establish program effectiveness or misconduct. Keep fiscal years, funds, budget cycles, populations and denominators separate before comparing."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [
+      "financial"
+    ],
+    "related": [
+      "finding-claim-contradicts-data",
+      "view-analysis"
+    ]
+  },
+  {
+    "id": "coverage-monitoring",
+    "title": "Coverage and changes",
+    "group": "Concepts",
+    "summary": "Acquisition priorities, publication changes and service access.",
+    "keywords": [
+      "monitoring",
+      "coverage",
+      "missing record",
+      "acquisition",
+      "publication change",
+      "version",
+      "baseline",
+      "service access",
+      "gap"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "Coverage and changes turns unresolved questions into acquisition work. You define a consequential missing record, record its receipt after checking scope and period, and can reopen a gap. Publication changes compare a previously retrieved version with a subsequently retrieved one. Changes are review leads. A failed fetch is never treated as deletion. It works on local ingested records only."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [
+      "monitoring"
+    ],
+    "related": [
+      "case-workbench",
+      "data-upkeep"
+    ]
+  },
+  {
+    "id": "data-upkeep",
+    "title": "Data upkeep and storage",
+    "group": "Concepts",
+    "summary": "Scheduled rechecks, storage budget and retention.",
+    "keywords": [
+      "upkeep",
+      "maintenance",
+      "storage",
+      "retention",
+      "budget",
+      "recheck",
+      "interval",
+      "originals",
+      "reference only",
+      "gib",
+      "automatic"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "Under San Diego, Collection, coverage and storage, you choose whether upkeep runs automatically, whether acquired tables are imported, whether sources are rechecked (every 6 hours, daily or weekly), a managed-file budget, and whether to keep original files with derived data or keep only references and extracted text. Recheck fetches the public sources you added. Recent upkeep activity is listed below the settings."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [
+      "maintenance"
+    ],
+    "related": [
+      "sources",
+      "data-handling"
+    ]
+  }
+]

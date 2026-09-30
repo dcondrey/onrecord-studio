@@ -1,0 +1,146 @@
+[
+  {
+    "id": "start-here",
+    "title": "Start here",
+    "group": "Getting started",
+    "summary": "What OnRecord Studio does and the order to work in.",
+    "keywords": ["welcome", "overview", "workflow", "first", "begin", "tour"],
+    "sections": [
+      {
+        "paragraphs": [
+          "OnRecord Studio collects public records you point it at, reads them on your Mac, looks for patterns and counted deadline failures, and keeps every claim tied to a passage in a source document.",
+          "It never files a request, sends an appeal, or contacts an agency for you. Drafts are text you copy or download and submit yourself."
+        ]
+      },
+      {
+        "heading": "Working order",
+        "items": [
+          "Add a source: a public URL, local files, or pasted text (see Adding and managing sources).",
+          "Wait for the sync. When it finishes the app runs every detector and opens a brief of anything new.",
+          "Read the Findings inbox on the San Diego view. Each row says whether it is a pattern signal or a counted legal claim, and how the confidence was derived.",
+          "Open the evidence behind a finding, read the source document, and check its provenance.",
+          "Save what you have reviewed to the Briefing view and export an outline."
+        ]
+      },
+      {
+        "heading": "Six views",
+        "paragraphs": ["San Diego, Patterns, Analysis, Evidence, Activity and Briefing. Switch with the sidebar, the command palette, or Cmd/Ctrl+1 to 6."]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [],
+    "related": ["keyboard-shortcuts", "evidence-ladder", "data-handling"]
+  },
+  {
+    "id": "keyboard-shortcuts",
+    "title": "Keyboard shortcuts",
+    "group": "Getting started",
+    "summary": "Every key binding, and how to change motion and contrast.",
+    "keywords": ["keys", "hotkey", "shortcut", "cmd", "ctrl", "accessibility", "motion", "contrast", "escape"],
+    "sections": [
+      {
+        "heading": "Shortcuts",
+        "items": [
+          "Cmd/Ctrl+K: open or close the command palette.",
+          "Cmd/Ctrl+1 to 6: San Diego, Patterns, Analysis, Evidence, Activity, Briefing.",
+          "Cmd/Ctrl+N: focus the source URL box to add a source.",
+          "Cmd/Ctrl+Shift+/ (the ? key): open this Help. Inside Help, Esc closes it.",
+          "Esc closes the palette or any dialog. In the palette, Up and Down move and Enter runs."
+        ]
+      },
+      {
+        "heading": "Motion and contrast",
+        "paragraphs": ["Motion and contrast follow the operating system by default. To override either direction, open the command palette and choose an Accessibility command. There is no header control for these. Appearance (light, dark, system) is in the header and the palette."]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [],
+    "related": ["command-palette", "start-here"]
+  },
+  {
+    "id": "sources",
+    "title": "Adding and managing sources",
+    "group": "Getting started",
+    "summary": "Register a public source, pause it, remove it, or delete it and its documents.",
+    "keywords": ["source", "url", "crawl", "paste", "import", "files", "ingest", "sync", "pause", "resume", "delete", "remove", "guided repair", "verified badge"],
+    "sections": [
+      {
+        "heading": "Adding",
+        "items": [
+          "URL: paste a public website, catalog, API or document address in the header box, or choose a built-in San Diego source, then press Add. Only public URLs are fetched. No portal login or password is collected anywhere.",
+          "Add files: pick local files. They are read on this Mac and need no network.",
+          "Paste content: text, CSV, JSON, XML or HTML, up to 16 MiB.",
+          "Crawl settings apply to the next source you add: depth, page and document limits, request rate, and whether to follow supported external platforms."
+        ]
+      },
+      {
+        "heading": "While it runs",
+        "paragraphs": ["At most five sources sync at once. Pause and Resume continue from the queue the pause left. The Activity view shows queues and errors. If the app cannot find the data on a page, Guided repair lets you point at the links with CSS selectors and approve the mapping for that publisher hostname."]
+      },
+      {
+        "heading": "Remove versus delete",
+        "items": [
+          "Remove source stops synchronizing and takes the source off the list. Documents already ingested are kept and stay searchable and exportable.",
+          "Delete source and its documents destroys the ingested documents, request records, downloaded files, and every search, provenance and compliance record derived from them. The dialog counts what will be destroyed first. It cannot be undone from inside the app.",
+          "Delete document (in Evidence) removes one file and everything derived from it. Syncing the source again can download it back."
+        ]
+      },
+      {
+        "heading": "The Verified badge",
+        "paragraphs": ["The green Verified badge beside the source name appears for any active saved source. It is not a fresh check of the source's contents."]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": ["ingest"],
+    "related": ["view-activity", "data-upkeep", "data-handling"]
+  },
+  {
+    "id": "command-palette",
+    "title": "Command palette and Ask",
+    "group": "Getting started",
+    "summary": "Jump to views and settings, or ask one of ten fixed questions. No AI model is involved.",
+    "keywords": ["palette", "ask", "question", "intent", "search", "command", "dossier", "subject", "contradictions", "deadline"],
+    "sections": [
+      {
+        "paragraphs": ["Press Cmd/Ctrl+K. Type to filter commands. A phrase of several words, or one ending in ?, adds an Ask row."]
+      },
+      {
+        "heading": "Ask",
+        "paragraphs": [
+          "Ask matches your sentence against ten fixed question shapes and answers from stored findings, the entity graph and document text. It uses phrase matching, not a language model, and sends nothing over the network.",
+          "A sentence outside those shapes returns Not understood and lists the ones it knows. A placeholder such as this contractor returns Needs a name. Answers are limited to 500 characters of question."
+        ]
+      },
+      {
+        "heading": "The ten questions",
+        "items": [
+          "Contradictions in an agency.",
+          "Why a request missed its deadline.",
+          "Who signed for a person or office.",
+          "Where a name appears across agencies.",
+          "Same denial language across agencies.",
+          "Same extension ground across agencies.",
+          "Which agencies changed behavior.",
+          "Topics one agency has and another lacks.",
+          "How two names are connected.",
+          "Stored findings for an agency."
+        ]
+      },
+      {
+        "heading": "Reading an answer",
+        "paragraphs": ["Every row carries a basis chip: Stored finding, Typed relationship, Co-occurrence only, Text match, Sourced determination, Activity stand-in or Still running. Solid borders mark measured bases and dashed borders mark signals or proxies. Confidence reads Confidence not assessed when none was measured. Rows list their citations, and the footer lists the limits of the answer."]
+      },
+      {
+        "heading": "Subject dossier",
+        "paragraphs": ["Open subject dossier asks for a name and stitches together findings that mention it and its neighbours in the entity graph. Matching is by text on the display name, so a namesake is possible."]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": ["intent"],
+    "related": ["keyboard-shortcuts", "measured-vs-unassessed"]
+  }
+]

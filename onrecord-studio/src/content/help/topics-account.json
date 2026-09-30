@@ -1,0 +1,213 @@
+[
+  {
+    "id": "account-trial-license",
+    "title": "Account, trial and license",
+    "group": "Accounts and updates",
+    "summary": "Signing in, the free trial, buying a license, and what each locked screen means.",
+    "keywords": [
+      "account",
+      "sign in",
+      "trial",
+      "license",
+      "upgrade",
+      "checkout",
+      "seat",
+      "stripe",
+      "expired",
+      "revoked",
+      "clock",
+      "offline",
+      "sign out",
+      "delete account",
+      "app store",
+      "storekit",
+      "verify license",
+      "device"
+    ],
+    "sections": [
+      {
+        "heading": "Two builds",
+        "items": [
+          "Direct download build: you sign in once with Google, Apple, LinkedIn or GitHub in a system sign-in window. The account service records a free trial start once per account and, after purchase, your license.",
+          "Mac App Store build: a one-time paid app verified by Apple with no account, no trial and no license key. Account and work-email features are not part of it."
+        ]
+      },
+      {
+        "heading": "Trial",
+        "paragraphs": [
+          "The trial banner at the top shows the days left. It turns amber for the last three days, and you can dismiss it for the session. Upgrade opens the seat picker. The trial start is kept by the account service, not on this Mac, so deleting files does not restart it."
+        ]
+      },
+      {
+        "heading": "Buying",
+        "paragraphs": [
+          "Pricing is per seat per year, before tax, and the Upgrade panel shows the current table and your total. Continue to checkout opens Stripe in your browser. Payment happens there, not in the app. When you return, the license is checked again as the window regains focus."
+        ]
+      },
+      {
+        "heading": "Offline and expiry",
+        "paragraphs": [
+          "The app keeps a signed entitlement on this Mac that is valid for at most seven days and refreshes it when online. If it expires while you are offline, the workspace locks until you verify again. A clock set earlier than a time the app has already seen shows This Mac's clock looks wrong. An account can be active on a limited number of Macs."
+        ]
+      },
+      {
+        "heading": "Locked screens",
+        "paragraphs": [
+          "Sign in to continue, Your free trial has ended, License needs to be verified online, License no longer active, and This license could not be verified all block the workspace. Verify license again re-checks with the account service. On every one of them, your local evidence on this Mac is not deleted."
+        ]
+      },
+      {
+        "heading": "Account menu",
+        "items": [
+          "Shows your email, sign-in provider and plan. Profile settings opens the local profile.",
+          "Sign out clears the local sign-in and returns to the sign-in screen.",
+          "Delete account deletes your license account on the server and removes local sign-in data. It does not delete local evidence, and a trial already used on this device is not restored. The result screen states which parts finished."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [
+      "account",
+      "runtime"
+    ],
+    "related": [
+      "work-email-verification",
+      "updates",
+      "data-handling"
+    ]
+  },
+  {
+    "id": "updates",
+    "title": "Updates",
+    "group": "Accounts and updates",
+    "summary": "How the app finds and installs a signed update.",
+    "keywords": [
+      "update",
+      "upgrade",
+      "install",
+      "restart",
+      "version",
+      "later",
+      "release notes",
+      "signed",
+      "updater"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "In the direct download build the app checks for an update at start and about every 24 hours. When one is available a notice in the header shows the version and release notes. Install and restart downloads it, installs it and relaunches. Later hides the notice for that version until you restart the app. Your license and account are not affected by an update."
+        ]
+      },
+      {
+        "heading": "Details",
+        "items": [
+          "Updates are verified against a signing key built into the app before they are installed.",
+          "The check contacts updates.writerslogic.com with the app's current version, operating system target and architecture in the request address.",
+          "The Mac App Store build has no updater and updates through the App Store.",
+          "If an install fails the notice says so and offers Retry install."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [],
+    "related": [
+      "account-trial-license",
+      "data-handling"
+    ]
+  },
+  {
+    "id": "data-handling",
+    "title": "Data handling: what stays and what leaves",
+    "group": "Data handling",
+    "summary": "Privacy in full: exactly what stays on your Mac and each thing that is sent elsewhere.",
+    "keywords": [
+      "data",
+      "privacy",
+      "network",
+      "sent",
+      "upload",
+      "local",
+      "leave",
+      "share",
+      "openai",
+      "openrouter",
+      "ollama",
+      "writerslogic",
+      "account service",
+      "stripe",
+      "email address",
+      "what is sent",
+      "telemetry",
+      "credentials",
+      "keychain"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "Nothing here says that nothing is sent. Some features contact other servers. This is the full list, and it applies to the current direct download build. Details of each are in the topics linked below."
+        ]
+      },
+      {
+        "heading": "Stays on your Mac",
+        "items": [
+          "Documents you ingest, their extracted text, search indexes, findings, tables, SQL results, the entity graph, and analysis. The app reads and analyzes them locally.",
+          "Your profile, tracked requests and confirmed dates, imported notification emails (read on this device only, attachments never opened), briefing outlines, request and appeal drafts, and case files.",
+          "The command palette Ask feature. It uses phrase matching on local data and makes no network call.",
+          "Activity logs, which reset when you quit."
+        ]
+      },
+      {
+        "heading": "Sent to the WritersLogic account service (auth.writerslogic.com)",
+        "items": [
+          "Sign-in: you choose Google, Apple, LinkedIn or GitHub, and sign in through that provider. The account service receives the identity your provider releases, including your email address. The sign-in session is kept in the macOS Keychain.",
+          "Trial and license: each check sends a signed request with your session, a device public key and a signature made with the device key. The service records the trial start and your plan. It receives no documents or findings.",
+          "Checkout: a request for a checkout session with your seat count. Payment itself happens at Stripe in your browser.",
+          "Delete account: a request that deletes your account record.",
+          "Work-email verification: the full email address you type is sent so a code can be emailed to it, and the code you enter is sent back. Only the domain is kept on this Mac afterwards."
+        ]
+      },
+      {
+        "heading": "Sent to the AI provider you choose (autonomous research only)",
+        "items": [
+          "If you use OpenAI or OpenRouter, excerpts of public records you collected, query results and case questions are sent to that provider using your API key. The app masks personal information it detects in the passages it prepares, which is best effort.",
+          "It is off until you enable it in Research settings, and then needs a key in your environment or ~/.env. You can turn it off again, or choose Local Ollama, which stays on this Mac. See Autonomous research."
+        ]
+      },
+      {
+        "heading": "Fetched from the internet by the app",
+        "items": [
+          "Public web pages, documents and data files at the addresses you add, and rechecks of them on the schedule you set. Those sites can see requests from this Mac.",
+          "Automatic collection of primary sources from a built-in list of public publishers, unless you turn it off.",
+          "The semantic model files, downloaded the first time the semantic model is initialized. Your documents are not part of that download.",
+          "Update checks (direct download build only), which contact updates.writerslogic.com with the app version, operating system target and architecture."
+        ]
+      },
+      {
+        "heading": "Never done by the app",
+        "items": [
+          "It does not send records requests, appeals, complaints, emails or briefings to any agency or person. Drafts are text for you to submit yourself.",
+          "It does not ask for or store portal logins or passwords.",
+          "The app does not include an analytics or advertising service."
+        ]
+      },
+      {
+        "heading": "Not covered here",
+        "paragraphs": [
+          "What your sign-in provider, Stripe, OpenAI, OpenRouter and the sites you fetch do with data on their side is set by their terms. In the Mac App Store build, purchase verification is done by Apple and no account service is used."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [],
+    "related": [
+      "autonomous-research",
+      "account-trial-license",
+      "work-email-verification",
+      "updates",
+      "sources"
+    ]
+  }
+]

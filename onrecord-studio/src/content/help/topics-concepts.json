@@ -1,0 +1,578 @@
+[
+  {
+    "id": "evidence-ladder",
+    "title": "The evidence ladder",
+    "group": "Concepts",
+    "summary": "How strong a statement the app is allowed to make, from stand-in to counted claim.",
+    "keywords": [
+      "ladder",
+      "evidence",
+      "claim strength",
+      "proxy",
+      "stand-in",
+      "pattern",
+      "measured",
+      "counted",
+      "rung",
+      "basis"
+    ],
+    "figure": "evidence-ladder",
+    "sections": [
+      {
+        "paragraphs": [
+          "Every statement in the app sits on a rung. A statement moves up only when a measurement supports it. It is never promoted because it would be useful or because it sounds serious."
+        ]
+      },
+      {
+        "heading": "The rungs, weakest first",
+        "items": [
+          "Stand-in: a proxy used where the real event was not recorded, for example the earliest recorded activity in place of an agency's determination. Labelled as a stand-in, and never presented as a measured determination.",
+          "Pattern signal, Unassessed: a detector observed something, but no confidence was measured. The meter reads Unassessed. That is not 0%.",
+          "Pattern signal with measured confidence: the same observation with a confidence the evaluation derived, shown as N% measured.",
+          "Legal claim: counted violation: a count against a statutory period or against the agency's own stated commitment, built from a sourced determination and recorded dates."
+        ]
+      },
+      {
+        "heading": "Every rung is traceable",
+        "paragraphs": [
+          "Findings carry citations: portal, document, character range and the quoted text. Why we believe this shows them. A finding with no citation says so."
+        ]
+      },
+      {
+        "heading": "Separate ladder for files",
+        "paragraphs": [
+          "How far a file can be trusted is a different question with its own ladder. See Provenance and C2PA."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "measured-vs-unassessed",
+      "provenance-c2pa",
+      "statutory-deadlines"
+    ]
+  },
+  {
+    "id": "legal-vs-pattern",
+    "title": "Legal claims versus pattern findings",
+    "group": "Concepts",
+    "summary": "Why almost every finding is a pattern signal and only one kind is a counted legal claim.",
+    "keywords": [
+      "legal",
+      "pattern",
+      "signal",
+      "claim",
+      "violation",
+      "outlier",
+      "statistical",
+      "counted",
+      "chip",
+      "basis",
+      "z-score"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "A statistical statement is not a legal one. A pattern signal says something is unusual, repeated or inconsistent. It does not say that any law or policy was broken."
+        ]
+      },
+      {
+        "heading": "In the app",
+        "items": [
+          "Pattern signal, not a legal claim: every finding kind except one. Dashed outline, ring shape.",
+          "Legal claim: counted violation: only Agency exceeded its own stated commitment, which counts requests against a stated number of days. Solid outline, diamond shape.",
+          "Outlier: an agency slower than its peers, such as a critical outlier with a z-score of 2 or more. It is a statistical comparison and never a legal finding.",
+          "Statutory deadline violation: requires a counted violation of the statutory period. See Statutory deadlines."
+        ]
+      },
+      {
+        "heading": "What the app will not do",
+        "paragraphs": [
+          "It will not upgrade a pattern to a legal claim because several patterns agree. It will not offer an appeal draft for a pattern finding. It presents evidence for you to weigh. It does not give legal advice."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [],
+    "related": [
+      "evidence-ladder",
+      "statutory-deadlines",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "measured-vs-unassessed",
+    "title": "Measured versus Unassessed",
+    "group": "Concepts",
+    "summary": "Why an empty value is never shown as zero.",
+    "keywords": [
+      "measured",
+      "unassessed",
+      "not computed",
+      "not measured",
+      "absence",
+      "zero",
+      "confidence",
+      "null",
+      "not recorded",
+      "unknown"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "Absence and measurement are never shown the same way. If the app did not compute something, it says so in words. It does not print 0."
+        ]
+      },
+      {
+        "heading": "What you will see",
+        "items": [
+          "Confidence: N% measured, or Unassessed.",
+          "Z-score: a number, or Not computed.",
+          "Not recorded, Not reported, or No recorded check, for a field the source never supplied.",
+          "Not measured, for a comparison with no baseline.",
+          "Logged before classification, meaning Absent, not low, for old provenance checks that ran before levels existed.",
+          "A panel whose query failed says it did not complete. It does not say there is nothing to report."
+        ]
+      },
+      {
+        "heading": "Counts that really are zero",
+        "paragraphs": [
+          "Zero flagged values or zero sampled bytes are real facts and are shown as zero."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [],
+    "related": [
+      "evidence-ladder",
+      "legal-vs-pattern"
+    ]
+  },
+  {
+    "id": "statutory-deadlines",
+    "title": "Statutory deadlines",
+    "group": "Concepts",
+    "summary": "How the California Public Records Act clock is counted, and what each basis means.",
+    "keywords": [
+      "statutory",
+      "deadline",
+      "cpra",
+      "california",
+      "public records act",
+      "7922.535",
+      "extension",
+      "determination",
+      "calendar days",
+      "10 days",
+      "14 days",
+      "proxy",
+      "provisional",
+      "sourced",
+      "violation",
+      "notice"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "For California Public Records Act requests the app evaluates the statutory period under Government Code section 7922.535: 10 calendar days from receipt to determine whether the request seeks disclosable records. One written extension can add up to 14 calendar days, so the longest valid period is 24. This is a calculator over recorded dates. It is not legal advice, and other jurisdictions have no deadline model here."
+        ]
+      },
+      {
+        "heading": "Extensions",
+        "paragraphs": [
+          "An extension counts only if the notice is dated after receipt and within the initial period, names its source, gives an expected response date, and stays within 14 additional days. The stated reason is one of six statutory grounds. A notice that fails any test is recorded, but the initial period still applies, and the evaluation says why."
+        ]
+      },
+      {
+        "heading": "What the period is measured to",
+        "items": [
+          "Sourced determination: a distinct determination date with a notice or source you or the record supplied. Measured.",
+          "Earliest recorded activity: a proxy, because activity is an upper bound and not evidence that a determination was made.",
+          "Observation only: nothing recorded after receipt, so the period is measured to now. The period is still running, and a lapse reported on this basis states only that the deadline has passed with no recorded response.",
+          "Proxy and provisional results are labelled as such and never presented as a measured determination."
+        ]
+      },
+      {
+        "heading": "Tracker chips",
+        "paragraphs": [
+          "In My requests each request shows one chip. A violation is counted only from a sourced determination such as one confirmed from an email. A date you typed yourself is treated as a proxy. Chips include days left (provisional), deadline passed with no determination recorded (provisional), No submission date recorded, No deadline model for this jurisdiction, and Dates conflict: not evaluated."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [],
+    "related": [
+      "request-tracker",
+      "legal-compliance",
+      "legal-vs-pattern"
+    ]
+  },
+  {
+    "id": "provenance-c2pa",
+    "title": "Provenance and C2PA confidence",
+    "group": "Concepts",
+    "summary": "What each provenance badge proves and does not prove.",
+    "keywords": [
+      "provenance",
+      "c2pa",
+      "manifest",
+      "signature",
+      "digest",
+      "hash",
+      "trust anchor",
+      "chain of custody",
+      "content credentials",
+      "mismatch",
+      "local integrity",
+      "badge",
+      "confidence"
+    ],
+    "figure": "provenance-ladder",
+    "sections": [
+      {
+        "paragraphs": [
+          "C2PA is a standard for signed provenance manifests embedded in files. Most public records carry none. The app therefore has two separate questions: does a manifest verify, and do the stored bytes still match the digest recorded when the file was ingested."
+        ]
+      },
+      {
+        "heading": "The ladder",
+        "items": [
+          "Chain of custody verified: a valid signature chains to a configured trust anchor. This build configures no trust anchors, so it never produces this result.",
+          "Manifest signature verified: the signature verifies over the asset, but the signer chains to no configured anchor. The signer's identity was not independently authenticated.",
+          "Local file hash verified: the stored bytes match the digest recorded at ingestion. This is local integrity, not provenance.",
+          "Recorded claim, unchecked: manifest metadata exists and nothing was checked against the bytes.",
+          "No recorded digest: nothing about the stored bytes can be confirmed.",
+          "Evidence file missing: the check ran and found no readable file. A custody gap, not an unrun check.",
+          "Digest mismatch: the bytes no longer hash to the recorded digest. The file changed after ingestion or the wrong file is stored.",
+          "Manifest signature invalid is shown alongside the rung: an attached claim that does not hold."
+        ]
+      },
+      {
+        "heading": "Absent is not low",
+        "paragraphs": [
+          "Provenance not checked means no verification has run. Logged before classification means the check predates the ladder. Neither is a low rating. The verification log lists every check with its rung."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [],
+    "related": [
+      "document-viewer",
+      "measured-vs-unassessed",
+      "evidence-ladder"
+    ]
+  },
+  {
+    "id": "redaction-inference",
+    "title": "Redaction inference",
+    "group": "Concepts",
+    "summary": "Ranked leads for who or what a redaction hides. Inference, not decryption.",
+    "keywords": [
+      "redaction",
+      "inference",
+      "infer identity",
+      "candidate",
+      "likelihood",
+      "corroborating",
+      "hypothesis",
+      "marker",
+      "semantic",
+      "lexical"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "In the document dialog, Audit redactions lists redaction markers found in the extracted text: labels such as REDACTED, exemption tags and block runs. Choosing one asks for candidates."
+        ]
+      },
+      {
+        "heading": "How to read a result",
+        "items": [
+          "Candidates come from the words around the redaction and from other released documents in your collection that share the same context. This is inference, not decryption. Treat each as a lead to verify.",
+          "Each candidate shows a kind, a likelihood, and how many corroborating documents support it, with up to three named.",
+          "Ranking uses the local semantic model when it has been initialized. Otherwise it uses lexical corroboration and says so.",
+          "No corroborating context means nothing is inferred.",
+          "A finding is raised only when the top candidate has corroboration from at least three independent documents, and likelihood is capped below certainty."
+        ]
+      },
+      {
+        "heading": "Handling",
+        "paragraphs": [
+          "These findings are tagged hypothesis, not established. Verifiable reports leave them out. Do not publish a name inferred this way as fact."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [
+      "redaction_inference"
+    ],
+    "related": [
+      "redaction-tools",
+      "finding-redaction-candidate-inferred"
+    ]
+  },
+  {
+    "id": "request-tracker",
+    "title": "My requests tracker and email import",
+    "group": "Concepts",
+    "summary": "Track requests you filed elsewhere and count the deadline from dates you confirm.",
+    "keywords": [
+      "tracker",
+      "my requests",
+      "claim",
+      "request",
+      "eml",
+      "msg",
+      "email",
+      "import",
+      "suggested",
+      "confirm",
+      "timeline",
+      "deadline",
+      "chip",
+      "determination",
+      "extension notice"
+    ],
+    "screenshot": "tracker",
+    "sections": [
+      {
+        "paragraphs": [
+          "Open My requests from the icon in the header. You claim a request by the number the portal shows, choose the jurisdiction, and record dates. Everything is stored on this Mac. The app does not send, file or poll anything, and no portal login is used or stored."
+        ]
+      },
+      {
+        "heading": "Timeline",
+        "paragraphs": [
+          "Add a date for each event: submitted, acknowledged, extension notice, determination, records released, closed or other. For an extension notice, choose the statutory reason the notice gives and the date it says the agency will respond by. Without that date the extension is not applied. Each event can be removed."
+        ]
+      },
+      {
+        "heading": "Import notification emails",
+        "items": [
+          "Choose .eml or .msg files the portal emailed you, up to 20 at a time. They are read on this device only. Attachments and remote content are never opened.",
+          "Each email yields suggested events. A suggestion is not counted until you confirm it.",
+          "The suggested date is filled from the email's date, which is not necessarily the date of the event. Correct it before confirming. If the email had no readable date, you enter it.",
+          "Reject discards a suggestion. An email without a Message-ID cannot be cited or recognized on a second import."
+        ]
+      },
+      {
+        "heading": "Deadline",
+        "paragraphs": [
+          "The deadline section states its basis. Only a determination confirmed from an email counts as sourced. See Statutory deadlines."
+        ]
+      },
+      {
+        "heading": "Limits",
+        "paragraphs": [
+          "Up to 200 tracked requests and 500 events per request."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [
+      "tracker"
+    ],
+    "related": [
+      "statutory-deadlines",
+      "data-handling"
+    ]
+  },
+  {
+    "id": "affiliation-profile",
+    "title": "Local profile and organization lens",
+    "group": "Concepts",
+    "summary": "Declare your organization to filter and disclose. It never changes a finding.",
+    "keywords": [
+      "profile",
+      "affiliation",
+      "organization",
+      "lens",
+      "self-declared",
+      "alias",
+      "match",
+      "confirm",
+      "reject",
+      "self-review",
+      "disclosure",
+      "records hygiene"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "Open the profile from the shield icon in the header. You type a display name and up to 8 organizations, each with up to 8 aliases. Nothing checks these against a list: affiliation is self-declared. The profile file lives on this Mac."
+        ]
+      },
+      {
+        "heading": "What it does",
+        "items": [
+          "Matches: the app compares your names with registered sources, agencies and organizations in documents and proposes candidates with the method (exact, alias or fuzzy). None applies until you confirm it.",
+          "Lens: the Findings inbox can show only findings about a confirmed match.",
+          "Disclosure: drafts and exports append a disclosure of your declared affiliation.",
+          "Records self-review: groups findings about your confirmed organization as contradictions, missing records, late responses and masking gaps, so you can correct the record. It shows the first 500 findings only."
+        ]
+      },
+      {
+        "heading": "What it never does",
+        "paragraphs": [
+          "It never changes any finding, confidence, severity, statutory result or ranking. No match is not a statement that the record is clean. Delete local profile removes the profile and every confirmed or rejected match on this device."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [
+      "profile"
+    ],
+    "related": [
+      "work-email-verification",
+      "findings-inbox"
+    ]
+  },
+  {
+    "id": "work-email-verification",
+    "title": "Work-email verification",
+    "group": "Concepts",
+    "summary": "What a confirmed work email proves, and what it does not.",
+    "keywords": [
+      "work email",
+      "verification",
+      "verify",
+      "code",
+      "domain",
+      "mailbox",
+      "employment",
+      "consumer",
+      "gmail",
+      "link",
+      "organization",
+      "six-digit"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "In the local profile, each organization has Verify with a work email. Save the profile first. You need the direct-download build and a signed-in account."
+        ]
+      },
+      {
+        "heading": "How it works",
+        "items": [
+          "Enter your work email address and choose Send code. The address is sent to the WritersLogic account service, which emails a six-digit code. The address and code are held in memory for this check and are not written to disk here.",
+          "Enter the code to confirm. A resend cooldown, an expiry and an attempt limit apply.",
+          "On success only the domain is kept on this Mac, with the time it was confirmed. The address and the code are not kept.",
+          "Consumer mail domains such as gmail are recorded but not used as proof of any organization.",
+          "Link to this organization is a separate choice, and applies only if the domain's name equals the organization's name or an alias."
+        ]
+      },
+      {
+        "heading": "What it does not prove",
+        "items": [
+          "It proves you control a mailbox at that domain. It does not prove you work there, hold any role, or are authorized to speak for the organization.",
+          "It does not make the organization declaration verified by anyone else. The badge reads Email domain verified (control of a mailbox, not employment).",
+          "It never changes any finding, ranking, confidence or statutory result."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [
+      "verification"
+    ],
+    "related": [
+      "affiliation-profile",
+      "data-handling",
+      "account-trial-license"
+    ]
+  },
+  {
+    "id": "autonomous-research",
+    "title": "Autonomous research",
+    "group": "Concepts",
+    "summary": "The only feature that uses an AI model. What it sends, when, and how to turn it off.",
+    "keywords": [
+      "research",
+      "autonomous",
+      "ai",
+      "model",
+      "openai",
+      "openrouter",
+      "ollama",
+      "credential",
+      "api key",
+      "env",
+      "budget",
+      "dossier",
+      "provider",
+      "web search",
+      "collect",
+      "primary sources",
+      "privacy",
+      "off",
+      "disable"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "Autonomous research drafts dossiers, which are saved investigations, from public records you already collected. It is the only feature that uses a language model. The command palette Ask does not."
+        ]
+      },
+      {
+        "heading": "When it runs",
+        "items": [
+          "Research is off on a fresh install. After you tick Autonomous research enabled in Research settings, a background check runs about every 30 seconds while the app is open and licensed, to decide whether an investigation is due.",
+          "It sends nothing to OpenAI or OpenRouter unless a credential is found: OPENAI_API_KEY or OPENROUTER_API_KEY in the environment or in ~/.env. There is no key field in the app. Once you enable research, it uses a key it finds there without asking again.",
+          "It also needs budget: a daily model-call limit (24 by default, counted per UTC day) that must cover a whole investigation.",
+          "Investigate now starts one on demand."
+        ]
+      },
+      {
+        "heading": "What leaves your Mac",
+        "items": [
+          "With OpenAI or OpenRouter: selected excerpts of your collected public records, query results, unresolved case questions, request gaps, decision tracking and editorial challenges, as structured text of up to 240 KB per call. The app applies its personal-information masking to the passages it prepares. Masking is pattern based and can miss things.",
+          "Source discovery, when enabled, asks the provider to run a web search limited to a built-in list of public publishers such as sandiego.gov and sdhc.org.",
+          "The request to OpenAI is sent with storage turned off. How OpenAI or OpenRouter and its model providers handle data is governed by their own terms, which this app cannot vouch for. API usage is billed to your key.",
+          "With Local Ollama the calls go to 127.0.0.1:11434 on this Mac and no provider receives anything."
+        ]
+      },
+      {
+        "heading": "Separate from the model: collecting sources",
+        "paragraphs": [
+          "Collect primary sources automatically is its own setting, off on a fresh install. It fetches records from public agency sites and needs no model or credential."
+        ]
+      },
+      {
+        "heading": "Turning it off",
+        "items": [
+          "Open Research settings on the San Diego view. Untick Autonomous research enabled and save. That stops model calls.",
+          "Or choose Local Ollama, which keeps model calls on this Mac.",
+          "Or remove the key from ~/.env and the environment. Without a credential, no provider call is made.",
+          "Untick Collect primary sources automatically to stop background collection. Neither setting is on until you turn it on."
+        ]
+      },
+      {
+        "heading": "Results",
+        "paragraphs": [
+          "Briefings and dossiers show what remains unproven, counterevidence and the next test. Saved quotations are not a live source check. Nothing is sent to an agency. Export a case packet as Markdown and JSON to your own files."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [
+      "research"
+    ],
+    "related": [
+      "data-handling",
+      "evidence-review",
+      "case-workbench"
+    ]
+  }
+]

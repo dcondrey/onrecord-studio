@@ -1,0 +1,321 @@
+[
+  {
+    "id": "view-overview",
+    "title": "San Diego view",
+    "group": "Views",
+    "summary": "The research desk: findings inbox, drafts, subject dossier, research, and the case workbench.",
+    "keywords": [
+      "overview",
+      "san diego",
+      "desk",
+      "inbox",
+      "brief",
+      "post-ingest",
+      "change feed",
+      "cross-corpus",
+      "analytics",
+      "drawer",
+      "dossier"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "The default view, and the one where findings appear. From top to bottom it holds the post-ingest brief, the subject dossier, the change feed, the Findings inbox, the cross-corpus explorer, autonomous research, and a panel that opens the case workbench."
+        ]
+      },
+      {
+        "heading": "Parts",
+        "items": [
+          "Post-ingest brief: a non-modal panel that opens after a sync stops and lists findings discovered in the last 15 minutes. It appears only on this view.",
+          "Change feed: how many findings are new since you last opened the inbox. It also counts statutory deadline violations for the active source when the analytics for that source have loaded.",
+          "Findings inbox: ranked list of everything the detectors surfaced. See Findings inbox.",
+          "Cross-corpus explorer: shared language, temporal shifts, orphan topics and reused grounds across agencies, with a jurisdiction by detector heat map.",
+          "Three collapsed drawers: plan an investigation or draft a request manually; collection, coverage and storage; browse sources and add records.",
+          "Show response analytics: request counts, closure and deadline rates, and outlier charts. See Response analytics."
+        ]
+      },
+      {
+        "heading": "Response analytics",
+        "paragraphs": [
+          "Charts here describe outliers relative to other agencies (a z-score at or above 2 is called a critical outlier). An outlier is a statistical statement about being slower than peers. It is not a legal finding. A panel whose query failed says so instead of showing zero."
+        ]
+      }
+    ],
+    "views": [
+      "overview"
+    ],
+    "findingKinds": [],
+    "commandGroups": [],
+    "related": [
+      "findings-inbox",
+      "request-drafts",
+      "autonomous-research",
+      "case-workbench",
+      "legal-vs-pattern"
+    ]
+  },
+  {
+    "id": "view-patterns",
+    "title": "Patterns view",
+    "group": "Views",
+    "summary": "Corpus-wide connections backed by source excerpts, and the entity graph.",
+    "keywords": [
+      "patterns",
+      "corpus",
+      "duplicates",
+      "shared",
+      "entity graph",
+      "recipe",
+      "co-occurrence",
+      "relationship",
+      "path",
+      "index"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "Patterns lists connections found across everything you ingested: exact and near copies, shared authorities, shared entities, recurring language, date clusters, and entity relationships. Each signal opens an evidence chain of source excerpts with the document hash."
+        ]
+      },
+      {
+        "heading": "Controls",
+        "items": [
+          "Minimum evidence, Confidence, Indexed after/before, and Required terms narrow the list. Preview results runs the query.",
+          "Recipes save the exact controls in this browser profile on this Mac. They never change source evidence.",
+          "The pattern type buttons filter by signal kind."
+        ]
+      },
+      {
+        "heading": "Entity graph",
+        "paragraphs": [
+          "Pick one of the most-cited entities to centre the graph. Dotted arcs with a hollow marker are co-occurrence: proximity this app computed, not a relationship any document stated. Labelled arcs with a solid diamond are relations read from the text (signed by, approved, cites, promises, delivered, supersedes, amends). Line thickness reads shared documents. Node shape shows the validation grade: check digit passed, format validated, gazetteer hit, or pattern only, which is a lead. Trace finds a path of up to four hops between two entity ids."
+        ]
+      },
+      {
+        "heading": "When the index is empty or fails",
+        "paragraphs": [
+          "An empty graph says nothing has been indexed. A failed read says the index did not answer, which is not a statement that no relationships exist. A rebuild discards entity identifiers, so an old selection can go stale."
+        ]
+      }
+    ],
+    "views": [
+      "patterns"
+    ],
+    "findingKinds": [],
+    "commandGroups": [
+      "corpus"
+    ],
+    "related": [
+      "legal-vs-pattern",
+      "measured-vs-unassessed"
+    ]
+  },
+  {
+    "id": "view-analysis",
+    "title": "Analysis view",
+    "group": "Views",
+    "summary": "Local semantic search and read-only SQL over imported tables.",
+    "keywords": [
+      "analysis",
+      "sql",
+      "semantic",
+      "search",
+      "embedding",
+      "model",
+      "vector",
+      "import",
+      "csv",
+      "budget",
+      "actuals",
+      "discovery",
+      "ripa",
+      "nibrs",
+      "schema"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "Analysis works on the text and tables already on your Mac. Panels appear in this order."
+        ]
+      },
+      {
+        "heading": "Panels",
+        "items": [
+          "What stands out: automatic observations with an Evidence and method line (snapshot id and SHA-256). Checks cover a bounded number of columns per table, and failed checks retry after a delay.",
+          "Semantic Index: Initialize model, Index missing, Rebuild and Cancel. The first initialization downloads the embedding model files (see Data handling). Until it is ready, search is exact-word only.",
+          "Analytical Import: turn an acquired table or a local CSV, TSV, JSON, GeoJSON, JSONL, XLSX, XLS or ODS file into a queryable table. Tick Partial export if completeness is not established.",
+          "Data discovery: compare a measure over groups and periods. Confirm units and row meaning before interpreting a total.",
+          "Hybrid retrieval: search extracted text. Exact search needs every word. A missing match does not show the sources lack the information.",
+          "Budget versus actuals: sums each side by year, fund, funds center and account, keeps missing counterparts visible, and does not reconcile transfers or show program effectiveness.",
+          "SQL Analysis: one read-only SELECT at a time. Run shows up to 500 rows and Export CSV up to 10,000. Datasets marked Partial / unverified coverage were imported with completeness not established.",
+          "Schema Browser lists tables and columns."
+        ]
+      }
+    ],
+    "views": [
+      "analysis"
+    ],
+    "findingKinds": [],
+    "commandGroups": [
+      "analysis_workbench",
+      "semantic"
+    ],
+    "related": [
+      "finding-claim-contradicts-data",
+      "data-handling"
+    ]
+  },
+  {
+    "id": "view-evidence",
+    "title": "Evidence view",
+    "group": "Views",
+    "summary": "Search requests, read their documents, and save leads to the briefing.",
+    "keywords": [
+      "evidence",
+      "search",
+      "request",
+      "filter",
+      "qualifier",
+      "agency",
+      "portal",
+      "status",
+      "flag",
+      "case context",
+      "documents",
+      "delete document",
+      "deep link",
+      "appeal"
+    ],
+    "sections": [
+      {
+        "heading": "Searching",
+        "paragraphs": [
+          "The search box looks in request metadata and extracted text. Qualifiers agency:, portal:, status: and flag: narrow results. Plain-language mode turns a sentence into those filters. Results are capped at 500. If a search fails, the last successful results stay on screen with a banner saying so."
+        ]
+      },
+      {
+        "heading": "Reading a request",
+        "items": [
+          "Select a record for its case context: dates, status, description and the Legal compliance panel.",
+          "Save lead to briefing stores it locally for the Briefing view.",
+          "Public documents lists files with their extraction state. Only searchable or recovered documents open. Personal information is masked in what you read.",
+          "Evidence links copy a portal, request, document and character offset so you can return to the same passage."
+        ]
+      },
+      {
+        "heading": "Deadline appeal draft",
+        "paragraphs": [
+          "Requests carrying a statutory latency flag show appeal actions. Drafts and saved files stay on this Mac. The app does not send anything. See Request and appeal drafts."
+        ]
+      }
+    ],
+    "views": [
+      "evidence"
+    ],
+    "findingKinds": [],
+    "commandGroups": [
+      "query"
+    ],
+    "related": [
+      "document-viewer",
+      "legal-compliance",
+      "statutory-deadlines",
+      "view-briefing"
+    ]
+  },
+  {
+    "id": "view-activity",
+    "title": "Activity view",
+    "group": "Views",
+    "summary": "Ingestion queues, throughput and errors for this session.",
+    "keywords": [
+      "activity",
+      "ingestion",
+      "queue",
+      "throughput",
+      "errors",
+      "log",
+      "telemetry",
+      "ocr",
+      "worker",
+      "runtime",
+      "export json"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "Activity is a control room for ingestion. Nothing on it is persisted: the event stream and counters reset when you quit the app."
+        ]
+      },
+      {
+        "items": [
+          "Session throughput: requests processed, tasks completed, documents saved, and task exceptions.",
+          "Event stream: filter by text or show errors only, Export JSON, or clear the session telemetry.",
+          "Source runtimes: running or stopped, done, active and queued counts per source.",
+          "Extraction event stream: the same feed inside the Evidence view.",
+          "The sidebar footer shows worker capacity out of five and whether local OCR handles images and PDFs, images only, or is unavailable."
+        ]
+      },
+      {
+        "paragraphs": [
+          "When a query behind a panel fails, the panel says it did not complete rather than showing an empty result."
+        ]
+      }
+    ],
+    "views": [
+      "activity"
+    ],
+    "findingKinds": [],
+    "commandGroups": [
+      "runtime"
+    ],
+    "related": [
+      "sources",
+      "data-upkeep"
+    ]
+  },
+  {
+    "id": "view-briefing",
+    "title": "Briefing view",
+    "group": "Views",
+    "summary": "Turn reviewed evidence into a timed public-comment outline.",
+    "keywords": [
+      "briefing",
+      "presentation",
+      "public comment",
+      "outline",
+      "promotion",
+      "checklist",
+      "minutes",
+      "run of show",
+      "export"
+    ],
+    "screenshot": "briefing",
+    "sections": [
+      {
+        "paragraphs": [
+          "Briefing is local. Your outline is saved in this app on this Mac and nothing is submitted anywhere. If saving fails, the view tells you to download your notes before leaving."
+        ]
+      },
+      {
+        "heading": "Steps",
+        "items": [
+          "Frame the presentation: title, meeting date and body, speaking time, opening, and the requested action.",
+          "Interrogate the record: prompts that open Evidence search.",
+          "Build the evidence board: the first time it opens it drafts a starting set from the top findings. You review and promote. Each card moves from Saved lead to Source reviewed to Presentation ready and carries a context or limitation note.",
+          "Check the promotion standard: at least one traceable item, one that reaches the underlying document, one marked ready, a limitation recorded, and a measurable requested action.",
+          "Export outline downloads a Markdown file with evidence locators, source URLs, file hashes when available, and operator-assessment labels."
+        ]
+      }
+    ],
+    "views": [
+      "briefing"
+    ],
+    "findingKinds": [],
+    "commandGroups": [],
+    "related": [
+      "view-evidence",
+      "document-viewer"
+    ]
+  }
+]
