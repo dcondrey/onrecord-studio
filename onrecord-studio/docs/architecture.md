@@ -179,3 +179,41 @@ Tailwind concession.
 frontend. The Mac App Store build additionally confines access with App Sandbox and the
 user-selected read/write entitlement. The window is opaque and `macOSPrivateApi` is disabled, so
 the App Store build does not rely on Tauri's private macOS APIs.
+
+---
+
+## 6. Starter source sets
+
+A starter set is a named bundle of public San Diego sources and public-records portals that a new
+install can add in one action. It is data, not a connector: `ingestion/starter_sets.rs` holds the
+versioned registry (`STARTER_SET_REGISTRY_VERSION`), `list_starter_sets` returns it, and adding a
+set calls the ordinary `start_data_source` command once per entry.
+
+**Every entry is a built-in source preset.** An entry's `id` and `url` must equal a preset in
+`src/utils/sanDiego.ts`, so the crawl limits and guidance a hand-chosen preset carries apply
+unchanged, and there is no second list of crawl settings to drift. `src/tests/starterSets.test.tsx`
+reads the Rust registry and fails when an entry has no preset, resolves to a different preset,
+duplicates another entry, is not https, or names an export-only source that cannot be fetched.
+
+**Each entry records** its URL, what it is, its publisher, the publisher's reuse terms or `None`
+when none were found, and `verified_as_of`. That date is a fact about one fetch, not a promise the
+page still exists, so nothing downstream treats it as availability. A `None` terms note is shown as
+"no terms found", never as permission. An address is listed only if it was fetched and matched its
+description; one that could not be confirmed is left out. The Sheriff's open-data page was dropped
+on these grounds: its host refused automated fetches (403), so a crawl would fail on first use.
+
+**Nothing is fetched without confirmation.** Rendering the registry and choosing a set start no
+network activity. The confirmation names each host; only its button starts the additions, one
+source at a time.
+
+**Absence and failure are kept apart.** A source that fails to load is marked Unavailable with its
+error and logged; it is never shown as a source with no records. The run continues with the other
+entries, because one broken publisher must not hide the rest.
+
+**Re-adding is idempotent.** An entry whose address (or origin) already matches a saved source, with
+or without a trailing slash, is skipped, so a second add starts only the sources that are missing,
+including any that were unavailable the first time.
+
+**A run that outlives the panel.** Results are written to component state only while the run is
+still current (`useLatestRequestGate`), and no further entry is started once it is superseded. A
+source that did start exists on the backend, so it is written to the library regardless.
