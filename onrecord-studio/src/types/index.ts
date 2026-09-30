@@ -42,3 +42,5 @@ export * from "./topics";
 export * from "./meetings";
 
 export * from "./starterSets";
+
+export * from "./bundle";

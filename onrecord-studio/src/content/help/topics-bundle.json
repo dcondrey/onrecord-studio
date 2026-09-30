@@ -1,0 +1,64 @@
+[
+  {
+    "id": "shareable-bundle",
+    "title": "Shareable read-only bundle",
+    "group": "Findings",
+    "summary": "Write selected findings as one HTML file that anyone can open without the app.",
+    "keywords": [
+      "share",
+      "bundle",
+      "export",
+      "read-only",
+      "offline",
+      "html",
+      "masked",
+      "content hash",
+      "send findings",
+      "privacy"
+    ],
+    "sections": [
+      {
+        "heading": "What it writes",
+        "paragraphs": [
+          "In the Findings inbox, open Share these findings as a read-only file, leave the findings you want ticked, and choose Review. The app lists exactly what the file will contain before anything is written. After you confirm, it writes one HTML file to the report folder. The file has no edit controls, loads nothing from the network and runs no script. It opens in any browser, offline."
+        ]
+      },
+      {
+        "heading": "What each finding carries",
+        "items": [
+          "Its basis: a counted comparison against a stated rule, or a pattern signal that is not a legal conclusion.",
+          "Its confidence, or Not assessed when none was measured.",
+          "Its limits: what the finding does not establish.",
+          "Its sources: file name, portal, document number, the cited character range, the file's SHA-256, and a quoted excerpt with how the excerpt was checked."
+        ]
+      },
+      {
+        "heading": "Privacy",
+        "paragraphs": [
+          "Quoted text, headlines and file names pass through the same personal-information masking as the verifiable report. A finding that rests on any record that is not public, or on a removed source, is left out whole, because its wording was written from that record. Dismissed findings, findings with no citation, and hypotheses about who a redaction hides are also left out. The review lists each omission with its reason.",
+          "Masking is structural: Social Security numbers, telephone numbers and street addresses. It is not a guarantee that no sensitive value remains. Read the list before you confirm."
+        ]
+      },
+      {
+        "heading": "Content hash and time",
+        "paragraphs": [
+          "The file shows a content SHA-256 and the time it was generated. The same findings hash the same at any time. The hash shows the data has not changed since it was written. The bundle is not signed, so it does not show who wrote it. If the findings change between review and writing, the app refuses and asks you to review again."
+        ]
+      },
+      {
+        "heading": "Reading the data",
+        "paragraphs": [
+          "The data is embedded in the page as JSON in a script element of type application/json, with a format name and a schema version. Other tools can read it, and a later version can embed evidence packets in the same data without changing the schema."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [
+      "bundle"
+    ],
+    "related": [
+      "findings-inbox"
+    ]
+  }
+]

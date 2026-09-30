@@ -80,3 +80,5 @@ pub mod verification;
 pub mod topics;
 
 pub mod starter_sets;
+
+pub mod bundle;

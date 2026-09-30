@@ -14,6 +14,8 @@ import starterSets from './topics-starter-sets.json';
 
 import evidencePackets from './topics-evidence-packets.json';
 
+import bundle from './topics-bundle.json';
+
 export type HelpGroup =
   | 'Getting started'
   | 'Views'
@@ -72,6 +74,8 @@ export const HELP_TOPICS = [
   ...starterSets,
 
   ...evidencePackets,
+
+  ...bundle,
 ] as HelpTopic[];
 
 export function findHelpTopic(id: string): HelpTopic | undefined {
