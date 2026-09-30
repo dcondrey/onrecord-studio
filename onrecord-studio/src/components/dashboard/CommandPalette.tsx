@@ -243,9 +243,10 @@ export default function CommandPalette() {
         else openPalette();
         return;
       }
-      if (!isOpen && modified && /^[1-7]$/.test(event.key)) {
+      const shortcut = workspaceCommandRegistry.find((command) => String(command.shortcutIndex) === event.key);
+      if (!isOpen && modified && shortcut) {
         event.preventDefault();
-        setWorkspaceView(workspaceCommandRegistry[Number(event.key) - 1].view);
+        setWorkspaceView(shortcut.view);
         return;
       }
       if (!isOpen && modified && event.shiftKey && (event.key === '?' || event.key === '/')) {

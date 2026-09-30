@@ -48,6 +48,7 @@ export const workspaceCommandRegistry: readonly WorkspaceCommandDefinition[] = [
   { id: 'workspace-briefing', view: 'briefing', label: 'Build a briefing', navigationLabel: 'Briefing', detail: 'Turn cited evidence into a timed presentation', icon: 'clipboard', keywords: 'briefing presentation public comment outline claims citations', shortcutIndex: 6 },
   // Shortcut keys index this array, so new views append rather than reorder the existing ones.
   { id: 'workspace-story', view: 'story', label: 'Rank story leads', navigationLabel: 'Story desk', detail: 'Findings ordered by money, scale, contradiction and violation', icon: 'activity', keywords: 'story desk leads ranking newsworthy public interest findings', shortcutIndex: 7 },
+  { id: 'workspace-meetings', view: 'meetings', label: 'Track public meetings', navigationLabel: 'Meetings', detail: 'Upcoming agendas, items to watch, and comment drafts', icon: 'clipboard', keywords: 'meetings council agenda minutes video board commission public comment calendar', shortcutIndex: 8 },
 ] as const;
 
 export const themeCommandRegistry: readonly ThemeCommandDefinition[] = [

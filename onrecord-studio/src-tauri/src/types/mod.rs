@@ -33,8 +33,8 @@ pub use c2pa::{
 pub use corpus::{
     CorpusEntityEdge, CorpusEntityKind, CorpusEntityNeighborhood, CorpusEntityNode,
     CorpusEvidenceReference, CorpusIndexStatus, CorpusPattern, CorpusPatternKind,
-    CorpusPatternQuery, EntityBroker, EntityPath, EntityPathStep, EntityResolutionBasis,
-    EntityValidationGrade, RelationshipBasis, RelationshipKind,
+    CorpusPatternQuery, EntityBroker, EntityPath, EntityPathOutcome, EntityPathStep,
+    EntityResolutionBasis, EntityValidationGrade, RelationshipBasis, RelationshipKind,
 };
 pub use investigation::{
     AuxiliaryEventInput, AuxiliaryImportResult, AuxiliaryStreamKind, CaseEvidencePackageResult,
@@ -92,6 +92,7 @@ pub mod story_desk;
 pub use story_desk::*;
 pub mod lead_dossier;
 pub use lead_dossier::*;
+pub mod meetings;
 
 pub mod profile;
 pub mod report;

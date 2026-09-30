@@ -138,7 +138,8 @@ interface PathRequest {
 type PathAnswer =
   | { request: PathRequest; kind: 'pending' }
   | { request: PathRequest; kind: 'found'; path: EntityPath }
-  | { request: PathRequest; kind: 'none' }
+  | { request: PathRequest; kind: 'notConnected'; maxHops: number }
+  | { request: PathRequest; kind: 'unknownEntity'; entityId: string }
   | { request: PathRequest; kind: 'failed'; message: string };
 
 export default function EntityGraph() {
@@ -450,7 +451,13 @@ export default function EntityGraph() {
               invokeCommand('find_entity_paths', { ...request, maxHops: 4 })
                 .then((result) => {
                   if (!pathGate.isCurrent(token)) return;
-                  setPathAnswer(result ? { request, kind: 'found', path: result } : { request, kind: 'none' });
+                  setPathAnswer(
+                    result.outcome === 'found'
+                      ? { request, kind: 'found', path: result.path }
+                      : result.outcome === 'notConnected'
+                        ? { request, kind: 'notConnected', maxHops: result.maxHops }
+                        : { request, kind: 'unknownEntity', entityId: result.entityId },
+                  );
                 })
                 .catch((reason: unknown) => {
                   if (!pathGate.isCurrent(token)) return;
@@ -481,12 +488,16 @@ export default function EntityGraph() {
               </span>
             )}
             {pathView?.kind === 'failed' && <span className="text-rose-400">{pathView.message}</span>}
-            {pathView?.kind === 'none' && (
-              // The index answers `null` both when an id is not in it and when no path exists, so
-              // this cannot be stated as "not connected" alone.
+            {pathView?.kind === 'notConnected' && (
               <span className="text-slate-400">
-                No path within 4 hops from {centre.displayValue} to {pathView.request.toEntityId}: either
-                that id is not in the index, or the two entities are not connected in this corpus.
+                No path within {pathView.maxHops} hops from {centre.displayValue} to {pathView.request.toEntityId}:
+                the two entities are not connected in this corpus.
+              </span>
+            )}
+            {pathView?.kind === 'unknownEntity' && (
+              <span className="text-amber-200">
+                {pathView.entityId} is not in the entity index, so no path from {centre.displayValue} could be
+                traced.
               </span>
             )}
             {pathView?.kind === 'found' && (

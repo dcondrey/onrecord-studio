@@ -1244,7 +1244,7 @@ async fn connection_answer(
         );
         return Ok(());
     };
-    let Some(path) = corpus
+    let crate::types::EntityPathOutcome::Found { path } = corpus
         .find_entity_paths(
             start.entity_id.clone(),
             end.entity_id.clone(),

@@ -39,3 +39,4 @@ export * from "./tracker";
 export * from "./leadDossier";
 
 export * from "./topics";
+export * from "./meetings";

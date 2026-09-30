@@ -100,6 +100,7 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::monitoring::refresh_monitoring_now,
         commands::monitoring::save_monitoring_coverage,
         commands::monitoring::save_monitoring_observation,
+        commands::meetings::get_meeting_calendar,
         commands::review::get_review_workspace,
         commands::review::save_finding_review,
         commands::review::replay_review_evidence,
