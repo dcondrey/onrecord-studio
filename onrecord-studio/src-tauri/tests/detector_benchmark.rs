@@ -51,6 +51,8 @@ fn registry() -> Vec<(&'static str, Run)> {
         differential_treatment,
         metadata_vs_content,
         regenerated_response,
+        response_time_claim,
+        redaction_inconsistency,
         email_thread_gap,
         evasion_paraphrased_denials,
         evasion_round_number_thresholds,
@@ -258,6 +260,7 @@ async fn claim_validation_eval_set() {
     let mut evaluator = Evaluator::load(&repo).await.unwrap();
     let mut failures = Vec::new();
     let mut tally: BTreeMap<&str, (usize, usize)> = BTreeMap::new();
+    let mut rows = Vec::new();
     for case in &cases {
         let claims = extract_claims(&case.text);
         let entry = tally.entry(case.expected.as_str()).or_default();
@@ -301,9 +304,31 @@ async fn claim_validation_eval_set() {
             println!("FAIL {:<32} {}", case.id, problems.join("; "));
             failures.push(format!("{}: {}", case.id, problems.join("; ")));
         }
+        rows.push(json!({
+            "id": case.id,
+            "text": case.text,
+            "expected": case.expected,
+            "outcome": outcome,
+            "observed": observed,
+            "passed": problems.is_empty(),
+        }));
     }
     for (expected, (passed, total)) in &tally {
         println!("{expected:<12} {passed}/{total}");
     }
+    // The scorecard is committed next to the cases so the methods page can cite the run that
+    // produced it; it holds nothing time-dependent, so a clean run leaves it unchanged.
+    let scorecard = json!({
+        "evalSet": "claim-eval",
+        "totals": tally.iter().map(|(expected, (passed, total))| {
+            json!({"expected": expected, "passed": passed, "total": total})
+        }).collect::<Vec<_>>(),
+        "cases": rows,
+    });
+    std::fs::write(
+        fixtures.join("scorecard.json"),
+        serde_json::to_string_pretty(&scorecard).unwrap() + "\n",
+    )
+    .unwrap();
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

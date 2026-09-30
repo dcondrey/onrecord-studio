@@ -335,6 +335,10 @@ pub fn falsification_for(kind: FindingKind) -> DossierFalsification {
             "The stated period is not the period actually given.",
             &["the dated posting or service record for the notice", "the minimum-notice authority in force on that date"],
         ),
+        FindingKind::RedactionInconsistentAcrossReleases => (
+            "The two copies are different versions of the record, or the later release applied an exemption the earlier one did not.",
+            &["both releases with their response letters and cited exemptions", "the redaction log or review notes for each request"],
+        ),
         FindingKind::CorrelatedFindings => (
             "The correlated signals share a benign cause such as a single large release.",
             &["the release log for the period", "each underlying finding's own records"],

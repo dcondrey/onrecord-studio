@@ -1305,5 +1305,40 @@
       "legal-vs-pattern",
       "findings-inbox"
     ]
+  },
+  {
+    "id": "finding-redaction-inconsistent-across-releases",
+    "title": "Redaction differs between releases",
+    "group": "Finding kinds",
+    "summary": "Two public copies of the same file, released under different requests, redact different passages.",
+    "sections": [
+      {
+        "heading": "What it shows",
+        "paragraphs": [
+          "Two public copies of one file name in a portal, released under different requests, where a passage marked as redacted or withheld in one copy reads as ordinary text in the other. The match is made on the words on either side of the redaction, and both passages are cited so the copies can be compared."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "Which release was right. A later release may apply an exemption the earlier one did not, a requester may have been entitled to more, or the copies may be different versions of the record. Copies with different file names are not compared."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is measured from how many passages diverged."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "REDACTION_INCONSISTENT_ACROSS_RELEASES"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
   }
 ]

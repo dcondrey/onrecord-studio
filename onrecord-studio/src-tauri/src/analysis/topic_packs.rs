@@ -177,7 +177,8 @@ pub fn finding_basis(kind: FindingKind) -> TopicFindingBasis {
         | K::SplitPurchasePattern
         | K::DepartmentSpendingYearOverYear
         | K::OvertimeAboveAdoptedLine
-        | K::FundActualAboveAdopted => TopicFindingBasis::Pattern,
+        | K::FundActualAboveAdopted
+        | K::RedactionInconsistentAcrossReleases => TopicFindingBasis::Pattern,
     }
 }
 

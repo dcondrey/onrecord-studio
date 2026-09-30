@@ -38,7 +38,9 @@ pub mod no_records_contradicted;
 pub mod policy_violation;
 pub mod practice_departure;
 mod public_documents;
+pub mod redaction_inconsistency;
 pub mod regenerated_response;
+pub mod response_time_claim;
 pub mod spending_cases;
 
 /// Summary returned by [`refresh_all_findings`].
@@ -99,6 +101,8 @@ pub async fn refresh_all_findings(
     run_detector!(repository, summary, run_started, differential_treatment);
     run_detector!(repository, summary, run_started, metadata_vs_content);
     run_detector!(repository, summary, run_started, regenerated_response);
+    run_detector!(repository, summary, run_started, response_time_claim);
+    run_detector!(repository, summary, run_started, redaction_inconsistency);
     run_detector!(repository, summary, run_started, email_thread_gap);
     run_detector!(
         repository,

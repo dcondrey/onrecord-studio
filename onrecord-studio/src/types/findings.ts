@@ -50,7 +50,8 @@ export type FindingKind =
   | 'OVERTIME_ABOVE_ADOPTED_LINE'
   | 'FUND_ACTUAL_ABOVE_ADOPTED'
   | 'ENCAMPMENT_NOTICE_SHORTFALL'
-  | 'ENCAMPMENT_NOTICE_STATED_SHORTFALL';
+  | 'ENCAMPMENT_NOTICE_STATED_SHORTFALL'
+  | 'REDACTION_INCONSISTENT_ACROSS_RELEASES';
 
 /**
  * How a finding's confidence was derived. `UNASSESSED` distinguishes an unmeasured rung from a

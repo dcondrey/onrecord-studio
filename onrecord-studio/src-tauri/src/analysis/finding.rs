@@ -225,6 +225,11 @@ pub enum FindingKind {
     /// An encampment notice that states a calendar-day notice period shorter than that minimum,
     /// without both dates recorded. One statement against another; a pattern signal.
     EncampmentNoticeStatedShortfall,
+    /// Two public copies of one file name in a portal, released under different requests, where
+    /// a passage marked redacted or withheld in one reads as ordinary text in the other, matched
+    /// by the words on either side. A comparison of two releases' redaction decisions; which was
+    /// right is not decided.
+    RedactionInconsistentAcrossReleases,
 }
 
 impl FindingKind {
@@ -269,6 +274,7 @@ impl FindingKind {
             Self::FundActualAboveAdopted => "FUND_ACTUAL_ABOVE_ADOPTED",
             Self::EncampmentNoticeShortfall => "ENCAMPMENT_NOTICE_SHORTFALL",
             Self::EncampmentNoticeStatedShortfall => "ENCAMPMENT_NOTICE_STATED_SHORTFALL",
+            Self::RedactionInconsistentAcrossReleases => "REDACTION_INCONSISTENT_ACROSS_RELEASES",
         }
     }
 
@@ -313,6 +319,7 @@ impl FindingKind {
             Self::FundActualAboveAdopted,
             Self::EncampmentNoticeShortfall,
             Self::EncampmentNoticeStatedShortfall,
+            Self::RedactionInconsistentAcrossReleases,
         ]
         .into_iter()
         .find(|candidate| candidate.as_str() == value)
@@ -408,6 +415,8 @@ impl FindingKind {
             Self::EncampmentNoticeShortfall => true,
             // A stated period against a stated minimum, with the period actually given unrecorded.
             Self::EncampmentNoticeStatedShortfall => false,
+            // Two releases disagreeing about a passage is a pattern signal; neither is judged.
+            Self::RedactionInconsistentAcrossReleases => false,
         }
     }
 }

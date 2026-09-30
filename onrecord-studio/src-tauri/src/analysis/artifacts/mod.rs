@@ -118,7 +118,8 @@ impl DraftFamily {
             | FindingKind::PracticeDepartureCounted
             | FindingKind::PracticeDepartureStated
             | FindingKind::EncampmentNoticeShortfall
-            | FindingKind::EncampmentNoticeStatedShortfall => Self::RequestOnly,
+            | FindingKind::EncampmentNoticeStatedShortfall
+            | FindingKind::RedactionInconsistentAcrossReleases => Self::RequestOnly,
             FindingKind::PolicyViolationDetected => Self::RequestAndAppeal,
             FindingKind::EvasionParaphrasedDenials
             | FindingKind::EvasionRoundNumberThresholds
@@ -388,7 +389,7 @@ mod tests {
     use super::*;
     use crate::analysis::finding::{FindingSeverity, FindingSubject};
 
-    pub(crate) fn all_kinds() -> [FindingKind; 24] {
+    pub(crate) fn all_kinds() -> [FindingKind; 25] {
         use FindingKind::*;
         [
             HeldBackResponse,
@@ -415,6 +416,7 @@ mod tests {
             ClaimContradictsData,
             EncampmentNoticeShortfall,
             EncampmentNoticeStatedShortfall,
+            RedactionInconsistentAcrossReleases,
         ]
     }
 

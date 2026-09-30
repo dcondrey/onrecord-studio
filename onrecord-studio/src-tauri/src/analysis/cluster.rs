@@ -46,18 +46,18 @@ pub struct TextLayerRedactionMetric {
 }
 
 #[derive(Debug, Clone)]
-struct WordToken<'a> {
+pub(crate) struct WordToken<'a> {
     _source: &'a str,
-    normalized: String,
-    start: usize,
-    end: usize,
+    pub(crate) normalized: String,
+    pub(crate) start: usize,
+    pub(crate) end: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct RedactionSpan {
-    kind: RedactionPatternKind,
-    start: usize,
-    end: usize,
+pub(crate) struct RedactionSpan {
+    pub(crate) kind: RedactionPatternKind,
+    pub(crate) start: usize,
+    pub(crate) end: usize,
 }
 
 pub fn analyze_redaction_density(text: &str) -> Result<RedactionDensityMetric, AppError> {
@@ -115,7 +115,7 @@ pub fn extract_enforcement_keyword_counts(text: &str) -> BTreeMap<String, usize>
     counts
 }
 
-fn redaction_spans(text: &str) -> Vec<RedactionSpan> {
+pub(crate) fn redaction_spans(text: &str) -> Vec<RedactionSpan> {
     let mut spans = black_block_spans(text);
     let words = word_tokens(text);
     for (index, word) in words.iter().enumerate() {
@@ -214,7 +214,7 @@ fn expand_brackets(text: &str, start: usize, end: usize) -> Option<(usize, usize
     }
 }
 
-fn word_tokens(text: &str) -> Vec<WordToken<'_>> {
+pub(crate) fn word_tokens(text: &str) -> Vec<WordToken<'_>> {
     let mut words = Vec::new();
     let mut start = None;
     for (index, character) in text

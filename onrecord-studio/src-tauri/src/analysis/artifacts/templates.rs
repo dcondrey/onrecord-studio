@@ -414,6 +414,31 @@ static TEMPLATES: LazyLock<Vec<ArtifactTemplate>> = LazyLock::new(|| {
                 [YOUR NAME]",
             cited_authorities: &GENERIC_CPRA_FOLLOWUP_AUTHORITIES,
         },
+        ArtifactTemplate {
+            id: "cpra_followup_redaction_inconsistency_v1",
+            kind: ArtifactKind::FollowupRequest,
+            jurisdiction: "US-CA",
+            applicable_finding_kinds: &[FindingKind::RedactionInconsistentAcrossReleases],
+            subject: "Follow-up request: the basis for differing redactions across releases",
+            body: "Date: {TODAY}\n\
+                To: {AGENCY_LABEL}\n\
+                Re: Follow-up to {REQUEST_LABEL}\n\n\
+                Under the California Public Records Act, I am writing about two public releases \
+                of the same record that differ in what they redact:\n\n\
+                {FINDING_HEADLINE}\n\n\
+                {FINDING_EXPLANATION}\n\n\
+                The passages, with their locations in each copy:\n\
+                {EVIDENCE_BULLETS}\n\n\
+                Under {AUTHORITY_CITATIONS}, I am requesting the response letter and the specific \
+                exemption cited for each redaction in the copy that withholds these passages, any \
+                redaction log or review notes for both requests, and, where the two copies are \
+                different versions of the record, a statement of which version each release \
+                reflects. This request only asks for the records and the stated basis; it does \
+                not assert that either release was improper.\n\n\
+                Sincerely,\n\
+                [YOUR NAME]",
+            cited_authorities: &GENERIC_CPRA_FOLLOWUP_AUTHORITIES,
+        },
         // --- Generic CPRA fallback follow-up: applies to any finding kind not caught above. ---
         ArtifactTemplate {
             id: "cpra_followup_generic_v1",

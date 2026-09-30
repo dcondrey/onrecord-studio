@@ -228,3 +228,32 @@ Suggestions per meeting are ranked by the number of distinct reason kinds and ca
 
 ### C. Public-comment drafts
 Each suggestion carries an editable draft. It quotes only cited passages: the item, the matched agenda sentences, and for figures the stated figure and the observed table value. A stored finding is named by id and basis, never quoted, so a finding headline cannot become the commenter's assertion. The comment deadline and instructions are quoted only from agenda sentences that name a comment and a deadline (or a way to submit); otherwise the draft says "not recorded". The draft names its bases and states that it does not characterize anyone's motives or the lawfulness of any action.
+
+## 12. Stated Response Times Checked Against Recorded Closures
+
+`analysis/detectors/response_time_claim.rs`; findings carry the kind `CLAIM_CONTRADICTS_DATA` with the headline "Stated average/median response time …".
+
+### A. What is extracted
+A sentence in a public document (or an official statement) becomes a **response-time claim** when token-phrase cues name a metric (`average`, `mean`, `on average`, `median`), a records-request context, a response context (`response time`, `closed within`, `responds in`, …) and a figure in days (`10 days`, `eight days`). The hedge (`about`, `within`, `under`, `over`) and the period the sentence names (a calendar year, or a fiscal year read July to June) are recorded with it. A sentence stated in business days yields no claim: only calendar days are measured, and converting by a guess would put a number in the agency's mouth.
+
+### B. What it is compared with
+For the agency that answered the request the document belongs to, the portal's own request rows give each request's opened-at and closed-at. Latency is their difference in calendar days for rows where both instants parse and are in order. The average and the median are computed over requests opened in the stated period, or over every recorded closure when no period is stated (and the finding says which). Fewer than five closures is not a record of practice and yields nothing.
+
+### C. Tolerance
+The stated figure is held to ±10 % of itself, never less than half a day; `about` doubles the band; `within`/`under` and `over`/`at least` make it one-sided. Each metric is compared only with its own measurement: an `average` claim against the mean, a `median` claim against the median.
+
+### D. What a finding does and does not claim
+The finding states that the sentence's figure, at the precision it states, falls outside the closures the portal recorded for that agency and period, with the sample size and both measured figures. It is a pattern signal (`is_legal_claim` false). It does not decide which figure is right: the agency may count business days, a different start event, or requests the portal does not hold, and the finding says so. Confidence is derived from the closure sample size (+50 basis points per closure above five, to +2500) and from whether the sentence named its own period (+1000).
+
+## 13. Redaction Consistency Across Releases
+
+`analysis/detectors/redaction_inconsistency.rs`; findings carry the kind `REDACTION_INCONSISTENT_ACROSS_RELEASES`.
+
+### A. Which copies are compared
+Public documents in one portal with the same file name (trimmed, case-folded), released under different requests, whose extracted text differs. Up to six copies per name are compared pairwise in both directions; copies under different names are not paired, so a renamed release is not compared.
+
+### B. How a divergence is found
+The withholding copy's redaction spans come from the same structural detector the density metric uses (`[REDACTED]` labels, black-block runs, `withheld under … exemption`). For each span, the five words before it and the five after are matched in the other copy; when both contexts occur in order with one to forty words between them, and no redaction of the other copy's own overlaps that gap, the gap is a passage one copy redacted and the other released. Both passages are cited with their character ranges, so a reader can open each copy at the place.
+
+### C. What a finding does and does not claim
+The finding states that two releases made different redaction decisions about the same passage. It does not say which was right: a later release may apply an exemption the earlier one did not, a requester may have been entitled to more, or the copies may be different versions of the record. It is a pattern signal; confidence is derived from the number of diverging passages (5000 basis points plus 500 per passage, to six).
