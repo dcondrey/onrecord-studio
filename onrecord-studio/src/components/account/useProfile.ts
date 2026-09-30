@@ -44,31 +44,41 @@ function isDisclosure(value: unknown): value is AffiliationDisclosure {
   );
 }
 
-/** Read-only disclosure for lens consumers. Refetches when the profile changes. */
+export type DisclosureStatus = "loading" | "loaded" | "failed";
+
+/**
+ * Read-only disclosure for lens consumers. Refetches when the profile changes. `disclosure` is
+ * `null` both while loading and for no profile, so a consumer that wants to say "no profile"
+ * must check `status === "loaded"` first.
+ */
 export function useAffiliationDisclosure() {
   const gate = useLatestRequestGate();
   const revision = useProfileLensStore((state) => state.profileRevision);
   const [disclosure, setDisclosure] = useState<AffiliationDisclosure | null>(
     null,
   );
+  const [status, setStatus] = useState<DisclosureStatus>("loading");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const token = gate.begin();
+    setStatus("loading");
     invokeCommand("get_affiliation_disclosure", {})
       .then((value) => {
         if (!gate.isCurrent(token)) return;
         // A malformed answer is "no profile", never a guessed affiliation.
         setDisclosure(isDisclosure(value) ? value : null);
         setError(null);
+        setStatus("loaded");
       })
       .catch((reason) => {
         if (!gate.isCurrent(token)) return;
         setError(formatNativeError(reason));
+        setStatus("failed");
       });
   }, [gate, revision]);
 
-  return { disclosure, error };
+  return { disclosure, status, error };
 }
 
 export function useProfile() {

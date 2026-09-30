@@ -66,6 +66,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 import FindingsInbox from '../components/dashboard/FindingsInbox';
 import { useAppStore } from '../store/useAppStore';
+import { useProfileLensStore } from '../store/useProfileLensStore';
 import type { Finding } from '../types';
 
 function deferred<T>() {
@@ -122,6 +123,29 @@ describe('FindingsInbox', () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  it('does not report "no local profile" while the disclosure is still loading', async () => {
+    const pending = deferred<unknown>();
+    bridge.override.get_affiliation_disclosure = () => pending.promise;
+    useProfileLensStore.setState({ lensEnabled: true });
+    await act(async () => {
+      render(<FindingsInbox />);
+    });
+    expect(screen.getByText(/reading the local profile/i)).toBeTruthy();
+    expect(screen.queryByText(/no local profile is set/i)).toBeNull();
+    await act(async () => {
+      pending.resolve({
+        status: 'UNSET',
+        sentence: null,
+        affiliations: [],
+        ownPortalKeys: [],
+        ownAgencies: [],
+        ownEntityIds: [],
+      });
+    });
+    expect(screen.getByText(/no local profile is set/i)).toBeTruthy();
+    useProfileLensStore.setState({ lensEnabled: false });
   });
 
   it('renders the empty-state prompt when no findings are returned', async () => {

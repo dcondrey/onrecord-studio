@@ -45,7 +45,7 @@ export default function FindingsInbox() {
   const lensEnabled = useProfileLensStore((state) => state.lensEnabled);
   const setLensEnabled = useProfileLensStore((state) => state.setLensEnabled);
   const setSelfReviewOpen = useProfileLensStore((state) => state.setSelfReviewOpen);
-  const { disclosure } = useAffiliationDisclosure();
+  const { disclosure, status: disclosureStatus } = useAffiliationDisclosure();
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
   const openLeadDossier = useAppStore((state) => state.openLeadDossier);
   const setActivePortal = useAppStore((state) => state.setActivePortal);
@@ -201,9 +201,13 @@ export default function FindingsInbox() {
 
       {lensEnabled && !hasConfirmedSubject && (
         <div role="status" className="rounded-lg border border-slate-800 px-3 py-2 text-[9px] text-slate-300">
-          {disclosure?.status === 'DECLARED'
-            ? 'No match to your declared organization is confirmed yet, so nothing can be filtered. This is not a statement that the record is clean.'
-            : 'No local profile is set, so the organization lens has nothing to filter on.'}
+          {disclosureStatus === 'loading'
+            ? 'Reading the local profile.'
+            : disclosureStatus === 'failed'
+              ? 'The local profile could not be read, so the organization lens has nothing to filter on.'
+              : disclosure?.status === 'DECLARED'
+                ? 'No match to your declared organization is confirmed yet, so nothing can be filtered. This is not a statement that the record is clean.'
+                : 'No local profile is set, so the organization lens has nothing to filter on.'}
         </div>
       )}
       {lensEnabled && hasConfirmedSubject && (
