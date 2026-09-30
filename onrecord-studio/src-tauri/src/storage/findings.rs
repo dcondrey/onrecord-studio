@@ -33,6 +33,9 @@ pub struct FindingsFilter {
     pub document_id: Option<i64>,
     pub source_detector: Option<String>,
     pub include_dismissed: Option<bool>,
+    /// Only findings first discovered strictly after this instant. Applied before the severity
+    /// ranking and limit, so a new low-severity finding is not hidden behind an older backlog.
+    pub discovered_after: Option<DateTime<Utc>>,
 }
 
 impl DuckDbRepository {
@@ -137,6 +140,15 @@ impl DuckDbRepository {
             if let Some(detector) = filter.source_detector {
                 sql.push_str(&format!(" AND source_detector = ?{}", binds.len() + 1));
                 binds.push(Box::new(detector));
+            }
+            if let Some(after) = filter.discovered_after {
+                // The column holds RFC 3339 text; comparing as timestamps keeps a row written
+                // with a different offset or precision comparable, and drops an unparsable one.
+                sql.push_str(&format!(
+                    " AND TRY_CAST(discovered_at AS TIMESTAMPTZ) > TRY_CAST(?{} AS TIMESTAMPTZ)",
+                    binds.len() + 1
+                ));
+                binds.push(Box::new(after.to_rfc3339()));
             }
             sql.push_str(
                 " ORDER BY CASE severity
@@ -533,5 +545,32 @@ mod tests {
             .unwrap();
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].subject.document_id, Some(1));
+    }
+
+    #[tokio::test]
+    async fn discovered_after_admits_a_new_low_severity_finding_past_an_older_critical_backlog() {
+        let repo = fresh_repo().await;
+        let cutoff = Utc::now() - chrono::Duration::minutes(5);
+        let old = Finding {
+            discovered_at: cutoff - chrono::Duration::hours(1),
+            ..sample_finding(1, "old critical", FindingSeverity::Critical)
+        };
+        let new = Finding {
+            discovered_at: cutoff + chrono::Duration::minutes(1),
+            ..sample_finding(2, "new info", FindingSeverity::Info)
+        };
+        repo.record_findings(vec![old, new]).await.unwrap();
+        let listed = repo
+            .list_findings(
+                FindingsFilter {
+                    discovered_after: Some(cutoff),
+                    ..Default::default()
+                },
+                1,
+            )
+            .await
+            .unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].headline, "new info");
     }
 }

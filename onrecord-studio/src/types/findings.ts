@@ -95,6 +95,8 @@ export interface FindingsFilter {
   documentId?: number | null;
   sourceDetector?: string | null;
   includeDismissed?: boolean | null;
+  /** RFC 3339 instant; only findings first discovered strictly after it. */
+  discoveredAfter?: string | null;
 }
 
 export type GapStatus = 'acquiring' | 'exhausted' | 'noAutomaticSource';

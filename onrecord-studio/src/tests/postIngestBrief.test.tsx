@@ -26,12 +26,23 @@ vi.hoisted(() => {
 
 const bridge = vi.hoisted(() => ({
   rows: [] as unknown[],
+  /** When set, the next list_findings call returns this instead of resolving with `rows`. */
+  next: null as null | (() => Promise<unknown>),
+  filters: [] as unknown[],
 }));
 
 vi.mock('@tauri-apps/api/core', () => ({
   isTauri: () => false,
-  invoke: (command: string) => {
-    if (command === 'list_findings') return Promise.resolve(bridge.rows);
+  invoke: (command: string, args: { filter?: unknown }) => {
+    if (command === 'list_findings') {
+      bridge.filters.push(args.filter);
+      const next = bridge.next;
+      if (next) {
+        bridge.next = null;
+        return next();
+      }
+      return Promise.resolve(bridge.rows);
+    }
     return Promise.resolve(null);
   },
 }));
@@ -66,6 +77,8 @@ function sample(id: string, discoveredAt: string): Finding {
 afterEach(() => {
   cleanup();
   bridge.rows = [];
+  bridge.next = null;
+  bridge.filters = [];
   act(() => {
     useAppStore.setState({ postIngestBriefOpen: false });
   });
@@ -89,6 +102,52 @@ describe('PostIngestBrief', () => {
     await screen.findByRole('dialog');
     await screen.findByText(/Response held \(recent\)/);
     expect(screen.queryByText(/Response held \(older\)/)).toBeNull();
+  });
+
+  it('asks the backend only for findings discovered in the window', async () => {
+    bridge.rows = [];
+    act(() => {
+      useAppStore.setState({ postIngestBriefOpen: true });
+    });
+    render(<PostIngestBrief />);
+    await screen.findByRole('dialog');
+    await waitFor(() => expect(bridge.filters.length).toBeGreaterThan(0));
+    const filter = bridge.filters[0] as { discoveredAfter?: string };
+    const after = Date.parse(filter.discoveredAfter ?? '');
+    expect(Number.isFinite(after)).toBe(true);
+    expect(Date.now() - after).toBeGreaterThanOrEqual(15 * 60 * 1000 - 1000);
+    expect(Date.now() - after).toBeLessThan(16 * 60 * 1000);
+  });
+
+  it('does not show the previous ingest\'s findings when reopened before its own load resolves', async () => {
+    bridge.rows = [sample('first', new Date().toISOString())];
+    act(() => {
+      useAppStore.setState({ postIngestBriefOpen: true });
+    });
+    render(<PostIngestBrief />);
+    await screen.findByText(/Response held \(first\)/);
+    act(() => {
+      useAppStore.setState({ postIngestBriefOpen: false });
+    });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    bridge.next = () => new Promise(() => {});
+    act(() => {
+      useAppStore.setState({ postIngestBriefOpen: true });
+    });
+    await screen.findByRole('dialog');
+    expect(screen.queryByText(/Response held \(first\)/)).toBeNull();
+    expect(screen.getByRole('status').textContent).toContain('Reading detector output');
+  });
+
+  it('does not claim nothing surfaced when the findings load failed', async () => {
+    bridge.next = () => Promise.reject(new Error('database busy'));
+    act(() => {
+      useAppStore.setState({ postIngestBriefOpen: true });
+    });
+    render(<PostIngestBrief />);
+    await screen.findByRole('alert');
+    expect(screen.queryByText(/Nothing notable surfaced/)).toBeNull();
+    expect(screen.getByText(/could not be read/)).toBeTruthy();
   });
 
   it('shows the empty state when no findings arrived recently and dismisses', async () => {
