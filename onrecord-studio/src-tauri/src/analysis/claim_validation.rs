@@ -673,12 +673,23 @@ fn normalized_tokens(value: &str) -> Vec<String> {
     words(value).into_iter().map(|word| word.text).collect()
 }
 
-/// `stated` names `candidate` when either's tokens are all present in the other.
+/// `stated` names `candidate` only exactly: a stated fund number must appear among the
+/// candidate's tokens, and a stated name must equal the candidate's non-numeric tokens. A subset
+/// test would let "general fund" bind to a lone "general fund reserve", which is a different fund.
 fn tokens_match(stated: &[String], candidate: &str) -> bool {
+    let is_number = |token: &String| token.chars().all(|c| c.is_ascii_digit());
     let candidate = normalized_tokens(candidate);
-    !candidate.is_empty()
-        && (candidate.iter().all(|token| stated.contains(token))
-            || stated.iter().all(|token| candidate.contains(token)))
+    if candidate.is_empty() {
+        return false;
+    }
+    if let [number] = stated {
+        if is_number(number) {
+            return candidate.contains(number);
+        }
+    }
+    let candidate_name: Vec<&String> = candidate.iter().filter(|t| !is_number(t)).collect();
+    let stated_name: Vec<&String> = stated.iter().filter(|t| !is_number(t)).collect();
+    !candidate_name.is_empty() && candidate_name == stated_name
 }
 
 /// Holds the financial workspace, portal jurisdictions, and every investigation already run this
@@ -1669,5 +1680,22 @@ mod tests {
                 ..
             }
         ));
+    }
+}
+
+#[cfg(test)]
+mod fund_binding_tests {
+    use super::{normalized_tokens, tokens_match};
+
+    #[test]
+    fn a_stated_fund_binds_only_to_the_same_fund() {
+        let general = normalized_tokens("general fund");
+        assert!(tokens_match(&general, "GENERAL FUND"));
+        assert!(tokens_match(&general, "100000 GENERAL FUND"));
+        assert!(!tokens_match(&general, "GENERAL FUND RESERVE"));
+        assert!(!tokens_match(&general, "FUND"));
+        let number = normalized_tokens("300000");
+        assert!(tokens_match(&number, "300000"));
+        assert!(!tokens_match(&number, "3000001"));
     }
 }
