@@ -706,6 +706,16 @@ pub(crate) fn parse_calendar(
         let mut comment_deadlines = Vec::new();
         let mut comment_instructions = Vec::new();
         let meeting_index = meetings.len();
+        // Sources arrive newest first; an amended or revised agenda supersedes earlier copies,
+        // so items are read from the newest agenda only.
+        let newest_agenda = members
+            .iter()
+            .filter(|(index, found)| {
+                found.role == MeetingDocumentRole::Agenda && !sources[*index].text.is_empty()
+            })
+            .map(|(index, _)| *index)
+            .min();
+        let mut quoted_passages = BTreeSet::new();
         for (index, found) in &members {
             let source = &sources[*index];
             documents.push(MeetingDocument {
@@ -719,9 +729,18 @@ pub(crate) fn parse_calendar(
                 continue;
             }
             let (deadlines, instructions) = comment_passages(source)?;
-            comment_deadlines.extend(deadlines);
-            comment_instructions.extend(instructions);
-            if timing == MeetingTiming::Upcoming {
+            let mut fresh =
+                |citation: &FindingCitation| quoted_passages.insert(citation.quote.clone());
+            comment_deadlines.extend(deadlines.into_iter().filter(|c| fresh(c)));
+            comment_instructions.extend(instructions.into_iter().filter(|c| fresh(c)));
+            if Some(*index) != newest_agenda {
+                if timing == MeetingTiming::Upcoming {
+                    limitations.push(format!(
+                        "{}: a newer agenda for the same meeting was collected, so items were read from that one only.",
+                        source.file_name
+                    ));
+                }
+            } else if timing == MeetingTiming::Upcoming {
                 items.extend(agenda_items(
                     source,
                     meeting_index,
@@ -1158,6 +1177,7 @@ struct LoadedSources {
     sources: Vec<MeetingSource>,
     agencies: HashMap<(String, i64), String>,
     coverage: Vec<String>,
+    unreadable_coverage: usize,
 }
 
 async fn load_sources(repository: &DuckDbRepository) -> Result<LoadedSources, AppError> {
@@ -1228,6 +1248,7 @@ async fn load_sources(repository: &DuckDbRepository) -> Result<LoadedSources, Ap
                 )
                 .map_err(storage)?;
             let mut coverage = Vec::new();
+            let mut unreadable_coverage = 0usize;
             if has_coverage {
                 let mut statement = conn
                     .prepare("SELECT payload FROM monitor_coverage ORDER BY id")
@@ -1237,15 +1258,17 @@ async fn load_sources(repository: &DuckDbRepository) -> Result<LoadedSources, Ap
                     .map_err(storage)?
                 {
                     let payload = payload.map_err(storage)?;
-                    let expectation: CoverageExpectation = serde_json::from_str(&payload)
-                        .map_err(|e| AppError::Storage(format!("coverage expectation: {e}")))?;
-                    coverage.push(expectation.agency);
+                    match serde_json::from_str::<CoverageExpectation>(&payload) {
+                        Ok(expectation) => coverage.push(expectation.agency),
+                        Err(_) => unreadable_coverage += 1,
+                    }
                 }
             }
             Ok(LoadedSources {
                 sources,
                 agencies,
                 coverage,
+                unreadable_coverage,
             })
         })
         .await
@@ -1257,6 +1280,12 @@ async fn match_context(
     limitations: &mut Vec<String>,
 ) -> MatchContext {
     let mut context = MatchContext::default();
+    if loaded.unreadable_coverage > 0 {
+        limitations.push(format!(
+            "{} monitoring coverage expectations could not be read, so their agencies were not matched.",
+            loaded.unreadable_coverage
+        ));
+    }
     for agency in &loaded.coverage {
         context.watched.push(WatchedName {
             name: agency.clone(),
@@ -1684,6 +1713,71 @@ mod tests {
             &[reason],
         );
         assert!(draft.text.contains("$1.32B") && draft.text.contains("Which figure is current"));
+    }
+
+    #[test]
+    fn a_newer_agenda_supersedes_an_older_copy_without_duplicating_passages() {
+        let date = today() + chrono::Duration::days(2);
+        let sources = [agenda(12, date), agenda(11, date)];
+        let parsed = parse_calendar(&sources, today()).unwrap();
+        assert_eq!(parsed.meetings.len(), 1);
+        assert_eq!(parsed.meetings[0].documents.len(), 2);
+        assert!(parsed.items.iter().all(|item| item.source == 0));
+        assert_eq!(parsed.meetings[0].comment_deadlines.len(), 1);
+    }
+
+    #[test]
+    fn the_retained_council_agenda_yields_a_cited_upcoming_meeting() {
+        let fixture = source(
+            2,
+            "9-28-26-special.pdf",
+            include_str!("../../tests/fixtures/council-agenda-2026-09-28.txt").into(),
+        );
+        let day_before = NaiveDate::from_ymd_opt(2026, 9, 27).unwrap();
+        let sources = [fixture];
+        let mut parsed = parse_calendar(&sources, day_before).unwrap();
+        let meeting = &parsed.meetings[0];
+        assert_eq!(meeting.timing, MeetingTiming::Upcoming);
+        assert_eq!(meeting.body, "City Council");
+        assert_eq!(meeting.date.as_deref(), Some("2026-09-28"));
+        assert!(meeting.comment_deadlines.iter().any(|c| c
+            .quote
+            .as_deref()
+            .unwrap()
+            .contains("received by 8:00 AM")));
+        let reasons = parsed
+            .items
+            .iter()
+            .map(|item| item_reasons(&sources[0], item, &MatchContext::default()).unwrap())
+            .collect();
+        assemble(&mut parsed, &sources, reasons);
+        let item = parsed.meetings[0]
+            .suggestions
+            .iter()
+            .find(|s| s.agenda_item == "Item 605")
+            .unwrap();
+        assert!(item
+            .reasons
+            .iter()
+            .any(|r| r.kind == SuggestionReasonKind::InvestigationTopic));
+        let start = item.item_citation.character_start.unwrap() as usize;
+        let end = item.item_citation.character_end.unwrap() as usize;
+        assert_eq!(
+            sources[0]
+                .text
+                .chars()
+                .skip(start)
+                .take(end - start)
+                .collect::<String>(),
+            *item.item_citation.quote.as_ref().unwrap()
+        );
+        for label in ["Item 602", "Item 605"] {
+            let item = parsed.items.iter().find(|i| i.label == label).unwrap();
+            eprintln!(
+                "{label}: {} extracted claims",
+                extract_claims(&sources[0].text[item.range.clone()]).len()
+            );
+        }
     }
 
     #[tokio::test]

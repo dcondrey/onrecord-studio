@@ -73,6 +73,29 @@ if (rustKinds.size === 0 || findingDrift.length) {
   throw new Error(`FindingKind contracts differ.\n${findingDrift.join('\n') || 'No kinds parsed.'}`);
 }
 
+// Meeting calendar unions are mirrored by hand in src/types/meetings.ts.
+const meetingsRust = readFileSync(join(root, 'src-tauri/src/types/meetings.rs'), 'utf8');
+const meetingsTs = readFileSync(join(root, 'src/types/meetings.ts'), 'utf8');
+const meetingUnions = ['MeetingTiming', 'MeetingDocumentRole', 'SuggestionBasis', 'SuggestionReasonKind'];
+const meetingDrift = meetingUnions.flatMap((name) => {
+  const rust = new Set(
+    [...(meetingsRust.match(new RegExp(`pub enum ${name} \\{([^}]*)\\}`))?.[1] ?? '').matchAll(/^\s*([A-Z][A-Za-z]*),/gm)].map(
+      (match) => match[1].replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase(),
+    ),
+  );
+  const ts = new Set(
+    [...(meetingsTs.match(new RegExp(`export type ${name} =([^;]*);`))?.[1] ?? '').matchAll(/'([A-Z_]+)'/g)].map((match) => match[1]),
+  );
+  if (rust.size === 0) return [`${name}: no Rust variants parsed`];
+  return [
+    ...difference(rust, ts).map((value) => `${name} ${value} missing from TypeScript`),
+    ...difference(ts, rust).map((value) => `${name} ${value} missing from Rust`),
+  ];
+});
+if (meetingDrift.length) {
+  throw new Error(`Meeting calendar contracts differ.\n${meetingDrift.join('\n')}`);
+}
+
 const directInvocations = walk(join(root, 'src'))
   .filter((path) => /\.(?:ts|tsx)$/.test(path) && path !== join(root, 'src/ipc.ts'))
   .filter((path) => /\binvoke(?:<[^>]+>)?\s*\(/.test(readFileSync(path, 'utf8')))
