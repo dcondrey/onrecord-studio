@@ -54,7 +54,7 @@ describe('plain-language text', () => {
 describe('PlainLanguageDisclosure', () => {
   it('is collapsed, labelled, and operable', () => {
     render(<PlainLanguageDisclosure kind="BOILERPLATE_DENIAL" label="Shared denial" />);
-    const toggle = screen.getByRole('button', { name: 'Plain-language explanation: Shared denial' });
+    const toggle = screen.getByRole('button', { name: 'In plain words: Shared denial' });
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByText(PLAIN_FINDING_TEXT.BOILERPLATE_DENIAL.observed)).toBeNull();
     fireEvent.click(toggle);

@@ -314,7 +314,7 @@ export function PlainLanguageDisclosure({ kind, label }: { kind: FindingKind; la
         type="button"
         aria-expanded={open}
         aria-controls={panelId}
-        aria-label={`Plain-language explanation: ${label}`}
+        aria-label={`In plain words: ${label}`}
         onClick={() => setOpen((current) => !current)}
         className="focus-ring inline-flex items-center gap-1 rounded-md border border-slate-600 px-1.5 py-1 font-semibold text-slate-200 transition hover:border-cyan-400/60"
       >
