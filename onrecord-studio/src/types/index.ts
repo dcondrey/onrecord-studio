@@ -40,3 +40,4 @@ export * from "./leadDossier";
 
 export * from "./topics";
 export * from "./meetings";
+export * from "./bundle";

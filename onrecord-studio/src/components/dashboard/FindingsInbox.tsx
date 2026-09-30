@@ -9,6 +9,7 @@ import { FindingEvidence } from '../ui/EvidenceBasis';
 import ArtifactDrafts from './ArtifactDrafts';
 import EvidenceGaps from './EvidenceGaps';
 import LeadDossier from './LeadDossier';
+import ShareableBundleExport from './ShareableBundleExport';
 import VerifiableReportExport from './VerifiableReportExport';
 import { useProfileLensStore } from '../../store/useProfileLensStore';
 import { touchesOwnOrganization, useAffiliationDisclosure } from '../account/useProfile';
@@ -206,6 +207,15 @@ export default function FindingsInbox() {
           <summary className="focus-ring cursor-pointer font-semibold">Export a verifiable report of these findings</summary>
           <div className="mt-2">
             <VerifiableReportExport />
+          </div>
+        </details>
+      )}
+
+      {isTauri() && (
+        <details className="text-[10px] text-slate-300">
+          <summary className="focus-ring cursor-pointer font-semibold">Share these findings as a read-only file</summary>
+          <div className="mt-2">
+            <ShareableBundleExport findings={visibleFindings} />
           </div>
         </details>
       )}
