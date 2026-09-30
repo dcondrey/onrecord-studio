@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useC2PA } from '../../hooks/useC2PA';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { invokeCommand } from '../../ipc';
-import type { EvidenceBundle, ForensicFinding, ProvenanceConfidence, ProvenanceVerificationRecord, RecoveredVersionProfile } from '../../types';
+import type { DocumentClaimChecks, EvidenceBundle, ForensicFinding, ProvenanceConfidence, ProvenanceVerificationRecord, RecoveredVersionProfile } from '../../types';
 import UnredactorPanel from './UnredactorPanel';
 import ReconstructionPanel from './ReconstructionPanel';
 import RedactionInferencePanel from './RedactionInferencePanel';
@@ -44,11 +44,15 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
   const [shareStatus, setShareStatus] = useState<string | null>(null);
   const [briefingStatus, setBriefingStatus] = useState<string | null>(null);
   const [inferenceSpan, setInferenceSpan] = useState<{ start: number; end: number } | null>(null);
+  const [claimChecks, setClaimChecks] = useState<DocumentClaimChecks | null>(null);
+  const [claimChecksState, setClaimChecksState] = useState<'idle' | 'pending' | 'failed'>('idle');
+  const [claimChecksError, setClaimChecksError] = useState<string | null>(null);
   const historyGate = useLatestRequestGate();
   const recoveryGate = useLatestRequestGate();
   const residualAuditGate = useLatestRequestGate();
   const truncationGate = useLatestRequestGate();
   const shareGate = useLatestRequestGate();
+  const claimGate = useLatestRequestGate();
   const [truncatedEntityKinds, setTruncatedEntityKinds] = useState<string[]>([]);
 
   useEffect(() => {
@@ -93,7 +97,29 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
     setTextPage(0);
     setShareStatus(null);
     setBriefingStatus(null);
-  }, [documentId, historyGate, portalKey, recoveryGate, residualAuditGate, shareGate, truncationGate]);
+    claimGate.invalidate();
+    setClaimChecks(null);
+    setClaimChecksState('idle');
+    setClaimChecksError(null);
+  }, [claimGate, documentId, historyGate, portalKey, recoveryGate, residualAuditGate, shareGate, truncationGate]);
+
+  const checkFigures = async () => {
+    const request = claimGate.begin();
+    setClaimChecksState('pending');
+    setClaimChecksError(null);
+    try {
+      const result = await invokeCommand('list_document_claim_checks', { documentId, portalKey });
+      // A check requested for one document must not be shown under the document the viewer
+      // moved to while it ran.
+      if (!claimGate.isCurrent(request)) return;
+      setClaimChecks(result);
+      setClaimChecksState('idle');
+    } catch (reason) {
+      if (!claimGate.isCurrent(request)) return;
+      setClaimChecksError(String(reason));
+      setClaimChecksState('failed');
+    }
+  };
 
   useEffect(() => {
     const token = truncationGate.begin();
@@ -263,6 +289,9 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
               </button>
             </>
           )}
+          <button type="button" onClick={() => void checkFigures()} disabled={claimChecksState === 'pending'} className="rounded-full border border-slate-700 px-2.5 py-1 text-[9px] font-medium text-slate-400 transition hover:border-indigo-400/30 hover:text-indigo-300 disabled:cursor-wait disabled:opacity-60">
+            {claimChecksState === 'pending' ? 'Checking figures…' : claimChecks ? 'Recheck figures' : 'Check figures'}
+          </button>
           <button type="button" onClick={() => void toggleVerificationHistory()} aria-expanded={showVerificationHistory} className="rounded-full border border-slate-700 px-2.5 py-1 text-[9px] font-medium text-slate-400 transition hover:border-indigo-400/30 hover:text-indigo-300">
             {showVerificationHistory ? 'Hide verification log' : 'Verification log'}
           </button>
@@ -301,6 +330,7 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
           Entity extraction stopped early for {truncatedEntityKinds.join(', ').toLowerCase().replace(/_/g, ' ')}. Entities listed for this document are incomplete.
         </p>
       )}
+      {(claimChecksState !== 'idle' || claimChecks) && <ClaimChecksPanel checks={claimChecks} state={claimChecksState} error={claimChecksError} />}
       {(residualAudit || residualAuditError) && <ResidualEvidencePanel bundle={residualAudit} error={residualAuditError} />}
       {showRedactionAudit && (
         <div className="max-h-[70vh] space-y-3 overflow-y-auto border-b border-slate-800 p-3">
@@ -706,5 +736,45 @@ function VerificationHistoryPanel({ records, isLoading, error }: { records: Prov
         })}
       </ol>
     </div>
+  );
+}
+
+function ClaimChecksPanel({ checks, state, error }: { checks: DocumentClaimChecks | null; state: 'idle' | 'pending' | 'failed'; error: string | null }) {
+  return (
+    <section aria-label="Figures checked against imported tables" className="space-y-2 border-b border-slate-800 p-3 text-[10px]">
+      <h3 className="text-[11px] font-semibold text-slate-200">Figures checked against imported tables</h3>
+      {state === 'pending' && <p role="status" className="text-slate-400">Checking the figures in this document…</p>}
+      {state === 'failed' && <p role="alert" className="text-rose-300">The check could not run: {error}</p>}
+      {state === 'idle' && checks && checks.checks.length === 0 && (
+        <p role="status" className="text-slate-400">No figures found in this document that name a budget or spending total, a percent change, or a balance.</p>
+      )}
+      {state === 'idle' && checks && checks.checks.length > 0 && (
+        <ul role="list" className="space-y-2">
+          {checks.checks.map((check) => (
+            <li key={`${check.characterStart}-${check.characterEnd}`} className="rounded-lg border border-slate-800 bg-slate-950/40 p-2">
+              <blockquote className="text-slate-300">“{check.claimText}”</blockquote>
+              <div className="mt-1 text-[9px] text-slate-400">
+                {check.kindLabel}
+                {check.scope.fiscalYear !== null && ` · FY ${check.scope.fiscalYear}`}
+                {check.scope.fund !== null && ` · fund ${check.scope.fund}`}
+                {check.scope.department !== null && ` · ${check.scope.department}`}
+              </div>
+              {check.result.outcome === 'consistent' && (
+                <p className="mt-1 text-emerald-300">Consistent: the data shows {check.result.observed}, within {check.result.band}. Query id(s) {check.result.queryIds.join(', ')}.</p>
+              )}
+              {check.result.outcome === 'mismatch' && (
+                <p className="mt-1 text-amber-200">Mismatch: states {check.result.claimed}; the data shows {check.result.observed}, a difference of {check.result.difference}, outside {check.result.band}. Query id(s) {check.result.queryIds.join(', ')}.</p>
+              )}
+              {check.result.outcome === 'unreconciled' && (
+                <p className="mt-1 text-slate-400">Not checked ({check.result.reason}): {check.result.detail}</p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {state === 'idle' && checks?.truncated && (
+        <p role="status" className="text-amber-200">Not every figure was checked: the document exceeded the per-document claim cap or the text window that was read.</p>
+      )}
+    </section>
   );
 }

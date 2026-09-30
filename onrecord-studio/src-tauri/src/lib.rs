@@ -140,6 +140,7 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::runtime::get_ocr_capability,
         commands::findings::refresh_findings,
         commands::findings::list_evidence_gaps,
+        commands::claim_checks::list_document_claim_checks,
         commands::findings::list_findings,
         commands::findings::dismiss_finding,
         commands::intent::run_intent_query,

@@ -102,6 +102,7 @@ export interface NativeCommandMap {
   get_ocr_capability: { args: NoArgs; result: Types.OcrCapability };
   refresh_findings: { args: NoArgs; result: Types.RefreshFindingsSummary };
   list_evidence_gaps: { args: NoArgs; result: Types.EvidenceGapView[] };
+  list_document_claim_checks: { args: { documentId: number; portalKey: string }; result: Types.DocumentClaimChecks };
   list_findings: { args: { filter?: Types.FindingsFilter | null; limit?: number | null }; result: Types.Finding[] };
   dismiss_finding: { args: { id: string }; result: null };
   run_intent_query: { args: { utterance: string; limit?: number | null }; result: Types.IntentAnswer };

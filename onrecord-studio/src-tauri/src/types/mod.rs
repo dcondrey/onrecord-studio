@@ -38,11 +38,12 @@ pub use corpus::{
 };
 pub use investigation::{
     AuxiliaryEventInput, AuxiliaryImportResult, AuxiliaryStreamKind, CaseEvidencePackageResult,
-    CrossAgencyCorrelation, DocumentProvenanceVerification, DocumentTextChunk,
-    LegalBriefExportResult, PackageVerificationResult, ProvenanceClaimGraph, ProvenanceClaimNode,
-    ProvenanceIngredientEdge, ProvenanceVerificationRecord, RequestDocumentSummary,
-    RequestSearchResult, RevokedSigningKey, SigningKeyRevocations, SigningKeyRotationResult,
-    StatutoryExtensionReason, StatutoryExtensionRecord,
+    ClaimCheckOutcome, ClaimCheckScope, ClaimCheckView, CrossAgencyCorrelation,
+    DocumentClaimChecks, DocumentProvenanceVerification, DocumentTextChunk, LegalBriefExportResult,
+    PackageVerificationResult, ProvenanceClaimGraph, ProvenanceClaimNode, ProvenanceIngredientEdge,
+    ProvenanceVerificationRecord, RequestDocumentSummary, RequestSearchResult, RevokedSigningKey,
+    SigningKeyRevocations, SigningKeyRotationResult, StatutoryExtensionReason,
+    StatutoryExtensionRecord,
 };
 pub use legal::{
     LegalAuthorityImport, LegalAuthorityImportResult, LegalAuthorityKind, LegalAuthoritySummary,

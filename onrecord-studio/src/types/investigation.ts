@@ -464,3 +464,33 @@ export interface RedactionIntersectionEvidence {
   textBounds: [number, number, number, number];
   maskBounds: [number, number, number, number];
 }
+
+export interface ClaimCheckScope {
+  fiscalYear: number | null;
+  fund: string | null;
+  department: string | null;
+  /** Which measure the figure names; `null` when the claim kind carries no single measure. */
+  basis: string | null;
+}
+
+export type ClaimCheckOutcome =
+  | { outcome: 'consistent'; observed: string; band: string; queryIds: string[] }
+  | { outcome: 'mismatch'; claimed: string; observed: string; difference: string; band: string; queryIds: string[] }
+  | { outcome: 'unreconciled'; reason: string; detail: string };
+
+export interface ClaimCheckView {
+  claimText: string;
+  kindLabel: string;
+  characterStart: number;
+  characterEnd: number;
+  scope: ClaimCheckScope;
+  result: ClaimCheckOutcome;
+}
+
+export interface DocumentClaimChecks {
+  documentId: number;
+  portalKey: string;
+  checks: ClaimCheckView[];
+  /** Claims past the per-document cap, or past the text window that was read, were not checked. */
+  truncated: boolean;
+}

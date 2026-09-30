@@ -402,3 +402,58 @@ pub struct DocumentTextChunk {
     pub masked_text: String,
     pub masked_finding_count: usize,
 }
+
+/// Every quantitative claim found in one document and what checking it against the imported
+/// tables produced, including the claims that could not be checked and why.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentClaimChecks {
+    pub document_id: u64,
+    pub portal_key: String,
+    pub checks: Vec<ClaimCheckView>,
+    /// Claims past the per-document cap, or past the text window that was read, were not checked.
+    pub truncated: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaimCheckView {
+    pub claim_text: String,
+    pub kind_label: String,
+    pub character_start: usize,
+    pub character_end: usize,
+    pub scope: ClaimCheckScope,
+    pub result: ClaimCheckOutcome,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaimCheckScope {
+    pub fiscal_year: Option<i32>,
+    pub fund: Option<String>,
+    pub department: Option<String>,
+    /// Which measure the figure names (adopted budget, actual expenditures); `None` when the
+    /// claim kind carries no single measure.
+    pub basis: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "outcome", rename_all = "camelCase")]
+pub enum ClaimCheckOutcome {
+    #[serde(rename_all = "camelCase")]
+    Consistent {
+        observed: String,
+        band: String,
+        query_ids: Vec<String>,
+    },
+    #[serde(rename_all = "camelCase")]
+    Mismatch {
+        claimed: String,
+        observed: String,
+        difference: String,
+        band: String,
+        query_ids: Vec<String>,
+    },
+    #[serde(rename_all = "camelCase")]
+    Unreconciled { reason: String, detail: String },
+}

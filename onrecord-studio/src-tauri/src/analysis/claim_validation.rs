@@ -8,6 +8,7 @@
 //! cannot be bound to exactly one table is reported as unreconciled, never as a contradiction, and
 //! a figure is only contradicted outside the rounding band its own wording carries.
 
+use crate::types::{ClaimCheckOutcome, ClaimCheckScope, ClaimCheckView};
 use crate::{
     analysis::{
         assertion_index::AssertionValue,
@@ -1719,5 +1720,135 @@ mod fund_binding_tests {
         let number = normalized_tokens("300000");
         assert!(tokens_match(&number, "300000"));
         assert!(!tokens_match(&number, "3000001"));
+    }
+}
+
+impl ClaimKind {
+    pub fn label(&self) -> String {
+        match self {
+            Self::BudgetBalance(BalanceState::Balanced) => "balanced budget".to_string(),
+            Self::BudgetBalance(BalanceState::Surplus(_)) => "surplus".to_string(),
+            Self::BudgetBalance(BalanceState::Deficit(_)) => "deficit".to_string(),
+            Self::WithinBudget(true) => "spending within budget".to_string(),
+            Self::WithinBudget(false) => "spending over budget".to_string(),
+            Self::Total { measure, .. } => format!("stated total, {}", measure.label()),
+            Self::PercentChange { measure, .. } => format!("percent change, {}", measure.label()),
+        }
+    }
+
+    fn basis_label(&self) -> Option<String> {
+        match self {
+            Self::BudgetBalance(_) => None,
+            Self::WithinBudget(_) => Some("adopted budget and actual expenditures".to_string()),
+            Self::Total { measure, .. } | Self::PercentChange { measure, .. } => {
+                Some(measure.label())
+            }
+        }
+    }
+}
+
+impl UnreconciledReason {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::NoMappedDataset => "no mapped dataset",
+            Self::AmbiguousScope => "ambiguous scope",
+            Self::MissingFiscalYear => "missing fiscal year",
+            Self::PartialOrRejectedRows => "partial or rejected rows",
+            Self::UnsupportedClaim => "unsupported claim",
+        }
+    }
+}
+
+/// The reader-facing form of one checked claim. Every outcome is carried, not only mismatches,
+/// so a reader can see what was checked and why a claim could not be bound.
+pub fn claim_check_view(claim: &QuantitativeClaim, evaluation: &ClaimEvaluation) -> ClaimCheckView {
+    let result = match evaluation {
+        ClaimEvaluation::Consistent {
+            query_ids,
+            observed,
+            band,
+            ..
+        } => ClaimCheckOutcome::Consistent {
+            observed: observed.clone(),
+            band: band.clone(),
+            query_ids: query_ids.clone(),
+        },
+        ClaimEvaluation::Mismatch {
+            query_ids,
+            claimed,
+            observed,
+            difference,
+            band,
+            ..
+        } => ClaimCheckOutcome::Mismatch {
+            claimed: claimed.clone(),
+            observed: observed.clone(),
+            difference: difference.clone(),
+            band: band.clone(),
+            query_ids: query_ids.clone(),
+        },
+        ClaimEvaluation::Unreconciled { reason, detail } => ClaimCheckOutcome::Unreconciled {
+            reason: reason.label().to_string(),
+            detail: detail.clone(),
+        },
+    };
+    ClaimCheckView {
+        claim_text: claim.source_text.chars().take(400).collect(),
+        kind_label: claim.kind.label(),
+        character_start: claim.char_start,
+        character_end: claim.char_end,
+        scope: ClaimCheckScope {
+            fiscal_year: claim.scope.fiscal_year,
+            fund: claim.scope.fund.clone(),
+            department: claim.scope.department.clone(),
+            basis: claim.kind.basis_label(),
+        },
+        result,
+    }
+}
+
+#[cfg(test)]
+mod claim_check_view_tests {
+    use super::*;
+
+    #[test]
+    fn every_outcome_is_carried_with_its_reason_or_figures() {
+        let claim = extract_claims(
+            "The adopted budget of $1.2 billion for FY 2023 was approved for fund 300000.",
+        )
+        .pop()
+        .expect("total claim");
+        let mismatch = claim_check_view(
+            &claim,
+            &ClaimEvaluation::Mismatch {
+                query_ids: vec!["q1".into()],
+                claimed: "$1.2B".into(),
+                observed: "$1.32B".into(),
+                difference: "$120M".into(),
+                band: "±$50M".into(),
+                bound_scope: "fund 300000".into(),
+                fund_explicit: true,
+                relative_basis_points: 909,
+            },
+        );
+        assert_eq!(mismatch.kind_label, "stated total, adopted budget");
+        assert_eq!(mismatch.scope.fund.as_deref(), Some("300000"));
+        assert_eq!(mismatch.scope.fiscal_year, Some(2023));
+        assert!(matches!(
+            mismatch.result,
+            ClaimCheckOutcome::Mismatch { ref band, ref query_ids, .. } if band == "±$50M" && query_ids == &["q1"]
+        ));
+        let unreconciled = claim_check_view(
+            &claim,
+            &ClaimEvaluation::Unreconciled {
+                reason: UnreconciledReason::AmbiguousScope,
+                detail: "the sentence names no fund".into(),
+            },
+        );
+        assert!(matches!(
+            unreconciled.result,
+            ClaimCheckOutcome::Unreconciled { ref reason, ref detail }
+                if reason == "ambiguous scope" && detail == "the sentence names no fund"
+        ));
     }
 }
