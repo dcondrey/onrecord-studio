@@ -13,9 +13,9 @@
 //!
 //! Evidence rules:
 //!
-//! - Only calendar-day periods are read. A period in business or working days, or in hours, is
-//!   dropped on both sides: date-only records cannot be compared with them without a holiday
-//!   calendar or the time of day, and a guess would turn a compliant notice into a shortfall.
+//! - Only calendar-day periods are read, on both sides. A business- or working-day period is
+//!   dropped because counting it needs a holiday calendar, and a guess would turn a compliant
+//!   notice into a shortfall. A period in hours is out of scope and not read.
 //! - A date with no role cue before it is not a posting, notice or cleanup date. A role no date is
 //!   given for is not recorded, never zero.
 //! - The start is the earliest posting date, or the earliest notice date when no posting date is
@@ -983,6 +983,19 @@ async fn load_jurisdictions(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn the_loaders_run_against_the_schema_and_the_seeded_cpra_row_is_not_a_notice_minimum() {
+        let repo = DuckDbRepository::new(":memory:").expect("open in-memory core");
+        repo.run_migrations(include_str!("../../../migrations/0001_initial_schema.sql"))
+            .await
+            .expect("run migrations");
+        let rows = load_statutes(&repo).await.expect("statutes");
+        assert!(rows.iter().any(|row| row.statute_id == "CPRA_7922.535"));
+        assert!(notice_statutes(rows).is_empty());
+        load_agencies(&repo).await.expect("agencies");
+        load_jurisdictions(&repo).await.expect("portals");
+    }
 
     const POLICY: &str = "Encampment Resolution Policy\n\
         The Encampment Resolution Policy is effective January 1, 2026.\n\
