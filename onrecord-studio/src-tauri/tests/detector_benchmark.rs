@@ -63,13 +63,17 @@ fn registry() -> Vec<(&'static str, Run)> {
         cross_corpus_reused_denial_grounds,
         policy_violation,
         encampment_notice,
+        spending_cases,
+        practice_departure,
+        budget_line_comparison,
+        correlated_findings,
     ]
 }
 
 #[test]
 fn registry_matches_refresh_all_findings() {
     let source = include_str!("../src/analysis/detectors/mod.rs");
-    let called = source.matches("::run(repository).await?").count();
+    let called = source.matches("run_detector!(").count();
     assert_eq!(registry().len(), called, "update registry() in this file");
 }
 
