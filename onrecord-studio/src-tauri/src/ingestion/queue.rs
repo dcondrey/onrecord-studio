@@ -3140,11 +3140,12 @@ async fn admit_crawl_link(
             });
         }
     }
-    if !(source_host_matches(&context.portal.canonical_url, url)
-        || guidance_explicitly_allows_host(&context.crawl.guidance, url)
-        || (context.crawl.policy.follow_supported_external_platforms
-            && is_supported_external_data_platform(url)))
-    {
+    if !crawl_host_in_scope(
+        &context.portal.canonical_url,
+        &context.crawl.guidance,
+        &context.crawl.policy,
+        url,
+    ) {
         return Err(FrontierExclusion::OffScopeHost);
     }
     if !claim_crawl_path(context, url).await {
@@ -3153,6 +3154,22 @@ async fn admit_crawl_link(
         });
     }
     Ok(())
+}
+
+/// The host-scope rule every crawl node must satisfy, whether the link was found in HTML or in a
+/// structured payload: the source's own host, a host the operator named in `allowed_hostnames`,
+/// or a supported external data platform when the policy opts in. Downloads are governed
+/// separately by `download_host_allowed`, because real portals serve documents from storage hosts
+/// this rule does not enumerate.
+fn crawl_host_in_scope(
+    canonical_url: &str,
+    guidance: &SourceGuidance,
+    policy: &CrawlPolicy,
+    url: &str,
+) -> bool {
+    source_host_matches(canonical_url, url)
+        || guidance_explicitly_allows_host(guidance, url)
+        || (policy.follow_supported_external_platforms && is_supported_external_data_platform(url))
 }
 
 async fn mark_crawl_url(context: &WorkerContext, url: &str) -> bool {
@@ -3948,15 +3965,31 @@ async fn expand_structured_document_links(
             {
                 tasks.push(task);
             }
-        } else if let Some(task) = prepare_crawl_url(
-            context,
-            candidate.url,
-            depth.crawl.saturating_add(1),
-            depth.structured.saturating_add(1),
-        )
-        .await
-        {
-            tasks.push(task);
+        } else {
+            // A JSON payload is content the remote site chose, exactly like an HTML page, so a
+            // crawl node it names is held to the host rule `admit_crawl_link` applies to HTML
+            // links. Without this, `{"type":"dataset","url":"https://anywhere/"}` in any JSON
+            // the crawl reads became a `CrawlPublicResource` on that host, and the page fetched
+            // there was recorded as a document of this source.
+            if !crawl_host_in_scope(
+                &context.portal.canonical_url,
+                &context.crawl.guidance,
+                &context.crawl.policy,
+                &candidate.url,
+            ) {
+                record_frontier_exclusion(context, &FrontierExclusion::OffScopeHost).await;
+                continue;
+            }
+            if let Some(task) = prepare_crawl_url(
+                context,
+                candidate.url,
+                depth.crawl.saturating_add(1),
+                depth.structured.saturating_add(1),
+            )
+            .await
+            {
+                tasks.push(task);
+            }
         }
     }
     enqueue_tasks_resilient(context, tasks).await
@@ -6120,6 +6153,57 @@ mod tests {
             page,
             per_page: 50,
         }
+    }
+
+    /// A crawl node named by a structured payload obeys the same host rule as one found in HTML.
+    /// Proven against the pre-fix file by inspection: `expand_structured_document_links` handed
+    /// every non-download candidate to `prepare_crawl_url` with no host check, while
+    /// `admit_crawl_link` refused the identical URL as `OffScopeHost`.
+    #[test]
+    fn structured_crawl_candidates_obey_the_html_host_scope_rule() {
+        let source = "https://records.example.gov/portal";
+        let guidance = SourceGuidance::default();
+        let mut policy = CrawlPolicy::default();
+        policy.follow_supported_external_platforms = false;
+
+        assert!(crawl_host_in_scope(
+            source,
+            &guidance,
+            &policy,
+            "https://records.example.gov/api/3/action/package_show?id=x"
+        ));
+        assert!(!crawl_host_in_scope(
+            source,
+            &guidance,
+            &policy,
+            "https://anywhere.example/landing"
+        ));
+        assert!(
+            !crawl_host_in_scope(
+                source,
+                &guidance,
+                &policy,
+                "https://services.arcgis.com/abc/FeatureServer"
+            ),
+            "a supported platform is off scope until the policy opts in"
+        );
+
+        policy.follow_supported_external_platforms = true;
+        assert!(crawl_host_in_scope(
+            source,
+            &guidance,
+            &policy,
+            "https://services.arcgis.com/abc/FeatureServer"
+        ));
+
+        let mut allowing = SourceGuidance::default();
+        allowing.allowed_hostnames = vec!["anywhere.example".to_string()];
+        assert!(crawl_host_in_scope(
+            source,
+            &allowing,
+            &policy,
+            "https://data.anywhere.example/landing"
+        ));
     }
 
     #[test]
