@@ -27,8 +27,9 @@ use crate::{
     storage::DuckDbRepository,
 };
 use chrono::Utc;
-use duckdb::params;
 use std::collections::HashMap;
+
+use super::public_documents::load_public_documents;
 
 pub const SLUG: &str = "contradictory_statement";
 
@@ -50,17 +51,17 @@ struct SourcedAssertion {
 }
 
 pub async fn run(repository: &DuckDbRepository) -> Result<Vec<Finding>, AppError> {
-    let documents = load_documents(repository).await?;
+    let documents = load_public_documents(repository, MAX_DOCUMENTS).await?;
     let mut by_group: HashMap<(String, AssertionPredicate), Vec<SourcedAssertion>> = HashMap::new();
     for document in documents {
-        for assertion in extract_assertions(&document.extracted_text) {
+        for assertion in extract_assertions(&document.text) {
             let key = (assertion.subject.clone(), assertion.predicate);
             let sourced = SourcedAssertion {
                 portal_key: document.portal_key.clone(),
                 document_id: document.document_id,
                 request_id: document.request_id,
                 file_name: document.file_name.clone(),
-                likely_authoritative: document.likely_authoritative,
+                likely_authoritative: infer_authoritative(&document.file_name),
                 assertion,
             };
             by_group.entry(key).or_default().push(sourced);
@@ -114,92 +115,12 @@ pub async fn run(repository: &DuckDbRepository) -> Result<Vec<Finding>, AppError
     Ok(findings)
 }
 
-struct DocumentRow {
-    portal_key: String,
-    document_id: i64,
-    request_id: i64,
-    file_name: Option<String>,
-    likely_authoritative: bool,
-    extracted_text: String,
-}
-
-async fn load_documents(repository: &DuckDbRepository) -> Result<Vec<DocumentRow>, AppError> {
-    repository
-        .query_connection("Contradictory-statement corpus sweep", move |conn| {
-            let mut statement = conn
-                .prepare(
-                    "SELECT documents.portal_subdomain, documents.id, documents.request_id,
-                            documents.file_name, documents.content_type, documents.file_size,
-                            documents_fts.extracted_text
-                     FROM documents
-                     INNER JOIN documents_fts
-                        ON documents_fts.document_id = documents.id
-                       AND documents_fts.portal_subdomain = documents.portal_subdomain
-                     WHERE LOWER(TRIM(documents.visibility)) = 'public'
-                       AND COALESCE(documents.extracted_text_sha256, '') <> ''
-                       AND LENGTH(documents_fts.extracted_text) > 0
-                     ORDER BY documents.updated_at DESC
-                     LIMIT ?1",
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!(
-                        "Failed to prepare contradiction sweep query: {error}"
-                    ))
-                })?;
-            let rows = statement
-                .query_map(params![MAX_DOCUMENTS], |row| {
-                    Ok((
-                        row.get::<_, String>(0)?,
-                        row.get::<_, i64>(1)?,
-                        row.get::<_, i64>(2)?,
-                        row.get::<_, Option<String>>(3)?,
-                        row.get::<_, Option<String>>(4)?,
-                        row.get::<_, Option<i64>>(5)?,
-                        row.get::<_, String>(6)?,
-                    ))
-                })
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to run contradiction sweep query: {error}"))
-                })?;
-            let mut out = Vec::new();
-            for row in rows {
-                let (
-                    portal_key,
-                    document_id,
-                    request_id,
-                    file_name,
-                    content_type,
-                    file_size,
-                    extracted_text,
-                ) = row.map_err(|error| {
-                    AppError::Storage(format!("Failed to decode contradiction row: {error}"))
-                })?;
-                let likely_authoritative =
-                    infer_authoritative(&file_name, &content_type, file_size);
-                out.push(DocumentRow {
-                    portal_key,
-                    document_id,
-                    request_id,
-                    file_name,
-                    likely_authoritative,
-                    extracted_text,
-                });
-            }
-            Ok(out)
-        })
-        .await
-}
-
 /// A rough "is this document authoritative" heuristic. A contradiction between two authoritative
 /// documents (policies, handbooks, MOUs, resolutions) is more serious than one between two ad-hoc
 /// letters; conversely, correspondence often has minor drift that isn't worth surfacing at
 /// Serious rank. The file-name signal is deliberately narrow: matching "policy"/"handbook"/
 /// "manual"/"MOU"/"resolution"/"contract" produces a true positive; anything else stays false.
-fn infer_authoritative(
-    file_name: &Option<String>,
-    _content_type: &Option<String>,
-    _file_size: Option<i64>,
-) -> bool {
+fn infer_authoritative(file_name: &Option<String>) -> bool {
     let Some(name) = file_name else {
         return false;
     };

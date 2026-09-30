@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>Verifiable findings report</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff; --fg: #1a1a1a; --muted: #555555; --line: #c9c9c9; --panel: #f5f5f5;
+  --ok: #0b6b2e; --bad: #a10d0d; --warn: #7a4b00; --focus: #0b57d0;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #14161a; --fg: #ececec; --muted: #b0b0b0; --line: #3a3d44; --panel: #1d2026;
+    --ok: #63d688; --bad: #ff8a8a; --warn: #ffc266; --focus: #8ab4ff; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main, header { max-width: 60rem; margin: 0 auto; padding: 1rem; }
+h1 { font-size: 1.6rem; margin: 0.5rem 0 0.25rem; }
+h2 { font-size: 1.2rem; margin: 1.75rem 0 0.5rem; }
+.muted { color: var(--muted); }
+code, .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.85em; word-break: break-all; }
+#verification { border: 2px solid var(--line); border-radius: 6px; padding: 0.75rem 1rem; background: var(--panel); }
+#verification[data-state="verified"] { border-color: var(--ok); }
+#verification[data-state="failed"] { border-color: var(--bad); }
+#verification[data-state="unverifiable"] { border-color: var(--warn); }
+#verdict { margin: 0; font-size: 1.15rem; }
+#verification[data-state="verified"] #verdict { color: var(--ok); }
+#verification[data-state="failed"] #verdict { color: var(--bad); }
+#verification[data-state="unverifiable"] #verdict { color: var(--warn); }
+#checks { margin: 0.5rem 0 0; padding-left: 1.25rem; }
+#checks li { margin: 0.15rem 0; }
+.pass::marker { content: "PASS  "; color: var(--ok); font-weight: 700; }
+.fail::marker { content: "FAIL  "; color: var(--bad); font-weight: 700; }
+.skip::marker { content: "N/A  "; color: var(--warn); font-weight: 700; }
+ul.claims { list-style: none; margin: 0; padding: 0; }
+ul.claims > li { border: 1px solid var(--line); border-radius: 6px; margin: 0.5rem 0; }
+.claim-toggle { all: unset; display: block; box-sizing: border-box; width: 100%; padding: 0.6rem 0.8rem; cursor: pointer; }
+.claim-toggle:hover { background: var(--panel); }
+.claim-toggle:focus-visible, .claim-detail:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.badges { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.3rem; }
+.badge { border: 1px solid var(--line); border-radius: 3px; padding: 0 0.4rem; font-size: 0.8rem; }
+.claim-detail { padding: 0.25rem 0.8rem 0.8rem; border-top: 1px solid var(--line); }
+.claim-detail[hidden] { display: none; }
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 1rem; margin: 0.5rem 0; }
+dt { color: var(--muted); }
+dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+blockquote { margin: 0.4rem 0; padding: 0.4rem 0.75rem; border-left: 4px solid var(--line); background: var(--panel); white-space: pre-wrap; overflow-wrap: anywhere; }
+.citation { border-top: 1px dashed var(--line); margin-top: 0.75rem; padding-top: 0.5rem; }
+.banner { border: 2px solid var(--warn); padding: 0.5rem 0.75rem; margin: 1rem 0; border-radius: 6px; }
+@media (max-width: 40rem) { dl { grid-template-columns: 1fr; } }
+@media print {
+  :root { --bg: #fff; --fg: #000; --muted: #333; --line: #888; --panel: #fff; --ok: #000; --bad: #000; --warn: #000; }
+  body { font-size: 11pt; }
+  .claim-detail[hidden] { display: block; }
+  ul.claims > li { break-inside: avoid; }
+  .claim-toggle { padding-bottom: 0; }
+  .noprint { display: none; }
+}
+</style>
+</head>
+<body>
+<header>
+<h1 id="report-title">Verifiable findings report</h1>
+<p id="report-meta" class="muted"></p>
+<section id="verification" data-state="checking" role="status" aria-live="polite" aria-labelledby="verdict">
+<p id="verdict"><strong>Checking this report...</strong></p>
+<ul id="checks"></ul>
+<p id="verification-note" class="muted"></p>
+<noscript><p><strong>Cannot verify.</strong> This report verifies itself with JavaScript, which is off. Its contents below are not shown. Use scripts/verify-report.mjs from the command line instead.</p></noscript>
+</section>
+</header>
+<main>
+<div id="content" hidden>
+<p class="noprint muted">Select a claim to see its citation and basis. Printing expands every claim.</p>
+<h2>Claims</h2>
+<ul id="claims" class="claims"></ul>
+<h2>Withheld from this report</h2>
+<div id="withheld"></div>
+<h2>What this report does not establish</h2>
+<ul id="limitations"></ul>
+</div>
+</main>
+<script type="application/json" id="onrecord-report-payload">__ONRECORD_REPORT_PAYLOAD__</script>
+<script>
+(function () {
+  'use strict';
+  var SCHEMA = 'onrecord-verifiable-report-v1';
+  var QUOTE_LABELS = {
+    VERIFIED_AGAINST_STORED_TEXT: 'Quote matches the stored text at this range.',
+    FROM_STORED_TEXT_RANGE: 'Text taken from the stored document at this range.',
+    UNCHECKED_DETECTOR_QUOTE: 'Unchecked: no stored text was available to compare this quote with.',
+    WITHHELD_MISMATCH: 'Quote withheld: it does not appear at the cited range.',
+    WITHHELD_NON_PUBLIC_DOCUMENT: 'Excerpt withheld: the document is not public.',
+    NO_QUOTE: 'No quote is attached to this citation.'
+  };
+  var BASIS_LABELS = {
+    COUNTED_VIOLATION: 'Legal claim: a counted violation of a stated rule or commitment.',
+    PATTERN_SIGNAL: 'Pattern signal: evidence for review, not a legal conclusion.'
+  };
+
+  function byId(id) { return document.getElementById(id); }
+  function el(tag, text, className) {
+    var node = document.createElement(tag);
+    if (text !== undefined && text !== null) node.textContent = String(text);
+    if (className) node.className = className;
+    return node;
+  }
+  function hexToBytes(hex) {
+    if (typeof hex !== 'string' || hex.length === 0 || hex.length % 2 !== 0 || !/^[0-9a-fA-F]+$/.test(hex)) {
+      throw new Error('not a hex string');
+    }
+    var out = new Uint8Array(hex.length / 2);
+    for (var i = 0; i < out.length; i += 1) out[i] = parseInt(hex.substr(i * 2, 2), 16);
+    return out;
+  }
+  function base64ToBytes(value) {
+    var binary = atob(value);
+    var out = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i += 1) out[i] = binary.charCodeAt(i);
+    return out;
+  }
+  function toHex(buffer) {
+    return Array.prototype.map.call(new Uint8Array(buffer), function (b) {
+      return ('0' + b.toString(16)).slice(-2);
+    }).join('');
+  }
+
+  // Each check resolves to true (passed), false (failed) or null (could not be run here).
+  async function verify(pkg) {
+    var checks = [];
+    var claims = null;
+    function add(label, result) { checks.push({ label: label, result: result }); }
+
+    var canonical = null;
+    try { canonical = base64ToBytes(pkg.manifestCanonicalBase64); } catch (e) { canonical = null; }
+    add('Signed payload is well-formed base64', canonical !== null);
+
+    var subtle = window.crypto && window.crypto.subtle;
+    if (canonical !== null) {
+      if (!subtle) {
+        add('SHA-256 of the signed payload matches the recorded digest', null);
+      } else {
+        var digest = toHex(await subtle.digest('SHA-256', canonical));
+        add('SHA-256 of the signed payload matches the recorded digest (' + digest.slice(0, 16) + '...)',
+          typeof pkg.manifestSha256 === 'string' && digest === pkg.manifestSha256.toLowerCase());
+      }
+    }
+
+    var sig = pkg.signature || {};
+    add('Signature algorithm is Ed25519', sig.algorithm === 'Ed25519');
+    var publicKey = null;
+    var signature = null;
+    try {
+      publicKey = hexToBytes(sig.publicKeyHex);
+      signature = hexToBytes(sig.signatureHex);
+    } catch (e) { /* recorded below */ }
+    add('Public key and signature are well-formed', publicKey !== null && signature !== null && publicKey.length === 32 && signature.length === 64);
+
+    if (publicKey && subtle) {
+      var keyId = toHex(await subtle.digest('SHA-256', publicKey));
+      add('Signer key id is the SHA-256 of the public key', typeof sig.signerKeyId === 'string' && keyId === sig.signerKeyId.toLowerCase());
+    }
+
+    if (canonical !== null && publicKey && signature && publicKey.length === 32 && signature.length === 64) {
+      if (!subtle) {
+        add('Ed25519 signature over the signed payload verifies', null);
+      } else {
+        var outcome = null;
+        try {
+          var key = await subtle.importKey('raw', publicKey, { name: 'Ed25519' }, false, ['verify']);
+          outcome = await subtle.verify('Ed25519', key, signature, canonical);
+        } catch (e) {
+          // A browser without Ed25519 cannot answer either way; that is not a failure of the file.
+          outcome = e && e.name === 'NotSupportedError' ? null : false;
+        }
+        add('Ed25519 signature over the signed payload verifies', outcome);
+      }
+    }
+
+    var manifest = null;
+    if (canonical !== null) {
+      try {
+        manifest = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(canonical));
+      } catch (e) { manifest = null; }
+    }
+    add('Signed payload is a report of the expected schema', manifest !== null && manifest.schemaVersion === SCHEMA && Array.isArray(manifest.claims));
+    if (manifest !== null && manifest.schemaVersion === SCHEMA && Array.isArray(manifest.claims)) {
+      var invariantOk = manifest.claims.every(function (claim) {
+        return claim.kind !== 'REDACTION_CANDIDATE_INFERRED' &&
+          (claim.evidenceBasis !== 'COUNTED_VIOLATION' || (claim.confidence && claim.confidence.state === 'MEASURED'));
+      });
+      add('No inferred redaction identity appears as a claim, and every legal claim has a measured confidence', invariantOk);
+      claims = manifest;
+    }
+
+    var state = 'verified';
+    for (var i = 0; i < checks.length; i += 1) {
+      if (checks[i].result === false) { state = 'failed'; break; }
+      if (checks[i].result === null) state = 'unverifiable';
+    }
+    return { state: state, checks: checks, manifest: claims };
+  }
+
+  function showVerdict(outcome, pkg) {
+    var box = byId('verification');
+    box.setAttribute('data-state', outcome.state);
+    var text = {
+      verified: 'Verified: this report is unchanged since it was signed.',
+      failed: 'Not verified: this report was altered or is malformed. Do not rely on it.',
+      unverifiable: 'Cannot verify: this browser could not complete every check. The contents are shown but are not confirmed.'
+    }[outcome.state];
+    var verdict = byId('verdict');
+    verdict.textContent = '';
+    verdict.appendChild(el('strong', text));
+    var list = byId('checks');
+    list.textContent = '';
+    outcome.checks.forEach(function (check) {
+      list.appendChild(el('li', check.label + (check.result === null ? ' (could not be checked in this browser)' : ''),
+        check.result === true ? 'pass' : check.result === false ? 'fail' : 'skip'));
+    });
+    var note = byId('verification-note');
+    var sig = (pkg && pkg.signature) || {};
+    note.textContent = '';
+    note.appendChild(document.createTextNode(
+      'Signer key id ' + (sig.signerKeyId || 'unknown') + ' (' + (sig.identityAssurance || 'no identity assurance recorded') + '). ' +
+      'A valid signature shows the file is unchanged; it does not show who holds the key. ' +
+      'This page cannot check whether that key has been revoked, and it cannot vouch for its own script: ' +
+      'run scripts/verify-report.mjs on the file for a check of the whole file.'));
+  }
+
+  function fmtConfidence(confidence) {
+    if (confidence && confidence.state === 'MEASURED' && Number.isInteger(confidence.basisPoints)) {
+      return 'Measured ' + (confidence.basisPoints / 100).toFixed(2) + '%';
+    }
+    return 'Not assessed';
+  }
+  function fmtConfidenceLong(confidence) {
+    if (confidence && confidence.state === 'MEASURED') return fmtConfidence(confidence);
+    return 'Not assessed. The detector had no measurable basis for a score. This is not a score of zero.';
+  }
+  function row(dl, term, value) {
+    dl.appendChild(el('dt', term));
+    var dd = el('dd');
+    if (value instanceof Node) dd.appendChild(value); else dd.textContent = value;
+    dl.appendChild(dd);
+  }
+
+  function renderCitation(citation, index) {
+    var box = el('div', null, 'citation');
+    box.appendChild(el('h4', 'Citation ' + (index + 1) + (citation.label ? ': ' + citation.label : '')));
+    var dl = el('dl');
+    row(dl, 'Document', citation.portalKey + ' / document ' + citation.documentId + (citation.fileName ? ' (' + citation.fileName + ')' : ''));
+    row(dl, 'Character range',
+      citation.characterStart !== null && citation.characterEnd !== null
+        ? citation.characterStart + ' to ' + citation.characterEnd
+        : 'Not recorded');
+    row(dl, 'Source file SHA-256', citation.rawFileSha256 ? el('span', citation.rawFileSha256, 'mono') : 'Not recorded');
+    row(dl, 'Extracted-text SHA-256', citation.extractedTextProjectionSha256 ? el('span', citation.extractedTextProjectionSha256, 'mono') : 'Not recorded, so the quoted text cannot be tied to a digest');
+    row(dl, 'Quote status', QUOTE_LABELS[citation.quoteStatus] || 'Unrecognised status: treat this quote as unchecked.');
+    box.appendChild(dl);
+    if (citation.quote !== null && citation.quote !== undefined) {
+      box.appendChild(el('blockquote', citation.quote));
+      var notes = [];
+      if (citation.quoteTruncated) notes.push('Shortened to fit.');
+      if (citation.piiMaskedCount > 0) notes.push(citation.piiMaskedCount + ' personal-information value(s) masked.');
+      if (notes.length) box.appendChild(el('p', notes.join(' '), 'muted'));
+    }
+    return box;
+  }
+
+  function setOpen(item, open) {
+    var toggle = item.querySelector('.claim-toggle');
+    var detail = item.querySelector('.claim-detail');
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    detail.hidden = !open;
+  }
+
+  function renderClaim(claim, index) {
+    var item = el('li');
+    item.id = 'claim-' + claim.findingId;
+    var toggle = el('button', null, 'claim-toggle');
+    toggle.type = 'button';
+    toggle.setAttribute('aria-expanded', 'false');
+    var detailId = 'detail-' + index;
+    toggle.setAttribute('aria-controls', detailId);
+    toggle.appendChild(el('strong', claim.headline));
+    var badges = el('div', null, 'badges');
+    badges.appendChild(el('span', claim.evidenceBasis === 'COUNTED_VIOLATION' ? 'Legal claim' : 'Pattern signal', 'badge'));
+    badges.appendChild(el('span', fmtConfidence(claim.confidence), 'badge'));
+    badges.appendChild(el('span', claim.severity, 'badge'));
+    toggle.appendChild(badges);
+    var detail = el('div', null, 'claim-detail');
+    detail.id = detailId;
+    detail.hidden = true;
+    detail.tabIndex = -1;
+    detail.setAttribute('role', 'region');
+    detail.setAttribute('aria-label', 'Basis and citations for: ' + claim.headline);
+    detail.appendChild(el('p', claim.explanation));
+    var dl = el('dl');
+    row(dl, 'Evidence basis', BASIS_LABELS[claim.evidenceBasis] || 'Unrecognised basis: do not treat as a legal claim.');
+    row(dl, 'Confidence', fmtConfidenceLong(claim.confidence));
+    row(dl, 'Finding kind', claim.kind);
+    row(dl, 'Finding id', el('span', claim.findingId, 'mono'));
+    row(dl, 'Detector', claim.sourceDetector);
+    row(dl, 'First seen', claim.discoveredAt);
+    row(dl, 'Last seen', claim.lastSeenAt);
+    if (claim.portalKey) row(dl, 'Source', claim.portalKey + (claim.requestId !== null && claim.requestId !== undefined ? ' / request ' + claim.requestId : ''));
+    detail.appendChild(dl);
+    if (claim.citations.length === 0) detail.appendChild(el('p', 'This claim carries no citations.', 'muted'));
+    claim.citations.forEach(function (citation, i) { detail.appendChild(renderCitation(citation, i)); });
+    toggle.addEventListener('click', function () {
+      setOpen(item, toggle.getAttribute('aria-expanded') !== 'true');
+    });
+    item.appendChild(toggle);
+    item.appendChild(detail);
+    return item;
+  }
+
+  function openFromHash() {
+    var id = decodeURIComponent(location.hash.replace(/^#/, ''));
+    if (!id) return;
+    var item = byId(id);
+    if (item && item.querySelector('.claim-toggle')) {
+      setOpen(item, true);
+      item.scrollIntoView();
+    }
+  }
+
+  function renderManifest(manifest, unconfirmed) {
+    document.title = manifest.title;
+    byId('report-title').textContent = manifest.title;
+    var meta = ['Generated ' + manifest.generatedAt];
+    if (manifest.authorName) meta.push('Prepared by ' + manifest.authorName);
+    if (manifest.scopePortalKey) meta.push('Scope: ' + manifest.scopePortalKey);
+    byId('report-meta').textContent = meta.join(' | ');
+    var content = byId('content');
+    if (unconfirmed) {
+      var banner = el('p', 'These contents are not confirmed by a completed verification.', 'banner');
+      content.insertBefore(banner, content.firstChild);
+    }
+    var claims = byId('claims');
+    manifest.claims.forEach(function (claim, i) { claims.appendChild(renderClaim(claim, i)); });
+    if (manifest.claims.length === 0) claims.appendChild(el('li', 'No claims.'));
+    var withheld = byId('withheld');
+    if (manifest.withheld.length === 0) {
+      withheld.appendChild(el('p', 'Nothing was withheld.'));
+    } else {
+      var list = el('ul');
+      manifest.withheld.forEach(function (item) {
+        list.appendChild(el('li', item.count + ' withheld. ' + item.explanation));
+      });
+      withheld.appendChild(list);
+    }
+    var limitations = byId('limitations');
+    manifest.limitations.forEach(function (text) { limitations.appendChild(el('li', text)); });
+    content.hidden = false;
+    openFromHash();
+  }
+
+  window.addEventListener('hashchange', openFromHash);
+
+  async function main() {
+    var pkg = null;
+    try { pkg = JSON.parse(byId('onrecord-report-payload').textContent); } catch (e) { pkg = null; }
+    if (pkg === null || typeof pkg !== 'object') {
+      showVerdict({ state: 'failed', checks: [{ label: 'Embedded payload is readable JSON', result: false }] }, null);
+      return;
+    }
+    var outcome;
+    try {
+      outcome = await verify(pkg);
+    } catch (e) {
+      outcome = { state: 'failed', checks: [{ label: 'Verification ran without error', result: false }], manifest: null };
+    }
+    showVerdict(outcome, pkg);
+    // Content is rendered from the signed bytes only, never from the unsigned "manifest" field.
+    if (outcome.state !== 'failed' && outcome.manifest) renderManifest(outcome.manifest, outcome.state !== 'verified');
+  }
+  main();
+})();
+</script>
+</body>
+</html>

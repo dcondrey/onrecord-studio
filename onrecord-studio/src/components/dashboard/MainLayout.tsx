@@ -6,7 +6,9 @@ import DocumentViewer from '../documents/DocumentViewer';
 import UnredactorPanel from '../documents/UnredactorPanel';
 import LegalAuthorityManager from '../legal/LegalAuthorityManager';
 import LegalCompliancePanel from '../legal/LegalCompliancePanel';
+import { isTauri } from '@tauri-apps/api/core';
 import { invokeCommand } from '../../ipc';
+import StatutoryDeadlineAppeal from './StatutoryDeadlineAppeal';
 import type {
   DocumentTextChunk,
   LegalBriefExportResult,
@@ -364,6 +366,11 @@ export default function MainLayout() {
                     </div>
                   )}
                   {documentError && <div role="alert" className="mt-2 text-[9px] leading-relaxed text-rose-300">Document view unavailable: {documentError}</div>}
+                  {isTauri() && selected.integrityFlags.includes('STATUTORY_LATENCY_VIOLATION') && (
+                    <div className="mt-3">
+                      <StatutoryDeadlineAppeal portalKey={selected.portalKey} requestId={selected.requestId} />
+                    </div>
+                  )}
                   {hasReportableFinding(selected) && (
                     <div className="mt-3">
                       <button

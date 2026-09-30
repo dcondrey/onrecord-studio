@@ -43,34 +43,6 @@ impl CorpusEntityKind {
     }
 }
 
-/// The role a `Money` mention plays in the document it appears in.
-///
-/// `Money` entities are shared across documents (a shared amount is a graph edge), but the same
-/// amount can be an invoice line in one document, a budget appropriation in another, and a
-/// payment record in a third — and the point of the reasoning is often "the same number, three
-/// different ledgers". The context lives on the mention, not on the entity.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum MoneyContext {
-    Invoice,
-    Approval,
-    Budget,
-    Payment,
-    Other,
-}
-
-impl MoneyContext {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Invoice => "INVOICE",
-            Self::Approval => "APPROVAL",
-            Self::Budget => "BUDGET",
-            Self::Payment => "PAYMENT",
-            Self::Other => "OTHER",
-        }
-    }
-}
-
 /// What an edge is claiming, not merely that it exists.
 ///
 /// `CoOccurrence` is the current default: two entities appeared near each other in one segment,

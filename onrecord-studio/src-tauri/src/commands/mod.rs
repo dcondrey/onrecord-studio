@@ -1,5 +1,6 @@
 //! Registration system formatting IPC pathways for frontend consumption.
 
+pub mod account;
 pub mod analysis_workbench;
 pub mod corpus;
 pub mod export;
@@ -18,7 +19,8 @@ pub use analysis_workbench::{
 };
 pub use corpus::{
     find_entity_paths, get_corpus_entity_neighborhood, get_corpus_index_status,
-    list_entity_brokers, list_top_corpus_entities, query_corpus_patterns,
+    get_document_entity_truncations, list_entity_brokers, list_top_corpus_entities,
+    query_corpus_patterns,
 };
 pub use export::{
     case_export_chain, export_case_evidence_package, export_legal_brief,
@@ -55,6 +57,15 @@ pub mod casework;
 pub mod monitoring;
 
 pub mod findings;
+pub mod intent;
 pub mod redaction_inference;
 
 pub mod artifacts;
+
+pub mod profile;
+
+pub mod report;
+
+pub mod tracker;
+
+pub mod verification;

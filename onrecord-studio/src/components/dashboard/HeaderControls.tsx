@@ -1,6 +1,13 @@
 import { cn } from '../../utils/cn';
 import Icon from '../ui/icons';
 import type { AppTheme } from '../../store/useAppStore';
+import { useProfileLensStore } from '../../store/useProfileLensStore';
+import ProfileSettings from '../account/ProfileSettings';
+import SelfReview from '../account/SelfReview';
+import AccountMenu from '../account/AccountMenu';
+import MyRequestsButton from '../tracker/MyRequestsButton';
+import HelpButton from '../help/HelpButton';
+import UpdatePrompt from '../updates/UpdatePrompt';
 
 /** The right-hand icon row: audio-alert toggle, appearance switcher, sync status, and the
  * mobile-only connector toggle. */
@@ -21,6 +28,7 @@ export function HeaderControls({
   isConnectorOpen: boolean;
   onToggleConnector: () => void;
 }) {
+  const setProfileOpen = useProfileLensStore((state) => state.setSettingsOpen);
   return (
     <div className="ml-auto flex shrink-0 items-center gap-2">
       <button
@@ -33,6 +41,21 @@ export function HeaderControls({
       >
         <Icon name="volume" className="h-3.5 w-3.5" />
       </button>
+      <button
+        type="button"
+        title="Local profile and declared organization"
+        aria-label="Open local profile"
+        onClick={() => setProfileOpen(true)}
+        className="focus-ring grid h-9 w-9 place-items-center rounded-xl border border-slate-800 bg-slate-900/50 text-slate-400 transition hover:text-slate-300"
+      >
+        <Icon name="shield" className="h-3.5 w-3.5" />
+      </button>
+      <HelpButton />
+      <MyRequestsButton />
+      <AccountMenu />
+      <UpdatePrompt />
+      <ProfileSettings />
+      <SelfReview />
       <div className="theme-switcher flex items-center rounded-xl border p-0.5" role="group" aria-label="Appearance">
         <button
           type="button"

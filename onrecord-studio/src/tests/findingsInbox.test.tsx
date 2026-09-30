@@ -31,10 +31,26 @@ vi.mock('@tauri-apps/api/core', () => ({
   isTauri: () => false,
   invoke: (command: string, args: unknown) => {
     bridge.invoked.push({ command, args });
+    if (command === 'get_affiliation_disclosure') {
+      return Promise.resolve({
+        status: 'UNSET',
+        sentence: null,
+        affiliations: [],
+        ownPortalKeys: [],
+        ownAgencies: [],
+        ownEntityIds: [],
+      });
+    }
+    if (command === 'list_evidence_gaps') return Promise.resolve([]);
+    if (command === 'get_profile') return Promise.resolve({ status: 'UNSET', profile: null });
     if (command === 'list_findings') return Promise.resolve(bridge.listRows);
     if (command === 'refresh_findings') {
       if (bridge.refreshRejects) return Promise.reject(new Error('refresh unavailable'));
-      return Promise.resolve({ detectorsRun: 1, findingsRecorded: 0, staleCleared: 0 });
+      return Promise.resolve({
+        detectorsRun: 1,
+        findingsRecorded: 0,
+        staleCleared: 0,
+      });
     }
     if (command === 'dismiss_finding') {
       if (bridge.dismissRejects) return Promise.reject(new Error('dismiss unavailable'));
@@ -105,8 +121,16 @@ describe('FindingsInbox', () => {
 
   it('renders ranked findings from list_findings and shows their severity, headline, and explanation', async () => {
     bridge.listRows = [
-      sampleFinding({ id: 'a', severity: 'CRITICAL', headline: 'Critical: 30 day holdback' }),
-      sampleFinding({ id: 'b', severity: 'NOTABLE', headline: 'Notable: 2 day holdback' }),
+      sampleFinding({
+        id: 'a',
+        severity: 'CRITICAL',
+        headline: 'Critical: 30 day holdback',
+      }),
+      sampleFinding({
+        id: 'b',
+        severity: 'NOTABLE',
+        headline: 'Notable: 2 day holdback',
+      }),
     ];
     await act(async () => {
       render(<FindingsInbox />);
@@ -116,7 +140,7 @@ describe('FindingsInbox', () => {
     });
     expect(screen.getByText('Notable: 2 day holdback')).toBeTruthy();
     // Severity + confidence pill visible.
-    expect(screen.getAllByText(/75% confidence/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/75% measured/i).length).toBeGreaterThan(0);
   });
 
   it('optimistically removes a dismissed finding and calls dismiss_finding on the backend', async () => {
@@ -151,7 +175,11 @@ describe('FindingsInbox', () => {
       expect(screen.getByText('Should reappear')).toBeTruthy();
     });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /dismiss finding: should reappear/i }));
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: /dismiss finding: should reappear/i,
+        }),
+      );
     });
     await waitFor(() => {
       expect(screen.getByText('Should reappear')).toBeTruthy();
@@ -173,9 +201,7 @@ describe('FindingsInbox', () => {
       fireEvent.click(screen.getByRole('button', { name: /refresh findings/i }));
     });
     await waitFor(() => {
-      expect(
-        bridge.invoked.some((call) => call.command === 'refresh_findings'),
-      ).toBe(true);
+      expect(bridge.invoked.some((call) => call.command === 'refresh_findings')).toBe(true);
       expect(screen.getByText('Fresh finding after refresh')).toBeTruthy();
     });
   });

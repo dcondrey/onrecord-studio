@@ -14,13 +14,6 @@ const MAX_ENTRY_COUNT: usize = 2_000;
 const MAX_ENTRY_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_TOTAL_UNCOMPRESSED_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 
-pub fn extract_zip_container<A: AsRef<Path>, D: AsRef<Path>>(
-    archive_path: A,
-    destination: D,
-) -> Result<(), AppError> {
-    extract_zip_container_with_manifest(archive_path, destination).map(|_| ())
-}
-
 pub fn extract_zip_container_with_manifest<A: AsRef<Path>, D: AsRef<Path>>(
     archive_path: A,
     destination: D,

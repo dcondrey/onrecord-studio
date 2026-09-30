@@ -6,11 +6,11 @@ import type { AgencyPerformanceProfile, Finding } from '../../types';
 
 /**
  * A compact strip above the findings inbox. Two numbers only: how many findings arrived since the
- * user last looked, and how many statutory deadlines are due to lapse in the next seven days
+ * user last looked, and how many statutory deadline violations the evaluator has counted,
  * scoped to the active portal. Clicking either scrolls the inbox to a relevant filter without
  * changing the workspace view.
  *
- * The numbers are honest counts of what has already been detected. The lapsing-deadlines figure
+ * The numbers are honest counts of what has already been detected. The violation figure
  * reads from the cached `agencyProfiles`; if that cache is empty (analytics not refreshed yet)
  * the strip reports the finding count only, rather than fabricating a zero for the second bucket.
  */
@@ -54,7 +54,7 @@ export default function ChangeFeed() {
     }).length;
   }, [findings, lastFindingsSeenAt]);
 
-  const lapsingSoon = useMemo(() => countLapsingDeadlines(agencyProfiles, activePortalKey), [
+  const statutoryCount = useMemo(() => countStatutoryViolations(agencyProfiles, activePortalKey), [
     agencyProfiles,
     activePortalKey,
   ]);
@@ -65,14 +65,14 @@ export default function ChangeFeed() {
     const anchor = document.getElementById('findings-inbox');
     if (anchor) anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
-  const focusInboxLapsing = () => {
+  const focusInboxStatutory = () => {
     if (activePortalKey) setActivePortal(activePortalKey);
-    setSearchFilters('', null, null, 'STATUTORY_DEADLINE_EXCEEDED');
+    setSearchFilters('', null, null, 'STATUTORY_LATENCY_VIOLATION');
     const anchor = document.getElementById('findings-inbox');
     if (anchor) anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  if (findings.length === 0 && lapsingSoon === null) return null;
+  if (findings.length === 0 && statutoryCount === null) return null;
 
   return (
     <section
@@ -92,38 +92,32 @@ export default function ChangeFeed() {
           ? 'No new findings since you last opened.'
           : `${newFindingsCount} new ${newFindingsCount === 1 ? 'finding' : 'findings'} since you last opened.`}
       </button>
-      {lapsingSoon !== null && lapsingSoon > 0 && (
+      {statutoryCount !== null && statutoryCount > 0 && (
         <button
           type="button"
-          onClick={focusInboxLapsing}
+          onClick={focusInboxStatutory}
           className="focus-ring inline-flex items-center gap-1.5 rounded-md border border-transparent px-2 py-1 font-semibold text-amber-300 transition hover:border-amber-400/25 hover:text-amber-200"
         >
           <span
             aria-hidden="true"
             className="inline-block h-1.5 w-1.5 rounded-full bg-amber-300"
           />
-          {lapsingSoon} deadline{lapsingSoon === 1 ? '' : 's'} lapsing within 7 days.
+          {statutoryCount} statutory deadline {statutoryCount === 1 ? 'violation' : 'violations'} counted.
         </button>
       )}
     </section>
   );
 }
 
-// The profile carries `statutoryDeadlineWithinDays` on the shape it exposes to the frontend, and
-// `null` means analytics hasn't finished computing it. We return `null` from this helper too when
-// the cache is empty so ChangeFeed can distinguish "no lapsing deadlines" (0) from "we don't
-// know yet" (null) — an application of the "absence and measurement never share a
-// representation" invariant to the UI layer.
-function countLapsingDeadlines(profiles: AgencyPerformanceProfile[], portalKey: string | null): number | null {
+// `null` means analytics hasn't produced profiles yet, so ChangeFeed can tell "no counted violations"
+// (0) from "not known yet" (null). The figure is the evaluator's counted statutory violations
+// (`statutoryViolationCount`), which are deadlines already exceeded. No profile field says a
+// deadline is about to lapse, so this strip does not claim one.
+function countStatutoryViolations(profiles: AgencyPerformanceProfile[], portalKey: string | null): number | null {
   if (profiles.length === 0) return null;
   const scoped = portalKey
     ? profiles.filter((profile) => profile.portalSubdomain === portalKey)
     : profiles;
   if (scoped.length === 0) return null;
-  return scoped.reduce((total, profile) => {
-    const value = (profile as unknown as { deadlinesLapsingWithinSevenDays?: number | null })
-      .deadlinesLapsingWithinSevenDays;
-    if (typeof value === 'number' && value > 0) return total + value;
-    return total;
-  }, 0);
+  return scoped.reduce((total, profile) => total + profile.statutoryViolationCount, 0);
 }

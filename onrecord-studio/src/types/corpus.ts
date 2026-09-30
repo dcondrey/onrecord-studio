@@ -65,9 +65,6 @@ export type CorpusEntityKind =
   | 'POSITION'
   | 'DOCUMENT_CLASS';
 
-/** The role a `MONEY` mention plays in the document it appears in. */
-export type MoneyContext = 'INVOICE' | 'APPROVAL' | 'BUDGET' | 'PAYMENT' | 'OTHER';
-
 /**
  * What an edge claims. `CO_OCCURRENCE` is the derivation this app performs today; the seven
  * others describe an edge the text actually carried. A reader must not draw a `CO_OCCURRENCE`

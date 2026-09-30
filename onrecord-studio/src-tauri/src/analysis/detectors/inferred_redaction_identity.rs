@@ -110,6 +110,7 @@ async fn load_targets(repository: &DuckDbRepository) -> Result<Vec<SweepTarget>,
                        AND documents_fts.portal_subdomain = documents.portal_subdomain \
                      WHERE LOWER(TRIM(documents.visibility)) = 'public' \
                        AND LENGTH(documents_fts.extracted_text) > 0 \
+                       AND strlen(documents_fts.extracted_text) <= ?2 \
                      ORDER BY documents.id DESC \
                      LIMIT ?1",
                 )
@@ -119,14 +120,20 @@ async fn load_targets(repository: &DuckDbRepository) -> Result<Vec<SweepTarget>,
                     ))
                 })?;
             let rows = statement
-                .query_map(params![MAX_CANDIDATE_DOCS], |row| {
-                    Ok((
-                        row.get::<_, i64>(0)?,
-                        row.get::<_, String>(1)?,
-                        row.get::<_, Option<String>>(2)?,
-                        row.get::<_, Option<i64>>(3)?,
-                    ))
-                })
+                .query_map(
+                    params![
+                        MAX_CANDIDATE_DOCS,
+                        super::public_documents::MAX_DOCUMENT_TEXT_BYTES
+                    ],
+                    |row| {
+                        Ok((
+                            row.get::<_, i64>(0)?,
+                            row.get::<_, String>(1)?,
+                            row.get::<_, Option<String>>(2)?,
+                            row.get::<_, Option<i64>>(3)?,
+                        ))
+                    },
+                )
                 .map_err(|error| {
                     AppError::Storage(format!(
                         "Failed to run inferred-redaction target query: {error}"

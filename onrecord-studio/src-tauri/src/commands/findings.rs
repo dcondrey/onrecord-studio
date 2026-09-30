@@ -1,7 +1,7 @@
 //! IPC commands for the autonomous findings inbox.
 
 use crate::{
-    analysis::{detectors, finding::Finding},
+    analysis::{detectors, finding::Finding, gaps},
     error::AppError,
     storage::{findings::FindingsFilter, sqlite::DuckDbRepository},
 };
@@ -26,6 +26,21 @@ pub async fn refresh_findings(
         findings_recorded: summary.findings_recorded,
         stale_cleared: summary.stale_cleared,
     })
+}
+
+/// Routes the corpus identified but cannot yet test, each with where its acquisition stands.
+/// Reading queues nothing; the collection service does that after each ingest.
+#[tauri::command]
+pub async fn list_evidence_gaps(
+    repository: State<'_, DuckDbRepository>,
+) -> Result<Vec<gaps::EvidenceGapView>, AppError> {
+    let (found, errors) = gaps::collect(&repository).await;
+    if found.is_empty() {
+        if let Some(error) = errors.into_iter().next() {
+            return Err(AppError::Storage(error));
+        }
+    }
+    gaps::resolve(&repository, &found, false).await
 }
 
 #[tauri::command]

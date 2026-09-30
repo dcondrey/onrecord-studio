@@ -14,7 +14,7 @@ static MASK: LazyLock<Regex> = LazyLock::new(|| {
 static NUMBER: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?im)\b(?P<label>contract|agreement|invoice|purchase order|po|grant|project|solicitation|bid|payment|appropriation|budget|amount|total)(?:\s+(?:number|no\.?|id|amount))?\s*[:#=]\s*(?P<value>\$?[0-9Xx*?█■▇., -]*(?:\[(?:REDACTED|WITHHELD)\][0-9Xx*?█■▇., -]*)?)").unwrap()
 });
-static ROLE: LazyLock<Regex> = LazyLock::new(|| {
+pub(crate) static ROLE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)\b(?:(?:assistant|deputy|acting|interim|senior)\s+)*(?:chief of police|police chief|chief operating officer|chief financial officer|independent budget analyst|city auditor|city attorney|city manager|mayor|(?:homelessness strategies and solutions|public works|environmental services|parks and recreation|housing and community development|finance|purchasing and contracting) director|director of [a-z][a-z &/\-]{3,75}|[a-z][a-z &/\-]{2,55} department director)\b").unwrap()
 });
 static NAME: LazyLock<Regex> = LazyLock::new(|| {

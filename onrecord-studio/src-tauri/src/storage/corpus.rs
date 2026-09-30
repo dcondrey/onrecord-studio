@@ -1,5 +1,6 @@
 //! Rebuildable, provenance-linked corpus index for cross-document pattern discovery.
 
+use crate::analysis::typed_edges;
 use crate::error::AppError;
 use crate::integrity::digest_hex;
 use crate::types::{
@@ -44,7 +45,17 @@ const CORPUS_ALGORITHM_VERSION: &str = "deterministic-corpus-v3";
 /// so an edge inferred from a segment carrying a date can outlive its ingestion moment. See
 /// the `RelationshipKind` docstring for the semantic guard: a reader that draws a
 /// `CoOccurrence` edge alike to a `SignedBy` edge makes a claim the app never did.
-const CORPUS_SCHEMA_VERSION: i64 = 8;
+/// 9: edges are typed at emission. `ROLE` and cue-anchored `PERSON` mentions are extracted, and
+/// `analyze_relationships` writes `SIGNED_BY`/`CITES`/`PROMISES`/`DELIVERED`/`SUPERSEDES`/`AMENDS`
+/// edges where the text carried the cue, including across segment boundaries. An index stamped 8
+/// holds only `CO_OCCURRENCE` edges and would read as "no typed relationships exist".
+const CORPUS_SCHEMA_VERSION: i64 = 9;
+
+/// Collapses a pair's edges to one kind. A typed edge is a stronger claim than proximity and
+/// `MIN` alone sorts `CO_OCCURRENCE` before `SIGNED_BY`, `PROMISES` and others, hiding them behind
+/// the weakest claim; `~` sorts after every kind name and reads back as `CoOccurrence`.
+const TYPED_FIRST_SQL: &str =
+    "CASE WHEN edge.relationship_kind = 'CO_OCCURRENCE' THEN '~' ELSE edge.relationship_kind END";
 
 const WRITER_QUEUE_CAPACITY: usize = 64;
 const MAXIMUM_CONCURRENT_ANALYSES: usize = 4;
@@ -240,6 +251,21 @@ const ORGANIZATION_EXTRACTOR: ExtractorStamp = ExtractorStamp {
     grade: EntityValidationGrade::GazetteerHit,
 };
 
+/// A title from `reconstruction`'s municipal role list. The list admits it, so that is the grade.
+const ROLE_EXTRACTOR: ExtractorStamp = ExtractorStamp {
+    id: "role.title-list",
+    version: 1,
+    grade: EntityValidationGrade::GazetteerHit,
+};
+
+/// A capitalized name directly after `/s/`, `Sincerely,`, `Respectfully,` or `Signed:`. The cue
+/// places it in a signature block; nothing verified that the string is a person.
+const SIGNER_EXTRACTOR: ExtractorStamp = ExtractorStamp {
+    id: "person.signature-cue",
+    version: 1,
+    grade: EntityValidationGrade::PatternOnly,
+};
+
 /// A currency symbol followed by a well-formed amount, with the minor unit checked to two digits
 /// when a decimal point is present and the thousands groups checked to three.
 const MONEY_EXTRACTOR: ExtractorStamp = ExtractorStamp {
@@ -266,9 +292,8 @@ struct AnalyzedRelationship {
     character_start: usize,
     character_end: usize,
     confidence_basis_points: u16,
-    /// What the edge claims. Populated by `analyze_relationships`; every edge the current
-    /// derivation writes is `CoOccurrence`. A later analyzer that identifies a signature line
-    /// or an approval sentence can emit the typed variants without a schema change.
+    /// What the edge claims. `CoOccurrence` for same-segment proximity; the typed variants only
+    /// where `typed_edges` found an explicit cue between the mentions.
     kind: RelationshipKind,
     /// RFC 3339 UTC when the edge starts to hold, when a date was extractable from the same
     /// segment. `None` when no date accompanies the edge in text — absence is not zero.
@@ -551,7 +576,7 @@ impl CorpusIndex {
                             counts.document_count, MAX(GRADE_RANK),
                             COUNT(DISTINCT edge.portal_key || \'|\' || edge.document_id),
                             MIN(edge.confidence_basis_points), MIN(edge.basis),
-                            MIN(edge.relationship_kind), MIN(edge.valid_from), MAX(edge.valid_until)
+                            MIN(TYPED_FIRST), MIN(edge.valid_from), MAX(edge.valid_until)
                      FROM corpus_entity_relationships edge
                      JOIN corpus_entities neighbor
                         ON neighbor.entity_id = CASE
@@ -567,6 +592,7 @@ impl CorpusIndex {
                      ORDER BY 6 DESC, neighbor.display_value ASC
                      LIMIT ?2"
                         .replace("GRADE_RANK", GRADE_RANK_SQL)
+                        .replace("TYPED_FIRST", TYPED_FIRST_SQL)
                         .as_str(),
                 )
                 .map_err(|error| {
@@ -1100,7 +1126,7 @@ fn analyze_document(input: CorpusDocumentInput) -> Result<AnalyzedDocument, AppE
     let segments = analyze_segments(&input.text, &tokens, character_count)?;
     let terms = top_terms(&tokens);
     let (entities, entity_truncations) = extract_entities(&input.text, &tokens, &segments);
-    let (relationships, relationships_truncated) = analyze_relationships(&entities);
+    let (relationships, relationships_truncated) = analyze_relationships(&input.text, &entities);
     Ok(AnalyzedDocument {
         portal_key: input.portal_key,
         request_id: input.request_id,
@@ -1118,7 +1144,10 @@ fn analyze_document(input: CorpusDocumentInput) -> Result<AnalyzedDocument, AppE
     })
 }
 
-fn analyze_relationships(entities: &[AnalyzedEntity]) -> (Vec<AnalyzedRelationship>, bool) {
+fn analyze_relationships(
+    text: &str,
+    entities: &[AnalyzedEntity],
+) -> (Vec<AnalyzedRelationship>, bool) {
     let mut by_segment = BTreeMap::<usize, Vec<&AnalyzedEntity>>::new();
     for entity in entities {
         by_segment
@@ -1177,7 +1206,66 @@ fn analyze_relationships(entities: &[AnalyzedEntity]) -> (Vec<AnalyzedRelationsh
             }
         }
     }
+    let inputs = entities
+        .iter()
+        .map(|entity| typed_edges::EdgeInput {
+            kind: entity.kind,
+            character_start: entity.character_start,
+            character_end: entity.character_end,
+            confidence_basis_points: entity.confidence_basis_points,
+        })
+        .collect::<Vec<_>>();
+    let entity_id = |entity: &AnalyzedEntity| {
+        stable_id(&format!(
+            "{}|{}",
+            entity.kind.as_str(),
+            entity.normalized_value
+        ))
+    };
+    let mut typed_seen = BTreeSet::new();
+    for edge in typed_edges::derive_typed_edges(text, &inputs) {
+        let (left, right) = (&entities[edge.left], &entities[edge.right]);
+        let (left_entity_id, right_entity_id) = (entity_id(left), entity_id(right));
+        // The same entity pair repeated across mentions is one claim per segment and kind, and an
+        // entity cannot relate to itself; the table's key and CHECK enforce both.
+        if left_entity_id == right_entity_id
+            || !typed_seen.insert((
+                left.segment_index,
+                left_entity_id.clone(),
+                right_entity_id.clone(),
+                edge.kind,
+            ))
+        {
+            continue;
+        }
+        if relationships.len() >= MAXIMUM_RELATIONSHIPS_PER_DOCUMENT {
+            truncated = true;
+            break;
+        }
+        relationships.push(AnalyzedRelationship {
+            left_entity_id,
+            right_entity_id,
+            segment_index: left.segment_index,
+            character_start: edge.character_start,
+            character_end: edge.character_end,
+            confidence_basis_points: edge.confidence_basis_points,
+            kind: edge.kind,
+            valid_from: None,
+            valid_until: None,
+        });
+    }
     (relationships, truncated)
+}
+
+/// The resolver's normal form for a name: each token's normalization joined by one space. Callers
+/// outside the index (the profile's affiliation matching) must use this rather than a copy, so a
+/// stored mention and a typed name compare equal exactly when the resolver would merge them.
+pub(crate) fn normalized_name(value: &str) -> String {
+    tokenize(value)
+        .into_iter()
+        .map(|token| token.normalized)
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn tokenize(text: &str) -> Vec<Token> {
@@ -1401,6 +1489,29 @@ fn extract_entities(
     extract_url_hosts(text, segments, &mut entities, &mut budget);
     extract_organizations_and_acronyms(text, tokens, segments, &mut entities, &mut budget);
     extract_money(text, segments, &mut entities, &mut budget);
+    for mention in typed_edges::role_and_signer_mentions(text) {
+        let extractor = if mention.kind == CorpusEntityKind::Role {
+            ROLE_EXTRACTOR
+        } else {
+            SIGNER_EXTRACTOR
+        };
+        push_entity_with_display(
+            &mut entities,
+            &mut budget,
+            segments,
+            mention.kind,
+            mention.normalized,
+            mention.display,
+            mention.character_start,
+            mention.character_end,
+            if mention.kind == CorpusEntityKind::Role {
+                7_000
+            } else {
+                6_000
+            },
+            extractor,
+        );
+    }
     entities.sort_by(|left, right| {
         left.character_start
             .cmp(&right.character_start)
@@ -2655,9 +2766,8 @@ fn insert_relationships(
                 relationship.left_entity_id,
                 relationship.right_entity_id,
                 relationship.kind.as_str(),
-                // Co-occurrence is a derivation this app performed and can re-derive. Calling it
-                // observed would make a claim the documents never made. Typed variants written
-                // by a future emitter must still declare their own basis honestly.
+                // Co-occurrence and cue-matched typed edges are derivations this app performed and
+                // can re-derive. Calling either observed would claim more than a pattern match.
                 RelationshipBasis::Computed.as_str(),
                 relationship.segment_index,
                 relationship.character_start,
@@ -3566,15 +3676,16 @@ fn load_edge_carriages(
 ) -> Result<Vec<(String, EdgeCarriage)>, AppError> {
     let mut statement = connection
         .prepare(
-            "SELECT CASE WHEN edge.left_entity_id = ?1
+            &"SELECT CASE WHEN edge.left_entity_id = ?1
                         THEN edge.right_entity_id ELSE edge.left_entity_id END AS neighbor_id,
-                   MIN(edge.relationship_kind), MIN(edge.basis),
+                   MIN(TYPED_FIRST), MIN(edge.basis),
                    MIN(edge.confidence_basis_points),
                    COUNT(DISTINCT edge.portal_key || '|' || edge.document_id) AS shared_docs
              FROM corpus_entity_relationships edge
              WHERE edge.left_entity_id = ?1 OR edge.right_entity_id = ?1
              GROUP BY neighbor_id
-             ORDER BY shared_docs DESC",
+             ORDER BY shared_docs DESC"
+                .replace("TYPED_FIRST", TYPED_FIRST_SQL),
         )
         .map_err(|error| {
             AppError::Storage(format!("Failed to prepare edge carriage query: {error}"))
@@ -3820,7 +3931,10 @@ CREATE TABLE IF NOT EXISTS corpus_entity_relationships (
     PRIMARY KEY (
         portal_key, document_id, left_entity_id, right_entity_id, relationship_kind, segment_index
     ),
-    CHECK (left_entity_id < right_entity_id),
+    -- Co-occurrence is undirected and stored once, with the smaller id on the left. A typed edge is
+    -- directed (a role SIGNED_BY a person), so its ids carry no ordering; only a self-edge is barred.
+    CHECK (left_entity_id <> right_entity_id),
+    CHECK (relationship_kind <> 'CO_OCCURRENCE' OR left_entity_id < right_entity_id),
     FOREIGN KEY (portal_key, document_id)
         REFERENCES corpus_documents(portal_key, document_id),
     FOREIGN KEY (left_entity_id) REFERENCES corpus_entities(entity_id),
@@ -4106,6 +4220,49 @@ mod tests {
             .index_document(input(1, "Section 6254 requires records review."))
             .await
             .expect("the rebuilt index must accept writes");
+    }
+
+    /// Typed edges are directed, so their entity ids are in no particular order. The table once
+    /// required `left < right` of every row, which rejected roughly half of them and failed the
+    /// whole document's append.
+    #[tokio::test]
+    async fn directed_typed_edges_persist_whichever_way_their_ids_sort() {
+        let directory = tempdir().expect("temp dir must be created");
+        let index = CorpusIndex::open(directory.path().join("corpus.db")).unwrap();
+        let text = (1..=8)
+            .map(|day| format!("The City Agency will respond by 2026-01-0{day}."))
+            .chain(std::iter::once(
+                "The City Agency will respond by 2026-01-01.".to_string(),
+            ))
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        index
+            .index_document(input(1, &text))
+            .await
+            .expect("directed edges must be accepted in either id order");
+        assert!(index.status().await.unwrap().indexed_relationship_count >= 8);
+    }
+
+    /// `MIN(relationship_kind)` sorts `CO_OCCURRENCE` before `PROMISES`, so a pair that both
+    /// co-occurs and carries a typed cue read back as proximity only.
+    #[tokio::test]
+    async fn a_typed_edge_is_not_hidden_behind_co_occurrence_on_the_same_pair() {
+        let directory = tempdir().expect("temp dir must be created");
+        let index = CorpusIndex::open(directory.path().join("corpus.db")).unwrap();
+        index
+            .index_document(input(1, "The City Agency will respond by 2026-01-05."))
+            .await
+            .unwrap();
+        let date_id = stable_id("DATE|2026-01-05");
+        let neighborhood = index
+            .entity_neighborhood(date_id, 8)
+            .await
+            .unwrap()
+            .expect("the date entity must exist");
+        assert!(neighborhood
+            .edges
+            .iter()
+            .any(|edge| edge.kind == RelationshipKind::Promises));
     }
 
     /// A write must be visible to every read that follows it.

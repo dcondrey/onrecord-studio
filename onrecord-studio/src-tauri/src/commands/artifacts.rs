@@ -6,11 +6,15 @@
 
 use crate::{
     analysis::artifacts::{
-        appeal::draft_appeal, followup_request::draft_followup, ArtifactError, DraftedArtifact,
+        appeal::draft_appeal, followup_request::draft_followup,
+        statutory_appeal::draft_for_request, ArtifactError, DraftAvailability, DraftedArtifact,
     },
+    commands::profile::disclosure_context,
     error::AppError,
-    storage::sqlite::DuckDbRepository,
+    profile::ProfileStore,
+    storage::{corpus::CorpusIndex, sqlite::DuckDbRepository},
 };
+use std::sync::Arc;
 use tauri::State;
 
 /// Default jurisdiction used when the caller does not specify one. CPRA is the only jurisdiction
@@ -28,6 +32,9 @@ fn map_artifact_error(error: ArtifactError) -> AppError {
         ArtifactError::MissingField(field) => AppError::Analysis(format!(
             "Finding is missing a field the draft needs: {field}"
         )),
+        other @ (ArtifactError::NotALegalClaim { .. } | ArtifactError::AppealNotSupported(_)) => {
+            AppError::Analysis(other.to_string())
+        }
     }
 }
 
@@ -36,13 +43,16 @@ pub async fn draft_followup_from_finding(
     finding_id: String,
     jurisdiction: Option<String>,
     repository: State<'_, DuckDbRepository>,
+    profile_store: State<'_, Arc<ProfileStore>>,
+    corpus: State<'_, CorpusIndex>,
 ) -> Result<DraftedArtifact, AppError> {
     let jurisdiction = jurisdiction.unwrap_or_else(|| DEFAULT_JURISDICTION.to_string());
     let finding = repository
         .get_finding_by_id(finding_id.clone())
         .await?
         .ok_or_else(|| AppError::Analysis(format!("No finding found with id {finding_id}")))?;
-    draft_followup(&finding, &jurisdiction).map_err(map_artifact_error)
+    let disclosure = disclosure_context(&profile_store, &repository, &corpus).await?;
+    draft_followup(&finding, &jurisdiction, &disclosure).map_err(map_artifact_error)
 }
 
 #[tauri::command]
@@ -50,13 +60,52 @@ pub async fn draft_appeal_from_finding(
     finding_id: String,
     jurisdiction: Option<String>,
     repository: State<'_, DuckDbRepository>,
+    profile_store: State<'_, Arc<ProfileStore>>,
+    corpus: State<'_, CorpusIndex>,
 ) -> Result<DraftedArtifact, AppError> {
     let jurisdiction = jurisdiction.unwrap_or_else(|| DEFAULT_JURISDICTION.to_string());
     let finding = repository
         .get_finding_by_id(finding_id.clone())
         .await?
         .ok_or_else(|| AppError::Analysis(format!("No finding found with id {finding_id}")))?;
-    draft_appeal(&finding, &jurisdiction).map_err(map_artifact_error)
+    let disclosure = disclosure_context(&profile_store, &repository, &corpus).await?;
+    draft_appeal(&finding, &jurisdiction, &disclosure).map_err(map_artifact_error)
+}
+
+/// Which drafts the UI may offer for a finding, decided from the finding's stored kind.
+#[tauri::command]
+pub async fn draft_availability_for_finding(
+    finding_id: String,
+    repository: State<'_, DuckDbRepository>,
+) -> Result<DraftAvailability, AppError> {
+    let finding = repository
+        .get_finding_by_id(finding_id.clone())
+        .await?
+        .ok_or_else(|| AppError::Analysis(format!("No finding found with id {finding_id}")))?;
+    Ok(DraftAvailability::for_kind(finding.kind))
+}
+
+/// Drafts an appeal for a request the statute evaluator counts as past its statutory deadline.
+/// Refuses when the determination is a proxy or the extension record is defective.
+#[tauri::command]
+pub async fn draft_appeal_from_statutory_deadline(
+    portal_key: String,
+    request_id: u64,
+    jurisdiction: Option<String>,
+    repository: State<'_, DuckDbRepository>,
+    profile_store: State<'_, Arc<ProfileStore>>,
+    corpus: State<'_, CorpusIndex>,
+) -> Result<DraftedArtifact, AppError> {
+    let jurisdiction = jurisdiction.unwrap_or_else(|| DEFAULT_JURISDICTION.to_string());
+    let disclosure = disclosure_context(&profile_store, &repository, &corpus).await?;
+    draft_for_request(
+        &repository,
+        &portal_key,
+        request_id,
+        &jurisdiction,
+        &disclosure,
+    )
+    .await
 }
 
 #[cfg(test)]

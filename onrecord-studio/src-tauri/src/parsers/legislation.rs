@@ -112,11 +112,6 @@ pub fn policy_tokens(text: &str) -> Vec<String> {
     tokens
 }
 
-pub fn phrase_match_count(tokens: &[String], phrase: &str) -> usize {
-    let phrase_tokens = policy_tokens(phrase);
-    token_sequence_match_count(tokens, &phrase_tokens)
-}
-
 pub fn token_sequence_match_count(tokens: &[String], phrase_tokens: &[String]) -> usize {
     if phrase_tokens.is_empty() || phrase_tokens.len() > tokens.len() {
         return 0;

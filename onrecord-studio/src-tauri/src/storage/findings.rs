@@ -43,6 +43,12 @@ impl DuckDbRepository {
         if findings.is_empty() {
             return Ok(0);
         }
+        if let Some(reason) = findings
+            .iter()
+            .find_map(|finding| finding.check_recordable().err())
+        {
+            return Err(AppError::Analysis(reason));
+        }
         self.query_connection("Record findings", move |conn| {
             let tx = conn.transaction().map_err(storage)?;
             let mut written = 0_usize;

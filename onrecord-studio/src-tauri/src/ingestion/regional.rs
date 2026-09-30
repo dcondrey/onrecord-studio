@@ -33,7 +33,10 @@ pub(crate) fn sdhc_board_attachment(
         .collect::<Vec<_>>()
         .join(" ");
     let lower = label.to_lowercase();
-    let report = regex::Regex::new(r"(?i)\bHCR[0-9]{2}-[0-9]{3}\b").expect("static report label");
+    static REPORT_LABEL: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let report = REPORT_LABEL.get_or_init(|| {
+        regex::Regex::new(r"(?i)\bHCR[0-9]{2}-[0-9]{3}\b").expect("static report label")
+    });
     if !report.is_match(&label)
         && !matches!(
             lower.as_str(),
@@ -83,6 +86,8 @@ const JURISDICTION_HOSTNAMES: &[(&[&str], &str)] = &[
         &[
             "sandiego.gov",
             "data.sandiego.gov",
+            "seshat.datasd.org",
+            "datasd.org",
             "budget.sandiego.gov",
             "sandiego.nextrequest.com",
             "sandiego.hylandcloud.com",
@@ -603,6 +608,8 @@ pub(crate) fn hyland_document_companion(url: &Url, html: &str) -> Option<String>
 /// The City's published agenda contains literal `loadAgendaItem(id, false)` links. They
 /// are public item references, not executable code. Resolve only that exact grammar on
 /// this tenant and preserve the meeting and document type; never enumerate nearby IDs.
+const MAX_AGENDA_ITEMS: usize = 128;
+
 pub(crate) fn hyland_agenda_items(url: &Url, html: &str) -> Vec<(String, String)> {
     if url.host_str() != Some("sandiego.hylandcloud.com")
         || !url
@@ -665,13 +672,12 @@ pub(crate) fn hyland_agenda_items(url: &Url, html: &str) -> Vec<(String, String)
             target.to_string(),
             label.chars().take(512).collect::<String>(),
         ));
-        if items.len() >= 128 {
-            break;
-        }
     }
-    // Within the bounded packet expansion, consequential service/funding items precede
-    // ceremonial business. Stable sorting retains the publisher's order for equal scores.
+    // The cap applies after ranking: truncating in document order first would drop a
+    // consequential item that the publisher happened to list late. Stable sorting retains the
+    // publisher's order for equal scores.
     items.sort_by_key(|(_, label)| std::cmp::Reverse(agenda_research_priority(label)));
+    items.truncate(MAX_AGENDA_ITEMS);
     items
 }
 
@@ -786,6 +792,25 @@ mod tests {
             )
             .unwrap()
         ));
+    }
+
+    #[test]
+    fn agenda_cap_keeps_consequential_items_listed_after_it() {
+        let agenda = Url::parse("https://sandiego.hylandcloud.com/211agendaonlinecouncil/Documents/ViewAgenda?meetingId=7192&type=summary&doctype=3").unwrap();
+        let mut html = String::new();
+        for id in 1..=MAX_AGENDA_ITEMS + 5 {
+            let label = if id == MAX_AGENDA_ITEMS + 5 {
+                "Homeless shelter funding grant"
+            } else {
+                "Honorary street name"
+            };
+            html.push_str(&format!(
+                r#"<a href="javascript:loadAgendaItem({id},false);">{label}</a>"#
+            ));
+        }
+        let items = hyland_agenda_items(&agenda, &html);
+        assert_eq!(items.len(), MAX_AGENDA_ITEMS);
+        assert!(items[0].1.contains("Homeless"));
     }
 
     #[test]
@@ -941,27 +966,28 @@ mod tests {
         assert!(hyland_document_companion(&url, "missing endpoint").is_none());
         assert!(hyland_document_companion(&url, &template.replace("7141", "7142")).is_none());
     }
-}
-#[test]
-fn publisher_scope_never_guesses_city_from_a_county_or_unrelated_hostname() {
-    assert_eq!(
-        source_jurisdiction("https://pra.sandiegocounty.gov"),
-        "San Diego County"
-    );
-    assert_eq!(
-        source_jurisdiction("https://sandiegohousingcommission.nextrequest.com"),
-        "San Diego Housing Commission"
-    );
-    assert_eq!(
-        source_jurisdiction("https://data.sandiego.gov"),
-        "City of San Diego"
-    );
-    assert_eq!(
-        source_jurisdiction("https://sandiego.gov.evil.test"),
-        "Unclassified source"
-    );
-    assert_eq!(
-        source_jurisdiction("onrecord://local/sandiego"),
-        "Unclassified source"
-    );
+
+    #[test]
+    fn publisher_scope_never_guesses_city_from_a_county_or_unrelated_hostname() {
+        assert_eq!(
+            source_jurisdiction("https://pra.sandiegocounty.gov"),
+            "San Diego County"
+        );
+        assert_eq!(
+            source_jurisdiction("https://sandiegohousingcommission.nextrequest.com"),
+            "San Diego Housing Commission"
+        );
+        assert_eq!(
+            source_jurisdiction("https://data.sandiego.gov"),
+            "City of San Diego"
+        );
+        assert_eq!(
+            source_jurisdiction("https://sandiego.gov.evil.test"),
+            "Unclassified source"
+        );
+        assert_eq!(
+            source_jurisdiction("onrecord://local/sandiego"),
+            "Unclassified source"
+        );
+    }
 }

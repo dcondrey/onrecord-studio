@@ -38,6 +38,20 @@ pub async fn list_top_corpus_entities(
     index.top_entities(limit.unwrap_or(24)).await
 }
 
+/// Entity kinds whose extraction stopped at its per-kind budget for one document.
+///
+/// Empty means every kind ran to completion, or the document was indexed before truncation was
+/// recorded; it never means "not checked". A viewer shows a non-empty answer as an incomplete
+/// entity list rather than a complete one.
+#[tauri::command]
+pub async fn get_document_entity_truncations(
+    document_id: u64,
+    portal_key: String,
+    index: State<'_, CorpusIndex>,
+) -> Result<Vec<String>, AppError> {
+    index.truncated_entity_kinds(portal_key, document_id).await
+}
+
 /// The subgraph around one entity.
 ///
 /// `None` when the identifier names no entity, which is a real answer and not an error: a corpus

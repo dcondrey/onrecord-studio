@@ -74,7 +74,6 @@ export const SAN_DIEGO_SOURCES: readonly SanDiegoSource[] = [
 ];
 
 export const SAN_DIEGO_RECORDS_URL = 'https://sandiego.nextrequest.com/';
-export const SAN_DIEGO_RECORDS_HELP_URL = `${city}/it/public-records`;
 
 export function sanDiegoSourceForUrl(value: string): SanDiegoSource | undefined {
   try {

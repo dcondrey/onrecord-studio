@@ -1,18 +1,23 @@
 use crate::analysis::statute;
 use crate::error::AppError;
+#[cfg(test)]
 use crate::storage::sqlite_snapshot::import_sqlite_snapshot;
 use crate::types::{AgencyPerformanceProfile, AnalysisConfig, VerificationState};
 use duckdb::{params, Connection};
 use std::collections::{BTreeSet, HashMap};
 use std::convert::TryFrom;
-use std::path::{Path, PathBuf};
+#[cfg(test)]
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 const SECONDS_PER_DAY: f64 = 86_400.0;
 pub const STATUTORY_DEADLINE_Z_SCORE: f64 = 2.0;
+#[cfg(test)]
 const ANALYTICS_SQLITE_TABLES: [&str; 4] =
     ["requests", "agencies", "documents", "statutory_extensions"];
 
+#[cfg(test)]
 const SQLITE_LAYOUT_PROBE_QUERY: &str = r#"
 SELECT COUNT(*)
 FROM (
@@ -314,10 +319,7 @@ impl AnalyticsEngine {
         }
     }
 
-    pub async fn attach_sqlite_source(&self, sqlite_path: &str) -> Result<(), AppError> {
-        self.attach_sqlite_source_path(sqlite_path).await
-    }
-
+    #[cfg(test)]
     pub async fn attach_sqlite_source_path(
         &self,
         sqlite_path: impl AsRef<Path>,
@@ -352,6 +354,7 @@ impl AnalyticsEngine {
         &self,
         config: &AnalysisConfig,
     ) -> Result<Vec<AgencyPerformanceProfile>, AppError> {
+        crate::licensing::recheck()?;
         validate_latency_threshold(config.latency_threshold_days)?;
         let patterns = keyword_patterns(&config.target_policy_keywords);
         let threshold = config.latency_threshold_days;
@@ -650,6 +653,7 @@ fn convert_raw_profile(
     })
 }
 
+#[cfg(test)]
 fn validate_attached_sqlite_layout(connection: &Connection) -> Result<(), AppError> {
     connection
         .query_row(
@@ -666,6 +670,7 @@ fn validate_attached_sqlite_layout(connection: &Connection) -> Result<(), AppErr
     Ok(())
 }
 
+#[cfg(test)]
 fn validate_sqlite_path(path: &Path) -> Result<PathBuf, AppError> {
     if path.as_os_str().is_empty() || path == Path::new(":memory:") {
         return Err(AppError::DataParsing(

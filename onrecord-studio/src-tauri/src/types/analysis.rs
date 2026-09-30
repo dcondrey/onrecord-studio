@@ -63,12 +63,3 @@ pub struct AgencyPerformanceProfile {
     pub total_documents_released: usize,
     pub keyword_frequency_map: HashMap<String, usize>,
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct OutlierCluster {
-    pub cluster_id: String,
-    pub core_anomaly_type: String,
-    pub dynamic_z_score: f64,
-    pub matching_request_ids: Vec<u64>,
-}

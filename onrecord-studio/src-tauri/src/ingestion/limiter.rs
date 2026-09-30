@@ -132,6 +132,7 @@ impl RateLimiter {
         self.buckets.write().await.remove(portal_key).is_some()
     }
 
+    #[cfg(test)]
     pub async fn registered_portal_count(&self) -> usize {
         self.buckets.read().await.len()
     }

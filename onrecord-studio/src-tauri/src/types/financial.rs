@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -169,6 +169,7 @@ pub struct FinancialReport {
     pub evidence: Vec<FinancialCitation>,
     pub queries: BTreeMap<String, String>,
     pub records: Vec<FinancialRecord>,
+    pub incomplete_roles: BTreeSet<String>,
     pub limitations: Vec<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]

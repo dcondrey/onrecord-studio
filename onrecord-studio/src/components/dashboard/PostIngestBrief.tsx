@@ -3,7 +3,8 @@ import { invokeCommand } from '../../ipc';
 import { useAppStore } from '../../store/useAppStore';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { ShapeGlyph, type GlyphShape } from '../ui/shapeGlyph';
-import type { Finding, FindingSeverity } from '../../types';
+import { FindingEvidence } from '../ui/EvidenceBasis';
+import type { Finding, FindingCitation, FindingSeverity } from '../../types';
 
 /**
  * The panel that opens automatically after every ingest. It shows the newest findings that
@@ -81,6 +82,12 @@ export default function PostIngestBrief() {
     close(false);
   };
 
+  const openSource = (citation: FindingCitation) => {
+    setActivePortal(citation.portalKey);
+    setWorkspaceView('evidence');
+    close(false);
+  };
+
   return (
     <div
       role="dialog"
@@ -122,12 +129,12 @@ export default function PostIngestBrief() {
         ) : (
           <ul className="grid gap-2 md:grid-cols-2 xl:grid-cols-3" aria-label="New findings from this ingest">
             {notable.map((finding) => (
-              <li key={finding.id}>
+              <li key={finding.id} className="flex flex-col gap-2 rounded-xl border border-slate-800/70 bg-slate-950/40 p-3">
                 <button
                   type="button"
                   onClick={() => inspect(finding)}
                   aria-label={`Open finding: ${finding.headline}`}
-                  className="focus-ring group flex w-full items-start gap-3 rounded-xl border border-slate-800/70 bg-slate-950/40 p-3 text-left transition hover:border-cyan-400/25 hover:bg-cyan-400/[0.03]"
+                  className="focus-ring group flex w-full items-start gap-3 rounded-lg text-left transition hover:bg-cyan-400/[0.03]"
                 >
                   <PostIngestSeverityGlyph severity={finding.severity} />
                   <span className="min-w-0 flex-1">
@@ -139,6 +146,7 @@ export default function PostIngestBrief() {
                     </span>
                   </span>
                 </button>
+                <FindingEvidence finding={finding} onOpenSource={openSource} />
               </li>
             ))}
           </ul>

@@ -515,16 +515,27 @@ impl DuckDbRepository {
                     500,
                 ));
             }
+            if let Some(currency) = &mapping.currency {
+                limitations.push(format!("{} currency is explicitly mapped as {currency}; verify the source documentation.",mapping.role));
+            }
+            // A ledger without a department column cannot honor the department scope; its totals
+            // would be whole-fund amounts labelled as the selected department.
+            let department_unscoped = scope.department.is_some()
+                && ["budget", "actual", "encumbrance"].contains(&mapping.role.as_str())
+                && !mapping.columns.contains_key("department");
+            if department_unscoped {
+                limitations.push(format!("{}: the source has no mapped department column, so the department scope was not applied. Totals and comparisons requiring department coverage are withheld.",mapping.role));
+            }
             for (role, sql, cap) in plans {
+                if department_unscoped {
+                    incomplete.insert(role.clone());
+                }
                 let query_id = sha256_hex(sql.as_bytes());
                 queries.insert(query_id.clone(), sql.clone());
                 let result = self.execute_restricted_sql(&sql, cap).await?;
                 if result.truncated || dataset.partial_dataset || dataset.rejected_rows > 0 {
                     incomplete.insert(role.clone());
                     limitations.push(format!("{}: query truncated={}, source partial={}, rejected rows={}. Totals and comparisons requiring complete coverage are withheld; narrow the scope or obtain a complete export.",role,result.truncated,dataset.partial_dataset,dataset.rejected_rows));
-                }
-                if let Some(currency) = &mapping.currency {
-                    limitations.push(format!("{} currency is explicitly mapped as {currency}; verify the source documentation.",mapping.role));
                 }
                 for row in result.rows {
                     let id = sha256_hex(
@@ -854,6 +865,31 @@ mod tests {
             .unwrap();
         assert!(report.reconciliation[0].actual.is_none());
         assert!(report.reconciliation[0].actual_minus_adopted.is_none());
+    }
+    #[tokio::test]
+    async fn financial_department_scope_is_withheld_for_ledgers_that_cannot_apply_it() {
+        let (_temp, repo) = repository().await;
+        let conn = repo.analytics_connection().await.unwrap();
+        install_city(&conn);
+        drop(conn);
+        let workspace = repo.financial_workspace().await.unwrap();
+        let mut actual = workspace
+            .mappings
+            .iter()
+            .find(|m| m.role == "actual")
+            .unwrap()
+            .clone();
+        actual.columns.remove("department");
+        repo.save_financial_mapping(actual).await.unwrap();
+        let report = repo
+            .run_financial_investigation(workspace.default_scope)
+            .await
+            .unwrap();
+        assert!(report
+            .limitations
+            .iter()
+            .any(|l| l.starts_with("actual: the source has no mapped department column")));
+        assert!(report.reconciliation.iter().all(|r| r.actual.is_none()));
     }
     #[test]
     fn financial_snapshot_identity_guard_rejects_replacement_and_removal() {

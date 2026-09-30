@@ -62,6 +62,8 @@ No client-side scheme is uncrackable. A determined attacker who controls the mac
 | Patch one boolean | The gate is checked in several independent places, including at command dispatch and again before evidence is read for analysis |
 | Inject code, attach a debugger | Hardened runtime, library validation, `PT_DENY_ATTACH` in release, runtime code-signature self-check |
 | Share one account across many people | Account-bound, device-bound; the server limits active devices per account |
+| Reuse one account on many Macs, or many macOS users on one Mac | The device key is per macOS user, not per physical machine: a second user on the same Mac holds a second key and counts as a second device. The server device limit is the bound; a third device is refused with `device_limit` until the user confirms revoking the oldest. App Attest is the planned machine-level improvement |
+| Run a modified build that reports integrity `unknown` | Accepted risk: `unknown` (for example an unsigned or development build) still runs, because denying it would brick legitimate debug and repackaged-for-support builds. Only `tampered` denies |
 
 Out of scope: defeating a reverse engineer who patches every check. The value of this app is also in updates and server-side entitlement, which a cracked copy does not get.
 

@@ -383,12 +383,16 @@ fn citation() -> Value {
 }
 
 pub fn planner_schema() -> Value {
-    object(json!({
+    let mut schema = object(json!({
         "questions": array(object(json!({"question":string(),"why":string(),"evidenceIds":strings()}))),
         "searches":strings(),
         "reads":array(object(json!({"evidenceId":string(),"characterOffset":{"type":"integer"}}))),
         "queries":array(object(json!({"question":string(),"sql":string(),"assumptions":string()})))
-    }))
+    }));
+    for (field, maximum) in [("searches", 4), ("reads", 3), ("queries", 3)] {
+        schema["properties"][field]["maxItems"] = json!(maximum);
+    }
+    schema
 }
 pub fn synthesis_schema() -> Value {
     let mut schema = object(json!({
@@ -413,6 +417,13 @@ pub fn synthesis_schema() -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn planner_schema_bounds_tool_arrays_to_what_execute_plan_runs() {
+        let schema = planner_schema();
+        for (field, maximum) in [("searches", 4), ("reads", 3), ("queries", 3)] {
+            assert_eq!(schema["properties"][field]["maxItems"], maximum, "{field}");
+        }
+    }
     async fn model_policy_fixture() -> (tempfile::TempDir, DuckDbRepository, ResearchPolicy) {
         let temp = tempfile::tempdir().unwrap();
         let repository = DuckDbRepository::new(temp.path().join("model-policy.db")).unwrap();

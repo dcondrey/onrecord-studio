@@ -78,14 +78,6 @@ impl PdfMetadataSignals {
             .or(self.xmp_metadata_date)
     }
 
-    /// The earliest creation instant carried by any timestamp field, if any exist. Prefer
-    /// `CreateDate` fields; fall back to modification if creation was never recorded.
-    pub fn effective_creation(&self) -> Option<DateTime<Utc>> {
-        self.info_creation_date
-            .or(self.xmp_create_date)
-            .or_else(|| self.effective_modification())
-    }
-
     /// True when Info and XMP producer strings both exist and match after trimming/lowercasing.
     pub fn producer_strings_match(&self) -> bool {
         match (

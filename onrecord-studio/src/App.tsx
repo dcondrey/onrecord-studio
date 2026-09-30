@@ -6,6 +6,7 @@ import Header from './components/dashboard/Header';
 import MainLayout from './components/dashboard/MainLayout';
 import Sidebar from './components/dashboard/Sidebar';
 import CommandPalette, { OPEN_COMMAND_PALETTE_EVENT } from './components/dashboard/CommandPalette';
+import HelpCenter from './components/help/HelpCenter';
 import { useAppStore } from './store/useAppStore';
 import { invokeCommand } from './ipc';
 import type { IngestionTelemetry } from './types';
@@ -20,71 +21,20 @@ import {
 } from './utils/accessibility';
 import { useAudioAlerts } from './hooks/useAudioAlerts';
 import { workspaceCommandRegistry } from './commands/registry';
-import LicenseGate from './components/licensing/LicenseGate';
+import LicenseSwitch from './components/licensing/LicenseSwitch';
+import { LicenseProvider } from './components/licensing/LicenseProvider';
 import { AutomaticDiscoveryProvider } from './components/dashboard/AutomaticDiscoveryProvider';
-import type { LicenseStatus } from './types';
 
 const RUNTIME_FAILURE_REMINDER_MILLISECONDS = 60_000;
 
-const BROWSER_DEVELOPMENT_LICENSE: LicenseStatus = {
-  enforced: false,
-  authorized: true,
-  state: 'DEVELOPMENT',
-  message: 'Browser preview uses development access.',
-  bundleId: 'com.onrecord.studio',
-  appVersion: null,
-  originalAppVersion: null,
-  appTransactionId: null,
-  appId: null,
-  environment: 'browser',
-  originalPurchaseDate: null,
-  signedDate: null,
-  revocationDate: null,
-};
-
 export default function App() {
-  const [license, setLicense] = useState<LicenseStatus | null>(() =>
-    isTauri() ? null : BROWSER_DEVELOPMENT_LICENSE,
+  return (
+    <LicenseProvider>
+      <LicenseSwitch>
+        <LicensedWorkspace />
+      </LicenseSwitch>
+    </LicenseProvider>
   );
-  const [refreshing, setRefreshing] = useState(false);
-  const [licenseError, setLicenseError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!isTauri()) return;
-    let active = true;
-    void invokeCommand('get_license_status', {})
-      .then((status) => {
-        if (active) setLicense(status);
-      })
-      .catch((error) => {
-        if (active) setLicenseError(String(error));
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const refreshLicense = useCallback(() => {
-    if (!isTauri() || refreshing) return;
-    setRefreshing(true);
-    setLicenseError(null);
-    void invokeCommand('refresh_license', {})
-      .then(setLicense)
-      .catch((error) => setLicenseError(String(error)))
-      .finally(() => setRefreshing(false));
-  }, [refreshing]);
-
-  if (!license?.authorized) {
-    return (
-      <LicenseGate
-        status={license}
-        refreshing={refreshing}
-        error={licenseError}
-        onRefresh={refreshLicense}
-      />
-    );
-  }
-  return <LicensedWorkspace />;
 }
 
 function LicensedWorkspace() {
@@ -445,6 +395,7 @@ function LicensedWorkspace() {
         <AutomaticDiscoveryProvider><MainLayout /></AutomaticDiscoveryProvider>
       </div>
       <CommandPalette />
+      <HelpCenter />
     </div>
   );
 }

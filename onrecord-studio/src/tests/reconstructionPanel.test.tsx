@@ -18,7 +18,7 @@ describe('cross-record reconstruction', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Compare related records' }));
     await screen.findByText(/Compared 4 records/);
     expect(screen.queryByRole('button', { name: 'Run integrity scan' })).toBeNull();
-    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(invoke.mock.calls.filter(([command]) => command !== 'get_document_entity_truncations')).toHaveLength(1);
   });
 
   it('compares retained text with explicit options and explains an unresolved result', async () => {

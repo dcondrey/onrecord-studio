@@ -56,8 +56,3 @@ export interface PublicRequest {
   // Custom timeline exceptions derived by Rust processing logic
   timeline_anomalies?: string[];
 }
-
-export interface NextRequestResponse {
-  requests: PublicRequest[];
-  meta: PaginationMeta | null;
-}

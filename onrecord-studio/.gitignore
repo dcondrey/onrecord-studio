@@ -37,6 +37,10 @@ src-tauri/gen/schemas/
 src-tauri/Entitlements.appstore.plist
 src-tauri/Info.appstore.plist
 src-tauri/AppStore.provisionprofile
+# Materialized by `npm run prepare:direct`: the public Supabase anon key and the Developer ID
+# provisioning profile for one release account.
+src-tauri/Info.direct.plist
+src-tauri/Direct.provisionprofile
 # Default output of `npm run package:app-store` (scripts/package-app-store.mjs). A signed
 # installer carries the release account's certificate chain and must never be committed.
 /release/
@@ -63,3 +67,5 @@ onrecord-studio/nextrequest_downloads/
 *.njsproj
 *.sln
 *.swp
+# Local values for `npm run prepare:direct`; never committed.
+.env.direct.local

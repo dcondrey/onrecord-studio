@@ -1,6 +1,7 @@
 import { useAppStore } from '../../store/useAppStore';
 import Icon from '../ui/icons';
 import { useSourceConnector } from '../../hooks/useSourceConnector';
+import TrialBanner from '../licensing/TrialBanner';
 import { HeaderIdentity } from './HeaderIdentity';
 import { HeaderControls } from './HeaderControls';
 import { SourceConnectorForm } from './SourceConnectorForm';
@@ -25,6 +26,7 @@ export default function Header() {
   return (
     <>
       <header className="header-surface relative z-30 shrink-0 border-b backdrop-blur-xl">
+        <TrialBanner />
         <div className="flex min-h-[68px] items-center gap-3 px-4 sm:px-5 lg:px-6">
           <button
             type="button"

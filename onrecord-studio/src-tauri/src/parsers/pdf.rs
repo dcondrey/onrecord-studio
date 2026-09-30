@@ -24,10 +24,6 @@ pub fn character_layer_density(text: &str) -> f64 {
     alphanumeric_count as f64 / total_character_count as f64
 }
 
-pub fn requires_ocr_reprocessing(text: &str) -> bool {
-    text.is_empty() || character_layer_density(text) < MINIMUM_CHARACTER_LAYER_DENSITY
-}
-
 pub fn extract_text_layers<P: AsRef<Path>>(file_path: P) -> Result<String, AppError> {
     let path = file_path.as_ref();
     inspect_regular_file(path, "PDF", MAX_PDF_BYTES)?;
@@ -143,8 +139,8 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        character_layer_density, extract_text_layers, requires_ocr_reprocessing,
-        MAX_DECOMPRESSED_STREAM_BYTES, MINIMUM_CHARACTER_LAYER_DENSITY,
+        character_layer_density, extract_text_layers, MAX_DECOMPRESSED_STREAM_BYTES,
+        MINIMUM_CHARACTER_LAYER_DENSITY,
     };
     use crate::error::AppError;
 
@@ -256,19 +252,12 @@ mod tests {
     }
 
     #[test]
-    fn empty_and_low_density_layers_require_ocr() {
-        assert!(requires_ocr_reprocessing(""));
-        assert!(requires_ocr_reprocessing("A---------"));
-    }
-
-    #[test]
     fn threshold_density_is_accepted() {
         let text = "ABC-----------------";
         assert_eq!(
             character_layer_density(text),
             MINIMUM_CHARACTER_LAYER_DENSITY
         );
-        assert!(!requires_ocr_reprocessing(text));
     }
 
     #[test]

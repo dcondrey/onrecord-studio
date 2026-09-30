@@ -452,6 +452,16 @@ fn history_findings(
     found
 }
 
+pub const ROLE_GAPS: [(&str, &str, &str, &str); 7] = [
+        ("budget","Adopted and revised appropriations","Adopted/revised appropriation ledger with fund, fiscal year, account, department and transfer history.","An adopted-to-actual difference is not a legal-authority test."),
+        ("encumbrance","Commitments already consuming authority","Open encumbrance register by fund/FY/account and close status.","Unspent cash cannot establish funds available for another program."),
+        ("contract","Executed contract register","Executed contracts with stable IDs, vendor IDs, fund/FY, ceilings, status and program links.","Department spending alone cannot trace a specific purchased service."),
+        ("amendment","Complete amendment history","Executed amendment register, delta amounts, effective dates and explicit no-amendment declarations.","A base award does not establish the current ceiling."),
+        ("payment","Invoice-to-payment trace","Posted transaction-line ledger with contract/vendor/invoice IDs, amounts, reversals and statuses.","Invoices and transfers are not necessarily final service expenditures."),
+        ("outcome","Comparable accepted service results","Program/contract output and outcome records with cost basis, date window, population, units, numerator and denominator.","A spending total cannot establish delivery or cost effectiveness."),
+        ("restriction","Funding eligibility and restrictions","Fund restrictions, permitted programs and applicable fiscal year, with source authority.","Scenario funding remains blocked until restrictions are known.")
+];
+
 pub fn analyze(
     scope: FinancialScope,
     records: Vec<FinancialRecord>,
@@ -756,7 +766,7 @@ pub fn analyze(
                     .entry((
                         get(r, "vendor_id").into(),
                         get(r, "invoice_id").to_uppercase(),
-                        get(r, "amount").into(),
+                        amount(r, "amount").map_or_else(|| get(r, "amount").into(), display),
                     ))
                     .or_default()
                     .push(r);
@@ -913,15 +923,16 @@ pub fn analyze(
             findings.push(finding("unit_cost_spread","Comparable reported units have different recorded costs",format!("For {} through {}, population '{}', unit '{}': observed costs range from {} to {} {} per unit. Period/unit labels match; quality and case mix still require review.",group[0].period_start,group[0].period_end,group[0].population,group[0].unit,display(low.unwrap()),display(high.unwrap()),group[0].currency),&rows,&["Service quality, acuity, facility costs, utilization, capital allocations, and accounting boundaries may differ."],"Obtain cost allocation methods, service specifications, case-mix measures and independent outcome verification before comparing provider efficiency."));
         }
     }
-    for (role,title,needed,why) in [
-        ("budget","Adopted and revised appropriations","Adopted/revised appropriation ledger with fund, fiscal year, account, department and transfer history.","An adopted-to-actual difference is not a legal-authority test."),
-        ("encumbrance","Commitments already consuming authority","Open encumbrance register by fund/FY/account and close status.","Unspent cash cannot establish funds available for another program."),
-        ("contract","Executed contract register","Executed contracts with stable IDs, vendor IDs, fund/FY, ceilings, status and program links.","Department spending alone cannot trace a specific purchased service."),
-        ("amendment","Complete amendment history","Executed amendment register, delta amounts, effective dates and explicit no-amendment declarations.","A base award does not establish the current ceiling."),
-        ("payment","Invoice-to-payment trace","Posted transaction-line ledger with contract/vendor/invoice IDs, amounts, reversals and statuses.","Invoices and transfers are not necessarily final service expenditures."),
-        ("outcome","Comparable accepted service results","Program/contract output and outcome records with cost basis, date window, population, units, numerator and denominator.","A spending total cannot establish delivery or cost effectiveness."),
-        ("restriction","Funding eligibility and restrictions","Fund restrictions, permitted programs and applicable fiscal year, with source authority.","Scenario funding remains blocked until restrictions are known.")
-    ] { if !records.iter().any(|r|r.role==role) || incomplete_roles.contains(role) { gaps.push(FinancialGap{title:title.into(),records_needed:needed.into(),why:why.into(),citations:vec![]}); } }
+    for (role, title, needed, why) in ROLE_GAPS {
+        if !records.iter().any(|r| r.role == role) || incomplete_roles.contains(role) {
+            gaps.push(FinancialGap {
+                title: title.into(),
+                records_needed: needed.into(),
+                why: why.into(),
+                citations: vec![],
+            });
+        }
+    }
     limitations.extend(["All amounts use exact fixed-point arithmetic to four decimal places. Displayed ratios truncate at four decimals; scenarios calculate from original amounts, not rounded unit costs.".into(),"Appropriations, contract ceilings, amendments, payments and outcomes are separate stages, never an additive spending total. Missing records establish evidence gaps, not nonperformance or wrongdoing.".into(),"Only explicitly mapped identifiers join stages. Equal names do not establish vendor or contract identity. Comparability of labels does not establish equal service quality.".into(),"Account-shift discovery compares at most the 16 largest movements per direction within the same agency/year/fund/center/program/currency/funding-duration/three-digit account family. It selects one pair per group with at least 70% offset and offset size at least 10% of combined adopted amounts. These are discovery filters, not statistical significance or evidence of a transfer.".into(),"Capacity leads require consecutive years, at least 20% adopted growth, both execution ratios below 75%, and less than half of the additional allocation reflected in additional actuals. Rebound leads require a three-year sequence with a drop of at least 20% and latest spending still at least 10% below the first year. Histories retain separate funding durations and jurisdictions; no inflation adjustment is inferred. A fiscal-year label does not certify a closed, final ledger.".into()]);
     let priority = |kind: &str| match kind {
         "ceiling_exceeded" => 0,
@@ -956,6 +967,7 @@ pub fn analyze(
         evidence,
         queries,
         records,
+        incomplete_roles: incomplete_roles.clone(),
         limitations,
     }
 }
@@ -1018,6 +1030,9 @@ pub fn scenario(
         .collect::<Vec<_>>();
     if restrictions.is_empty() {
         blockers.push("No cited funding restriction/eligibility record was retrieved for this fund and fiscal year.".into());
+    } else if report.incomplete_roles.contains("restriction") {
+        // A truncated or partial source cannot be treated as the fund's complete restrictions.
+        blockers.push("The funding restriction source is incomplete; an unretrieved restriction could exclude the proposed program.".into());
     }
     let eligible = restrictions.iter().all(|r| {
         get(r, "restriction").eq_ignore_ascii_case("unrestricted")
@@ -1610,6 +1625,82 @@ mod tests {
             unscoped.scope.fiscal_year = None;
             assert_eq!(scenario(&unscoped, &input).unwrap().status, "blocked");
         }
+    }
+    #[test]
+    fn financial_scenario_blocks_when_restriction_source_is_incomplete() {
+        let records = vec![
+            row(
+                "budget",
+                "revised",
+                &[("amount", "1200"), ("basis", "revised")],
+            ),
+            row("actual", "actual", &[("amount", "100")]),
+            row("encumbrance", "commit", &[("amount", "100")]),
+            outcome("o1", "100", "10"),
+            row("restriction", "r", &[("restriction", "unrestricted")]),
+        ];
+        let build = |incomplete: &[&str]| {
+            analyze(
+                FinancialScope {
+                    fiscal_year: Some(2025),
+                    fund: Some("100000".into()),
+                    department: None,
+                },
+                records.clone(),
+                vec![],
+                BTreeMap::new(),
+                vec![],
+                &incomplete.iter().map(|s| s.to_string()).collect(),
+            )
+        };
+        let scenario_for = |r: &FinancialReport| {
+            scenario(
+                r,
+                &FinancialScenarioInput {
+                    scope: r.scope.clone(),
+                    funding_key: r.reconciliation[0].key.clone(),
+                    outcome_key: r.outcomes[0].key.clone(),
+                    target_program: "Shelter".into(),
+                    proposed_amount: "20".into(),
+                },
+            )
+            .unwrap()
+        };
+        assert_eq!(scenario_for(&build(&[])).status, "conditional_estimate");
+        let partial = scenario_for(&build(&["restriction"]));
+        assert_eq!(partial.status, "blocked");
+        assert!(partial.blockers.iter().any(|b| b.contains("incomplete")));
+    }
+    #[test]
+    fn financial_duplicate_invoice_ignores_amount_formatting() {
+        let mut records = vec![row(
+            "contract",
+            "c",
+            &[
+                ("contract_id", "C-1"),
+                ("vendor_id", "V-1"),
+                ("amount", "500"),
+                ("status", "executed"),
+            ],
+        )];
+        for (id, txn, amount) in [("p1", "T-1", "70"), ("p2", "T-2", "70.00")] {
+            records.push(row(
+                "payment",
+                id,
+                &[
+                    ("contract_id", "C-1"),
+                    ("vendor_id", "V-1"),
+                    ("transaction_id", txn),
+                    ("invoice_id", "I-1"),
+                    ("amount", amount),
+                    ("status", "paid"),
+                ],
+            ));
+        }
+        assert!(report(records)
+            .findings
+            .iter()
+            .any(|f| f.kind == "duplicate_invoice"));
     }
     #[test]
     fn financial_agency_isolation_prevents_shared_codes_becoming_false_comparisons() {

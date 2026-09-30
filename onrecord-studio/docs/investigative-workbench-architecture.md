@@ -119,7 +119,7 @@ edge and an observed edge be the same color on the graph.
 
 ## 4. Entities without a model
 
-There is no LLM in this application and `parsers/neural_inference.rs` says so in its header. That
+There is no LLM in this application. That
 is a deliberate posture and this plan keeps it. Entity extraction is therefore deterministic, and
 that turns out to be the stronger design for evidence rather than a compromise:
 
@@ -239,11 +239,10 @@ becomes a *candidate* mention that an investigator confirms, and the confirmatio
 it, recorded as `InvestigatorConfirmed`.
 
 This is not a hedge added for this feature. `analysis/statute.rs` already refuses to let a proxy
-date masquerade as a sourced determination, and `parsers/neural_inference.rs` already ships a
-held-out evaluation harness reporting character error rate, abstention rate, calibration error,
-per-subgroup metrics, and a privacy leakage count for its local ranker. **Any NER model added here
-goes through that same harness before it is enabled**, and its measured per-class precision is
-shown to the investigator rather than assumed. A model whose ORG precision on this corpus is 0.71
+date masquerade as a sourced determination. **Any NER model added here must first pass a
+held-out evaluation** reporting error rate, abstention rate, calibration error, per-subgroup
+metrics, and a privacy leakage count, and its measured per-class precision is shown to the
+investigator rather than assumed. A model whose ORG precision on this corpus is 0.71
 is useful and must say so.
 
 Corrections to the pipeline sketch, in the order they would bite:

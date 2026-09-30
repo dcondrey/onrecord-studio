@@ -5,7 +5,6 @@ use crate::parsers::forensic_evidence::{
     finding_for_text, EvidenceBundle, EvidenceClass, EvidenceConfidence, EvidenceLocator,
     ForensicAuditOptions,
 };
-use lopdf::content::Content;
 use lopdf::{Document, Object, ObjectId};
 use std::collections::{BTreeMap, HashSet};
 
@@ -14,8 +13,6 @@ const MAXIMUM_FINDINGS: usize = 10_000;
 const MAXIMUM_VALUE_BYTES: usize = 1024 * 1024;
 const MAXIMUM_TOTAL_VALUE_BYTES: usize = 16 * 1024 * 1024;
 const MAXIMUM_GRAPH_DEPTH: usize = 64;
-const MAXIMUM_PREVIEW_OPERATIONS: usize = 1_000_000;
-const MAXIMUM_PREVIEW_ENTRIES: usize = 10_000;
 const AUXILIARY_STRING_KEYS: &[&[u8]] = &[
     b"Contents",
     b"ActualText",
@@ -350,15 +347,6 @@ fn collect_strings(document: &Document, object: &Object, depth: usize, output: &
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct OverlaySuppressionManifest {
-    pub document_version: String,
-    pub entries: Vec<OverlayOperationEvidence>,
-    pub coverage_complete: bool,
-    pub warnings: Vec<String>,
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct OverlayOperationEvidence {
     pub page_number: u32,
     pub page_object_reference: String,
@@ -372,168 +360,10 @@ pub struct OverlayOperationEvidence {
     pub form_xobject_name: Option<String>,
 }
 
-/// Builds a non-destructive manifest for a future derived preview. It identifies the exact paint
-/// operations a preview renderer may suppress, but never rewrites the evidence PDF or claims that
-/// suppressing an overlay restores content that is not present in another source object.
-pub fn build_overlay_suppression_manifest(
-    document: &Document,
-) -> Result<OverlaySuppressionManifest, AppError> {
-    let mut entries = Vec::new();
-    let mut warnings = Vec::new();
-    let mut coverage_complete = true;
-    let mut inspected_operations = 0_usize;
-    for (page_number, page_id) in document.get_pages() {
-        let bytes = match crate::parsers::unredactor::bounded_page_content(document, page_id) {
-            Ok(bytes) => bytes,
-            Err(error) => {
-                coverage_complete = false;
-                warnings.push(format!("PDF_OVERLAY_PAGE_SKIPPED:{page_number}:{error}"));
-                continue;
-            }
-        };
-        let content = match Content::decode(&bytes) {
-            Ok(content) => content,
-            Err(error) => {
-                coverage_complete = false;
-                warnings.push(format!("PDF_OVERLAY_CONTENT_INVALID:{page_number}:{error}"));
-                continue;
-            }
-        };
-        let mut transform = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
-        let mut stack = Vec::new();
-        let mut clipping_active = false;
-        let mut active_graphics_state = None;
-        let mut rectangle = None;
-        for (operation_index, operation) in content.operations.iter().enumerate() {
-            inspected_operations += 1;
-            if inspected_operations > MAXIMUM_PREVIEW_OPERATIONS {
-                coverage_complete = false;
-                warnings.push("PDF_OVERLAY_OPERATION_LIMIT_REACHED".to_string());
-                break;
-            }
-            match operation.operator.as_str() {
-                "q" => stack.push((transform, clipping_active, active_graphics_state.clone())),
-                "Q" => {
-                    if let Some(state) = stack.pop() {
-                        (transform, clipping_active, active_graphics_state) = state;
-                    } else {
-                        coverage_complete = false;
-                        warnings.push(format!(
-                            "PDF_OVERLAY_GRAPHICS_STACK_UNDERFLOW:{page_number}:{operation_index}"
-                        ));
-                    }
-                }
-                "cm" => {
-                    if let Some(matrix) = numeric_operands(&operation.operands, 6) {
-                        transform = multiply_transform(transform, matrix);
-                    }
-                }
-                "W" | "W*" => clipping_active = true,
-                "gs" => {
-                    active_graphics_state = operation
-                        .operands
-                        .first()
-                        .and_then(|value| value.as_name().ok())
-                        .map(|value| String::from_utf8_lossy(value).into_owned());
-                }
-                "re" => rectangle = numeric_operands(&operation.operands, 4),
-                "n" => rectangle = None,
-                _ => {}
-            }
-            let painted_rectangle = matches!(
-                operation.operator.as_str(),
-                "f" | "F" | "f*" | "B" | "B*" | "b" | "b*"
-            ) && rectangle.is_some();
-            let form_xobject_name = (operation.operator == "Do")
-                .then(|| {
-                    operation
-                        .operands
-                        .first()
-                        .and_then(|value| value.as_name().ok())
-                        .map(|value| String::from_utf8_lossy(value).into_owned())
-                })
-                .flatten();
-            if painted_rectangle || form_xobject_name.is_some() {
-                if entries.len() >= MAXIMUM_PREVIEW_ENTRIES {
-                    coverage_complete = false;
-                    warnings.push("PDF_OVERLAY_ENTRY_LIMIT_REACHED".to_string());
-                    break;
-                }
-                entries.push(OverlayOperationEvidence {
-                    page_number,
-                    page_object_reference: format!("{} {} R", page_id.0, page_id.1),
-                    operation_index,
-                    operator: operation.operator.clone(),
-                    operands: operation.operands.iter().map(format_object).collect(),
-                    current_transform: transform,
-                    clipping_active,
-                    active_graphics_state: active_graphics_state.clone(),
-                    rectangle,
-                    form_xobject_name,
-                });
-            }
-            if matches!(
-                operation.operator.as_str(),
-                "f" | "F" | "f*" | "B" | "B*" | "b" | "b*" | "S" | "s"
-            ) {
-                rectangle = None;
-            }
-        }
-    }
-    Ok(OverlaySuppressionManifest {
-        document_version: document.version.clone(),
-        entries,
-        coverage_complete,
-        warnings,
-    })
-}
-
-fn numeric_operands<const N: usize>(operands: &[Object], count: usize) -> Option<[f64; N]> {
-    if count != N || operands.len() < N {
-        return None;
-    }
-    let mut values = [0.0; N];
-    for (index, object) in operands.iter().take(N).enumerate() {
-        values[index] = match object {
-            Object::Integer(value) => *value as f64,
-            Object::Real(value) => (*value).into(),
-            _ => return None,
-        };
-    }
-    Some(values)
-}
-
-fn multiply_transform(left: [f64; 6], right: [f64; 6]) -> [f64; 6] {
-    [
-        left[0] * right[0] + left[2] * right[1],
-        left[1] * right[0] + left[3] * right[1],
-        left[0] * right[2] + left[2] * right[3],
-        left[1] * right[2] + left[3] * right[3],
-        left[0] * right[4] + left[2] * right[5] + left[4],
-        left[1] * right[4] + left[3] * right[5] + left[5],
-    ]
-}
-
-fn format_object(object: &Object) -> String {
-    match object {
-        Object::Integer(value) => value.to_string(),
-        Object::Real(value) => format!("{value:.4}"),
-        Object::Name(value) => format!("/{}", String::from_utf8_lossy(value)),
-        Object::Reference((number, generation)) => format!("{number} {generation} R"),
-        Object::String(value, _) => format!("stringBytes={}", value.len()),
-        Object::Array(values) => format!("arrayItems={}", values.len()),
-        Object::Dictionary(values) => format!("dictionaryEntries={}", values.len()),
-        Object::Stream(stream) => format!("streamBytes={}", stream.content.len()),
-        Object::Boolean(value) => value.to_string(),
-        Object::Null => "null".to_string(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lopdf::content::{Content, Operation};
-    use lopdf::{dictionary, Object, ObjectId, Stream};
+    use lopdf::{dictionary, Object, ObjectId};
 
     #[test]
     fn collects_auxiliary_strings_with_object_attribution() {
@@ -553,51 +383,6 @@ mod tests {
         assert!(result.findings.iter().any(|finding| {
             finding.kind == "PDF_UNREFERENCED_OBJECT"
                 && finding.locator.object_reference.as_deref() == Some(expected_reference.as_str())
-        }));
-    }
-
-    #[test]
-    fn builds_attributed_overlay_suppression_manifest() {
-        let mut document = Document::with_version("1.7");
-        let pages_id = document.new_object_id();
-        let content = Content {
-            operations: vec![
-                Operation::new("q", vec![]),
-                Operation::new(
-                    "cm",
-                    vec![1.into(), 0.into(), 0.into(), 1.into(), 12.into(), 24.into()],
-                ),
-                Operation::new("re", vec![0.into(), 0.into(), 120.into(), 18.into()]),
-                Operation::new("W", vec![]),
-                Operation::new("f", vec![]),
-                Operation::new("Do", vec![Object::Name(b"MaskForm".to_vec())]),
-                Operation::new("Q", vec![]),
-            ],
-        };
-        let content_id = document.add_object(Stream::new(
-            dictionary! {},
-            content.encode().expect("encode"),
-        ));
-        let page_id = document.add_object(dictionary! { "Type" => "Page", "Parent" => pages_id, "Contents" => content_id, "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()] });
-        document.objects.insert(
-            pages_id,
-            dictionary! { "Type" => "Pages", "Kids" => vec![page_id.into()], "Count" => 1 }.into(),
-        );
-        let catalog_id =
-            document.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
-        document.trailer.set("Root", catalog_id);
-
-        let manifest = build_overlay_suppression_manifest(&document).expect("manifest");
-        assert!(manifest.coverage_complete);
-        assert!(manifest.entries.iter().any(|entry| {
-            entry.operator == "f"
-                && entry.rectangle == Some([0.0, 0.0, 120.0, 18.0])
-                && entry.current_transform == [1.0, 0.0, 0.0, 1.0, 12.0, 24.0]
-                && entry.clipping_active
-        }));
-        assert!(manifest.entries.iter().any(|entry| {
-            entry.form_xobject_name.as_deref() == Some("MaskForm")
-                && entry.page_object_reference == format!("{} {} R", page_id.0, page_id.1)
         }));
     }
 }

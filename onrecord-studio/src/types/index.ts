@@ -25,3 +25,11 @@ export * from "./findings";
 export * from "./artifacts";
 
 export * from "./redactionInference";
+
+export * from "./intent";
+
+export * from "./report";
+
+export * from "./profile";
+
+export * from "./tracker";

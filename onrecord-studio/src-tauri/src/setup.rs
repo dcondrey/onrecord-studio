@@ -109,6 +109,12 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
     app.manage(repository);
     app.manage(corpus_index);
     app.manage(vector_index);
+    app.manage(std::sync::Arc::new(crate::profile::ProfileStore::new(
+        &app_data_dir,
+    )));
+    app.manage(std::sync::Arc::new(crate::tracker::TrackerStore::new(
+        &app_data_dir,
+    )));
     app.manage(report_directory);
     app.manage(AppInvestigationPaths::new(download_root));
     app.manage(manager);

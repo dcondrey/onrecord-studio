@@ -1,5 +1,5 @@
 import type { AnalyticalDatasetSummary, AnalyticalSchema, SqlQueryResult } from '../types';
-import { buildDiscoveryPlan, discoveryDefaults, quoteIdentifier, type DiscoveryQuery, type DiscoverySelection } from './dataDiscovery';
+import { buildDiscoveryPlan, discoveryDefaults, type DiscoveryQuery, type DiscoverySelection } from './dataDiscovery';
 
 export interface DiscoveryObservation {
   id: string;
@@ -139,5 +139,3 @@ export function rankObservations(observations: DiscoveryObservation[], limit = 8
   }
   return selected;
 }
-
-export const snapshotPreviewSql = (dataset: AnalyticalDatasetSummary) => `SELECT * FROM ${quoteIdentifier(dataset.tableName)} LIMIT 100`;

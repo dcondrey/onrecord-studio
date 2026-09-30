@@ -14,6 +14,7 @@ use crate::{error::AppError, storage::DuckDbRepository};
 
 pub mod absence_of_records;
 pub mod boilerplate_denial;
+pub mod claim_data_mismatch;
 pub mod contradictory_statement;
 pub mod cross_corpus_orphan_topic;
 pub mod cross_corpus_reused_denial_grounds;
@@ -31,6 +32,8 @@ pub mod inferred_redaction_identity;
 pub mod just_in_time_compliance;
 pub mod metadata_vs_content;
 pub mod no_records_contradicted;
+pub mod policy_violation;
+mod public_documents;
 pub mod regenerated_response;
 
 /// Summary returned by [`refresh_all_findings`].
@@ -253,6 +256,26 @@ pub async fn refresh_all_findings(
             cross_corpus_reused_denial_grounds::SLUG.to_string(),
             run_started,
         )
+        .await?;
+
+    // policy_violation (Wave 4)
+    summary.detectors_run += 1;
+    let findings = policy_violation::run(repository).await?;
+    if !findings.is_empty() {
+        summary.findings_recorded += repository.record_findings(findings).await?;
+    }
+    summary.stale_cleared += repository
+        .clear_stale_findings(policy_violation::SLUG.to_string(), run_started)
+        .await?;
+
+    // claim_data_mismatch
+    summary.detectors_run += 1;
+    let findings = claim_data_mismatch::run(repository).await?;
+    if !findings.is_empty() {
+        summary.findings_recorded += repository.record_findings(findings).await?;
+    }
+    summary.stale_cleared += repository
+        .clear_stale_findings(claim_data_mismatch::SLUG.to_string(), run_started)
         .await?;
 
     Ok(summary)

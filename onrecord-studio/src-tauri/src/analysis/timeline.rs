@@ -47,19 +47,6 @@ pub struct StatutoryComplianceAnalysis {
     pub evidence_summary: String,
 }
 
-pub fn calculate_operational_latency(
-    request_id: u64,
-    created_at: &str,
-    closed_at: Option<&str>,
-) -> Result<StateTransitionLog, AppError> {
-    let inferred_status = if closed_at.is_some() {
-        "closed"
-    } else {
-        "open"
-    };
-    calculate_operational_latency_for_status(request_id, inferred_status, created_at, closed_at)
-}
-
 pub fn calculate_operational_latency_for_status(
     request_id: u64,
     status: &str,
@@ -75,29 +62,6 @@ pub fn calculate_operational_latency_for_status(
     )
 }
 
-pub fn calculate_operational_latency_at(
-    request_id: u64,
-    status: &str,
-    created_at: &str,
-    closed_at: Option<&str>,
-    observation_at: &str,
-) -> Result<StateTransitionLog, AppError> {
-    calculate_operational_latency_internal(
-        request_id,
-        status,
-        created_at,
-        closed_at,
-        parse_timestamp(observation_at, "observation")?,
-    )
-}
-
-pub fn detect_fast_drop(
-    created_at: &str,
-    closed_at: &str,
-) -> Result<Option<TimelineAnomalyMarker>, AppError> {
-    detect_fast_drop_for_status("closed", created_at, closed_at)
-}
-
 pub fn detect_fast_drop_for_status(
     status: &str,
     created_at: &str,
@@ -111,23 +75,6 @@ pub fn detect_fast_drop_for_status(
     let lifetime = closed.signed_duration_since(created);
     Ok(is_suspiciously_fast_lifetime(lifetime)
         .then_some(TimelineAnomalyMarker::SuspiciouslyFastClosure))
-}
-
-pub fn evaluate_statutory_compliance(
-    request_id: u64,
-    created_at: &str,
-    updated_at: Option<&str>,
-    closed_at: Option<&str>,
-    extension: Option<&StatutoryExtensionRecord>,
-) -> Result<StatutoryComplianceAnalysis, AppError> {
-    evaluate_statutory_compliance_at(
-        request_id,
-        created_at,
-        updated_at,
-        closed_at,
-        extension,
-        &Utc::now().to_rfc3339(),
-    )
 }
 
 pub fn evaluate_statutory_compliance_at(
@@ -433,11 +380,17 @@ mod tests {
     #[test]
     fn fast_drop_boundary_preserves_subsecond_precision() {
         assert_eq!(
-            detect_fast_drop("2024-05-01T12:00:00Z", "2024-05-01T12:05:00Z").unwrap(),
+            detect_fast_drop_for_status("closed", "2024-05-01T12:00:00Z", "2024-05-01T12:05:00Z")
+                .unwrap(),
             Some(TimelineAnomalyMarker::SuspiciouslyFastClosure)
         );
         assert_eq!(
-            detect_fast_drop("2024-05-01T12:00:00.000Z", "2024-05-01T12:05:00.001Z").unwrap(),
+            detect_fast_drop_for_status(
+                "closed",
+                "2024-05-01T12:00:00.000Z",
+                "2024-05-01T12:05:00.001Z"
+            )
+            .unwrap(),
             None
         );
     }

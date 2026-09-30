@@ -1,59 +1,218 @@
-import type { LicenseStatus } from '../../types';
+import { useEffect, useRef } from 'react';
+import DeleteAccountResult from '../account/DeleteAccountResult';
+import { isDirectChannel } from '../../utils/licenseState';
+import type { LicenseState, LicenseStatus } from '../../types';
+import { type LicenseController, type SignInProvider } from './LicenseProvider';
+import DeviceLimitPanel from './DeviceLimitPanel';
+import UpgradePanel from './UpgradePanel';
 
-interface LicenseGateProps {
-  status: LicenseStatus | null;
-  refreshing: boolean;
-  error: string | null;
-  onRefresh: () => void;
+const PROVIDERS: ReadonlyArray<{ id: SignInProvider; label: string }> = [
+  { id: 'google', label: 'Google' },
+  { id: 'apple', label: 'Apple' },
+  { id: 'linkedin', label: 'LinkedIn' },
+  { id: 'github', label: 'GitHub' },
+];
+
+interface Copy {
+  heading: string;
+  sentence: string;
 }
 
-function headingFor(status: LicenseStatus | null) {
+function storeKitCopy(status: LicenseStatus | null): Copy {
   switch (status?.state) {
     case 'REVOKED':
-      return 'Purchase no longer active';
+      return { heading: 'Purchase no longer active', sentence: status.message };
     case 'UNVERIFIED':
     case 'BUNDLE_MISMATCH':
-      return 'This copy could not be verified';
+      return { heading: 'This copy could not be verified', sentence: status.message };
     case 'UNAVAILABLE':
-      return 'App Store verification needed';
+      return { heading: 'App Store verification needed', sentence: status.message };
     default:
-      return 'Verifying App Store purchase';
+      return {
+        heading: 'Verifying App Store purchase',
+        sentence: status?.message ?? 'Checking Apple’s signed app transaction before opening the evidence workspace.',
+      };
   }
 }
 
-export default function LicenseGate({ status, refreshing, error, onRefresh }: LicenseGateProps) {
-  const loading = status === null;
+const DIRECT_COPY: Partial<Record<LicenseState, Copy>> = {
+  SIGN_IN_REQUIRED: {
+    heading: 'Sign in to continue',
+    sentence: 'OnRecord Studio needs an account to start your free trial or open your license.',
+  },
+  TRIAL_EXPIRED: {
+    heading: 'Your free trial has ended',
+    sentence: 'Upgrade to keep using the evidence workspace. Your local evidence on this Mac is unchanged.',
+  },
+  CLOCK_ROLLED_BACK: {
+    heading: 'This Mac’s clock looks wrong',
+    sentence:
+      'The date on this Mac is earlier than a time OnRecord Studio has already seen. Correct the date and time, then verify your license again.',
+  },
+  ENTITLEMENT_EXPIRED: {
+    heading: 'License needs to be verified online',
+    sentence: 'Cannot reach the license server. Your last verified license has expired.',
+  },
+  DEVICE_LIMIT_REACHED: {
+    heading: 'This account is active on the maximum number of Macs',
+    sentence:
+      'Your account is already signed in on the most Macs it allows. To use this Mac, sign your oldest Mac out of the account, or sign out here.',
+  },
+  REVOKED: {
+    heading: 'License no longer active',
+    sentence: 'The license server reports that this license is no longer active.',
+  },
+  UNVERIFIED: {
+    heading: 'This license could not be verified',
+    sentence: 'The stored license did not pass verification on this Mac. Verify again, or sign in again.',
+  },
+  BUNDLE_MISMATCH: {
+    heading: 'This copy could not be verified',
+    sentence: 'The stored license does not belong to this app. Sign in again to get a license for this copy.',
+  },
+  UNAVAILABLE: {
+    heading: 'License could not be checked',
+    sentence: 'OnRecord Studio could not check your license. If this Mac is offline, connect to the internet and verify again.',
+  },
+};
+
+function copyFor(status: LicenseStatus | null): Copy {
+  if (status === null) {
+    return { heading: 'Checking your license', sentence: 'Checking your license before opening the evidence workspace.' };
+  }
+  if (!isDirectChannel(status)) return storeKitCopy(status);
   return (
-    <main className="app-theme flex h-screen w-screen items-center justify-center bg-slate-950 px-6 text-slate-100">
-      <section className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900/95 p-8 shadow-2xl" aria-live="polite">
+    DIRECT_COPY[status.state] ?? {
+      heading: 'License could not be checked',
+      sentence: status.message,
+    }
+  );
+}
+
+const SHOWS_SIGN_IN: ReadonlySet<LicenseState> = new Set(['SIGN_IN_REQUIRED', 'UNVERIFIED', 'BUNDLE_MISMATCH']);
+
+export default function LicenseGate({ controller }: { controller: LicenseController }) {
+  const { status, error, refreshing, signInProvider, signInNotice, signingOut, activating } = controller;
+  const loading = status === null;
+  const direct = isDirectChannel(status);
+  const copy = copyFor(status);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const busy = refreshing || signInProvider !== null || signingOut || activating || controller.deleting;
+
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, [copy.heading]);
+
+  const showSignIn = direct && status !== null && SHOWS_SIGN_IN.has(status.state);
+  const showDeviceLimit = direct && status?.state === 'DEVICE_LIMIT_REACHED';
+  const showUpgrade = direct && status?.state === 'TRIAL_EXPIRED';
+  const showVerify = status !== null && (!direct || status.state !== 'SIGN_IN_REQUIRED');
+  const detail = direct && status && status.message !== copy.sentence && status.state !== 'SIGN_IN_REQUIRED'
+    ? status.message
+    : null;
+
+  return (
+    <main className="app-theme flex h-screen w-screen items-center justify-center overflow-y-auto bg-slate-950 px-6 text-slate-100">
+      <section className="my-auto w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900/80 p-8 shadow-2xl" aria-labelledby="license-gate-heading">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-400">OnRecord Studio</p>
-        <h1 className="mt-3 text-2xl font-semibold">{headingFor(status)}</h1>
-        <p className="mt-4 text-sm leading-6 text-slate-300">
-          {status?.message ?? 'Checking Apple’s signed app transaction before opening the evidence workspace.'}
-        </p>
+        <h1 id="license-gate-heading" ref={headingRef} tabIndex={-1} className="mt-3 text-2xl font-semibold outline-none">
+          {copy.heading}
+        </h1>
+        <p className="mt-4 text-sm leading-6 text-slate-300">{copy.sentence}</p>
+        {detail ? <p className="mt-2 text-xs leading-5 text-slate-400">Detail: {detail}</p> : null}
+        {direct && status?.accountEmail && !showDeviceLimit ? (
+          <p className="mt-3 text-xs text-slate-300">
+            Signed in as {status.accountEmail}
+            {status.signInProvider ? ` with ${status.signInProvider}` : ''}.{' '}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={controller.signOut}
+              className="focus-ring inline-flex min-h-[24px] items-center rounded px-1.5 font-semibold text-cyan-300 underline disabled:opacity-50"
+            >
+              Sign out
+            </button>
+          </p>
+        ) : null}
         {error ? (
-          <p className="mt-4 rounded-lg border border-rose-800 bg-rose-950/60 px-4 py-3 text-sm text-rose-200">
+          <p role="alert" className="mt-4 rounded-lg border border-rose-700 bg-rose-950/60 px-4 py-3 text-sm text-rose-100">
             {error}
           </p>
         ) : null}
-        {!loading ? (
+        {signInNotice ? (
+          <p role="alert" className="mt-4 rounded-lg border border-rose-700 bg-rose-950/60 px-4 py-3 text-sm text-rose-100">
+            Sign-in did not complete. {signInNotice}
+          </p>
+        ) : null}
+        {signInProvider ? (
+          <p role="status" className="mt-4 text-sm text-slate-300">Waiting for {providerLabel(signInProvider)} sign-in in your browser window...</p>
+        ) : null}
+        <DeleteAccountResult report={controller.deleteReport} error={controller.deleteError} onDismiss={controller.dismissDeleteResult} />
+
+        {showSignIn ? (
+          <div className="mt-6 grid grid-cols-2 gap-2" role="group" aria-label="Sign in with">
+            {PROVIDERS.map((provider) => (
+              <button
+                key={provider.id}
+                type="button"
+                disabled={busy}
+                aria-busy={signInProvider === provider.id}
+                onClick={() => controller.signIn(provider.id)}
+                className="focus-ring rounded-lg border border-slate-500 px-3 py-2.5 text-sm font-semibold text-slate-100 hover:bg-slate-800 disabled:cursor-wait disabled:opacity-50"
+              >
+                {signInProvider === provider.id ? `Signing in with ${provider.label}...` : `Continue with ${provider.label}`}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {showDeviceLimit ? (
+          <DeviceLimitPanel
+            busy={busy}
+            activating={activating}
+            onActivate={controller.activateThisDevice}
+            onSignOut={controller.signOut}
+          />
+        ) : null}
+
+        {showUpgrade ? <UpgradePanel checkout={controller.checkout} onStartCheckout={controller.startCheckout} /> : null}
+
+        {!loading && !direct ? (
           <div className="mt-5 space-y-2 rounded-lg bg-slate-950/70 px-4 py-3 text-xs leading-5 text-slate-400">
             <p>Open the Mac App Store and sign in with the Apple Account that purchased this app.</p>
             <p>This is a one-time paid app; no subscription or separate license key is required.</p>
           </div>
         ) : null}
-        <button
-          type="button"
-          disabled={loading || refreshing}
-          onClick={onRefresh}
-          className="mt-6 w-full rounded-lg bg-cyan-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-wait disabled:opacity-50"
-        >
-          {loading || refreshing ? 'Checking purchase…' : 'Verify purchase again'}
-        </button>
+
+        {showVerify || loading ? (
+          <button
+            type="button"
+            disabled={busy || (loading && !error)}
+            onClick={controller.refresh}
+            className="focus-ring mt-6 w-full rounded-lg bg-cyan-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-wait disabled:opacity-50"
+          >
+            {refreshing || (loading && !error)
+              ? direct || loading
+                ? 'Checking license...'
+                : 'Checking purchase...'
+              : direct || loading
+                ? 'Verify license again'
+                : 'Verify purchase again'}
+          </button>
+        ) : null}
+        {refreshing ? <p role="status" className="sr-only">Checking license</p> : null}
         <p className="mt-4 text-center text-[11px] leading-4 text-slate-400">
-          Workspace commands and local evidence remain locked until StoreKit verifies the paid app transaction.
+          {loading
+            ? 'Workspace commands stay locked until the license check finishes. Local evidence on this Mac is not deleted.'
+            : direct
+              ? 'Workspace commands stay locked until a license is verified. Local evidence on this Mac is not deleted.'
+              : 'Workspace commands and local evidence remain locked until StoreKit verifies the paid app transaction.'}
         </p>
       </section>
     </main>
   );
+}
+
+function providerLabel(id: SignInProvider): string {
+  return PROVIDERS.find((provider) => provider.id === id)?.label ?? id;
 }

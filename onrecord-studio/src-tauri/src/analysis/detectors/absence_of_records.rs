@@ -50,6 +50,15 @@ const SERIOUS_MEMBER_COUNT: usize = 5;
 /// meaningful evidence of omission.
 const SERIOUS_MAX_GAP_FRACTION: f64 = 0.20;
 
+/// Missing fraction above which a span is not a "tight" sequence and nothing is emitted. Agendas
+/// number items in category blocks (30s proclamations, 50s ordinances, 100s resolutions), so a
+/// span of 10..331 with 25 members is a numbering convention, not a release with holes.
+const MAX_GAP_FRACTION: f64 = 0.5;
+
+/// Structured-data exports. Their text is row content (free-text complaints, addresses, IDs), so
+/// "item 2" or "invoice 7" in a cell says nothing about an agency's numbering scheme.
+const TABULAR_EXTENSIONS: [&str; 6] = [".csv", ".tsv", ".json", ".ndjson", ".xls", ".xlsx"];
+
 /// Labels of numbering schemes agencies routinely use. The regex only fires when the token starts
 /// with one of these words so ordinary numbers, dates, and phone numbers don't produce noise.
 static SEQUENCE_TOKEN: LazyLock<Regex> = LazyLock::new(|| {
@@ -140,6 +149,9 @@ fn collect_findings(scanned: &[ScannedDocument]) -> Vec<Finding> {
     let mut buckets: BTreeMap<(String, i64, String), SequenceEvidence> = BTreeMap::new();
 
     for document in scanned {
+        if is_tabular_export(document.file_name.as_deref()) {
+            continue;
+        }
         for capture in SEQUENCE_TOKEN.captures_iter(&document.extracted_text) {
             let label_raw = capture.name("label").map(|m| m.as_str()).unwrap_or("");
             let Some(normalized_label) = normalize_label(label_raw) else {
@@ -192,6 +204,9 @@ fn collect_findings(scanned: &[ScannedDocument]) -> Vec<Finding> {
             continue;
         }
         let gap_fraction = missing_count as f64 / span as f64;
+        if gap_fraction > MAX_GAP_FRACTION {
+            continue;
+        }
         let severity =
             if present_count >= SERIOUS_MEMBER_COUNT && gap_fraction <= SERIOUS_MAX_GAP_FRACTION {
                 FindingSeverity::Serious
@@ -249,6 +264,14 @@ fn collect_findings(scanned: &[ScannedDocument]) -> Vec<Finding> {
     // Rank the highest-value gaps first so the truncation at MAX_FINDINGS_PER_RUN keeps them.
     findings.sort_by_key(|f| std::cmp::Reverse(f.rank_key()));
     findings
+}
+
+fn is_tabular_export(file_name: Option<&str>) -> bool {
+    let Some(name) = file_name else {
+        return false;
+    };
+    let lower = name.to_ascii_lowercase();
+    TABULAR_EXTENSIONS.iter().any(|ext| lower.ends_with(ext))
 }
 
 fn normalize_label(raw: &str) -> Option<String> {
@@ -456,6 +479,33 @@ mod tests {
             "PO and 'purchase order' must fold to one sequence"
         );
         assert!(findings[0].explanation.contains("#1003"));
+    }
+
+    #[test]
+    fn open_data_rows_and_block_numbered_agendas_are_not_sequences() {
+        // Measured on the San Diego corpus: 4 of 5 findings came from free-text cells of Get It
+        // Done CSV exports ("Invoice# 403238", "no resolution.1."), the fifth from a Council
+        // agenda whose items are numbered in category blocks (10, 30-31, 50-56, 100-106, 330-331).
+        let mut csv_rows = doc(
+            "p",
+            1,
+            10,
+            "\"a\",\"towed, Invoice# 1\" \"b\",\"invoice 2 unpaid\" \"c\",\"invoice 4 and item 2\"",
+        );
+        csv_rows.file_name = Some("get_it_done_requests.CSV".into());
+        let agenda = doc(
+            "p",
+            1,
+            11,
+            "Item 10: Minutes. Item 30: Proclamation. Item 31: Day. Item 50: Ordinance. Item 51: Repeal. \
+             Item 100: Grant. Item 101: Sole source. Item 330: Definition. Item 331: Lease.",
+        );
+        let findings = collect_findings(&[csv_rows, agenda]);
+        assert!(
+            findings.is_empty(),
+            "got {:?}",
+            findings.iter().map(|f| &f.headline).collect::<Vec<_>>()
+        );
     }
 
     #[test]

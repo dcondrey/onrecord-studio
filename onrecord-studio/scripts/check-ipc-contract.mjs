@@ -39,6 +39,40 @@ const verificationStateCount = auditContracts
   .match(/export type VerificationState =(?<body>[\s\S]*?);/)?.groups?.body
   ?.match(/^ {2}\| /gm)?.length ?? 0;
 
+// FindingKind is mirrored by hand in src/types/findings.ts, including which kinds are legal claims.
+// A kind missing on either side, or a legal claim the UI would draw as a pattern signal, is a false
+// statement about evidence.
+const findingRust = readFileSync(join(root, 'src-tauri/src/analysis/finding.rs'), 'utf8');
+const findingTs = readFileSync(join(root, 'src/types/findings.ts'), 'utf8');
+const findingKindImpl = findingRust.match(/impl FindingKind \{[\s\S]*?\n\}\n/)?.[0] ?? '';
+const wireName = Object.fromEntries(
+  [...findingKindImpl.matchAll(/Self::(\w+) => "([A-Z_]+)",/g)].map((match) => [match[1], match[2]]),
+);
+const rustKinds = new Set(Object.values(wireName));
+const legalBody = findingRust.match(/fn is_legal_claim[\s\S]*?\n    }\n/)?.[0] ?? '';
+const rustLegal = new Set(
+  [...legalBody.matchAll(/Self::(\w+) => true/g)].map((match) => wireName[match[1]]),
+);
+const tsKinds = new Set(
+  [...(findingTs.match(/export type FindingKind =([\s\S]*?);/)?.[1] ?? '').matchAll(/'([A-Z_]+)'/g)].map(
+    (match) => match[1],
+  ),
+);
+const tsLegal = new Set(
+  [...(findingTs.match(/LEGAL_CLAIM_KINDS[^=]*=\s*\[([\s\S]*?)\]/)?.[1] ?? '').matchAll(/'([A-Z_]+)'/g)].map(
+    (match) => match[1],
+  ),
+);
+const findingDrift = [
+  ...difference(rustKinds, tsKinds).map((kind) => `FindingKind ${kind} missing from TypeScript`),
+  ...difference(tsKinds, rustKinds).map((kind) => `FindingKind ${kind} missing from Rust`),
+  ...difference(rustLegal, tsLegal).map((kind) => `${kind} is a legal claim in Rust only`),
+  ...difference(tsLegal, rustLegal).map((kind) => `${kind} is a legal claim in TypeScript only`),
+];
+if (rustKinds.size === 0 || findingDrift.length) {
+  throw new Error(`FindingKind contracts differ.\n${findingDrift.join('\n') || 'No kinds parsed.'}`);
+}
+
 const directInvocations = walk(join(root, 'src'))
   .filter((path) => /\.(?:ts|tsx)$/.test(path) && path !== join(root, 'src/ipc.ts'))
   .filter((path) => /\binvoke(?:<[^>]+>)?\s*\(/.test(readFileSync(path, 'utf8')))
@@ -52,7 +86,7 @@ if (directInvocations.length) {
 globalThis.console.log(
   `IPC contract verified: ${rustCommands.size} commands are typed and centralized, ` +
     `${telemetryEventCount} telemetry events and ${verificationStateCount} verification states ` +
-    'are generated from the native definitions.',
+    `are generated from the native definitions; ${rustKinds.size} finding kinds match.`,
 );
 
 function difference(left, right) {

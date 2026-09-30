@@ -1,15 +1,19 @@
 use crate::blocking::spawn_with;
 use crate::error::AppError;
+#[cfg(test)]
 use crate::storage::sqlite_snapshot::import_sqlite_snapshot;
 use crate::types::CrossAgencyCorrelation;
 use duckdb::{params, Connection, Row};
 use std::convert::TryFrom;
-use std::path::{Path, PathBuf};
+#[cfg(test)]
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
 use std::time::{Duration, Instant};
 
 const WORKSPACE_LOCK_TIMEOUT: Duration = Duration::from_secs(5);
 const WORKSPACE_LOCK_POLL_INTERVAL: Duration = Duration::from_millis(5);
+#[cfg(test)]
 const CORRELATION_SQLITE_TABLES: [&str; 5] = [
     "requests",
     "agencies",
@@ -164,6 +168,7 @@ pub struct DuckDbWorkspace {
 }
 
 impl DuckDbWorkspace {
+    #[cfg(test)]
     /// Creates a standalone workspace for inspecting a foreign SQLite database supplied by the
     /// investigator. Call `attach_sqlite_read_only` before querying.
     pub fn open_workspace() -> Result<Self, AppError> {
@@ -195,6 +200,7 @@ impl DuckDbWorkspace {
         }
     }
 
+    #[cfg(test)]
     pub async fn attach_sqlite_read_only(
         &self,
         sqlite_path: impl AsRef<Path>,
@@ -335,6 +341,7 @@ fn map_correlation_row(row: &Row<'_>) -> duckdb::Result<CorrelationRow> {
     })
 }
 
+#[cfg(test)]
 fn validate_layout(connection: &Connection, table_prefix: &str) -> Result<(), AppError> {
     validate_layout_query(
         connection,
@@ -371,6 +378,7 @@ fn validate_layout(connection: &Connection, table_prefix: &str) -> Result<(), Ap
     Ok(())
 }
 
+#[cfg(test)]
 fn validate_layout_query(
     connection: &Connection,
     layout_name: &str,
@@ -385,6 +393,7 @@ fn validate_layout_query(
         .map_err(|error| AppError::Analysis(format!("{layout_name} is incompatible: {error}")))
 }
 
+#[cfg(test)]
 fn validate_database_path(path: &Path) -> Result<PathBuf, AppError> {
     if path.as_os_str().is_empty() || path == Path::new(":memory:") {
         return Err(AppError::DataParsing(

@@ -570,8 +570,14 @@ select:not(:disabled) {
 [data-theme="light"] [class~="bg-slate-950/70"],
 [data-theme="light"] [class~="bg-slate-950/80"],
 [data-theme="light"] [class~="bg-slate-950/85"],
-[data-theme="light"] [class~="bg-slate-950/90"] {
+[data-theme="light"] [class~="bg-slate-950/90"],
+[data-theme="light"] [class~="bg-slate-950/95"] {
   background-color: rgba(255, 255, 255, 0.82);
+}
+
+/* Cyan-200 mapped to #0e7490 measured 4.41:1 on the tinted profile panel. */
+[data-theme="light"] .profile-save {
+  color: #155e75;
 }
 
 [data-theme="light"] .bg-slate-900 {
@@ -597,6 +603,7 @@ select:not(:disabled) {
 }
 
 [data-theme="light"] .bg-slate-800,
+[data-theme="light"] [class~="bg-slate-800/40"],
 [data-theme="light"] [class~="bg-slate-800/20"],
 [data-theme="light"] [class~="bg-slate-800/45"],
 [data-theme="light"] [class~="bg-slate-800/50"],
@@ -710,6 +717,18 @@ select:not(:disabled) {
 [data-theme="light"] [class~="text-rose-300/70"],
 [data-theme="light"] [class~="text-rose-300/80"],
 [data-theme="light"] .text-red-400 { color: #be123c; }
+
+/* SVG labels take their colour from fill, which the text-* remaps above never reach. */
+[data-theme="light"] .fill-slate-100 { fill: #172033; }
+[data-theme="light"] .fill-slate-200,
+[data-theme="light"] .fill-slate-300 { fill: #334155; }
+[data-theme="light"] [class~="text-amber-200/90"] { color: #92400e; }
+
+/* Rose error panels pair a dark wash with light text; without a light remap they read as muddy mauve. */
+[data-theme="light"] [class~="bg-rose-950/60"] { background-color: #fff1f2; }
+[data-theme="light"] .text-rose-50 { color: #881337; }
+[data-theme="light"] [class~="hover:bg-rose-950"]:hover { background-color: #ffe4e6; }
+[data-theme="light"] [class~="hover:bg-cyan-950"]:hover { background-color: #ecfeff; }
 
 [data-theme="light"] [class~="hover:text-cyan-200"]:hover,
 [data-theme="light"] [class~="hover:text-cyan-300"]:hover { color: #0e7490; }

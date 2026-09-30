@@ -19,6 +19,7 @@
 //! See `docs/storage-and-evidence-architecture.md`.
 
 pub mod corpus;
+pub mod cross_agency;
 pub(crate) mod discovery_search;
 pub mod duckdb;
 pub mod fts;
@@ -28,6 +29,7 @@ pub mod pii;
 pub mod reconstruction;
 pub mod research;
 pub mod sqlite;
+#[cfg(test)]
 pub(crate) mod sqlite_snapshot;
 pub(crate) mod tabular;
 pub mod vector;

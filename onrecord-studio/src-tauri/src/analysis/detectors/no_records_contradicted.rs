@@ -22,6 +22,7 @@ use crate::{
             finding_id, Finding, FindingCitation, FindingConfidence, FindingKind, FindingSeverity,
             FindingSubject,
         },
+        gaps::{EvidenceGap, GapRole},
     },
     error::AppError,
     storage::DuckDbRepository,
@@ -55,13 +56,19 @@ struct Candidate {
     denial_text: String,
 }
 
-pub async fn run(repository: &DuckDbRepository) -> Result<Vec<Finding>, AppError> {
-    let candidates = load_denial_candidates(repository).await?;
-    let mut findings = Vec::new();
-    for candidate in candidates {
-        // Confirm the denial phrase actually lives in the text, and grab its position for the
-        // citation. Guard against denial-shaped strings appearing incidentally with no scope
-        // narrowing — the SQL LIKE gate above is intentionally coarse.
+/// A plain, unscoped denial with enough topic vocabulary to test, and the other-request
+/// documents that match it.
+struct Tested {
+    candidate: Candidate,
+    matched_phrase: String,
+    tokens: Vec<String>,
+    matches: Vec<ContradictingMatch>,
+}
+
+async fn test_denials(repository: &DuckDbRepository) -> Result<Vec<Tested>, AppError> {
+    let mut tested = Vec::new();
+    for candidate in load_denial_candidates(repository).await? {
+        // The SQL LIKE gate is coarse; `extract_denial` re-verifies with the shared regex.
         let Some(fingerprint) = extract_denial(&candidate.denial_text) else {
             continue;
         };
@@ -79,16 +86,53 @@ pub async fn run(repository: &DuckDbRepository) -> Result<Vec<Finding>, AppError
             candidate.request_id,
         )
         .await?;
-        if matches.len() < MIN_CONTRADICTING_DOCS {
-            continue;
-        }
-        if let Some(finding) =
-            build_finding(&candidate, &fingerprint.matched_phrase, &tokens, &matches)
-        {
-            findings.push(finding);
-        }
+        tested.push(Tested {
+            candidate,
+            matched_phrase: fingerprint.matched_phrase,
+            tokens,
+            matches,
+        });
     }
-    Ok(findings)
+    Ok(tested)
+}
+
+pub async fn run(repository: &DuckDbRepository) -> Result<Vec<Finding>, AppError> {
+    Ok(test_denials(repository)
+        .await?
+        .iter()
+        .filter(|t| t.matches.len() >= MIN_CONTRADICTING_DOCS)
+        .filter_map(|t| build_finding(&t.candidate, &t.matched_phrase, &t.tokens, &t.matches))
+        .collect())
+}
+
+/// A denial the corpus holds no other releases to test. `run` returns nothing for these; that is
+/// not evidence the denial was accurate.
+pub async fn gaps(repository: &DuckDbRepository) -> Result<Vec<EvidenceGap>, AppError> {
+    Ok(test_denials(repository)
+        .await?
+        .into_iter()
+        .filter(|t| t.matches.is_empty())
+        .map(|t| {
+            let c = t.candidate;
+            EvidenceGap {
+                detector: SLUG,
+                key: format!("{SLUG}:{}:{}", c.portal_key, c.denial_document_id),
+                route: format!(
+                    "Request {} on {} was answered that no responsive records exist",
+                    c.request_id, c.portal_key
+                ),
+                blocked: format!(
+                    "No public release on the topic ({}) is in the corpus, so the denial can be neither contradicted nor supported.",
+                    t.tokens.join(", ")
+                ),
+                role: GapRole::AgencyRecords,
+                request: format!(
+                    "Provide existing records released in response to other requests on: {}.",
+                    t.tokens.join(", ")
+                ),
+            }
+        })
+        .collect())
 }
 
 async fn load_denial_candidates(repository: &DuckDbRepository) -> Result<Vec<Candidate>, AppError> {

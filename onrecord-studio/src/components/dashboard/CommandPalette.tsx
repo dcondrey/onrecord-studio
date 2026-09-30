@@ -1,19 +1,28 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { invokeCommand, formatNativeError } from '../../ipc';
+import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
+import type { IntentAnswer, IntentOption } from '../../types';
+import IntentAnswerView from './IntentAnswerView';
 import { cn } from '../../utils/cn';
 import Icon, { type IconName } from '../ui/icons';
+import { openHelp } from '../help/helpEvents';
 import { contrastCommandRegistry, motionCommandRegistry, scoreCommand, themeCommandRegistry, workspaceCommandRegistry } from '../../commands/registry';
 
 export const OPEN_COMMAND_PALETTE_EVENT = 'onrecord:open-command-palette';
+
+const INTENT_ROW_LIMIT = 10;
 
 interface CommandAction {
   id: string;
   label: string;
   detail: string;
-  group: 'Navigate' | 'Create' | 'Appearance' | 'Accessibility';
+  group: 'Ask' | 'Navigate' | 'Create' | 'Help' | 'Appearance' | 'Accessibility';
   icon: IconName;
   keywords: string;
   shortcut?: string;
+  /** The row starts work whose result the palette shows, so choosing it must not close the palette. */
+  keepOpen?: boolean;
   perform: () => void;
 }
 
@@ -30,15 +39,55 @@ export default function CommandPalette() {
   const setContrast = useAppStore((state) => state.setContrast);
   const toggleSidebarCollapsed = useAppStore((state) => state.toggleSidebarCollapsed);
   const openSubjectDossier = useAppStore((state) => state.openSubjectDossier);
+  const [answer, setAnswer] = useState<IntentAnswer | null>(null);
+  const [asking, setAsking] = useState(false);
+  const [askError, setAskError] = useState<string | null>(null);
+  const answerGate = useLatestRequestGate();
+  // A chosen suggestion changes the query, and that change invalidates any answer in flight. The
+  // suggestion is asked from the effect that handles the change, after the invalidation.
+  const askOnQuery = useRef<string | null>(null);
+
+  const clearAnswer = () => {
+    answerGate.invalidate();
+    setAnswer(null);
+    setAsking(false);
+    setAskError(null);
+  };
+
+  const runIntent = (utterance: string) => {
+    const token = answerGate.begin();
+    setAsking(true);
+    setAskError(null);
+    setAnswer(null);
+    invokeCommand('run_intent_query', { utterance, limit: INTENT_ROW_LIMIT })
+      .then((result) => {
+        if (!answerGate.isCurrent(token)) return;
+        setAnswer(result);
+      })
+      .catch((error: unknown) => {
+        if (!answerGate.isCurrent(token)) return;
+        setAskError(formatNativeError(error));
+      })
+      .finally(() => {
+        if (answerGate.isCurrent(token)) setAsking(false);
+      });
+  };
+
+  const chooseOption = (option: IntentOption) => {
+    askOnQuery.current = option.example;
+    setQuery(option.example);
+  };
 
   const openPalette = () => {
     previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    clearAnswer();
     setQuery('');
     setSelectedIndex(0);
     setOpen(true);
   };
 
   const closePalette = () => {
+    clearAnswer();
     setOpen(false);
     window.requestAnimationFrame(() => previousFocus.current?.focus());
   };
@@ -72,6 +121,18 @@ export default function CommandPalette() {
       keywords: 'new connect import url file paste source',
       shortcut: `${modifier}N`,
       perform: focusSourceComposer,
+    },
+    {
+      id: 'open-help',
+      label: 'Open Help',
+      detail: 'Search the documentation for views, findings, and data handling',
+      group: 'Help',
+      icon: 'search',
+      keywords: 'help documentation manual guide how to learn support faq privacy data',
+      shortcut: `${modifier}⇧/`,
+      // The palette restores focus to its opener on the next frame. Opening Help after that frame
+      // lets the dialog keep the focus it takes on mount.
+      perform: () => window.requestAnimationFrame(() => openHelp()),
     },
     {
       // Opens the subject dossier for a name the user types. The prompt is the native window
@@ -126,11 +187,25 @@ export default function CommandPalette() {
   const filteredActions = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
     if (!normalized) return actions;
-    return actions
+    const matches = actions
       .map((action) => ({ action, score: scoreCommand(normalized, action.label, `${action.detail} ${action.group}`, action.keywords) }))
       .filter((entry): entry is { action: CommandAction; score: number } => entry.score !== null)
       .sort((left, right) => right.score - left.score || left.action.label.localeCompare(right.action.label))
       .map(({ action }) => action);
+    if (!isQuestionLike(normalized)) return matches;
+    const ask: CommandAction = {
+      id: 'ask-intent',
+      label: `Ask: ${query.trim()}`,
+      detail: 'Answered from findings, the entity graph and document text. No AI model is used.',
+      group: 'Ask',
+      icon: 'search',
+      keywords: '',
+      keepOpen: true,
+      perform: () => runIntent(query.trim()),
+    };
+    // A sentence is a question first; a word or two that also names a view stays a view jump.
+    return normalized.split(/\s+/).length >= 3 || normalized.endsWith('?') ? [ask, ...matches] : [...matches, ask];
+    // runIntent closes over the gate and setters only, all stable.
   }, [actions, query]);
 
   useEffect(() => {
@@ -146,6 +221,13 @@ export default function CommandPalette() {
 
   useEffect(() => {
     setSelectedIndex(0);
+    // Whatever was asked about the previous text says nothing about this text.
+    clearAnswer();
+    if (askOnQuery.current === query) {
+      askOnQuery.current = null;
+      runIntent(query.trim());
+    }
+    // clearAnswer and runIntent close over the gate and setters only, all stable.
   }, [query]);
 
   useEffect(() => {
@@ -158,9 +240,14 @@ export default function CommandPalette() {
         else openPalette();
         return;
       }
-      if (!isOpen && modified && /^[1-5]$/.test(event.key)) {
+      if (!isOpen && modified && /^[1-6]$/.test(event.key)) {
         event.preventDefault();
         setWorkspaceView(workspaceCommandRegistry[Number(event.key) - 1].view);
+        return;
+      }
+      if (!isOpen && modified && event.shiftKey && (event.key === '?' || event.key === '/')) {
+        event.preventDefault();
+        openHelp();
         return;
       }
       if (!isOpen && modified && key === 'n') {
@@ -169,9 +256,13 @@ export default function CommandPalette() {
         return;
       }
       if (!isOpen) return;
+      const showingAnswer = answer !== null || asking || askError !== null;
       if (event.key === 'Escape') {
         event.preventDefault();
-        closePalette();
+        if (showingAnswer) clearAnswer();
+        else closePalette();
+      } else if (showingAnswer) {
+        return;
       } else if (event.key === 'ArrowDown') {
         event.preventDefault();
         setSelectedIndex((index) => filteredActions.length ? (index + 1) % filteredActions.length : 0);
@@ -180,13 +271,15 @@ export default function CommandPalette() {
         setSelectedIndex((index) => filteredActions.length ? (index - 1 + filteredActions.length) % filteredActions.length : 0);
       } else if (event.key === 'Enter' && filteredActions[selectedIndex]) {
         event.preventDefault();
-        closePalette();
-        filteredActions[selectedIndex].perform();
+        const chosen = filteredActions[selectedIndex];
+        if (!chosen.keepOpen) closePalette();
+        chosen.perform();
       }
     };
     window.addEventListener('keydown', handleKeyboard);
     return () => window.removeEventListener('keydown', handleKeyboard);
-  }, [filteredActions, isOpen, selectedIndex, setWorkspaceView]);
+    // closePalette and clearAnswer close over the gate and setters only, all stable.
+  }, [answer, askError, asking, filteredActions, isOpen, selectedIndex, setWorkspaceView]);
 
   useEffect(() => {
     document.getElementById(`command-${filteredActions[selectedIndex]?.id}`)?.scrollIntoView({ block: 'nearest' });
@@ -210,8 +303,8 @@ export default function CommandPalette() {
             ref={inputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search commands, views, and settings"
-            aria-label="Search commands, views, and settings"
+            placeholder="Search commands, or ask a question"
+            aria-label="Search commands, views, and settings, or ask a question"
             className="h-14 min-w-0 flex-1 border-0 bg-transparent text-[14px] text-slate-100 outline-none placeholder:text-slate-400"
             role="combobox"
             aria-expanded="true"
@@ -223,6 +316,15 @@ export default function CommandPalette() {
           <Keycap>Esc</Keycap>
         </div>
 
+        {asking || askError !== null || answer !== null ? (
+          <div id="command-results" className="max-h-[min(480px,62vh)] overflow-y-auto">
+            {asking && <p className="px-6 py-8 text-center text-[13px] text-slate-300" role="status">Searching findings, the entity graph and document text…</p>}
+            {askError !== null && (
+              <p className="px-6 py-8 text-center text-[13px] text-slate-300" role="alert">The question could not be answered: {askError}</p>
+            )}
+            {answer !== null && <IntentAnswerView answer={answer} onChooseOption={chooseOption} />}
+          </div>
+        ) : (
         <div id="command-results" className="max-h-[min(480px,62vh)] overflow-y-auto p-2" role="listbox">
           {filteredActions.length === 0 ? (
             <div className="px-4 py-10 text-center">
@@ -242,7 +344,7 @@ export default function CommandPalette() {
                   aria-selected={selectedIndex === index}
                   onMouseEnter={() => setSelectedIndex(index)}
                   onClick={() => {
-                    closePalette();
+                    if (!action.keepOpen) closePalette();
                     action.perform();
                   }}
                   className={cn(
@@ -263,13 +365,19 @@ export default function CommandPalette() {
             );
           })}
         </div>
+        )}
         <footer className="flex items-center justify-between border-t border-slate-800/70 px-4 py-2.5 text-[12px] text-slate-400">
-          <span>OnRecord commands</span>
-          <span className="flex items-center gap-2"><Keycap>↑↓</Keycap> Navigate <Keycap>↵</Keycap> Open</span>
+          <span>{answer !== null || asking || askError !== null ? 'Esc returns to commands' : 'OnRecord commands'}</span>
+          <span className="flex items-center gap-2"><Keycap>↑↓</Keycap> Navigate <Keycap>↵</Keycap> Open or ask</span>
         </footer>
       </section>
     </div>
   );
+}
+
+/** Three characters and a space or question mark: a phrase, not a lone view name. */
+function isQuestionLike(normalized: string) {
+  return normalized.length >= 3 && (/\s/.test(normalized) || normalized.endsWith('?'));
 }
 
 function Keycap({ children }: { children: string }) {

@@ -777,3 +777,68 @@ than adding a third grammar beside it.
 - [ ] Windows has no release path at all. `tauri.conf.json` sets `targets: "all"` while
       `docs/release.md` contains no Windows signing, packaging, or appearance content. Decide
       whether Windows ships before treating the two boxes below as in scope.
+
+## Version 2: learned models (deferred, 2026-09-30)
+
+Decision: version 1 ships with what exists today (on-device `bge-small-en-v1.5` embeddings,
+deterministic detectors and statistics, opt-in cloud LLM for research). No new model work
+before release. Governing rule for everything below: a learned model's output is an observation
+about the model, not the record, so models live in the recall layer (ranking, candidate
+generation, triage) and never become a `Finding` without a deterministic check and an
+observable confidence basis. Statutory, deadline, and latency evaluators stay deterministic.
+
+Ordered plan, each step gated on the eval set before it:
+
+1. Evaluation sets first: ~300 labeled documents for `DocumentClass`; 50–100 request → responsive
+   document pairs (recall@10 for `hybrid_search`, semantic/lexical/fused reported separately);
+   ~200 denial and extension letters grouped into template families; person/org spans on ~100
+   documents. Wire each into an `--ignored` cargo benchmark that prints metrics, in the
+   held-out-eval shape the retired `parsers/neural_inference.rs` had. Baselines recorded before
+   any change.
+2. Frozen embeddings plus tiny heads: a linear or kNN head over the existing embeddings,
+   serialized with a content hash and versioned alongside `EMBEDDING_MODEL_ID`/`REVISION` so a
+   model revision invalidates heads. Targets: document classification beside
+   `analysis/document_class.rs`, paraphrase and template-family detection replacing
+   `phrase_match` in the evasion and cross-corpus detectors, intent routing. Confidence basis is
+   "matches N labeled exemplars at cosine ≥ threshold", never a probability. Retune
+   `fuse_document_results` toward semantic-primary only if retrieval recall improves. Pin the ONNX
+   CPU execution provider for any path feeding a finding; add a same-corpus-twice reproducibility
+   test.
+3. Claim-versus-data validation (qualitative statements checked against quantitative tables).
+   **Shipped in v1 (2026-09-30)** as `analysis/claim_validation.rs` plus the
+   `claim_data_mismatch` detector and the `CLAIM_CONTRADICTS_DATA` finding kind; see
+   `docs/analysis_methods.md` §5 for what it does and does not claim. The plan below is kept as
+   the design record. Original design: extend `analysis/assertion_index.rs` with quantitative predicates (budget balance:
+   surplus/deficit/balanced; total; percent change; count) so a prose claim such as "the budget
+   was balanced with no deficit" becomes an `Assertion` with a canonical value and a scope
+   (fiscal year, fund, agency). Evaluate each against imported analytical tables
+   (`OPERATING_BUDGET`, `BUDGET_DIMENSION`, regional data) through `execute_restricted_sql`
+   using the existing financial mapping roles and `FinancialScope`; emit a finding only when
+   the claim and the rows materially differ under `AssertionValue::materially_differs`, with the
+   query id and rows as the basis. A claim whose scope cannot be bound to a table (ambiguous
+   fund, missing year, no mapped dataset) is reported as unreconciled, never as a contradiction.
+   No model is required; an LLM or trained extractor is optional later only to widen claim
+   extraction, and never decides the verdict. Eval set: hand-verified claim/table pairs from
+   already-imported San Diego budget and RIPA data.
+4. Cross-document redaction audit (pre-publication leak assessment). Deterministic first:
+   link documents by case number, date, thread headers, near-duplicate text; align a redacted
+   span against its unredacted counterpart; constrain by box width → character count. Primary
+   output is "recoverable, by method M, from documents X and Y, N-way agreement". The recovered
+   value is a separate, logged, explicit reveal, withheld by default when the span's inferred
+   category is third-party PII. Constrained fill-mask ranking over graph-derived candidates is
+   the only learned component, added after the deterministic path ships. Eval set: real
+   double-release pairs from the corpus. The retired `neural_inference.rs` rule stands: rank
+   investigator-supplied or graph-derived candidates, never invent them.
+5. One additional pretrained on-device ONNX model for person/org NER through the existing
+   download, manifest-hash, and status flow in `storage/vector.rs` (same runtime as fastembed).
+   Model-extracted entities carry a distinct `EntityValidationGrade`; validating extractors stay
+   authoritative.
+6. Conditional only: NLI cross-encoder to widen candidate assertion pairs for
+   `contradictory_statement` (deterministic `find_conflict_pair` still decides); fine-tuning
+   `bge-small` on mined request↔document pairs only if step 1's retrieval set shows retrieval is
+   the bottleneck after step 2, shipped as a new `EMBEDDING_MODEL_REVISION` with a full re-index.
+
+Verified 2026-09-30: the research LLM path sends masked text only. `research/retrieval.rs` runs
+`mask_pii(..).masked_text` on every passage (lines ~127 and ~166) before `research/model.rs`
+builds the outbound `messages` payload. Any new cloud LLM surface must go through the same
+masking step.

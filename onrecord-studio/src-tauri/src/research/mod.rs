@@ -370,7 +370,7 @@ pub async fn investigate_with_collection(
                     // A pool can finish useful documents before its last request times out.
                     // Refresh from actual retained state even if acquisition is incomplete.
                     let before=evidence.len();
-                    for term in seeds.iter().copied().chain(plan.searches.iter().map(String::as_str)) {
+                    for term in seeds.iter().copied().chain(plan.searches.iter().take(4).map(String::as_str)) {
                         if let Ok(records)=repository.research_search(term).await {add_evidence(&mut evidence,records);}
                     }
                     schema=repository.analytical_schema().await?;
@@ -1030,11 +1030,35 @@ pub async fn collect_one(
     Ok(())
 }
 
+/// Runs every detector and the gap sweep whenever ingestion has changed the corpus, so findings
+/// and insufficiency reports do not wait for the interface to be open. Gap sources are queued
+/// only under the operator's collection opt-in; `collect_one` then acquires them on its own tick.
+async fn analyze_new_evidence(
+    repository: &DuckDbRepository,
+    analyzed: &mut Option<String>,
+) -> Result<(), AppError> {
+    let marker = repository.corpus_change_marker().await?;
+    if analyzed.as_deref() == Some(marker.as_str()) {
+        return Ok(());
+    }
+    crate::analysis::detectors::refresh_all_findings(repository).await?;
+    let (found, errors) = crate::analysis::gaps::collect(repository).await;
+    let policy = repository.research_policy().await?;
+    crate::analysis::gaps::resolve(repository, &found, policy.enabled && policy.auto_collect)
+        .await?;
+    if let Some(error) = errors.into_iter().next() {
+        return Err(AppError::Storage(error));
+    }
+    *analyzed = Some(marker);
+    Ok(())
+}
+
 pub fn start_service<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
     tauri::async_runtime::spawn(async move {
         let mut tick = tokio::time::interval(std::time::Duration::from_secs(30));
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         tick.tick().await;
+        let mut analyzed_corpus: Option<String> = None;
         loop {
             tick.tick().await;
             if app
@@ -1056,6 +1080,11 @@ pub fn start_service<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
             if let Err(e) = collect_one(&repository, &manager).await {
                 let _ = repository
                     .research_phase("Collection needs attention", Some(e.to_string()))
+                    .await;
+            }
+            if let Err(error) = analyze_new_evidence(&repository, &mut analyzed_corpus).await {
+                let _ = repository
+                    .research_phase("Evidence analysis needs attention", Some(error.to_string()))
                     .await;
             }
             if let Err(error) = repository.refresh_monitoring().await {

@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { invokeCommand } from '../../ipc';
+import { isTauri } from '@tauri-apps/api/core';
+import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { ShapeGlyph, type GlyphShape } from '../ui/shapeGlyph';
 import { useAppStore } from '../../store/useAppStore';
-import type { Finding, FindingSeverity } from '../../types';
+import type { Finding, FindingCitation, FindingSeverity } from '../../types';
+import { FindingEvidence } from '../ui/EvidenceBasis';
 import ArtifactDrafts from './ArtifactDrafts';
+import EvidenceGaps from './EvidenceGaps';
+import VerifiableReportExport from './VerifiableReportExport';
+import { useProfileLensStore } from '../../store/useProfileLensStore';
+import { touchesOwnOrganization, useAffiliationDisclosure } from '../account/useProfile';
 
 /**
  * The autonomous findings inbox: the first thing on the overview screen.
@@ -24,6 +30,10 @@ export default function FindingsInbox() {
   // text can be long, and stacking several open drafts hides the ranked list.
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const listGate = useLatestRequestGate();
+  const lensEnabled = useProfileLensStore((state) => state.lensEnabled);
+  const setLensEnabled = useProfileLensStore((state) => state.setLensEnabled);
+  const setSelfReviewOpen = useProfileLensStore((state) => state.setSelfReviewOpen);
+  const { disclosure } = useAffiliationDisclosure();
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
   const setActivePortal = useAppStore((state) => state.setActivePortal);
   const setSearchFilters = useAppStore((state) => state.setSearchFilters);
@@ -46,7 +56,7 @@ export default function FindingsInbox() {
       })
       .catch((reason) => {
         if (!listGate.isCurrent(request)) return;
-        setError(String(reason));
+        setError(formatNativeError(reason));
       })
       .finally(() => {
         if (listGate.isCurrent(request)) setIsLoading(false);
@@ -66,7 +76,7 @@ export default function FindingsInbox() {
     try {
       await invokeCommand('refresh_findings', {});
     } catch (reason) {
-      setError(String(reason));
+      setError(formatNativeError(reason));
     } finally {
       setIsRefreshing(false);
       requestFindingsRefresh();
@@ -81,7 +91,7 @@ export default function FindingsInbox() {
         await invokeCommand('dismiss_finding', { id });
       } catch (reason) {
         setFindings(previous);
-        setError(String(reason));
+        setError(formatNativeError(reason));
       }
     },
     [findings],
@@ -97,12 +107,29 @@ export default function FindingsInbox() {
     [setActivePortal, setSearchFilters, setWorkspaceView],
   );
 
-  const summary = useMemo(() => summariseSeverity(findings), [findings]);
+  // Evidence view is the deepest surface a citation can reach without a document deep link.
+  const openSource = useCallback(
+    (citation: FindingCitation) => {
+      setActivePortal(citation.portalKey);
+      setWorkspaceView('evidence');
+    },
+    [setActivePortal, setWorkspaceView],
+  );
+
+  const hasConfirmedSubject =
+    disclosure !== null && (disclosure.ownPortalKeys.length > 0 ||
+      disclosure.ownAgencies.length > 0 ||
+      disclosure.ownEntityIds.length > 0);
+  const visibleFindings = useMemo(
+    () => (lensEnabled ? findings.filter((finding) => touchesOwnOrganization(finding, disclosure)) : findings),
+    [lensEnabled, findings, disclosure],
+  );
+  const summary = useMemo(() => summariseSeverity(visibleFindings), [visibleFindings]);
 
   return (
     <section id="findings-inbox" className="app-panel flex flex-col gap-3 p-4" aria-label="Findings inbox">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-[14rem] flex-1">
           <div className="app-eyebrow">Findings inbox</div>
           <h3 className="mt-1 text-[13px] font-semibold text-slate-200">
             Everything the app is surfacing right now
@@ -113,6 +140,16 @@ export default function FindingsInbox() {
             </p>
           )}
         </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <button
+          type="button"
+          aria-pressed={lensEnabled}
+          onClick={() => setLensEnabled(!lensEnabled)}
+          title="Show only findings about your confirmed organization. Ranking and confidence are unchanged."
+          className="secondary-action focus-ring whitespace-nowrap rounded-lg border px-3 py-1.5 text-[10px] font-semibold text-slate-300 transition"
+        >
+          {lensEnabled ? 'Showing: my organization' : 'My organization'}
+        </button>
         <button
           type="button"
           onClick={refresh}
@@ -121,7 +158,33 @@ export default function FindingsInbox() {
         >
           {isRefreshing ? 'Analyzing…' : 'Refresh findings'}
         </button>
+        </div>
       </div>
+
+      {isTauri() && (
+        <details className="text-[10px] text-slate-300">
+          <summary className="focus-ring cursor-pointer font-semibold">Export a verifiable report of these findings</summary>
+          <div className="mt-2">
+            <VerifiableReportExport />
+          </div>
+        </details>
+      )}
+
+      {lensEnabled && !hasConfirmedSubject && (
+        <div role="status" className="rounded-lg border border-slate-800 px-3 py-2 text-[9px] text-slate-300">
+          {disclosure?.status === 'DECLARED'
+            ? 'No match to your declared organization is confirmed yet, so nothing can be filtered. This is not a statement that the record is clean.'
+            : 'No local profile is set, so the organization lens has nothing to filter on.'}
+        </div>
+      )}
+      {lensEnabled && hasConfirmedSubject && (
+        <div className="flex items-center gap-2 text-[9px] text-slate-400">
+          <span>{visibleFindings.length} of {findings.length} findings touch your confirmed organization.</span>
+          <button type="button" onClick={() => setSelfReviewOpen(true)} className="focus-ring underline">
+            Open records self-review
+          </button>
+        </div>
+      )}
 
       {error && (
         <div role="alert" className="rounded-lg border border-rose-500/20 bg-rose-500/[0.04] px-3 py-2 text-[9px] text-rose-200">
@@ -133,7 +196,7 @@ export default function FindingsInbox() {
         <div role="status" className="text-[10px] text-slate-400">
           Loading findings…
         </div>
-      ) : findings.length === 0 ? (
+      ) : lensEnabled && !hasConfirmedSubject ? null : findings.length === 0 && error ? null : findings.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-800 bg-slate-950/25 p-4 text-center">
           <p className="text-[10px] font-medium text-slate-300">
             No findings surfaced yet.
@@ -144,39 +207,47 @@ export default function FindingsInbox() {
         </div>
       ) : (
         <ul className="flex flex-col gap-2" aria-label="Ranked findings">
-          {findings.map((finding) => (
+          {visibleFindings.map((finding) => (
             <FindingRow
               key={finding.id}
+              own={touchesOwnOrganization(finding, disclosure)}
               finding={finding}
               expanded={expandedId === finding.id}
               onToggle={() => setExpandedId((current) => (current === finding.id ? null : finding.id))}
               onInspect={() => inspect(finding)}
               onDismiss={() => dismiss(finding.id)}
+              onOpenSource={openSource}
             />
           ))}
         </ul>
       )}
+      <EvidenceGaps />
     </section>
   );
 }
 
 function FindingRow({
   finding,
+  own,
   expanded,
   onToggle,
   onInspect,
   onDismiss,
+  onOpenSource,
 }: {
   finding: Finding;
+  own: boolean;
   expanded: boolean;
   onToggle: () => void;
   onInspect: () => void;
   onDismiss: () => void;
+  onOpenSource: (citation: FindingCitation) => void;
 }) {
   const [shape, tone] = severityGlyph(finding.severity);
   return (
-    <li className="focus-within:ring-1 focus-within:ring-cyan-400/40 group rounded-xl border border-slate-800/70 bg-slate-950/30 p-3 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.03]">
-      <div className="flex items-start gap-3">
+    <li className="focus-within:ring-1 focus-within:ring-cyan-400/40 group rounded-xl border border-slate-800/70 bg-slate-950/30 p-3 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.03]" data-own-organization={own ? 'true' : undefined}>
+      {own && <p className="mb-1 text-[8px] uppercase tracking-wider text-cyan-300">Your organization (self-declared)</p>}
+      <div className="flex flex-wrap items-start gap-3 sm:flex-nowrap">
         <span
           className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-slate-900/70 ${tone}`}
           aria-hidden="true"
@@ -185,37 +256,35 @@ function FindingRow({
             <ShapeGlyph shape={shape} cx={0} cy={0} radius={4.5} fill="currentColor" />
           </svg>
         </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <button
           type="button"
           onClick={onInspect}
-          className="min-w-0 flex-1 text-left"
+          className="min-w-0 text-left"
           aria-label={`Inspect finding: ${finding.headline}`}
         >
           <p className="text-[11px] font-semibold text-slate-100">{finding.headline}</p>
           <p className="mt-1 text-[10px] leading-relaxed text-slate-400">{finding.explanation}</p>
           <p className="mt-1 text-[8px] uppercase tracking-wider text-slate-400">
-            {severityLabel(finding.severity)}
-            {finding.confidence.kind === 'MEASURED' &&
-              ` · ${(finding.confidence.basisPoints / 100).toFixed(0)}% confidence`}
-            {finding.confidence.kind === 'UNASSESSED' && ' · confidence unassessed'}
-            {' · '}
-            {formatRelativeTime(finding.lastSeenAt)}
+            {severityLabel(finding.severity)} · {formatRelativeTime(finding.lastSeenAt)}
           </p>
         </button>
-        <div className="flex shrink-0 flex-col items-end gap-1">
+        <FindingEvidence finding={finding} onOpenSource={onOpenSource} />
+        </div>
+        <div className="flex w-full shrink-0 flex-row items-end gap-1 sm:w-auto sm:flex-col">
           <button
             type="button"
             onClick={onToggle}
             aria-expanded={expanded}
             aria-controls={`finding-drafts-${finding.id}`}
-            className="focus-ring rounded-md border border-slate-800 px-2 py-0.5 text-[8px] font-medium text-slate-400 transition hover:border-cyan-400/40 hover:text-slate-200"
+            className="focus-ring rounded-md border border-slate-800 px-2 py-1 text-[8px] font-medium text-slate-400 transition hover:border-cyan-400/40 hover:text-slate-200"
           >
             {expanded ? 'Hide drafts' : 'Draft…'}
           </button>
           <button
             type="button"
             onClick={onDismiss}
-            className="focus-ring rounded-md border border-slate-800 px-2 py-0.5 text-[8px] font-medium text-slate-400 transition hover:border-slate-600 hover:text-slate-200"
+            className="focus-ring rounded-md border border-slate-800 px-2 py-1 text-[8px] font-medium text-slate-400 transition hover:border-slate-600 hover:text-slate-200"
             aria-label={`Dismiss finding: ${finding.headline}`}
           >
             Dismiss

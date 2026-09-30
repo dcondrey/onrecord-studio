@@ -31,7 +31,9 @@ export type FindingKind =
   | 'CROSS_CORPUS_SHARED_LANGUAGE'
   | 'CROSS_CORPUS_TEMPORAL_SHIFT'
   | 'CROSS_CORPUS_ORPHAN_TOPIC'
-  | 'CROSS_CORPUS_REUSED_DENIAL_GROUNDS';
+  | 'CROSS_CORPUS_REUSED_DENIAL_GROUNDS'
+  | 'POLICY_VIOLATION_DETECTED'
+  | 'CLAIM_CONTRADICTS_DATA';
 
 /**
  * How a finding's confidence was derived. `UNASSESSED` distinguishes an unmeasured rung from a
@@ -83,8 +85,33 @@ export interface FindingsFilter {
   includeDismissed?: boolean | null;
 }
 
+export type GapStatus = 'acquiring' | 'exhausted' | 'noAutomaticSource';
+
+/** A route the corpus identified but cannot yet test. Never a finding and never evidence of compliance. */
+export interface EvidenceGapView {
+  detector: string;
+  key: string;
+  route: string;
+  blocked: string;
+  role: string;
+  request: string;
+  status: GapStatus;
+  sources: string[];
+}
+
 export interface RefreshFindingsSummary {
   detectorsRun: number;
   findingsRecorded: number;
   staleCleared: number;
+}
+
+/**
+ * Kinds that name a counted legal or policy violation. Mirrors
+ * `FindingKind::is_legal_claim` in `analysis/finding.rs`; every other kind is a pattern or
+ * statistical signal and must not be presented as a legal claim.
+ */
+export const LEGAL_CLAIM_KINDS: readonly FindingKind[] = ['POLICY_VIOLATION_DETECTED'];
+
+export function isLegalClaimKind(kind: FindingKind): boolean {
+  return LEGAL_CLAIM_KINDS.includes(kind);
 }

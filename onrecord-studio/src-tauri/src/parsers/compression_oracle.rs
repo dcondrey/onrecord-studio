@@ -251,7 +251,7 @@ pub fn assess_package_compression_risk(
                     byte_offset: Some(pii_finding.byte_start as u64),
                     ..EvidenceLocator::default()
                 },
-                &format!("kind={:?};evidenceSha256={}", pii_finding.kind, pii_finding.evidence_sha256),
+                &format!("kind={:?};bytes={}..{}", pii_finding.kind, pii_finding.byte_start, pii_finding.byte_end),
                 "A bounded structural PII detector found sensitive-looking plaintext in the decompressed member. The value is not returned; review the member before releasing the package.",
                 options,
             )?);

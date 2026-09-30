@@ -1,4 +1,5 @@
 pub mod analysis;
+mod atomic_write;
 mod blocking;
 pub mod commands;
 pub mod error;
@@ -8,10 +9,13 @@ mod integrity;
 pub mod licensing;
 mod normalization;
 pub mod parsers;
+pub mod profile;
 pub mod provenance;
+pub mod report;
 pub mod research;
 pub mod setup;
 pub mod storage;
+pub mod tracker;
 pub mod types;
 
 use tauri::menu::{Menu, MenuBuilder, MenuItem, SubmenuBuilder};
@@ -29,7 +33,11 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
             ));
             return true;
         };
-        if let Err(error) = license.require_authorized() {
+        // Two independent verdicts: the managed gate, then the process-wide entitlement check.
+        if let Err(error) = license
+            .require_authorized()
+            .and_then(|()| licensing::recheck())
+        {
             invoke.resolver.reject(error);
             return true;
         }
@@ -37,6 +45,12 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
     let native_handler: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = generate_handler![
         commands::runtime::get_license_status,
         commands::runtime::refresh_license,
+        commands::account::get_account_status,
+        commands::account::begin_sign_in,
+        commands::account::sign_out,
+        commands::account::delete_account,
+        commands::account::start_checkout,
+        commands::account::activate_this_device,
         commands::ingest::pause_source_sync,
         commands::ingest::resume_source_sync,
         commands::ingest::remove_source,
@@ -53,6 +67,7 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::corpus::get_corpus_index_status,
         commands::corpus::list_top_corpus_entities,
         commands::corpus::get_corpus_entity_neighborhood,
+        commands::corpus::get_document_entity_truncations,
         commands::corpus::find_entity_paths,
         commands::corpus::list_entity_brokers,
         commands::semantic::get_embedding_model_status,
@@ -124,11 +139,36 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::investigation::audit_document_residual_evidence,
         commands::runtime::get_ocr_capability,
         commands::findings::refresh_findings,
+        commands::findings::list_evidence_gaps,
         commands::findings::list_findings,
         commands::findings::dismiss_finding,
+        commands::intent::run_intent_query,
         commands::redaction_inference::infer_redaction,
         commands::artifacts::draft_followup_from_finding,
-        commands::artifacts::draft_appeal_from_finding
+        commands::artifacts::draft_appeal_from_finding,
+        commands::artifacts::draft_availability_for_finding,
+        commands::artifacts::draft_appeal_from_statutory_deadline,
+        commands::report::export_verifiable_report,
+        commands::profile::get_profile,
+        commands::profile::save_profile,
+        commands::profile::delete_profile,
+        commands::profile::list_affiliation_matches,
+        commands::profile::confirm_affiliation_match,
+        commands::profile::reject_affiliation_match,
+        commands::profile::get_affiliation_disclosure,
+        commands::verification::request_work_email_code,
+        commands::verification::confirm_work_email_code,
+        commands::verification::link_affiliation_verified_domain,
+        commands::tracker::list_claimed_requests,
+        commands::tracker::claim_request,
+        commands::tracker::update_claimed_request,
+        commands::tracker::remove_claimed_request,
+        commands::tracker::add_timeline_event,
+        commands::tracker::remove_timeline_event,
+        commands::tracker::import_request_emails,
+        commands::tracker::confirm_suggested_event,
+        commands::tracker::reject_suggested_event,
+        commands::tracker::get_request_deadline
     ];
     native_handler(invoke)
 }
@@ -225,8 +265,15 @@ fn application_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init());
+    // Registered only in the Developer ID build; the App Store build must never self-update.
+    #[cfg(feature = "direct-license")]
+    let builder = builder
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init());
+    builder
         .menu(application_menu)
         .on_menu_event(|app, event| {
             let command = event.id().0.as_str();

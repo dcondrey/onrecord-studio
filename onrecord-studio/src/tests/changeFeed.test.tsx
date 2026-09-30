@@ -96,3 +96,29 @@ describe('ChangeFeed', () => {
     await screen.findByText(/1 new finding since you last opened/);
   });
 });
+
+describe('ChangeFeed statutory violations', () => {
+  it('shows the counted violations from the agency profiles', async () => {
+    bridge.rows = [sample('a', '2026-09-01T00:00:00Z')];
+    act(() => {
+      useAppStore.setState({
+        agencyProfiles: [
+          { portalSubdomain: 'p1', statutoryViolationCount: 2 },
+          { portalSubdomain: 'p2', statutoryViolationCount: 1 },
+        ] as never,
+      });
+    });
+    render(<ChangeFeed />);
+    await screen.findByText('3 statutory deadline violations counted.');
+  });
+
+  it('omits the button when no violation is counted', async () => {
+    bridge.rows = [sample('a', '2026-09-01T00:00:00Z')];
+    act(() => {
+      useAppStore.setState({ agencyProfiles: [{ portalSubdomain: 'p1', statutoryViolationCount: 0 }] as never });
+    });
+    render(<ChangeFeed />);
+    await screen.findByText(/new finding/);
+    expect(screen.queryByText(/statutory deadline/)).toBeNull();
+  });
+});

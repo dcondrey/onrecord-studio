@@ -2,17 +2,6 @@
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CaseAuditRecord {
-    pub audit_id: String,
-    pub target_request_id: u64,
-    pub target_subdomain: String,
-    pub auditor_notes: Option<String>,
-    pub verified_at: String,
-    pub verification_status: VerificationState,
-    pub document_integrity_flags: Vec<String>,
-}
-
 /// What an audit or profile concluded about a request or an agency.
 ///
 /// `scripts/generate-contracts.mjs` derives the TypeScript counterpart from this enum, and

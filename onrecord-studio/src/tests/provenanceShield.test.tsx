@@ -90,6 +90,7 @@ function verification(overrides: Partial<DocumentProvenanceVerification>): Docum
     isCryptographicallySigned: false,
     signatureVerification: 'NOT_ATTEMPTED',
     signatureIssuer: null,
+    signingCertificateSerialNumber: null,
     signingTimestamp: null,
     assertionCount: 0,
     invalidAssertionCount: 0,
@@ -131,6 +132,7 @@ function record(overrides: Partial<ProvenanceVerificationRecord>): ProvenanceVer
     manifestPresent: false,
     isCryptographicallySigned: false,
     signatureIssuer: null,
+    signingCertificateSerialNumber: null,
     signingTimestamp: null,
     assertionCount: 0,
     invalidAssertionCount: 0,
@@ -185,6 +187,28 @@ describe('document evidence navigation', () => {
     const copied = new URL(writeText.mock.calls[0][0]);
     const fragment = new URLSearchParams(copied.hash.slice(1));
     expect(Object.fromEntries(fragment)).toEqual({ portal: 'example', request: '3', document: '7', offset: '12' });
+  });
+
+  // The clipboard write is async and cannot be cancelled. Removing the shareGate check in
+  // shareEvidenceLocation makes this fail: document 7's "Copied offset" confirmation appears
+  // while document 8 is on screen.
+  it('discards a copy confirmation that resolves after the viewer moved to another document', async () => {
+    bridge.result = verification({});
+    let releaseCopy = () => {};
+    const writeText = vi.fn().mockImplementation(
+      () => new Promise<void>((resolve) => { releaseCopy = resolve; }),
+    );
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+
+    const view = render(<DocumentViewer documentId={7} portalKey="example" fileName="a.pdf" textContent="evidence text" fileSizeFormatted="1 KB" />);
+    await waitFor(() => expect(screen.queryByText('Verifying…')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Copy evidence link' }));
+
+    view.rerender(<DocumentViewer documentId={8} portalKey="example" fileName="b.pdf" textContent="evidence text" fileSizeFormatted="1 KB" />);
+
+    releaseCopy();
+    await settlePendingResolutions();
+    expect(screen.queryByRole('status')).toBeNull();
   });
 
   it('paginates a large extracted-text chunk instead of mounting it all at once', async () => {
@@ -343,6 +367,72 @@ describe('provenance verification log', () => {
     // Document 7's finding must not be presented as document 8's.
     expect(screen.queryByText('Digest mismatch')).toBeNull();
     expect(screen.getByText('Local file hash verified')).toBeTruthy();
+  });
+
+  // useC2PA is not remounted or reset when documentId changes -- DocumentViewer is reused across
+  // documents -- so without a guard, activeManifest would keep document 7's claim graph visible
+  // until document 8's own check resolves: document 7's claim graph rendered while document 8 is
+  // still "Verifying…". Two independent layers close this: useC2PA clears activeManifest the
+  // instant a new request begins, and DocumentViewer's own `manifestForActiveDocument` refuses to
+  // render a result whose documentId/portalKey do not match what is on screen. The sibling test
+  // below ("...has no original to verify") is what proves the DocumentViewer-side layer on its
+  // own, since useC2PA's clear never fires when no request is issued at all.
+  it('does not show the previous document\'s claim graph while the next document is still verifying', async () => {
+    bridge.verificationsByDocument.set(7, verification({
+      documentId: 7,
+      manifestPresent: true,
+      claimGraph: {
+        activeManifestLabel: 'urn:c2pa:doc-7',
+        claims: [{ manifestLabel: 'urn:c2pa:doc-7', isActive: true, title: 'Document 7 claim', format: null, instanceId: null, claimGenerator: null, assertionLabels: [] }],
+        ingredients: [],
+        validationStatuses: [],
+        certificateChainTrusted: false,
+        certificateChainDiagnostics: [],
+        truncated: false,
+      },
+    }));
+    bridge.verificationsByDocument.set(8, verification({ documentId: 8 }));
+    let releaseEight = () => {};
+    bridge.verifyGates.set(8, new Promise<void>((resolve) => {
+      releaseEight = () => resolve();
+    }));
+
+    const view = render(<DocumentViewer documentId={7} portalKey="example" fileName="a.pdf" textContent="" fileSizeFormatted="1 KB" />);
+    await waitFor(() => expect(screen.getByText(/urn:c2pa:doc-7/)).toBeTruthy());
+
+    view.rerender(<DocumentViewer documentId={8} portalKey="example" fileName="b.pdf" textContent="" fileSizeFormatted="1 KB" />);
+    await waitFor(() => expect(screen.getByText('Verifying…')).toBeTruthy());
+    expect(screen.queryByText(/urn:c2pa:doc-7/)).toBeNull();
+
+    releaseEight();
+    await settlePendingResolutions();
+    expect(screen.queryByText('Verifying…')).toBeNull();
+  });
+
+  // Distinct from the loading-window case above: document 8 never issues a check at all (no
+  // original file to verify), so nothing ever invalidates document 7's stale result. Without the
+  // identity check this stays wrong for as long as the viewer sits on a document with no original.
+  it('does not show the previous document\'s claim graph when the new document has no original to verify', async () => {
+    bridge.verificationsByDocument.set(7, verification({
+      documentId: 7,
+      manifestPresent: true,
+      claimGraph: {
+        activeManifestLabel: 'urn:c2pa:doc-7',
+        claims: [{ manifestLabel: 'urn:c2pa:doc-7', isActive: true, title: 'Document 7 claim', format: null, instanceId: null, claimGenerator: null, assertionLabels: [] }],
+        ingredients: [],
+        validationStatuses: [],
+        certificateChainTrusted: false,
+        certificateChainDiagnostics: [],
+        truncated: false,
+      },
+    }));
+
+    const view = render(<DocumentViewer documentId={7} portalKey="example" fileName="a.pdf" textContent="" fileSizeFormatted="1 KB" originalAvailable />);
+    await waitFor(() => expect(screen.getByText(/urn:c2pa:doc-7/)).toBeTruthy());
+
+    view.rerender(<DocumentViewer documentId={8} portalKey="example" fileName="b.pdf" textContent="" fileSizeFormatted="1 KB" originalAvailable={false} />);
+    await waitFor(() => expect(screen.getByText('Original referenced · file verification unavailable')).toBeTruthy());
+    expect(screen.queryByText(/urn:c2pa:doc-7/)).toBeNull();
   });
 
   it('discards a revision scan that resolves after the viewer moved on', async () => {

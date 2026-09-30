@@ -352,6 +352,7 @@ pub async fn get_document_text_chunk(
     character_limit: Option<usize>,
     repository: State<'_, DuckDbRepository>,
 ) -> Result<DocumentTextChunk, AppError> {
+    crate::licensing::recheck()?;
     let portal_key = validate_portal_key(&portal_key)?;
     let character_limit = character_limit.unwrap_or(100_000);
     if !(1..=100_000).contains(&character_limit) {

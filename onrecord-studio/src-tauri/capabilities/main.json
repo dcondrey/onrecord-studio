@@ -2,13 +2,29 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main-window-capability",
   "description": "Explicit security scopes allowing front-to-back IPC interaction loops.",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:path:default",
     "core:app:allow-set-app-theme",
     "core:event:default",
     "core:window:default",
     "core:webview:default",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "https://checkout.stripe.com/*"
+        },
+        {
+          "url": "https://billing.stripe.com/*"
+        },
+        {
+          "url": "https://writerslogic.com/*"
+        }
+      ]
+    }
   ]
 }

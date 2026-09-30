@@ -45,10 +45,3 @@ export interface CrossAgencyCorrelation {
   keywordSignalCount: number;
   correlationDensity: number;
 }
-
-export interface OutlierCluster {
-  clusterId: string;
-  coreAnomalyType: 'CIVIC_DISPLACEMENT' | 'PROCUREMENT_ANOMALY' | string;
-  dynamicZScore: number;
-  matchingRequestIds: number[];
-}

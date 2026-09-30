@@ -22,7 +22,13 @@ impl DuckDbRepository {
     pub async fn initialize_research(&self) -> Result<(), AppError> {
         self.query_connection("Initialize autonomous research", |conn| {
             conn.execute_batch(SCHEMA).map_err(err)?;
-            let mut initial_policy = ResearchPolicy::default();
+            // Research sends excerpts to a third-party model provider, so a fresh install
+            // starts with it off; the user opts in from the research workspace.
+            let mut initial_policy = ResearchPolicy {
+                enabled: false,
+                auto_collect: false,
+                ..ResearchPolicy::default()
+            };
             if crate::research::model::provider_key("openrouter").is_some() {
                 initial_policy.provider = "openrouter".into();
                 initial_policy.model = "openai/gpt-5.4".into();
@@ -90,17 +96,6 @@ impl DuckDbRepository {
             )
             .map_err(err)?;
             Ok(())
-        })
-        .await
-    }
-    pub async fn research_schedule(&self) -> Result<(Option<String>, Option<String>), AppError> {
-        self.query_connection("Research schedule", |conn| {
-            conn.query_row(
-                "SELECT last_finished_at, last_topic FROM research_settings WHERE singleton",
-                [],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .map_err(err)
         })
         .await
     }
@@ -186,6 +181,34 @@ impl DuckDbRepository {
         self.query_connection("Pending evidence-gap acquisitions", |conn| {
             conn.prepare("SELECT label, url, state, detail FROM research_sources WHERE state IN ('QUEUED', 'RETRY', 'STARTING') AND next_attempt_at <= ?1 ORDER BY next_attempt_at LIMIT 30").map_err(err)?.query_map(params![super::maintenance::now()], |row| Ok(ResearchSourceStatus { label:row.get(0)?,url:row.get(1)?,state:row.get(2)?,detail:row.get(3)? })).map_err(err)?.collect::<Result<Vec<_>,_>>().map_err(err)
         }).await
+    }
+    /// Every recorded acquisition's state, and whether its retry/recheck time has passed.
+    pub async fn research_source_states(
+        &self,
+    ) -> Result<std::collections::HashMap<String, (String, bool)>, AppError> {
+        self.query_connection("Research source states", |conn| {
+            conn.prepare("SELECT url, state, next_attempt_at <= ?1 FROM research_sources")
+                .map_err(err)?
+                .query_map(params![super::maintenance::now()], |row| {
+                    Ok((row.get(0)?, (row.get(1)?, row.get(2)?)))
+                })
+                .map_err(err)?
+                .collect::<Result<_, _>>()
+                .map_err(err)
+        })
+        .await
+    }
+    /// Changes whenever ingestion adds or revises a document or an analytical snapshot.
+    pub async fn corpus_change_marker(&self) -> Result<String, AppError> {
+        self.query_connection("Corpus change marker", |conn| {
+            conn.query_row(
+                "SELECT (SELECT COUNT(*) FROM documents) || ':' || (SELECT COALESCE(MAX(updated_at), '') FROM documents) || ':' || (SELECT COUNT(*) FROM analytical_snapshots)",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(err)
+        })
+        .await
     }
     pub async fn record_research_source(
         &self,
@@ -365,6 +388,13 @@ mod tests {
         assert!(!db.research_policy().await.unwrap().enabled);
     }
     #[tokio::test]
+    async fn a_fresh_install_does_not_send_anything_to_a_model_provider() {
+        let (_root, db) = setup().await;
+        db.initialize_research().await.unwrap();
+        let policy = db.research_policy().await.unwrap();
+        assert!(!policy.enabled && !policy.auto_collect);
+    }
+    #[tokio::test]
     async fn dossiers_round_trip_compressed_and_call_reservations_are_durable() {
         let (_root, db) = setup().await;
         db.initialize_research().await.unwrap();
@@ -465,6 +495,8 @@ mod tests {
         let (_root, db) = setup().await;
         db.initialize_research().await.unwrap();
         let policy = ResearchPolicy {
+            enabled: true,
+            auto_collect: true,
             provider: "ollama".into(),
             ..db.research_policy().await.unwrap()
         };

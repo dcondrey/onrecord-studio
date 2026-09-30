@@ -79,16 +79,12 @@ static CPRA_WRITTEN_JUSTIFICATION: StaticAuthority = StaticAuthority {
     quote: None,
 };
 
-// Segregability — used when a redaction pattern suggests over-withholding.
-static CPRA_SEGREGABILITY: StaticAuthority = StaticAuthority {
-    statute: "Cal. Gov. Code § 7922.525(b) (agency shall segregate exempt and non-exempt portions)",
-    quote: None,
-};
-
 // A universally-applicable template used when no more specific one exists.
 static GENERIC_CPRA_FOLLOWUP_AUTHORITIES: [StaticAuthority; 1] = [CPRA_UMBRELLA];
 
 static ABSENCE_FOLLOWUP_AUTHORITIES: [StaticAuthority; 2] = [CPRA_UMBRELLA, CPRA_DISCLOSURE];
+
+static EMAIL_GAP_FOLLOWUP_AUTHORITIES: [StaticAuthority; 2] = [CPRA_UMBRELLA, CPRA_DISCLOSURE];
 
 static METADATA_FOLLOWUP_AUTHORITIES: [StaticAuthority; 1] = [CPRA_UMBRELLA];
 
@@ -96,17 +92,6 @@ static EXTENSION_FOLLOWUP_AUTHORITIES: [StaticAuthority; 2] = [CPRA_UMBRELLA, CP
 
 static BOILERPLATE_FOLLOWUP_AUTHORITIES: [StaticAuthority; 2] =
     [CPRA_UMBRELLA, CPRA_WRITTEN_JUSTIFICATION];
-
-static NO_RECORDS_APPEAL_AUTHORITIES: [StaticAuthority; 3] =
-    [CPRA_UMBRELLA, CPRA_DISCLOSURE, CPRA_WRITTEN_JUSTIFICATION];
-
-static BOILERPLATE_APPEAL_AUTHORITIES: [StaticAuthority; 3] = [
-    CPRA_UMBRELLA,
-    CPRA_WRITTEN_JUSTIFICATION,
-    CPRA_SEGREGABILITY,
-];
-
-static EXTENSION_APPEAL_AUTHORITIES: [StaticAuthority; 2] = [CPRA_UMBRELLA, CPRA_DEADLINE];
 
 static CPRA_FOLLOWUPS: &[FindingKind] = &[
     FindingKind::HeldBackResponse,
@@ -120,11 +105,12 @@ static CPRA_FOLLOWUPS: &[FindingKind] = &[
     FindingKind::EmailThreadGap,
     FindingKind::ContradictoryStatement,
     FindingKind::NoRecordsContradictedByRelease,
+    FindingKind::PolicyViolationDetected,
 ];
 
-static CPRA_APPEAL_NO_RECORDS: &[FindingKind] = &[FindingKind::NoRecordsContradictedByRelease];
-static CPRA_APPEAL_BOILERPLATE: &[FindingKind] = &[FindingKind::BoilerplateDenial];
-static CPRA_APPEAL_EXTENSION: &[FindingKind] = &[FindingKind::ExtensionAbuse];
+static POLICY_APPEAL_AUTHORITIES: [StaticAuthority; 1] = [CPRA_DEADLINE];
+
+static CPRA_APPEAL_POLICY: &[FindingKind] = &[FindingKind::PolicyViolationDetected];
 
 static TEMPLATES: LazyLock<Vec<ArtifactTemplate>> = LazyLock::new(|| {
     vec![
@@ -153,6 +139,132 @@ static TEMPLATES: LazyLock<Vec<ArtifactTemplate>> = LazyLock::new(|| {
                 Please respond within the statutory 10-day determination window (Cal. Gov. Code § \
                 7922.535). If any missing item is redacted rather than withheld in full, please \
                 release the segregable portions per § 7922.525(b).\n\n\
+                Sincerely,\n\
+                [YOUR NAME]",
+            cited_authorities: &ABSENCE_FOLLOWUP_AUTHORITIES,
+        },
+        ArtifactTemplate {
+            id: "cpra_followup_email_gap_v1",
+            kind: ArtifactKind::FollowupRequest,
+            jurisdiction: "US-CA",
+            applicable_finding_kinds: &[FindingKind::EmailThreadGap],
+            subject: "Follow-up request: email messages referenced by released messages",
+            body: "Date: {TODAY}\n\
+                To: {AGENCY_LABEL}\n\
+                Re: Follow-up to {REQUEST_LABEL}\n\n\
+                Under the California Public Records Act, I am writing about records released in \
+                response to {REQUEST_LABEL}. A released email names, in its reply headers, a \
+                Message-ID that is not among the messages released.\n\n\
+                {FINDING_HEADLINE}\n\n\
+                {FINDING_EXPLANATION}\n\n\
+                The released messages that carry the reference:\n\
+                {EVIDENCE_BULLETS}\n\n\
+                Under {AUTHORITY_CITATIONS}, I am requesting the message or messages with the \
+                Message-ID(s) named above, or, if a message is being withheld in whole or in \
+                part, the specific exemption relied on. If no such message exists in the agency's \
+                possession, please say so. This request does not assume the message is \
+                responsive or non-exempt.\n\n\
+                Sincerely,\n\
+                [YOUR NAME]",
+            cited_authorities: &EMAIL_GAP_FOLLOWUP_AUTHORITIES,
+        },
+        ArtifactTemplate {
+            id: "cpra_followup_held_back_v1",
+            kind: ArtifactKind::FollowupRequest,
+            jurisdiction: "US-CA",
+            applicable_finding_kinds: &[FindingKind::HeldBackResponse],
+            subject: "Follow-up request: transmittal and approval records for a response",
+            body: "Date: {TODAY}\n\
+                To: {AGENCY_LABEL}\n\
+                Re: Follow-up to {REQUEST_LABEL}\n\n\
+                Under the California Public Records Act, I am writing about the response to \
+                {REQUEST_LABEL}. Metadata in the released response records an earlier \
+                modification date than its release date:\n\n\
+                {FINDING_HEADLINE}\n\n\
+                {FINDING_EXPLANATION}\n\n\
+                Supporting metadata:\n\
+                {EVIDENCE_BULLETS}\n\n\
+                Under {AUTHORITY_CITATIONS}, I am requesting the transmittal and approval records \
+                for that response: the record showing when it was transmitted to the requester \
+                and any internal approval or sign-off records for its release, with their dates. \
+                Metadata dates can have ordinary explanations, and this request does not assume \
+                otherwise.\n\n\
+                Sincerely,\n\
+                [YOUR NAME]",
+            cited_authorities: &METADATA_FOLLOWUP_AUTHORITIES,
+        },
+        ArtifactTemplate {
+            id: "cpra_followup_contradiction_v1",
+            kind: ArtifactKind::FollowupRequest,
+            jurisdiction: "US-CA",
+            applicable_finding_kinds: &[FindingKind::ContradictoryStatement],
+            subject: "Follow-up request: clarification of differing statements in released records",
+            body: "Date: {TODAY}\n\
+                To: {AGENCY_LABEL}\n\
+                Re: Follow-up to {REQUEST_LABEL}\n\n\
+                Under the California Public Records Act, I am writing about two released records \
+                that state different values for the same item:\n\n\
+                {FINDING_HEADLINE}\n\n\
+                {FINDING_EXPLANATION}\n\n\
+                The statements, with their locations:\n\
+                {EVIDENCE_BULLETS}\n\n\
+                I am asking the agency to identify which statement is current and to reconcile \
+                the two, citing the record, policy, or decision that establishes the current \
+                value. Under {AUTHORITY_CITATIONS}, I am also requesting any record that \
+                supersedes or amends either document. The records may differ for a legitimate \
+                reason, such as a revision; this request only asks which applies.\n\n\
+                Sincerely,\n\
+                [YOUR NAME]",
+            cited_authorities: &GENERIC_CPRA_FOLLOWUP_AUTHORITIES,
+        },
+        ArtifactTemplate {
+            id: "cpra_followup_claim_versus_data_v1",
+            kind: ArtifactKind::FollowupRequest,
+            jurisdiction: "US-CA",
+            applicable_finding_kinds: &[FindingKind::ClaimContradictsData],
+            subject: "Follow-up request: figures behind a stated total",
+            body: "Date: {TODAY}\n\
+                To: {AGENCY_LABEL}\n\
+                Re: Follow-up to {REQUEST_LABEL}\n\n\
+                Under the California Public Records Act, I am writing about a figure stated in a \
+                released record that does not match the published data for the same period and \
+                scope:\n\n\
+                {FINDING_HEADLINE}\n\n\
+                {FINDING_EXPLANATION}\n\n\
+                The statement and the data it was compared against, with their locations:\n\
+                {EVIDENCE_BULLETS}\n\n\
+                I am asking the agency to identify the source of the stated figure and the basis, \
+                fund, department and fiscal year it covers, and to provide the underlying report or \
+                ledger rows from which it was derived. Under {AUTHORITY_CITATIONS}, I am also \
+                requesting any later revision or correction of either the statement or the \
+                published data. The two may differ for a legitimate reason, such as a different \
+                basis, scope, rounding convention or a later revision; this request only asks \
+                which figures apply and how they were reached.\n\n\
+                Sincerely,\n\
+                [YOUR NAME]",
+            cited_authorities: &GENERIC_CPRA_FOLLOWUP_AUTHORITIES,
+        },
+        ArtifactTemplate {
+            id: "cpra_followup_no_records_v1",
+            kind: ArtifactKind::FollowupRequest,
+            jurisdiction: "US-CA",
+            applicable_finding_kinds: &[FindingKind::NoRecordsContradictedByRelease],
+            subject: "Follow-up request: released documents that mention the topic of a request",
+            body: "Date: {TODAY}\n\
+                To: {AGENCY_LABEL}\n\
+                Re: Follow-up to {REQUEST_LABEL}\n\n\
+                Under the California Public Records Act, I am writing about the response to \
+                {REQUEST_LABEL}, which stated that no responsive records were located. Other \
+                documents the agency has released publicly appear to mention the same topic:\n\n\
+                {FINDING_HEADLINE}\n\n\
+                {FINDING_EXPLANATION}\n\n\
+                The released documents:\n\
+                {EVIDENCE_BULLETS}\n\n\
+                Under {AUTHORITY_CITATIONS}, I am asking the agency to identify which of these \
+                documents it considers within the scope of {REQUEST_LABEL}, to describe the \
+                search it conducted, and to state why any of them was not treated as responsive. \
+                A document can mention a topic without being responsive to a specific request, \
+                and this request does not assume otherwise.\n\n\
                 Sincerely,\n\
                 [YOUR NAME]",
             cited_authorities: &ABSENCE_FOLLOWUP_AUTHORITIES,
@@ -269,93 +381,36 @@ static TEMPLATES: LazyLock<Vec<ArtifactTemplate>> = LazyLock::new(|| {
                 [YOUR NAME]",
             cited_authorities: &GENERIC_CPRA_FOLLOWUP_AUTHORITIES,
         },
-        // --- CPRA appeal templates. ---
+        // --- CPRA appeal templates: legal-claim kinds only. ---
         ArtifactTemplate {
-            id: "cpra_appeal_no_records_v1",
+            id: "cpra_appeal_policy_commitment_v1",
             kind: ArtifactKind::Appeal,
             jurisdiction: "US-CA",
-            applicable_finding_kinds: CPRA_APPEAL_NO_RECORDS,
-            subject: "Appeal: denial contradicted by publicly-released records",
+            applicable_finding_kinds: CPRA_APPEAL_POLICY,
+            subject: "Complaint: agency practice compared with its own stated response time",
             body: "Date: {TODAY}\n\
-                To: {AGENCY_LABEL} (Records Appeals)\n\
-                Re: Appeal of denial to {REQUEST_LABEL}\n\n\
-                I am writing to appeal the denial of my public records request {REQUEST_LABEL}, in \
-                which the agency stated that no responsive records exist.\n\n\
+                To: {AGENCY_LABEL} (Records Appeals or Custodian of Records)\n\
+                Re: Agency response times compared with the agency's own published policy\n\
+                Example request on the portal: {REQUEST_LABEL} (the slowest counted request, cited \
+                as an example)\n\n\
+                I am writing to bring to the agency's attention a difference between the response \
+                time its own policy document states and the response times recorded on the public \
+                portal.\n\n\
                 {FINDING_HEADLINE}\n\n\
                 {FINDING_EXPLANATION}\n\n\
-                The following documents released by the agency to other requesters contain \
-                content responsive to the topic of my request, contradicting the denial's factual \
-                basis:\n\
+                The stated commitment, quoted from the agency's document, and its location:\n\
                 {EVIDENCE_BULLETS}\n\n\
-                Under {AUTHORITY_CITATIONS}, the California Public Records Act requires an agency \
-                to make responsive records promptly available (Cal. Gov. Code § 7922.525). A \
-                denial resting on the assertion that no responsive records exist cannot stand \
-                when the agency's own prior productions contain such records.\n\n\
-                I request that this appeal be reviewed and that the responsive records be \
-                released, with any withheld portions accompanied by the specific statutory \
-                exemption relied on and the basis for its application (Cal. Gov. Code § 7922.540).\n\n\
+                Framework: {AUTHORITY_CITATIONS}. The California Public Records Act sets its own \
+                determination period, stated in that section. This complaint does not assert that \
+                the statutory period was exceeded on any request; it concerns the agency's own \
+                stated commitment. Only requests with a recorded determination event and no \
+                recorded extension were counted, as described above.\n\n\
+                I ask the agency to review the counted requests against the commitment its policy \
+                states, to tell me whether the policy is current, and to explain any request \
+                where the stated response time was not met.\n\n\
                 Sincerely,\n\
                 [YOUR NAME]",
-            cited_authorities: &NO_RECORDS_APPEAL_AUTHORITIES,
-        },
-        ArtifactTemplate {
-            id: "cpra_appeal_boilerplate_v1",
-            kind: ArtifactKind::Appeal,
-            jurisdiction: "US-CA",
-            applicable_finding_kinds: CPRA_APPEAL_BOILERPLATE,
-            subject: "Appeal: denial appears to reflect a template rather than individualized review",
-            body: "Date: {TODAY}\n\
-                To: {AGENCY_LABEL} (Records Appeals)\n\
-                Re: Appeal of denial to {REQUEST_LABEL}\n\n\
-                I am appealing the denial of my public records request {REQUEST_LABEL}. The \
-                denial's language appears verbatim or near-verbatim across multiple unrelated \
-                requests the agency has responded to:\n\n\
-                {FINDING_HEADLINE}\n\n\
-                {FINDING_EXPLANATION}\n\n\
-                Supporting instances of the repeated language:\n\
-                {EVIDENCE_BULLETS}\n\n\
-                Under {AUTHORITY_CITATIONS}, the California Public Records Act requires an agency \
-                to state the reasons for withholding a record with reference to the specific \
-                exemption relied on (Cal. Gov. Code § 7922.540) and to segregate exempt from \
-                non-exempt portions (Cal. Gov. Code § 7922.525(b)). A response that consists \
-                only of stock language, without an individualized statement of how the cited \
-                exemption applies to the records at issue in this request, does not satisfy the \
-                statutory obligation.\n\n\
-                I request that the denial be reviewed, that any responsive segregable portions be \
-                released, and that the agency provide an individualized statement of the basis \
-                for any continued withholding.\n\n\
-                Sincerely,\n\
-                [YOUR NAME]",
-            cited_authorities: &BOILERPLATE_APPEAL_AUTHORITIES,
-        },
-        ArtifactTemplate {
-            id: "cpra_appeal_extension_v1",
-            kind: ArtifactKind::Appeal,
-            jurisdiction: "US-CA",
-            applicable_finding_kinds: CPRA_APPEAL_EXTENSION,
-            subject: "Appeal: pattern of repeated extension invocations",
-            body: "Date: {TODAY}\n\
-                To: {AGENCY_LABEL} (Records Appeals)\n\
-                Re: Appeal regarding pattern of statutory extensions\n\n\
-                I am appealing the agency's pattern of relying on a single statutory extension \
-                ground under Cal. Gov. Code § 7922.535(b) to defer determinations on public \
-                records requests:\n\n\
-                {FINDING_HEADLINE}\n\n\
-                {FINDING_EXPLANATION}\n\n\
-                Supporting evidence:\n\
-                {EVIDENCE_BULLETS}\n\n\
-                Under {AUTHORITY_CITATIONS}, an extension of the 10-day initial determination \
-                window is permitted only when the specific enumerated conditions in § 7922.535(b) \
-                are actually present. A systemic pattern of invoking one ground on a large \
-                fraction of requests raises the question whether the ground is being asserted \
-                pretextually rather than because the enumerated condition is present in each \
-                specific request.\n\n\
-                I request that the agency's use of this ground be reviewed, that the specific \
-                factual basis for each invocation be provided, and that any requests where the \
-                condition was not actually present receive an immediate determination.\n\n\
-                Sincerely,\n\
-                [YOUR NAME]",
-            cited_authorities: &EXTENSION_APPEAL_AUTHORITIES,
+            cited_authorities: &POLICY_APPEAL_AUTHORITIES,
         },
     ]
 });
@@ -399,6 +454,7 @@ pub fn render_authority_line(template: &ArtifactTemplate) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::analysis::artifacts::tests::all_kinds;
 
     #[test]
     fn every_template_id_is_unique() {
@@ -432,28 +488,63 @@ mod tests {
     }
 
     #[test]
-    fn no_records_kind_selects_no_records_appeal_when_kind_is_appeal() {
-        let template = find_template(
-            ArtifactKind::Appeal,
-            "US-CA",
-            FindingKind::NoRecordsContradictedByRelease,
-        )
-        .expect("should find an appeal template");
-        assert_eq!(template.id, "cpra_appeal_no_records_v1");
+    fn appeal_templates_exist_exactly_for_the_appeal_family() {
+        use crate::analysis::artifacts::DraftFamily;
+        for kind in all_kinds() {
+            let family = DraftFamily::for_kind(kind);
+            let followup = find_template(ArtifactKind::FollowupRequest, "US-CA", kind).is_some();
+            let appeal = find_template(ArtifactKind::Appeal, "US-CA", kind).is_some();
+            assert_eq!(
+                followup,
+                family != DraftFamily::NoDraft,
+                "{kind:?} follow-up template disagrees with its family"
+            );
+            assert_eq!(
+                appeal,
+                family == DraftFamily::RequestAndAppeal,
+                "{kind:?} appeal template disagrees with its family"
+            );
+            if !kind.is_legal_claim() {
+                assert!(
+                    !appeal,
+                    "pattern kind {kind:?} must never have an appeal template"
+                );
+            }
+        }
     }
 
     #[test]
-    fn a_kind_with_no_appeal_template_returns_none() {
-        // JustInTimeCompliance has a follow-up template but no appeal template.
-        let hit = find_template(
+    fn narrowing_kinds_select_their_specific_followup() {
+        for (kind, id) in [
+            (FindingKind::EmailThreadGap, "cpra_followup_email_gap_v1"),
+            (FindingKind::HeldBackResponse, "cpra_followup_held_back_v1"),
+            (
+                FindingKind::ContradictoryStatement,
+                "cpra_followup_contradiction_v1",
+            ),
+            (
+                FindingKind::NoRecordsContradictedByRelease,
+                "cpra_followup_no_records_v1",
+            ),
+        ] {
+            let template = find_template(ArtifactKind::FollowupRequest, "US-CA", kind).unwrap();
+            assert_eq!(template.id, id);
+        }
+    }
+
+    #[test]
+    fn policy_appeal_cites_the_statute_the_constant_names() {
+        let template = find_template(
             ArtifactKind::Appeal,
             "US-CA",
-            FindingKind::JustInTimeCompliance,
-        );
-        assert!(
-            hit.is_none(),
-            "no appeal template should exist for this kind"
-        );
+            FindingKind::PolicyViolationDetected,
+        )
+        .unwrap();
+        let section = crate::analysis::statute::CPRA_STATUTE_CITATION
+            .rsplit("§ ")
+            .next()
+            .unwrap();
+        assert!(render_authority_line(template).contains(section));
     }
 
     #[test]
@@ -466,15 +557,15 @@ mod tests {
     #[test]
     fn render_authority_line_joins_statutes() {
         let template = find_template(
-            ArtifactKind::Appeal,
+            ArtifactKind::FollowupRequest,
             "US-CA",
-            FindingKind::NoRecordsContradictedByRelease,
+            FindingKind::AbsenceOfRecords,
         )
         .unwrap();
         let line = render_authority_line(template);
         assert!(line.contains("§ 7920.000"));
         assert!(line.contains("§ 7922.525"));
-        assert!(line.contains("§ 7922.540"));
+        assert!(line.contains("; "));
     }
 
     #[test]

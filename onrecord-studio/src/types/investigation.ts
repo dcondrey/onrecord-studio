@@ -433,6 +433,8 @@ export interface RedactionIntegrityReport {
   analysisVersion: string;
   sourceSha256: string;
   scannedPageCount: number;
+  /** Pages whose content is a full-page raster image drawn before any text: redactions burned into the scan are outside vector analysis. */
+  rasterBackdropPages: number;
   coverageComplete: boolean;
   requiresManualReview: boolean;
   isLeakyRedaction: boolean;

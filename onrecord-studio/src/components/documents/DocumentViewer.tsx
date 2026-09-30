@@ -47,15 +47,34 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
   const historyGate = useLatestRequestGate();
   const recoveryGate = useLatestRequestGate();
   const residualAuditGate = useLatestRequestGate();
+  const truncationGate = useLatestRequestGate();
+  const shareGate = useLatestRequestGate();
+  const [truncatedEntityKinds, setTruncatedEntityKinds] = useState<string[]>([]);
 
   useEffect(() => {
     if (originalAvailable) void verifyAssetProvenance(documentId, portalKey);
   }, [documentId, portalKey, originalAvailable, verifyAssetProvenance]);
 
+  // useC2PA's own state is not remounted or reset when documentId changes -- this viewer is
+  // reused across documents (see MainLayout, which renders it without a `key`) -- so
+  // activeManifest can still hold the previous document's result: while the new document's own
+  // check is in flight, or indefinitely once originalAvailable is false and no new check is ever
+  // issued. The backend echoes documentId/portalKey back on every result, so that is checked here
+  // rather than trusting that a result in hand belongs to what is currently on screen.
+  const manifestForActiveDocument = useMemo(
+    () => (activeManifest && activeManifest.documentId === documentId && activeManifest.portalKey === portalKey
+      ? activeManifest
+      : null),
+    [activeManifest, documentId, portalKey],
+  );
+
   useEffect(() => {
     historyGate.invalidate();
     recoveryGate.invalidate();
     residualAuditGate.invalidate();
+    truncationGate.invalidate();
+    shareGate.invalidate();
+    setTruncatedEntityKinds([]);
     setRecoveryProfile(null);
     setRecoveryError(null);
     setIsRecovering(false);
@@ -74,7 +93,18 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
     setTextPage(0);
     setShareStatus(null);
     setBriefingStatus(null);
-  }, [documentId, historyGate, portalKey, recoveryGate, residualAuditGate]);
+  }, [documentId, historyGate, portalKey, recoveryGate, residualAuditGate, shareGate, truncationGate]);
+
+  useEffect(() => {
+    const token = truncationGate.begin();
+    invokeCommand('get_document_entity_truncations', { documentId, portalKey })
+      .then((kinds) => {
+        if (truncationGate.isCurrent(token)) setTruncatedEntityKinds(kinds);
+      })
+      .catch(() => {
+        // No answer leaves the notice hidden; only a recorded truncation is worth stating.
+      });
+  }, [documentId, portalKey, truncationGate]);
 
   useEffect(() => { setTextPage(0); setActiveMatch(0); }, [characterOffset, textContent]);
 
@@ -97,6 +127,7 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
   };
 
   const shareEvidenceLocation = async () => {
+    const request = shareGate.begin();
     const localIndex = selectedMatch ?? textPage * TEXT_PAGE_CHARACTERS;
     const sourceCharacterOffset = characterOffset + Array.from(textContent.slice(0, localIndex)).length;
     const fragment = new URLSearchParams({
@@ -109,8 +140,13 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
     window.history.replaceState(null, '', `#${fragment}`);
     try {
       await navigator.clipboard.writeText(url);
+      // The clipboard write is async and cannot be cancelled. Without this check, a write started
+      // for this document can resolve after the viewer has moved to another one and confirm an
+      // offset that is no longer what is on screen.
+      if (!shareGate.isCurrent(request)) return;
       setShareStatus(`Copied offset ${sourceCharacterOffset.toLocaleString()}`);
     } catch {
+      if (!shareGate.isCurrent(request)) return;
       setShareStatus(`Link set at offset ${sourceCharacterOffset.toLocaleString()}`);
     }
   };
@@ -230,7 +266,7 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
           <button type="button" onClick={() => void toggleVerificationHistory()} aria-expanded={showVerificationHistory} className="rounded-full border border-slate-700 px-2.5 py-1 text-[9px] font-medium text-slate-400 transition hover:border-indigo-400/30 hover:text-indigo-300">
             {showVerificationHistory ? 'Hide verification log' : 'Verification log'}
           </button>
-          {originalAvailable ? <ProvenanceShield isValidating={isValidating} result={activeManifest} error={provenanceError} /> : <span className="text-[9px] text-amber-200">Original referenced · file verification unavailable</span>}
+          {originalAvailable ? <ProvenanceShield isValidating={isValidating} result={manifestForActiveDocument} error={provenanceError} /> : <span className="text-[9px] text-amber-200">Original referenced · file verification unavailable</span>}
         </div>
       </div>
       <div className="flex items-center justify-between border-b border-slate-900 px-4 py-2 text-[9px] text-slate-400">
@@ -255,11 +291,16 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
         {shareStatus && <span role="status" className="text-emerald-300">{shareStatus}</span>}
         {briefingStatus && <span role="status" className="text-emerald-300">{briefingStatus}</span>}
       </div>
-      {activeManifest && activeManifest.claimGraph.claims.length > 0 && (
-        <ProvenanceGraphPanel graph={activeManifest.claimGraph} />
+      {manifestForActiveDocument && manifestForActiveDocument.claimGraph.claims.length > 0 && (
+        <ProvenanceGraphPanel graph={manifestForActiveDocument.claimGraph} />
       )}
       {showVerificationHistory && <VerificationHistoryPanel records={verificationHistory} isLoading={isLoadingHistory} error={historyError} />}
       {(recoveryProfile || recoveryError) && <RevisionRecoveryPanel profile={recoveryProfile} error={recoveryError} />}
+      {truncatedEntityKinds.length > 0 && (
+        <p role="status" className="text-xs text-amber-200">
+          Entity extraction stopped early for {truncatedEntityKinds.join(', ').toLowerCase().replace(/_/g, ' ')}. Entities listed for this document are incomplete.
+        </p>
+      )}
       {(residualAudit || residualAuditError) && <ResidualEvidencePanel bundle={residualAudit} error={residualAuditError} />}
       {showRedactionAudit && (
         <div className="max-h-[70vh] space-y-3 overflow-y-auto border-b border-slate-800 p-3">

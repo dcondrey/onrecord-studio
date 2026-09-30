@@ -287,6 +287,7 @@ fn pattern_match_length(pattern: &str, target: &str) -> Option<usize> {
     };
     let segments = body.split('*').collect::<Vec<_>>();
     let mut cursor = 0_usize;
+    let last = segments.len() - 1;
     for (index, segment) in segments.iter().enumerate() {
         if segment.is_empty() {
             continue;
@@ -296,6 +297,15 @@ fn pattern_match_length(pattern: &str, target: &str) -> Option<usize> {
                 return None;
             }
             cursor += segment.len();
+            continue;
+        }
+        if anchored && index == last {
+            // The leftmost occurrence may sit mid-target while a later one ends it, as in
+            // `/*.php$` against `/a.php/b.php`; the final literal has to be tested as a suffix.
+            if target.len() < cursor + segment.len() || !target.ends_with(segment) {
+                return None;
+            }
+            cursor = target.len();
             continue;
         }
         let found = target[cursor..].find(segment)?;
@@ -469,8 +479,8 @@ impl HostGovernor {
             .and_then(RobotsRules::crawl_delay)
             .unwrap_or(self.minimum_interval)
             .min(MAXIMUM_HOST_INTERVAL);
-        let (permits, wait) = {
-            let outcome = self.with_host(&host, |state| {
+        let permits = self
+            .with_host(&host, |state| {
                 if state.stop.is_none() && state.requests_spent >= self.request_budget {
                     state.stop = Some(HostStopReason::BudgetSpent {
                         budget: self.request_budget,
@@ -480,31 +490,45 @@ impl HostGovernor {
                     return Err(reason);
                 }
                 state.requests_spent = state.requests_spent.saturating_add(1);
-                let now = Instant::now();
-                let ready = state.next_allowed.unwrap_or(now).max(now);
-                state.next_allowed = Some(ready + interval);
-                Ok((
-                    Arc::clone(&state.permits),
-                    ready.saturating_duration_since(now),
-                ))
-            });
-            outcome.map_err(|reason| RequestRefusal::HostStopped {
+                Ok(Arc::clone(&state.permits))
+            })
+            .map_err(|reason| RequestRefusal::HostStopped {
                 host: host.clone(),
                 reason,
-            })?
-        };
-        if !wait.is_zero() {
-            tokio::time::sleep(wait).await;
-        }
+            })?;
         let permit = permits
             .acquire_owned()
             .await
             .map_err(|_| RequestRefusal::HostStopped {
-                host,
+                host: host.clone(),
                 reason: HostStopReason::RobotsUnavailable {
                     detail: "the host permit pool was closed".to_string(),
                 },
             })?;
+        // Pacing is assigned only once the permit is held: a slot claimed before a queued request
+        // gets its permit lets several of them fire back to back when the permit frees. The stop is
+        // re-read here and after the wait because a response recorded while this request was
+        // queued or sleeping is the host refusing this client.
+        let wait = self
+            .with_host(&host, |state| {
+                if let Some(reason) = state.stop.clone() {
+                    return Err(reason);
+                }
+                let now = Instant::now();
+                let ready = state.next_allowed.unwrap_or(now).max(now);
+                state.next_allowed = Some(ready + interval);
+                Ok(ready.saturating_duration_since(now))
+            })
+            .map_err(|reason| RequestRefusal::HostStopped {
+                host: host.clone(),
+                reason,
+            })?;
+        if !wait.is_zero() {
+            tokio::time::sleep(wait).await;
+            if let Some(reason) = self.with_host(&host, |state| state.stop.clone()) {
+                return Err(RequestRefusal::HostStopped { host, reason });
+            }
+        }
         Ok(HostPermit { _permit: permit })
     }
 
@@ -655,6 +679,39 @@ mod tests {
         let rules = RobotsRules::parse("User-agent: *\nDisallow: /*.php$\n");
         assert_eq!(rules.evaluate("/index.php"), Some("/*.php$"));
         assert_eq!(rules.evaluate("/index.php?a=1"), None);
+    }
+
+    #[test]
+    fn an_end_anchored_pattern_matches_a_later_occurrence_of_its_suffix() {
+        let rules = RobotsRules::parse("User-agent: *\nDisallow: /*.php$\n");
+        assert_eq!(rules.evaluate("/a.php/b.php"), Some("/*.php$"));
+        assert_eq!(rules.evaluate("/x.php.php"), Some("/*.php$"));
+        assert_eq!(rules.evaluate("/x.php/y"), None);
+        let exact = RobotsRules::parse("User-agent: *\nDisallow: /a$\n");
+        assert_eq!(exact.evaluate("/a"), Some("/a$"));
+        assert_eq!(exact.evaluate("/ab"), None);
+    }
+
+    #[tokio::test]
+    async fn a_queued_request_is_refused_when_its_host_is_stopped_while_it_waits() {
+        let governor = Arc::new(HostGovernor::new(1, 100, Duration::ZERO));
+        let target = url("https://example.gov/a");
+        let held = governor.reserve(&target, None).await.unwrap();
+        let queued = {
+            let governor = Arc::clone(&governor);
+            let target = target.clone();
+            tokio::spawn(async move { governor.reserve(&target, None).await.map(|_| ()) })
+        };
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        governor.record_status(&target, 403, None);
+        drop(held);
+        assert!(matches!(
+            queued.await.unwrap().unwrap_err(),
+            RequestRefusal::HostStopped {
+                reason: HostStopReason::Refused { status: 403 },
+                ..
+            }
+        ));
     }
 
     #[test]

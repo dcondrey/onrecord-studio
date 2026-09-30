@@ -170,6 +170,16 @@ pub enum FindingKind {
     /// matter, not one program area that legitimately keeps hitting the same ground. Pattern
     /// signal for a catch-all rationale, not a legal claim on its own.
     CrossCorpusReusedDenialGrounds,
+    /// A commitment an agency's own policy document states (a calendar-day response time or a
+    /// per-unit fee) that observed practice in the same portal exceeded: requests that took longer
+    /// than the stated days, or responses that state a higher fee. A counted comparison against
+    /// the agency's own words, not a rate or an outlier.
+    PolicyViolationDetected,
+    /// A quantitative statement in a released document (a total, a change, "within budget") that
+    /// falls outside the rounding band its wording carries when checked against the imported
+    /// budget or actuals table for the same fiscal year, fund and jurisdiction. A comparison of
+    /// a sentence with a dataset, not a judgement of which is right.
+    ClaimContradictsData,
 }
 
 impl FindingKind {
@@ -195,6 +205,8 @@ impl FindingKind {
             Self::CrossCorpusTemporalShift => "CROSS_CORPUS_TEMPORAL_SHIFT",
             Self::CrossCorpusOrphanTopic => "CROSS_CORPUS_ORPHAN_TOPIC",
             Self::CrossCorpusReusedDenialGrounds => "CROSS_CORPUS_REUSED_DENIAL_GROUNDS",
+            Self::PolicyViolationDetected => "POLICY_VIOLATION_DETECTED",
+            Self::ClaimContradictsData => "CLAIM_CONTRADICTS_DATA",
         }
     }
 
@@ -220,6 +232,8 @@ impl FindingKind {
             Self::CrossCorpusTemporalShift,
             Self::CrossCorpusOrphanTopic,
             Self::CrossCorpusReusedDenialGrounds,
+            Self::PolicyViolationDetected,
+            Self::ClaimContradictsData,
         ]
         .into_iter()
         .find(|candidate| candidate.as_str() == value)
@@ -231,8 +245,7 @@ impl FindingKind {
     pub const fn is_legal_claim(self) -> bool {
         match self {
             // HeldBackResponse is a behavioral/pattern signal about intent, not a violation of a
-            // stated rule. Kept as a non-legal-claim kind on purpose. New PolicyViolationDetected
-            // producers will flip this to true and route through the counted-violation guard.
+            // stated rule. Kept as a non-legal-claim kind on purpose.
             Self::HeldBackResponse => false,
             // The three Wave 2B detectors are all statistical/pattern signals about agency
             // behavior. None counts a per-request statutory violation and none should be cited in
@@ -282,6 +295,12 @@ impl FindingKind {
             Self::CrossCorpusTemporalShift => false,
             Self::CrossCorpusOrphanTopic => false,
             Self::CrossCorpusReusedDenialGrounds => false,
+            // The one legal-claim kind: every finding is a counted comparison of an observed
+            // request or fee against a commitment the agency's own document states.
+            Self::PolicyViolationDetected => true,
+            // A sentence disagreeing with a table is a pattern signal for review; which of the
+            // two is wrong, and whether either breaks a rule, is not decided here.
+            Self::ClaimContradictsData => false,
         }
     }
 }
@@ -393,6 +412,25 @@ pub struct Finding {
 }
 
 impl Finding {
+    /// The write-time guard behind `FindingKind::is_legal_claim`. A finding that names a legal
+    /// conclusion must say how strongly it is believed, where it comes from, and whom it is about;
+    /// a statistical signal never reaches this branch.
+    pub fn check_recordable(&self) -> Result<(), String> {
+        if !self.kind.is_legal_claim() {
+            return Ok(());
+        }
+        if !matches!(self.confidence, FindingConfidence::Measured { .. }) {
+            return Err("a legal-claim finding needs a measured confidence".to_string());
+        }
+        if self.citations.is_empty() {
+            return Err("a legal-claim finding needs at least one citation".to_string());
+        }
+        if self.subject.portal_key.is_none() {
+            return Err("a legal-claim finding needs a portal subject".to_string());
+        }
+        Ok(())
+    }
+
     /// Composite ranking key: severity, then confidence, then freshness. Higher tuple = higher
     /// position in the inbox. The inbox itself sorts descending on this key.
     pub fn rank_key(&self) -> (u8, u16, i64) {
@@ -529,6 +567,34 @@ mod tests {
             &["days=8"],
         );
         assert_ne!(with_seven, with_eight);
+    }
+
+    #[test]
+    fn a_legal_claim_without_citations_is_not_recordable() {
+        let now = Utc::now();
+        let claim = Finding {
+            id: "a".into(),
+            kind: FindingKind::PolicyViolationDetected,
+            severity: FindingSeverity::Serious,
+            confidence: FindingConfidence::measured(8000),
+            subject: FindingSubject {
+                portal_key: Some("sd-city".into()),
+                ..Default::default()
+            },
+            headline: String::new(),
+            explanation: String::new(),
+            citations: vec![],
+            discovered_at: now,
+            last_seen_at: now,
+            dismissed_at: None,
+            source_detector: "test".into(),
+        };
+        assert!(claim.check_recordable().is_err());
+        let pattern = Finding {
+            kind: FindingKind::HeldBackResponse,
+            ..claim
+        };
+        assert!(pattern.check_recordable().is_ok());
     }
 
     #[test]
