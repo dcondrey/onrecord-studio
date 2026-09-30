@@ -1,0 +1,48 @@
+[
+  {
+    "id": "topic-packs",
+    "title": "Topics",
+    "group": "Findings",
+    "summary": "Records tagged by their own wording as encampment sweeps, belongings disposal, police overtime and budget, or public restrooms, and the findings about them.",
+    "keywords": [
+      "topic",
+      "encampment",
+      "sweep",
+      "abatement",
+      "homeless",
+      "belongings",
+      "police",
+      "overtime",
+      "budget",
+      "restroom",
+      "bathroom",
+      "briefing"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "Open Topics on the San Diego view. Each topic is a fixed list of word phrases, shown under the topic. A document is tagged when its file name or stored text contains one of them; a request is tagged by its own title or description. A tag is the record's wording, not a finding, and a request is not tagged because one of its documents is."
+        ]
+      },
+      {
+        "heading": "Findings",
+        "items": [
+          "A finding appears under a topic only when its subject is a tagged record: the document, when the finding names one, otherwise the request, in the same source. Findings about an agency, an entity, or a record merely cited are not listed.",
+          "Each finding shows its basis: Counted violation, Stated in the record, or Pattern signal, not a legal claim. Confidence appears only when it was measured.",
+          "Very long documents are read to their opening only, and documents without stored text by file name only. The scan summary says how many."
+        ]
+      },
+      {
+        "heading": "Export",
+        "items": [
+          "Export topic briefing writes a Markdown outline of the topic's findings with basis and citation locators. Quoted text is left out of that file.",
+          "The verifiable report exports the topic's 200 highest-ranked findings as a signed HTML file, with checked and masked quotes."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": ["topics"],
+    "related": ["findings-inbox"]
+  }
+]

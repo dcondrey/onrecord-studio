@@ -147,6 +147,7 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::lead_dossier::build_lead_dossier,
         commands::findings::list_findings,
         commands::findings::dismiss_finding,
+        commands::topics::list_topic_packs,
         commands::intent::run_intent_query,
         commands::redaction_inference::infer_redaction,
         commands::artifacts::draft_followup_from_finding,
