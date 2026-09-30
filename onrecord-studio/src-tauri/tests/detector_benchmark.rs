@@ -192,18 +192,9 @@ async fn import_city_export(
     }
 }
 
-/// Every sentence in `fixtures/claim-eval/cases.json` must evaluate to its verified outcome
-/// against the real FY22–23 General Fund rows for the Library and Police departments. The
-/// scorecard it prints is the claim-validation benchmark; a change to extraction, binding or
-/// the bands that moves any case is a change to what the detector tells a reader.
-#[tokio::test]
-async fn claim_validation_eval_set() {
-    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/claim-eval");
-    let cases: Vec<EvalCase> =
-        serde_json::from_str(&std::fs::read_to_string(fixtures.join("cases.json")).unwrap())
-            .unwrap();
-    assert!(!cases.is_empty());
-
+/// A fresh repository holding the City portal, the two sliced exports under the automatic
+/// budget and actual mappings, and the actuals export mapped again as revenue.
+async fn eval_repository(fixtures: &Path) -> (tempfile::TempDir, DuckDbRepository) {
     let temp = tempfile::tempdir().unwrap();
     let repo = DuckDbRepository::new(temp.path().join("core.db")).unwrap();
     repo.run_migrations(include_str!("../migrations/0001_initial_schema.sql"))
@@ -256,6 +247,23 @@ async fn claim_validation_eval_set() {
     })
     .await
     .unwrap();
+
+    (temp, repo)
+}
+
+/// Every sentence in `fixtures/claim-eval/cases.json` must evaluate to its verified outcome
+/// against the real FY22–23 General Fund rows for the Library and Police departments. The
+/// scorecard it prints is the claim-validation benchmark; a change to extraction, binding or
+/// the bands that moves any case is a change to what the detector tells a reader.
+#[tokio::test]
+async fn claim_validation_eval_set() {
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/claim-eval");
+    let cases: Vec<EvalCase> =
+        serde_json::from_str(&std::fs::read_to_string(fixtures.join("cases.json")).unwrap())
+            .unwrap();
+    assert!(!cases.is_empty());
+
+    let (_temp, repo) = eval_repository(&fixtures).await;
 
     let mut evaluator = Evaluator::load(&repo).await.unwrap();
     let mut failures = Vec::new();
@@ -331,4 +339,64 @@ async fn claim_validation_eval_set() {
     )
     .unwrap();
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// The sweep the app runs after every ingest, over the same exports: a memo and a press release
+/// stored as public documents. Only the mismatching sentences become findings, the press
+/// release's are labelled as an official statement, and consistent or unreconciled sentences
+/// leave nothing behind.
+#[tokio::test]
+async fn claim_sweep_end_to_end_on_stored_documents() {
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/claim-eval");
+    let (_temp, repo) = eval_repository(&fixtures).await;
+    let memo = "Library budget memo. The Library Department spent $65 million in FY 2023 from fund 100000. \
+                The adopted budget of $66.8 million for FY 2023 funded the Library Department in fund 100000. \
+                The Fire-Rescue Department spent $350 million in FY 2023 from fund 100000.";
+    let release = "FOR IMMEDIATE RELEASE. Statement from the City of San Diego. \
+                   The Police Department reported a surplus of $2 million in fund 100000 for FY 2023.";
+    let conn = repo.analytics_connection().await.unwrap();
+    conn.execute_batch(&format!(
+        "INSERT INTO requests (id, portal_subdomain, title, status, created_at, updated_at)
+           VALUES (1, 'sandiego', 'Budget records', 'closed', '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z');
+         INSERT INTO documents (id, request_id, portal_subdomain, file_name, visibility, created_at, updated_at, extracted_text_sha256)
+           VALUES (1, 1, 'sandiego', 'library-budget-memo.pdf', 'public', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', 'h1'),
+                  (2, 1, 'sandiego', 'press-release.pdf', 'public', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', 'h2');
+         INSERT INTO documents_fts (document_id, portal_subdomain, file_name, extracted_text)
+           VALUES (1, 'sandiego', 'library-budget-memo.pdf', '{memo}'),
+                  (2, 'sandiego', 'press-release.pdf', '{release}');"
+    ))
+    .unwrap();
+    drop(conn);
+
+    let findings = claim_data_mismatch::run(&repo).await.unwrap();
+    let mut headlines: Vec<&str> = findings.iter().map(|f| f.headline.as_str()).collect();
+    headlines.sort();
+    assert_eq!(findings.len(), 2, "{headlines:?}");
+    let memo_finding = findings
+        .iter()
+        .find(|f| f.subject.document_id == Some(1))
+        .expect("the understated Library actual is a finding");
+    assert!(
+        memo_finding.explanation.contains("$65"),
+        "{}",
+        memo_finding.explanation
+    );
+    assert!(!memo_finding.headline.starts_with("Official statement"));
+    let release_finding = findings
+        .iter()
+        .find(|f| f.subject.document_id == Some(2))
+        .expect("the surplus claim in the press release is a finding");
+    assert!(
+        release_finding
+            .headline
+            .starts_with("Official statement vs released record"),
+        "{}",
+        release_finding.headline
+    );
+    for finding in &findings {
+        let text = format!("{} {}", finding.headline, finding.explanation).to_lowercase();
+        for word in ["false", "lied", "misled"] {
+            assert!(!text.contains(word), "{text}");
+        }
+    }
 }
