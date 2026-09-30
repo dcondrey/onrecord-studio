@@ -51,6 +51,7 @@ fn document(visibility: &str, name: &str) -> SourceDocument {
         raw_file_sha256: Some("a".repeat(64)),
         extracted_text_projection_sha256: None,
         text: None,
+        download_url: None,
     }
 }
 

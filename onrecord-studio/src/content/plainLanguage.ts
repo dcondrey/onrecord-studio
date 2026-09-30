@@ -218,6 +218,11 @@ export const PLAIN_FINDING_TEXT: Record<FindingKind, PlainText> = {
     notShown: 'It compares one statement with another. It does not show the actual time given.',
     next: 'If it matters to your work, ask the agency for the posting and cleanup dates.',
   },
+  REDACTION_INCONSISTENT_ACROSS_RELEASES: {
+    observed: 'Two public copies of the same file, released under different requests, redact different passages.',
+    notShown: 'It does not show which release was correct. A later release may apply an exemption the earlier one did not.',
+    next: 'Compare the cited passages in both copies, then ask the agency why they differ.',
+  },
 };
 
 export const PLAIN_VERIFICATION_TEXT: Record<VerificationState, PlainText> = {

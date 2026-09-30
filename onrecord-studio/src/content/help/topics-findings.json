@@ -1311,6 +1311,15 @@
     "title": "Redaction differs between releases",
     "group": "Finding kinds",
     "summary": "Two public copies of the same file, released under different requests, redact different passages.",
+    "keywords": [
+      "redaction",
+      "redacted",
+      "withheld",
+      "releases",
+      "copies",
+      "inconsistent",
+      "exemption"
+    ],
     "sections": [
       {
         "heading": "What it shows",
