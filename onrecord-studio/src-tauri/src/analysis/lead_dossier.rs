@@ -311,6 +311,26 @@ pub fn falsification_for(kind: FindingKind) -> DossierFalsification {
             "The stated figure refers to a different basis, fund, period or a later revision of the data.",
             &["the report or ledger the statement drew its figure from", "a later revision of the published data or of the statement"],
         ),
+        FindingKind::DepartmentSpendingYearOverYear => (
+            "The change reflects a documented programme, reorganisation or accounting reclassification.",
+            &["the adopted budget narrative for both years", "the account mapping or reclassification notice"],
+        ),
+        FindingKind::OvertimeAboveAdoptedLine => (
+            "A budget amendment or transfer raised the overtime line after adoption.",
+            &["the revised budget for the account", "the transfer or supplemental appropriation record"],
+        ),
+        FindingKind::FundActualAboveAdopted => (
+            "The revised authority for the fund was higher than the adopted amount.",
+            &["the mid-year budget revisions for the fund", "the supplemental appropriation record"],
+        ),
+        FindingKind::EncampmentNoticeShortfall => (
+            "A longer notice was given by a route the recorded dates do not show.",
+            &["the notice as posted, with its posting date", "the cleanup log with its date"],
+        ),
+        FindingKind::EncampmentNoticeStatedShortfall => (
+            "The stated period is not the period actually given.",
+            &["the dated posting or service record for the notice", "the minimum-notice authority in force on that date"],
+        ),
         FindingKind::CorrelatedFindings => (
             "The correlated signals share a benign cause such as a single large release.",
             &["the release log for the period", "each underlying finding's own records"],

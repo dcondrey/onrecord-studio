@@ -347,7 +347,7 @@ fn query(mapping: &FinancialMapping, table: &str, scope: &FinancialScope) -> Str
     }
     // The same exports carry revenue under 4xxxx accounts; a revenue role mapped to one of them
     // must not net service expenditure into receipts.
-    if official && mapping.role == "revenue" {
+    if official_city_export(mapping) && mapping.role == "revenue" {
         filters.push("account LIKE '4%'".into());
     }
     let filter = if filters.is_empty() {

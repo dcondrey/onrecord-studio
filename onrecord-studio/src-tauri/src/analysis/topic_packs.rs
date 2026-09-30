@@ -144,9 +144,12 @@ pub fn finding_basis(kind: FindingKind) -> TopicFindingBasis {
         | K::AppropriationExceeded
         | K::RestrictedFundOffProgram
         | K::ApprovalThresholdExceeded
-        | K::SplitPurchaseProhibitedByPolicy => TopicFindingBasis::Counted,
+        | K::SplitPurchaseProhibitedByPolicy
+        | K::EncampmentNoticeShortfall => TopicFindingBasis::Counted,
         // The document states departures from its own rule without a count.
-        K::PracticeDepartureStated => TopicFindingBasis::Stated,
+        K::PracticeDepartureStated | K::EncampmentNoticeStatedShortfall => {
+            TopicFindingBasis::Stated
+        }
         K::HeldBackResponse
         | K::BoilerplateDenial
         | K::JustInTimeCompliance
@@ -171,7 +174,10 @@ pub fn finding_basis(kind: FindingKind) -> TopicFindingBasis {
         | K::CorrelatedFindings
         | K::PaymentWithoutContractRecord
         | K::ApprovalRecordAbsent
-        | K::SplitPurchasePattern => TopicFindingBasis::Pattern,
+        | K::SplitPurchasePattern
+        | K::DepartmentSpendingYearOverYear
+        | K::OvertimeAboveAdoptedLine
+        | K::FundActualAboveAdopted => TopicFindingBasis::Pattern,
     }
 }
 
@@ -640,6 +646,9 @@ mod tests {
             FindingKind::ContractCeilingExceeded,
             FindingKind::SplitPurchasePattern,
             FindingKind::SplitPurchaseProhibitedByPolicy,
+            FindingKind::EncampmentNoticeShortfall,
+            FindingKind::EncampmentNoticeStatedShortfall,
+            FindingKind::FundActualAboveAdopted,
         ] {
             assert_eq!(
                 finding_basis(kind) == TopicFindingBasis::Counted,
