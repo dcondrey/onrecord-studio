@@ -236,11 +236,15 @@ export const TOPIC_BASIS_LABELS: Record<TopicFindingBasis, string> = {
  * stays out of an exported file.
  */
 export function topicBriefingProject(topic: TopicPackView, now = new Date()): BriefingProject {
+  // Hypotheses about who a redaction hides are never exported, as in the verifiable report.
+  const exported = topic.findings.filter((match) => match.finding.kind !== 'REDACTION_CANDIDATE_INFERRED');
+  const withheld = topic.findings.length - exported.length;
   return {
     ...createDefaultBriefingProject(now),
     title: `${topic.title}: findings briefing`,
-    objective: `Findings whose subject is a request or document tagged "${topic.title}" by its own wording (${topic.cues.join(', ')}).`,
-    evidence: topic.findings.map((match) => topicFindingEvidence(match, now)),
+    objective: `Findings whose subject is a request or document tagged "${topic.title}" by its own wording (${topic.cues.join(', ')}).` +
+      (withheld > 0 ? ` ${withheld} inferred-redaction finding${withheld === 1 ? ' is' : 's are'} left out: they are hypotheses about who a redaction hides, not facts.` : ''),
+    evidence: exported.map((match) => topicFindingEvidence(match, now)),
     autoDrafted: true,
   };
 }

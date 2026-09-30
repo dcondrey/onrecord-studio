@@ -121,4 +121,15 @@ describe('topic briefing export', () => {
     expect(markdown).not.toContain('SECRET QUOTE');
     expect(markdown).toContain('city / request 4 / document 9');
   });
+
+  it('leaves inferred-redaction findings out and says so', () => {
+    const inferred = { ...finding('inferred', { kind: 'UNASSESSED' }), kind: 'REDACTION_CANDIDATE_INFERRED' as const };
+    const markdown = buildBriefingMarkdown(topicBriefingProject(topic([
+      { basis: 'PATTERN', anchorRequestId: 4, finding: inferred },
+      { basis: 'PATTERN', anchorRequestId: 4, finding: finding('kept', { kind: 'UNASSESSED' }) },
+    ])));
+    expect(markdown).not.toContain('Headline inferred');
+    expect(markdown).toContain('Headline kept');
+    expect(markdown).toContain('1 inferred-redaction finding is left out');
+  });
 });

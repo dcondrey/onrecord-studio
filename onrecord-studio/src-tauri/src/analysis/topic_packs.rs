@@ -319,7 +319,7 @@ async fn load_requests(repository: &DuckDbRepository) -> Result<Vec<RequestRow>,
                 )
                 .map_err(|error| AppError::Storage(format!("Topic request sweep: {error}")))?;
             let rows = statement
-                .query_map(params![MAX_REQUESTS], |row| {
+                .query_map(params![MAX_REQUESTS + 1], |row| {
                     Ok(RequestRow {
                         portal_key: row.get(0)?,
                         request_id: row.get(1)?,
@@ -479,9 +479,10 @@ pub async fn build_topic_packs(
         }
     }
 
-    let requests = load_requests(repository).await?;
+    let mut requests = load_requests(repository).await?;
+    let request_limit_reached = requests.len() as i64 > MAX_REQUESTS;
+    requests.truncate(MAX_REQUESTS as usize);
     let requests_scanned = requests.len();
-    let request_limit_reached = requests_scanned as i64 >= MAX_REQUESTS;
     for row in requests {
         let title_words = words(row.title.as_deref().unwrap_or(""));
         let description_words = words(row.description.as_deref().unwrap_or(""));
@@ -537,10 +538,17 @@ pub async fn build_topic_packs(
                 finding_total -= 1;
                 continue;
             };
+            // Masked as the verifiable report masks them; detector prose can carry source text.
+            let mut finding = finding.clone();
+            finding.headline = mask_pii(&finding.headline)?.masked_text;
+            finding.explanation = mask_pii(&finding.explanation)?.masked_text;
+            for citation in &mut finding.citations {
+                citation.label = masked(citation.label.take())?;
+            }
             findings.push(TopicFindingMatch {
                 basis: finding_basis(finding.kind),
                 anchor_request_id,
-                finding: finding.clone(),
+                finding,
             });
         }
         let document_total = accumulator.documents.len();
