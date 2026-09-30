@@ -83,6 +83,17 @@ export default function SubjectDossier() {
         .then((value) => {
           if (!neighborhoodGate.isCurrent(request)) return;
           setNeighborhood({ status: 'READY', value });
+          // Direct entity-id navigation (EntityGraph, a finding row) never resolves a label from
+          // the name search, so `resolution.label` starts null; backfill it from the neighborhood
+          // center once it's confirmed to be this same entity, so loadFindings (keyed on label)
+          // gets a real query instead of the empty string it treats as "no query".
+          if (value) {
+            setResolution((prev) =>
+              prev.status === 'RESOLVED' && prev.label === null && prev.entityId === value.center.entityId
+                ? { ...prev, label: value.center.displayValue }
+                : prev,
+            );
+          }
         })
         .catch((reason) => {
           if (!neighborhoodGate.isCurrent(request)) return;
@@ -116,11 +127,15 @@ export default function SubjectDossier() {
     [findingsGate],
   );
 
+  const resolvedEntityId = resolution.status === 'RESOLVED' ? resolution.entityId : null;
   useEffect(() => {
-    if (resolution.status !== 'RESOLVED') return;
-    loadNeighborhood(resolution.entityId);
+    // Keyed on the entity id alone, not the whole `resolution` object: backfilling `label` below
+    // produces a new `resolution` object for the same entity, and re-running this effect on that
+    // would invalidate the in-flight request and refire it for no reason.
+    if (resolvedEntityId === null) return;
+    loadNeighborhood(resolvedEntityId);
     return neighborhoodGate.invalidate;
-  }, [loadNeighborhood, neighborhoodGate, resolution]);
+  }, [loadNeighborhood, neighborhoodGate, resolvedEntityId]);
 
   useEffect(() => {
     if (resolution.status !== 'RESOLVED') return;
@@ -176,7 +191,7 @@ export default function SubjectDossier() {
 
       {resolution.status === 'NONE' && (
         <p className="text-[10px] text-slate-400">
-          No corpus entity matches &ldquo;{target.kind === 'name' ? target.value : target.value}&rdquo;
+          No corpus entity matches &ldquo;{target.value}&rdquo;
           in the 500 most-cited entities. Add data or refine the name to try again.
         </p>
       )}
@@ -184,7 +199,7 @@ export default function SubjectDossier() {
       {resolution.status === 'AMBIGUOUS' && (
         <div className="rounded-xl border border-amber-400/20 bg-amber-500/[0.06] p-3">
           <p className="text-[10px] font-semibold text-amber-200">
-            &ldquo;{target.kind === 'name' ? target.value : target.value}&rdquo; matches {resolution.matches.length} entities. Pick one.
+            &ldquo;{target.value}&rdquo; matches {resolution.matches.length} entities. Pick one.
           </p>
           <ul className="mt-2 flex flex-wrap gap-1.5" role="list">
             {resolution.matches.map((entity) => (

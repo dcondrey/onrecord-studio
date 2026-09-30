@@ -15,6 +15,11 @@ export function useC2PA() {
     const request = requestGate.begin();
     setIsValidating(true);
     setError(null);
+    // The previous document's manifest must not survive into this request's loading window:
+    // `ProvenanceGraphPanel` (DocumentViewer.tsx) renders `activeManifest` whenever it is
+    // non-null, without waiting on `isValidating`, so a stale manifest here is a stale claim
+    // graph shown under the new document's identity while its own check is still in flight.
+    setActiveManifest(null);
     try {
       const result = await invokeCommand('verify_document_provenance', {
         documentId,

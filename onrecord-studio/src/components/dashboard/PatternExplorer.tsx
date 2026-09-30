@@ -59,6 +59,7 @@ export default function PatternExplorer() {
   const refreshGate = useLatestRequestGate();
   const evidenceGate = useLatestRequestGate();
   const restoredEvidenceKey = useRef<string | null>(null);
+  const lastGatedPatternId = useRef<string | null>(null);
 
   const currentRecipeControls = useCallback(() => ({
     kindFilter,
@@ -127,6 +128,24 @@ export default function PatternExplorer() {
     filteredPatterns.find((pattern) => pattern.patternId === selectedPatternId)
     ?? filteredPatterns[0]
     ?? null;
+
+  // The pattern actually shown in the "Source evidence" panel can change for reasons besides the
+  // pattern-list `onClick` below: `refresh()` reselects silently when the previously selected
+  // pattern drops out of a new result set, and a `kindFilter` change can drop it out of
+  // `filteredPatterns` before that. Whenever the *displayed* pattern changes for any reason, any
+  // evidence fetched or in flight for the previous one must not survive under the new one. Skips
+  // the initial null-to-first-pattern transition so it never races the mount-time evidence restore
+  // effect below, which begins its own request for that same transition.
+  useEffect(() => {
+    const nextPatternId = selectedPattern?.patternId ?? null;
+    const previousPatternId = lastGatedPatternId.current;
+    lastGatedPatternId.current = nextPatternId;
+    if (previousPatternId !== null && previousPatternId !== nextPatternId) {
+      evidenceGate.invalidate();
+      setExcerpt(null);
+      setExcerptLoadingKey(null);
+    }
+  }, [selectedPattern?.patternId, evidenceGate]);
 
   const recipeIsPreviewed = lastPreviewFingerprint === patternRecipeFingerprint(currentRecipeControls());
 
@@ -373,6 +392,11 @@ export default function PatternExplorer() {
                     setSelectedPatternId(pattern.patternId);
                     setPatternEvidenceSelection({ patternId: pattern.patternId, portalKey: null, documentId: null, characterStart: null });
                     setExcerpt(null);
+                    // An evidence fetch for the previously selected pattern may still be in
+                    // flight. Without invalidating it, it would still pass `isCurrent` and
+                    // publish its excerpt under this newly selected pattern.
+                    evidenceGate.invalidate();
+                    setExcerptLoadingKey(null);
                   }}
                   className={cn(
                     'focus-ring block w-full border-b border-slate-800/70 px-4 py-3 text-left transition hover:bg-slate-900/70',

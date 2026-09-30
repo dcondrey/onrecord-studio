@@ -35,6 +35,16 @@ export interface BriefingProject {
   opening: string;
   requestedAction: string;
   evidence: BriefingEvidence[];
+  /**
+   * True once the auto-draft-from-findings effect has reached a definitive outcome for this
+   * project: the project already had evidence, or the findings fetch completed. A transient fetch
+   * failure leaves this false so the next mount gets another attempt. Persisted (not
+   * component-local) so that deleting every drafted item and remounting the workspace does not
+   * read an empty `evidence` array as "never drafted" and resurrect them.
+   */
+  autoDrafted: boolean;
+  /** True if `addBriefingEvidence` has ever evicted an item to stay under its 200-item cap. */
+  evidenceTruncated: boolean;
 }
 
 export function createDefaultBriefingProject(now = new Date()): BriefingProject {
@@ -48,6 +58,8 @@ export function createDefaultBriefingProject(now = new Date()): BriefingProject 
     opening: '',
     requestedAction: '',
     evidence: [],
+    autoDrafted: false,
+    evidenceTruncated: false,
   };
 }
 
@@ -72,6 +84,10 @@ export function loadBriefingProject(
       evidence: Array.isArray(parsed.evidence)
         ? parsed.evidence.filter(isBriefingEvidence).slice(0, 200)
         : [],
+      autoDrafted: typeof parsed.autoDrafted === 'boolean' ? parsed.autoDrafted : false,
+      evidenceTruncated:
+        (typeof parsed.evidenceTruncated === 'boolean' ? parsed.evidenceTruncated : false) ||
+        (Array.isArray(parsed.evidence) && parsed.evidence.length > 200),
     };
   } catch {
     return fallback;
@@ -116,17 +132,26 @@ export function documentBriefingEvidence(input: {
   requestId: number;
   documentId: number;
   fileName: string;
-  characterOffset: number;
+  characterOffset: number | null;
   sourceUrl: string | null;
   agencyName: string;
   requestTitle: string;
   excerpt: string;
   rawFileSha256: string | null;
+  /**
+   * Required when `characterOffset` is null: disambiguates two document-level findings (no
+   * character-level location) for the same document, which would otherwise collide on the same
+   * id and silently deduplicate in `addBriefingEvidence`. Ignored when `characterOffset` is set,
+   * since the offset itself is already a distinguishing locator.
+   */
+  evidenceId?: string;
   now?: Date;
 }): BriefingEvidence {
   const now = input.now ?? new Date();
   return {
-    id: `document:${input.portalKey}:${input.documentId}:${input.characterOffset}`,
+    id: input.characterOffset === null
+      ? `document:${input.portalKey}:${input.documentId}:whole:${input.evidenceId ?? ''}`
+      : `document:${input.portalKey}:${input.documentId}:${input.characterOffset}`,
     kind: 'DOCUMENT_EXCERPT',
     portalKey: input.portalKey,
     requestId: input.requestId,
@@ -152,9 +177,14 @@ export function buildBriefingMarkdown(project: BriefingProject, generatedAt = ne
   const minutes = Math.max(1, Math.round(project.durationMinutes));
   const targetWords = minutes * 130;
   const sections = evidence.map((item, index) => {
+    // A document-level finding (e.g. a metadata-vs-content contradiction) can be cited
+    // without any character-level location, so characterOffset can be null even when
+    // documentId is not. `?? 0` would fabricate a precise offset the evidence never had;
+    // omit the segment instead of asserting a location nothing measured.
     const locator = item.documentId === null
       ? `${item.portalKey} / request ${item.requestId}`
-      : `${item.portalKey} / request ${item.requestId} / document ${item.documentId} / character ${item.characterOffset ?? 0}`;
+      : `${item.portalKey} / request ${item.requestId} / document ${item.documentId}` +
+        (item.characterOffset === null ? '' : ` / character ${item.characterOffset}`);
     const source = item.sourceUrl ? `\n- Source: ${item.sourceUrl}` : '';
     const digest = item.rawFileSha256 ? `\n- Preserved file SHA-256: ${item.rawFileSha256}` : '';
     const excerpt = item.excerpt ? `\n\n> ${item.excerpt.replace(/\s+/g, ' ').trim()}` : '';

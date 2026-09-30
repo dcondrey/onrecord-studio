@@ -33,6 +33,11 @@ const bridge = vi.hoisted(() => ({
   // last, which is the only ordering in which the staleness guard is observable.
   heldPreviews: new Map<string, (value: unknown) => void>(),
   holdPreviewFor: null as string | null,
+  // Same idea for the destructive call itself: held open so a second source's confirmation can be
+  // opened while the first source's destruction is still in flight, which is the only ordering in
+  // which "does the first source's completion clobber the second source's open dialog" is observable.
+  heldPurges: new Map<string, (value: unknown) => void>(),
+  holdPurgeFor: null as string | null,
 }));
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -50,12 +55,16 @@ vi.mock('@tauri-apps/api/core', () => ({
       return Promise.resolve(preview);
     }
     if (command === 'purge_source') {
-      return Promise.resolve({
+      const purge = {
         sourceKey,
         documentsRemoved: 412,
         requestsRemoved: 57,
         localPaths: ['/var/data/sandiego/a.pdf', '/var/data/sandiego/b.pdf'],
-      });
+      };
+      if (bridge.holdPurgeFor === sourceKey) {
+        return new Promise((resolve) => bridge.heldPurges.set(sourceKey, resolve));
+      }
+      return Promise.resolve(purge);
     }
     if (command === 'remove_source') {
       return Promise.resolve({ sourceKey, discardedFrontierTasks: 12, retainedDocuments: 70 });
@@ -112,6 +121,8 @@ describe('source purge', () => {
     bridge.calls.length = 0;
     bridge.heldPreviews.clear();
     bridge.holdPreviewFor = null;
+    bridge.heldPurges.clear();
+    bridge.holdPurgeFor = null;
   });
 
   afterEach(cleanup);
@@ -121,6 +132,11 @@ describe('source purge', () => {
   it('keeps withdrawal and deletion on separate controls and separate confirmations', async () => {
     mountWith([sanDiego], 'sandiego');
 
+    const refreshCountsBefore = {
+      evidence: useAppStore.getState().evidenceRefreshRequests,
+      findings: useAppStore.getState().findingsRefreshRequests,
+      analytics: useAppStore.getState().analyticsRefreshRequests,
+    };
     fireEvent.click(screen.getByRole('button', { name: 'Remove source' }));
     expect(screen.getByText(/Documents already ingested from this source are kept/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Delete source and documents' })).toBeNull();
@@ -128,6 +144,11 @@ describe('source purge', () => {
     await waitFor(() => expect(bridge.calls).toHaveLength(1));
     expect(bridge.calls[0].command).toBe('remove_source');
     expect(bridge.calls.some((call) => call.command === 'purge_source')).toBe(false);
+    // A removed source no longer belongs in evidence, findings, or analytics: stale charts and
+    // lists must be told to refetch.
+    expect(useAppStore.getState().evidenceRefreshRequests).toBe(refreshCountsBefore.evidence + 1);
+    expect(useAppStore.getState().findingsRefreshRequests).toBe(refreshCountsBefore.findings + 1);
+    expect(useAppStore.getState().analyticsRefreshRequests).toBe(refreshCountsBefore.analytics + 1);
   });
 
   it('names the counts before destroying anything, and reports what was destroyed', async () => {
@@ -146,6 +167,11 @@ describe('source purge', () => {
     expect(screen.getByText(/57/)).toBeTruthy();
     expect(screen.getByText(/400/)).toBeTruthy();
 
+    const refreshCountsBefore = {
+      evidence: useAppStore.getState().evidenceRefreshRequests,
+      findings: useAppStore.getState().findingsRefreshRequests,
+      analytics: useAppStore.getState().analyticsRefreshRequests,
+    };
     fireEvent.click(confirm);
     await waitFor(() => expect(bridge.calls).toHaveLength(2));
     expect(bridge.calls[1]).toEqual({
@@ -157,6 +183,11 @@ describe('source purge', () => {
     expect(log).toContain('412 documents and 57 requests destroyed');
     expect(log).toContain('2 evidence files deleted');
     expect(log).toContain('can be added again');
+    // A purged source no longer belongs in evidence, findings, or analytics: stale charts and
+    // lists must be told to refetch.
+    expect(useAppStore.getState().evidenceRefreshRequests).toBe(refreshCountsBefore.evidence + 1);
+    expect(useAppStore.getState().findingsRefreshRequests).toBe(refreshCountsBefore.findings + 1);
+    expect(useAppStore.getState().analyticsRefreshRequests).toBe(refreshCountsBefore.analytics + 1);
   });
 
   // A confirmation whose counts arrived for a different source is a false statement about the
@@ -185,5 +216,40 @@ describe('source purge', () => {
     await waitFor(() => expect(screen.getByText(/Delete Oakland and everything from it\?/)).toBeTruthy());
     expect(screen.queryByText(/412/)).toBeNull();
     expect(bridge.calls.some((call) => call.command === 'purge_source')).toBe(false);
+  });
+
+  // A confirmation dialog the operator is actively looking at is a statement about the source
+  // named in its heading. If an earlier, already-dismissed purge for a different source resolves
+  // later and blindly clears `pendingPurge`, it silently closes the dialog the operator is looking
+  // at right now, for a source that was never touched. Proven by reverting `purgeSource`'s
+  // `setPendingPurge` call in useSourceConnector.ts to the unconditional `setPendingPurge(null)`:
+  // Oakland's confirmation then disappears out from under the operator when San Diego's purge lands.
+  it('does not let a dismissed purge from one source clobber another source\'s open confirmation', async () => {
+    bridge.holdPurgeFor = 'sandiego';
+    mountWith([sanDiego, oakland], 'sandiego');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete source and its documents' }));
+    const confirmSanDiego = await screen.findByRole('button', { name: 'Delete source and documents' });
+    fireEvent.click(confirmSanDiego);
+    await waitFor(() => expect(bridge.heldPurges.has('sandiego')).toBe(true));
+
+    // The operator gives up watching San Diego's in-flight deletion and checks Oakland instead.
+    fireEvent.click(screen.getByRole('button', { name: 'Close deletion confirmation' }));
+    act(() => useAppStore.setState({ activePortalKey: 'oakland' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete source and its documents' }));
+    await screen.findByText(/Delete Oakland and everything from it\?/);
+    await waitFor(() => expect(screen.getByText('3', { exact: true })).toBeTruthy());
+
+    // San Diego's purge, opened and confirmed before Oakland's dialog even existed, lands now.
+    act(() => bridge.heldPurges.get('sandiego')?.({
+      sourceKey: 'sandiego', documentsRemoved: 412, requestsRemoved: 57,
+      localPaths: ['/var/data/sandiego/a.pdf', '/var/data/sandiego/b.pdf'],
+    }));
+
+    // The real destruction still applies: San Diego is gone and the refresh fired.
+    await waitFor(() => expect(useAppStore.getState().portals.map((p) => p.registration.portalKey)).toEqual(['oakland']));
+    // But Oakland's still-open, still-unconfirmed dialog must survive San Diego's unrelated landing.
+    expect(screen.getByText(/Delete Oakland and everything from it\?/)).toBeTruthy();
+    expect(bridge.calls.some((call) => call.command === 'purge_source' && call.args.sourceKey === 'oakland')).toBe(false);
   });
 });

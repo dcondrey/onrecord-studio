@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { invokeCommand } from '../../ipc';
+import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type {
   AnalyticalDatasetKind,
   AnalyticalImportCandidate,
@@ -64,6 +65,14 @@ export default function AnalysisWorkbench() {
   const [importResult, setImportResult] = useState<AnalyticalImportResult | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // `sqlResult` is written asynchronously from two independent paths: the automatic-discovery
+  // inspection effect below, and the manual Run/Compare buttons (via `runGatedSql`). Both issue a
+  // request through the same gate so whichever the user asked for LAST wins, regardless of which
+  // resolves first. Every OTHER place that changes `sql` without issuing a request of its own
+  // (dataset/template presets, direct textarea edits) must call `sqlGate.invalidate()` so it can't
+  // be silently overwritten by an in-flight request's result once it resolves for a query the
+  // editor no longer shows.
+  const sqlGate = useLatestRequestGate();
 
   const templates = schema?.templates ?? [];
   const groupedColumns = useMemo(() => {
@@ -97,17 +106,30 @@ export default function AnalysisWorkbench() {
   const inspection = automatic?.inspection;
   useEffect(() => {
     if (!inspection) return;
+    // `active` tracks only whether *this effect instance* is still mounted, so it governs the
+    // loading indicator: that must clear when this specific fetch settles, regardless of whether
+    // anything downstream (a preset, a template, an edit, a manual run) has since told `sqlGate`
+    // not to trust this fetch's *data* any more. Conflating the two left the indicator stuck on
+    // "Loading supporting records" (and the Import button disabled) whenever the user moved on
+    // to a different query before this fetch resolved.
     let active = true;
+    const request = sqlGate.begin();
     const release = discovery?.hold();
     setSql(inspection.sql);
     setSqlResult(null);
     setStatus('Loading supporting records');
     void invokeCommand('run_analytical_sql', { sql: inspection.sql, limit: 500 }).then((result) => {
-      if (active) setSqlResult(result);
-    }).catch((reason) => { if (active) setError(String(reason)); }).finally(() => { release?.(); if (active) setStatus(null); });
+      if (sqlGate.isCurrent(request)) setSqlResult(result);
+    }).catch((reason) => { if (sqlGate.isCurrent(request)) setError(String(reason)); }).finally(() => { release?.(); if (active) setStatus(null); });
     window.requestAnimationFrame(() => document.getElementById('analytical-sql-editor')?.focus());
-    return () => { active = false; release?.(); };
-  }, [discovery, inspection]);
+    return () => {
+      active = false;
+      // Only invalidate if nothing has superseded this request yet. A manual run that already
+      // began (a newer token) must not be cancelled by this effect's own teardown.
+      if (sqlGate.isCurrent(request)) sqlGate.invalidate();
+      release?.();
+    };
+  }, [discovery, inspection, sqlGate]);
 
   const run = async <T,>(label: string, action: () => Promise<T>, onSuccess?: (value: T) => void) => {
     setStatus(label);
@@ -124,6 +146,17 @@ export default function AnalysisWorkbench() {
       release?.();
       discovery?.refresh();
     }
+  };
+
+  // Manual entry point for the two call sites that write `sqlResult` outside the inspection
+  // effect (the Run button, the budget-comparison button). `begin()` synchronously, before the
+  // request is issued, so it supersedes an in-flight inspection query (or a previous manual one)
+  // the instant the user acts.
+  const runGatedSql = (label: string, query: string, limit = 500) => {
+    const request = sqlGate.begin();
+    return run(label, () => invokeCommand('run_analytical_sql', { sql: query, limit }), (result) => {
+      if (sqlGate.isCurrent(request)) setSqlResult(result);
+    });
   };
 
   return (
@@ -223,6 +256,9 @@ export default function AnalysisWorkbench() {
             <DataDiscovery schema={schema} onInspect={(query) => {
               setSql(query);
               setSqlResult(null);
+              // No request is fired here, but an in-flight inspection or manual run must not
+              // repopulate `sqlResult` for the query the user just queued instead of ran.
+              sqlGate.invalidate();
               window.requestAnimationFrame(() => document.getElementById('analytical-sql-editor')?.focus());
             }} />
           </Panel>}
@@ -286,7 +322,7 @@ export default function AnalysisWorkbench() {
           {schema && <Panel title="Budget versus actuals" icon="database">
             <BudgetComparison schema={schema} onCompare={(query) => {
               setSql(query);
-              void run('Comparing budget and actuals', () => invokeCommand('run_analytical_sql', { sql: query, limit: 500 }), setSqlResult);
+              void runGatedSql('Comparing budget and actuals', query);
             }} />
           </Panel>}
 
@@ -297,7 +333,7 @@ export default function AnalysisWorkbench() {
                   <div className="analysis-label">Datasets</div>
                   <div className="mt-1 max-h-40 overflow-y-auto rounded border border-slate-800">
                     {(schema?.datasets ?? []).map((dataset) => (
-                      <button key={dataset.snapshotId} type="button" onClick={() => setSql(`SELECT * FROM ${dataset.tableName} LIMIT 50`)} className="block w-full border-b border-slate-800 px-2 py-1.5 text-left text-[10px] text-slate-300 last:border-b-0 hover:bg-slate-900">
+                      <button key={dataset.snapshotId} type="button" onClick={() => { setSql(`SELECT * FROM ${dataset.tableName} LIMIT 50`); setSqlResult(null); sqlGate.invalidate(); }} className="block w-full border-b border-slate-800 px-2 py-1.5 text-left text-[10px] text-slate-300 last:border-b-0 hover:bg-slate-900">
                         <span className="font-semibold">{dataset.displayName}</span>
                         <span className="block font-mono text-[9px] text-slate-400">{dataset.tableName}</span>
                         <span className="block text-slate-400">{dataset.importedRows.toLocaleString()} rows · {dataset.rejectedRows.toLocaleString()} rejected · {dataset.partialDataset ? 'Partial / unverified coverage' : 'Declared complete'}</span>
@@ -307,12 +343,18 @@ export default function AnalysisWorkbench() {
                     ))}
                   </div>
                 </div>
-                <TemplateList templates={templates} onChoose={setSql} />
+                <TemplateList templates={templates} onChoose={(query) => { setSql(query); setSqlResult(null); sqlGate.invalidate(); }} />
               </div>
               <div className="min-w-0">
-                <textarea id="analytical-sql-editor" aria-label="Analytical SQL" className="analysis-sql" value={sql} onChange={(event) => setSql(event.target.value)} placeholder="SELECT ... FROM analysis_*" />
+                {/* Unlike the dataset/template presets and DataDiscovery's onInspect (which jump to an
+                    entirely different canned query and clear the old table immediately), a manual edit
+                    is iterative refinement of the query the visible result already belongs to, so the
+                    table is left showing until the user reruns it — standard SQL-console behavior. It
+                    still invalidates the gate so a still-in-flight older request can't silently attach
+                    its result to this now-different, unrun text. */}
+                <textarea id="analytical-sql-editor" aria-label="Analytical SQL" className="analysis-sql" value={sql} onChange={(event) => { setSql(event.target.value); sqlGate.invalidate(); }} placeholder="SELECT ... FROM analysis_*" />
                 <div className="mt-2 flex gap-2">
-                  <button className="analysis-button" type="button" disabled={!sql.trim()} onClick={() => void run('Running SQL', () => invokeCommand('run_analytical_sql', { sql, limit: 500 }), setSqlResult)}>
+                  <button className="analysis-button" type="button" disabled={!sql.trim()} onClick={() => void runGatedSql('Running SQL', sql)}>
                     Run
                   </button>
                   <button className="analysis-button" type="button" disabled={!sql.trim()} onClick={() => void run('Exporting SQL', async () => {

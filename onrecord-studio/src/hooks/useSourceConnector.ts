@@ -53,6 +53,9 @@ export function useSourceConnector() {
   const upsertPortal = useAppStore((state) => state.upsertPortal);
   const setPortalLifecycleState = useAppStore((state) => state.setPortalLifecycleState);
   const removePortalFromWorkspace = useAppStore((state) => state.removePortal);
+  const requestEvidenceRefresh = useAppStore((state) => state.requestEvidenceRefresh);
+  const requestFindingsRefresh = useAppStore((state) => state.requestFindingsRefresh);
+  const requestAnalyticsRefresh = useAppStore((state) => state.requestAnalyticsRefresh);
   const appendSyncLog = useAppStore((state) => state.appendSyncLog);
   const pendingSourceRepair = useAppStore((state) => state.pendingSourceRepair);
   const setPendingSourceRepair = useAppStore((state) => state.setPendingSourceRepair);
@@ -400,15 +403,23 @@ export function useSourceConnector() {
     setError(null);
     try {
       const removal = await invokeCommand('remove_source', { sourceKey: source.portalKey });
+      // These reflect a removal that has already happened on the backend, so they apply
+      // unconditionally regardless of what the operator is looking at by the time this resolves.
       setPortalSyncState(source.portalKey, false, syncRunId);
       removePortalFromWorkspace(source.portalKey);
+      requestEvidenceRefresh();
+      requestFindingsRefresh();
+      requestAnalyticsRefresh();
       appendSyncLog(
         `${source.displayName}: removed. ${removal.retainedDocuments.toLocaleString()} ingested ` +
           `document${removal.retainedDocuments === 1 ? '' : 's'} kept; ` +
           `${removal.discardedFrontierTasks.toLocaleString()} queued task` +
           `${removal.discardedFrontierTasks === 1 ? '' : 's'} discarded.`,
       );
-      setPendingRemoval(null);
+      // Only dismiss the confirmation if it is still showing for the source this removal was
+      // requested for. The operator may have already closed it and opened a different source's
+      // confirmation, which must not vanish out from under them.
+      setPendingRemoval((current) => (current?.portalKey === source.portalKey ? null : current));
     } catch (reason) {
       setError(String(reason));
     }
@@ -447,8 +458,13 @@ export function useSourceConnector() {
     setIsPurging(true);
     try {
       const purge = await invokeCommand('purge_source', { sourceKey: source.portalKey });
+      // These reflect a destruction that has already happened on the backend, so they apply
+      // unconditionally regardless of what the operator is looking at by the time this resolves.
       setPortalSyncState(source.portalKey, false, syncRunId);
       removePortalFromWorkspace(source.portalKey);
+      requestEvidenceRefresh();
+      requestFindingsRefresh();
+      requestAnalyticsRefresh();
       // The counts reported here are what the purge actually destroyed, which is the
       // authoritative figure. The preview's counts were a forecast and can differ if the crawl
       // finalized a document between the two calls.
@@ -461,7 +477,10 @@ export function useSourceConnector() {
           `${purge.localPaths.length === 1 ? '' : 's'} deleted. ` +
           'The registration is gone, so this source can be added again from scratch.',
       );
-      setPendingPurge(null);
+      // Only dismiss the confirmation if it is still showing for the source this purge was
+      // requested for. The operator may have already closed it and opened a different source's
+      // confirmation, which must not vanish out from under them.
+      setPendingPurge((current) => (current?.portalKey === source.portalKey ? null : current));
     } catch (reason) {
       setError(String(reason));
     } finally {

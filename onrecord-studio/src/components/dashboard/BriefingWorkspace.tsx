@@ -60,29 +60,47 @@ export default function BriefingWorkspace() {
   const [exported, setExported] = useState(false);
   const autoDraftedRef = useRef(false);
   const [autoDraftError, setAutoDraftError] = useState<string | null>(null);
+  // Seeded from the same condition the effect below uses to decide whether it will fetch, so
+  // the first paint already reflects reality instead of flashing "no findings" for one frame
+  // before the effect flips it to "drafting".
+  const [isAutoDrafting, setIsAutoDrafting] = useState(
+    () => !project.autoDrafted && project.evidence.length === 0,
+  );
 
   // When a user opens the briefing workspace and nothing is saved, populate a draft from the top
   // findings the detectors have surfaced. The user can edit, promote, or delete every drafted
   // item — the promotion checklist below still requires an operator's judgment to publish. This
   // is the autonomy override for the workspace that previously refused to fill anything.
+  //
+  // `project.autoDrafted` is the source of truth for "has this run before"; it is persisted on
+  // the project itself, not component state, because deleting every drafted item drives
+  // `project.evidence.length` back to 0 and a remount must not read that as "never drafted" and
+  // resurrect what the user removed. `autoDraftedRef` only dedupes re-runs within one mount.
+  // The flag is only set on a definitive outcome — the already-had-evidence skip, or a completed
+  // fetch — never in the `.catch()`: a transient IPC failure must still get a retry on the next
+  // mount rather than permanently burning the one chance to auto-draft.
   useEffect(() => {
     if (autoDraftedRef.current) return;
+    autoDraftedRef.current = true;
+    if (project.autoDrafted) return;
     if (project.evidence.length > 0) {
-      autoDraftedRef.current = true;
+      updateProject({ autoDrafted: true });
       return;
     }
-    autoDraftedRef.current = true;
+    setIsAutoDrafting(true);
     invokeCommand('list_findings', { filter: null, limit: 20 })
       .then((rows) => {
         const drafted = rows
           .map((row) => findingToBriefingEvidence(row))
           .filter((item): item is BriefingEvidence => item !== null);
         for (const item of drafted) addBriefingEvidence(item);
+        updateProject({ autoDrafted: true });
       })
       .catch((reason) => {
         setAutoDraftError(String(reason));
-      });
-  }, [addBriefingEvidence, project.evidence.length]);
+      })
+      .finally(() => setIsAutoDrafting(false));
+  }, [addBriefingEvidence, project.autoDrafted, project.evidence.length, updateProject]);
 
   const hasAutoDraftedItems = project.evidence.some((item) => item.id.startsWith(AUTO_DRAFT_ID_PREFIX));
 
@@ -208,12 +226,16 @@ export default function BriefingWorkspace() {
                     <h3 className="mt-3 text-[11px] font-semibold text-slate-300">
                       {autoDraftError
                         ? 'Auto-draft unavailable — start manually.'
-                        : 'Drafting from detector findings…'}
+                        : isAutoDrafting
+                          ? 'Drafting from detector findings…'
+                          : 'No findings drafted — start manually.'}
                     </h3>
                     <p className="mt-1.5 text-[9px] leading-relaxed text-slate-400">
                       {autoDraftError
                         ? `We couldn't populate a starting draft (${autoDraftError}). Run a focused search, select a request, and choose "Save lead to briefing" — or open Evidence and add manually.`
-                        : 'The workspace populates with the most notable findings from your data. You review and promote what belongs in the briefing.'}
+                        : isAutoDrafting
+                          ? 'The workspace populates with the most notable findings from your data. You review and promote what belongs in the briefing.'
+                          : 'The workspace found no detector findings to draft, or the drafted items were removed. Run a focused search, select a request, and choose "Save lead to briefing" — or open Evidence and add manually.'}
                     </p>
                     <button type="button" onClick={() => setWorkspaceView('evidence')} className="focus-ring mt-3 rounded-lg border border-indigo-400/25 bg-indigo-500/10 px-3 py-2 text-[9px] font-semibold text-indigo-200">Open Evidence</button>
                   </div>
@@ -223,6 +245,11 @@ export default function BriefingWorkspace() {
                   {hasAutoDraftedItems && (
                     <div role="status" className="rounded-lg border border-cyan-400/20 bg-cyan-500/[0.05] px-3 py-2 text-[9px] text-cyan-200">
                       Auto-drafted from your top findings. Edit, remove, or promote each item before you present.
+                    </div>
+                  )}
+                  {project.evidenceTruncated && (
+                    <div role="status" className="rounded-lg border border-amber-400/20 bg-amber-500/[0.05] px-3 py-2 text-[9px] text-amber-200">
+                      This briefing exceeded the 200-item evidence cap; the oldest items were dropped to make room for new ones.
                     </div>
                   )}
                   {project.evidence.map((item, index) => (
@@ -304,7 +331,7 @@ function EvidenceCard({ item, number, onChange, onReview, onRemove }: {
         <div className="min-w-0 flex-1">
           <div className="text-[8px] font-semibold uppercase tracking-wider text-cyan-300/80">Point {number} · {item.kind === 'DOCUMENT_EXCERPT' ? 'Document excerpt' : 'Request lead'}</div>
           <h3 className="mt-1 truncate text-[11px] font-semibold text-slate-300">{item.label}</h3>
-          <div className="mt-1 font-mono text-[8px] text-slate-400">{item.portalKey} / request {item.requestId}{item.documentId === null ? '' : ` / document ${item.documentId} / character ${item.characterOffset ?? 0}`}</div>
+          <div className="mt-1 font-mono text-[8px] text-slate-400">{item.portalKey} / request {item.requestId}{item.documentId === null ? '' : ` / document ${item.documentId}`}{item.documentId !== null && item.characterOffset !== null ? ` / character ${item.characterOffset}` : ''}</div>
         </div>
         <div className="flex items-center gap-2">
           <select value={item.readiness} onChange={(event) => onChange({ readiness: event.target.value as BriefingEvidenceReadiness })} aria-label={`Evidence status for ${item.label}`} className="focus-ring h-8 rounded-lg border border-slate-800 bg-slate-950 px-2 text-[8px] font-semibold text-slate-300">

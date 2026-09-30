@@ -1,0 +1,330 @@
+// @vitest-environment jsdom
+//
+// AnalysisWorkbench writes `sql`/`sqlResult` from two independent paths: the automatic-discovery
+// inspection effect, and the manual Run / budget-comparison buttons. Both call `run_analytical_sql`
+// with no ordering guard between them prior to the fix, so a slower automatic query can overwrite
+// a faster manual result the user asked for afterward. Both paths must go through the same
+// `useLatestRequestGate` so the last request the user actually made wins regardless of resolution
+// order.
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { SqlQueryResult } from '../types';
+
+const resolvers = new Map<string, (result: SqlQueryResult) => void>();
+const bridge = vi.hoisted(() => ({ invoke: vi.fn() }));
+
+const upkeep = {
+  policy: { enabled: true, autoImport: true, autoRefresh: true, refreshHours: 24, retentionMode: 'ORIGINALS', retainedFileBudgetBytes: 10 * 1024 ** 3 },
+  effectiveAt: '2026-09-14T00:00:00Z',
+  retainedFileBytes: 1048576,
+  referencedDocuments: 0,
+  reclaimedFileBytes: 0,
+  events: [],
+};
+
+vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn(), save: vi.fn() }));
+vi.mock('../ipc', () => ({ invokeCommand: bridge.invoke }));
+vi.mock('../store/useAppStore', () => ({
+  useAppStore: Object.assign((selector: (state: { evidenceRefreshRequests: number }) => unknown) =>
+    selector({ evidenceRefreshRequests: 0 }), {
+    getState: () => ({
+      setActivePortal: vi.fn(),
+      setSearchFilters: vi.fn(),
+      setSelectedRequest: vi.fn(),
+      setWorkspaceView: vi.fn(),
+      setPortalUrlDraft: vi.fn(),
+    }),
+  }),
+}));
+
+function result(column: string): SqlQueryResult {
+  return { columns: [column], rows: [['value']], rowCount: 1, truncated: false, elapsedMs: 1, provenance: [] };
+}
+
+import AnalysisWorkbench from '../components/dashboard/AnalysisWorkbench';
+import {
+  AutomaticDiscoveryProvider,
+  useDiscoveryController,
+} from '../components/dashboard/AutomaticDiscoveryProvider';
+import type { DiscoveryController } from '../utils/discoveryController';
+
+let capturedController: DiscoveryController | null = null;
+function ControllerCapture() {
+  capturedController = useDiscoveryController();
+  return null;
+}
+
+function Harness() {
+  return (
+    <AutomaticDiscoveryProvider>
+      <ControllerCapture />
+      <AnalysisWorkbench />
+    </AutomaticDiscoveryProvider>
+  );
+}
+
+afterEach(() => {
+  cleanup();
+  resolvers.clear();
+  capturedController = null;
+  vi.clearAllMocks();
+});
+
+describe('AnalysisWorkbench SQL result gating', () => {
+  it('keeps the manual run result even when a slower automatic inspection query resolves after it', async () => {
+    bridge.invoke.mockImplementation(async (name: string, args?: { sql?: string }) => {
+      switch (name) {
+        case 'get_analytical_schema':
+          return { datasets: [], columns: [], templates: [] };
+        case 'list_analytical_import_candidates':
+          return [];
+        case 'query_corpus_patterns':
+          return [];
+        case 'get_data_maintenance_status':
+          return upkeep;
+        case 'run_analytical_sql':
+          return new Promise((resolve) => resolvers.set(String(args?.sql ?? ''), resolve));
+        default:
+          return null;
+      }
+    });
+
+    render(<Harness />);
+    await waitFor(() => expect(capturedController).not.toBeNull());
+
+    // Automatic discovery starts inspecting a slow query.
+    act(() => {
+      capturedController!.inspect('SELECT slow_query');
+    });
+    await waitFor(() =>
+      expect((screen.getByLabelText('Analytical SQL') as HTMLTextAreaElement).value).toBe('SELECT slow_query'),
+    );
+    await waitFor(() => expect(resolvers.has('SELECT slow_query')).toBe(true));
+
+    // The user edits the SQL and runs it manually before the automatic query resolves.
+    fireEvent.change(screen.getByLabelText('Analytical SQL'), { target: { value: 'SELECT fast_query' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await waitFor(() => expect(resolvers.has('SELECT fast_query')).toBe(true));
+
+    // Manual result resolves first (it's fast).
+    act(() => {
+      resolvers.get('SELECT fast_query')!(result('manual_col'));
+    });
+    await screen.findByText('manual_col');
+
+    // The automatic query resolves afterward. Without the gate, this silently overwrites the
+    // manual result the user is now looking at.
+    await act(async () => {
+      resolvers.get('SELECT slow_query')!(result('auto_col'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText('auto_col')).toBeNull();
+    expect(screen.getByText('manual_col')).toBeTruthy();
+  });
+
+  it('discards a stale automatic result after the user switches to a different query without running it', async () => {
+    const template = {
+      templateId: 't1',
+      title: 'Regional preset',
+      description: 'Loads a canned regional query',
+      sql: 'SELECT * FROM analysis_regional_data LIMIT 50',
+      denominator: '',
+    };
+    bridge.invoke.mockImplementation(async (name: string, args?: { sql?: string }) => {
+      switch (name) {
+        case 'get_analytical_schema':
+          return { datasets: [], columns: [], templates: [template] };
+        case 'list_analytical_import_candidates':
+          return [];
+        case 'query_corpus_patterns':
+          return [];
+        case 'get_data_maintenance_status':
+          return upkeep;
+        case 'run_analytical_sql':
+          return new Promise((resolve) => resolvers.set(String(args?.sql ?? ''), resolve));
+        default:
+          return null;
+      }
+    });
+
+    render(<Harness />);
+    await waitFor(() => expect(capturedController).not.toBeNull());
+
+    // Automatic discovery starts inspecting a slow query.
+    act(() => {
+      capturedController!.inspect('SELECT slow_query');
+    });
+    await waitFor(() =>
+      expect((screen.getByLabelText('Analytical SQL') as HTMLTextAreaElement).value).toBe('SELECT slow_query'),
+    );
+    await waitFor(() => expect(resolvers.has('SELECT slow_query')).toBe(true));
+
+    // The user picks a different query from the template list without ever clicking Run, so
+    // nothing supersedes the gate through `runGatedSql`.
+    fireEvent.click(await screen.findByRole('button', { name: /Regional preset/ }));
+    await waitFor(() =>
+      expect((screen.getByLabelText('Analytical SQL') as HTMLTextAreaElement).value).toBe(template.sql),
+    );
+
+    // The automatic query resolves afterward, for SQL the editor no longer shows.
+    await act(async () => {
+      resolvers.get('SELECT slow_query')!(result('auto_col'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText('auto_col')).toBeNull();
+  });
+
+  it('discards a stale automatic result after the user edits the SQL by hand without running it', async () => {
+    bridge.invoke.mockImplementation(async (name: string, args?: { sql?: string }) => {
+      switch (name) {
+        case 'get_analytical_schema':
+          return { datasets: [], columns: [], templates: [] };
+        case 'list_analytical_import_candidates':
+          return [];
+        case 'query_corpus_patterns':
+          return [];
+        case 'get_data_maintenance_status':
+          return upkeep;
+        case 'run_analytical_sql':
+          return new Promise((resolve) => resolvers.set(String(args?.sql ?? ''), resolve));
+        default:
+          return null;
+      }
+    });
+
+    render(<Harness />);
+    await waitFor(() => expect(capturedController).not.toBeNull());
+
+    act(() => {
+      capturedController!.inspect('SELECT slow_query');
+    });
+    await waitFor(() =>
+      expect((screen.getByLabelText('Analytical SQL') as HTMLTextAreaElement).value).toBe('SELECT slow_query'),
+    );
+    await waitFor(() => expect(resolvers.has('SELECT slow_query')).toBe(true));
+
+    // The user types over the query by hand and never clicks Run.
+    fireEvent.change(screen.getByLabelText('Analytical SQL'), { target: { value: 'SELECT edited_by_hand' } });
+
+    await act(async () => {
+      resolvers.get('SELECT slow_query')!(result('auto_col'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText('auto_col')).toBeNull();
+  });
+
+  it('discards a stale automatic result after the user picks a dataset preset without running it', async () => {
+    const dataset = {
+      snapshotId: 'snap-1',
+      datasetKind: 'REGIONAL_DATA' as const,
+      displayName: 'Regional dataset fixture',
+      tableName: 'analysis_regional_data_fixture',
+      importedRows: 10,
+      rejectedRows: 0,
+      sourceUri: null,
+      sourceSha256: 'a'.repeat(64),
+      retrievedAt: '2026-09-01T00:00:00Z',
+      observationPeriodStart: null,
+      observationPeriodEnd: null,
+      partialDataset: false,
+      validationSummary: 'ok',
+    };
+    bridge.invoke.mockImplementation(async (name: string, args?: { sql?: string }) => {
+      switch (name) {
+        case 'get_analytical_schema':
+          return { datasets: [dataset], columns: [], templates: [] };
+        case 'list_analytical_import_candidates':
+          return [];
+        case 'query_corpus_patterns':
+          return [];
+        case 'get_data_maintenance_status':
+          return upkeep;
+        case 'run_analytical_sql':
+          return new Promise((resolve) => resolvers.set(String(args?.sql ?? ''), resolve));
+        default:
+          return null;
+      }
+    });
+
+    render(<Harness />);
+    await waitFor(() => expect(capturedController).not.toBeNull());
+
+    act(() => {
+      capturedController!.inspect('SELECT slow_query');
+    });
+    await waitFor(() =>
+      expect((screen.getByLabelText('Analytical SQL') as HTMLTextAreaElement).value).toBe('SELECT slow_query'),
+    );
+    await waitFor(() => expect(resolvers.has('SELECT slow_query')).toBe(true));
+
+    // The user picks the dataset preset without ever clicking Run.
+    fireEvent.click(await screen.findByRole('button', { name: /Regional dataset fixture/ }));
+    await waitFor(() =>
+      expect((screen.getByLabelText('Analytical SQL') as HTMLTextAreaElement).value).toBe(
+        'SELECT * FROM analysis_regional_data_fixture LIMIT 50',
+      ),
+    );
+
+    await act(async () => {
+      resolvers.get('SELECT slow_query')!(result('auto_col'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText('auto_col')).toBeNull();
+  });
+
+  it('clears the loading indicator once a superseded automatic query settles, even though its result is discarded', async () => {
+    const template = {
+      templateId: 't1',
+      title: 'Regional preset',
+      description: 'Loads a canned regional query',
+      sql: 'SELECT * FROM analysis_regional_data LIMIT 50',
+      denominator: '',
+    };
+    bridge.invoke.mockImplementation(async (name: string, args?: { sql?: string }) => {
+      switch (name) {
+        case 'get_analytical_schema':
+          return { datasets: [], columns: [], templates: [template] };
+        case 'list_analytical_import_candidates':
+          return [];
+        case 'query_corpus_patterns':
+          return [];
+        case 'get_data_maintenance_status':
+          return upkeep;
+        case 'run_analytical_sql':
+          return new Promise((resolve) => resolvers.set(String(args?.sql ?? ''), resolve));
+        default:
+          return null;
+      }
+    });
+
+    render(<Harness />);
+    await waitFor(() => expect(capturedController).not.toBeNull());
+
+    act(() => {
+      capturedController!.inspect('SELECT slow_query');
+    });
+    await screen.findByText('Loading supporting records');
+    await waitFor(() => expect(resolvers.has('SELECT slow_query')).toBe(true));
+
+    // The user moves on to a different query before the automatic fetch settles. Its *result*
+    // must be discarded (covered above), but its *own* loading indicator must still clear when
+    // the fetch finishes — nothing else is going to turn it off.
+    fireEvent.click(await screen.findByRole('button', { name: /Regional preset/ }));
+
+    await act(async () => {
+      resolvers.get('SELECT slow_query')!(result('auto_col'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText('Loading supporting records')).toBeNull();
+  });
+});

@@ -172,7 +172,9 @@ interface AppState {
   setTerminalVisibility: (visible: boolean) => void;
   setPendingSourceRepair: (notice: SourceRepairNotice | null) => void;
   setPatternEvidenceSelection: (selection: PatternEvidenceSelection | null) => void;
-  updateBriefingProject: (patch: Partial<Omit<BriefingProject, 'version' | 'evidence'>>) => void;
+  updateBriefingProject: (
+    patch: Partial<Omit<BriefingProject, 'version' | 'evidence' | 'evidenceTruncated'>>,
+  ) => void;
   addBriefingEvidence: (evidence: BriefingEvidence) => void;
   updateBriefingEvidence: (id: string, patch: Pick<Partial<BriefingEvidence>, 'claim' | 'note' | 'readiness'>) => void;
   removeBriefingEvidence: (id: string) => void;
@@ -416,11 +418,11 @@ export const useAppStore = create<AppState>((set) => ({
   }),
   addBriefingEvidence: (evidence) => set((state) => {
     const existing = state.briefingProject.evidence.find((item) => item.id === evidence.id);
+    const appended = existing ? state.briefingProject.evidence : [...state.briefingProject.evidence, evidence];
     const briefingProject = {
       ...state.briefingProject,
-      evidence: existing
-        ? state.briefingProject.evidence
-        : [...state.briefingProject.evidence, evidence].slice(-200),
+      evidence: appended.slice(-200),
+      evidenceTruncated: state.briefingProject.evidenceTruncated || appended.length > 200,
     };
     persistBriefingProject(
       briefingProject,

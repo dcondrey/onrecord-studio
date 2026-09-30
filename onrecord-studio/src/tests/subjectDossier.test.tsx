@@ -6,9 +6,10 @@
 // evidence, and the panel would be asserting relationships the corpus never recorded for the
 // subject it names. Every fetch goes through `useLatestRequestGate`.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 const resolvers = new Map<string, (rows: unknown) => void>();
+let findingsResponse: unknown[] = [];
 
 vi.hoisted(() => {
   const entries = new Map<string, string>();
@@ -46,7 +47,7 @@ vi.mock('@tauri-apps/api/core', () => ({
       return new Promise((resolve) => resolvers.set(`nb:${entityId}`, resolve));
     }
     if (command === 'list_findings') {
-      return Promise.resolve([]);
+      return Promise.resolve(findingsResponse);
     }
     return Promise.resolve(null);
   },
@@ -65,9 +66,27 @@ function node(entityId: string, displayValue: string, documentCount: number) {
   };
 }
 
+function finding(id: string, headline: string) {
+  return {
+    id,
+    kind: 'ANOMALY',
+    severity: 'NOTABLE',
+    confidence: 'MEDIUM',
+    subject: null,
+    headline,
+    explanation: `${headline} explanation`,
+    citations: [],
+    discoveredAt: new Date().toISOString(),
+    lastSeenAt: new Date().toISOString(),
+    dismissedAt: null,
+    sourceDetector: 'test-detector',
+  };
+}
+
 afterEach(() => {
   cleanup();
   resolvers.clear();
+  findingsResponse = [];
   act(() => {
     useAppStore.setState({ subjectDossierTarget: null });
   });
@@ -141,9 +160,40 @@ describe('SubjectDossier', () => {
       });
     });
     await waitFor(() => {
-      expect(screen.getByText('Sarah Smith')).toBeTruthy();
+      const neighborhoodSection = screen.getByText('Corpus neighborhood').closest('section');
+      expect(within(neighborhoodSection!).getByText('Sarah Smith')).toBeTruthy();
     });
     // The stale neighborhood's neighbor label must not appear anywhere.
     expect(screen.queryByText(/wrong-poison-neighbor/i)).toBeNull();
+  });
+
+  it('backfills the label from the neighborhood when opened by entity id, so findings populate', async () => {
+    // This is the "opened via EntityGraph or a finding row" path: `resolveTarget` sets
+    // `label: null` for `{kind:'entity'}` targets, and `loadFindings` treats a null/empty label
+    // as "no query" (matches: []). Without backfilling the label from the resolved neighborhood,
+    // findings for this subject never populate, even when matching findings exist.
+    findingsResponse = [finding('f1', 'Payment to John Smith flagged')];
+    act(() => {
+      useAppStore.setState({ subjectDossierTarget: { kind: 'entity', value: 'entity-a' } });
+    });
+    render(<SubjectDossier />);
+    await waitFor(() => expect(resolvers.has('nb:entity-a')).toBe(true));
+    act(() => {
+      resolvers.get('nb:entity-a')!({
+        center: node('entity-a', 'John Smith', 12),
+        edges: [],
+        truncated: false,
+      });
+    });
+    await screen.findByText('Payment to John Smith flagged');
+
+    // Switch subject before entity-b's neighborhood resolves: the label must revert to unresolved
+    // and John Smith's finding must not remain attributed to the new subject.
+    act(() => {
+      useAppStore.setState({ subjectDossierTarget: { kind: 'entity', value: 'entity-b' } });
+    });
+    await waitFor(() => expect(resolvers.has('nb:entity-b')).toBe(true));
+    expect(screen.queryByText('Payment to John Smith flagged')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'John Smith' })).toBeNull();
   });
 });
