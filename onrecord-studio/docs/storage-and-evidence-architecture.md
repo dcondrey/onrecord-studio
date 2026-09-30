@@ -500,3 +500,45 @@ trusted channel is the recipient's responsibility, the same as for any manifest 
   recorded after receipt. The `evidence_summary` prose discloses the basis, so this is not a silent
   mislabel, but a provisional finding exported to a legal brief should not carry the same
   confidence as a completed one. This is the compliance analogue of section 5.
+
+## 10. Shareable read-only bundle
+
+A bundle is selected findings as one static HTML file for a reader who does not have the app. It is
+a different artifact from the two signed exports above. It carries no signature, so it claims
+"unchanged since written" (by content hash) and nothing about who wrote it. Code: `src/bundle/`;
+IPC: `preview_shareable_bundle` and `export_shareable_bundle` in `src/commands/bundle.rs`.
+
+**What it does and does not claim.** Each finding carries its basis (a counted comparison, or a
+pattern signal that is not a legal conclusion), its confidence (`Unassessed` is shown as "not
+assessed", never as a number), its limits, and its sources: file name, portal, document id, cited
+character range, file SHA-256, and a quoted excerpt labelled with how it was checked. Source
+documents themselves and source URLs are not included. The page has no script, no form, no link and
+no external reference, and carries a `default-src 'none'` policy; a test asserts that in the written
+output.
+
+**What it leaves out, whole.** A finding is excluded, with its reason shown in the pre-export
+summary, when it cites no source; cites any document that is not public, is missing, or whose
+portal is removed or unknown; is dismissed; is a redaction-identity hypothesis; or is a legal claim
+without measured confidence. One private record withdraws the whole finding because its headline
+and explanation were written from that record, not only its excerpt. Headlines, explanations,
+labels, file names and excerpts pass through `storage::pii::mask_pii`, with whole-document context
+for excerpts read from stored text (reused from `report::builder`, so the masking is the verifiable
+report's masking). Masking is structural, not a guarantee; the bundle says so.
+
+**Confirmation.** `preview_shareable_bundle` writes nothing and returns exactly what would be
+written plus a content hash. `export_shareable_bundle` takes that hash back and refuses when the
+content as it stands now hashes differently, so what the person confirmed is what is written. The
+file is written with `atomic_write::write_atomic` into the managed report directory, never over an
+existing file.
+
+**Schema.** The data document sits in `<script type="application/json" id="onrecord-bundle-data">`:
+`format` (`onrecord-read-only-bundle`), `schemaVersion` (integer, currently 1; a reader refuses one
+it does not know), `generatedAt`, `contentSha256`, and `content` (`title`, `findings`,
+`limitations`, `packets`). `contentSha256` is SHA-256 of `content` in canonical JSON (keys sorted at
+every depth, no whitespace), so `generatedAt` is outside it and any JSON tool can recompute it.
+`content.packets` is reserved for citable evidence packets: each entry is `{packetFormat,
+packetVersion, packetSha256, payload}` and the bundle does not interpret `payload`, so a packet
+format can be embedded later without changing this schema. Nothing populates it yet.
+
+**Not done.** Only a selection of findings can be bundled. A casework case cannot, because its
+citations reference saved research reports rather than findings.
