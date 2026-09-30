@@ -25,12 +25,16 @@ const bridge = vi.hoisted(() => ({
   listRows: [] as unknown[],
   refreshRejects: false,
   dismissRejects: false,
+  /** Per-command override; when set, the mock returns whatever the function yields for that call. */
+  override: {} as Record<string, ((args: unknown) => Promise<unknown>) | undefined>,
 }));
 
 vi.mock('@tauri-apps/api/core', () => ({
   isTauri: () => false,
   invoke: (command: string, args: unknown) => {
     bridge.invoked.push({ command, args });
+    const override = bridge.override[command];
+    if (override) return override(args);
     if (command === 'get_affiliation_disclosure') {
       return Promise.resolve({
         status: 'UNSET',
@@ -61,7 +65,18 @@ vi.mock('@tauri-apps/api/core', () => ({
 }));
 
 import FindingsInbox from '../components/dashboard/FindingsInbox';
+import { useAppStore } from '../store/useAppStore';
 import type { Finding } from '../types';
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
 
 function sampleFinding(overrides: Partial<Finding> = {}): Finding {
   return {
@@ -102,6 +117,7 @@ describe('FindingsInbox', () => {
     bridge.listRows = [];
     bridge.refreshRejects = false;
     bridge.dismissRejects = false;
+    bridge.override = {};
   });
 
   afterEach(() => {
@@ -204,5 +220,141 @@ describe('FindingsInbox', () => {
       expect(bridge.invoked.some((call) => call.command === 'refresh_findings')).toBe(true);
       expect(screen.getByText('Fresh finding after refresh')).toBeTruthy();
     });
+  });
+
+  it('keeps a failed refresh_findings visible after the list re-loads', async () => {
+    bridge.listRows = [sampleFinding({ id: 'stale', headline: 'Finding from the previous sweep' })];
+    bridge.refreshRejects = true;
+    await act(async () => {
+      render(<FindingsInbox />);
+    });
+    await waitFor(() => {
+      expect(screen.getByText('Finding from the previous sweep')).toBeTruthy();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /refresh findings/i }));
+    });
+    // The reload keyed off the refresh counter must have settled before we judge the alert.
+    await waitFor(() => {
+      expect(bridge.invoked.filter((call) => call.command === 'list_findings').length).toBeGreaterThanOrEqual(2);
+      expect(screen.getByRole('button', { name: /refresh findings/i })).toBeTruthy();
+    });
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toMatch(/refresh unavailable/);
+    expect(alert.textContent).not.toMatch(/findings unavailable/i);
+    // The previous sweep's rows are still shown; a failed sweep does not blank the list.
+    expect(screen.getByText('Finding from the previous sweep')).toBeTruthy();
+  });
+
+  it('does not restore a successfully dismissed sibling when an earlier dismissal is rejected', async () => {
+    bridge.listRows = [
+      sampleFinding({ id: 'first', headline: 'First to dismiss' }),
+      sampleFinding({ id: 'second', headline: 'Second to dismiss' }),
+    ];
+    const first = deferred<null>();
+    bridge.override.dismiss_finding = (args) =>
+      (args as { id: string }).id === 'first' ? first.promise : Promise.resolve(null);
+    await act(async () => {
+      render(<FindingsInbox />);
+    });
+    await waitFor(() => {
+      expect(screen.getByText('First to dismiss')).toBeTruthy();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /dismiss finding: first to dismiss/i }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /dismiss finding: second to dismiss/i }));
+    });
+    await waitFor(() => {
+      expect(screen.queryByText('Second to dismiss')).toBeNull();
+    });
+    await act(async () => {
+      first.reject(new Error('dismiss unavailable'));
+    });
+    await waitFor(() => {
+      expect(screen.getByText('First to dismiss')).toBeTruthy();
+    });
+    // `second` was dismissed on the backend; the rollback of `first` must not resurrect it.
+    expect(screen.queryByText('Second to dismiss')).toBeNull();
+    expect(screen.getByRole('alert').textContent).toMatch(/dismiss unavailable/);
+  });
+
+  it('does not overwrite a newer list with the pre-dismiss snapshot when a rejected dismissal rolls back', async () => {
+    bridge.listRows = [
+      sampleFinding({ id: 'kept', headline: 'Kept across sweeps' }),
+      sampleFinding({ id: 'cleared', headline: 'Cleared by the next sweep' }),
+    ];
+    const pending = deferred<null>();
+    bridge.override.dismiss_finding = () => pending.promise;
+    await act(async () => {
+      render(<FindingsInbox />);
+    });
+    await waitFor(() => {
+      expect(screen.getByText('Kept across sweeps')).toBeTruthy();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /dismiss finding: kept across sweeps/i }));
+    });
+    await waitFor(() => {
+      expect(screen.queryByText('Kept across sweeps')).toBeNull();
+    });
+    // An ingest finishes while the dismissal is in flight: the next sweep dropped `cleared` and
+    // surfaced `fresh`. The backend still holds `kept` because its dismissal has not committed.
+    bridge.listRows = [
+      sampleFinding({ id: 'kept', headline: 'Kept across sweeps' }),
+      sampleFinding({ id: 'fresh', headline: 'Fresh from the new sweep' }),
+    ];
+    await act(async () => {
+      useAppStore.getState().requestFindingsRefresh();
+    });
+    await waitFor(() => {
+      expect(screen.getByText('Fresh from the new sweep')).toBeTruthy();
+    });
+    // The in-flight dismissal still hides `kept` even though the reload returned it.
+    expect(screen.queryByText('Kept across sweeps')).toBeNull();
+    await act(async () => {
+      pending.reject(new Error('dismiss unavailable'));
+    });
+    await waitFor(() => {
+      expect(screen.getByText('Kept across sweeps')).toBeTruthy();
+    });
+    expect(screen.getByText('Fresh from the new sweep')).toBeTruthy();
+    expect(screen.queryByText('Cleared by the next sweep')).toBeNull();
+  });
+
+  it('renders a failed initial load as an error, not as an empty inbox', async () => {
+    bridge.override.list_findings = () => Promise.reject(new Error('database locked'));
+    await act(async () => {
+      render(<FindingsInbox />);
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent).toMatch(/database locked/);
+    });
+    expect(screen.queryByText(/no findings surfaced yet/i)).toBeNull();
+    expect(screen.queryByText(/loading findings/i)).toBeNull();
+  });
+
+  it('renders CLAIM_CONTRADICTS_DATA as a pattern signal with its full explanation', async () => {
+    const explanation =
+      'Band: stated $1,200,000; observed $840,000 in the audited fund ledger (scope: fund-general, FY2025); queries #12, #19.';
+    bridge.listRows = [
+      sampleFinding({
+        id: 'claim',
+        kind: 'CLAIM_CONTRADICTS_DATA',
+        severity: 'NOTABLE',
+        headline: 'Stated fund total exceeds the ledger',
+        explanation,
+      }),
+    ];
+    await act(async () => {
+      render(<FindingsInbox />);
+    });
+    await waitFor(() => {
+      expect(screen.getByText('Stated fund total exceeds the ledger')).toBeTruthy();
+    });
+    expect(screen.getAllByText(explanation).length).toBeGreaterThan(0);
+    expect(screen.getByText(/pattern signal, not a legal claim/i)).toBeTruthy();
+    expect(screen.queryByText(/legal claim: counted violation/i)).toBeNull();
   });
 });

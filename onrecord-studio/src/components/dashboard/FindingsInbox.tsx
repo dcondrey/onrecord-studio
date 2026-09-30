@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isTauri } from '@tauri-apps/api/core';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
@@ -12,6 +12,12 @@ import VerifiableReportExport from './VerifiableReportExport';
 import { useProfileLensStore } from '../../store/useProfileLensStore';
 import { touchesOwnOrganization, useAffiliationDisclosure } from '../account/useProfile';
 
+/** A failed user action. Kept apart from a failed load: the list is still valid when one of these is set. */
+interface ActionError {
+  action: 'refresh' | 'dismiss';
+  message: string;
+}
+
 /**
  * The autonomous findings inbox: the first thing on the overview screen.
  *
@@ -23,13 +29,18 @@ import { touchesOwnOrganization, useAffiliationDisclosure } from '../account/use
  */
 export default function FindingsInbox() {
   const [findings, setFindings] = useState<Finding[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<ActionError | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   // Which finding's row is expanded to show ArtifactDrafts. At most one at a time — the drafted
   // text can be long, and stacking several open drafts hides the ranked list.
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const listGate = useLatestRequestGate();
+  // Ids whose `dismiss_finding` has not settled. A list load that resolves while one is in flight
+  // still carries the row (the backend has not committed the dismissal yet), and must not re-show
+  // a finding the user has already removed.
+  const pendingDismissals = useRef(new Set<string>());
   const lensEnabled = useProfileLensStore((state) => state.lensEnabled);
   const setLensEnabled = useProfileLensStore((state) => state.setLensEnabled);
   const setSelfReviewOpen = useProfileLensStore((state) => state.setSelfReviewOpen);
@@ -44,11 +55,11 @@ export default function FindingsInbox() {
   const loadFindings = useCallback(() => {
     const request = listGate.begin();
     setIsLoading(true);
-    setError(null);
+    setLoadError(null);
     invokeCommand('list_findings', { filter: null, limit: 50 })
       .then((rows) => {
         if (!listGate.isCurrent(request)) return;
-        setFindings(rows);
+        setFindings(rows.filter((row) => !pendingDismissals.current.has(row.id)));
         // The user is looking at the inbox. Bump the watermark so ChangeFeed knows the difference
         // between findings that arrived while they weren't looking and findings they've already
         // been shown. Only on a successful load — a failed fetch is not "seen."
@@ -56,7 +67,7 @@ export default function FindingsInbox() {
       })
       .catch((reason) => {
         if (!listGate.isCurrent(request)) return;
-        setError(formatNativeError(reason));
+        setLoadError(formatNativeError(reason));
       })
       .finally(() => {
         if (listGate.isCurrent(request)) setIsLoading(false);
@@ -73,10 +84,13 @@ export default function FindingsInbox() {
 
   const refresh = useCallback(async () => {
     setIsRefreshing(true);
+    setActionError(null);
     try {
       await invokeCommand('refresh_findings', {});
     } catch (reason) {
-      setError(formatNativeError(reason));
+      // The list reload below clears only `loadError`, so a failed sweep stays on screen next to
+      // the rows the previous sweep produced.
+      setActionError({ action: 'refresh', message: formatNativeError(reason) });
     } finally {
       setIsRefreshing(false);
       requestFindingsRefresh();
@@ -85,13 +99,26 @@ export default function FindingsInbox() {
 
   const dismiss = useCallback(
     async (id: string) => {
-      const previous = findings;
+      const index = findings.findIndex((row) => row.id === id);
+      if (index === -1) return;
+      const removed = findings[index];
+      pendingDismissals.current.add(id);
+      setActionError(null);
       setFindings((rows) => rows.filter((row) => row.id !== id));
       try {
         await invokeCommand('dismiss_finding', { id });
       } catch (reason) {
-        setFindings(previous);
-        setError(formatNativeError(reason));
+        // Roll back by re-inserting this one row into whatever list is current. Restoring the
+        // snapshot captured at click time would resurrect siblings dismissed since, and would
+        // overwrite a list that a reload has replaced in the meantime.
+        setFindings((rows) => {
+          if (rows.some((row) => row.id === id)) return rows;
+          const at = Math.min(index, rows.length);
+          return [...rows.slice(0, at), removed, ...rows.slice(at)];
+        });
+        setActionError({ action: 'dismiss', message: formatNativeError(reason) });
+      } finally {
+        pendingDismissals.current.delete(id);
       }
     },
     [findings],
@@ -186,9 +213,17 @@ export default function FindingsInbox() {
         </div>
       )}
 
-      {error && (
+      {loadError && (
         <div role="alert" className="rounded-lg border border-rose-500/20 bg-rose-500/[0.04] px-3 py-2 text-[9px] text-rose-200">
-          Findings unavailable: {error}
+          Findings unavailable: {loadError}
+        </div>
+      )}
+      {actionError && (
+        <div role="alert" className="rounded-lg border border-rose-500/20 bg-rose-500/[0.04] px-3 py-2 text-[9px] text-rose-200">
+          {actionError.action === 'refresh'
+            ? 'Analysis did not run; the list below is from the previous sweep: '
+            : 'The finding could not be dismissed and has been restored: '}
+          {actionError.message}
         </div>
       )}
 
@@ -196,7 +231,7 @@ export default function FindingsInbox() {
         <div role="status" className="text-[10px] text-slate-400">
           Loading findings…
         </div>
-      ) : lensEnabled && !hasConfirmedSubject ? null : findings.length === 0 && error ? null : findings.length === 0 ? (
+      ) : lensEnabled && !hasConfirmedSubject ? null : findings.length === 0 && loadError ? null : findings.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-800 bg-slate-950/25 p-4 text-center">
           <p className="text-[10px] font-medium text-slate-300">
             No findings surfaced yet.
