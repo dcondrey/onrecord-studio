@@ -15,21 +15,26 @@ import type { AgencyPerformanceProfile, Finding } from '../../types';
  * the strip reports the finding count only, rather than fabricating a zero for the second bucket.
  */
 export default function ChangeFeed() {
-  const lastFindingsSeenAt = useAppStore((state) => state.lastFindingsSeenAt);
   const findingsRefreshRequests = useAppStore((state) => state.findingsRefreshRequests);
   const agencyProfiles = useAppStore((state) => state.agencyProfiles);
   const activePortalKey = useAppStore((state) => state.activePortalKey);
   const setSearchFilters = useAppStore((state) => state.setSearchFilters);
   const setActivePortal = useAppStore((state) => state.setActivePortal);
   const [findings, setFindings] = useState<Finding[]>([]);
+  // The watermark as it stood when this load began. FindingsInbox bumps `lastFindingsSeenAt`
+  // after its own load of the same refresh settles, so reading the live value would zero the
+  // count as soon as the inbox finished; the honest cutoff is the previous time the inbox loaded.
+  const [cutoffAt, setCutoffAt] = useState<string | null>(null);
   const gate = useLatestRequestGate();
 
   const load = useCallback(() => {
     const request = gate.begin();
+    const seenAtStart = useAppStore.getState().lastFindingsSeenAt;
     invokeCommand('list_findings', { filter: null, limit: 200 })
       .then((rows) => {
         if (!gate.isCurrent(request)) return;
         setFindings(rows);
+        setCutoffAt(seenAtStart);
       })
       .catch(() => {
         // A ChangeFeed that can't count is a ChangeFeed that shouldn't invent a number. Leave the
@@ -45,14 +50,14 @@ export default function ChangeFeed() {
 
   const newFindingsCount = useMemo(() => {
     if (findings.length === 0) return 0;
-    if (!lastFindingsSeenAt) return findings.length;
-    const cutoff = Date.parse(lastFindingsSeenAt);
+    if (!cutoffAt) return findings.length;
+    const cutoff = Date.parse(cutoffAt);
     if (!Number.isFinite(cutoff)) return findings.length;
     return findings.filter((finding) => {
       const discovered = Date.parse(finding.discoveredAt);
       return Number.isFinite(discovered) && discovered > cutoff;
     }).length;
-  }, [findings, lastFindingsSeenAt]);
+  }, [findings, cutoffAt]);
 
   const statutoryCount = useMemo(() => countStatutoryViolations(agencyProfiles, activePortalKey), [
     agencyProfiles,
