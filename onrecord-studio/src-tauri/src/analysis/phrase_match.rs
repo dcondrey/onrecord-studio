@@ -61,3 +61,26 @@ pub(crate) fn count_phrases(words: &[Word], phrases: Phrases) -> usize {
         .filter(|phrase| contains_phrase(words, phrase))
         .count()
 }
+
+/// Word index of every occurrence of any phrase of the list, in ascending order.
+pub(crate) fn find_phrases(words: &[Word], phrases: Phrases) -> Vec<usize> {
+    let mut found: Vec<usize> = phrases
+        .iter()
+        .flat_map(|phrase| {
+            words
+                .windows(phrase.len())
+                .enumerate()
+                .filter(|(_, window)| {
+                    window
+                        .iter()
+                        .zip(*phrase)
+                        .all(|(word, cue)| word.text == *cue)
+                })
+                .map(|(index, _)| index)
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    found.sort_unstable();
+    found.dedup();
+    found
+}
