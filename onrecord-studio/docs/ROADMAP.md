@@ -842,3 +842,28 @@ Verified 2026-09-30: the research LLM path sends masked text only. `research/ret
 `mask_pii(..).masked_text` on every passage (lines ~127 and ~166) before `research/model.rs`
 builds the outbound `messages` payload. Any new cloud LLM surface must go through the same
 masking step.
+
+## Open follow-ups (2026-09-30, after the audit sweep)
+
+Small, cross-file items that audits confirmed but left for a later pass; each has a design in
+the audit report it came from.
+
+- ChangeFeed's "new since you last looked" is almost always 0: the inbox bumps the watermark on
+  every counter-driven load and both reload on the same bump. Capture `lastFindingsSeenAt` into
+  a ref when ChangeFeed's own load begins, or move `markFindingsSeen` to mount/Refresh/dismiss.
+- `useAffiliationDisclosure` returns `null` both while loading and for no profile, so the inbox
+  lens says "No local profile is set" during load. Return a `loading|loaded|failed` status.
+- A `.msg` at `MAXIMUM_CONTAINER_DEPTH` sets `collect_attachments: false` and returns
+  `Searchable` with no record that attachments were withheld (the archive path says `Deferred`).
+- A `list_findings` load begun before a dismissal commits and resolving after it settles can
+  re-show that row until the next sweep.
+- queue.rs regions still not examined: `process_public_resource` HTML-link body,
+  `prepare_html_page_document` internals, and the catalog/ArcGIS response parsers in client.rs.
+- Frontend never audited: PostIngestBrief, ArtifactDrafts, IntentAnswerView, EvidenceBasis.
+- No deterministic regression tests for the queue counter/refill fixes (needs repository fault
+  injection).
+
+Product direction under discussion: rank leads by observable public-interest factors (a
+"Story desk"), ingest public statements as a source class and run claim-versus-record checks
+against them, and assemble a lead into a dossier with its evidence chain, falsification test
+and gaps. Not started.
