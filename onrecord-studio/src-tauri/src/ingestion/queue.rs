@@ -926,6 +926,7 @@ impl QueueManager {
         guidance: SourceGuidance,
         seed_policy: PoolSeedPolicy,
     ) -> Result<String, AppError> {
+        crate::licensing::recheck()?;
         validate_crawl_policy(&crawl_policy)?;
         // At capacity, this parks rather than refusing: it releases `provisioning_lock` and
         // waits for `slot_freed` (bumped whenever a running pool is removed, or the cap is
@@ -1193,14 +1194,17 @@ impl QueueManager {
         .await;
         if let Err(error) = enqueue_result {
             let pool = self.pools.write().await.remove(&portal.portal_key);
+            statistics.running.store(false, Ordering::Release);
+            // Set before the workers stop, as `stop_source_pool_locked` does: the last worker out
+            // announces `SyncStopped` unless a stop was requested, and this run never announced
+            // `SyncStarted`.
+            statistics.stop_requested.store(true, Ordering::Release);
             if let Some(pool) = pool {
-                let _ = join_workers(pool.worker_handles).await;
+                let _ = cancel_and_join_workers(&pool.cancellation, pool.worker_handles).await;
             }
             self.slot_freed.send_modify(|generation| {
                 *generation = generation.wrapping_add(1);
             });
-            statistics.running.store(false, Ordering::Release);
-            let _ = cancellation.send(true);
             self.cancel_task_pool_start(&context.sync_run_id, &portal.portal_key)
                 .await;
             return Err(error);
@@ -1437,6 +1441,7 @@ impl QueueManager {
         &self,
         paths: Vec<String>,
     ) -> Result<SourceIngestionStart, AppError> {
+        crate::licensing::recheck()?;
         if paths.is_empty() || paths.len() > MAXIMUM_LOCAL_IMPORT_FILES {
             return Err(AppError::DataParsing(format!(
                 "Select between 1 and {MAXIMUM_LOCAL_IMPORT_FILES} files per import"
@@ -1551,6 +1556,7 @@ impl QueueManager {
         &self,
         input: PastedContentInput,
     ) -> Result<SourceIngestionStart, AppError> {
+        crate::licensing::recheck()?;
         let title = input.title.trim();
         if title.is_empty() || title.len() > 256 {
             return Err(AppError::DataParsing(
@@ -1695,19 +1701,6 @@ impl QueueManager {
         })
     }
 
-    /// Destroys a source and everything ingested under it, including the `portals` row.
-    ///
-    /// [`Self::remove_source`] withdraws a source and keeps its documents. This is the other
-    /// operation, and the two are deliberately not one function with a flag: an operator who meant
-    /// "stop crawling this" and an operator who meant "erase this" have opposite intentions, and a
-    /// boolean parameter is a poor place for that distinction to live.
-    ///
-    /// Workers are joined before anything is deleted, for the same reason the withdrawal path does
-    /// it: a worker still in flight can finalize a document behind the delete, which would leave
-    /// rows referencing a `portals` row that no longer exists and make the next launch fail
-    /// `verify_logical_relations`.
-    ///
-    /// The returned evidence paths are unlinked by the caller. The repository owns rows, not files.
     /// Counts what [`Self::purge_source`] would destroy.
     ///
     /// Read-only, so it takes no provisioning lock and stops nothing. A crawl finishing between
@@ -1730,6 +1723,19 @@ impl QueueManager {
         self.repository.preview_source_purge(source_key).await
     }
 
+    /// Destroys a source and everything ingested under it, including the `portals` row.
+    ///
+    /// [`Self::remove_source`] withdraws a source and keeps its documents. This is the other
+    /// operation, and the two are deliberately not one function with a flag: an operator who meant
+    /// "stop crawling this" and an operator who meant "erase this" have opposite intentions, and a
+    /// boolean parameter is a poor place for that distinction to live.
+    ///
+    /// Workers are joined before anything is deleted, for the same reason the withdrawal path does
+    /// it: a worker still in flight can finalize a document behind the delete, which would leave
+    /// rows referencing a `portals` row that no longer exists and make the next launch fail
+    /// `verify_logical_relations`.
+    ///
+    /// The returned evidence paths are unlinked by the caller. The repository owns rows, not files.
     pub async fn purge_source(&self, source_key: &str) -> Result<SourcePurge, AppError> {
         let _provisioning_guard = self.provisioning_lock.lock().await;
         if self
@@ -1778,8 +1784,7 @@ impl QueueManager {
             .stop_requested
             .store(true, Ordering::Release);
         pool.statistics.running.store(false, Ordering::Release);
-        let _ = pool.cancellation.send(true);
-        let worker_result = join_workers(pool.worker_handles).await;
+        let worker_result = cancel_and_join_workers(&pool.cancellation, pool.worker_handles).await;
         let finalization = self
             .repository
             .finish_portal_sync_run(PortalSyncRunFinalization {
@@ -1908,16 +1913,18 @@ async fn worker_loop(
                     )
                 });
         if let (Some(frontier_id), Some(delay_seconds)) = (frontier_id, retry_delay) {
+            // Counted back in before the deferral commits, for the reason `enqueue_tasks_resilient`
+            // gives: a refill may claim the row the moment it is available again.
+            context
+                .statistics
+                .queued_tasks
+                .fetch_add(1, Ordering::AcqRel);
             match context
                 .repository
                 .defer_ingestion_frontier_task(frontier_id, delay_seconds)
                 .await
             {
                 Ok(()) => {
-                    context
-                        .statistics
-                        .queued_tasks
-                        .fetch_add(1, Ordering::AcqRel);
                     let error_msg = result
                         .as_ref()
                         .err()
@@ -1937,20 +1944,51 @@ async fn worker_loop(
                     if *context.cancellation.borrow() {
                         break;
                     }
+                    // This wake is the only thing that re-dispatches a deferred row: workers
+                    // idle in `receive_task`, and nothing ticks. A refill that fails once must
+                    // therefore be retried and reported, or the pool holds `queued_tasks` above
+                    // zero forever, never retires, and nobody is told why.
                     let retry_context = context.clone();
                     tokio::spawn(async move {
-                        tokio::time::sleep(std::time::Duration::from_secs(
-                            delay_seconds.saturating_add(1),
-                        ))
-                        .await;
-                        if !*retry_context.cancellation.borrow() {
-                            let _ = refill_ingestion_frontier(&retry_context).await;
+                        for _ in 0..MAXIMUM_DURABLE_TASK_ATTEMPTS {
+                            tokio::time::sleep(std::time::Duration::from_secs(
+                                delay_seconds.saturating_add(1),
+                            ))
+                            .await;
+                            if *retry_context.cancellation.borrow() {
+                                return;
+                            }
+                            match refill_ingestion_frontier(&retry_context).await {
+                                Ok(()) => return,
+                                Err(error) => {
+                                    // A stop that landed mid-refill closes the channel; that is
+                                    // the stop's outcome, not a failure of this pool.
+                                    if *retry_context.cancellation.borrow() {
+                                        return;
+                                    }
+                                    send_progress(
+                                        &retry_context,
+                                        IngestionProgress::TaskFailed {
+                                            portal_key: retry_context.portal.portal_key.clone(),
+                                            target_id: format!(
+                                                "{}-frontier-refill",
+                                                retry_context.sync_run_id
+                                            ),
+                                            error_msg: error.to_string(),
+                                        },
+                                    )
+                                    .await;
+                                }
+                            }
                         }
                     });
                     retire_portal_if_idle(&context).await;
                     continue;
                 }
-                Err(error) => result = Err(error),
+                Err(error) => {
+                    decrement_atomic(&context.statistics.queued_tasks);
+                    result = Err(error);
+                }
             }
         }
         // A terminal result leaves the retry frontier even when it failed; the failure is retained
@@ -2062,6 +2100,17 @@ fn durable_retry_delay_for_error(error: &AppError, attempt: u64, jitter_seed: u6
         let jitter_window = (base / 2).saturating_add(1);
         base.saturating_add(mixed % jitter_window)
     })
+}
+
+/// Signals cancellation, then waits for the workers. Workers leave their loop only on that signal
+/// (the dispatcher sender they share keeps the task channel open), so a join that precedes the
+/// signal waits forever, and every caller holds `provisioning_lock` while it waits.
+async fn cancel_and_join_workers(
+    cancellation: &watch::Sender<bool>,
+    worker_handles: Vec<tokio::task::JoinHandle<()>>,
+) -> Result<(), AppError> {
+    let _ = cancellation.send(true);
+    join_workers(worker_handles).await
 }
 
 /// Waits for workers to observe the cancellation signal at a task boundary. Aborting their async
@@ -5016,19 +5065,41 @@ async fn enqueue_tasks_resilient(
         })?;
         encoded.push((target_id, payload));
     }
-    let inserted = context
+    // Counted before the rows become visible. Once the batch commits, any worker's refill can
+    // claim a row and its dequeue decrements `queued_tasks`; a decrement that lands before this
+    // increment saturates at zero and leaves the counter one too high for the rest of the run,
+    // and `retire_portal_if_idle` then never sees the pool idle. Rows the UNIQUE constraint
+    // ignored, or a failed batch, are given back below.
+    let reserved = encoded.len();
+    context
+        .statistics
+        .queued_tasks
+        .fetch_add(reserved, Ordering::AcqRel);
+    let inserted = match context
         .repository
         .persist_ingestion_frontier_tasks(
             &context.sync_run_id,
             &context.portal.portal_key,
             &encoded,
         )
-        .await?;
-    if inserted > 0 {
+        .await
+    {
+        Ok(inserted) => usize::try_from(inserted).unwrap_or(reserved).min(reserved),
+        Err(error) => {
+            context
+                .statistics
+                .queued_tasks
+                .fetch_sub(reserved, Ordering::AcqRel);
+            return Err(error);
+        }
+    };
+    if inserted < reserved {
         context
             .statistics
             .queued_tasks
-            .fetch_add(inserted as usize, Ordering::AcqRel);
+            .fetch_sub(reserved - inserted, Ordering::AcqRel);
+    }
+    if inserted > 0 {
         refill_ingestion_frontier(context).await?;
     }
     Ok(())
@@ -5697,17 +5768,32 @@ fn validate_source_guidance(guidance: &SourceGuidance) -> Result<(), AppError> {
 /// A minimal glob matcher: `*` matches any run of characters (including none), every other byte
 /// matches literally. Sufficient for filename rules like `*.pdf` or `budget-*-final.xlsx` without
 /// pulling in a glob crate for a single wildcard character.
+///
+/// Iterative with a single backtrack point, so it is O(pattern x text). The filename is taken from
+/// a URL a remote site chose, and this runs on a worker thread with no await point: a recursive
+/// matcher takes exponential time on `*a*a*a*a*a*b` against a long run of `a`.
 fn glob_matches(pattern: &str, text: &str) -> bool {
-    fn matches(pattern: &[u8], text: &[u8]) -> bool {
-        match pattern.first() {
-            None => text.is_empty(),
-            Some(b'*') => {
-                matches(&pattern[1..], text) || (!text.is_empty() && matches(pattern, &text[1..]))
-            }
-            Some(byte) => text.first() == Some(byte) && matches(&pattern[1..], &text[1..]),
+    let (pattern, text) = (pattern.as_bytes(), text.as_bytes());
+    let (mut pattern_index, mut text_index) = (0, 0);
+    // Where to resume after the most recent `*`: the pattern just past it, and the next text
+    // position it should swallow.
+    let mut resume: Option<(usize, usize)> = None;
+    while text_index < text.len() {
+        if pattern.get(pattern_index) == Some(&b'*') {
+            pattern_index += 1;
+            resume = Some((pattern_index, text_index));
+        } else if pattern.get(pattern_index) == Some(&text[text_index]) {
+            pattern_index += 1;
+            text_index += 1;
+        } else if let Some((resume_pattern, resume_text)) = resume {
+            pattern_index = resume_pattern;
+            text_index = resume_text + 1;
+            resume = Some((resume_pattern, text_index));
+        } else {
+            return false;
         }
     }
-    matches(pattern.as_bytes(), text.as_bytes())
+    pattern[pattern_index..].iter().all(|byte| *byte == b'*')
 }
 
 /// The immediate last path segment of a URL, treated as the filename a `SourceGuidance` filename
@@ -6906,6 +6992,82 @@ mod tests {
                 .expect("lifecycle lookup must succeed"),
             Some(SourceLifecycleState::Active)
         );
+    }
+
+    // REGRESSION(queue): a start whose initial enqueue failed joined its workers before signalling
+    // them, so the join never returned while `provisioning_lock` was held and every later start,
+    // pause and removal blocked. To prove it, make `start_task_pool`'s failure branch join before
+    // signalling again: the start below then exceeds the timeout.
+    #[tokio::test]
+    async fn a_failed_initial_enqueue_stops_its_workers_and_releases_the_lifecycle_lock() {
+        let directory = tempdir().expect("temp dir must be created");
+        let (manager, repository, source, _telemetry) = manager_with_source(&directory).await;
+        manager.global_semaphore.close(); // Keep any dispatched task network-free.
+        repository
+            .begin_portal_sync_run("run-1", &source.portal_key)
+            .await
+            .expect("sync run must begin");
+        repository
+            .persist_ingestion_frontier_task("run-1", &source.portal_key, "corrupt", "{not json")
+            .await
+            .expect("queued work must persist");
+        repository
+            .finish_portal_sync_run(PortalSyncRunFinalization {
+                run_id: "run-1",
+                portal_key: &source.portal_key,
+                status: "CANCELLED",
+                pages_processed: 0,
+                requests_processed: 0,
+                documents_processed: 0,
+                failures: 0,
+            })
+            .await
+            .expect("interrupted run must finalize");
+
+        // The corrupt row is adopted, claimed first during the start's own refill, and refused as
+        // invalid: an error from inside the enqueue step, after the workers are already running.
+        let started = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            manager.start_verified_portal(
+                source.clone(),
+                MetadataPageWindow::default(),
+                RateLimitPolicy::default(),
+            ),
+        )
+        .await
+        .expect("a failed start must return instead of waiting on workers nobody cancelled");
+        assert!(
+            started.is_err(),
+            "the invalid frontier row must fail the start"
+        );
+        assert!(!manager.is_source_running(&source.portal_key).await);
+        assert!(
+            manager.provisioning_lock.try_lock().is_ok(),
+            "a failed start must not leave the lifecycle lock held"
+        );
+    }
+
+    #[test]
+    fn glob_matching_is_linear_and_keeps_its_wildcard_semantics() {
+        assert!(glob_matches("*.pdf", "report.pdf"));
+        assert!(glob_matches(
+            "budget-*-final.xlsx",
+            "budget-2024-final.xlsx"
+        ));
+        assert!(glob_matches("*", ""));
+        assert!(glob_matches("a**b", "ab"));
+        assert!(glob_matches("*a*b*", "xxaxxbxx"));
+        assert!(!glob_matches("*.pdf", "report.pdf.exe"));
+        assert!(!glob_matches("a*b", "ba"));
+        assert!(!glob_matches("abc", "ab"));
+        assert!(!glob_matches("", "a"));
+        assert!(glob_matches("", ""));
+        // A recursive matcher needs on the order of C(60, 12) steps to reject this.
+        let pattern = format!("{}b", "*a".repeat(12));
+        let text = "a".repeat(60);
+        let started = std::time::Instant::now();
+        assert!(!glob_matches(&pattern, &text));
+        assert!(started.elapsed() < std::time::Duration::from_secs(1));
     }
 
     fn second_source(portal_key: &str) -> PortalRegistration {
