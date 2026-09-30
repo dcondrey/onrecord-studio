@@ -25,6 +25,8 @@ pub mod review;
 
 pub mod financial;
 
+pub mod budget_lines;
+
 pub mod monitoring;
 
 pub mod assertion_index;

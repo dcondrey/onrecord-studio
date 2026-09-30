@@ -33,7 +33,10 @@ export type FindingKind =
   | 'CROSS_CORPUS_ORPHAN_TOPIC'
   | 'CROSS_CORPUS_REUSED_DENIAL_GROUNDS'
   | 'POLICY_VIOLATION_DETECTED'
-  | 'CLAIM_CONTRADICTS_DATA';
+  | 'CLAIM_CONTRADICTS_DATA'
+  | 'DEPARTMENT_SPENDING_YEAR_OVER_YEAR'
+  | 'OVERTIME_ABOVE_ADOPTED_LINE'
+  | 'FUND_ACTUAL_ABOVE_ADOPTED';
 
 /**
  * How a finding's confidence was derived. `UNASSESSED` distinguishes an unmeasured rung from a

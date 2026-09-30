@@ -124,7 +124,11 @@ impl DraftFamily {
             | FindingKind::CrossCorpusSharedLanguage
             | FindingKind::CrossCorpusTemporalShift
             | FindingKind::CrossCorpusOrphanTopic
-            | FindingKind::CrossCorpusReusedDenialGrounds => Self::NoDraft,
+            | FindingKind::CrossCorpusReusedDenialGrounds
+            // Dataset aggregates with no portal or document to address a request to.
+            | FindingKind::DepartmentSpendingYearOverYear
+            | FindingKind::OvertimeAboveAdoptedLine
+            | FindingKind::FundActualAboveAdopted => Self::NoDraft,
         }
     }
 }

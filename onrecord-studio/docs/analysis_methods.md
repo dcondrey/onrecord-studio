@@ -128,3 +128,25 @@ so `$1.2 billion` is consistent with any total in $[\$1.15\text{B}, \$1.25\text{
 * A claim that cannot be bound is **unreconciled**, never a contradiction: no dataset for the jurisdiction, ambiguous fund or department, no fiscal year, no stated budget-versus-actual basis, a partial or rejected-row dataset, or a claim kind the data cannot support. Balance, surplus and deficit claims are unreconciled today because no mapped role distinguishes revenue from expenditure; an account-number convention is not inferred.
 * Confidence is derived from what was observed: 6000 basis points for a mismatch whose scope was completed from context, +1500 when the sentence named the fund, +1500 when it stated the fiscal year itself rather than inheriting the heading's. A complete dataset is a precondition, not a bonus. Confidence is unassessed whenever the claim is unreconciled.
 * Consistent and unreconciled outcomes are returned by the sweep alongside mismatches so a reader can see what was checked and what could not be; only mismatches are stored as findings.
+
+## 6. Budget Line Comparisons
+
+`analysis/budget_lines.rs`, read by `DuckDbRepository::budget_line_data` (`storage/financial.rs`) and run by the `budget_line_comparison` detector.
+
+### A. What is read
+The mapped `budget` and `actual` roles are grouped by agency, currency, fiscal year, fund, department and budget basis (and by account for overtime lines), with the same expense-account filter the financial investigation applies to the City exports. Only `adopted` budget rows, and budget rows with no basis, are read. A group whose amounts do not all parse sums to NULL. Each read is capped at 10,000 grouped rows (`BUDGET_LINE_ROW_CAP`).
+
+### B. The three measures
+All in fixed-point arithmetic (four decimal places); percentages are computed only against a positive reference.
+* **Department year over year** (`DEPARTMENT_SPENDING_YEAR_OVER_YEAR`): actual spending of one department in one fund, FY \(y-1\) to FY \(y\), for every year pair the fund's actuals contain. Finding when \(|\text{observed} - \text{prior}| \times 10000 \ge 1000 \times \text{prior}\) (`YEAR_OVER_YEAR_FINDING_BASIS_POINTS = 1000`).
+* **Overtime against its adopted line** (`OVERTIME_ABOVE_ADOPTED_LINE`): an account is an overtime line when its label contains the word `overtime` in both tables and no label of that account names anything else. Actual spending on the account is compared with its adopted rows for the same fiscal year, fund and department.
+* **Fund against adopted** (`FUND_ACTUAL_ABOVE_ADOPTED`): a fund's actual spending for a year against its adopted amount.
+* The two adopted comparisons report when \((\text{observed} - \text{adopted}) \times 10000 \ge 500 \times \text{adopted}\) (`ABOVE_ADOPTED_FINDING_BASIS_POINTS = 500`). Both thresholds are inclusive and compared exactly, so 9.9999% is not 10%.
+
+### C. Unreconciled, never a number
+A comparison is unreconciled, with no value and no finding, when: the role is not mapped; its snapshot is partial or has rejected rows; a read was truncated; any row of the role names no fiscal year, fund, agency or currency; a row in the compared fund and year names no department (department and overtime measures); a budget row states no basis; an amount is missing or unparsable; either side has no rows (a department absent from one year, a fund with no adopted rows); the reference total is zero or negative; the department or account label column is unmapped; or an account's labels disagree within or across the tables.
+
+### D. What a finding does and does not claim
+* Every kind is a pattern signal (`is_legal_claim` is false). Adopted is the original appropriation, not the revised legal authority; the test of spending against revised authority is a separate question these kinds do not answer.
+* Confidence: 9000 basis points for the fund and department comparisons (`LEDGER_CONFIDENCE`), withholding the rest because a fiscal-year export does not certify a closed ledger; 8000 for overtime (`OVERTIME_CONFIDENCE`), whose line is identified by the agency's own account label.
+* A finding cites no document; its explanation names each dataset, its source hash, and the query ids of the grouped reads.

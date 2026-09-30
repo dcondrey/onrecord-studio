@@ -14,6 +14,7 @@ use crate::{error::AppError, storage::DuckDbRepository};
 
 pub mod absence_of_records;
 pub mod boilerplate_denial;
+pub mod budget_line_comparison;
 pub mod claim_data_mismatch;
 pub mod contradictory_statement;
 pub mod cross_corpus_orphan_topic;
@@ -141,6 +142,7 @@ pub async fn refresh_all_findings(
     );
     run_detector!(repository, summary, run_started, policy_violation);
     run_detector!(repository, summary, run_started, claim_data_mismatch);
+    run_detector!(repository, summary, run_started, budget_line_comparison);
 
     Ok(summary)
 }

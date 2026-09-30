@@ -180,6 +180,15 @@ pub enum FindingKind {
     /// budget or actuals table for the same fiscal year, fund and jurisdiction. A comparison of
     /// a sentence with a dataset, not a judgement of which is right.
     ClaimContradictsData,
+    /// A department's imported actual spending moved by at least the threshold share of its
+    /// previous fiscal year's, both years read in full. A counted change, not an explanation.
+    DepartmentSpendingYearOverYear,
+    /// Imported actual spending on an account labelled overtime is at least the threshold share
+    /// above the adopted amount for the same account, fund, department and year.
+    OvertimeAboveAdoptedLine,
+    /// A fund's imported actual spending is at least the threshold share above its adopted amount
+    /// for the year. Adopted is not the revised authority, so this is not an appropriation test.
+    FundActualAboveAdopted,
 }
 
 impl FindingKind {
@@ -207,6 +216,9 @@ impl FindingKind {
             Self::CrossCorpusReusedDenialGrounds => "CROSS_CORPUS_REUSED_DENIAL_GROUNDS",
             Self::PolicyViolationDetected => "POLICY_VIOLATION_DETECTED",
             Self::ClaimContradictsData => "CLAIM_CONTRADICTS_DATA",
+            Self::DepartmentSpendingYearOverYear => "DEPARTMENT_SPENDING_YEAR_OVER_YEAR",
+            Self::OvertimeAboveAdoptedLine => "OVERTIME_ABOVE_ADOPTED_LINE",
+            Self::FundActualAboveAdopted => "FUND_ACTUAL_ABOVE_ADOPTED",
         }
     }
 
@@ -234,6 +246,9 @@ impl FindingKind {
             Self::CrossCorpusReusedDenialGrounds,
             Self::PolicyViolationDetected,
             Self::ClaimContradictsData,
+            Self::DepartmentSpendingYearOverYear,
+            Self::OvertimeAboveAdoptedLine,
+            Self::FundActualAboveAdopted,
         ]
         .into_iter()
         .find(|candidate| candidate.as_str() == value)
@@ -301,6 +316,11 @@ impl FindingKind {
             // A sentence disagreeing with a table is a pattern signal for review; which of the
             // two is wrong, and whether either breaks a rule, is not decided here.
             Self::ClaimContradictsData => false,
+            // Differences between two imported totals. Adopted is not the revised authority and
+            // a year-over-year change breaks no rule, so none of these is a legal claim.
+            Self::DepartmentSpendingYearOverYear => false,
+            Self::OvertimeAboveAdoptedLine => false,
+            Self::FundActualAboveAdopted => false,
         }
     }
 }
