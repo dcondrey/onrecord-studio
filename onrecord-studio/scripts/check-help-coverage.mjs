@@ -59,10 +59,37 @@ for (const [label, expected, field] of [
   for (const item of [...expected].sort()) if (!have.has(item)) problems.push(`${label} ${item} has no help topic`);
 }
 
+// Every finding kind and verification state needs plain-language text, read from the same type
+// definitions the rest of the app uses. The tables are Records, so tsc already refuses a missing key;
+// this catches it without a build and also catches a key whose fields are empty or absent.
+const tableBody = (source, name) => {
+  const start = source.indexOf(`export const ${name}`);
+  const end = source.indexOf('\n};', start);
+  return start < 0 || end < 0 ? '' : source.slice(start, end);
+};
+const plainSource = read('src/content/plainLanguage.ts');
+const states = new Set(
+  [...(read('src/generated/auditContracts.ts').match(/export type VerificationState =([^;]+);/)?.[1] ?? '').matchAll(/'([A-Za-z]+)'/g)].map((m) => m[1]),
+);
+if (states.size === 0) throw new Error('Could not parse VerificationState.');
+for (const [label, expected, table] of [
+  ['FindingKind', kinds, 'PLAIN_FINDING_TEXT'],
+  ['VerificationState', states, 'PLAIN_VERIFICATION_TEXT'],
+]) {
+  const body = tableBody(plainSource, table);
+  const keys = [...body.matchAll(/^ {2}([A-Za-z_]+): \{/gm)].map((m) => m[1]);
+  for (const item of [...expected].sort()) if (!keys.includes(item)) problems.push(`${label} ${item} has no plain-language text in ${table}`);
+  for (const key of keys) if (!expected.has(key)) problems.push(`${table} has text for unknown ${label} ${key}`);
+  for (const field of ['observed', 'notShown', 'next']) {
+    const filled = [...body.matchAll(new RegExp(`^ {4}${field}: (?:'[^']+'|"[^"]+"|[A-Z_]+),$`, 'gm'))].length;
+    if (filled !== keys.length) problems.push(`${table} has ${filled} non-empty ${field} entries for ${keys.length} keys`);
+  }
+}
+
 if (problems.length) {
   process.stderr.write(`Help coverage check failed:\n${problems.map((p) => `  ${p}`).join('\n')}\n`);
   process.exit(1);
 }
 process.stdout.write(
-  `Help coverage verified: ${topics.length} topics cover ${views.size} views, ${kinds.size} finding kinds and ${groups.size} command groups.\n`,
+  `Help coverage verified: ${topics.length} topics cover ${views.size} views, ${kinds.size} finding kinds and ${groups.size} command groups; plain-language text covers ${kinds.size} kinds and ${states.size} verification states.\n`,
 );
