@@ -706,3 +706,64 @@ no relationship to anything here. If the intent behind those two names was the n
 *features*, they are not dependencies: memos and saved positions are core-database tables hanging
 off the span primitive in section 1, and building them on an external crate would put authored
 evidence outside the durability boundary in section 2a.
+
+## 16. Watchlists and change detection
+
+A watch is a saved scope: an agency by name, a person or entity by phrase, a topic pack, a search
+of up to 8 terms, or one source. Each check observes the local corpus only, compares with the
+stored baseline, and records what differs. It fetches nothing. The code is
+`analysis/watchlists.rs` (the pure comparison), `storage/watchlists.rs` (scope, baselines,
+history), and `commands/watchlists.rs`. It reuses `analysis/monitoring.rs` (`changed_facts`) and
+the `monitor_heads` captures for figures, `build_topic_packs` for topic scope, `findings` for
+findings, `case_audits` and `document_integrity_flags` for redaction, and `portal_sync_runs` for
+source health, and adds no extractor of its own.
+
+**Absence and measurement never share a representation.** Every dimension of a snapshot (documents,
+findings, figures, redaction, source health) is either measured at a time, possibly empty, or not
+measured with a reason. An empty measured set is "observed, nothing there". A dimension a run could
+not observe is reported as `NOT_MEASURED` with its reason, never as unchanged, and it does not
+replace the baseline. The next run that does observe it compares against the last real
+observation, and the change states that observation's time as its old as-of. The cases that
+produce `NOT_MEASURED`: no captured version to compare, no redaction audit for any request in
+scope, no completed sync run since the baseline, a scope over its cap, or a topic scan that hit
+its document limit. A check that cannot read the corpus at all fails and writes nothing.
+
+**A change states old value, new value, both as-of times, and the basis.** `old_value` is null when
+the baseline did not contain the subject, `new_value` is null when the present observation does
+not, and the UI words each as "not present at the baseline" and "not present now". The as-of times
+are when the watch observed each value; for figures they are the capture times of the two document
+versions, which are retrieval times and not publication or effective dates.
+
+**Claims stay narrow.** A document that leaves a scope may have been purged, hidden or its source
+removed; a finding that stops being emitted has not been shown corrected, and a dismissed finding
+is not resolved (the baseline's ids are checked against the findings table, which keeps dismissed
+rows); a heavy-redaction flag is a structural signal, not a finding that redaction was improper;
+a degraded sync reports the sync outcome and not why the source failed. Nothing here is a
+statutory claim.
+
+**Idempotence.** A check reads the baseline, observes, compares, inserts changes, and advances the
+baseline in one transaction on the single writer connection. A change id is a hash of the watch,
+kind, subject, old and new values and the baseline's as-of time, inserted with `ON CONFLICT DO
+NOTHING`, so the same difference read from the same baseline is one row and a repeated check with
+nothing new reports "observed, no change". The first check of a watch records baselines and
+reports no changes.
+
+**Storage.** Four tables, `watches`, `watch_baselines`, `watch_runs` and `watch_changes`, created
+with `CREATE TABLE IF NOT EXISTS` at startup, with no foreign keys and no integer key columns, so
+they create identically on a file written by an earlier release and the DuckDB storage-version
+widening in the corpus index cannot bite them. They live in the core database, not the corpus
+index, so `CORPUS_SCHEMA_VERSION` is unchanged. Baselines and changes hold labels and quotes
+derived from source documents, so `purge_watchlist_references` runs with the other purge hooks. A
+source purge removes that source's entries from every baseline dimension and its recorded changes;
+a document purge removes that document's entry from the documents baseline and its source's entry
+from the figures baseline. Entries are removed, not the baselines, so the records that remain are
+not reported as new on the next check, and the purged records leave the scope without being
+reported as withdrawn. Run history keeps the last 50 runs per watch.
+
+**Limits.** 50 watches; 20,000 documents and 500 figure sources per scope, and a findings table
+read up to 50,000 rows, beyond which findings report `NOT_MEASURED`. A topic watch takes its scope
+from the topic scan, which lists at most 500 documents and 500 findings per topic, so a topic with
+more tagged items than that reports `NOT_MEASURED` for them rather than a partial list. An entity
+or query watch scans stored text with a substring match, so a document without stored text is not
+in scope. Figures are the `MONEY` and `OUTCOME` statements that version monitoring already
+extracts, at most 40 per source.

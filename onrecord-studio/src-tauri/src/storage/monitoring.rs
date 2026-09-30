@@ -20,10 +20,10 @@ CREATE TABLE IF NOT EXISTS monitor_observations(id TEXT PRIMARY KEY, topic TEXT 
 CREATE TABLE IF NOT EXISTS monitor_geo_progress(snapshot_id TEXT PRIMARY KEY, last_row_number BIGINT NOT NULL, portal_key TEXT NOT NULL, document_id BIGINT NOT NULL);
 ";
 
-fn packed<T: serde::Serialize>(value: &T) -> Result<Vec<u8>, AppError> {
+pub(crate) fn packed<T: serde::Serialize>(value: &T) -> Result<Vec<u8>, AppError> {
     zstd::stream::encode_all(serde_json::to_vec(value).map_err(err)?.as_slice(), 9).map_err(err)
 }
-fn unpacked<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<T, AppError> {
+pub(crate) fn unpacked<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<T, AppError> {
     let mut output = Vec::new();
     zstd::stream::read::Decoder::new(bytes)
         .map_err(err)?

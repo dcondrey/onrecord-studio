@@ -57,6 +57,7 @@ pub mod facilities;
 pub mod casework;
 
 pub mod monitoring;
+pub mod watchlists;
 
 pub mod meetings;
 

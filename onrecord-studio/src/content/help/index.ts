@@ -16,6 +16,8 @@ import evidencePackets from './topics-evidence-packets.json';
 
 import bundle from './topics-bundle.json';
 
+import watchlists from './topics-watchlists.json';
+
 export type HelpGroup =
   | 'Getting started'
   | 'Views'
@@ -76,6 +78,8 @@ export const HELP_TOPICS = [
   ...evidencePackets,
 
   ...bundle,
+
+  ...watchlists,
 ] as HelpTopic[];
 
 export function findHelpTopic(id: string): HelpTopic | undefined {

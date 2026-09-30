@@ -62,6 +62,11 @@ export interface NativeCommandMap {
   refresh_monitoring_now: { args: { topic: string; caseId?: string | null }; result: Types.MonitoringStatus };
   save_monitoring_coverage: { args: { expectation: Types.CoverageExpectation }; result: null };
   save_monitoring_observation: { args: { observation: Types.ServiceObservation }; result: null };
+  list_watches: { args: NoArgs; result: Types.WatchSummary[] };
+  save_watch: { args: { watch: Types.Watch }; result: Types.Watch };
+  delete_watch: { args: { watchId: string }; result: null };
+  check_watches: { args: { watchId?: string | null }; result: Types.WatchCheck[] };
+  list_watch_changes: { args: { watchId?: string | null; limit: number }; result: Types.WatchChange[] };
   get_meeting_calendar: { args: NoArgs; result: Types.MeetingCalendar };
   get_review_workspace: { args: { reportId: string }; result: Types.ReviewWorkspace };
   save_finding_review: { args: { input: Types.FindingReviewInput }; result: Types.ReviewWorkspace };
