@@ -1310,6 +1310,16 @@
     "id": "finding-redaction-inconsistent-across-releases",
     "title": "Redaction differs between releases",
     "group": "Finding kinds",
+    "keywords": [
+      "redaction",
+      "redacted",
+      "withheld",
+      "releases",
+      "copies",
+      "inconsistent",
+      "finding",
+      "kind"
+    ],
     "summary": "Two public copies of the same file, released under different requests, redact different passages.",
     "keywords": [
       "redaction",
