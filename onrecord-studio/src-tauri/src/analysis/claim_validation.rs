@@ -774,6 +774,13 @@ impl Evaluator {
         Ok((values, truncated))
     }
 
+    /// The SQL behind a query id an evaluation cited, from the reports this evaluator ran.
+    pub fn query_sql(&self, query_id: &str) -> Option<&str> {
+        self.reports
+            .values()
+            .find_map(|report| report.queries.get(query_id).map(String::as_str))
+    }
+
     pub fn has_any_role(&self, roles: &[&str]) -> bool {
         self.workspace
             .mappings

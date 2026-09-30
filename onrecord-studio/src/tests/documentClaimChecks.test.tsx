@@ -11,11 +11,21 @@ import type { DocumentClaimChecks } from '../types';
 const bridge = vi.hoisted(() => ({
   responses: new Map<number, DocumentClaimChecks>(),
   gates: new Map<number, Promise<void>>(),
+  packGates: new Map<number, Promise<void>>(),
+  packRequests: [] as number[],
+  downloads: [] as string[],
 }));
 
 vi.mock('../ipc', () => ({
   invokeCommand: (command: string, args?: { documentId?: number }) => {
     if (command === 'get_document_entity_truncations') return Promise.resolve([]);
+    if (command === 'export_claim_query_pack') {
+      const documentId = args?.documentId ?? 0;
+      bridge.packRequests.push(documentId);
+      const pack = { documentId, portalKey: 'example', generatedAt: '2026-09-30T00:00:00Z', checks: [], queries: [], datasets: [], truncated: false };
+      const gate = bridge.packGates.get(documentId);
+      return gate ? gate.then(() => pack) : Promise.resolve(pack);
+    }
     if (command === 'list_document_claim_checks') {
       const documentId = args?.documentId ?? 0;
       const answer = bridge.responses.get(documentId) ?? { documentId, portalKey: 'example', checks: [], truncated: false };
@@ -47,6 +57,9 @@ function checksFor(documentId: number): DocumentClaimChecks {
 afterEach(() => {
   cleanup();
   bridge.responses.clear();
+  bridge.packGates.clear();
+  bridge.packRequests = [];
+  bridge.downloads = [];
   bridge.gates.clear();
 });
 
@@ -59,6 +72,44 @@ describe('document claim checks', () => {
     expect(screen.getByText(/Mismatch: states \+12\.00%; the data shows \+3\.10%, a difference of 8\.90 pt, outside ±0\.50 pt\. Query id\(s\) q2, q3\./)).toBeTruthy();
     expect(screen.getByText(/Not checked \(unsupported claim\): no mapped role distinguishes revenue from expenditure/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Recheck figures' })).toBeTruthy();
+  });
+
+  it('offers a query pack only once checks exist and names the file after the document it was built for', async () => {
+    bridge.responses.set(7, checksFor(7));
+    const createObjectURL = vi.fn(() => 'blob:pack');
+    const revokeObjectURL = vi.fn();
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      bridge.downloads.push(this.download);
+    });
+    render(viewer(7));
+    expect(screen.queryByRole('button', { name: 'Download query pack' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Check figures' }));
+    await screen.findByRole('button', { name: 'Download query pack' });
+    fireEvent.click(screen.getByRole('button', { name: 'Download query pack' }));
+    await waitFor(() => expect(bridge.downloads).toEqual(['claim-query-pack-example-7.json']));
+    expect(bridge.packRequests).toEqual([7]);
+    click.mockRestore();
+  });
+
+  it('does not save a query pack that resolves after the viewer moved to another document', async () => {
+    bridge.responses.set(7, checksFor(7));
+    let release = () => {};
+    bridge.packGates.set(7, new Promise<void>((resolve) => { release = () => resolve(); }));
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      bridge.downloads.push(this.download);
+    });
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: () => 'blob:pack' });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: () => {} });
+    const view = render(viewer(7));
+    fireEvent.click(screen.getByRole('button', { name: 'Check figures' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Download query pack' }));
+    view.rerender(viewer(8));
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(bridge.downloads).toEqual([]);
+    click.mockRestore();
   });
 
   it('discards checks that resolve after the viewer moved to another document', async () => {

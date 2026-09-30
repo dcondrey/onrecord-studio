@@ -494,3 +494,32 @@ export interface DocumentClaimChecks {
   /** Claims past the per-document cap, or past the text window that was read, were not checked. */
   truncated: boolean;
 }
+
+/** The SQL, rows and dataset identities behind a document's claim checks, for re-running them elsewhere. */
+export interface ClaimQueryPack {
+  documentId: number;
+  portalKey: string;
+  generatedAt: string;
+  checks: ClaimCheckView[];
+  queries: QueryPackQuery[];
+  datasets: QueryPackDataset[];
+  truncated: boolean;
+}
+
+export interface QueryPackQuery {
+  queryId: string;
+  sql: string;
+  columns: string[];
+  rows: unknown[][];
+  rowCount: number;
+  /** The result was cut at the pack's row ceiling; the SQL still names the whole set. */
+  truncated: boolean;
+}
+
+export interface QueryPackDataset {
+  snapshotId: string;
+  tableName: string;
+  sourceUri: string | null;
+  sourceSha256: string;
+  retrievedAt: string;
+}

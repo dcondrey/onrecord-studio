@@ -415,6 +415,44 @@ pub struct DocumentClaimChecks {
     pub truncated: bool,
 }
 
+/// Everything needed to re-run a document's claim checks outside the app: each check, the SQL
+/// behind every query id it cites with the rows that SQL returned, and the identity of every
+/// imported dataset those queries read. A reader with the same exports can reproduce each figure.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaimQueryPack {
+    pub document_id: u64,
+    pub portal_key: String,
+    pub generated_at: String,
+    pub checks: Vec<ClaimCheckView>,
+    pub queries: Vec<QueryPackQuery>,
+    pub datasets: Vec<QueryPackDataset>,
+    /// Claims past the per-document cap, or past the text window that was read, were not checked.
+    pub truncated: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryPackQuery {
+    pub query_id: String,
+    pub sql: String,
+    pub columns: Vec<String>,
+    pub rows: Vec<Vec<serde_json::Value>>,
+    pub row_count: usize,
+    /// The result was cut at the pack's row ceiling; the SQL still names the whole set.
+    pub truncated: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryPackDataset {
+    pub snapshot_id: String,
+    pub table_name: String,
+    pub source_uri: Option<String>,
+    pub source_sha256: String,
+    pub retrieved_at: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClaimCheckView {

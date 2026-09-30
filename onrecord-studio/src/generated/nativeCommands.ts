@@ -106,6 +106,7 @@ export interface NativeCommandMap {
   refresh_findings: { args: NoArgs; result: Types.RefreshFindingsSummary };
   list_evidence_gaps: { args: NoArgs; result: Types.EvidenceGapView[] };
   list_document_claim_checks: { args: { documentId: number; portalKey: string }; result: Types.DocumentClaimChecks };
+  export_claim_query_pack: { args: { documentId: number; portalKey: string }; result: Types.ClaimQueryPack };
   list_story_leads: { args: { limit?: number | null }; result: Types.StoryLead[] };
   build_lead_dossier: { args: { findingId: string }; result: Types.LeadDossier };
   list_findings: { args: { filter?: Types.FindingsFilter | null; limit?: number | null }; result: Types.Finding[] };

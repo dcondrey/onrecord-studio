@@ -53,6 +53,9 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
   const truncationGate = useLatestRequestGate();
   const shareGate = useLatestRequestGate();
   const claimGate = useLatestRequestGate();
+  const packGate = useLatestRequestGate();
+  const [packState, setPackState] = useState<'idle' | 'pending' | 'failed'>('idle');
+  const [packError, setPackError] = useState<string | null>(null);
   const [truncatedEntityKinds, setTruncatedEntityKinds] = useState<string[]>([]);
 
   useEffect(() => {
@@ -98,10 +101,36 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
     setShareStatus(null);
     setBriefingStatus(null);
     claimGate.invalidate();
+    packGate.invalidate();
+    setPackState('idle');
+    setPackError(null);
     setClaimChecks(null);
     setClaimChecksState('idle');
     setClaimChecksError(null);
-  }, [claimGate, documentId, historyGate, portalKey, recoveryGate, residualAuditGate, shareGate, truncationGate]);
+  }, [claimGate, documentId, historyGate, packGate, portalKey, recoveryGate, residualAuditGate, shareGate, truncationGate]);
+
+  const downloadQueryPack = async () => {
+    const request = packGate.begin();
+    setPackState('pending');
+    setPackError(null);
+    try {
+      const pack = await invokeCommand('export_claim_query_pack', { documentId, portalKey });
+      // A pack built for one document must not be saved under the name of the document the
+      // viewer moved to while it was built.
+      if (!packGate.isCurrent(request)) return;
+      const url = URL.createObjectURL(new Blob([JSON.stringify(pack, null, 2)], { type: 'application/json' }));
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `claim-query-pack-${portalKey}-${documentId}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setPackState('idle');
+    } catch (reason) {
+      if (!packGate.isCurrent(request)) return;
+      setPackError(String(reason));
+      setPackState('failed');
+    }
+  };
 
   const checkFigures = async () => {
     const request = claimGate.begin();
@@ -292,6 +321,12 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
           <button type="button" onClick={() => void checkFigures()} disabled={claimChecksState === 'pending'} className="rounded-full border border-slate-700 px-2.5 py-1 text-[9px] font-medium text-slate-400 transition hover:border-indigo-400/30 hover:text-indigo-300 disabled:cursor-wait disabled:opacity-60">
             {claimChecksState === 'pending' ? 'Checking figures…' : claimChecks ? 'Recheck figures' : 'Check figures'}
           </button>
+          {claimChecks && claimChecks.checks.some((check) => check.result.outcome !== 'unreconciled') && (
+            <button type="button" onClick={() => void downloadQueryPack()} disabled={packState === 'pending'} className="rounded-full border border-slate-700 px-2.5 py-1 text-[9px] font-medium text-slate-400 transition hover:border-indigo-400/30 hover:text-indigo-300 disabled:cursor-wait disabled:opacity-60">
+              {packState === 'pending' ? 'Building query pack…' : 'Download query pack'}
+            </button>
+          )}
+          {packError && <span role="alert" className="text-[9px] text-rose-300">Query pack failed: {packError}</span>}
           <button type="button" onClick={() => void toggleVerificationHistory()} aria-expanded={showVerificationHistory} className="rounded-full border border-slate-700 px-2.5 py-1 text-[9px] font-medium text-slate-400 transition hover:border-indigo-400/30 hover:text-indigo-300">
             {showVerificationHistory ? 'Hide verification log' : 'Verification log'}
           </button>
