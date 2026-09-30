@@ -78,3 +78,5 @@ pub mod tracker;
 pub mod verification;
 
 pub mod topics;
+
+pub mod bundle;

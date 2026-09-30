@@ -24,7 +24,7 @@ const MAXIMUM_SELECTED_FINDINGS: usize = 200;
 const MAXIMUM_FINDING_ID_BYTES: usize = 64;
 const DEFAULT_FINDING_LIMIT: usize = 500;
 
-fn validate_finding_ids(ids: Vec<String>) -> Result<Vec<String>, AppError> {
+pub(crate) fn validate_finding_ids(ids: Vec<String>) -> Result<Vec<String>, AppError> {
     if ids.len() > MAXIMUM_SELECTED_FINDINGS {
         return Err(AppError::DataParsing(format!(
             "At most {MAXIMUM_SELECTED_FINDINGS} findings can be selected for one report"

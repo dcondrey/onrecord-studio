@@ -45,6 +45,7 @@ pub mod financial;
 
 pub mod facilities;
 
+pub mod bundle;
 pub mod casework;
 
 pub mod monitoring;
