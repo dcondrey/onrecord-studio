@@ -113,6 +113,7 @@ export interface NativeCommandMap {
   count_findings: { args: { filter?: Types.FindingsFilter | null }; result: number };
   dismiss_finding: { args: { id: string }; result: null };
   list_topic_packs: { args: NoArgs; result: Types.TopicPacksReport };
+  list_starter_sets: { args: NoArgs; result: Types.StarterSetsReport };
   run_intent_query: { args: { utterance: string; limit?: number | null }; result: Types.IntentAnswer };
   infer_redaction: { args: { documentId: number; portalKey: string; spanStart: number; spanEnd: number }; result: Types.InferenceReport };
   draft_followup_from_finding: { args: { findingId: string; jurisdiction?: string | null }; result: Types.DraftedArtifact };

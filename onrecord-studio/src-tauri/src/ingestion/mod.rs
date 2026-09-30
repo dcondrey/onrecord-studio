@@ -6,6 +6,7 @@ pub mod host_policy;
 pub mod limiter;
 pub mod queue;
 pub mod source_catalog;
+pub mod starter_sets;
 
 pub use client::ApiClient;
 pub use host_policy::{HostGovernor, HostSnapshot, HostStopReason, RequestRefusal};

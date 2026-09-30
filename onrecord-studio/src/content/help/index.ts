@@ -10,6 +10,8 @@ import account from './topics-account.json';
 import topicPacks from './topics-topic-packs.json';
 import plainLanguage from './topics-plain-language.json';
 
+import starterSets from './topics-starter-sets.json';
+
 export type HelpGroup =
   | 'Getting started'
   | 'Views'
@@ -64,6 +66,8 @@ export const HELP_TOPICS = [
   ...account,
   ...topicPacks,
   ...plainLanguage,
+
+  ...starterSets,
 ] as HelpTopic[];
 
 export function findHelpTopic(id: string): HelpTopic | undefined {

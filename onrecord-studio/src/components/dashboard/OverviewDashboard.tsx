@@ -22,12 +22,16 @@ import SubjectDossier from './SubjectDossier';
 import PostIngestBrief from './PostIngestBrief';
 import CrossCorpusExplorer from './CrossCorpusExplorer';
 import TopicPacks from './TopicPacks';
+import StarterSets from './StarterSets';
+import { useStarterRunStore } from '../../store/useStarterRunStore';
 
 export default function OverviewDashboard() {
   const portals = useAppStore((state) => state.portals);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [workbench, setWorkbench] = useState<{ reportId: string; review: boolean } | null>(null);
   const workspaceInitializationStatus = useAppStore((state) => state.workspaceInitializationStatus);
+  // Stays up after the first source lands, so the outcome of every source in a run is visible.
+  const starterRunShown = useStarterRunStore((state) => Object.keys(state.statuses).length > 0);
   const workspaceInitializationError = useAppStore((state) => state.workspaceInitializationError);
   const profiles = useAppStore((state) => state.agencyProfiles);
   const activePortalKey = useAppStore((state) => state.activePortalKey);
@@ -75,6 +79,8 @@ export default function OverviewDashboard() {
           <WorkspaceSourcesLoading />
         ) : workspaceInitializationStatus === 'error' ? (
           <WorkspaceSourcesUnavailable detail={workspaceInitializationError} />
+        ) : portals.length === 0 || starterRunShown ? (
+          <section className="app-panel p-5"><StarterSets /></section>
         ) : null}
 
         <PostIngestBrief />

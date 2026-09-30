@@ -1,6 +1,7 @@
 import { useAppStore } from '../../store/useAppStore';
 import { focusSourceComposer, openFileImport, SAN_DIEGO_RECORDS_URL, SAN_DIEGO_SOURCES } from '../../utils/sanDiego';
 import Icon from '../ui/icons';
+import StarterSets from './StarterSets';
 
 export default function SanDiegoWorkspace() {
   const [sourceSearch, setSourceSearch] = useState('');
@@ -43,6 +44,7 @@ export default function SanDiegoWorkspace() {
           <button type="button" onClick={() => setWorkspaceView('analysis')} className="secondary-action focus-ring rounded-lg border px-3 py-2 text-xs text-slate-300">Analyze a dataset</button>
         </div>
       </div>
+      <StarterSets />
       <div className="flex flex-wrap items-center gap-3">
         <input aria-label="Find a regional source" value={sourceSearch} onChange={(event) => setSourceSearch(event.target.value)} placeholder="Find a source, agency, or topic" className="analysis-input min-w-64 flex-1" />
         <select aria-label="Source topic" value={category} onChange={(event) => setCategory(event.target.value)} className="analysis-input">
