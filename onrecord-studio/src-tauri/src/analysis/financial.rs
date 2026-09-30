@@ -1,4 +1,5 @@
 //! Deterministic, source-bound financial investigations. Amounts never pass through f64.
+use super::spending_cases;
 use crate::{error::AppError, integrity::sha256_hex, types::*};
 use std::collections::{BTreeMap, BTreeSet};
 const SCALE: i128 = 10_000;
@@ -47,7 +48,7 @@ pub fn display(value: i128) -> String {
     }
     format!("{sign}{}.{fraction}", value / SCALE as u128)
 }
-fn get<'a>(record: &'a FinancialRecord, key: &str) -> &'a str {
+pub(crate) fn get<'a>(record: &'a FinancialRecord, key: &str) -> &'a str {
     record
         .values
         .get(key)
@@ -55,7 +56,7 @@ fn get<'a>(record: &'a FinancialRecord, key: &str) -> &'a str {
         .unwrap_or("")
         .trim()
 }
-fn amount(record: &FinancialRecord, field: &str) -> Option<i128> {
+pub(crate) fn amount(record: &FinancialRecord, field: &str) -> Option<i128> {
     decimal(get(record, field))
 }
 fn funding_duration(record: &FinancialRecord) -> &'static str {
@@ -69,7 +70,7 @@ fn funding_duration(record: &FinancialRecord) -> &'static str {
         _ => "unknown",
     }
 }
-fn sum(records: &[&FinancialRecord], field: &str) -> Option<i128> {
+pub(crate) fn sum(records: &[&FinancialRecord], field: &str) -> Option<i128> {
     if records.is_empty() {
         return None;
     }
@@ -77,7 +78,7 @@ fn sum(records: &[&FinancialRecord], field: &str) -> Option<i128> {
         total.checked_add(amount(record, field)?)
     })
 }
-fn ids(records: &[&FinancialRecord]) -> Vec<String> {
+pub(crate) fn ids(records: &[&FinancialRecord]) -> Vec<String> {
     records
         .iter()
         .map(|r| r.citation_id.clone())
@@ -88,10 +89,10 @@ fn ids(records: &[&FinancialRecord]) -> Vec<String> {
 fn formatted(value: Option<i128>) -> Option<String> {
     value.map(display)
 }
-fn key(values: &[&str]) -> String {
+pub(crate) fn key(values: &[&str]) -> String {
     sha256_hex(values.join("\u{1f}").as_bytes())[..20].into()
 }
-fn finding(
+pub(crate) fn finding(
     kind: &str,
     title: &str,
     observation: String,
@@ -108,10 +109,12 @@ fn finding(
         alternatives: alternatives.iter().map(|s| (*s).into()).collect(),
         next_test: next_test.into(),
         calculations: vec![],
+        basis: "lead".into(),
+        confidence_basis_points: None,
     }
 }
 
-fn canonical_account(
+pub(crate) fn canonical_account(
     record: &FinancialRecord,
     crosswalks: &[&FinancialRecord],
 ) -> (String, Vec<String>, bool) {
@@ -581,8 +584,25 @@ pub fn analyze(
         let available = comparable
             .then(|| revised?.checked_sub(actual?)?.checked_sub(encumbered?))
             .flatten();
+        let mapping_ids = mapping_citations.remove(&dimensions).unwrap_or_default();
+        if let Some(case) = spending_cases::appropriation_case(
+            &dimensions,
+            comparable,
+            revised,
+            actual,
+            encumbered,
+            &revised_rows,
+            &actual_rows,
+            &encumbered_rows,
+            &mapping_ids,
+        ) {
+            if let Some(excess) = case.calculations.first().and_then(|c| decimal(&c.result)) {
+                amounts_by_finding.insert(case.id.clone(), excess.unsigned_abs());
+            }
+            findings.push(case);
+        }
         let mut citations = ids(&rows);
-        citations.extend(mapping_citations.remove(&dimensions).unwrap_or_default());
+        citations.extend(mapping_ids);
         if let Some(value) = delta.filter(|v| *v != 0) {
             let item = finding("budget_variance", "A spending difference needs the revised-authority bridge", format!("FY{} fund {} account {}: actual minus original adopted = {} {}. This is not a finding that revised legal authority was exceeded.",dimensions[0],dimensions[1],dimensions[2],display(value),dimensions[6]), &rows,
                 &["Council revisions or transfers may change authority.","Timing, encumbrances, reimbursements, or account reclassifications may explain the difference."],"Obtain the adopted-to-revised appropriation bridge, dated transfers, close status, and matching encumbrance register.");
@@ -756,7 +776,16 @@ pub fn analyze(
         };
         let remaining = ceiling.and_then(|c| c.checked_sub(paid?));
         if remaining.is_some_and(|v| v < 0) {
-            findings.push(finding("ceiling_exceeded","Recorded payments exceed the retrieved executed ceiling",format!("Contract {contract_id}: paid {} {}; retrieved executed authority {} {}.",display(paid.unwrap()),currency,display(ceiling.unwrap()),currency),&rows,&["An omitted amendment may increase the ceiling.","Pass-through reimbursements, credits, or a reused contract ID may change the comparison."],"Reconcile all executed amendments, contract identifiers, line-level payments, and reimbursements with the agency's certified contract ledger."));
+            let mut item = finding("ceiling_exceeded","Recorded payments exceed the retrieved executed ceiling",format!("Contract {contract_id}: paid {} {}; retrieved executed authority {} {}.",display(paid.unwrap()),currency,display(ceiling.unwrap()),currency),&rows,&["An omitted amendment may increase the ceiling.","Pass-through reimbursements, credits, or a reused contract ID may change the comparison."],"Reconcile all executed amendments, contract identifiers, line-level payments, and reimbursements with the agency's certified contract ledger.");
+            item.basis = spending_cases::COUNTED.into();
+            item.confidence_basis_points = Some(spending_cases::LEDGER_CONFIDENCE);
+            item.calculations = vec![calculation(
+                "Payments above the executed ceiling",
+                format!("{} − {}", display(paid.unwrap()), display(ceiling.unwrap())),
+                paid.unwrap() - ceiling.unwrap(),
+                &currency,
+            )];
+            findings.push(item);
         }
         let mut invoices: BTreeMap<(String, String, String), Vec<&FinancialRecord>> =
             BTreeMap::new();
@@ -923,6 +952,19 @@ pub fn analyze(
             findings.push(finding("unit_cost_spread","Comparable reported units have different recorded costs",format!("For {} through {}, population '{}', unit '{}': observed costs range from {} to {} {} per unit. Period/unit labels match; quality and case mix still require review.",group[0].period_start,group[0].period_end,group[0].population,group[0].unit,display(low.unwrap()),display(high.unwrap()),group[0].currency),&rows,&["Service quality, acuity, facility costs, utilization, capital allocations, and accounting boundaries may differ."],"Obtain cost allocation methods, service specifications, case-mix measures and independent outcome verification before comparing provider efficiency."));
         }
     }
+    let spending = spending_cases::ledger_cases(&records, incomplete_roles);
+    gaps.extend(spending.gaps);
+    for case in spending.cases {
+        if let Some(amount) = case
+            .finding
+            .calculations
+            .first()
+            .and_then(|c| decimal(&c.result))
+        {
+            amounts_by_finding.insert(case.finding.id.clone(), amount.unsigned_abs());
+        }
+        findings.push(case.finding);
+    }
     for (role, title, needed, why) in ROLE_GAPS {
         if !records.iter().any(|r| r.role == role) || incomplete_roles.contains(role) {
             gaps.push(FinancialGap {
@@ -935,7 +977,11 @@ pub fn analyze(
     }
     limitations.extend(["All amounts use exact fixed-point arithmetic to four decimal places. Displayed ratios truncate at four decimals; scenarios calculate from original amounts, not rounded unit costs.".into(),"Appropriations, contract ceilings, amendments, payments and outcomes are separate stages, never an additive spending total. Missing records establish evidence gaps, not nonperformance or wrongdoing.".into(),"Only explicitly mapped identifiers join stages. Equal names do not establish vendor or contract identity. Comparability of labels does not establish equal service quality.".into(),"Account-shift discovery compares at most the 16 largest movements per direction within the same agency/year/fund/center/program/currency/funding-duration/three-digit account family. It selects one pair per group with at least 70% offset and offset size at least 10% of combined adopted amounts. These are discovery filters, not statistical significance or evidence of a transfer.".into(),"Capacity leads require consecutive years, at least 20% adopted growth, both execution ratios below 75%, and less than half of the additional allocation reflected in additional actuals. Rebound leads require a three-year sequence with a drop of at least 20% and latest spending still at least 10% below the first year. Histories retain separate funding durations and jurisdictions; no inflation adjustment is inferred. A fiscal-year label does not certify a closed, final ledger.".into()]);
     let priority = |kind: &str| match kind {
-        "ceiling_exceeded" => 0,
+        "ceiling_exceeded"
+        | "payment_outside_contract_term"
+        | "appropriation_exceeded"
+        | "restricted_fund_off_program" => 0,
+        "payment_without_contract_record" => 1,
         "duplicate_invoice" => 1,
         "duplicate_transaction" => 2,
         "account_shift" | "execution_capacity_gap" | "rebound_below_baseline" => 3,

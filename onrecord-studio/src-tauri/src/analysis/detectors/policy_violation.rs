@@ -339,7 +339,7 @@ fn measured_days(
 
 /// The latest effective date the policy states for itself. The latest is the conservative choice:
 /// a later start counts fewer requests.
-fn stated_effective_date(text: &str) -> Option<DateTime<Utc>> {
+pub(super) fn stated_effective_date(text: &str) -> Option<DateTime<Utc>> {
     extract_assertions(text)
         .into_iter()
         .filter(|assertion| {

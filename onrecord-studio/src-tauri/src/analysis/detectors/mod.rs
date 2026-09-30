@@ -34,8 +34,10 @@ pub mod just_in_time_compliance;
 pub mod metadata_vs_content;
 pub mod no_records_contradicted;
 pub mod policy_violation;
+pub mod practice_departure;
 mod public_documents;
 pub mod regenerated_response;
+pub mod spending_cases;
 
 /// Summary returned by [`refresh_all_findings`].
 #[derive(Debug, Clone, Copy, Default)]
@@ -142,6 +144,8 @@ pub async fn refresh_all_findings(
     );
     run_detector!(repository, summary, run_started, policy_violation);
     run_detector!(repository, summary, run_started, claim_data_mismatch);
+    run_detector!(repository, summary, run_started, spending_cases);
+    run_detector!(repository, summary, run_started, practice_departure);
     // Last: correlates the settled output of every detector above.
     run_detector!(repository, summary, run_started, correlated_findings);
 

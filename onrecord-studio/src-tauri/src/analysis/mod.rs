@@ -35,7 +35,12 @@ pub mod story_desk;
 
 pub mod document_class;
 
+pub mod practice;
+
 pub mod commitments;
+
+pub mod spending_cases;
+pub mod spending_rules;
 
 pub(crate) mod phrase_match;
 

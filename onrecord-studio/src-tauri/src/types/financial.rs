@@ -115,6 +115,13 @@ pub struct FinancialAuditFinding {
     pub alternatives: Vec<String>,
     pub next_test: String,
     pub calculations: Vec<FinancialCalculation>,
+    /// `counted_comparison` when every input was a recorded row or a written limit, `pattern` for
+    /// an inferential observation, `lead` for a hypothesis that needs more records.
+    #[serde(default)]
+    pub basis: String,
+    /// Derived from the inputs the evaluation observed. `None` is not computed, not zero.
+    #[serde(default)]
+    pub confidence_basis_points: Option<u16>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -128,9 +128,17 @@ pub async fn collect(repository: &DuckDbRepository) -> (Vec<EvidenceGap>, Vec<St
         Ok(found) => gaps.extend(found),
         Err(error) => errors.push(format!("policy_violation gap sweep failed: {error}")),
     }
+    match crate::analysis::detectors::practice_departure::gaps(repository).await {
+        Ok(found) => gaps.extend(found),
+        Err(error) => errors.push(format!("practice_departure gap sweep failed: {error}")),
+    }
     match crate::analysis::detectors::no_records_contradicted::gaps(repository).await {
         Ok(found) => gaps.extend(found),
         Err(error) => errors.push(format!("no_records_contradicted gap sweep failed: {error}")),
+    }
+    match crate::analysis::detectors::spending_cases::gaps(repository).await {
+        Ok(found) => gaps.extend(found),
+        Err(error) => errors.push(format!("spending_cases gap sweep failed: {error}")),
     }
     match financial_gaps(repository).await {
         Ok(found) => gaps.extend(found),

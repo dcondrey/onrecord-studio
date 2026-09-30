@@ -183,6 +183,32 @@ pub enum FindingKind {
     /// Two or more findings of different kinds that name exactly the same document, request or
     /// agency. Restates its members without adding a claim; confidence is the weakest member's.
     CorrelatedFindings,
+    /// A policy sentence states a duty about a policing practice and another document of the same
+    /// agency, in force after the policy's effective date, states `N of M` cases did not follow
+    /// it. A counted comparison of two documents' statements; the count is the source's and is
+    /// not recounted here.
+    PracticeDepartureCounted,
+    /// The same pairing, where the departure sentence states noncompliance without a count. A
+    /// pattern signal: the extent is unknown.
+    PracticeDepartureStated,
+    /// Recorded payments on one contract sum to more than its executed ceiling (base amount plus complete executed amendments), with every input recorded. A counted comparison of ledger rows with the contract's own written amount.
+    ContractCeilingExceeded,
+    /// Posted payments dated before a contract's recorded start or after its recorded end (extended by executed amendments that state their own end date). A counted comparison of two recorded dates.
+    PaymentOutsideContractTerm,
+    /// Posted payments to a vendor that neither the contract register's vendors nor the payments' contract ids name, while the register is complete. Absence from a table; registers often omit small purchases.
+    PaymentWithoutContractRecord,
+    /// Recorded actual (or actual plus open encumbrance) spending above the recorded revised appropriation for one fund, year and canonical account. A counted comparison against the ledger's own authority; a conflicting crosswalk blocks it.
+    AppropriationExceeded,
+    /// Actual spending from a fund recorded as restricted, on a program the restriction register does not name. A counted comparison of exact program identifiers.
+    RestrictedFundOffProgram,
+    /// Rows above an approval limit the agency's own policy states, whose approval value explicitly records that no approval was obtained, dated while the policy was in force. Rule text, threshold and rows are all cited.
+    ApprovalThresholdExceeded,
+    /// Rows above a stated approval limit whose approval cell is blank or not applicable, or whose date does not show the policy in force. A missing record, not a statement that approval was not obtained.
+    ApprovalRecordAbsent,
+    /// Several payments to one vendor within a short window, each just under a stated limit, whose sum exceeds it. A pattern: the policy sentence cited does not forbid splitting.
+    SplitPurchasePattern,
+    /// The same clustering where the agency's own policy forbids dividing a purchase to stay under a limit and the payments fall in force. Whether it was one purchase is not recorded in the ledger.
+    SplitPurchaseProhibitedByPolicy,
 }
 
 impl FindingKind {
@@ -211,6 +237,17 @@ impl FindingKind {
             Self::PolicyViolationDetected => "POLICY_VIOLATION_DETECTED",
             Self::ClaimContradictsData => "CLAIM_CONTRADICTS_DATA",
             Self::CorrelatedFindings => "CORRELATED_FINDINGS",
+            Self::PracticeDepartureCounted => "PRACTICE_DEPARTURE_COUNTED",
+            Self::PracticeDepartureStated => "PRACTICE_DEPARTURE_STATED",
+            Self::ContractCeilingExceeded => "CONTRACT_CEILING_EXCEEDED",
+            Self::PaymentOutsideContractTerm => "PAYMENT_OUTSIDE_CONTRACT_TERM",
+            Self::PaymentWithoutContractRecord => "PAYMENT_WITHOUT_CONTRACT_RECORD",
+            Self::AppropriationExceeded => "APPROPRIATION_EXCEEDED",
+            Self::RestrictedFundOffProgram => "RESTRICTED_FUND_OFF_PROGRAM",
+            Self::ApprovalThresholdExceeded => "APPROVAL_THRESHOLD_EXCEEDED",
+            Self::ApprovalRecordAbsent => "APPROVAL_RECORD_ABSENT",
+            Self::SplitPurchasePattern => "SPLIT_PURCHASE_PATTERN",
+            Self::SplitPurchaseProhibitedByPolicy => "SPLIT_PURCHASE_PROHIBITED_BY_POLICY",
         }
     }
 
@@ -239,6 +276,17 @@ impl FindingKind {
             Self::PolicyViolationDetected,
             Self::ClaimContradictsData,
             Self::CorrelatedFindings,
+            Self::PracticeDepartureCounted,
+            Self::PracticeDepartureStated,
+            Self::ContractCeilingExceeded,
+            Self::PaymentOutsideContractTerm,
+            Self::PaymentWithoutContractRecord,
+            Self::AppropriationExceeded,
+            Self::RestrictedFundOffProgram,
+            Self::ApprovalThresholdExceeded,
+            Self::ApprovalRecordAbsent,
+            Self::SplitPurchasePattern,
+            Self::SplitPurchaseProhibitedByPolicy,
         ]
         .into_iter()
         .find(|candidate| candidate.as_str() == value)
@@ -308,6 +356,23 @@ impl FindingKind {
             Self::ClaimContradictsData => false,
             // Convergence of separate signals is not a violation; a legal member stays its own row.
             Self::CorrelatedFindings => false,
+            // A document's own stated count of cases that did not follow the agency's written
+            // rule, set against that rule's sentence. Counted in the document, not recounted
+            // here, and never a statement that the conduct was unlawful.
+            Self::PracticeDepartureCounted => true,
+            // No count: the extent is unknown, so this is a pattern signal.
+            Self::PracticeDepartureStated => false,
+            // Spending cases: a comparison of recorded rows with a written limit or ceiling with every
+            // input recorded is a counted claim; an absence or a clustering is a pattern.
+            Self::ContractCeilingExceeded => true,
+            Self::PaymentOutsideContractTerm => true,
+            Self::PaymentWithoutContractRecord => false,
+            Self::AppropriationExceeded => true,
+            Self::RestrictedFundOffProgram => true,
+            Self::ApprovalThresholdExceeded => true,
+            Self::ApprovalRecordAbsent => false,
+            Self::SplitPurchasePattern => false,
+            Self::SplitPurchaseProhibitedByPolicy => true,
         }
     }
 }

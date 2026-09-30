@@ -114,7 +114,9 @@ impl DraftFamily {
             | FindingKind::EmailThreadGap
             | FindingKind::ContradictoryStatement
             | FindingKind::NoRecordsContradictedByRelease
-            | FindingKind::ClaimContradictsData => Self::RequestOnly,
+            | FindingKind::ClaimContradictsData
+            | FindingKind::PracticeDepartureCounted
+            | FindingKind::PracticeDepartureStated => Self::RequestOnly,
             FindingKind::PolicyViolationDetected => Self::RequestAndAppeal,
             FindingKind::EvasionParaphrasedDenials
             | FindingKind::EvasionRoundNumberThresholds
@@ -125,7 +127,17 @@ impl DraftFamily {
             | FindingKind::CrossCorpusTemporalShift
             | FindingKind::CrossCorpusOrphanTopic
             | FindingKind::CrossCorpusReusedDenialGrounds
-            | FindingKind::CorrelatedFindings => Self::NoDraft,
+            | FindingKind::CorrelatedFindings
+            // Spending cases cite ledger rows, not a records-request exchange; no CPRA template fits.
+            | FindingKind::ContractCeilingExceeded
+            | FindingKind::PaymentOutsideContractTerm
+            | FindingKind::PaymentWithoutContractRecord
+            | FindingKind::AppropriationExceeded
+            | FindingKind::RestrictedFundOffProgram
+            | FindingKind::ApprovalThresholdExceeded
+            | FindingKind::ApprovalRecordAbsent
+            | FindingKind::SplitPurchasePattern
+            | FindingKind::SplitPurchaseProhibitedByPolicy => Self::NoDraft,
         }
     }
 }
