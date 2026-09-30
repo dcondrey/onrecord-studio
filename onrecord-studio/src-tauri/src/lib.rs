@@ -16,6 +16,8 @@ pub mod report;
 pub mod research;
 pub mod setup;
 pub mod storage;
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support;
 pub mod tracker;
 pub mod types;
 

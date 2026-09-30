@@ -5,6 +5,8 @@ edition = "2021"
 
 [features]
 default = []
+# Exposes `test_support` to the crate's integration tests (enabled by its own dev-dependency).
+test-support = []
 # Statically links the native StoreKit 2 verifier and changes the runtime gate from development
 # access to fail-closed Mac App Store transaction enforcement.
 app-store = []
@@ -74,3 +76,4 @@ tauri-build = { version = "2.6.3", features = [] }
 
 [dev-dependencies]
 tempfile = "3"
+onrecord-studio-lib = { path = ".", features = ["test-support"] }

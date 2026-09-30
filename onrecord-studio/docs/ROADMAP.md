@@ -851,15 +851,14 @@ the audit report it came from.
 - `useFindings` (src/hooks) now carries the shared loader; FindingsInbox, PostIngestBrief,
   StoryDesk, BriefingWorkspace, SubjectDossier and SelfReview still load on their own. Move them
   over one at a time (each has bespoke filtering or dismissal state).
-- `import_city_export` in `tests/detector_benchmark.rs` and `repository_with_city_exports` in
-  `claim_validation.rs` register snapshots the same way; one shared test helper belongs in the lib
-  behind a `test-support` feature (a self dev-dependency enabling it).
-- Claim eval set covers the evaluator only; a second tier that stores a memo document and runs
-  the `claim_data_mismatch` sweep end to end is still open.
 - Periodic portal re-crawl: build it on the peer session's watchlist storage once that lands; do
   not add a second diff store.
 - Signed, importable case bundle: casework portable packets already sign and import; what is
-  missing is carrying finding dismissals and the briefing project inside the packet.
+  missing is carrying finding dismissals and the briefing project inside the packet
+  (`CaseworkPacket` is `deny_unknown_fields` at schema version 1, so this is a version bump with
+  an import test on a version-1 packet).
+- Query packs (`export_claim_query_pack`) carry SQL and rows; the peer's evidence packets carry
+  basis, hashes and quotes. When both have landed, one download should offer both.
 - No deterministic regression tests for the queue counter/refill fixes (needs repository fault
   injection).
 
@@ -867,7 +866,10 @@ Closed on 2026-09-30 (second batch): `count_findings` and `FindingsFilter.id`; S
 dossier draft records requests (10da52e); cross-agency comparison view (604a610); response-time
 claim detector (§12 of analysis_methods.md); redaction-consistency detector and the
 `REDACTION_INCONSISTENT_ACROSS_RELEASES` kind (§13); methods page `docs/METHODS.md` built by
-`scripts/build-methods.mjs` from the eval scorecards.
+`scripts/build-methods.mjs` from the eval scorecards; per-document query pack export; the claim
+sweep run end to end over stored documents in the eval set; `test_support::register_analytical_table`
+shared by the unit and integration suites (feature `test-support`, enabled by the crate's own
+dev-dependency).
 
 Closed on 2026-09-30 (commits 342735f..43da2f5): ChangeFeed watermark, lens loading status,
 `.msg` withheld-attachment record, dismissal race, crawled-page content type, CKAN/Socrata

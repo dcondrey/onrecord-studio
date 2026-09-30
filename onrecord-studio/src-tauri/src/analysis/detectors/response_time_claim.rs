@@ -591,9 +591,11 @@ fn to_finding(
 mod tests {
     use super::*;
 
+    type Expected = Option<(Metric, u32, Hedge, Option<Period>)>;
+
     #[test]
     fn extracts_average_and_median_day_claims_with_their_scope_and_hedge() {
-        let cases: &[(&str, Option<(Metric, u32, Hedge, Option<Period>)>)] = &[
+        let cases: &[(&str, Expected)] = &[
             (
                 "The average response time for public records requests was 10 days in 2024.",
                 Some((

@@ -1554,7 +1554,6 @@ pub fn to_finding(
 mod tests {
     use super::*;
     use crate::types::PortalRegistration;
-    use duckdb::params;
 
     #[test]
     fn extracts_each_claim_kind_and_ignores_years_that_are_not_fiscal() {
@@ -1724,6 +1723,7 @@ mod tests {
           CREATE TABLE analysis_fin_actual(report_fy INTEGER,fund_number VARCHAR,account_number VARCHAR,funds_center_number VARCHAR,dept_name VARCHAR,amount DECIMAL(28,4));
           INSERT INTO analysis_fin_budget VALUES (23,'100000','5001','001','Police',100.01,'adopted'),(23,'100000','5001','001','Police',150.01,'revised'),(23,'100000','4001','001','Police',9999,'adopted'),(23,'200000','5001','001','Police',9000,'adopted'),(23,'300000','5001','001','Police',1187654321,'adopted'),(23,'400000','5001','001','Police',1320000000,'adopted');
           INSERT INTO analysis_fin_actual VALUES (23,'100000','5001','001','Police',120.02),(23,'100000','5001','001','Police',0.01),(23,'100000','4001','001','Police',9999);").unwrap();
+        drop(conn);
         for (role, table, path) in [
             (
                 "budget",
@@ -1736,24 +1736,16 @@ mod tests {
                 "/operating_actuals/actuals_operating_datasd.csv",
             ),
         ] {
-            conn.execute("INSERT INTO analytical_snapshots(snapshot_id,dataset_kind,display_name,table_name,source_uri,local_path,source_sha256,retrieved_at,validation_summary_json,imported_rows) VALUES (?1,'OPERATING_BUDGET',?1,?2,?3,'/fixture',repeat('a',64),'2026-09-26','{}',3)",params![role,table,format!("https://seshat.datasd.org{path}")]).unwrap();
-            let mut statement = conn.prepare("SELECT column_name,data_type,ordinal_position FROM information_schema.columns WHERE table_name=?1 ORDER BY ordinal_position").unwrap();
-            let columns = statement
-                .query_map(params![table], |r| {
-                    Ok((
-                        r.get::<_, String>(0)?,
-                        r.get::<_, String>(1)?,
-                        r.get::<_, i64>(2)?,
-                    ))
-                })
-                .unwrap()
-                .collect::<Result<Vec<_>, _>>()
-                .unwrap();
-            for (name, kind, ordinal) in columns {
-                conn.execute("INSERT INTO analytical_columns(snapshot_id,table_name,column_name,logical_type,ordinal) VALUES (?1,?2,?3,?4,?5)",params![role,table,name,if kind.starts_with("DECIMAL"){"DECIMAL"}else{"TEXT"},ordinal]).unwrap();
-            }
+            crate::test_support::register_analytical_table(
+                &repo,
+                role,
+                table,
+                &format!("https://seshat.datasd.org{path}"),
+                'a',
+            )
+            .await
+            .unwrap();
         }
-        drop(conn);
         (temp, repo)
     }
 
@@ -1763,21 +1755,16 @@ mod tests {
         let conn = repo.analytics_connection().await.unwrap();
         conn.execute_batch("CREATE TABLE analysis_fin_revenue(report_fy INTEGER,fund_number VARCHAR,account_number VARCHAR,funds_center_number VARCHAR,dept_name VARCHAR,amount DECIMAL(28,4));
           INSERT INTO analysis_fin_revenue VALUES (23,'100000','4001','001','Police',200.00),(23,'100000','5001','001','Police',50.00);").unwrap();
-        conn.execute("INSERT INTO analytical_snapshots(snapshot_id,dataset_kind,display_name,table_name,source_uri,local_path,source_sha256,retrieved_at,validation_summary_json,imported_rows) VALUES ('revenue','OPERATING_BUDGET','revenue','analysis_fin_revenue','https://seshat.datasd.org/revenue/revenue_datasd.csv','/fixture',repeat('b',64),'2026-09-26','{}',2)",[]).unwrap();
-        for (ordinal, (name, kind)) in [
-            ("report_fy", "TEXT"),
-            ("fund_number", "TEXT"),
-            ("account_number", "TEXT"),
-            ("funds_center_number", "TEXT"),
-            ("dept_name", "TEXT"),
-            ("amount", "DECIMAL"),
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            conn.execute("INSERT INTO analytical_columns(snapshot_id,table_name,column_name,logical_type,ordinal) VALUES ('revenue','analysis_fin_revenue',?1,?2,?3)",params![name,kind,ordinal as i64 + 1]).unwrap();
-        }
         drop(conn);
+        crate::test_support::register_analytical_table(
+            repo,
+            "revenue",
+            "analysis_fin_revenue",
+            "https://seshat.datasd.org/revenue/revenue_datasd.csv",
+            'b',
+        )
+        .await
+        .unwrap();
         repo.save_financial_mapping(crate::types::FinancialMapping {
             role: "revenue".to_string(),
             snapshot_id: "revenue".to_string(),

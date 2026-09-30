@@ -19,6 +19,7 @@ use onrecord_studio_lib::analysis::detectors::*;
 use onrecord_studio_lib::analysis::finding::Finding;
 use onrecord_studio_lib::error::AppError;
 use onrecord_studio_lib::storage::sqlite::DuckDbRepository;
+use onrecord_studio_lib::test_support::register_analytical_table;
 use onrecord_studio_lib::types::{FinancialMapping, PortalRegistration};
 use serde::Deserialize;
 use serde_json::json;
@@ -163,33 +164,10 @@ async fn import_city_export(
         "CREATE TABLE {table} AS SELECT * FROM read_csv('{path}', all_varchar = true, header = true)"
     ))
     .unwrap();
-    let rows: i64 = conn
-        .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
-            row.get(0)
-        })
+    drop(conn);
+    register_analytical_table(repo, snapshot_id, table, source_uri, '0')
+        .await
         .unwrap();
-    conn.execute(
-        "INSERT INTO analytical_snapshots(snapshot_id,dataset_kind,display_name,table_name,source_uri,local_path,source_sha256,retrieved_at,validation_summary_json,imported_rows) VALUES (?1,'OPERATING_BUDGET',?1,?2,?3,?4,repeat('0',64),'2026-09-30','{}',?5)",
-        duckdb::params![snapshot_id, table, source_uri, path, rows],
-    )
-    .unwrap();
-    let mut statement = conn
-        .prepare("SELECT column_name, ordinal_position FROM information_schema.columns WHERE table_name = ?1 ORDER BY ordinal_position")
-        .unwrap();
-    let columns = statement
-        .query_map(duckdb::params![table], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
-        })
-        .unwrap()
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap();
-    for (name, ordinal) in columns {
-        conn.execute(
-            "INSERT INTO analytical_columns(snapshot_id,table_name,column_name,logical_type,ordinal) VALUES (?1,?2,?3,'TEXT',?4)",
-            duckdb::params![snapshot_id, table, name, ordinal],
-        )
-        .unwrap();
-    }
 }
 
 /// A fresh repository holding the City portal, the two sliced exports under the automatic

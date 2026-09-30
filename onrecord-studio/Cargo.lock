@@ -4549,6 +4549,7 @@ dependencies = [
  "futures-util",
  "lopdf",
  "msg_parser",
+ "onrecord-studio-lib",
  "png 0.18.1",
  "rand 0.8.8",
  "regex",
