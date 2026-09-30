@@ -30,6 +30,7 @@ pub mod monitoring;
 pub mod assertion_index;
 
 pub mod claim_validation;
+pub mod lead_dossier;
 pub mod story_desk;
 
 pub mod document_class;

@@ -30,7 +30,7 @@ export interface NativeCommandMap {
   list_top_corpus_entities: { args: { limit?: number | null }; result: Types.CorpusEntityNode[] };
   get_corpus_entity_neighborhood: { args: { entityId: string; limit?: number | null }; result: Types.CorpusEntityNeighborhood | null };
   get_document_entity_truncations: { args: { documentId: number; portalKey: string }; result: string[] };
-  find_entity_paths: { args: { fromEntityId: string; toEntityId: string; maxHops?: number | null }; result: Types.EntityPath | null };
+  find_entity_paths: { args: { fromEntityId: string; toEntityId: string; maxHops?: number | null }; result: Types.EntityPathOutcome };
   list_entity_brokers: { args: { subjectScope?: string | null; limit?: number | null }; result: Types.EntityBroker[] };
   get_embedding_model_status: { args: NoArgs; result: Types.EmbeddingModelStatus };
   initialize_embedding_model: { args: NoArgs; result: Types.EmbeddingModelStatus };
@@ -104,6 +104,7 @@ export interface NativeCommandMap {
   list_evidence_gaps: { args: NoArgs; result: Types.EvidenceGapView[] };
   list_document_claim_checks: { args: { documentId: number; portalKey: string }; result: Types.DocumentClaimChecks };
   list_story_leads: { args: { limit?: number | null }; result: Types.StoryLead[] };
+  build_lead_dossier: { args: { findingId: string }; result: Types.LeadDossier };
   list_findings: { args: { filter?: Types.FindingsFilter | null; limit?: number | null }; result: Types.Finding[] };
   dismiss_finding: { args: { id: string }; result: null };
   run_intent_query: { args: { utterance: string; limit?: number | null }; result: Types.IntentAnswer };

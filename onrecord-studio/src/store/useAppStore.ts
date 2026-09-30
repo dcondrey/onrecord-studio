@@ -113,6 +113,8 @@ interface AppState {
    * one entity.
    */
   subjectDossierTarget: { kind: 'entity' | 'name'; value: string } | null;
+  /** The finding whose lead dossier is open, so any view can open one. */
+  dossierFindingId: string | null;
   /**
    * True when the post-ingest brief overlay should be visible. Set by `syncStopped` in App.tsx
    * after `refresh_findings` completes; cleared when the user dismisses it or opens a specific
@@ -180,6 +182,8 @@ interface AppState {
   removeBriefingEvidence: (id: string) => void;
   openSubjectDossier: (target: { kind: 'entity' | 'name'; value: string }) => void;
   clearSubjectDossier: () => void;
+  openLeadDossier: (findingId: string) => void;
+  closeLeadDossier: () => void;
   setPostIngestBriefOpen: (open: boolean) => void;
   markFindingsSeen: () => void;
 }
@@ -236,6 +240,7 @@ export const useAppStore = create<AppState>((set) => ({
     typeof window === 'undefined' ? undefined : window.localStorage,
   ),
   subjectDossierTarget: null,
+  dossierFindingId: null,
   postIngestBriefOpen: false,
   lastFindingsSeenAt: null,
   setWorkspaceView: (workspaceView) => set({ workspaceView, isSidebarOpen: false }),
@@ -455,6 +460,8 @@ export const useAppStore = create<AppState>((set) => ({
   }),
   openSubjectDossier: (target) => set({ subjectDossierTarget: target }),
   clearSubjectDossier: () => set({ subjectDossierTarget: null }),
+  openLeadDossier: (dossierFindingId) => set({ dossierFindingId }),
+  closeLeadDossier: () => set({ dossierFindingId: null }),
   setPostIngestBriefOpen: (postIngestBriefOpen) => set({ postIngestBriefOpen }),
   markFindingsSeen: () => set({ lastFindingsSeenAt: new Date().toISOString() }),
 }));

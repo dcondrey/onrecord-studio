@@ -8,6 +8,7 @@ import type { Finding, FindingCitation, FindingSeverity } from '../../types';
 import { FindingEvidence } from '../ui/EvidenceBasis';
 import ArtifactDrafts from './ArtifactDrafts';
 import EvidenceGaps from './EvidenceGaps';
+import LeadDossier from './LeadDossier';
 import VerifiableReportExport from './VerifiableReportExport';
 import { useProfileLensStore } from '../../store/useProfileLensStore';
 import { touchesOwnOrganization, useAffiliationDisclosure } from '../account/useProfile';
@@ -46,6 +47,7 @@ export default function FindingsInbox() {
   const setSelfReviewOpen = useProfileLensStore((state) => state.setSelfReviewOpen);
   const { disclosure } = useAffiliationDisclosure();
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
+  const openLeadDossier = useAppStore((state) => state.openLeadDossier);
   const setActivePortal = useAppStore((state) => state.setActivePortal);
   const setSearchFilters = useAppStore((state) => state.setSearchFilters);
   const findingsRefreshRequests = useAppStore((state) => state.findingsRefreshRequests);
@@ -251,11 +253,13 @@ export default function FindingsInbox() {
               onToggle={() => setExpandedId((current) => (current === finding.id ? null : finding.id))}
               onInspect={() => inspect(finding)}
               onDismiss={() => dismiss(finding.id)}
+              onAssemble={() => openLeadDossier(finding.id)}
               onOpenSource={openSource}
             />
           ))}
         </ul>
       )}
+      <LeadDossier />
       <EvidenceGaps />
     </section>
   );
@@ -268,6 +272,7 @@ function FindingRow({
   onToggle,
   onInspect,
   onDismiss,
+  onAssemble,
   onOpenSource,
 }: {
   finding: Finding;
@@ -276,6 +281,7 @@ function FindingRow({
   onToggle: () => void;
   onInspect: () => void;
   onDismiss: () => void;
+  onAssemble: () => void;
   onOpenSource: (citation: FindingCitation) => void;
 }) {
   const [shape, tone] = severityGlyph(finding.severity);
@@ -315,6 +321,14 @@ function FindingRow({
             className="focus-ring rounded-md border border-slate-800 px-2 py-1 text-[8px] font-medium text-slate-400 transition hover:border-cyan-400/40 hover:text-slate-200"
           >
             {expanded ? 'Hide drafts' : 'Draft…'}
+          </button>
+          <button
+            type="button"
+            onClick={onAssemble}
+            className="focus-ring rounded-md border border-slate-800 px-2 py-1 text-[8px] font-medium text-slate-400 transition hover:border-cyan-400/40 hover:text-slate-200"
+            aria-label={`Assemble dossier: ${finding.headline}`}
+          >
+            Assemble dossier
           </button>
           <button
             type="button"
