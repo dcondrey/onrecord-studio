@@ -209,6 +209,13 @@ pub enum FindingKind {
     SplitPurchasePattern,
     /// The same clustering where the agency's own policy forbids dividing a purchase to stay under a limit and the payments fall in force. Whether it was one purchase is not recorded in the ledger.
     SplitPurchaseProhibitedByPolicy,
+    /// An encampment notice whose recorded posting (or notice) date and recorded cleanup date are
+    /// fewer calendar days apart than the minimum the agency's own policy, or a stored notice
+    /// authority of the same jurisdiction, states. A counted comparison of stated dates.
+    EncampmentNoticeShortfall,
+    /// An encampment notice that states a calendar-day notice period shorter than that minimum,
+    /// without both dates recorded. One statement against another; a pattern signal.
+    EncampmentNoticeStatedShortfall,
 }
 
 impl FindingKind {
@@ -248,6 +255,8 @@ impl FindingKind {
             Self::ApprovalRecordAbsent => "APPROVAL_RECORD_ABSENT",
             Self::SplitPurchasePattern => "SPLIT_PURCHASE_PATTERN",
             Self::SplitPurchaseProhibitedByPolicy => "SPLIT_PURCHASE_PROHIBITED_BY_POLICY",
+            Self::EncampmentNoticeShortfall => "ENCAMPMENT_NOTICE_SHORTFALL",
+            Self::EncampmentNoticeStatedShortfall => "ENCAMPMENT_NOTICE_STATED_SHORTFALL",
         }
     }
 
@@ -287,6 +296,8 @@ impl FindingKind {
             Self::ApprovalRecordAbsent,
             Self::SplitPurchasePattern,
             Self::SplitPurchaseProhibitedByPolicy,
+            Self::EncampmentNoticeShortfall,
+            Self::EncampmentNoticeStatedShortfall,
         ]
         .into_iter()
         .find(|candidate| candidate.as_str() == value)
@@ -373,6 +384,10 @@ impl FindingKind {
             Self::ApprovalRecordAbsent => false,
             Self::SplitPurchasePattern => false,
             Self::SplitPurchaseProhibitedByPolicy => true,
+            // Two recorded dates counted against a stated minimum notice period.
+            Self::EncampmentNoticeShortfall => true,
+            // A stated period against a stated minimum, with the period actually given unrecorded.
+            Self::EncampmentNoticeStatedShortfall => false,
         }
     }
 }

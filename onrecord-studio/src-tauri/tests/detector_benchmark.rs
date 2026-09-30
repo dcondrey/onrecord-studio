@@ -55,6 +55,7 @@ fn registry() -> Vec<(&'static str, Run)> {
         cross_corpus_orphan_topic,
         cross_corpus_reused_denial_grounds,
         policy_violation,
+        encampment_notice,
     ]
 }
 

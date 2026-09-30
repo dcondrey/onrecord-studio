@@ -45,7 +45,9 @@ export type FindingKind =
   | 'APPROVAL_THRESHOLD_EXCEEDED'
   | 'APPROVAL_RECORD_ABSENT'
   | 'SPLIT_PURCHASE_PATTERN'
-  | 'SPLIT_PURCHASE_PROHIBITED_BY_POLICY';
+  | 'SPLIT_PURCHASE_PROHIBITED_BY_POLICY'
+  | 'ENCAMPMENT_NOTICE_SHORTFALL'
+  | 'ENCAMPMENT_NOTICE_STATED_SHORTFALL';
 
 /**
  * How a finding's confidence was derived. `UNASSESSED` distinguishes an unmeasured rung from a
@@ -131,6 +133,7 @@ export const LEGAL_CLAIM_KINDS: readonly FindingKind[] = [
   'RESTRICTED_FUND_OFF_PROGRAM',
   'APPROVAL_THRESHOLD_EXCEEDED',
   'SPLIT_PURCHASE_PROHIBITED_BY_POLICY',
+  'ENCAMPMENT_NOTICE_SHORTFALL',
 ];
 
 export function isLegalClaimKind(kind: FindingKind): boolean {
