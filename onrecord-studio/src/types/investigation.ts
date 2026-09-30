@@ -443,7 +443,8 @@ export interface RedactionIntegrityReport {
   metadataLeaks: string[];
   isolatedStructuralAnomalies: string[];
   pageFindings: RedactionPageFinding[];
-  calculatedRedactionRatio: number;
+  /** Redacted share of the measured text. `null` when no text was measured; absence is not zero. */
+  calculatedRedactionRatio: number | null;
 }
 
 export interface RedactionPageFinding {

@@ -220,8 +220,8 @@ fn build_finding(
         .map(|row| FindingCitation {
             portal_key: row.portal_key.clone(),
             document_id: row.document_id,
-            character_start: Some(row.assertion.char_start as i64),
-            character_end: Some(row.assertion.char_end as i64),
+            character_start: Some(row.assertion.character_start as i64),
+            character_end: Some(row.assertion.character_end as i64),
             quote: None,
             label: Some(format!(
                 "{} reports {}",
@@ -303,6 +303,8 @@ mod tests {
                 value,
                 char_start: 0,
                 char_end: 10,
+                character_start: 0,
+                character_end: 10,
             },
         }
     }

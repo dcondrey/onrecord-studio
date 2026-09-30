@@ -395,7 +395,8 @@ pub struct UnredactorForensicReport {
     pub metadata_leaks: Vec<String>,
     pub isolated_structural_anomalies: Vec<String>,
     pub page_findings: Vec<RedactionPageFinding>,
-    pub calculated_redaction_ratio: f64,
+    /// Redacted share of the measured text. `None` when no text was measured: absence is not zero.
+    pub calculated_redaction_ratio: Option<f64>,
 }
 
 // This geometry-specific report remains deterministic and PII-masked. The companion
@@ -729,11 +730,8 @@ pub fn evaluate_vector_redaction_leaks<P: AsRef<Path>>(
         )?;
     }
 
-    let calculated_redaction_ratio = if total_character_count == 0 {
-        0.0
-    } else {
-        redaction_character_count as f64 / total_character_count as f64
-    };
+    let calculated_redaction_ratio = (total_character_count > 0)
+        .then(|| redaction_character_count as f64 / total_character_count as f64);
     let coverage_complete = !isolated_structural_anomalies.iter().any(|signal| {
         signal.contains("MALFORMED_GEOMETRY_OPERATIONS")
             || signal.contains("UNCLASSIFIED_FILLED_RECTANGLES")

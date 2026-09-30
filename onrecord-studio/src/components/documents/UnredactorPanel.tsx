@@ -86,7 +86,7 @@ export default function UnredactorPanel({ documentId, portalKey }: { documentId:
             <dl className="grid grid-cols-2 gap-3 rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-[9px]">
               <Metric label="Pages analyzed" value={report.scannedPageCount.toLocaleString()} />
               <Metric label="Potential clashes" value={report.boundingBoxClashesCount.toLocaleString()} />
-              <Metric label="Text redaction density" value={`${(report.calculatedRedactionRatio * 100).toFixed(2)}%`} />
+              <Metric label="Text redaction density" value={report.calculatedRedactionRatio === null ? 'No text measured' : `${(report.calculatedRedactionRatio * 100).toFixed(2)}%`} />
               <Metric label="Metadata properties" value={report.metadataLeaks.length.toLocaleString()} />
               <Metric label="Structural signals" value={report.isolatedStructuralAnomalies.length.toLocaleString()} />
               <Metric label="Analysis profile" value={report.analysisVersion} />

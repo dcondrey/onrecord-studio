@@ -131,7 +131,14 @@ export default function AnalysisWorkbench() {
     };
   }, [discovery, inspection, sqlGate]);
 
-  const run = async <T,>(label: string, action: () => Promise<T>, onSuccess?: (value: T) => void) => {
+  // `isCurrent` lets a gated caller keep a superseded request's error and status off the screen;
+  // the newer request owns both from the moment it begins.
+  const run = async <T,>(
+    label: string,
+    action: () => Promise<T>,
+    onSuccess?: (value: T) => void,
+    isCurrent: () => boolean = () => true,
+  ) => {
     setStatus(label);
     setError(null);
     const release = discovery?.hold();
@@ -140,9 +147,9 @@ export default function AnalysisWorkbench() {
       onSuccess?.(value);
       await refresh();
     } catch (reason) {
-      setError(String(reason));
+      if (isCurrent()) setError(String(reason));
     } finally {
-      setStatus(null);
+      if (isCurrent()) setStatus(null);
       release?.();
       discovery?.refresh();
     }
@@ -154,9 +161,14 @@ export default function AnalysisWorkbench() {
   // the instant the user acts.
   const runGatedSql = (label: string, query: string, limit = 500) => {
     const request = sqlGate.begin();
-    return run(label, () => invokeCommand('run_analytical_sql', { sql: query, limit }), (result) => {
-      if (sqlGate.isCurrent(request)) setSqlResult(result);
-    });
+    return run(
+      label,
+      () => invokeCommand('run_analytical_sql', { sql: query, limit }),
+      (result) => {
+        if (sqlGate.isCurrent(request)) setSqlResult(result);
+      },
+      () => sqlGate.isCurrent(request),
+    );
   };
 
   return (

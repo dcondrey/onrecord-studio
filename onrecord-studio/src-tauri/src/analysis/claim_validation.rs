@@ -699,7 +699,8 @@ pub struct Evaluator {
     portal_jurisdictions: HashMap<String, &'static str>,
     reports: HashMap<(i32, String, Option<String>), FinancialReport>,
     /// Distinct values of a mapped field per role, keyed `(role, field)`.
-    values: HashMap<(String, String), Vec<String>>,
+    /// Distinct values per (role, field), with whether the 5000-row read was cut short.
+    values: HashMap<(String, String), (Vec<String>, bool)>,
 }
 
 impl Evaluator {
@@ -731,17 +732,17 @@ impl Evaluator {
         repository: &DuckDbRepository,
         role: &str,
         field: &str,
-    ) -> Result<Vec<String>, AppError> {
+    ) -> Result<(Vec<String>, bool), AppError> {
         let key = (role.to_string(), field.to_string());
         if let Some(values) = self.values.get(&key) {
             return Ok(values.clone());
         }
         let Some(mapping) = self.workspace.mappings.iter().find(|m| m.role == role) else {
-            return Ok(Vec::new());
+            return Ok((Vec::new(), false));
         };
         let Some(column) = mapping.columns.get(field) else {
-            self.values.insert(key, Vec::new());
-            return Ok(Vec::new());
+            self.values.insert(key, (Vec::new(), false));
+            return Ok((Vec::new(), false));
         };
         let Some(dataset) = self
             .workspace
@@ -749,7 +750,7 @@ impl Evaluator {
             .iter()
             .find(|d| d.snapshot_id == mapping.snapshot_id)
         else {
-            return Ok(Vec::new());
+            return Ok((Vec::new(), false));
         };
         let quote = |identifier: &str| format!("\"{}\"", identifier.replace('"', "\"\""));
         let sql = format!(
@@ -758,15 +759,15 @@ impl Evaluator {
             column = quote(column),
             table = quote(&dataset.table_name),
         );
-        let values = repository
-            .execute_restricted_sql(&sql, 5000)
-            .await?
+        let result = repository.execute_restricted_sql(&sql, 5000).await?;
+        let truncated = result.truncated;
+        let values = result
             .rows
             .into_iter()
             .filter_map(|row| row.first().and_then(|v| v.as_str().map(str::to_string)))
             .collect::<Vec<_>>();
-        self.values.insert(key, values.clone());
-        Ok(values)
+        self.values.insert(key, (values.clone(), truncated));
+        Ok((values, truncated))
     }
 
     pub fn has_any_role(&self, roles: &[&str]) -> bool {
@@ -965,22 +966,43 @@ impl Evaluator {
         };
         // Scope binds against the first role's own distinct values; every other role the claim
         // needs must carry the same bound value, or the comparison would span different funds.
-        let funds = self.distinct_values(repository, roles[0], "fund").await?;
+        // A cut-short value list could hide the one fund or department that would have matched,
+        // or a second one that would have made the match ambiguous; neither can be bound.
+        let (funds, funds_truncated) = self.distinct_values(repository, roles[0], "fund").await?;
+        if funds_truncated {
+            return unreconciled(
+                UnreconciledReason::AmbiguousScope,
+                format!(
+                    "the {} dataset has more distinct funds than can be read for binding",
+                    roles[0]
+                ),
+            );
+        }
         let (fund, fund_explicit) = match Self::bind_fund(&funds, claim.scope.fund.as_deref()) {
             Ok(bound) => bound,
             Err(detail) => return unreconciled(UnreconciledReason::AmbiguousScope, detail),
         };
-        let departments = self
+        let (departments, departments_truncated) = self
             .distinct_values(repository, roles[0], "department")
             .await?;
+        if departments_truncated {
+            return unreconciled(
+                UnreconciledReason::AmbiguousScope,
+                format!(
+                    "the {} dataset has more distinct departments than can be read for binding",
+                    roles[0]
+                ),
+            );
+        }
         let department =
             match Self::bind_department(&departments, claim.scope.department.as_deref()) {
                 Ok(bound) => bound,
                 Err(detail) => return unreconciled(UnreconciledReason::AmbiguousScope, detail),
             };
         for role in roles.iter().skip(1) {
-            let other_funds = self.distinct_values(repository, role, "fund").await?;
-            if !other_funds.contains(&fund) {
+            let (other_funds, other_truncated) =
+                self.distinct_values(repository, role, "fund").await?;
+            if other_truncated || !other_funds.contains(&fund) {
                 return unreconciled(
                     UnreconciledReason::AmbiguousScope,
                     format!("fund {fund} has no rows in the {role} dataset"),

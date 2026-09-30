@@ -24,8 +24,18 @@ pub struct Assertion {
     pub subject: String,
     pub predicate: AssertionPredicate,
     pub value: AssertionValue,
+    /// Byte offsets into the source text (regex match bounds); use for slicing the text.
     pub char_start: usize,
     pub char_end: usize,
+    /// Character offsets, which is what a citation and the viewer's `characterStart` count in.
+    /// Bytes and characters diverge on any non-ASCII text, so a byte offset cited as a character
+    /// offset highlights the wrong span.
+    pub character_start: usize,
+    pub character_end: usize,
+}
+
+fn character_offset(text: &str, byte_offset: usize) -> usize {
+    text[..byte_offset].chars().count()
 }
 
 /// The classes of assertion we extract. Named so a contradiction between two rows can be reported
@@ -171,6 +181,8 @@ pub fn extract_assertions(text: &str) -> Vec<Assertion> {
             value: AssertionValue::Days(days),
             char_start: full.start(),
             char_end: full.end(),
+            character_start: character_offset(text, full.start()),
+            character_end: character_offset(text, full.end()),
         });
     }
 
@@ -198,6 +210,8 @@ pub fn extract_assertions(text: &str) -> Vec<Assertion> {
             value: AssertionValue::Days(days),
             char_start: full.start(),
             char_end: full.end(),
+            character_start: character_offset(text, full.start()),
+            character_end: character_offset(text, full.end()),
         });
     }
 
@@ -221,6 +235,8 @@ pub fn extract_assertions(text: &str) -> Vec<Assertion> {
             value: AssertionValue::Cents(cents),
             char_start: full.start(),
             char_end: full.end(),
+            character_start: character_offset(text, full.start()),
+            character_end: character_offset(text, full.end()),
         });
     }
 
@@ -247,6 +263,8 @@ pub fn extract_assertions(text: &str) -> Vec<Assertion> {
             value: AssertionValue::Date(iso),
             char_start: full.start(),
             char_end: full.end(),
+            character_start: character_offset(text, full.start()),
+            character_end: character_offset(text, full.end()),
         });
     }
 
@@ -278,6 +296,8 @@ pub fn extract_assertions(text: &str) -> Vec<Assertion> {
             value: AssertionValue::Cents(cents),
             char_start: full.start(),
             char_end: full.end(),
+            character_start: character_offset(text, full.start()),
+            character_end: character_offset(text, full.end()),
         });
     }
 
