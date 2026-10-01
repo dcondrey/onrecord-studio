@@ -94,10 +94,11 @@ function cargoTargetDirectory() {
   return metadata.target_directory;
 }
 
+// package.json's build:direct script is just `node scripts/build-direct.mjs`; the --target flag
+// itself is baked into that script's own `tauri build` invocation, not into the npm script text.
 function configuredBuildTarget() {
-  const script = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts['build:direct'];
-  assert(typeof script === 'string', 'package.json has no build:direct script.');
-  const flag = script.match(/--target\s+(\S+)/);
+  const source = readFileSync(join(root, 'scripts', 'build-direct.mjs'), 'utf8');
+  const flag = source.match(/'--target',\s*'([^']+)'/);
   return flag ? flag[1] : null;
 }
 

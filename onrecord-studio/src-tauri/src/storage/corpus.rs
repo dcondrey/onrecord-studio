@@ -73,10 +73,11 @@ const MAXIMUM_TERMS_PER_DOCUMENT: usize = 96;
 const MAXIMUM_ENTITIES_PER_KIND: usize = 4_000;
 /// Every `kind` value ever passed to `push_entity`/`push_entity_with_display`. Used to seed the
 /// truncation map so a document's row set always states "not truncated" rather than omitting a kind
-/// that simply had nothing in it. `Person`/`Role`/`Position`/`DocumentClass` are on the list so
-/// their truncation rows exist by construction the moment an extractor for them lands; the current
-/// extraction pipeline does not populate them, so those rows read as "not truncated" against a
-/// zero-extraction pass, which is honest.
+/// that simply had nothing in it. `Person` and `Role` are populated by
+/// [`typed_edges::role_and_signer_mentions`]. `Position` and `DocumentClass` are on the list so
+/// their truncation rows exist by construction the moment an extractor for them lands; no extractor
+/// populates those two yet, so their rows read as "not truncated" against a zero-extraction pass,
+/// which is honest.
 const ENTITY_KINDS: [CorpusEntityKind; 12] = [
     CorpusEntityKind::Statute,
     CorpusEntityKind::Date,

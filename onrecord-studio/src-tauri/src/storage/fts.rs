@@ -13,7 +13,7 @@
 //! The sanitizer is retained rather than deleted because it is the piece a real Boolean search
 //! needs and because the SQLite attachment boundary can still present FTS5 tables.
 //!
-//! The DuckDB core persists [`token_frequencies`] and searches with [`positive_query_tokens`].
+//! The DuckDB core persists [`token_frequencies`] and searches with [`core_query_tokens`].
 
 pub(crate) use crate::normalization::normalize_index_text as clean_plain_text_for_index;
 use std::collections::{BTreeMap, BTreeSet};
