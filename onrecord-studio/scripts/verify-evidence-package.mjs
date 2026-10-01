@@ -55,6 +55,16 @@ function hexToBytes(hex) {
   return bytes;
 }
 
+// The signature block is not inside the signed bytes, so the key id that revocation lookups and
+// "signed by" use must be bound to the key that actually verified, or any key could claim any id.
+function signatureBlockBound(signature, publicKeyBytes) {
+  return (
+    createHash('sha256').update(publicKeyBytes).digest('hex') === String(signature.signerKeyId).toLowerCase() &&
+    signature.algorithm === 'Ed25519' &&
+    signature.identityAssurance === 'SELF_MANAGED_LOCAL_KEY_NOT_EXTERNALLY_ATTESTED'
+  );
+}
+
 function deepEqual(a, b) {
   if (a === b) return true;
   if (typeof a !== typeof b || a === null || b === null) return false;
@@ -78,7 +88,9 @@ async function loadRevocations(path) {
   const publicKeyBytes = hexToBytes(package_.signature.publicKeyHex);
   const signatureBytes = hexToBytes(package_.signature.signatureHex);
   const key = await webcrypto.subtle.importKey('raw', publicKeyBytes, { name: 'Ed25519' }, false, ['verify']);
-  const valid = await webcrypto.subtle.verify('Ed25519', key, signatureBytes, canonicalBytes);
+  const valid =
+    signatureBlockBound(package_.signature, publicKeyBytes) &&
+    (await webcrypto.subtle.verify('Ed25519', key, signatureBytes, canonicalBytes));
   const hashMatches = createHash('sha256').update(canonicalBytes).digest('hex') === package_.manifestSha256;
   // The entry list is read from the verified canonical bytes, never from `package_.manifest`
   // directly: that field is unsigned JSON sitting next to the signature, so an attacker could
@@ -134,11 +146,13 @@ async function verifyOne(path, revocations) {
     const publicKeyBytes = hexToBytes(package_.signature.publicKeyHex);
     const signatureBytes = hexToBytes(package_.signature.signatureHex);
     const key = await webcrypto.subtle.importKey('raw', publicKeyBytes, { name: 'Ed25519' }, false, ['verify']);
-    signatureValid = await webcrypto.subtle.verify('Ed25519', key, signatureBytes, canonicalBytes);
+    signatureValid =
+      signatureBlockBound(package_.signature, publicKeyBytes) &&
+      (await webcrypto.subtle.verify('Ed25519', key, signatureBytes, canonicalBytes));
   } catch (error) {
     console.error(`Signature check could not run: ${error.message}`);
   }
-  results.push([signatureValid, `Ed25519 signature over the canonical bytes verifies against the embedded public key (${package_.signature.algorithm ?? 'unknown algorithm'})`]);
+  results.push([signatureValid, `Ed25519 signature over the canonical bytes verifies against the embedded public key, whose SHA-256 is the signer key id (${package_.signature.algorithm ?? 'unknown algorithm'})`]);
 
   let manifestConsistent = false;
   try {

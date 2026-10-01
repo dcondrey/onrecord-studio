@@ -306,6 +306,22 @@ pub(crate) fn verify_package_detailed<T: Serialize>(
             detail.push("Public key is not 32 bytes.".to_string());
             return false;
         };
+        // INVARIANT(signature): the signature block sits outside the signed bytes, so every field
+        // a reader acts on must be bound here. Revocation and "signed by" both key off
+        // `signer_key_id`; unbound, a package signed by a revoked key could claim another key's id.
+        if sha256_hex(&public_key_bytes) != package.signature.signer_key_id.to_ascii_lowercase() {
+            detail.push("Signer key id is not the SHA-256 of the embedded public key.".to_string());
+            return false;
+        }
+        if package.signature.algorithm != SIGNATURE_ALGORITHM
+            || package.signature.identity_assurance != SELF_MANAGED_LOCAL_KEY
+        {
+            detail.push(
+                "Signature algorithm or identity assurance is not one this application produces."
+                    .to_string(),
+            );
+            return false;
+        }
         let Ok(verifying_key) = VerifyingKey::from_bytes(&public_key_bytes) else {
             detail.push("Public key bytes do not form a valid Ed25519 key.".to_string());
             return false;

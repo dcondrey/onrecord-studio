@@ -429,10 +429,10 @@ pub async fn export_case_evidence_package(
     })
 }
 
-/// Reads back this case's local export ledger for the "verify this chain" surface in the UI. Any
-/// reader can check the same continuity independently from the exported files themselves via
-/// `scripts/verify-evidence-package.mjs --chain`; this command exists so the desktop app can show
-/// it without asking someone to run Node against files they may not have all downloaded yet.
+/// Reads back this case's local export ledger for the "verify this chain" surface in the UI. The
+/// ledger is this installation's own unsigned record, so its continuity says nothing about the
+/// exported files; passing every exported package of the case to
+/// `scripts/verify-evidence-package.mjs` checks the chain against the files themselves.
 #[tauri::command]
 pub async fn case_export_chain(
     case_id: String,
@@ -1096,6 +1096,12 @@ mod tests {
             package.signature.identity_assurance,
             "SELF_MANAGED_LOCAL_KEY_NOT_EXTERNALLY_ATTESTED"
         );
+
+        // Revocation is looked up by the claimed id, so a validly signed package naming another
+        // key must fail rather than borrow that key's standing.
+        let mut impersonating = package.clone();
+        impersonating.signature.signer_key_id = sha256_hex(b"another installation's public key");
+        assert!(verify_package(&impersonating).is_err());
 
         package
             .manifest
