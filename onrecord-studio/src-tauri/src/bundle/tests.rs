@@ -393,3 +393,16 @@ fn an_unrecorded_file_digest_is_stated_not_omitted() {
     let (_, html) = rendered(assembly);
     assert!(html.contains("File SHA-256 not recorded"));
 }
+
+#[test]
+fn a_packet_carrying_reviewer_annotations_cannot_be_embedded() {
+    let mut assembly = one_public_finding();
+    assembly.content.packets.push(EmbeddedPacket {
+        packet_format: "onrecord-evidence-packet-v1".into(),
+        packet_version: 1,
+        packet_sha256: "c".repeat(64),
+        payload: serde_json::json!({"content": {"reviewerAnnotations": {"annotations": []}}}),
+    });
+    let document = BundleDocument::new(assembly.content, "t0".into()).unwrap();
+    assert!(render_html(&document).is_err());
+}

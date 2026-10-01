@@ -11,6 +11,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 const resolvers = new Map<string, (value: unknown) => void>();
 const calls: { command: string; args: Record<string, unknown> }[] = [];
 const counts = new Map<string, unknown>();
+const clusters = new Map<string, () => Promise<unknown>>();
 
 vi.mock("@tauri-apps/api/core", () => ({
   isTauri: () => false,
@@ -52,7 +53,10 @@ vi.mock("@tauri-apps/api/core", () => ({
       const from = String(args?.fromEntityId);
       return new Promise((resolve) => resolvers.set(`path:${from}`, resolve));
     }
-    if (command === "get_resolution_clusters") return Promise.resolve(null);
+    if (command === "get_resolution_clusters") {
+      const held = clusters.get(String(args?.entityId));
+      return held ? held() : Promise.resolve(null);
+    }
     return Promise.resolve([]);
   },
 }));
@@ -92,6 +96,7 @@ function neighborhood(
 afterEach(() => {
   resolvers.clear();
   counts.clear();
+  clusters.clear();
   calls.length = 0;
   cleanup();
 });
@@ -126,6 +131,65 @@ describe("EntityGraph combining", () => {
     resolvers.get("entity-alias")?.(neighborhood("entity-alias", "HOUSING AUTHORITY, Inc.", "LEAKED VENDOR"));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(screen.queryByText("LEAKED VENDOR")).toBeNull();
+  });
+});
+
+function reviewedCluster(centreId: string, memberId: string) {
+  const key = (id: string) => ({ kind: "ORGANIZATION", value: id });
+  return {
+    entityId: centreId,
+    key: key(centreId),
+    members: [
+      { entityId: centreId, key: key(centreId), displayValue: "Housing Authority" },
+      { entityId: memberId, key: key(memberId), displayValue: "HOUSING AUTH. (SD)" },
+    ],
+    reasons: [
+      {
+        entryId: "entry-1",
+        leftDisplayValue: "Housing Authority",
+        rightDisplayValue: "HOUSING AUTH. (SD)",
+        author: "Maria",
+        decidedAt: "2026-03-04T00:00:00Z",
+        reason: "same letterhead",
+      },
+    ],
+    contradictions: [],
+    resolutionId: "r".repeat(64),
+    ledgerHead: "l".repeat(64),
+    corpusStateDigest: "s".repeat(64),
+  };
+}
+
+describe("EntityGraph with a reviewed resolution", () => {
+  it("combines a reviewed member's neighbours without a click and says why", async () => {
+    clusters.set("entity-slow", () => Promise.resolve(reviewedCluster("entity-slow", "entity-member")));
+    render(<EntityGraph />);
+    await waitFor(() => expect(resolvers.has("entity-slow")).toBe(true));
+    resolvers.get("entity-slow")?.(neighborhood("entity-slow", "Housing Authority", "OWN NEIGHBOUR"));
+    await waitFor(() => expect(resolvers.has("entity-member")).toBe(true));
+    resolvers.get("entity-member")?.(neighborhood("entity-member", "HOUSING AUTH. (SD)", "MEMBER NEIGHBOUR"));
+
+    await screen.findAllByText("MEMBER NEIGHBOUR");
+    expect(screen.getAllByText("OWN NEIGHBOUR").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Combined by your review: Housing Authority · HOUSING AUTH\. \(SD\)/)).toBeTruthy();
+    expect(screen.getByText(/Maria judged "Housing Authority" and "HOUSING AUTH\. \(SD\)" the same on 2026-03-04: same letterhead/)).toBeTruthy();
+  });
+
+  it("never applies a cluster that answers after the reader moved to another centre", async () => {
+    let answerSlow: (value: unknown) => void = () => {};
+    clusters.set("entity-slow", () => new Promise((resolve) => { answerSlow = resolve; }));
+    render(<EntityGraph />);
+    await waitFor(() => expect(resolvers.has("entity-slow")).toBe(true));
+
+    screen.getByRole("button", { name: /rtfhsd\.org/ }).click();
+    await waitFor(() => expect(resolvers.has("entity-fast")).toBe(true));
+    resolvers.get("entity-fast")?.(neighborhood("entity-fast", "rtfhsd.org", "FAST NEIGHBOUR"));
+    await screen.findAllByText("FAST NEIGHBOUR");
+
+    answerSlow(reviewedCluster("entity-slow", "entity-member"));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(resolvers.has("entity-member")).toBe(false);
+    expect(screen.queryByText(/Combined by your review/)).toBeNull();
   });
 });
 

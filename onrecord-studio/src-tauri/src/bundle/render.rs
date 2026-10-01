@@ -4,6 +4,7 @@
 
 use super::{BundleDocument, BundleFinding, BUNDLE_FORMAT, BUNDLE_SCHEMA_VERSION};
 use crate::error::AppError;
+use crate::report::packet::annotations::json_carries_section;
 use crate::types::report::{QuoteStatus, ReportConfidence};
 use std::fmt::Write;
 
@@ -140,6 +141,16 @@ fn embeddable_json(document: &BundleDocument) -> Result<String, AppError> {
 
 pub fn render_html(document: &BundleDocument) -> Result<String, AppError> {
     let content = &document.content;
+    if content
+        .packets
+        .iter()
+        .any(|packet| json_carries_section(&packet.payload))
+    {
+        return Err(AppError::Export(
+            "A shareable bundle never carries reviewer annotations; the embedded packet has them."
+                .to_string(),
+        ));
+    }
     let mut out = String::new();
     let _ = write!(
         out,

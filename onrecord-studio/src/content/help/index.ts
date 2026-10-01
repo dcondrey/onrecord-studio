@@ -16,6 +16,7 @@ import watchlists from './topics-watchlists.json';
 import scale from './topics-scale.json';
 import resolution from './topics-resolution.json';
 import annotations from './topics-annotations.json';
+import annotationExport from './topics-annotation-export.json';
 
 export type HelpGroup =
   | 'Getting started'
@@ -78,6 +79,7 @@ export const HELP_TOPICS = [
   ...scale,
   ...resolution,
   ...annotations,
+  ...annotationExport,
 ] as HelpTopic[];
 
 export function findHelpTopic(id: string): HelpTopic | undefined {
