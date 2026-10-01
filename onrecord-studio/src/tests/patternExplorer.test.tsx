@@ -75,6 +75,10 @@ describe('PatternExplorer evidence gating', () => {
           return new Promise((resolve) => resolvers.set(String(args?.documentId ?? ''), resolve));
         case 'list_top_corpus_entities':
           return [];
+        case 'list_resolution_candidates':
+          return { candidates: [], nextCursor: null, remaining: 0, scanTruncated: false, guards: { skippedNameGroups: 0, skippedIdentifiers: 0 }, ledgerHead: '' };
+        case 'list_resolution_ledger':
+          return { items: [], nextCursor: null, total: 0, entryCount: 0, head: '', summary: { byBasis: [] }, contradictions: [] };
         default:
           return [];
       }

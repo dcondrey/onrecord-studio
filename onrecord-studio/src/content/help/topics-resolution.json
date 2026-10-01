@@ -1,0 +1,64 @@
+[
+  {
+    "id": "entity-resolution",
+    "title": "Resolving entities",
+    "group": "Findings",
+    "summary": "Judge whether two names in the record are the same person or organization. Your judgments are kept on this device and survive an index rebuild.",
+    "keywords": [
+      "entity",
+      "resolution",
+      "resolve",
+      "same",
+      "different",
+      "unsure",
+      "duplicate",
+      "lookalike",
+      "alias",
+      "ledger",
+      "merge",
+      "identifier",
+      "email"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "On the Patterns view, under the entity graph, Resolve entities lists pairs worth a look. Mark each pair Same, Different or Unsure, with an optional reason. Press S, D or U when the pair has focus and you are not typing in the reason box."
+        ]
+      },
+      {
+        "heading": "Where suggestions come from",
+        "items": [
+          "Shared identifier: both entities appear in the same text segment as one validated email address, in at least two documents each. Appearing near an address is not owning it, so read the documents before judging.",
+          "Name-only: the names match after punctuation, word order and company suffixes are ignored. A similar name is a lead, never proof.",
+          "Nothing is merged for you. A suggestion only changes anything after you judge it."
+        ]
+      },
+      {
+        "heading": "What is kept",
+        "items": [
+          "Each judgment is stored in a ledger on this device with your name, the time, your reason and what you saw: the documents and spans, and any shared identifier.",
+          "The ledger is append-only. Undo and change of mind add a new entry that supersedes the old one; the old one stays visible in the history.",
+          "A pair you marked Different is never suggested again and is never merged, even if other judgments would link its two sides.",
+          "If Same judgments chain two entities together while a Different separates them, the group is shown as a contradiction and left unmerged until you record a new judgment.",
+          "Judgments are tied to the entity's kind and normalized value, not to an internal id, so they still apply after the index is rebuilt."
+        ]
+      },
+      {
+        "heading": "Sharing a ledger",
+        "paragraphs": [
+          "Export signs the ledger with this installation's key. Importing previews first: how many entries are new, which already exist, and which conflict. An entry that already exists is never replaced. A valid signature shows the file is unchanged since that key signed it; it does not show who holds the key, so check unfamiliar keys against your contributor list."
+        ]
+      },
+      {
+        "heading": "The counts shown",
+        "paragraphs": [
+          "The summary counts your own current judgments by what prompted them, for example how many name-only suggestions you marked as the same. It is a count of your decisions, not a measure of how accurate the suggestions or you were."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": ["resolution"],
+    "related": ["legal-vs-pattern"]
+  }
+]
