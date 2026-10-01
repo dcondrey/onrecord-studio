@@ -16,6 +16,11 @@ pub const DELETE_ACCOUNT_URL: &str =
 pub const CHECKOUT_URL: &str = "https://auth.writerslogic.com/functions/v1/onrecord-checkout";
 const CHECKOUT_HOST: &str = "checkout.stripe.com";
 pub const MAX_CHECKOUT_QUANTITY: u32 = 999;
+/// The shared `stripe-portal` function: it looks the customer up by the signed-in user, so it
+/// needs no OnRecord-specific body beyond where the browser should return to.
+pub const BILLING_PORTAL_URL: &str = "https://auth.writerslogic.com/functions/v1/stripe-portal";
+const BILLING_PORTAL_HOST: &str = "billing.stripe.com";
+const BILLING_PORTAL_RETURN_URL: &str = "https://writerslogic.com/onrecord";
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
@@ -68,6 +73,14 @@ pub trait AccountServer: Send + Sync {
         access_token: &'a AccessToken,
         quantity: Option<u32>,
     ) -> BoxFuture<'a, Result<String, FetchError>>;
+
+    /// Returns a Stripe Customer Portal URL that `validate_billing_portal_url` has accepted. The
+    /// portal is where a subscriber changes seats, payment method, or cancels; cancellation there
+    /// stops renewal at the period end and the entitlement follows the subscription's status.
+    fn start_billing_portal<'a>(
+        &'a self,
+        access_token: &'a AccessToken,
+    ) -> BoxFuture<'a, Result<String, FetchError>>;
 }
 
 /// The only URL the app will hand to the system browser from a server reply.
@@ -88,9 +101,33 @@ pub fn validate_checkout_url(url: &str) -> Result<String, FetchError> {
     }
 }
 
+/// Same shape of check as the checkout URL, for the Customer Portal host.
+pub fn validate_billing_portal_url(url: &str) -> Result<String, FetchError> {
+    let parsed = reqwest::Url::parse(url)
+        .map_err(|_| FetchError::Invalid("billing portal URL is not a URL".to_string()))?;
+    let acceptable = parsed.scheme() == "https"
+        && parsed.host_str() == Some(BILLING_PORTAL_HOST)
+        && parsed.username().is_empty()
+        && parsed.password().is_none()
+        && parsed.port().is_none();
+    if acceptable {
+        Ok(parsed.into())
+    } else {
+        Err(FetchError::Invalid(
+            "billing portal URL is not a Stripe Customer Portal address".to_string(),
+        ))
+    }
+}
+
 #[derive(Deserialize)]
 struct EntitlementResponse {
     token: String,
+}
+
+#[derive(Serialize)]
+struct BillingPortalRequest {
+    #[serde(rename = "returnUrl")]
+    return_url: &'static str,
 }
 
 #[derive(Deserialize)]
@@ -109,19 +146,26 @@ pub struct HttpAccountServer {
     entitlement_url: String,
     delete_url: String,
     checkout_url: String,
+    portal_url: String,
 }
 
 impl HttpAccountServer {
     pub fn new() -> Result<Self, FetchError> {
-        Self::with_urls(ENTITLEMENT_URL, DELETE_ACCOUNT_URL, CHECKOUT_URL)
+        Self::with_urls(
+            ENTITLEMENT_URL,
+            DELETE_ACCOUNT_URL,
+            CHECKOUT_URL,
+            BILLING_PORTAL_URL,
+        )
     }
 
     fn with_urls(
         entitlement_url: &str,
         delete_url: &str,
         checkout_url: &str,
+        portal_url: &str,
     ) -> Result<Self, FetchError> {
-        for url in [entitlement_url, delete_url, checkout_url] {
+        for url in [entitlement_url, delete_url, checkout_url, portal_url] {
             require_https(url)?;
         }
         let client = reqwest::Client::builder()
@@ -136,6 +180,7 @@ impl HttpAccountServer {
             entitlement_url: entitlement_url.to_string(),
             delete_url: delete_url.to_string(),
             checkout_url: checkout_url.to_string(),
+            portal_url: portal_url.to_string(),
         })
     }
 }
@@ -260,6 +305,31 @@ impl AccountServer for HttpAccountServer {
             validate_checkout_url(&parsed.url)
         })
     }
+
+    fn start_billing_portal<'a>(
+        &'a self,
+        access_token: &'a AccessToken,
+    ) -> BoxFuture<'a, Result<String, FetchError>> {
+        Box::pin(async move {
+            let response = self
+                .client
+                .post(&self.portal_url)
+                .bearer_auth(access_token.expose())
+                .json(&BillingPortalRequest {
+                    return_url: BILLING_PORTAL_RETURN_URL,
+                })
+                .send()
+                .await
+                .map_err(transport)?;
+            if !response.status().is_success() {
+                return Err(status_error(response.status()));
+            }
+            let body = bounded_body(response).await?;
+            let parsed: CheckoutResponse = serde_json::from_slice(&body)
+                .map_err(|_| FetchError::Invalid("missing billing portal url".to_string()))?;
+            validate_billing_portal_url(&parsed.url)
+        })
+    }
 }
 
 #[cfg(test)]
@@ -270,9 +340,30 @@ mod tests {
     fn only_https_endpoints_are_accepted() {
         assert!(HttpAccountServer::new().is_ok());
         for bad in ["http://auth.example/x", "ftp://a/b", "not a url"] {
-            assert!(HttpAccountServer::with_urls(bad, ENTITLEMENT_URL, CHECKOUT_URL).is_err());
-            assert!(HttpAccountServer::with_urls(ENTITLEMENT_URL, bad, CHECKOUT_URL).is_err());
-            assert!(HttpAccountServer::with_urls(ENTITLEMENT_URL, CHECKOUT_URL, bad).is_err());
+            let good = [
+                ENTITLEMENT_URL,
+                DELETE_ACCOUNT_URL,
+                CHECKOUT_URL,
+                BILLING_PORTAL_URL,
+            ];
+            for slot in 0..good.len() {
+                let mut urls = good;
+                urls[slot] = bad;
+                assert!(HttpAccountServer::with_urls(urls[0], urls[1], urls[2], urls[3]).is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn only_the_stripe_portal_host_is_handed_to_the_browser() {
+        assert!(validate_billing_portal_url("https://billing.stripe.com/p/session/x").is_ok());
+        for bad in [
+            "http://billing.stripe.com/p/x",
+            "https://checkout.stripe.com/p/x",
+            "https://user@billing.stripe.com/p/x",
+            "https://billing.stripe.com:8443/p/x",
+        ] {
+            assert!(validate_billing_portal_url(bad).is_err(), "{bad}");
         }
     }
 

@@ -109,3 +109,20 @@ Product decisions: AI research is off on a fresh install (opt-in), documents and
 Owner-only remaining: notary credentials (`xcrun notarytool store-credentials onrecord-notary`), Stripe coupons and the ten webhook events on the live endpoint, privacy policy and terms, backup of the entitlement signing key and `updater.key` (+ password), run `build:direct` and upload artifacts per `release-direct.md`, set `DOWNLOAD_URL`, push site commits, authorize push, tag and release.
 
 Unverified end to end: real sign-in, Keychain and Secure Enclave, a live Stripe purchase, notarization, an update against a lower-versioned build, the new screens in a browser.
+
+## Billing portal and plan intervals (2026-10-01)
+
+Cancellation uses Stripe's Customer Portal through the shared `stripe-portal` function
+(`https://auth.writerslogic.com/functions/v1/stripe-portal`, deployed from the website repo). The
+app's `start_billing_portal` command sends the signed-in session and a fixed return URL and opens
+only a `https://billing.stripe.com` address. No new server code is needed: the webhook already
+keeps a subscription `active` until Stripe sends `customer.subscription.deleted` at the period end,
+so a portal cancellation (`cancel_at_period_end`) leaves the license valid until then and is not
+refunded; the next entitlement refresh after that denies. The portal's own configuration in the
+Stripe dashboard must allow cancellation and seat (quantity) changes.
+
+A yearly price is a Stripe step, not an app step: create the price on the existing product, add
+its id to the `ONRECORD_STRIPE_PRICE_IDS` secret (comma-separated; `onrecord-checkout` accepts any
+listed `priceId` and `stripe-webhook` grants on any of them), then teach the app to send
+`priceId` for the chosen interval and show both prices in `src/config/pricing.ts`. Until a second
+price is listed, checkout omits `priceId` and the single live price is used.

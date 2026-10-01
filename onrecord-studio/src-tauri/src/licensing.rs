@@ -34,6 +34,7 @@ pub const BEGIN_SIGN_IN_COMMAND: &str = "begin_sign_in";
 pub const SIGN_OUT_COMMAND: &str = "sign_out";
 pub const DELETE_ACCOUNT_COMMAND: &str = "delete_account";
 pub const START_CHECKOUT_COMMAND: &str = "start_checkout";
+pub const BILLING_PORTAL_COMMAND: &str = "start_billing_portal";
 pub const ACTIVATE_DEVICE_COMMAND: &str = "activate_this_device";
 #[cfg(any(test, all(target_os = "macos", feature = "app-store")))]
 const EXPECTED_BUNDLE_IDENTIFIER: &str = "com.onrecord.studio";
@@ -239,6 +240,14 @@ impl client::AccountServer for UnreachableServer {
         let error = client::FetchError::Unreachable(self.0.to_string());
         Box::pin(async move { Err(error) })
     }
+
+    fn start_billing_portal<'a>(
+        &'a self,
+        _: &'a account::AccessToken,
+    ) -> client::BoxFuture<'a, Result<String, client::FetchError>> {
+        let error = client::FetchError::Unreachable(self.0.to_string());
+        Box::pin(async move { Err(error) })
+    }
 }
 
 pub fn command_is_unlicensed(command: &str) -> bool {
@@ -251,6 +260,7 @@ pub fn command_is_unlicensed(command: &str) -> bool {
             | SIGN_OUT_COMMAND
             | DELETE_ACCOUNT_COMMAND
             | START_CHECKOUT_COMMAND
+            | BILLING_PORTAL_COMMAND
             | ACTIVATE_DEVICE_COMMAND
     )
 }

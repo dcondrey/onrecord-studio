@@ -150,6 +150,25 @@ pub async fn start_checkout(
     }
 }
 
+/// Opens Stripe's Customer Portal for the signed-in subscriber: payment method, seat count, and
+/// cancellation. A cancellation there ends renewal at the current period's end; the license stays
+/// active until then and the next entitlement refresh after that denies. Nothing is refunded by it.
+#[tauri::command]
+pub async fn start_billing_portal(
+    license: State<'_, LicenseGate>,
+) -> Result<CheckoutSession, AppError> {
+    #[cfg(feature = "direct-license")]
+    {
+        let url = license.direct().clone().start_billing_portal().await?;
+        Ok(CheckoutSession { url })
+    }
+    #[cfg(not(feature = "direct-license"))]
+    {
+        let _ = license;
+        Err(not_in_this_build())
+    }
+}
+
 /// Re-runs the entitlement flow for this Mac. `confirm_revoke_oldest` must come from an
 /// explicit user confirmation: it lets the server revoke the account's oldest device.
 #[tauri::command]

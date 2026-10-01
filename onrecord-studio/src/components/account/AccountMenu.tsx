@@ -5,6 +5,8 @@ import { useProfileLensStore } from '../../store/useProfileLensStore';
 import { isDirectChannel } from '../../utils/licenseState';
 import type { LicenseStatus } from '../../types';
 import DeleteAccountResult from './DeleteAccountResult';
+import { formatNativeError, invokeCommand } from '../../ipc';
+import { openExternalUrl } from '../../utils/openExternal';
 
 function formatDate(value: string | null): string | null {
   if (!value) return null;
@@ -30,8 +32,26 @@ export default function AccountMenu() {
   const setProfileOpen = useProfileLensStore((state) => state.setSettingsOpen);
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [billingBusy, setBillingBusy] = useState(false);
+  const [billingNotice, setBillingNotice] = useState<string | null>(null);
   const status = controller?.status ?? null;
   if (!controller || !status || !isDirectChannel(status)) return null;
+
+  // Stripe's Customer Portal owns payment method, seat count and cancellation. Cancelling there
+  // ends renewal at the period end; the entitlement stays valid until then and nothing is refunded.
+  const manageSubscription = async () => {
+    setBillingBusy(true);
+    setBillingNotice(null);
+    try {
+      const session = await invokeCommand('start_billing_portal', {});
+      const opened = await openExternalUrl(session.url);
+      if (!opened.ok) setBillingNotice(`${opened.reason} Address: ${session.url}`);
+    } catch (failure) {
+      setBillingNotice(formatNativeError(failure));
+    } finally {
+      setBillingBusy(false);
+    }
+  };
 
   const busy = controller.signingOut || controller.deleting;
   const hasResult = controller.deleteReport !== null || controller.deleteError !== null;
@@ -69,6 +89,16 @@ export default function AccountMenu() {
             >
               Profile settings
             </button>
+            {status.state === 'LICENSED' ? (
+              <button
+                type="button"
+                disabled={busy || billingBusy}
+                onClick={() => void manageSubscription()}
+                className="focus-ring rounded-lg border border-slate-500 px-3 py-1.5 text-xs font-semibold hover:bg-slate-800 disabled:opacity-50"
+              >
+                {billingBusy ? 'Opening Stripe...' : 'Manage subscription'}
+              </button>
+            ) : null}
             <button
               type="button"
               disabled={busy}
@@ -86,6 +116,12 @@ export default function AccountMenu() {
               Delete account
             </button>
           </div>
+          {status.state === 'LICENSED' ? (
+            <p className="mt-2 text-xs leading-5 text-slate-400">
+              Manage subscription opens Stripe in your browser to change seats or payment method, or to cancel. Cancelling stops renewal at the end of the current billing period; the license stays active until then and no partial refund is issued.
+            </p>
+          ) : null}
+          {billingNotice ? <p role="alert" className="mt-2 text-xs text-amber-200">{billingNotice}</p> : null}
           {confirming ? (
             <div role="group" aria-label="Confirm account deletion" className="mt-4 rounded-lg border border-rose-700 bg-rose-950/60 p-4 text-xs leading-5 text-rose-50">
               <p className="font-semibold">Delete your account?</p>

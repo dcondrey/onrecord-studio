@@ -1,1 +1,1 @@
-OnRecord Studio 1.0. Analyze public-records requests and documents on your Mac, track deadlines, and export verifiable reports.
+OnRecord Studio 1.0.0-beta.1. First beta: collect public records, count statutory deadline failures, find spending and redaction patterns, and export verifiable reports, evidence packets and research snapshots. New in this build: research snapshot export for Python, R and SQL, shared-folder collaboration, Manage subscription in the account menu, and a Support link in Help. See CHANGELOG.md for details.

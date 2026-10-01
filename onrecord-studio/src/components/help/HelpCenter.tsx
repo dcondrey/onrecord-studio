@@ -7,6 +7,10 @@ import { EvidenceLadderFigure, ProvenanceLadderFigure } from './HelpFigures';
 import { OPEN_HELP_EVENT, type OpenHelpDetail } from './helpEvents';
 import { HELP_SHOTS } from './shots';
 import { buildSearchIndex, excerptFor, searchTopics } from './search';
+import { openExternalUrl } from '../../utils/openExternal';
+
+/** Public support entry point: issues and questions are filed there, not emailed. */
+export const SUPPORT_URL = 'https://github.com/writerslogic/support';
 
 const FIGURES: Record<string, () => JSX.Element> = {
   'evidence-ladder': EvidenceLadderFigure,
@@ -41,6 +45,11 @@ export function HelpDialog({ initialTopicId, onClose }: { initialTopicId: string
   const [selectedId, setSelectedId] = useState<string>(
     () => (initialTopicId && findHelpTopic(initialTopicId) ? initialTopicId : HELP_TOPICS[0].id),
   );
+  const [supportNotice, setSupportNotice] = useState<string | null>(null);
+  const openSupport = async () => {
+    const result = await openExternalUrl(SUPPORT_URL);
+    setSupportNotice(result.ok ? null : `${result.reason} Open ${SUPPORT_URL} in your browser.`);
+  };
 
   useEffect(() => {
     // useDialogFocus parks focus on the panel; a reader opening Help usually wants to type.
@@ -84,15 +93,25 @@ export function HelpDialog({ initialTopicId, onClose }: { initialTopicId: string
           <div>
             <h2 id="help-title" className="text-[15px] font-semibold text-slate-100">OnRecord Studio Help</h2>
             <p className="text-[12px] text-slate-400">Version {__APP_VERSION__}. Cmd/Ctrl+Shift+/ opens Help from anywhere. Esc closes it.</p>
+            {supportNotice ? <p role="alert" className="mt-1 text-[12px] text-amber-200">{supportNotice}</p> : null}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close help"
-            className="focus-ring grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-slate-700 text-slate-300 hover:bg-slate-800"
-          >
-            <Icon name="x" className="h-4 w-4" />
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void openSupport()}
+              className="focus-ring h-9 rounded-xl border border-slate-700 px-3 text-[12px] font-medium text-slate-200 hover:bg-slate-800"
+            >
+              Support
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close help"
+              className="focus-ring grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-slate-700 text-slate-300 hover:bg-slate-800"
+            >
+              <Icon name="x" className="h-4 w-4" />
+            </button>
+          </div>
         </header>
 
         <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[300px_minmax(0,1fr)]">

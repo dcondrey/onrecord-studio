@@ -58,6 +58,7 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::account::sign_out,
         commands::account::delete_account,
         commands::account::start_checkout,
+        commands::account::start_billing_portal,
         commands::account::activate_this_device,
         commands::ingest::pause_source_sync,
         commands::ingest::resume_source_sync,

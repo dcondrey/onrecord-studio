@@ -4,7 +4,7 @@
     "title": "Start here",
     "group": "Getting started",
     "summary": "What OnRecord Studio does and the order to work in.",
-    "keywords": ["welcome", "overview", "workflow", "first", "begin", "tour"],
+    "keywords": ["welcome", "overview", "workflow", "first", "begin", "tour", "support", "bug", "feedback", "contact"],
     "sections": [
       {
         "paragraphs": [
@@ -25,6 +25,10 @@
       {
         "heading": "Nine views",
         "paragraphs": ["San Diego, Patterns, Analysis, Evidence, Activity, Briefing, Story desk, Meetings and Compare. Switch with the sidebar, the command palette, or Cmd/Ctrl+1 to 9."]
+      },
+      {
+        "heading": "Support",
+        "paragraphs": ["Questions, bug reports and feature requests go to github.com/writerslogic/support. The Support button at the top of Help opens it in your browser. Include the version shown in the Help header and, for a failed sync or export, the Activity view error text. Never attach confidential source documents to a public report."]
       }
     ],
     "views": [],
@@ -142,5 +146,48 @@
     "findingKinds": [],
     "commandGroups": ["intent"],
     "related": ["keyboard-shortcuts", "measured-vs-unassessed"]
+  },
+  {
+    "id": "whats-next",
+    "title": "What's next: planned enhancements",
+    "group": "Getting started",
+    "summary": "The enhancements planned after this beta, in rough order, and the rule every one of them must obey.",
+    "keywords": ["roadmap", "planned", "coming", "future", "beta", "next", "release", "upcoming", "feature request"],
+    "sections": [
+      {
+        "paragraphs": [
+          "This is a beta. The list below is what is planned, in rough order; it is not a promise of dates, and the order can change with what users report at github.com/writerslogic/support. Every item obeys one rule: a learned model or a heuristic may suggest where to look, but nothing becomes a finding without a deterministic check and a stated confidence basis."
+        ]
+      },
+      {
+        "heading": "Near term",
+        "items": [
+          "Standing searches: save a search and have it re-run after each sync against a recorded corpus state, so a changed answer is reported with the before and after snapshot digests.",
+          "Agency trends over time: closure latency, violation rate and spending compared across fiscal years, and outcome-per-dollar views where outcome data such as 311 resolutions or shelter placements is imported.",
+          "Organization seats: assign purchased seats to colleagues and manage them from the account menu.",
+          "Monthly and yearly subscription options at checkout."
+        ]
+      },
+      {
+        "heading": "Later",
+        "items": [
+          "Redaction production: redact at render time with a proof that the published excerpt comes from the withheld original, so selective disclosure can be verified without releasing the whole file.",
+          "Meeting video and audio transcription with timestamped spans that cite back to the recording, keeping the same absence rules as document text.",
+          "Cross-referencing collected records against open datasets of companies, officials and contracts.",
+          "On-device models for document classification, template-family detection and person or organization extraction, each gated on a labeled evaluation set before it ships."
+        ]
+      },
+      {
+        "heading": "Far",
+        "items": [
+          "Filing requests from the app by email or portal submission. Today the app never sends anything to an agency; drafts are text you submit yourself, and that stays true until a filing channel exists.",
+          "Exchanging case packets with a verified identity behind the signature. Today a signature proves integrity, not who signed."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [],
+    "related": ["start-here", "research-snapshot", "shared-folder-collaboration"]
   }
 ]

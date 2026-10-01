@@ -450,6 +450,23 @@ impl DirectGate {
             .map_err(|error| AppError::Network(error.to_string()))
     }
 
+    pub async fn start_billing_portal(self: &Arc<Self>) -> Result<String, AppError> {
+        let worker = self.clone();
+        let token = tokio::task::spawn_blocking(move || match worker.account.session() {
+            Ok(SessionResult::SignedIn(_)) => worker.account.access_token(),
+            Ok(_) => Err(AppError::License(
+                "Sign in to manage your subscription.".to_string(),
+            )),
+            Err(error) => Err(error),
+        })
+        .await
+        .map_err(|error| AppError::Internal(format!("Account worker failed: {error}")))??;
+        self.server
+            .start_billing_portal(&token)
+            .await
+            .map_err(|error| AppError::Network(error.to_string()))
+    }
+
     pub fn begin_sign_in(&self, provider: &str) -> Result<SignInResult, AppError> {
         self.account.sign_in(provider)
     }
@@ -680,6 +697,12 @@ mod tests {
             _: Option<u32>,
         ) -> BoxFuture<'a, Result<String, FetchError>> {
             Box::pin(async { Ok("https://checkout.stripe.com/c/pay/x".to_string()) })
+        }
+        fn start_billing_portal<'a>(
+            &'a self,
+            _: &'a AccessToken,
+        ) -> BoxFuture<'a, Result<String, FetchError>> {
+            Box::pin(async { Ok("https://billing.stripe.com/p/session/x".to_string()) })
         }
     }
 
