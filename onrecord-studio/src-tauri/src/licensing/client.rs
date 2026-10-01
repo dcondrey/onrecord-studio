@@ -16,11 +16,12 @@ pub const DELETE_ACCOUNT_URL: &str =
 pub const CHECKOUT_URL: &str = "https://auth.writerslogic.com/functions/v1/onrecord-checkout";
 const CHECKOUT_HOST: &str = "checkout.stripe.com";
 pub const MAX_CHECKOUT_QUANTITY: u32 = 999;
-/// The shared `stripe-portal` function: it looks the customer up by the signed-in user, so it
-/// needs no OnRecord-specific body beyond where the browser should return to.
-pub const BILLING_PORTAL_URL: &str = "https://auth.writerslogic.com/functions/v1/stripe-portal";
+/// OnRecord's own portal function: it looks the customer up by the signed-in user and binds the
+/// session to the OnRecord portal configuration (cancel at period end, seat quantity, payment
+/// method). The return URL is fixed server-side; the body is empty.
+pub const BILLING_PORTAL_URL: &str =
+    "https://auth.writerslogic.com/functions/v1/onrecord-billing-portal";
 const BILLING_PORTAL_HOST: &str = "billing.stripe.com";
-const BILLING_PORTAL_RETURN_URL: &str = "https://writerslogic.com/onrecord";
 pub const SEATS_URL: &str = "https://auth.writerslogic.com/functions/v1/onrecord-seats";
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -166,12 +167,6 @@ pub fn validate_billing_portal_url(url: &str) -> Result<String, FetchError> {
 #[derive(Deserialize)]
 struct EntitlementResponse {
     token: String,
-}
-
-#[derive(Serialize)]
-struct BillingPortalRequest {
-    #[serde(rename = "returnUrl")]
-    return_url: &'static str,
 }
 
 #[derive(Deserialize)]
@@ -369,12 +364,14 @@ impl AccountServer for HttpAccountServer {
                 .client
                 .post(&self.portal_url)
                 .bearer_auth(access_token.expose())
-                .json(&BillingPortalRequest {
-                    return_url: BILLING_PORTAL_RETURN_URL,
-                })
                 .send()
                 .await
                 .map_err(transport)?;
+            if response.status() == reqwest::StatusCode::NOT_FOUND {
+                return Err(FetchError::Refused(
+                    "No billing account exists for this sign-in yet; subscribe first.".to_string(),
+                ));
+            }
             if !response.status().is_success() {
                 return Err(status_error(response.status()));
             }
