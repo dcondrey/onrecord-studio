@@ -17,6 +17,7 @@
 use super::{builder::SIGNATURE_LIMITATIONS, SourceDocument, SourceDocuments};
 use crate::analysis::gaps::EvidenceGap;
 use crate::integrity::sha256_hex;
+use crate::storage::pii::mask_pii;
 use crate::types::report::{
     QuoteStatus, ReportCitation, ReportClaim, ReportConfidence, ReportEvidenceBasis,
     VerifiableReportManifest, WithheldItem,
@@ -215,13 +216,26 @@ fn does_not_show(claim: &ReportClaim, sources: &[PacketSource], gap_count: usize
     lines
 }
 
-fn build_source(citation: ReportCitation, documents: &SourceDocuments) -> PacketSource {
+fn build_source(
+    citation: ReportCitation,
+    documents: &SourceDocuments,
+) -> Result<PacketSource, String> {
+    // The file name is masked by the builder; a URL cannot be masked and stay valid, so one that
+    // carries a personal value is not reproduced.
     let download_url = documents
         .get(&(citation.portal_key.clone(), citation.document_id))
         .filter(|document: &&SourceDocument| document.is_public())
         .and_then(|document| document.download_url.as_deref())
         .and_then(public_url);
-    PacketSource {
+    let download_url = match download_url {
+        Some(url) => mask_pii(&url)
+            .map_err(|error| format!("Failed to screen a download URL: {error}"))?
+            .findings
+            .is_empty()
+            .then_some(url),
+        None => None,
+    };
+    Ok(PacketSource {
         portal_key: citation.portal_key,
         document_id: citation.document_id,
         label: citation.label,
@@ -235,7 +249,7 @@ fn build_source(citation: ReportCitation, documents: &SourceDocuments) -> Packet
         quote_status: citation.quote_status,
         quote_truncated: citation.quote_truncated,
         pii_masked_count: citation.pii_masked_count,
-    }
+    })
 }
 
 fn gap_sweep_name(failure: &str) -> &str {
@@ -281,14 +295,14 @@ pub fn build_packet(
                 .filter(|gap| gap.detector_slug == claim.source_detector)
                 .map(|gap| gap.key.clone())
                 .collect();
-            let sources: Vec<PacketSource> = claim
+            let sources = claim
                 .citations
                 .iter()
                 .cloned()
                 .map(|citation| build_source(citation, documents))
-                .collect();
+                .collect::<Result<Vec<PacketSource>, String>>()?;
             let does_not_show = does_not_show(&claim, &sources, gap_keys.len());
-            PacketClaim {
+            Ok(PacketClaim {
                 finding_id: claim.finding_id,
                 kind: claim.kind,
                 severity: claim.severity,
@@ -304,9 +318,9 @@ pub fn build_packet(
                 sources,
                 gap_keys,
                 does_not_show,
-            }
+            })
         })
-        .collect();
+        .collect::<Result<_, String>>()?;
     claims.sort_by(|a, b| a.finding_id.cmp(&b.finding_id));
 
     let mut limitations: Vec<String> = manifest
@@ -356,12 +370,23 @@ fn single_line(value: &str) -> String {
     value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+/// One line of prose with `<` escaped, so text from a finding or a document cannot open raw HTML
+/// in a Markdown viewer that passes it through.
+fn prose(value: &str) -> String {
+    single_line(value).replace('<', "&lt;")
+}
+
 fn code(value: &str) -> String {
     format!("`{}`", single_line(value).replace('`', "'"))
 }
 
 fn block_quote(value: &str) -> String {
+    // A lone carriage return ends a line in Markdown but not in `str::lines`, so a line that
+    // starts after one would escape the quote and could read as a heading.
     value
+        .replace("\r\n", "\n")
+        .replace('\r', "\n")
+        .replace('<', "&lt;")
         .lines()
         .map(|line| {
             let line = line.trim_end();
@@ -410,7 +435,7 @@ pub fn render_markdown(packet: &EvidencePacket) -> String {
         out.push_str(&format!(
             "\n{CLAIM_HEADING_PREFIX}{}: {}\n\n",
             index + 1,
-            single_line(&claim.headline)
+            prose(&claim.headline)
         ));
         out.push_str(&format!("- Basis: {}\n", claim.basis_label));
         out.push_str(&format!("- Finding: {}\n", code(&claim.finding_id)));
@@ -477,7 +502,7 @@ pub fn render_markdown(packet: &EvidencePacket) -> String {
         }
         out.push_str("\nWhat this does not show:\n\n");
         for line in &claim.does_not_show {
-            out.push_str(&format!("- {}\n", single_line(line)));
+            out.push_str(&format!("- {}\n", prose(line)));
         }
         if !claim.gap_keys.is_empty() {
             let keys: Vec<String> = claim.gap_keys.iter().map(|key| code(key)).collect();
@@ -500,9 +525,9 @@ pub fn render_markdown(packet: &EvidencePacket) -> String {
             "- {} ({}): {} Cannot be tested: {} Records request: {}\n",
             code(&gap.key),
             code(&gap.detector_slug),
-            single_line(&gap.route),
-            single_line(&gap.blocked),
-            single_line(&gap.records_request)
+            prose(&gap.route),
+            prose(&gap.blocked),
+            prose(&gap.records_request)
         ));
     }
     out.push_str("\n## Withheld\n\n");
@@ -514,12 +539,12 @@ pub fn render_markdown(packet: &EvidencePacket) -> String {
             "- {} x {}: {}\n",
             code(&format!("{:?}", item.reason)),
             item.count,
-            single_line(&item.explanation)
+            prose(&item.explanation)
         ));
     }
     out.push_str("\n## Limitations\n\n");
     for line in &content.limitations {
-        out.push_str(&format!("- {}\n", single_line(line)));
+        out.push_str(&format!("- {}\n", prose(line)));
     }
     out
 }

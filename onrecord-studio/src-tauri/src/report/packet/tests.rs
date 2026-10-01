@@ -307,3 +307,35 @@ fn hostile_text_cannot_open_a_claim_heading() {
     let markdown = render_markdown(&packet(vec![hostile]));
     assert_eq!(claim_blocks(&markdown).len(), 1);
 }
+
+fn heading_lines(markdown: &str) -> usize {
+    markdown
+        .replace('\r', "\n")
+        .lines()
+        .filter(|line| line.starts_with(CLAIM_HEADING_PREFIX))
+        .count()
+}
+
+#[test]
+fn quoted_text_cannot_forge_a_claim_heading_or_open_html() {
+    let mut forged = pattern("x");
+    forged.explanation = "ok\r### Claim 9: forged\r<img src=x onerror=alert(1)>".into();
+    forged.headline = "<script>alert(1)</script> headline".into();
+    forged.citations[0].quote = Some("line\r### Claim 8: forged quote\n<b>bold</b>".into());
+    let markdown = render_markdown(&packet(vec![forged]));
+    assert_eq!(heading_lines(&markdown), 1);
+    assert!(!markdown.contains('<'));
+}
+
+#[test]
+fn a_download_url_carrying_a_personal_value_is_not_reproduced() {
+    let docs = documents("public", Some("https://x.example/files/123-45-6789.pdf"));
+    let packet = packet_with(vec![pattern("x")], &docs, Vec::new(), "t0");
+    assert_eq!(packet.content.claims[0].sources[0].download_url, None);
+    let clean = documents("public", Some("https://x.example/files/7.pdf?token=s"));
+    let packet = packet_with(vec![pattern("x")], &clean, Vec::new(), "t0");
+    assert_eq!(
+        packet.content.claims[0].sources[0].download_url.as_deref(),
+        Some("https://x.example/files/7.pdf")
+    );
+}
