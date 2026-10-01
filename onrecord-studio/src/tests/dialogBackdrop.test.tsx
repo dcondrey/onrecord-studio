@@ -23,6 +23,16 @@ function Host() {
 describe('DialogBackdrop', () => {
   afterEach(cleanup);
 
+  it('leaves focus on a child that claimed it with autoFocus', () => {
+    render(
+      <DialogBackdrop labelledBy="t" onClose={() => {}} className="x">
+        <h2 id="t">Paste</h2>
+        <textarea aria-label="body" autoFocus />
+      </DialogBackdrop>,
+    );
+    expect(document.activeElement).toBe(screen.getByLabelText('body'));
+  });
+
   it('keeps Tab inside, closes on Escape, and returns focus to the opener', () => {
     render(<Host />);
     const opener = screen.getByText('open');

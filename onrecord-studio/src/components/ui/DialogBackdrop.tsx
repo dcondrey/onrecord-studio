@@ -7,11 +7,13 @@ import { useDialogFocus } from '../licensing/useDialogFocus';
  */
 export default function DialogBackdrop({
   labelledBy,
+  label,
   onClose,
   className,
   children,
 }: {
-  labelledBy: string;
+  labelledBy?: string;
+  label?: string;
   onClose: () => void;
   className: string;
   children: ReactNode;
@@ -24,6 +26,7 @@ export default function DialogBackdrop({
       role="dialog"
       aria-modal="true"
       aria-labelledby={labelledBy}
+      aria-label={label}
       className={`${className} outline-none`}
       onKeyDown={onKeyDown}
     >
