@@ -3913,33 +3913,7 @@ impl DuckDbRepository {
         let search_tokens = core_query_tokens(search_term)
             .map_err(|message| AppError::DataParsing(message.to_string()))?;
         let fts_query = (!search_tokens.is_empty()).then_some(search_term.trim().to_string());
-        let token_predicate = if search_tokens.is_empty() {
-            "TRUE".to_string()
-        } else {
-            let values = search_tokens
-                .iter()
-                .map(|token| format!("'{}'", token.replace('\'', "''")))
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!(
-                "(SELECT COUNT(DISTINCT matched.token)
-                  FROM (
-                    SELECT LEFT(LOWER(UNNEST(regexp_split_to_array(
-                        concat_ws(' ', requests.title, requests.description, requests.rpid,
-                            CAST(requests.id AS VARCHAR)), '[^\\p{{L}}\\p{{N}}]+'))), 128) AS token
-                    UNION ALL
-                    SELECT document_search_tokens.token
-                    FROM documents
-                    INNER JOIN document_search_tokens
-                      ON document_search_tokens.document_id = documents.id
-                     AND document_search_tokens.portal_subdomain = documents.portal_subdomain
-                    WHERE documents.request_id = requests.id
-                      AND documents.portal_subdomain = requests.portal_subdomain
-                  ) matched
-                  WHERE matched.token IN ({values})) = {}",
-                search_tokens.len()
-            )
-        };
+        let filters = request_search_filters(&search_tokens);
         let agency_id = agency_id.map(i64::try_from).transpose().map_err(|_| {
             AppError::DataParsing("Agency identifier exceeds SQLite capacity".to_string())
         })?;
@@ -3990,19 +3964,7 @@ impl DuckDbRepository {
                  LEFT JOIN agencies
                    ON agencies.id = requests.agency_id
                   AND agencies.portal_subdomain = requests.portal_subdomain
-                 WHERE (?1 IS NULL OR requests.portal_subdomain = ?1)
-                   AND (?2 IS NULL OR requests.agency_id = ?2)
-                   AND (?3 IS NULL OR LOWER(requests.status) = LOWER(?3))
-                   AND (?4 IS NULL OR EXISTS (
-                        SELECT 1
-                        FROM case_audits
-                        INNER JOIN document_integrity_flags
-                          ON document_integrity_flags.audit_id = case_audits.audit_id
-                        WHERE case_audits.target_request_id = requests.id
-                          AND case_audits.target_subdomain = requests.portal_subdomain
-                          AND document_integrity_flags.flag_type = ?4
-                   ))
-                   AND (?5 IS NULL OR {token_predicate})
+                 WHERE {filters}
                  ORDER BY requests.created_at DESC, requests.portal_subdomain, requests.id
                  LIMIT ?6"
             );
@@ -6553,6 +6515,54 @@ fn upsert_statutory_extension(
             ))
         })?;
     Ok(())
+}
+
+/// The WHERE conditions shared by every request search: `?1` portal, `?2` agency, `?3` status,
+/// `?4` policy flag, `?5` the free-text term (NULL when none). Counting and paging reuse this
+/// text so a total can never describe a different set than the pages it is shown beside.
+pub(crate) fn request_search_filters(search_tokens: &[String]) -> String {
+    let token_predicate = if search_tokens.is_empty() {
+        "TRUE".to_string()
+    } else {
+        let values = search_tokens
+            .iter()
+            .map(|token| format!("'{}'", token.replace('\'', "''")))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(
+            "(SELECT COUNT(DISTINCT matched.token)
+              FROM (
+                SELECT LEFT(LOWER(UNNEST(regexp_split_to_array(
+                    concat_ws(' ', requests.title, requests.description, requests.rpid,
+                        CAST(requests.id AS VARCHAR)), '[^\\p{{L}}\\p{{N}}]+'))), 128) AS token
+                UNION ALL
+                SELECT document_search_tokens.token
+                FROM documents
+                INNER JOIN document_search_tokens
+                  ON document_search_tokens.document_id = documents.id
+                 AND document_search_tokens.portal_subdomain = documents.portal_subdomain
+                WHERE documents.request_id = requests.id
+                  AND documents.portal_subdomain = requests.portal_subdomain
+              ) matched
+              WHERE matched.token IN ({values})) = {}",
+            search_tokens.len()
+        )
+    };
+    format!(
+        "(?1 IS NULL OR requests.portal_subdomain = ?1)
+           AND (?2 IS NULL OR requests.agency_id = ?2)
+           AND (?3 IS NULL OR LOWER(requests.status) = LOWER(?3))
+           AND (?4 IS NULL OR EXISTS (
+                SELECT 1
+                FROM case_audits
+                INNER JOIN document_integrity_flags
+                  ON document_integrity_flags.audit_id = case_audits.audit_id
+                WHERE case_audits.target_request_id = requests.id
+                  AND case_audits.target_subdomain = requests.portal_subdomain
+                  AND document_integrity_flags.flag_type = ?4
+           ))
+           AND (?5 IS NULL OR {token_predicate})"
+    )
 }
 
 fn map_request_search_row(row: &Row<'_>) -> duckdb::Result<RequestSearchRow> {

@@ -87,6 +87,10 @@ export interface NativeCommandMap {
   run_analytical_sql: { args: { sql: string; limit?: number | null }; result: Types.SqlQueryResult };
   export_analytical_sql_csv: { args: { sql: string; outputPath: string; limit?: number | null }; result: Types.SqlExportResult };
   query_audit_records: { args: { searchTerm: string; portalKey?: string | null; agencyId?: number | null; status?: string | null; policyDeviation?: string | null; limit?: number | null }; result: Types.RequestSearchResult[] };
+  query_audit_records_page: { args: { searchTerm: string; portalKey?: string | null; agencyId?: number | null; status?: string | null; policyDeviation?: string | null; cursor?: string | null; pageSize: number }; result: Types.AuditRecordPage };
+  count_audit_records: { args: { searchTerm: string; portalKey?: string | null; agencyId?: number | null; status?: string | null; policyDeviation?: string | null }; result: Types.AuditRecordCount };
+  page_corpus_entity_neighbors: { args: { entityId: string; cursor?: string | null; pageSize: number; filter?: Types.EntityNeighborFilter | null }; result: Types.EntityNeighborPage | null };
+  count_corpus_entity_neighbors: { args: { entityId: string; filter?: Types.EntityNeighborFilter | null }; result: Types.EntityNeighborCounts | null };
   export_legal_brief: { args: { requestId: number; portalKey: string; targetPath?: string | null; authorName?: string | null }; result: Types.LegalBriefExportResult };
   export_case_evidence_package: { args: { caseId: string; targetPath?: string | null; withheldCitations: Types.WithheldCitationRequest[] }; result: Types.CaseEvidencePackageResult };
   case_export_chain: { args: { caseId: string }; result: Types.CaseExportLedgerEntry[] };
