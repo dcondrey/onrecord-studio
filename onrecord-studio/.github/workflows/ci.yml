@@ -34,8 +34,15 @@ jobs:
       - run: npm ci
       - name: IPC contract
         run: npm run check:ipc
+      - name: Help coverage
+        run: npm run check:help
+      - name: Methods document
+        run: npm run check:methods
       - name: Mac App Store configuration
         run: npm run check:app-store-config
+      - name: Direct-distribution configuration
+        # notarize-direct --check needs Xcode tools; the macOS bundle job covers the full check.
+        run: node scripts/prepare-direct.mjs --check
       - name: TypeScript
         run: npx tsc --noEmit
       - name: ESLint
@@ -125,9 +132,13 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
             librsvg2-dev patchelf libglib2.0-dev
       - run: npm ci
+      - name: Direct-distribution tooling
+        if: matrix.os == 'macos-latest'
+        run: npm run check:direct-config
       - name: Build bundle
         # Unsigned on CI: signing and notarization require secrets this workflow does not hold.
-        # See docs/release.md for the credentials a release workflow must add.
+        # Only the macOS builds are distributed (docs/release.md, docs/release-direct.md); the
+        # Windows and Linux bundles are compile evidence.
         run: npx tauri build --ci
       - uses: actions/upload-artifact@v4
         with:
