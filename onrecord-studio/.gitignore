@@ -8,6 +8,8 @@
 .AppleDouble
 .LSOverride
 Icon?
+# `Icon?` also matches `icons` on case-insensitive file systems; the app icons are source.
+!/src-tauri/icons/
 ._*
 .Spotlight-V100
 .Trashes
