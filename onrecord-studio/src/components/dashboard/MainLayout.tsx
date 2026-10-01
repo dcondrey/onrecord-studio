@@ -36,7 +36,8 @@ export default function MainLayout() {
   // Request selection lives in the shared workspace store and survives view switches. The open
   // document chunk is session-local and is deliberately cleared when the selected request changes.
   const workspaceView = useAppStore((state) => state.workspaceView);
-  const [evidenceMode, setEvidenceMode] = useState<'records' | 'timeline'>('records');
+  const evidenceMode = useAppStore((state) => state.evidenceMode);
+  const setEvidenceMode = useAppStore((state) => state.setEvidenceMode);
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
   const evidenceRefreshRequests = useAppStore((state) => state.evidenceRefreshRequests);
   const results = useAppStore((state) => state.filteredResults);

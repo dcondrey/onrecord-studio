@@ -33,6 +33,7 @@ export interface IngestionMetrics {
 }
 
 export type WorkspaceView = 'overview' | 'story' | 'patterns' | 'analysis' | 'evidence' | 'activity' | 'briefing' | 'meetings' | 'compare';
+export type EvidenceMode = 'records' | 'timeline';
 export type AppTheme = ThemePreference;
 export type AppMotion = MotionPreference;
 export type AppContrast = ContrastPreference;
@@ -55,6 +56,8 @@ interface AppState {
   // Search state mirrors the four filters in the supported native query contract; qualifier text
   // is parsed at the search boundary and unsupported syntax never enters this store.
   workspaceView: WorkspaceView;
+  evidenceMode: EvidenceMode;
+  setEvidenceMode: (mode: EvidenceMode) => void;
   theme: AppTheme;
   motion: AppMotion;
   contrast: AppContrast;
@@ -199,6 +202,7 @@ const emptyMetrics = (): IngestionMetrics => ({
 
 export const useAppStore = create<AppState>((set) => ({
   workspaceView: 'overview',
+  evidenceMode: 'records',
   theme: readThemePreference(),
   motion: readMotionPreference(),
   contrast: readContrastPreference(),
@@ -247,6 +251,7 @@ export const useAppStore = create<AppState>((set) => ({
   postIngestBriefOpen: false,
   lastFindingsSeenAt: null,
   setWorkspaceView: (workspaceView) => set({ workspaceView, isSidebarOpen: false }),
+  setEvidenceMode: (evidenceMode) => set({ evidenceMode }),
   setTheme: (theme) => set({ theme }),
   setMotion: (motion) => set({ motion }),
   setContrast: (contrast) => set({ contrast }),

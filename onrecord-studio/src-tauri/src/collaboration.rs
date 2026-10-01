@@ -222,6 +222,17 @@ pub fn list_packets(folder: &str) -> Result<Vec<SharedFolderPacket>, AppError> {
     Ok(packets)
 }
 
+#[cfg(unix)]
+fn same_file(left: &fs::Metadata, right: &fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    left.dev() == right.dev() && left.ino() == right.ino()
+}
+
+#[cfg(not(unix))]
+fn same_file(_left: &fs::Metadata, _right: &fs::Metadata) -> bool {
+    true
+}
+
 pub fn read_packet(folder: &str, file_name: &str) -> Result<String, AppError> {
     validate_packet_file_name(file_name)?;
     let path = checked_folder(folder)?.join(file_name);
@@ -230,12 +241,19 @@ pub fn read_packet(folder: &str, file_name: &str) -> Result<String, AppError> {
     if !metadata.file_type().is_file() {
         return Err(invalid("that entry is not a regular file"));
     }
+    let file = File::open(&path)
+        .map_err(|error| invalid(format!("that packet cannot be read: {error}")))?;
+    // The folder is writable by others: refuse a file that was swapped for a link between the
+    // check above and this open.
+    let opened = file
+        .metadata()
+        .map_err(|error| invalid(format!("that packet cannot be read: {error}")))?;
+    if !opened.is_file() || !same_file(&metadata, &opened) {
+        return Err(invalid("that entry changed while it was being read"));
+    }
     let mut text = String::new();
-    File::open(&path)
-        .and_then(|file| {
-            file.take(MAXIMUM_PACKET_FILE_BYTES + 1)
-                .read_to_string(&mut text)
-        })
+    file.take(MAXIMUM_PACKET_FILE_BYTES + 1)
+        .read_to_string(&mut text)
         .map_err(|error| invalid(format!("that packet cannot be read: {error}")))?;
     if text.len() as u64 > MAXIMUM_PACKET_FILE_BYTES {
         return Err(invalid(format!(

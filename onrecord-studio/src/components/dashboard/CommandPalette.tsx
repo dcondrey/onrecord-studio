@@ -34,6 +34,7 @@ export default function CommandPalette() {
   const previousFocus = useRef<HTMLElement | null>(null);
   const modifier = isApplePlatform() ? '⌘' : 'Ctrl';
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
+  const setEvidenceMode = useAppStore((state) => state.setEvidenceMode);
   const setTheme = useAppStore((state) => state.setTheme);
   const setMotion = useAppStore((state) => state.setMotion);
   const setContrast = useAppStore((state) => state.setContrast);
@@ -103,6 +104,18 @@ export default function CommandPalette() {
       shortcut: `${modifier}${command.shortcutIndex}`,
       perform: () => setWorkspaceView(command.view),
     })),
+    {
+      id: 'open-timeline',
+      label: 'Show evidence timeline',
+      detail: 'Requests, findings and watch changes on one dated list',
+      group: 'Navigate',
+      icon: 'activity',
+      keywords: 'timeline chronology dates events history sequence',
+      perform: () => {
+        setEvidenceMode('timeline');
+        setWorkspaceView('evidence');
+      },
+    },
     {
       id: 'toggle-sidebar',
       label: 'Toggle navigation sidebar',
@@ -182,7 +195,7 @@ export default function CommandPalette() {
       keywords: command.keywords,
       perform: () => setContrast(command.contrast),
     })),
-  ], [modifier, openSubjectDossier, setContrast, setMotion, setTheme, setWorkspaceView, toggleSidebarCollapsed]);
+  ], [modifier, openSubjectDossier, setContrast, setEvidenceMode, setMotion, setTheme, setWorkspaceView, toggleSidebarCollapsed]);
 
   const filteredActions = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
