@@ -27,6 +27,8 @@ describe('SignerTrustNotice', () => {
     expect(screen.queryByText(/Signed by Maria/)).toBeNull();
     rerender(<SignerTrustNotice signerKeyId={KEY} contributors={contributors([{ keyId: KEY, label: 'Maria' }])} />);
     expect(screen.getByText(/Signed by Maria/)).toBeTruthy();
+    rerender(<SignerTrustNotice signerKeyId={KEY.toUpperCase()} contributors={contributors([{ keyId: KEY, label: 'Maria' }])} />);
+    expect(screen.getByText(/Signed by Maria/)).toBeTruthy();
   });
 });
 

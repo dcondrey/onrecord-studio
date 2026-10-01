@@ -61,6 +61,16 @@ fn validate_mark(
     signer_key_id: &str,
 ) -> Result<DocumentAnnotation, AppError> {
     Uuid::parse_str(&mark.id).map_err(|_| invalid("a packet annotation has no valid id"))?;
+    // The same bounds a local mark's portal key meets; a packet is not a way around them.
+    let portal_key = clean_text(
+        "portal key",
+        &packet.portal_key,
+        MAXIMUM_PORTAL_KEY_CHARACTERS,
+        false,
+    )?;
+    if portal_key.is_empty() || portal_key != packet.portal_key {
+        return Err(invalid("a packet annotation has an invalid portal key"));
+    }
     if mark.portal_key != packet.portal_key || mark.document_id != packet.document_id {
         return Err(invalid(
             "a packet annotation belongs to a different document than the packet",
@@ -177,6 +187,23 @@ pub fn apply_import(
     if document.annotations.len() + plan.to_add.len() > MAXIMUM_ANNOTATIONS {
         return Err(invalid(format!(
             "importing would exceed the {MAXIMUM_ANNOTATIONS} annotations kept; delete some first"
+        )));
+    }
+    let regions_in = |marks: &[DocumentAnnotation]| {
+        marks
+            .iter()
+            .filter(|mark| {
+                mark.page_region.is_some()
+                    && mark.portal_key == packet.portal_key
+                    && mark.document_id == packet.document_id
+            })
+            .count()
+    };
+    if regions_in(&document.annotations) + regions_in(&plan.to_add)
+        > MAXIMUM_PAGE_REGIONS_PER_DOCUMENT
+    {
+        return Err(invalid(format!(
+            "importing would exceed the {MAXIMUM_PAGE_REGIONS_PER_DOCUMENT} page regions kept per document; delete some first"
         )));
     }
     let added = plan.to_add.len();
@@ -313,6 +340,26 @@ mod tests {
         let result = apply_import(&mut local, &packet(vec![region_mark(A)]), "signer").unwrap();
         assert_eq!(result.added, 1);
         assert!(local.annotations[0].page_region.is_some());
+    }
+
+    #[test]
+    fn an_import_meets_the_same_key_and_region_limits_as_a_local_mark() {
+        let mut local = AnnotationDocument::default();
+        let long_key = "k".repeat(MAXIMUM_PORTAL_KEY_CHARACTERS + 1);
+        let mut long = packet(vec![mark(A, "x")]);
+        long.portal_key = long_key.clone();
+        long.annotations[0].portal_key = long_key;
+        assert!(apply_import(&mut local, &long, "signer").is_err());
+
+        for index in 0..MAXIMUM_PAGE_REGIONS_PER_DOCUMENT {
+            local
+                .annotations
+                .push(region_mark(&format!("00000000-0000-4000-8000-{index:012}")));
+        }
+        assert!(apply_import(&mut local, &packet(vec![region_mark(A)]), "signer").is_err());
+        assert_eq!(local.annotations.len(), MAXIMUM_PAGE_REGIONS_PER_DOCUMENT);
+        // A text mark is not a region and still fits.
+        assert!(apply_import(&mut local, &packet(vec![mark(B, "text")]), "signer").is_ok());
     }
 
     #[test]

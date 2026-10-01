@@ -107,6 +107,9 @@ fn link_hash(
     Ok(sha256_hex(&bytes))
 }
 
+/// How far ahead of this computer's clock an imported judgment may be dated, for clock skew.
+const MAXIMUM_FUTURE_SKEW: Duration = Duration::days(1);
+
 fn canonical_time(value: &str) -> bool {
     DateTime::parse_from_rfc3339(value).is_ok_and(|parsed| {
         parsed
@@ -372,6 +375,7 @@ pub fn plan_import(
         .map(|link| (link.entry.id.as_str(), &link.entry))
         .collect();
     let mut seen = BTreeSet::new();
+    let latest_accepted = Utc::now() + MAXIMUM_FUTURE_SKEW;
     let mut plan = ImportPlan {
         additions: Vec::new(),
         already_present: 0,
@@ -379,6 +383,15 @@ pub fn plan_import(
     };
     for entry in incoming {
         validate_entry(entry)?;
+        // Replay lets the latest entry for a pair win, so an entry dated far ahead would override
+        // every later local judgment of that pair and push the next local timestamp out of range.
+        if DateTime::parse_from_rfc3339(&entry.decided_at)
+            .is_ok_and(|time| time.with_timezone(&Utc) > latest_accepted)
+        {
+            return Err(invalid(
+                "the package holds a judgment dated more than a day in the future; it was not imported",
+            ));
+        }
         if !seen.insert(entry.id.as_str()) {
             return Err(invalid("the package repeats an entry id"));
         }
@@ -645,5 +658,18 @@ mod tests {
         )
         .unwrap();
         assert_eq!((again.already_present, again.additions.len()), (1, 0));
+    }
+
+    #[test]
+    fn an_imported_judgment_dated_in_the_far_future_is_refused() {
+        let local = LedgerDocument::default();
+        let mut far = entry("far", "01.000", "a", "b", Verdict::Different);
+        far.decided_at = "9999-12-31T23:59:59.999Z".to_string();
+        assert!(plan_import(&local, &[far]).is_err());
+
+        let mut soon = entry("soon", "01.000", "a", "b", Verdict::Different);
+        soon.decided_at =
+            (Utc::now() + Duration::hours(1)).to_rfc3339_opts(SecondsFormat::Millis, true);
+        assert_eq!(plan_import(&local, &[soon]).unwrap().additions.len(), 1);
     }
 }
