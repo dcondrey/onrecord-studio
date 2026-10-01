@@ -2119,6 +2119,15 @@ impl DuckDbRepository {
                     .execute(
                         "UPDATE ingestion_task_frontier
                      SET run_id = ?1, status = 'PENDING', lease_expires_at = NULL,
+                         -- An operator stop interrupted a lease on purpose; only interruptions
+                         -- nobody chose count toward abandoning the task.
+                         attempts = CASE
+                             WHEN status = 'LEASED' AND run_id IN (
+                                 SELECT run_id FROM portal_sync_runs
+                                 WHERE portal_subdomain = ?2 AND status = 'CANCELLED'
+                             ) THEN greatest(attempts - 1, 0)
+                             ELSE attempts
+                         END,
                          updated_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
                      WHERE source_key = ?2
                        AND run_id IN (
@@ -5119,6 +5128,67 @@ impl DuckDbRepository {
         })
         .await?;
         Ok(flags)
+    }
+
+    /// Recomputes every stored CPRA finding once after the deadline rule changes, so findings the
+    /// old rule produced do not keep standing until each request happens to sync again. A request
+    /// whose dates cannot be evaluated is skipped, as it would be on sync; the version is recorded
+    /// only after every request was attempted, so an interrupted pass resumes on the next launch.
+    pub async fn recompute_cpra_findings_for_rule_change(&self) -> Result<usize, AppError> {
+        const RULE_KEY: &str = "cpra_deadline";
+        let current = crate::analysis::statute::CPRA_RULE_VERSION;
+        let stale_requests = self
+            .query_connection("Find requests under an older CPRA rule", move |conn| {
+                let recorded = conn
+                    .query_row(
+                        "SELECT version FROM analysis_rule_versions WHERE rule_key = ?1",
+                        params![RULE_KEY],
+                        |row| row.get::<_, i64>(0),
+                    )
+                    .optional()
+                    .map_err(|error| AppError::Storage(error.to_string()))?;
+                if recorded.is_some_and(|version| version >= current) {
+                    return Ok(None);
+                }
+                let mut statement = conn
+                    .prepare(
+                        "SELECT id, portal_subdomain FROM requests ORDER BY portal_subdomain, id",
+                    )
+                    .map_err(|error| AppError::Storage(error.to_string()))?;
+                let rows = statement
+                    .query_map([], |row| {
+                        Ok((row.get::<_, u64>(0)?, row.get::<_, String>(1)?))
+                    })
+                    .map_err(|error| AppError::Storage(error.to_string()))?
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|error| AppError::Storage(error.to_string()))?;
+                Ok(Some(rows))
+            })
+            .await?;
+        let Some(stale_requests) = stale_requests else {
+            return Ok(0);
+        };
+        let mut recomputed = 0;
+        for (request_id, portal_key) in stale_requests {
+            if self
+                .refresh_request_timeline_audit(request_id, &portal_key)
+                .await
+                .is_ok()
+            {
+                recomputed += 1;
+            }
+        }
+        self.query_connection("Record the CPRA rule version", move |conn| {
+            conn.execute(
+                "INSERT INTO analysis_rule_versions (rule_key, version) VALUES (?1, ?2)
+                 ON CONFLICT (rule_key) DO UPDATE SET version = excluded.version",
+                params![RULE_KEY, current],
+            )
+            .map_err(|error| AppError::Storage(error.to_string()))?;
+            Ok(())
+        })
+        .await?;
+        Ok(recomputed)
     }
 
     pub async fn import_auxiliary_events(
@@ -9681,6 +9751,38 @@ mod tests {
         assert_eq!(remaining, 0, "the document row itself must be gone");
     }
 
+    /// A core written before fetch history existed has no `document_acquisitions`, and the startup
+    /// relation audit queries it, so opening that core must create the table before auditing.
+    #[tokio::test]
+    async fn a_core_from_before_fetch_history_still_opens() {
+        let repository = repository_with_document().await;
+        repository
+            .conn
+            .lock()
+            .await
+            .execute_batch(
+                "DROP INDEX idx_document_acquisitions_document;
+                 DROP TABLE document_acquisitions;
+                 DROP SEQUENCE document_acquisition_seq;",
+            )
+            .unwrap();
+        repository
+            .run_migrations(MIGRATION)
+            .await
+            .expect("an older core must open");
+        repository
+            .record_document_acquisition(
+                PORTAL_SUBDOMAIN,
+                DOCUMENT_ID as u64,
+                None,
+                RAW_FILE_SHA256,
+                1,
+                &test_acquisition(),
+            )
+            .await
+            .expect("the upgraded core must record fetches");
+    }
+
     fn test_acquisition() -> crate::ingestion::client::AcquisitionRecord {
         crate::ingestion::client::AcquisitionRecord {
             requested_url: "https://records.example.gov/doc".to_string(),
@@ -9873,6 +9975,56 @@ mod tests {
     /// period the statute grants, the same dates are compliant. Before this repository could
     /// record an extension, only the first outcome was reachable, which is the difference between
     /// a finding and a false accusation.
+    /// Findings stored under an older deadline rule are rewritten once, at the first launch that
+    /// carries a newer rule, and never again under the same rule.
+    #[tokio::test]
+    async fn a_deadline_rule_change_recomputes_stored_findings_once() {
+        let repository = repository_with_document().await;
+        let audit_count = || async {
+            repository
+                .conn
+                .lock()
+                .await
+                .query_row(
+                    "SELECT COUNT(*) FROM case_audits WHERE audit_id = ?1",
+                    params![format!("auto-{PORTAL_SUBDOMAIN}-{REQUEST_ID}")],
+                    |row| row.get::<_, i64>(0),
+                )
+                .unwrap()
+        };
+        repository
+            .conn
+            .lock()
+            .await
+            .execute(
+                "UPDATE requests SET created_at = ?1, updated_at = ?2, closed_at = ?2,
+                 status = 'closed' WHERE id = ?3",
+                params!["2026-08-03T09:00:00Z", "2026-08-24T09:00:00Z", REQUEST_ID],
+            )
+            .unwrap();
+        assert_eq!(audit_count().await, 0);
+
+        assert_eq!(
+            repository
+                .recompute_cpra_findings_for_rule_change()
+                .await
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            audit_count().await,
+            1,
+            "the overdue request must now carry its finding"
+        );
+        assert_eq!(
+            repository
+                .recompute_cpra_findings_for_rule_change()
+                .await
+                .unwrap(),
+            0
+        );
+    }
+
     #[tokio::test]
     async fn a_recorded_extension_withdraws_the_statutory_latency_violation() {
         let repository = repository_with_document().await;

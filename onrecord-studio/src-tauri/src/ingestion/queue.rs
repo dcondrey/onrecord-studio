@@ -6,8 +6,9 @@ use crate::file_name::sanitized_component;
 use crate::ingestion::backoff;
 use crate::ingestion::client::ApiClient;
 use crate::ingestion::client::{
-    DataCatalogEndpoint, DownloadedPayload, PublicEmbeddedConnector, PublicResourceInspection,
-    PublicResourceKind, PublicResourceLink, WordPressGoogleDriveConnector,
+    AcquisitionRecord, DataCatalogEndpoint, DownloadedPayload, PublicEmbeddedConnector,
+    PublicResourceInspection, PublicResourceKind, PublicResourceLink,
+    WordPressGoogleDriveConnector,
 };
 use crate::ingestion::host_policy::RequestRefusal;
 use crate::ingestion::limiter::RateLimiter;
@@ -2460,6 +2461,7 @@ async fn process_public_resource(
                             body: None,
                             embedded_connectors: Vec::new(),
                             content_length: None,
+                            acquisition: None,
                         },
                         Some(request_id),
                         &inspection.final_url,
@@ -2557,6 +2559,7 @@ async fn process_wordpress_google_drive(
                 body: None,
                 embedded_connectors: Vec::new(),
                 content_length: None,
+                acquisition: None,
             },
             Some(request_id),
             &folder_origin,
@@ -2635,6 +2638,7 @@ async fn process_data_catalog_page(
             body: None,
             embedded_connectors: Vec::new(),
             content_length: download.byte_count,
+            acquisition: None,
         };
         if let Some(task) = prepare_discovered_download(
             context,
@@ -2771,6 +2775,14 @@ async fn process_arcgis_layer(
         extracted_text_sha256: None,
         was_ocr_processed: false,
     };
+    record_inline_acquisition(
+        context,
+        request_id,
+        &document,
+        &page.bytes,
+        &page.acquisition,
+    )
+    .await?;
     let mut tasks = vec![standard_document_task(
         context,
         request_id,
@@ -2856,9 +2868,39 @@ async fn prepare_html_page_document(
         extracted_text_sha256: None,
         was_ocr_processed: false,
     };
+    if let Some(acquisition) = &inspection.acquisition {
+        record_inline_acquisition(context, request_id, &document, body, acquisition).await?;
+    }
     Ok(Some(standard_document_task(
         context, request_id, document, depth,
     )))
+}
+
+/// A page fetched and stored inline is already an acquisition before its document task runs, and
+/// that task reads the stored bytes as cached. The row is written first so the event always has a
+/// document to belong to; the task's own write of the same metadata is an idempotent upsert.
+async fn record_inline_acquisition(
+    context: &WorkerContext,
+    request_id: u64,
+    document: &DocumentMetadata,
+    bytes: &[u8],
+    acquisition: &AcquisitionRecord,
+) -> Result<(), AppError> {
+    context
+        .repository
+        .insert_or_update_document(&context.portal.portal_key, request_id, document)
+        .await?;
+    context
+        .repository
+        .record_document_acquisition(
+            &context.portal.portal_key,
+            document.id,
+            Some(&context.sync_run_id),
+            &sha256_hex(bytes),
+            bytes.len() as u64,
+            acquisition,
+        )
+        .await
 }
 
 async fn ensure_crawl_request(
@@ -3990,6 +4032,7 @@ async fn expand_structured_document_links(
                 body: None,
                 embedded_connectors: Vec::new(),
                 content_length: None,
+                acquisition: None,
             };
             if let Some(task) = prepare_discovered_download(
                 context,
@@ -6435,6 +6478,7 @@ mod tests {
             body: None,
             embedded_connectors: Vec::new(),
             content_length: None,
+            acquisition: None,
         }
     }
 

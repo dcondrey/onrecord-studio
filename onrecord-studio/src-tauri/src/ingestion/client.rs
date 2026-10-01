@@ -125,6 +125,7 @@ struct ResponsePayload {
     final_url: Url,
     content_type: Option<String>,
     bytes: Vec<u8>,
+    acquisition: AcquisitionRecord,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -160,6 +161,8 @@ pub struct PublicResourceInspection {
     // header is absent or unparseable, which is a genuine "not known", not zero: a size predicate
     // must treat it as contributing nothing rather than as a document of size zero.
     pub content_length: Option<u64>,
+    /// The fetch that produced `body`; `None` when nothing was fetched.
+    pub acquisition: Option<AcquisitionRecord>,
 }
 
 #[derive(Debug, Clone)]
@@ -192,6 +195,7 @@ pub struct WordPressGoogleDriveItem {
 pub struct ArcGisFeaturePage {
     pub request_url: String,
     pub bytes: Vec<u8>,
+    pub acquisition: AcquisitionRecord,
     pub feature_count: usize,
     pub exceeded_transfer_limit: bool,
 }
@@ -221,6 +225,24 @@ pub struct AcquisitionRecord {
 }
 
 const MAXIMUM_RECORDED_HEADER_CHARACTERS: usize = 512;
+
+fn acquisition_record(
+    requested_url: &Url,
+    response: &reqwest::Response,
+    redirect_chain: Vec<String>,
+) -> AcquisitionRecord {
+    let headers = response.headers();
+    AcquisitionRecord {
+        requested_url: requested_url.to_string(),
+        resolved_url: response.url().to_string(),
+        redirect_chain,
+        http_status: response.status().as_u16(),
+        content_type: recorded_header(headers, reqwest::header::CONTENT_TYPE),
+        etag: recorded_header(headers, reqwest::header::ETAG),
+        last_modified: recorded_header(headers, reqwest::header::LAST_MODIFIED),
+        retrieved_at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+    }
+}
 
 fn recorded_header(headers: &HeaderMap, name: reqwest::header::HeaderName) -> Option<String> {
     let value = headers.get(name)?.to_str().ok()?.trim();
@@ -275,8 +297,9 @@ impl ApiClient {
         let dns = Arc::new(PinnedDnsResolver::default());
         let client = Client::builder()
             .default_headers(headers)
-            // Every connection resolves through the addresses `validate_remote_url` already
-            // approved; see `PinnedDnsResolver`.
+            // Every direct connection resolves through the addresses `validate_remote_url`
+            // already approved; see `PinnedDnsResolver`. A configured system proxy resolves the
+            // host itself, so behind one the pin covers only the validation lookup.
             .dns_resolver(Arc::clone(&dns))
             .connect_timeout(Duration::from_secs(config.connect_timeout_seconds))
             .timeout(Duration::from_secs(config.request_timeout_seconds))
@@ -646,7 +669,7 @@ impl ApiClient {
     ) -> Result<PublicResourceInspection, AppError> {
         let url = normalize_submitted_url(source_url)?;
         validate_remote_url(&self.dns, &url).await?;
-        let (response, _host_permit) = self
+        let (response, _host_permit, acquisition) = self
             .response_with_retries(url, self.config.max_document_bytes)
             .await?;
         let final_url = response.url().clone();
@@ -677,6 +700,7 @@ impl ApiClient {
                 body: None,
                 embedded_connectors: Vec::new(),
                 content_length,
+                acquisition: None,
             });
         }
         let (_, bytes) = read_response_bytes(
@@ -708,6 +732,7 @@ impl ApiClient {
             body: Some(bytes),
             embedded_connectors,
             content_length,
+            acquisition: Some(acquisition),
         })
     }
 
@@ -756,6 +781,7 @@ impl ApiClient {
             kind: PublicResourceKind::HtmlPage,
             links,
             content_length: Some(payload.bytes.len() as u64),
+            acquisition: Some(payload.acquisition),
             body: Some(payload.bytes),
             embedded_connectors,
         })
@@ -892,6 +918,7 @@ impl ApiClient {
             })?;
         Ok(ArcGisFeaturePage {
             request_url: payload.final_url.to_string(),
+            acquisition: payload.acquisition,
             bytes: payload.bytes,
             feature_count: features.len(),
             exceeded_transfer_limit: value
@@ -1051,11 +1078,14 @@ impl ApiClient {
         &self,
         initial_url: Url,
         maximum_bytes: usize,
-    ) -> Result<(reqwest::Response, HostPermit), AppError> {
+    ) -> Result<(reqwest::Response, HostPermit, AcquisitionRecord), AppError> {
         self.execute_with_retries(&initial_url, "Request", || async {
             self.send_response_following_safe_redirects(initial_url.clone(), &[], maximum_bytes)
                 .await
-                .map(|(response, permit, _redirect_chain)| (response, permit))
+                .map(|(response, permit, redirect_chain)| {
+                    let acquisition = acquisition_record(&initial_url, &response, redirect_chain);
+                    (response, permit, acquisition)
+                })
         })
         .await
     }
@@ -1146,9 +1176,11 @@ impl ApiClient {
         query: &[(&str, String)],
         maximum_bytes: usize,
     ) -> Result<ResponsePayload, RetryDisposition> {
-        let (response, _host_permit, _redirect_chain) = self
+        let requested_url = materialize_request_url(&initial_url, Some(query));
+        let (response, _host_permit, redirect_chain) = self
             .send_response_following_safe_redirects(initial_url, query, maximum_bytes)
             .await?;
+        let acquisition = acquisition_record(&requested_url, &response, redirect_chain);
         let content_type = response
             .headers()
             .get(reqwest::header::CONTENT_TYPE)
@@ -1167,6 +1199,7 @@ impl ApiClient {
             final_url,
             content_type,
             bytes,
+            acquisition,
         })
     }
 
@@ -1262,17 +1295,7 @@ impl ApiClient {
             .send_response_following_safe_redirects(initial_url.clone(), &[], maximum_bytes)
             .await?;
         let final_url = response.url().clone();
-        let headers = response.headers();
-        let acquisition = AcquisitionRecord {
-            requested_url: initial_url.to_string(),
-            resolved_url: final_url.to_string(),
-            redirect_chain,
-            http_status: response.status().as_u16(),
-            content_type: recorded_header(headers, reqwest::header::CONTENT_TYPE),
-            etag: recorded_header(headers, reqwest::header::ETAG),
-            last_modified: recorded_header(headers, reqwest::header::LAST_MODIFIED),
-            retrieved_at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
-        };
+        let acquisition = acquisition_record(&initial_url, &response, redirect_chain);
         let mut file = tokio::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -4352,6 +4375,19 @@ fn council_agendas_expose_item_indexes_without_spending_frontier_on_bootstrap_na
         .all(|link| link.follow_candidate && !link.download_candidate && !link.navigation_chrome));
 }
 
+fn unused_acquisition() -> AcquisitionRecord {
+    AcquisitionRecord {
+        requested_url: String::new(),
+        resolved_url: String::new(),
+        redirect_chain: Vec::new(),
+        http_status: 200,
+        content_type: None,
+        etag: None,
+        last_modified: None,
+        retrieved_at: String::new(),
+    }
+}
+
 #[test]
 fn council_optional_item_failure_preserves_other_attachments_and_retry_links() {
     let agenda = Url::parse("https://sandiego.hylandcloud.com/211agendaonlinecouncil/Documents/ViewAgenda?meetingId=7192&type=agenda&doctype=1").unwrap();
@@ -4372,7 +4408,7 @@ fn council_optional_item_failure_preserves_other_attachments_and_retry_links() {
         .collect::<BTreeSet<_>>();
     let item = Url::parse(&links[0].url).unwrap();
     let unavailable = Url::parse(&links[1].url).unwrap();
-    let successful = ResponsePayload { final_url: item.clone(), content_type: Some("text/html".into()), bytes: br#"<a href="/211agendaonlinecouncil/Documents/DownloadFile/grant.pdf?meetingId=7192&amp;itemId=265583&amp;publishId=1">Grant agreement</a>"#.to_vec() };
+    let successful = ResponsePayload { final_url: item.clone(), content_type: Some("text/html".into()), bytes: br#"<a href="/211agendaonlinecouncil/Documents/DownloadFile/grant.pdf?meetingId=7192&amp;itemId=265583&amp;publishId=1">Grant agreement</a>"#.to_vec(), acquisition: unused_acquisition() };
     merge_hyland_item_attachments(&item, "Riverbed", Ok(successful), &mut links, &mut seen);
     merge_hyland_item_attachments(
         &unavailable,
@@ -4385,6 +4421,7 @@ fn council_optional_item_failure_preserves_other_attachments_and_retry_links() {
         final_url: agenda.clone(),
         content_type: Some("text/html".into()),
         bytes: Vec::new(),
+        acquisition: unused_acquisition(),
     };
     merge_hyland_item_attachments(
         &unavailable,

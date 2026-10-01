@@ -347,7 +347,11 @@ fn from_reader(reader: &c2pa::Reader) -> AssetProvenance {
         validation: Some(validation),
         signature_issuer,
         signing_certificate_serial_number,
-        signing_timestamp: active.and_then(|manifest| manifest.time()),
+        // Gated like the issuer: a time read out of a manifest whose signature failed is a value the
+        // validation step rejected.
+        signing_timestamp: active
+            .and_then(|manifest| manifest.time())
+            .filter(|_| is_tamper_evident),
         claim_generator,
         assertions,
         claim_graph,

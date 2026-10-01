@@ -757,3 +757,10 @@ CREATE TABLE IF NOT EXISTS document_acquisitions (
 );
 CREATE INDEX IF NOT EXISTS idx_document_acquisitions_document
     ON document_acquisitions(portal_subdomain, document_id);
+
+-- The rule version each stored derivation was computed under. A rule change bumps the version in
+-- code, and startup recomputes what the old rule stored instead of leaving its findings standing.
+CREATE TABLE IF NOT EXISTS analysis_rule_versions (
+    rule_key TEXT PRIMARY KEY,
+    version BIGINT NOT NULL
+);

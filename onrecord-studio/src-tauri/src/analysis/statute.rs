@@ -42,6 +42,9 @@ use serde::{Deserialize, Serialize};
 pub const CPRA_INITIAL_DETERMINATION_DAYS: u64 = 10;
 /// Calendar days a single written extension may add to the initial determination period.
 pub const CPRA_MAXIMUM_EXTENSION_DAYS: u64 = 14;
+/// Bumped whenever the rule changes what a stored CPRA finding says; startup then recomputes every
+/// stored finding. 2: last days carried past weekends and judicial holidays.
+pub const CPRA_RULE_VERSION: i64 = 2;
 /// Citation recorded on every finding this model produces.
 pub const CPRA_STATUTE_CITATION: &str = "California Government Code § 7922.535";
 /// A closure this soon after receipt is recorded as a lifecycle anomaly, not a statutory finding.

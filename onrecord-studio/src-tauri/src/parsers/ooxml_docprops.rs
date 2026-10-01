@@ -231,6 +231,33 @@ mod tests {
         temp
     }
 
+    /// A part that inflates past the size its central directory declares is never read: the
+    /// declared size passes the cap, so trusting it lets a small archive expand without bound.
+    #[test]
+    fn a_part_inflating_past_its_declared_size_is_not_read() {
+        let core = "<cp:lastModifiedBy>Bomb</cp:lastModifiedBy>".to_string()
+            + &" ".repeat(1 << 20);
+        let mut bytes = Vec::new();
+        {
+            let mut zip = zip::ZipWriter::new(std::io::Cursor::new(&mut bytes));
+            let options: zip::write::FileOptions<()> = zip::write::FileOptions::default()
+                .compression_method(zip::CompressionMethod::Deflated);
+            zip.start_file("docProps/core.xml", options).unwrap();
+            zip.write_all(core.as_bytes()).unwrap();
+            zip.finish().unwrap();
+        }
+        let central = bytes
+            .windows(4)
+            .rposition(|window| window == b"PK\x01\x02")
+            .unwrap();
+        bytes[central + 24..central + 28].copy_from_slice(&100_u32.to_le_bytes());
+        let temp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(temp.path(), &bytes).unwrap();
+
+        let props = read_ooxml_docprops(temp.path()).unwrap();
+        assert_eq!(props.last_modified_by, None);
+    }
+
     #[test]
     fn extracts_core_and_app_fields_from_a_normal_ooxml_package() {
         let core = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
