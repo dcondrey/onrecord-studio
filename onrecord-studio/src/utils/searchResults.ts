@@ -1,9 +1,9 @@
-/** Row cap sent to `query_audit_records`. A result set of exactly this size may be truncated. */
-export const SEARCH_RESULT_LIMIT = 500;
+/** Rows requested per page. A page size is a unit of transfer; the total comes from the count. */
+export const SEARCH_PAGE_SIZE = 200;
 
-/** Count label that never states a capped result set as an exact total. */
+/** An exact match count with thousands separators. */
 export function formatMatchCount(count: number): string {
-  return count >= SEARCH_RESULT_LIMIT ? `${SEARCH_RESULT_LIMIT.toLocaleString()}+` : count.toLocaleString();
+  return count.toLocaleString('en-US');
 }
 
 export type MatchBasis = 'title' | 'description' | 'unshown';
@@ -43,20 +43,20 @@ export interface SearchRecordInput {
   query: string;
   filters: { label: string; value: string }[];
   sourceCount: number;
+  /** Exact number of matches, from the count that accompanied the first page. */
   resultCount: number;
 }
 
 /** A citable account of one search. It records what was asked and answered, not that the answer is complete or permanent. */
 export function searchRecordText(input: SearchRecordInput): string {
   const filters = input.filters.length === 0 ? 'none' : input.filters.map((f) => `${f.label}: ${f.value}`).join('; ');
-  const capped = input.resultCount >= SEARCH_RESULT_LIMIT;
   return [
     `OnRecord Studio search run ${input.ranAt}`,
     ...(input.queryId ? [`Query ID: ${input.queryId}`] : []),
     `Text: ${input.query.trim() || '(none)'}`,
     `Filters: ${filters}`,
     `Sources searched: ${input.sourceCount}`,
-    `Records returned: ${formatMatchCount(input.resultCount)}${capped ? ` (limited to the first ${SEARCH_RESULT_LIMIT}; more may exist)` : ''}`,
+    `Matches: ${formatMatchCount(input.resultCount)} (exact count when the search ran)`,
     input.corpus
       ? `Corpus state: sha256:${input.corpus.digest.slice(0, 16)} (${input.corpus.documentCount.toLocaleString('en-US')} documents). It covers extracted document text only, not request status or titles.`
       : 'Corpus state: could not be read.',
@@ -64,12 +64,11 @@ export function searchRecordText(input: SearchRecordInput): string {
   ].join('\n');
 }
 
-/** A short, stable name for one exact query: the same text, filters and limit always give the same ID. */
+/** A short, stable name for one exact query: the same text and filters always give the same ID. */
 export async function searchQueryId(query: string, filters: { label: string; value: string }[]): Promise<string | null> {
   const canonical = JSON.stringify({
     text: query.trim().replace(/\s+/g, ' '),
     filters: [...filters].sort((a, b) => a.label.localeCompare(b.label)).map((f) => [f.label, f.value]),
-    limit: SEARCH_RESULT_LIMIT,
   });
   try {
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical));

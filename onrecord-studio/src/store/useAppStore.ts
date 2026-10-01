@@ -16,6 +16,8 @@ import type {
   PortalRuntimeSnapshot,
   RequestSearchResult,
   SavedSource,
+  SearchPageArgs,
+  SearchPaging,
   SourceLifecycleState,
 } from '../types';
 import {
@@ -103,6 +105,9 @@ interface AppState {
   filteredResults: RequestSearchResult[];
   /** The free-text term that produced `filteredResults`, kept with them so basis labels never describe a newer query. */
   filteredResultsTerm: string;
+  /** Exact number of matches for the query behind `filteredResults`; the list may hold fewer while pages load. */
+  filteredResultsTotal: number;
+  searchPaging: SearchPaging | null;
   /** Set when the latest evidence query failed; retained results then belong to the last successful query. */
   searchError: string | null;
   selectedRequestId: number | null;
@@ -173,7 +178,15 @@ interface AppState {
     status: string | null,
     policyDeviation?: string | null,
   ) => void;
-  setFilteredResults: (results: RequestSearchResult[], appliedTerm?: string) => void;
+  setFilteredResults: (
+    results: RequestSearchResult[],
+    appliedTerm?: string,
+    paging?: { total: number; args: SearchPageArgs; nextCursor: string | null },
+  ) => void;
+  /** Appends a later page. Ignored unless it belongs to the query currently shown. */
+  appendFilteredResults: (generation: number, results: RequestSearchResult[], nextCursor: string | null) => void;
+  setSearchPageState: (generation: number, state: { loadingMore: boolean; moreError: string | null }) => void;
+  setFilteredResultsTotal: (generation: number, total: number) => void;
   setSearchError: (message: string | null) => void;
   setSelectedRequest: (requestId: number | null, portalKey?: string | null) => void;
   setTerminalVisibility: (visible: boolean) => void;
@@ -199,6 +212,9 @@ const emptyMetrics = (): IngestionMetrics => ({
   anomaliesFound: 0,
   bytesTransferred: 0,
 });
+
+/** Names each query's result list, so a page that outlives its query can be recognised and dropped. */
+let searchGeneration = 0;
 
 export const useAppStore = create<AppState>((set) => ({
   workspaceView: 'overview',
@@ -237,6 +253,8 @@ export const useAppStore = create<AppState>((set) => ({
   selectedPolicyDeviation: null,
   filteredResults: [],
   filteredResultsTerm: '',
+  filteredResultsTotal: 0,
+  searchPaging: null,
   searchError: null,
   selectedRequestId: null,
   selectedRequestPortalKey: null,
@@ -335,6 +353,8 @@ export const useAppStore = create<AppState>((set) => ({
       selectedRequestId: null,
       selectedRequestPortalKey: null,
       filteredResults: [],
+      filteredResultsTotal: 0,
+      searchPaging: null,
       searchError: null,
       searchTerm: '',
       selectedAgencyId: null,
@@ -414,8 +434,41 @@ export const useAppStore = create<AppState>((set) => ({
     selectedPolicyDeviation = null,
   ) =>
     set({ searchTerm, selectedAgencyId, selectedStatus, selectedPolicyDeviation }),
-  setFilteredResults: (filteredResults, filteredResultsTerm = '') =>
-    set({ filteredResults, filteredResultsTerm, searchError: null }),
+  setFilteredResults: (filteredResults, filteredResultsTerm = '', paging) =>
+    set(() => ({
+      filteredResults,
+      filteredResultsTerm,
+      // A list handed over without paging is complete, so its length is its total.
+      filteredResultsTotal: paging?.total ?? filteredResults.length,
+      searchPaging: paging
+        ? {
+            generation: ++searchGeneration,
+            args: paging.args,
+            nextCursor: paging.nextCursor,
+            loadingMore: false,
+            moreError: null,
+          }
+        : null,
+      searchError: null,
+    })),
+  appendFilteredResults: (generation, results, nextCursor) =>
+    set((state) => {
+      if (state.searchPaging?.generation !== generation) return state;
+      const held = new Set(state.filteredResults.map((result) => `${result.portalKey}\u0000${result.requestId}`));
+      return {
+        filteredResults: [
+          ...state.filteredResults,
+          ...results.filter((result) => !held.has(`${result.portalKey}\u0000${result.requestId}`)),
+        ],
+        searchPaging: { ...state.searchPaging, nextCursor, loadingMore: false, moreError: null },
+      };
+    }),
+  setSearchPageState: (generation, pageState) =>
+    set((state) =>
+      state.searchPaging?.generation === generation ? { searchPaging: { ...state.searchPaging, ...pageState } } : state,
+    ),
+  setFilteredResultsTotal: (generation, total) =>
+    set((state) => (state.searchPaging?.generation === generation ? { filteredResultsTotal: total } : state)),
   setSearchError: (searchError) => set({ searchError }),
   setSelectedRequest: (selectedRequestId, selectedRequestPortalKey = null) =>
     set({ selectedRequestId, selectedRequestPortalKey, activeLegalFindings: [] }),

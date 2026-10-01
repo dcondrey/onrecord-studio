@@ -28,7 +28,7 @@ vi.mock('@tauri-apps/api/core', () => ({
     // A request with no recorded statutory extension. The command returns the record or
     // null, never a collection, and the panel reads its fields.
     if (command === 'get_request_statutory_extension') return Promise.resolve(null);
-    if (command === 'query_audit_records') return Promise.reject(new Error('database busy'));
+    if (command === 'query_audit_records_page') return Promise.reject(new Error('database busy'));
     if (command === 'list_request_legal_findings') {
       return Promise.reject(new Error('legal query failed'));
     }

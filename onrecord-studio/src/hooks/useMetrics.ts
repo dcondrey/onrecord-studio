@@ -3,7 +3,7 @@ import { useAppStore } from '../store/useAppStore';
 
 export function useMetrics() {
   const metrics = useAppStore((state) => state.metrics);
-  const activeSearchMatchesCount = useAppStore((state) => state.filteredResults.length);
+  const activeSearchMatchesCount = useAppStore((state) => state.filteredResultsTotal);
   const runtimes = useAppStore((state) => state.portalRuntimes);
 
   return useMemo(() => {

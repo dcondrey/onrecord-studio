@@ -1,4 +1,5 @@
-import { formatMatchCount, SEARCH_RESULT_LIMIT } from '../../utils/searchResults';
+import { formatMatchCount, SEARCH_PAGE_SIZE } from '../../utils/searchResults';
+import type { SearchPageArgs } from '../../types';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import AgencySelector from './AgencySelector';
 import { useAppStore } from '../../store/useAppStore';
@@ -18,7 +19,9 @@ export default function SearchFilter() {
   const setFilteredResults = useAppStore((state) => state.setFilteredResults);
   const error = useAppStore((state) => state.searchError);
   const setSearchError = useAppStore((state) => state.setSearchError);
-  const resultCount = useAppStore((state) => state.filteredResults.length);
+  // The exact number of matches, not the number of rows loaded so far.
+  const resultCount = useAppStore((state) => state.filteredResultsTotal);
+  const retainedCount = useAppStore((state) => state.filteredResults.length);
   const agencyProfiles = useAppStore((state) => state.agencyProfiles);
   const portalCount = useAppStore((state) => state.portals.length);
   const [inputValue, setInputValue] = useState(searchTerm);
@@ -62,16 +65,17 @@ export default function SearchFilter() {
       setIsSearching(true);
       setSearchError(null);
       try {
-        const results = await invokeCommand('query_audit_records', {
+        const args: SearchPageArgs = {
           searchTerm: compiledQuery.searchTerm,
           portalKey: compiledQuery.portalKey ?? activePortalKey,
           agencyId: compiledQuery.agencyId ?? selectedAgencyId,
           status: compiledQuery.status ?? selectedStatus,
           policyDeviation: compiledQuery.policyDeviation ?? selectedPolicyDeviation,
-          limit: SEARCH_RESULT_LIMIT,
-        });
+        };
+        const page = await invokeCommand('query_audit_records_page', { ...args, cursor: null, pageSize: SEARCH_PAGE_SIZE });
+        if (page.total === null) throw new Error('The search did not report how many records match.');
         if (requestGate.isCurrent(request)) {
-          setFilteredResults(results, compiledQuery.searchTerm);
+          setFilteredResults(page.records, compiledQuery.searchTerm, { total: page.total, args, nextCursor: page.nextCursor });
           // Captured with the results it describes, so a record never pairs a newer query with an older count.
           appliedRecord.current = {
             ranAt: new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC',
@@ -83,7 +87,7 @@ export default function SearchFilter() {
               ...((compiledQuery.portalKey ?? activePortalKey) ? [{ label: 'Source', value: String(compiledQuery.portalKey ?? activePortalKey) }] : []),
             ],
             sourceCount: (compiledQuery.portalKey ?? activePortalKey) ? 1 : portalCount,
-            resultCount: results.length,
+            resultCount: page.total,
           };
         }
       } catch (reason) {
@@ -232,7 +236,7 @@ export default function SearchFilter() {
         )}
         {error && (
           <span role="alert" className="truncate text-rose-300">
-            Search unavailable; {resultCount > 0 ? `showing ${resultCount.toLocaleString()} results from the last successful query` : 'no result set is available'}: {error}
+            Search unavailable; {retainedCount > 0 ? `showing ${formatMatchCount(retainedCount)} results from the last successful query` : 'no result set is available'}: {error}
           </span>
         )}
         {!error && parsedQuery.filters.length === 0 && <span className="text-slate-400">Search remains available while ingestion is active.</span>}

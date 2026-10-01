@@ -40,7 +40,7 @@ vi.mock('@tauri-apps/api/core', () => ({
     // A request with no recorded statutory extension. The command returns the record or
     // null, never a collection, and the panel reads its fields.
     if (command === 'get_request_statutory_extension') return Promise.resolve(null);
-    if (command === 'query_audit_records') return Promise.resolve([recordFor(42), recordFor(99)]);
+    if (command === 'query_audit_records_page') return Promise.resolve({ records: [recordFor(42), recordFor(99)], nextCursor: null, total: 2 });
     if (command === 'list_request_documents') {
       const requestId = Number(args.requestId);
       return Promise.resolve(requestId === 42
