@@ -16,6 +16,7 @@ pub mod profile;
 pub mod provenance;
 pub mod report;
 pub mod research;
+pub mod resolution;
 pub mod setup;
 pub mod storage;
 #[cfg(any(test, feature = "test-support"))]
@@ -210,7 +211,14 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::tracker::import_request_emails,
         commands::tracker::confirm_suggested_event,
         commands::tracker::reject_suggested_event,
-        commands::tracker::get_request_deadline
+        commands::tracker::get_request_deadline,
+        commands::resolution::list_resolution_candidates,
+        commands::resolution::record_resolution_judgment,
+        commands::resolution::list_resolution_ledger,
+        commands::resolution::get_resolution_clusters,
+        commands::resolution::export_resolution_ledger,
+        commands::resolution::preview_resolution_import,
+        commands::resolution::import_resolution_ledger
     ];
     native_handler(invoke)
 }

@@ -1,0 +1,106 @@
+[
+  {
+    "input": "Acme, Inc.",
+    "key": "acme"
+  },
+  {
+    "input": "ACME LLC",
+    "key": "acme"
+  },
+  {
+    "input": "Smith, John",
+    "key": "john smith"
+  },
+  {
+    "input": "John   Smith",
+    "key": "john smith"
+  },
+  {
+    "input": "The Acme Company",
+    "key": "acme"
+  },
+  {
+    "input": "Inc.",
+    "key": ""
+  },
+  {
+    "input": "O'Brien & Sons Ltd",
+    "key": "brien o sons"
+  },
+  {
+    "input": "ΟΔΟΣ",
+    "key": "οδος"
+  },
+  {
+    "input": "Οδός ΟΔΟΣ",
+    "key": "οδος οδός"
+  },
+  {
+    "input": "café René",
+    "key": "cafe rene"
+  },
+  {
+    "input": "café René",
+    "key": "café rené"
+  },
+  {
+    "input": "का हम",
+    "key": "क हम"
+  },
+  {
+    "input": "ｚ 𝐀",
+    "key": "𝐀 ｚ"
+  },
+  {
+    "input": "smith smith john",
+    "key": "john smith smith"
+  },
+  {
+    "input": "2024-01-02",
+    "key": "01 02 2024"
+  },
+  {
+    "input": "2024-02-01",
+    "key": "01 02 2024"
+  },
+  {
+    "input": "a.b@x.com",
+    "key": "a b com x"
+  },
+  {
+    "input": "b.a@x.com",
+    "key": "a b com x"
+  },
+  {
+    "input": "Dr. Jane　Roe",
+    "key": "dr jane roe"
+  },
+  {
+    "input": "jane﻿roe",
+    "key": "jane roe"
+  },
+  {
+    "input": "janeroe",
+    "key": "jane roe"
+  },
+  {
+    "input": "İstanbul Co",
+    "key": "i stanbul"
+  },
+  {
+    "input": "Straße 12",
+    "key": "12 straße"
+  },
+  {
+    "input": "",
+    "key": ""
+  },
+  {
+    "input": "   ",
+    "key": ""
+  },
+  {
+    "input": "Ünal  ÖZ",
+    "key": "öz ünal"
+  }
+]
