@@ -6183,8 +6183,10 @@ mod tests {
     fn structured_crawl_candidates_obey_the_html_host_scope_rule() {
         let source = "https://records.example.gov/portal";
         let guidance = SourceGuidance::default();
-        let mut policy = CrawlPolicy::default();
-        policy.follow_supported_external_platforms = false;
+        let mut policy = CrawlPolicy {
+            follow_supported_external_platforms: false,
+            ..Default::default()
+        };
 
         assert!(crawl_host_in_scope(
             source,
@@ -6216,8 +6218,10 @@ mod tests {
             "https://services.arcgis.com/abc/FeatureServer"
         ));
 
-        let mut allowing = SourceGuidance::default();
-        allowing.allowed_hostnames = vec!["anywhere.example".to_string()];
+        let allowing = SourceGuidance {
+            allowed_hostnames: vec!["anywhere.example".to_string()],
+            ..Default::default()
+        };
         assert!(crawl_host_in_scope(
             source,
             &allowing,

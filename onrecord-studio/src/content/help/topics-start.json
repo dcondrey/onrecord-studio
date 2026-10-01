@@ -23,8 +23,8 @@
         ]
       },
       {
-        "heading": "Six views",
-        "paragraphs": ["San Diego, Patterns, Analysis, Evidence, Activity and Briefing. Switch with the sidebar, the command palette, or Cmd/Ctrl+1 to 6."]
+        "heading": "Nine views",
+        "paragraphs": ["San Diego, Patterns, Analysis, Evidence, Activity, Briefing, Story desk, Meetings and Compare. Switch with the sidebar, the command palette, or Cmd/Ctrl+1 to 9."]
       }
     ],
     "views": [],
@@ -43,7 +43,7 @@
         "heading": "Shortcuts",
         "items": [
           "Cmd/Ctrl+K: open or close the command palette.",
-          "Cmd/Ctrl+1 to 6: San Diego, Patterns, Analysis, Evidence, Activity, Briefing.",
+          "Cmd/Ctrl+1 to 9: San Diego, Patterns, Analysis, Evidence, Activity, Briefing, Story desk, Meetings, Compare.",
           "Cmd/Ctrl+N: focus the source URL box to add a source.",
           "Cmd/Ctrl+Shift+/ (the ? key): open this Help. Inside Help, Esc closes it.",
           "Esc closes the palette or any dialog. In the palette, Up and Down move and Enter runs."

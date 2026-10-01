@@ -1,9 +1,12 @@
 # Release, Mac App Store publication, and rollback
 
 This runbook distinguishes build evidence from a distributable artifact. The ordinary CI bundles
-are intentionally unsigned. The paid macOS release is a separate Mac App Store build that must be
-sandboxed, provisioned for `com.onrecord.studio`, signed with Apple distribution identities, and
-submitted as a signed installer package.
+are intentionally unsigned, and the Windows and Linux bundles CI produces are compile evidence
+only: the account, license, and update paths are macOS-native, so macOS is the only distributed
+platform. Two macOS builds ship. The paid Mac App Store build is sandboxed, provisioned for
+`com.onrecord.studio`, signed with Apple distribution identities, and submitted as a signed
+installer package (this document). The Developer ID build is notarized and self-updating
+([release-direct.md](release-direct.md)).
 
 ## Distribution contract
 

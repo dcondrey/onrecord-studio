@@ -237,6 +237,10 @@
       "log",
       "telemetry",
       "ocr",
+      "tesseract",
+      "poppler",
+      "scanned",
+      "install",
       "worker",
       "runtime",
       "export json"
@@ -253,7 +257,13 @@
           "Event stream: filter by text or show errors only, Export JSON, or clear the session telemetry.",
           "Source runtimes: running or stopped, done, active and queued counts per source.",
           "Extraction event stream: the same feed inside the Evidence view.",
-          "The sidebar footer shows worker capacity out of five and whether local OCR handles images and PDFs, images only, or is unavailable."
+          "The sidebar footer shows worker capacity out of five and whether local OCR handles images and PDFs, images only, or is unavailable. Hover it for the probe details."
+        ]
+      },
+      {
+        "heading": "Local OCR",
+        "paragraphs": [
+          "OCR is not built into the app. It runs Tesseract with its eng language pack for images and Poppler's pdftoppm for scanned PDFs, found on this Mac in the usual Homebrew, MacPorts or /usr/local locations: brew install tesseract poppler. Until both are installed, a scanned document whose text cannot be read is kept but its text is not searchable. OCR runs locally and sends nothing anywhere."
         ]
       },
       {
