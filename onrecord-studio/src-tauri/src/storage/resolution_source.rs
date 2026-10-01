@@ -3,7 +3,10 @@
 
 use super::corpus::CorpusIndex;
 use crate::error::AppError;
-use crate::resolution::{IdentifierLink, MentionExample, ResolutionEntity, ResolutionKey};
+use crate::resolution::{
+    link_condition, IdentifierLink, MentionExample, ResolutionEntity, ResolutionKey,
+    IDENTIFIER_RULES,
+};
 use duckdb::{params_from_iter, Connection};
 use std::collections::BTreeMap;
 
@@ -67,22 +70,29 @@ fn identifier_links(
         Some(ids) => format!("AND named.entity_id IN ({})", placeholders(ids.len())),
         None => String::new(),
     };
+    let identifier_kinds = IDENTIFIER_RULES
+        .iter()
+        .map(|rule| format!("'{}'", rule.kind))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let link_condition = link_condition("identifier", "named", "linked.span");
     let mut statement = connection
         .prepare(&format!(
             "WITH strong AS (
                         SELECT mention.entity_id
                         FROM corpus_entity_mentions mention
                         JOIN corpus_entities entity ON entity.entity_id = mention.entity_id
-                        WHERE entity.entity_kind = 'EMAIL_ADDRESS'
+                        WHERE entity.entity_kind IN ({identifier_kinds})
                         GROUP BY mention.entity_id
                         HAVING bool_and(mention.validation_grade
                                         IN ('CHECK_DIGIT_PASSED', 'FORMAT_VALIDATED'))
                      ), linked AS (
                         SELECT left_entity_id AS identifier_id, right_entity_id AS entity_id,
-                               portal_key, document_id
+                               portal_key, document_id, character_end - character_start AS span
                         FROM corpus_entity_relationships WHERE relationship_kind = 'CO_OCCURRENCE'
                         UNION ALL
-                        SELECT right_entity_id, left_entity_id, portal_key, document_id
+                        SELECT right_entity_id, left_entity_id, portal_key, document_id,
+                               character_end - character_start
                         FROM corpus_entity_relationships WHERE relationship_kind = 'CO_OCCURRENCE'
                      )
                      SELECT linked.identifier_id, identifier.entity_kind, identifier.display_value,
@@ -92,7 +102,8 @@ fn identifier_links(
                      JOIN strong ON strong.entity_id = linked.identifier_id
                      JOIN corpus_entities identifier ON identifier.entity_id = linked.identifier_id
                      JOIN corpus_entities named ON named.entity_id = linked.entity_id
-                          AND named.entity_kind IN ('PERSON', 'ORGANIZATION') {restriction}
+                          AND named.entity_kind IN ('PERSON', 'ORGANIZATION')
+                          AND {link_condition} {restriction}
                      GROUP BY linked.identifier_id, identifier.entity_kind,
                               identifier.display_value, linked.entity_id"
         ))
@@ -345,5 +356,106 @@ mod tests {
             .unwrap();
         assert_eq!(examples["p-1"].len(), 2);
         assert_eq!(examples["p-1"][0].document_id, 100);
+    }
+
+    #[tokio::test]
+    async fn identifiers_link_only_the_entity_kinds_and_distances_their_rule_allows() {
+        let directory = tempdir().expect("temp dir");
+        let path = directory.path().join("corpus.db");
+        drop(CorpusIndex::open(&path).expect("the index must open"));
+        let connection = Connection::open(&path).expect("the fresh index must open");
+        let document = |id: i64| {
+            format!(
+                "('records', 1, {id}, repeat('a', 64), repeat('b', 64), 3, repeat('0', 16),
+                  FALSE, 'deterministic-corpus-v3', '2026-09-29T00:00:00Z')"
+            )
+        };
+        let mention = |entity: &str, document: i64| {
+            format!(
+                "('records', {document}, '{entity}', 0, 0, 4, 5000, 'test', 1, 'FORMAT_VALIDATED')"
+            )
+        };
+        let edge = |identifier: &str, entity: &str, document: i64, span: i64| {
+            format!(
+                "('records', {document}, '{identifier}', '{entity}', 'CO_OCCURRENCE', 'COMPUTED', 0, 0, {span}, 4000, NULL, NULL)"
+            )
+        };
+        let identifiers = [
+            ("i-ein", "EIN"),
+            ("i-lic", "CONTRACTOR_LICENSE"),
+            ("i-apn", "PARCEL_NUMBER"),
+        ];
+        let entities = identifiers
+            .iter()
+            .map(|(id, kind)| {
+                format!("('{id}', '{kind}', '{id}', '{id}', 'EXACT_NORMALIZED_MATCH')")
+            })
+            .chain(
+                [
+                    ("o-1", "ORGANIZATION"),
+                    ("o-2", "ORGANIZATION"),
+                    ("o-3", "ORGANIZATION"),
+                    ("p-1", "PERSON"),
+                ]
+                .iter()
+                .map(|(id, kind)| {
+                    format!("('{id}', '{kind}', '{id}', '{id}', 'EXACT_NORMALIZED_MATCH')")
+                }),
+            )
+            .collect::<Vec<_>>()
+            .join(", ");
+        let mentions = identifiers
+            .iter()
+            .flat_map(|(id, _)| [mention(id, 100), mention(id, 101)])
+            .collect::<Vec<_>>()
+            .join(", ");
+        let edges = [
+            edge("i-ein", "o-1", 100, 30),
+            edge("i-ein", "o-1", 101, 30),
+            edge("i-ein", "o-2", 100, 30),
+            edge("i-ein", "o-2", 101, 200),
+            // One document within reach, one beyond it: the far edge does not count.
+            edge("i-ein", "o-3", 100, 30),
+            edge("i-ein", "o-3", 101, 201),
+            // An EIN does not anchor a person; a parcel anchors neither people nor organizations.
+            edge("i-ein", "p-1", 100, 30),
+            edge("i-ein", "p-1", 101, 30),
+            edge("i-apn", "o-1", 100, 30),
+            edge("i-apn", "o-1", 101, 30),
+            edge("i-apn", "p-1", 100, 30),
+            edge("i-apn", "p-1", 101, 30),
+            edge("i-lic", "p-1", 100, 30),
+            edge("i-lic", "p-1", 101, 30),
+        ]
+        .join(", ");
+        connection
+            .execute_batch(&format!(
+                "INSERT INTO corpus_documents VALUES {}, {};
+                 INSERT INTO corpus_entities VALUES {entities};
+                 INSERT INTO corpus_entity_mentions VALUES {mentions};
+                 INSERT INTO corpus_entity_relationships VALUES {edges};",
+                document(100),
+                document(101),
+            ))
+            .expect("fixture rows must insert");
+        drop(connection);
+
+        let index = CorpusIndex::open(&path).expect("the index must reopen");
+        let scan = index.resolution_scan().await.expect("the scan must read");
+        let mut links: Vec<_> = scan
+            .links
+            .iter()
+            .map(|l| (l.identifier_id.as_str(), l.entity_id.as_str(), l.documents))
+            .collect();
+        links.sort();
+        assert_eq!(
+            links,
+            vec![
+                ("i-ein", "o-1", 2),
+                ("i-ein", "o-2", 2),
+                ("i-ein", "o-3", 1),
+                ("i-lic", "p-1", 2),
+            ]
+        );
     }
 }

@@ -63,7 +63,10 @@ export type CorpusEntityKind =
   | 'PERSON'
   | 'ROLE'
   | 'POSITION'
-  | 'DOCUMENT_CLASS';
+  | 'DOCUMENT_CLASS'
+  | 'EIN'
+  | 'CONTRACTOR_LICENSE'
+  | 'PARCEL_NUMBER';
 
 /**
  * What an edge claims. `CO_OCCURRENCE` is the derivation this app performs today; the seven
