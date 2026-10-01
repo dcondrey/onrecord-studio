@@ -4,6 +4,18 @@ export interface EvidencePacketRequest {
   portalKey: string | null;
   findingIds: string[] | null;
   targetPath: string | null;
+  includeAnnotations: boolean;
+}
+
+export interface PacketAnnotationPreviewRequest {
+  portalKey: string | null;
+  findingIds: string[] | null;
+}
+
+export interface AnnotationPreview {
+  included: number;
+  orphaned: number;
+  notPublicOmitted: number;
 }
 
 export interface EvidencePacketExportResult {
@@ -14,6 +26,8 @@ export interface EvidencePacketExportResult {
   gapCount: number;
   withheldCount: number;
   generatedAt: string;
+  /** `null`: annotations were not requested. */
+  annotationCount: number | null;
 }
 
 export interface VerifiableReportRequest {

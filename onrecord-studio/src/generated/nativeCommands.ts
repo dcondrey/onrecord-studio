@@ -137,6 +137,7 @@ export interface NativeCommandMap {
   draft_appeal_from_statutory_deadline: { args: { portalKey: string; requestId: number; jurisdiction?: string | null }; result: Types.DraftedArtifact };
   export_verifiable_report: { args: { request: Types.VerifiableReportRequest }; result: Types.VerifiableReportExportResult };
   export_evidence_packet: { args: { request: Types.EvidencePacketRequest }; result: Types.EvidencePacketExportResult };
+  preview_packet_annotations: { args: { request: Types.PacketAnnotationPreviewRequest }; result: Types.AnnotationPreview };
   preview_shareable_bundle: { args: { request: Types.ShareableBundleRequest }; result: Types.BundlePreview };
   export_shareable_bundle: { args: { request: Types.ShareableBundleExportRequest }; result: Types.ShareableBundleResult };
   get_profile: { args: NoArgs; result: Types.ProfileState };

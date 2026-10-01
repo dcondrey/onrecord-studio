@@ -1,0 +1,49 @@
+[
+  {
+    "id": "annotations-in-packets",
+    "title": "Annotations in an evidence packet",
+    "group": "Findings",
+    "summary": "What the optional annotations section of an evidence packet writes, what it leaves out, and why it is labelled as your reading.",
+    "keywords": [
+      "annotations",
+      "evidence packet",
+      "export",
+      "reviewer",
+      "notes",
+      "private",
+      "orphaned",
+      "anchor",
+      "include my annotations"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "An evidence packet leaves your annotations out unless you tick Include my annotations on cited documents. When ticked, the packet gains one section, headed as the reviewer's reading and not part of the record. It is separate from the claims and no detector reads it."
+        ]
+      },
+      {
+        "heading": "What is written",
+        "items": [
+          "Annotations on the documents the packet's claims cite, and no others.",
+          "For each: its code, author, status, the quoted passage, and your note exactly as saved (personal data masked).",
+          "Its citation: portal, document id, the offset of the passage now and when it was marked, and the SHA-256 digest of the document's stored text now and when it was marked.",
+          "Its anchor state, checked when the packet is written: Anchored, Re-anchored, or Orphaned. An orphan is kept and labelled, never dropped. A note on the whole document, or a document whose text could not be read, is shown as not checked, which is not a result."
+        ]
+      },
+      {
+        "heading": "What to check before you export",
+        "items": [
+          "Notes can hold private commentary. Everything in a note is written to both the Markdown and the JSON file; read them first.",
+          "The preview states how many annotations will be written and how many are orphaned.",
+          "Annotations on a cited document that is not public are counted and not written, because a quote would publish text the packet withholds.",
+          "The content hash covers the section when it is included, so changing a note changes the hash. The packet itself is still not signed.",
+          "The shareable read-only bundle never carries annotations."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [],
+    "related": ["annotations-depth", "evidence-packets"]
+  }
+]

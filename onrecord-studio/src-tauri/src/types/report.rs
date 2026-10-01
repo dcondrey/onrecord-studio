@@ -166,6 +166,8 @@ pub struct EvidencePacketExportResult {
     pub gap_count: usize,
     pub withheld_count: usize,
     pub generated_at: String,
+    /// `None`: annotations were not requested.
+    pub annotation_count: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
