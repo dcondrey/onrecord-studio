@@ -3,8 +3,8 @@
 //! and both are only suggestions.
 
 use super::{
-    invalid, is_identifier_kind, is_name_kind, name_key, ordered_pair, Replay, ResolutionKey,
-    SharedIdentifier, SuggestionBasis,
+    identifier_rule, invalid, is_name_kind, may_anchor, name_key, ordered_pair, Replay,
+    ResolutionKey, SharedIdentifier, SuggestionBasis,
 };
 use crate::error::AppError;
 use serde::Serialize;
@@ -97,7 +97,9 @@ pub fn pair_lead(
         links
             .iter()
             .filter(|link| {
-                link.documents >= MINIMUM_IDENTIFIER_DOCUMENTS && link.entity_id == entity.entity_id
+                link.documents >= MINIMUM_IDENTIFIER_DOCUMENTS
+                    && link.entity_id == entity.entity_id
+                    && may_anchor(&link.identifier_kind, &entity.key.kind)
             })
             .map(|link| (link.identifier_id.as_str(), link))
             .collect()
@@ -184,8 +186,9 @@ pub fn rank_candidates(
     let mut by_identifier: BTreeMap<&str, Vec<&IdentifierLink>> = BTreeMap::new();
     for link in links.iter().filter(|link| {
         link.documents >= MINIMUM_IDENTIFIER_DOCUMENTS
-            && is_identifier_kind(&link.identifier_kind)
-            && known.contains_key(link.entity_id.as_str())
+            && known
+                .get(link.entity_id.as_str())
+                .is_some_and(|entity| may_anchor(&link.identifier_kind, &entity.key.kind))
     }) {
         by_identifier
             .entry(&link.identifier_id)
@@ -193,7 +196,9 @@ pub fn rank_candidates(
             .push(link);
     }
     for group in by_identifier.values().filter(|group| group.len() > 1) {
-        if group.len() > MAXIMUM_IDENTIFIER_FANOUT {
+        let fanout = identifier_rule(&group[0].identifier_kind)
+            .map_or(MAXIMUM_IDENTIFIER_FANOUT, |rule| rule.maximum_fanout);
+        if group.len() > fanout {
             guards.skipped_identifiers += 1;
             continue;
         }
@@ -390,5 +395,93 @@ mod tests {
         let tokens: Vec<_> = second.leads.iter().map(PairLead::token).collect();
         assert_eq!(tokens, vec![leads[2].token(), leads[3].token()]);
         assert!(page_after(leads, Some("garbage"), 2).is_err());
+    }
+
+    fn link_of(
+        kind: &str,
+        identifier: &str,
+        entity: &ResolutionEntity,
+        documents: u64,
+    ) -> IdentifierLink {
+        IdentifierLink {
+            identifier_kind: kind.to_string(),
+            identifier_display: identifier.to_string(),
+            ..link(identifier, entity, documents)
+        }
+    }
+
+    #[test]
+    fn two_organizations_sharing_an_ein_in_two_documents_are_a_strong_lead_and_one_document_is_not()
+    {
+        let (a, b) = (
+            entity("ORGANIZATION", "acme holdings", 3),
+            entity("ORGANIZATION", "beta services", 3),
+        );
+        let entities = vec![a.clone(), b.clone()];
+        let none = replay(&[], &PresentEntities::new());
+
+        let two = [
+            link_of("EIN", "12-3456789", &a, 2),
+            link_of("EIN", "12-3456789", &b, 3),
+        ];
+        let (leads, _) = rank_candidates(&entities, &two, &none, false);
+        assert_eq!(leads.len(), 1);
+        assert_eq!(leads[0].basis, SuggestionBasis::StrongIdentifier);
+        let shared = leads[0].shared_identifier.as_ref().unwrap();
+        assert_eq!(
+            (shared.kind.as_str(), shared.display_value.as_str()),
+            ("EIN", "12-3456789")
+        );
+        assert_eq!((shared.left_documents, shared.right_documents), (2, 3));
+
+        let one = [
+            link_of("EIN", "12-3456789", &a, 1),
+            link_of("EIN", "12-3456789", &b, 3),
+        ];
+        let (leads, _) = rank_candidates(&entities, &one, &none, false);
+        assert!(leads.is_empty());
+    }
+
+    #[test]
+    fn an_identifier_never_links_an_entity_kind_it_may_not_anchor() {
+        let none = replay(&[], &PresentEntities::new());
+        let people = [
+            entity("PERSON", "ann lee", 3),
+            entity("PERSON", "bob roe", 3),
+        ];
+        let orgs = [
+            entity("ORGANIZATION", "acme holdings", 3),
+            entity("ORGANIZATION", "beta services", 3),
+        ];
+        for (kind, group) in [
+            ("PARCEL_NUMBER", &people),
+            ("PARCEL_NUMBER", &orgs),
+            ("EIN", &people),
+        ] {
+            let links: Vec<_> = group.iter().map(|e| link_of(kind, "x", e, 9)).collect();
+            let (leads, _) = rank_candidates(group, &links, &none, false);
+            assert!(
+                leads.is_empty(),
+                "{kind} must not link {:?}",
+                group[0].key.kind
+            );
+            let lead = pair_lead(&group[0], &group[1], &links).unwrap();
+            assert_eq!(lead.basis, SuggestionBasis::Manual);
+        }
+    }
+
+    #[test]
+    fn an_identifier_shared_past_its_fanout_is_skipped_and_counted() {
+        let none = replay(&[], &PresentEntities::new());
+        let orgs: Vec<_> = (0..=identifier_rule("EIN").unwrap().maximum_fanout)
+            .map(|i| entity("ORGANIZATION", &format!("org{i} holdings"), 3))
+            .collect();
+        let links: Vec<_> = orgs
+            .iter()
+            .map(|o| link_of("EIN", "12-3456789", o, 2))
+            .collect();
+        let (leads, guards) = rank_candidates(&orgs, &links, &none, false);
+        assert!(leads.is_empty());
+        assert_eq!(guards.skipped_identifiers, 1);
     }
 }

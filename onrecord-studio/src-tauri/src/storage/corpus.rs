@@ -49,8 +49,12 @@ const CORPUS_ALGORITHM_VERSION: &str = "deterministic-corpus-v3";
 /// `analyze_relationships` writes `SIGNED_BY`/`CITES`/`PROMISES`/`DELIVERED`/`SUPERSEDES`/`AMENDS`
 /// edges where the text carried the cue, including across segment boundaries. An index stamped 8
 /// holds only `CO_OCCURRENCE` edges and would read as "no typed relationships exist".
-const CORPUS_SCHEMA_VERSION: i64 = 9;
+/// 10: `EIN`, `CONTRACTOR_LICENSE` and `PARCEL_NUMBER` join the entity kinds, so the `entity_kind`
+/// CHECK changes; an index stamped 9 would refuse every write that carries one.
+const CORPUS_SCHEMA_VERSION: i64 = 10;
 
+#[path = "corpus_identifiers.rs"]
+mod identifiers;
 #[path = "corpus_neighbors.rs"]
 pub mod neighbors;
 
@@ -81,7 +85,7 @@ const MAXIMUM_ENTITIES_PER_KIND: usize = 4_000;
 /// their truncation rows exist by construction the moment an extractor for them lands; no extractor
 /// populates those two yet, so their rows read as "not truncated" against a zero-extraction pass,
 /// which is honest.
-const ENTITY_KINDS: [CorpusEntityKind; 12] = [
+const ENTITY_KINDS: [CorpusEntityKind; 15] = [
     CorpusEntityKind::Statute,
     CorpusEntityKind::Date,
     CorpusEntityKind::EmailDomain,
@@ -94,6 +98,9 @@ const ENTITY_KINDS: [CorpusEntityKind; 12] = [
     CorpusEntityKind::Role,
     CorpusEntityKind::Position,
     CorpusEntityKind::DocumentClass,
+    CorpusEntityKind::Ein,
+    CorpusEntityKind::ContractorLicense,
+    CorpusEntityKind::ParcelNumber,
 ];
 const MAXIMUM_TOKEN_CHARACTERS: usize = 96;
 const MAXIMUM_RELATIONSHIPS_PER_DOCUMENT: usize = 20_000;
@@ -274,6 +281,28 @@ const SIGNER_EXTRACTOR: ExtractorStamp = ExtractorStamp {
 /// when a decimal point is present and the thousands groups checked to three.
 const MONEY_EXTRACTOR: ExtractorStamp = ExtractorStamp {
     id: "money.currency-amount",
+    version: 1,
+    grade: EntityValidationGrade::FormatValidated,
+};
+
+/// `NN-NNNNNNN` with an assigned IRS prefix on clean boundaries. No checksum exists, so the format
+/// is all that was verified.
+const EIN_EXTRACTOR: ExtractorStamp = ExtractorStamp {
+    id: "identifier.ein",
+    version: 1,
+    grade: EntityValidationGrade::FormatValidated,
+};
+
+/// A 6 to 8 digit number after an explicit CSLB or contractor-license label.
+const CONTRACTOR_LICENSE_EXTRACTOR: ExtractorStamp = ExtractorStamp {
+    id: "identifier.contractor-license",
+    version: 1,
+    grade: EntityValidationGrade::FormatValidated,
+};
+
+/// `NNN-NNN-NN(-NN)` after an explicit APN or assessor's-parcel label.
+const PARCEL_NUMBER_EXTRACTOR: ExtractorStamp = ExtractorStamp {
+    id: "identifier.parcel-number",
     version: 1,
     grade: EntityValidationGrade::FormatValidated,
 };
@@ -1507,6 +1536,7 @@ fn extract_entities(
     extract_url_hosts(text, segments, &mut entities, &mut budget);
     extract_organizations_and_acronyms(text, tokens, segments, &mut entities, &mut budget);
     extract_money(text, segments, &mut entities, &mut budget);
+    extract_identifiers(text, segments, &mut entities, &mut budget);
     for mention in typed_edges::role_and_signer_mentions(text) {
         let extractor = if mention.kind == CorpusEntityKind::Role {
             ROLE_EXTRACTOR
@@ -2045,6 +2075,57 @@ fn extract_money(
             .unwrap_or(1);
         byte_index += character_bytes;
         character_index += 1;
+    }
+}
+
+fn extract_identifiers(
+    text: &str,
+    segments: &[AnalyzedSegment],
+    entities: &mut Vec<AnalyzedEntity>,
+    budget: &mut EntityBudget,
+) {
+    let limit = MAXIMUM_ENTITIES_PER_KIND + 1;
+    let passes = [
+        (
+            CorpusEntityKind::Ein,
+            identifiers::find_eins(text, limit),
+            EIN_EXTRACTOR,
+        ),
+        (
+            CorpusEntityKind::ContractorLicense,
+            identifiers::find_contractor_licenses(text, limit),
+            CONTRACTOR_LICENSE_EXTRACTOR,
+        ),
+        (
+            CorpusEntityKind::ParcelNumber,
+            identifiers::find_parcel_numbers(text, limit),
+            PARCEL_NUMBER_EXTRACTOR,
+        ),
+    ];
+    for (kind, matches, extractor) in passes {
+        let mut byte_cursor = 0;
+        let mut character_cursor = 0;
+        for found in matches {
+            if budget.is_full(kind) {
+                break;
+            }
+            character_cursor += text[byte_cursor..found.byte_start].chars().count();
+            let length = text[found.byte_start..found.byte_end].chars().count();
+            push_entity_with_display(
+                entities,
+                budget,
+                segments,
+                kind,
+                found.normalized,
+                found.display,
+                character_cursor,
+                character_cursor + length,
+                9_000,
+                extractor,
+            );
+            character_cursor += length;
+            byte_cursor = found.byte_end;
+        }
     }
 }
 
@@ -3867,7 +3948,8 @@ CREATE TABLE IF NOT EXISTS corpus_entities (
     entity_kind TEXT NOT NULL CHECK (
         entity_kind IN (
             'STATUTE', 'DATE', 'EMAIL_DOMAIN', 'EMAIL_ADDRESS', 'URL_HOST', 'ACRONYM',
-            'ORGANIZATION', 'MONEY', 'PERSON', 'ROLE', 'POSITION', 'DOCUMENT_CLASS'
+            'ORGANIZATION', 'MONEY', 'PERSON', 'ROLE', 'POSITION', 'DOCUMENT_CLASS',
+            'EIN', 'CONTRACTOR_LICENSE', 'PARCEL_NUMBER'
         )
     ),
     normalized_value TEXT NOT NULL,
@@ -4106,6 +4188,97 @@ mod tests {
             assert!(entity.character_start < entity.character_end);
             assert!(entity.character_end <= text.chars().count());
         }
+    }
+
+    #[test]
+    fn identifier_mentions_carry_character_offsets_extractor_and_grade() {
+        let text = "Café Ünïon Inc, EIN 12-3456789, CSLB License No. 654321, APN 123-456-78.";
+        let analyzed = analyze_document(input(1, text)).unwrap();
+        let characters: Vec<char> = text.chars().collect();
+        for (kind, value, extractor) in [
+            (CorpusEntityKind::Ein, "12-3456789", "identifier.ein"),
+            (
+                CorpusEntityKind::ContractorLicense,
+                "654321",
+                "identifier.contractor-license",
+            ),
+            (
+                CorpusEntityKind::ParcelNumber,
+                "123-456-78",
+                "identifier.parcel-number",
+            ),
+        ] {
+            let entity = analyzed
+                .entities
+                .iter()
+                .find(|entity| entity.kind == kind)
+                .unwrap_or_else(|| panic!("{kind:?} must be extracted"));
+            let span: String = characters[entity.character_start..entity.character_end]
+                .iter()
+                .collect();
+            assert_eq!(span, value);
+            assert_eq!(entity.extractor.id, extractor);
+            assert_eq!(entity.extractor.version, 1);
+            assert_eq!(
+                entity.extractor.grade,
+                EntityValidationGrade::FormatValidated
+            );
+        }
+    }
+
+    /// An index stamped 9 has the twelve-kind `entity_kind` CHECK, which refuses `EIN`. It must be
+    /// discarded and rebuilt rather than left to fail the first write that carries one.
+    #[tokio::test]
+    async fn a_version_9_corpus_index_is_rebuilt_and_then_accepts_the_identifier_kinds() {
+        let directory = tempdir().expect("temp dir must be created");
+        let path = directory.path().join("corpus.db");
+        {
+            let previous = Connection::open(&path).expect("the version 9 fixture must open");
+            previous
+                .execute_batch(
+                    "CREATE TABLE corpus_schema_version (
+                        singleton BOOLEAN PRIMARY KEY,
+                        version BIGINT NOT NULL
+                     );
+                     INSERT INTO corpus_schema_version (singleton, version) VALUES (TRUE, 9);
+                     CREATE TABLE corpus_entities (
+                        entity_id TEXT PRIMARY KEY,
+                        entity_kind TEXT NOT NULL CHECK (
+                            entity_kind IN (
+                                'STATUTE', 'DATE', 'EMAIL_DOMAIN', 'EMAIL_ADDRESS', 'URL_HOST',
+                                'ACRONYM', 'ORGANIZATION', 'MONEY', 'PERSON', 'ROLE', 'POSITION',
+                                'DOCUMENT_CLASS'
+                            )
+                        ),
+                        normalized_value TEXT NOT NULL,
+                        display_value TEXT NOT NULL,
+                        resolution_basis TEXT NOT NULL,
+                        UNIQUE (entity_kind, normalized_value)
+                     );
+                     INSERT INTO corpus_entities
+                     VALUES ('stale', 'ACRONYM', 'rtfh', 'RTFH', 'EXACT_NORMALIZED_MATCH');",
+                )
+                .expect("the version 9 schema must apply");
+        }
+
+        drop(CorpusIndex::open(&path).expect("a version 9 index must be rebuilt, not fail"));
+        let connection = Connection::open(&path).expect("the rebuilt index must open");
+        for kind in ["EIN", "CONTRACTOR_LICENSE", "PARCEL_NUMBER"] {
+            connection
+                .execute(
+                    "INSERT INTO corpus_entities VALUES (?, ?, 'v', 'v', 'EXACT_NORMALIZED_MATCH')",
+                    params![kind, kind],
+                )
+                .unwrap_or_else(|error| panic!("{kind} must be storable: {error}"));
+        }
+        let remaining: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM corpus_entities WHERE entity_id = 'stale'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(remaining, 0);
     }
 
     /// The version-mismatch path specifically, which the fixture above does not exercise: that one

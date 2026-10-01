@@ -17,6 +17,7 @@ import scale from './topics-scale.json';
 import resolution from './topics-resolution.json';
 import annotations from './topics-annotations.json';
 import annotationExport from './topics-annotation-export.json';
+import identifiers from './topics-identifiers.json';
 
 export type HelpGroup =
   | 'Getting started'
@@ -80,6 +81,7 @@ export const HELP_TOPICS = [
   ...resolution,
   ...annotations,
   ...annotationExport,
+  ...identifiers,
 ] as HelpTopic[];
 
 export function findHelpTopic(id: string): HelpTopic | undefined {

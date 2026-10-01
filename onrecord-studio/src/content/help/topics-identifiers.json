@@ -1,0 +1,59 @@
+[
+  {
+    "id": "shared-identifiers",
+    "title": "Shared identifiers in entity resolution",
+    "group": "Findings",
+    "summary": "Which identifiers raise a suggestion when you resolve entities, what each one does and does not show, and what is skipped.",
+    "keywords": [
+      "identifier",
+      "ein",
+      "employer identification number",
+      "contractor license",
+      "cslb",
+      "apn",
+      "parcel",
+      "assessor",
+      "entity",
+      "resolution",
+      "shared"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "Besides email addresses, the index reads three California-relevant identifiers. A suggestion can say two names share one. A shared identifier is a reason to look, not proof that two names are one party, and nothing is merged for you."
+        ]
+      },
+      {
+        "heading": "What is read",
+        "items": [
+          "EIN: ten characters in the form NN-NNNNNNN with an assigned IRS prefix, standing alone. A bare nine-digit number is never read as an EIN. The format is all that is checked; no checksum exists.",
+          "Contractor license: six to eight digits directly after a label such as CSLB or Contractor License, or after Lic. No. when the word contractor is on the same line. Format only.",
+          "Parcel number (APN): NNN-NNN-NN or NNN-NNN-NN-NN directly after APN or Assessor's Parcel. Format only.",
+          "Values that the app's privacy masking would remove are not indexed."
+        ]
+      },
+      {
+        "heading": "What each one can link",
+        "items": [
+          "An EIN can link organizations, never people.",
+          "A contractor license can link people or organizations.",
+          "A parcel number identifies a property. It never links people or organizations: two parties named near one parcel are neighbours of that parcel, not each other.",
+          "Both names must appear within a short stretch of text (about 200 characters) of an EIN or license number, in at least two documents each. Only the first mention of each name in a passage is measured, so a closer later mention can be missed."
+        ]
+      },
+      {
+        "heading": "What is skipped",
+        "paragraphs": [
+          "An identifier tied to more than the allowed number of names (8 for an EIN or license, 12 for an email address) is skipped as a template value or shared mailbox. The Resolve entities panel shows how many were skipped.",
+          "Documents indexed before this feature need to be re-indexed before these identifiers appear. The app does that automatically the first time it opens an older index."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [],
+    "related": [
+      "entity-resolution"
+    ]
+  }
+]
