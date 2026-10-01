@@ -88,6 +88,8 @@ pub use casework::*;
 pub mod monitoring;
 pub use monitoring::*;
 
+pub mod snapshot;
+
 pub mod watchlists;
 pub use watchlists::*;
 

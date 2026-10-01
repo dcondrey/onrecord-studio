@@ -97,7 +97,12 @@ information. Semantic search in Analysis needs the embedding model, downloaded o
 - **Case chain-of-custody package** (Casework) and **appeal draft** (Evidence): signed packages
   that the verifier above the workbench tabs checks for integrity.
 
-Reports and packets are written to the `reports/` folder of the workspace directory above.
+- **Research snapshot** (San Diego view, *Collection, coverage and storage*): a read-only DuckDB
+  file of requests, documents, deadline evaluations and findings, with a signed manifest naming the
+  exact corpus state, for Python, R or SQL work that can be cited and re-run. See
+  [research-snapshot.md](research-snapshot.md).
+
+Reports, packets and snapshots are written to the `reports/` folder of the workspace directory above.
 
 ## Privacy
 

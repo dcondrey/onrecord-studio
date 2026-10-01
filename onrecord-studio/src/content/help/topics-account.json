@@ -209,5 +209,45 @@
       "updates",
       "sources"
     ]
+  },
+  {
+    "id": "research-snapshot",
+    "title": "Research snapshot: query your evidence from Python, R or SQL",
+    "group": "Data handling",
+    "summary": "A read-only DuckDB file of the evidence projection, with a signed manifest that names the exact corpus state, so a query result can be cited and re-run.",
+    "keywords": ["snapshot", "duckdb", "python", "r", "sql", "export", "reproducible", "cite", "manifest", "digest", "api", "pandas", "jupyter", "notebook"],
+    "sections": [
+      {
+        "paragraphs": [
+          "Under San Diego, Collection, coverage and storage, open Research snapshot for outside tools and press Export research snapshot. The app writes a .duckdb file and a .manifest.json beside it in the reports/snapshots folder of its data directory. The app keeps running; the snapshot is a separate file that any DuckDB client can open read-only."
+        ]
+      },
+      {
+        "heading": "What is in it",
+        "items": [
+          "Tables portals, agencies, requests, statutory_extensions, documents, statutory_violations and findings, each with a stable, documented set of columns, plus snapshot_manifest.",
+          "Digests, never content: documents carry the SHA-256 of their file and extracted text, not the text. Request descriptions, reviewer notes and local paths are left out, so a snapshot can be shared without reviewing it for personal information in those fields. Headlines, explanations and quoted citations in findings are included as the inbox shows them.",
+          "Counts and confidence exactly as stored: confidence_basis_points is NULL when no confidence was measured, which is not zero."
+        ]
+      },
+      {
+        "heading": "Citing a result",
+        "paragraphs": [
+          "The manifest records the file's SHA-256, the corpus state digest (over every document's identity and text digest) and the findings digest, signed with this installation's export key. Quote the corpus state digest with any figure you publish: anyone holding a snapshot with the same digest can re-run the query and get the same rows. The signature shows the file is unchanged since export; it does not identify who exported it."
+        ]
+      },
+      {
+        "heading": "What it does not do",
+        "items": [
+          "It is not live. Changes after export are not in it; export again and compare digests.",
+          "It cannot be overwritten. A second export the same second fails rather than replacing a file that may already be cited.",
+          "It does not include the semantic index, entity graph, tables you imported for SQL analysis, drafts, tracked requests or case files."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": ["snapshot"],
+    "related": ["data-handling", "package-verification", "evidence-packets"]
   }
 ]
