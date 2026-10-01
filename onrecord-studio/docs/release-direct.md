@@ -5,6 +5,10 @@ plugin is linked only with the `direct-license` feature and its capability
 (`src-tauri/capabilities/direct.json`) is listed only by `tauri.direct.conf.json`. An update replaces
 the binary and nothing else; it never grants or extends a license.
 
+Both channels ship Apple silicon only (`aarch64-apple-darwin`). ONNX Runtime publishes no Intel macOS
+binaries from 1.24 on (ort-sys 2.0.0-rc.12+), so the embedding model cannot link for `x86_64`, and
+macOS 26 was the last release for Intel Macs.
+
 ## Environment
 
 | name | purpose |
@@ -36,8 +40,8 @@ node scripts/build-direct.mjs            # prepare, tauri build, notarize app, p
 `package-direct.mjs` (last step) verifies the stapled `.app` (`codesign --verify --deep --strict`,
 `stapler validate`, `spctl --assess`), then writes to `dist-tauri/release/<version>/`:
 
-- `OnRecord-Studio_<version>_universal.dmg`: signed, notarized, stapled (hdiutil; no extra tool).
-- `OnRecord-Studio_<version>_universal.app.tar.gz` and `.sig`: built from the stapled app, signed with
+- `OnRecord-Studio_<version>_aarch64.dmg`: signed, notarized, stapled (hdiutil; no extra tool).
+- `OnRecord-Studio_<version>_aarch64.app.tar.gz` and `.sig`: built from the stapled app, signed with
   the updater key, verified against the public key in `tauri.direct.conf.json`, then extracted and
   re-verified with codesign and stapler.
 - `latest.json`.
@@ -57,7 +61,6 @@ a fixed Xcode ships, set for the release build only, in `.env.direct.local`:
 
 ```sh
 CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER=/Volumes/A/onrecord-studio/onrecord-studio/scripts/xcode27-linker/cc
-CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER=/Volumes/A/onrecord-studio/onrecord-studio/scripts/xcode27-linker/cc
 CARGO_TARGET_DIR=/Volumes/C/rust-target-onrecord-release
 ```
 
@@ -77,13 +80,12 @@ the version comparison itself.
   "notes": "Text from RELEASE_NOTES.md",
   "pub_date": "2026-10-01T12:00:00.000Z",
   "platforms": {
-    "darwin-aarch64": { "signature": "<contents of the .sig file>", "url": "https://.../1.0.1/OnRecord-Studio_1.0.1_universal.app.tar.gz" },
-    "darwin-x86_64": { "signature": "<same>", "url": "<same>" }
+    "darwin-aarch64": { "signature": "<contents of the .sig file>", "url": "https://.../1.0.1/OnRecord-Studio_1.0.1_aarch64.app.tar.gz" }
   }
 }
 ```
 
-The archive is universal, so both entries carry the same signature and URL. Tauri 2 has no updater
+The build is Apple silicon only, so the feed has no `darwin-x86_64` entry and an Intel client finds no update. Tauri 2 has no updater
 `dialog` option; the app shows its own prompt (`src/components/updates/`).
 
 ## Owner-only steps

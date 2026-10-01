@@ -16,7 +16,7 @@ const steps = [
   [
     'npx',
     [
-      'tauri', 'build', '--ci', '--bundles', 'app', '--target', 'universal-apple-darwin',
+      'tauri', 'build', '--ci', '--bundles', 'app', '--target', 'aarch64-apple-darwin',
       '--features', 'direct-license', '--config', 'src-tauri/tauri.direct.conf.json',
     ],
   ],

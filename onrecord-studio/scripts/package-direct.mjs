@@ -15,7 +15,7 @@ const identifier = 'com.onrecord.studio';
 const teamId = 'U3PZN7P3E5';
 const productName = 'OnRecord Studio';
 const feedTemplate = 'https://updates.writerslogic.com/onrecord/updates/{{target}}/{{arch}}/{{current_version}}';
-const targets = ['darwin-aarch64', 'darwin-x86_64'];
+const targets = ['darwin-aarch64'];
 
 const localEnvironment = join(root, '.env.direct.local');
 if (existsSync(localEnvironment)) process.loadEnvFile(localEnvironment);
@@ -30,7 +30,7 @@ const passwordPath = process.env.ONRECORD_UPDATER_KEY_PASSWORD_PATH ?? `${keyPat
 const notesPath = resolve(argumentValue('--notes') ?? process.env.RELEASE_NOTES_PATH ?? join(root, 'RELEASE_NOTES.md'));
 const outputDir = resolve(argumentValue('--out') ?? join(root, 'dist-tauri', 'release', version));
 const baseUrl = process.env.RELEASE_BASE_URL?.trim().replace(/\/+$/, '');
-const fileStem = `OnRecord-Studio_${version}_universal`;
+const fileStem = `OnRecord-Studio_${version}_aarch64`;
 const files = {
   dmg: join(outputDir, `${fileStem}.dmg`),
   archive: join(outputDir, `${fileStem}.app.tar.gz`),
@@ -96,7 +96,7 @@ function check() {
 function dryRun() {
   check();
   const plan = [
-    `1. Locate ${productName}.app (--app, ONRECORD_APP_BUNDLE_PATH, or the Cargo universal bundle); require Developer ID signature, team ${teamId}, stapled ticket, Gatekeeper "Notarized Developer ID", CFBundleShortVersionString ${version}.`,
+    `1. Locate ${productName}.app (--app, ONRECORD_APP_BUNDLE_PATH, or the Cargo bundle); require Developer ID signature, team ${teamId}, stapled ticket, Gatekeeper "Notarized Developer ID", CFBundleShortVersionString ${version}.`,
     `2. Build ${files.dmg} with hdiutil; sign with APPLE_SIGNING_IDENTITY; notarize with APPLE_NOTARY_KEYCHAIN_PROFILE; staple; spctl --type open.`,
     `3. Archive the stapled app to ${files.archive}; sign it with ${keyPath}; verify the signature against the configured public key; extract and re-verify codesign and stapler.`,
     `4. Write ${files.feed} for ${targets.join(', ')} with notes from ${notesPath}, URLs under ${baseUrl ?? '$RELEASE_BASE_URL'}/${version}/.`,
@@ -189,7 +189,7 @@ function verifyApp(appPath) {
 
 function resolveApp() {
   const explicit = argumentValue('--app') ?? process.env.ONRECORD_APP_BUNDLE_PATH;
-  const target = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts['build:direct'] ? 'universal-apple-darwin' : null;
+  const target = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts['build:direct'] ? 'aarch64-apple-darwin' : null;
   const metadata = JSON.parse(run('cargo', ['metadata', '--format-version', '1', '--no-deps', '--manifest-path', join(tauriRoot, 'Cargo.toml')]));
   const path = resolve(explicit ?? join(metadata.target_directory, ...(target ? [target] : []), 'release', 'bundle', 'macos', `${productName}.app`));
   assert(existsSync(path) && lstatSync(path).isDirectory(), `App bundle not found: ${path}`);

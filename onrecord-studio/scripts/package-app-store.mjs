@@ -96,10 +96,11 @@ for (const link of links) {
 // checked, not just the main executable: the dependency allowlist above admits `@rpath` and
 // `@loader_path`, and a universal executable beside a single-architecture bundled library still
 // fails at dyld load on the architecture that library is missing.
-if (bundleTarget === 'universal-apple-darwin') {
+const requiredArchitectures = { 'aarch64-apple-darwin': ['arm64'] }[bundleTarget];
+if (requiredArchitectures) {
   for (const machO of machObjectsIn(join(appPath, 'Contents'))) {
     const architectures = run('lipo', ['-archs', machO]).split(/\s+/).filter(Boolean);
-    for (const architecture of ['arm64', 'x86_64']) {
+    for (const architecture of requiredArchitectures) {
       assert(
         architectures.includes(architecture),
         `${machO} is missing the ${architecture} architecture; it carries ${architectures.join(', ')}.`,

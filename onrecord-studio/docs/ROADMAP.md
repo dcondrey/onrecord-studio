@@ -778,7 +778,7 @@ than adding a third grammar beside it.
 - [ ] Validate light/dark/automatic appearance on macOS and Windows builds.
 - [ ] Test standalone window restoration, menu shortcuts, and deep links.
 - [ ] Run accessibility contrast and focus checks at 100%, 125%, and 200% scale. Contrast and non-colour cues were met in `2c04d1a`; the scale sweep needs the app driven and cannot be closed from a test.
-- [x] The Mac App Store chain is built and asserted: sandboxed universal bundle, provisioning
+- [x] The Mac App Store chain is built and asserted: sandboxed Apple silicon bundle, provisioning
       profile identity and expiry validated before packaging, every Mach-O checked, and the
       installer chain verified (`d0f5cab`, `60348c9`, `56bb2c6`, `94276ac`, `09ab5a1`, `dbcb619`).
       App Store submissions are notarized by Apple, so there is no separate notarization step.
