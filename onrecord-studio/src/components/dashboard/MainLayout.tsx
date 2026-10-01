@@ -27,6 +27,7 @@ import StoryDesk from './StoryDesk';
 import AgencyComparison from './AgencyComparison';
 import MeetingsView from './MeetingsView';
 import { documentBriefingEvidence, requestBriefingEvidence } from '../../utils/briefing';
+import DialogBackdrop from '../ui/DialogBackdrop';
 import AnalysisWorkbench from './AnalysisWorkbench';
 import { formatMatchCount, SEARCH_RESULT_LIMIT } from '../../utils/searchResults';
 
@@ -136,13 +137,15 @@ export default function MainLayout() {
   };
 
   useEffect(() => {
-    if (!activeDocument) return;
+    // The delete confirmation owns Escape while it is open; closing the viewer underneath it too
+    // would discard the reader's place.
+    if (!activeDocument || pendingDocumentPurge) return;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setActiveDocument(null);
     };
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [activeDocument]);
+  }, [activeDocument, pendingDocumentPurge]);
 
   const openDocument = async (summary: RequestDocumentSummary, characterOffset = 0) => {
     setDocumentError(null);
@@ -425,7 +428,7 @@ export default function MainLayout() {
         </div>
       </div>
       {pendingDocumentPurge && (
-        <div className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="purge-document-title">
+        <DialogBackdrop labelledBy="purge-document-title" onClose={() => setPendingDocumentPurge(null)} className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm">
           <div className="app-panel w-full max-w-md overflow-hidden shadow-2xl shadow-black/40">
             <div className="border-b border-slate-800 p-4">
               <div className="app-eyebrow text-rose-300/70">Evidence</div>
@@ -445,7 +448,7 @@ export default function MainLayout() {
               <button type="button" disabled={isPurgingDocument} onClick={() => void purgeDocument()} className="focus-ring rounded-lg border border-rose-400/40 bg-rose-500/20 px-4 py-2 text-[9px] font-semibold text-rose-100 disabled:cursor-not-allowed disabled:opacity-60">{isPurgingDocument ? 'Deleting…' : 'Delete this document'}</button>
             </div>
           </div>
-        </div>
+        </DialogBackdrop>
       )}
       {activeDocument && (
         <div className="app-backdrop fixed inset-0 z-50 grid place-items-center p-8 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`Document ${activeDocument.summary.fileName}`}>
