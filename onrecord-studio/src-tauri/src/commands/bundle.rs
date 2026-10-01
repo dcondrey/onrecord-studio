@@ -2,7 +2,6 @@
 //! an export that writes it only for the content the caller confirmed.
 
 use crate::{
-    blocking,
     bundle::{
         self, content_sha256, parse_embedded, preview_of, render_html, Assembly, BundleDocument,
         BundlePreview, ShareableBundleResult, MAXIMUM_BUNDLE_BYTES,
@@ -15,7 +14,7 @@ use crate::{
     error::AppError,
     integrity::sha256_hex,
     profile::ProfileStore,
-    report::output::validate_output_path,
+    report::output::{commit_new_file, validate_output_path},
     storage::{corpus::CorpusIndex, sqlite::DuckDbRepository},
 };
 use serde::Deserialize;
@@ -124,11 +123,9 @@ pub(crate) async fn write_bundle(
         ));
     }
     let file_sha256 = sha256_hex(html.as_bytes());
-    let destination = output_path.clone();
-    blocking::spawn("Write shareable bundle", move || {
-        crate::atomic_write::write_atomic(&destination, "the shareable bundle", html.as_bytes())
-    })
-    .await??;
+    // Links the file into place and fails if the path exists by now, so a file that appeared
+    // after the path was validated is never replaced.
+    commit_new_file(&output_path, html.as_bytes()).await?;
     Ok(ShareableBundleResult {
         output_path: output_path.to_string_lossy().into_owned(),
         file_sha256,

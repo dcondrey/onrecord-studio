@@ -373,3 +373,23 @@ async fn a_written_bundle_reads_back_as_the_confirmed_content_and_holds_only_pub
     assert!(stale.is_err());
     assert!(!dir.path().join("second.html").exists());
 }
+
+#[tokio::test]
+async fn an_existing_file_is_never_replaced() {
+    let assembly = one_public_finding();
+    let hash = content_sha256(&assembly.content).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("b.html");
+    std::fs::write(&path, "precious").unwrap();
+    let result = write_bundle(assembly, &hash, path.clone(), "t".into()).await;
+    assert!(result.is_err());
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "precious");
+}
+
+#[test]
+fn an_unrecorded_file_digest_is_stated_not_omitted() {
+    let mut assembly = one_public_finding();
+    assembly.content.findings[0].claim.citations[0].raw_file_sha256 = None;
+    let (_, html) = rendered(assembly);
+    assert!(html.contains("File SHA-256 not recorded"));
+}

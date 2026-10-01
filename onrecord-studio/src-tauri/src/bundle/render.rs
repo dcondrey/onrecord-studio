@@ -96,12 +96,15 @@ fn write_finding(out: &mut String, finding: &BundleFinding) {
             let _ = write!(out, ", characters {start} to {end}");
         }
         out.push_str(")</span>");
-        if let Some(digest) = &citation.raw_file_sha256 {
-            let _ = write!(
-                out,
-                "<div class=\"hash\">File SHA-256 {}</div>",
-                escape(digest)
-            );
+        match &citation.raw_file_sha256 {
+            Some(digest) => {
+                let _ = write!(
+                    out,
+                    "<div class=\"hash\">File SHA-256 {}</div>",
+                    escape(digest)
+                );
+            }
+            None => out.push_str("<div class=\"hash\">File SHA-256 not recorded</div>"),
         }
         if let Some(quote) = &citation.quote {
             let _ = write!(
