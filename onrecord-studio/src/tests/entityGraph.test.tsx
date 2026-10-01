@@ -82,6 +82,39 @@ afterEach(() => {
   cleanup();
 });
 
+describe("EntityGraph combining", () => {
+  it("never merges a lookalike's relationships into an entity the reader has since moved to", async () => {
+    render(<EntityGraph />);
+    await waitFor(() => expect(resolvers.has("entity-slow")).toBe(true));
+    resolvers.get("entity-slow")?.({
+      center: node("entity-slow", "Housing Authority", 9),
+      edges: [
+        {
+          neighbor: node("entity-alias", "HOUSING AUTHORITY, Inc.", 2),
+          basis: "COMPUTED" as const,
+          kind: "CO_OCCURRENCE" as const,
+          sharedDocumentCount: 2,
+          confidenceBasisPoints: 6000,
+        },
+      ],
+      truncated: false,
+    });
+    const combine = await screen.findByRole("button", { name: /combine in this view/i });
+    fireEvent.click(combine);
+    await waitFor(() => expect(resolvers.has("entity-alias")).toBe(true));
+
+    // The reader moves on before the alias answers.
+    screen.getByRole("button", { name: /rtfhsd\.org/ }).click();
+    await waitFor(() => expect(resolvers.has("entity-fast")).toBe(true));
+    resolvers.get("entity-fast")?.(neighborhood("entity-fast", "rtfhsd.org", "FAST NEIGHBOUR"));
+    await screen.findAllByText("FAST NEIGHBOUR");
+
+    resolvers.get("entity-alias")?.(neighborhood("entity-alias", "HOUSING AUTHORITY, Inc.", "LEAKED VENDOR"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByText("LEAKED VENDOR")).toBeNull();
+  });
+});
+
 describe("EntityGraph", () => {
   it("discards a neighbourhood that resolves after the investigator moved to another entity", async () => {
     render(<EntityGraph />);

@@ -46,6 +46,7 @@ export interface NativeCommandMap {
   set_data_maintenance_policy: { args: { policy: Types.DataMaintenancePolicy }; result: Types.DataMaintenanceStatus };
   run_data_maintenance: { args: NoArgs; result: Types.DataMaintenanceStatus };
   export_research_snapshot: { args: NoArgs; result: Types.ResearchSnapshotResult };
+  get_corpus_state_digest: { args: NoArgs; result: Types.CorpusStateIdentity };
   reconstruct_document_context: { args: { documentId: number; portalKey: string; options?: Types.ReconstructionOptions | null }; result: Types.ReconstructionReport };
   get_financial_workspace: { args: NoArgs; result: Types.FinancialWorkspace };
   save_financial_mapping: { args: { mapping: Types.FinancialMapping }; result: Types.FinancialWorkspace };

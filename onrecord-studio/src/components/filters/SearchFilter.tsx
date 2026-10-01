@@ -2,7 +2,7 @@ import { formatMatchCount, SEARCH_RESULT_LIMIT } from '../../utils/searchResults
 import { useEffect, useMemo, useRef, useState } from 'react';
 import AgencySelector from './AgencySelector';
 import { useAppStore } from '../../store/useAppStore';
-import { searchRecordText, type SearchRecordInput } from '../../utils/searchResults';
+import { searchQueryId, searchRecordText, type SearchRecordInput } from '../../utils/searchResults';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { compileToLegacyQuery, interpretNaturalLanguage, parseQualifierQuery, serializeQualifierQuery } from '../../query';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
@@ -131,7 +131,11 @@ export default function SearchFilter() {
       return;
     }
     try {
-      await navigator.clipboard.writeText(searchRecordText(applied));
+      const [queryId, corpus] = await Promise.all([
+        searchQueryId(applied.query, applied.filters),
+        invokeCommand('get_corpus_state_digest', {}).catch(() => null),
+      ]);
+      await navigator.clipboard.writeText(searchRecordText({ ...applied, queryId, corpus }));
       setWatchStatus({ ok: true, text: 'Search record copied.' });
     } catch {
       setWatchStatus({ ok: false, text: 'The clipboard is unavailable.' });
