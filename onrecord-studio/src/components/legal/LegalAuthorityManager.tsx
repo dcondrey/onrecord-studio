@@ -1,3 +1,4 @@
+import DialogBackdrop from '../ui/DialogBackdrop';
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { invokeCommand } from '../../ipc';
 import { useAppStore } from '../../store/useAppStore';
@@ -100,15 +101,10 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
       .finally(() => {
         if (active) setIsLoading(false);
       });
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', closeOnEscape);
     return () => {
       active = false;
-      window.removeEventListener('keydown', closeOnEscape);
     };
-  }, [isOpen, onClose, setAuthorities]);
+  }, [isOpen, setAuthorities]);
 
   useEffect(() => {
     if (!isOpen || authorities.length === 0) return;
@@ -234,12 +230,7 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
   };
 
   return (
-    <div
-      className="app-backdrop fixed inset-0 z-[70] grid place-items-center p-6 backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="legal-library-title"
-    >
+    <DialogBackdrop labelledBy="legal-library-title" onClose={onClose} className="app-backdrop fixed inset-0 z-[70] grid place-items-center p-6 backdrop-blur-sm">
       <div className="grid h-[min(860px,92vh)] w-[min(1380px,96vw)] grid-cols-[360px_minmax(0,1fr)] overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl shadow-black/60">
         <aside className="flex min-h-0 flex-col border-r border-slate-800 bg-slate-900/35">
           <div className="border-b border-slate-800 px-5 py-4">
@@ -424,7 +415,7 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
           </form>
         </section>
       </div>
-    </div>
+    </DialogBackdrop>
   );
 }
 

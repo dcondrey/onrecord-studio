@@ -15,7 +15,8 @@ export function useDialogFocus(onClose: () => void) {
 
   useEffect(() => {
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    ref.current?.focus();
+    // A child that claimed focus itself (autoFocus) already knows the right first control.
+    if (!ref.current?.contains(document.activeElement)) ref.current?.focus();
     return () => opener?.focus();
   }, []);
 

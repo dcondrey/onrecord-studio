@@ -80,7 +80,7 @@ export default function ResearchWorkspace({ onReview }: { onReview?: (reportId: 
     : missingCredential ? "Model access is unavailable. Configure a credential to run another investigation."
     : status.phase;
   return <section ref={workspaceRef} aria-label="Autonomous research" className="space-y-4">
-    <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400"><p role="status">{stage}</p>{latestSavedAt && <p>Latest saved dossier: {new Date(latestSavedAt).toLocaleString()}</p>}</div>
+    <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400"><p role="status">{stage}</p>{status && <p className={status.policy.provider === "ollama" ? "text-emerald-300" : "text-amber-200"}>{status.policy.provider === "ollama" ? "Model: local Ollama. Nothing is sent off this computer." : `Model: ${status.policy.provider === "openrouter" ? "OpenRouter" : "OpenAI"} (external). Investigations${status.policy.enabled ? "" : " you run manually"} send selected public-record excerpts to it.`}</p>}{latestSavedAt && <p>Latest saved dossier: {new Date(latestSavedAt).toLocaleString()}</p>}</div>
     {status && (missingCredential || budgetMessage) && <div className="rounded-lg border border-amber-700 p-3 text-sm text-amber-200">
       {missingCredential && <p>Add <code>{status.policy.provider === "openrouter" ? "OPENROUTER_API_KEY" : "OPENAI_API_KEY"}</code> to <code>~/.env</code> for the selected {status.policy.provider === "openrouter" ? "OpenRouter" : "OpenAI API"} provider. The app checks this file automatically. If your key is for another provider, select that provider in Research settings.</p>}
       {budgetMessage && <p className={missingCredential ? "mt-2" : undefined}>{budgetMessage}</p>}

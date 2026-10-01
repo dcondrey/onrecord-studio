@@ -17,6 +17,10 @@ import { useProfileLensStore } from '../../store/useProfileLensStore';
 import { touchesOwnOrganization, useAffiliationDisclosure } from '../account/useProfile';
 
 /** A failed user action. Kept apart from a failed load: the list is still valid when one of these is set. */
+const PAGE_SIZE = 50;
+const SEVERITIES: FindingSeverity[] = ['CRITICAL', 'SERIOUS', 'NOTABLE', 'INFO'];
+type FindingSort = 'ranked' | 'newest';
+
 interface ActionError {
   action: 'refresh' | 'dismiss';
   message: string;
@@ -37,6 +41,11 @@ export default function FindingsInbox() {
   const [actionError, setActionError] = useState<ActionError | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [limit, setLimit] = useState(PAGE_SIZE);
+  const [hasMore, setHasMore] = useState(false);
+  const [severityFilter, setSeverityFilter] = useState<FindingSeverity | null>(null);
+  const [sort, setSort] = useState<FindingSort>('ranked');
+  const [textFilter, setTextFilter] = useState('');
   // Which finding's row is expanded to show ArtifactDrafts. At most one at a time — the drafted
   // text can be long, and stacking several open drafts hides the ranked list.
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -66,9 +75,12 @@ export default function FindingsInbox() {
     const settledBeforeLoad = [...settledDismissals.current];
     setIsLoading(true);
     setLoadError(null);
-    invokeCommand('list_findings', { filter: null, limit: 50 })
-      .then((rows) => {
+    // One extra row distinguishes "exactly `limit` findings" from "more exist beyond the cap".
+    invokeCommand('list_findings', { filter: null, limit: limit + 1 })
+      .then((fetched) => {
         if (!listGate.isCurrent(request)) return;
+        setHasMore(fetched.length > limit);
+        const rows = fetched.slice(0, limit);
         setFindings(
           rows.filter(
             (row) => !pendingDismissals.current.has(row.id) && !settledDismissals.current.has(row.id),
@@ -87,7 +99,7 @@ export default function FindingsInbox() {
       .finally(() => {
         if (listGate.isCurrent(request)) setIsLoading(false);
       });
-  }, [listGate, markFindingsSeen]);
+  }, [limit, listGate, markFindingsSeen]);
 
   // The store bumps `findingsRefreshRequests` after each ingest (via `refreshFindingsInbox`) and
   // whenever the user presses Refresh. Loading is keyed off that counter so we always pick up the
@@ -163,11 +175,23 @@ export default function FindingsInbox() {
     disclosure !== null && (disclosure.ownPortalKeys.length > 0 ||
       disclosure.ownAgencies.length > 0 ||
       disclosure.ownEntityIds.length > 0);
-  const visibleFindings = useMemo(
+  const lensedFindings = useMemo(
     () => (lensEnabled ? findings.filter((finding) => touchesOwnOrganization(finding, disclosure)) : findings),
     [lensEnabled, findings, disclosure],
   );
-  const summary = useMemo(() => summariseSeverity(visibleFindings), [visibleFindings]);
+  const summary = useMemo(() => summariseSeverity(lensedFindings), [lensedFindings]);
+  const visibleFindings = useMemo(() => {
+    const needle = textFilter.trim().toLowerCase();
+    const matching = lensedFindings.filter(
+      (finding) =>
+        (severityFilter === null || finding.severity === severityFilter) &&
+        (needle === '' || `${finding.headline} ${finding.explanation}`.toLowerCase().includes(needle)),
+    );
+    return sort === 'newest'
+      ? [...matching].sort((a, b) => Date.parse(b.lastSeenAt) - Date.parse(a.lastSeenAt))
+      : matching;
+  }, [lensedFindings, severityFilter, sort, textFilter]);
+  const isNarrowed = severityFilter !== null || textFilter.trim() !== '';
 
   return (
     <section id="findings-inbox" className="app-panel flex flex-col gap-3 p-4" aria-label="Findings inbox">
@@ -175,7 +199,7 @@ export default function FindingsInbox() {
         <div className="min-w-[14rem] flex-1">
           <div className="app-eyebrow">Findings inbox</div>
           <h3 className="mt-1 text-[13px] font-semibold text-slate-200">
-            Everything the app is surfacing right now
+            What the detectors are surfacing
           </h3>
           {summary && (
             <p className="mt-1 text-[9px] text-slate-400">
@@ -220,9 +244,46 @@ export default function FindingsInbox() {
         <details className="text-[10px] text-slate-300">
           <summary className="focus-ring cursor-pointer font-semibold">Share these findings as a read-only file</summary>
           <div className="mt-2">
-            <ShareableBundleExport findings={visibleFindings} />
+            <ShareableBundleExport findings={lensedFindings} />
           </div>
         </details>
+      )}
+
+      {findings.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-[9px] text-slate-400">
+          <div role="group" aria-label="Filter by severity" className="flex gap-1">
+            {SEVERITIES.map((level) => (
+              <button
+                key={level}
+                type="button"
+                aria-pressed={severityFilter === level}
+                onClick={() => setSeverityFilter((current) => (current === level ? null : level))}
+                className={`focus-ring rounded-md border px-2 py-1 font-semibold ${severityFilter === level ? 'border-cyan-400/50 text-cyan-200' : 'border-slate-800 text-slate-400'}`}
+              >
+                {severityLabel(level)}
+              </button>
+            ))}
+          </div>
+          <label className="sr-only" htmlFor="findings-text-filter">Filter findings by text</label>
+          <input
+            id="findings-text-filter"
+            type="search"
+            value={textFilter}
+            onChange={(event) => setTextFilter(event.target.value)}
+            placeholder="Filter findings"
+            className="focus-ring min-w-[10rem] flex-1 rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] text-slate-200"
+          />
+          <label htmlFor="findings-sort" className="sr-only">Sort findings</label>
+          <select
+            id="findings-sort"
+            value={sort}
+            onChange={(event) => setSort(event.target.value as FindingSort)}
+            className="focus-ring rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] text-slate-200"
+          >
+            <option value="ranked">Ranked</option>
+            <option value="newest">Newest first</option>
+          </select>
+        </div>
       )}
 
       {lensEnabled && !hasConfirmedSubject && (
@@ -288,6 +349,22 @@ export default function FindingsInbox() {
             />
           ))}
         </ul>
+      )}
+      {isNarrowed && visibleFindings.length === 0 && findings.length > 0 && (
+        <p role="status" className="text-[10px] text-slate-400">No loaded findings match this filter.</p>
+      )}
+      {hasMore && (
+        <div className="flex items-center gap-2 text-[9px] text-slate-400">
+          <span>Showing the top {findings.length} findings; more exist. Filters apply only to what is loaded.</span>
+          <button
+            type="button"
+            onClick={() => setLimit((current) => current + PAGE_SIZE)}
+            disabled={isLoading}
+            className="secondary-action focus-ring rounded-lg border px-3 py-1 text-[10px] font-semibold text-slate-300 disabled:opacity-60"
+          >
+            Load {PAGE_SIZE} more
+          </button>
+        </div>
       )}
       <LeadDossier />
       <EvidenceGaps />

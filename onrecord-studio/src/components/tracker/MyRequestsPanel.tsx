@@ -203,6 +203,7 @@ function Detail({ claim, deadline, tracker }: { claim: ClaimedRequest; deadline:
   const [reason, setReason] = useState<StatutoryExtensionReason | ''>('');
   const [expected, setExpected] = useState('');
   const [pickError, setPickError] = useState<string | null>(null);
+  const [confirmingRemoval, setConfirmingRemoval] = useState(false);
   const occurredAt = localInputToRfc3339(when);
   const needsReason = kind === 'EXTENSION_NOTICE';
   const events = [...claim.events].sort((left, right) => left.occurredAt.localeCompare(right.occurredAt));
@@ -338,9 +339,21 @@ function Detail({ claim, deadline, tracker }: { claim: ClaimedRequest; deadline:
         )}
       </section>
 
-      <button type="button" className={button} disabled={tracker.isBusy} onClick={() => void tracker.remove(claim.id)}>
-        Stop tracking this request
-      </button>
+      {confirmingRemoval ? (
+        <div role="alert" className="rounded border border-rose-500/30 p-2">
+          <p>Stop tracking {claim.reference}? Its recorded dates and imported suggestions are deleted from this computer. The agency's own records are not affected.</p>
+          <div className="mt-1.5 flex gap-2">
+            <button type="button" className={button} disabled={tracker.isBusy} onClick={() => void tracker.remove(claim.id)}>
+              Yes, delete tracking data
+            </button>
+            <button type="button" className={button} onClick={() => setConfirmingRemoval(false)}>Keep tracking</button>
+          </div>
+        </div>
+      ) : (
+        <button type="button" className={button} disabled={tracker.isBusy} onClick={() => setConfirmingRemoval(true)}>
+          Stop tracking this request
+        </button>
+      )}
     </div>
   );
 }
