@@ -113,6 +113,27 @@ describe("verify-evidence-package.mjs CLI, end to end", () => {
     });
   });
 
+  it("checks a research snapshot's sibling file against the signed digest", async () => {
+    const dir = await setup();
+    const key = await generateKeyPair();
+    const bytes = new TextEncoder().encode("duckdb bytes");
+    const fileName = "snap.duckdb";
+    const signed = await signPackage(
+      { schemaVersion: "onrecord-research-snapshot-v1", fileName, fileSha256: await sha256Hex(bytes), corpusStateDigest: "x" },
+      key,
+    );
+    const manifestPath = await writePackage(dir, "snap.duckdb.manifest.json", signed);
+    await writeFile(join(dir, fileName), bytes);
+    const { stdout } = await run("node", [scriptPath, manifestPath]);
+    expect(stdout).toContain("PASS  Sibling file snap.duckdb");
+
+    await writeFile(join(dir, fileName), "tampered");
+    await expect(run("node", [scriptPath, manifestPath])).rejects.toMatchObject({
+      code: 1,
+      stdout: expect.stringContaining("FAIL  Sibling file snap.duckdb"),
+    });
+  });
+
   it("does not treat two different cases each at sequence 1 as a fork", async () => {
     const dir = await setup();
     const key = await generateKeyPair();

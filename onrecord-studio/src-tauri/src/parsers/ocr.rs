@@ -35,6 +35,53 @@ pub struct OcrCapability {
     pub diagnostics: Vec<String>,
 }
 
+/// Package-manager prefixes searched after PATH. An app launched from the Finder inherits launchd's
+/// PATH (`/usr/bin:/bin:/usr/sbin:/sbin`), which never contains them, so without this a Homebrew
+/// or MacPorts Tesseract would be reported unavailable in every installed build.
+const FALLBACK_BIN_DIRS: &[&str] = &["/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin"];
+
+fn program_command(program: &OsStr) -> Command {
+    Command::new(resolve_program(
+        program,
+        std::env::var_os("PATH").as_deref(),
+        FALLBACK_BIN_DIRS.iter().map(Path::new),
+    ))
+}
+
+/// A bare program name is resolved against PATH and then the fallback directories; the first
+/// existing executable wins. An explicit path, or a name found nowhere, is returned unchanged so
+/// the spawn reports the failure itself.
+fn resolve_program<'a>(
+    program: &OsStr,
+    path: Option<&OsStr>,
+    fallbacks: impl IntoIterator<Item = &'a Path>,
+) -> OsString {
+    if program.is_empty() || Path::new(program).components().count() != 1 {
+        return program.to_os_string();
+    }
+    let path_dirs = path.map(std::env::split_paths).into_iter().flatten();
+    path_dirs
+        .chain(fallbacks.into_iter().map(Path::to_path_buf))
+        .map(|dir| dir.join(program))
+        .find(|candidate| is_executable_file(candidate))
+        .map_or_else(|| program.to_os_string(), PathBuf::into_os_string)
+}
+
+fn is_executable_file(path: &Path) -> bool {
+    let Ok(metadata) = std::fs::metadata(path) else {
+        return false;
+    };
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        metadata.is_file() && metadata.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        metadata.is_file()
+    }
+}
+
 pub fn probe_ocr_capability() -> OcrCapability {
     if let Some(engine) = std::env::var_os("ONRECORD_OCR_ENGINE") {
         let probe = probe_executable(&engine, &["--version"]);
@@ -75,6 +122,12 @@ pub fn probe_ocr_capability() -> OcrCapability {
     }
     let image_ocr_available = engine_probe.available && english_available;
     let pdf_ocr_available = image_ocr_available && renderer_probe.available;
+    if !engine_probe.available || !renderer_probe.available {
+        diagnostics.push(
+            "Install both tools with `brew install tesseract poppler` (or MacPorts), then relaunch"
+                .to_string(),
+        );
+    }
     OcrCapability {
         engine: "tesseract".to_string(),
         engine_available: engine_probe.available,
@@ -103,7 +156,7 @@ struct LanguageProbe {
 }
 
 fn probe_executable(program: &OsStr, arguments: &[&str]) -> ExecutableProbe {
-    let mut command = Command::new(program);
+    let mut command = program_command(program);
     command.args(arguments);
     match run_command(
         &mut command,
@@ -139,7 +192,7 @@ fn probe_executable(program: &OsStr, arguments: &[&str]) -> ExecutableProbe {
 }
 
 fn probe_language_packs(engine: &OsStr) -> LanguageProbe {
-    let mut command = Command::new(engine);
+    let mut command = program_command(engine);
     command.arg("--list-langs");
     match run_command(
         &mut command,
@@ -208,7 +261,7 @@ pub fn execute_local_ocr_scan<P: AsRef<Path>>(document_path: P) -> Result<String
     let deadline = Instant::now() + ocr_timeout();
 
     if let Some(engine) = std::env::var_os("ONRECORD_OCR_ENGINE") {
-        let mut command = Command::new(engine);
+        let mut command = program_command(&engine);
         command.arg(path);
         let output = run_command(&mut command, deadline, "OCR_ENGINE", path)?;
         return decode_ocr_output(path, output, false);
@@ -285,7 +338,7 @@ fn ocr_image_with_empty_policy(
     deadline: Instant,
     allow_empty: bool,
 ) -> Result<String, AppError> {
-    let mut command = Command::new("tesseract");
+    let mut command = program_command(OsStr::new("tesseract"));
     command.arg(path).arg("stdout");
     let output = run_command(&mut command, deadline, "OCR_ENGINE", path)?;
     decode_ocr_output(path, output, allow_empty)
@@ -314,7 +367,7 @@ fn ocr_pdf(path: &Path, deadline: Instant) -> Result<String, AppError> {
     for page_number in 1..=page_count {
         let prefix = workspace.path.join(format!("page-{page_number:08}"));
         let page = prefix.with_extension("png");
-        let mut command = Command::new(&renderer);
+        let mut command = program_command(&renderer);
         command
             .arg("-f")
             .arg(page_number.to_string())
@@ -387,7 +440,7 @@ fn pdf_page_count(path: &Path, deadline: Instant) -> Result<usize, AppError> {
     }
     let inspector =
         std::env::var_os("ONRECORD_PDF_INFO").unwrap_or_else(|| OsString::from("pdfinfo"));
-    let mut command = Command::new(inspector);
+    let mut command = program_command(&inspector);
     command.arg(path);
     let output = run_command(&mut command, deadline, "PDF_INFO", path)?;
     ensure_success(path, "PDF_INFO", &output)?;
@@ -570,5 +623,39 @@ impl OcrWorkspace {
 impl Drop for OcrWorkspace {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.path);
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::resolve_program;
+    use std::ffi::{OsStr, OsString};
+    use std::os::unix::fs::PermissionsExt;
+    use std::path::Path;
+
+    #[test]
+    fn bare_name_falls_back_to_package_manager_directories_after_path() {
+        let path_dir = tempfile::tempdir().expect("path dir");
+        let fallback = tempfile::tempdir().expect("fallback dir");
+        let installed = fallback.path().join("tesseract");
+        std::fs::write(&installed, "#!/bin/sh\n").expect("write stub");
+        std::fs::set_permissions(&installed, std::fs::Permissions::from_mode(0o755))
+            .expect("mark executable");
+        std::fs::write(path_dir.path().join("pdftoppm"), "").expect("non-executable file");
+
+        let path = OsString::from(path_dir.path());
+        let resolve =
+            |name: &str| resolve_program(OsStr::new(name), Some(&path), [fallback.path()]);
+
+        assert_eq!(resolve("tesseract"), installed.as_os_str());
+        assert_eq!(resolve("pdftoppm"), OsStr::new("pdftoppm"));
+        assert_eq!(
+            resolve_program(
+                installed.as_os_str(),
+                Some(&path),
+                [Path::new("/nonexistent")]
+            ),
+            installed.as_os_str()
+        );
     }
 }

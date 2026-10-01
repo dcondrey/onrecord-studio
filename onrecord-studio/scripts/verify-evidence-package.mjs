@@ -27,6 +27,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { createHash, webcrypto } from 'node:crypto';
+import { dirname, join } from 'node:path';
 import process from 'node:process';
 
 function parseArgs() {
@@ -161,6 +162,23 @@ async function verifyOne(path, revocations) {
     manifestConsistent = false;
   }
   results.push([manifestConsistent, 'The human-readable "manifest" field matches the signed canonical bytes structurally']);
+
+  // A research-snapshot manifest describes a sibling `.duckdb` file by name and SHA-256. When that
+  // file is present beside the manifest, its digest is checked too, so one command verifies both
+  // the signature and that the database being queried is the one signed for.
+  const { fileName, fileSha256 } = package_.manifest ?? {};
+  if (typeof fileName === 'string' && typeof fileSha256 === 'string') {
+    const siblingPath = join(dirname(path), fileName);
+    const fileDigest = await readFile(siblingPath).then(
+      (bytes) => createHash('sha256').update(bytes).digest('hex'),
+      () => null,
+    );
+    if (fileDigest === null) {
+      console.log(`\nNote: ${fileName} is not beside the manifest, so its digest was not checked (expected ${fileSha256}).`);
+    } else {
+      results.push([fileDigest === fileSha256, `Sibling file ${fileName} hashes to the manifest's fileSha256`]);
+    }
+  }
 
   const allPassed = results.every(([passed]) => passed);
   console.log(`\nVerifying: ${path}`);

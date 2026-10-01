@@ -83,7 +83,7 @@ export function HelpDialog({ initialTopicId, onClose }: { initialTopicId: string
         <header className="flex items-center justify-between gap-3 border-b border-slate-800/70 px-4 py-3">
           <div>
             <h2 id="help-title" className="text-[15px] font-semibold text-slate-100">OnRecord Studio Help</h2>
-            <p className="text-[12px] text-slate-400">Cmd/Ctrl+Shift+/ opens Help from anywhere. Esc closes it.</p>
+            <p className="text-[12px] text-slate-400">Version {__APP_VERSION__}. Cmd/Ctrl+Shift+/ opens Help from anywhere. Esc closes it.</p>
           </div>
           <button
             type="button"

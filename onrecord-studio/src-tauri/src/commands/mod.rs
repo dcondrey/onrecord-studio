@@ -2,6 +2,8 @@
 
 pub mod account;
 pub mod analysis_workbench;
+pub mod annotations;
+pub mod collaboration;
 pub mod corpus;
 pub mod export;
 pub mod ingest;
@@ -12,6 +14,7 @@ pub mod reconstruction;
 pub mod research;
 pub mod runtime;
 pub mod semantic;
+pub mod snapshot;
 pub(crate) mod validation;
 
 pub use analysis_workbench::{

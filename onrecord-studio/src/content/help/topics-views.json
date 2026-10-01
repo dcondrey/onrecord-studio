@@ -26,8 +26,8 @@
       {
         "heading": "Parts",
         "items": [
-          "Post-ingest brief: a non-modal panel that opens after a sync stops and lists findings discovered in the last 15 minutes. It appears only on this view.",
-          "Change feed: how many findings are new since you last opened the inbox. It also counts statutory deadline violations for the active source when the analytics for that source have loaded.",
+          "Post-ingest brief (headed Just landed): a non-modal panel that opens after a sync stops and lists findings discovered in the last 15 minutes. It appears only on this view.",
+          "Change feed (What changed since you last looked): how many findings are new since you last opened the inbox. It also counts statutory deadline violations for the active source when the analytics for that source have loaded.",
           "Findings inbox: ranked list of everything the detectors surfaced. See Findings inbox.",
           "Cross-corpus explorer: shared language, temporal shifts, orphan topics and reused grounds across agencies, with a jurisdiction by detector heat map.",
           "Three collapsed drawers: plan an investigation or draft a request manually; collection, coverage and storage; browse sources and add records.",
@@ -88,7 +88,8 @@
       {
         "heading": "Entity graph",
         "paragraphs": [
-          "Pick one of the most-cited entities to centre the graph. Dotted arcs with a hollow marker are co-occurrence: proximity this app computed, not a relationship any document stated. Labelled arcs with a solid diamond are relations read from the text (signed by, approved, cites, promises, delivered, supersedes, amends). Line thickness reads shared documents. Node shape shows the validation grade: check digit passed, format validated, gazetteer hit, or pattern only, which is a lead. Trace finds a path of up to four hops between two entity ids."
+          "Pick one of the most-cited entities to centre the graph. Dotted arcs with a hollow marker are co-occurrence: proximity this app computed, not a relationship any document stated. Labelled arcs with a solid diamond are relations read from the text (signed by, approved, cites, promises, delivered, supersedes, amends). Line thickness reads shared documents. Node shape shows the validation grade: check digit passed, format validated, gazetteer hit, or pattern only, which is a lead. Trace finds a path of up to four hops between two entity ids.",
+          "Above the drawing, three toggles show relationships by how they are known: stated in text, derived by this app, or asserted by a source. As of shows relationships whose recorded dates include that day. A relationship with no recorded dates is not assumed valid on any date, so it is hidden unless Include undated is checked. Filtered relationships are hidden, not absent, and the count says how many are shown."
         ]
       },
       {
@@ -184,13 +185,18 @@
       "documents",
       "delete document",
       "deep link",
-      "appeal"
+      "appeal",
+      "watch",
+      "search record",
+      "500+"
     ],
     "sections": [
       {
         "heading": "Searching",
         "paragraphs": [
-          "The search box looks in request metadata and extracted text. Qualifiers agency:, portal:, status: and flag: narrow results. Plain-language mode turns a sentence into those filters. Results are capped at 500. If a search fails, the last successful results stay on screen with a banner saying so."
+          "The search box looks in request metadata and extracted text. Qualifiers agency:, portal:, status: and flag: narrow results. Plain-language mode turns a sentence into those filters. Results are capped at 500, and a count of 500+ means more may exist. If a search fails, the last successful results stay on screen with a banner saying so.",
+          "Each result says where your text is visible: in the title, in the description, or not shown here. Not shown means the match may be in the full description or in a document's extracted text. It does not mean the text is absent. An empty result lists what was searched and offers to remove each filter that narrowed it. It does not show that no such record exists.",
+          "Watch this text for changes saves the words as a watch that is checked after each ingest. It covers all sources and ignores the department, status and policy filters. Copy search record puts the text, filters, source count and result count on the clipboard, with the time of the search. Results can change as sources synchronize."
         ]
       },
       {
@@ -199,7 +205,7 @@
           "Select a record for its case context: dates, status, description and the Legal compliance panel.",
           "Save lead to briefing stores it locally for the Briefing view.",
           "Public documents lists files with their extraction state. Only searchable or recovered documents open. Personal information is masked in what you read.",
-          "Evidence links copy a portal, request, document and character offset so you can return to the same passage."
+          "Copy evidence link, in the document viewer, copies a portal, request, document and character offset so you can return to the same passage."
         ]
       },
       {
@@ -237,6 +243,10 @@
       "log",
       "telemetry",
       "ocr",
+      "tesseract",
+      "poppler",
+      "scanned",
+      "install",
       "worker",
       "runtime",
       "export json"
@@ -253,7 +263,13 @@
           "Event stream: filter by text or show errors only, Export JSON, or clear the session telemetry.",
           "Source runtimes: running or stopped, done, active and queued counts per source.",
           "Extraction event stream: the same feed inside the Evidence view.",
-          "The sidebar footer shows worker capacity out of five and whether local OCR handles images and PDFs, images only, or is unavailable."
+          "The sidebar footer shows worker capacity out of five and whether local OCR handles images and PDFs, images only, or is unavailable. Hover it for the probe details."
+        ]
+      },
+      {
+        "heading": "Local OCR",
+        "paragraphs": [
+          "OCR is not built into the app. It runs Tesseract with its eng language pack for images and Poppler's pdftoppm for scanned PDFs, found on this Mac in the usual Homebrew, MacPorts or /usr/local locations: brew install tesseract poppler. Until both are installed, a scanned document whose text cannot be read is kept but its text is not searchable. OCR runs locally and sends nothing anywhere."
         ]
       },
       {

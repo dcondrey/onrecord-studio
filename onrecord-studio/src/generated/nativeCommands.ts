@@ -44,6 +44,7 @@ export interface NativeCommandMap {
   get_data_maintenance_status: { args: NoArgs; result: Types.DataMaintenanceStatus };
   set_data_maintenance_policy: { args: { policy: Types.DataMaintenancePolicy }; result: Types.DataMaintenanceStatus };
   run_data_maintenance: { args: NoArgs; result: Types.DataMaintenanceStatus };
+  export_research_snapshot: { args: NoArgs; result: Types.ResearchSnapshotResult };
   reconstruct_document_context: { args: { documentId: number; portalKey: string; options?: Types.ReconstructionOptions | null }; result: Types.ReconstructionReport };
   get_financial_workspace: { args: NoArgs; result: Types.FinancialWorkspace };
   save_financial_mapping: { args: { mapping: Types.FinancialMapping }; result: Types.FinancialWorkspace };
@@ -139,6 +140,16 @@ export interface NativeCommandMap {
   request_work_email_code: { args: { email: string }; result: Types.WorkEmailCodeReport };
   confirm_work_email_code: { args: { email: string; code: string }; result: Types.WorkEmailConfirmReport };
   link_affiliation_verified_domain: { args: { input: Types.AffiliationDomainLinkInput }; result: Types.AffiliationLinkReport };
+  get_local_contributor_identity: { args: NoArgs; result: Types.LocalContributorIdentity };
+  list_trusted_contributors: { args: NoArgs; result: Types.TrustedContributor[] };
+  trust_contributor: { args: { keyId: string; label: string }; result: Types.TrustedContributor };
+  untrust_contributor: { args: { keyId: string }; result: null };
+  list_shared_folder_packets: { args: { folder: string }; result: Types.SharedFolderPacket[] };
+  read_shared_folder_packet: { args: { folder: string; fileName: string }; result: string };
+  publish_packet_to_folder: { args: { folder: string; fileName: string; payload: string }; result: null };
+  list_document_annotations: { args: { portalKey: string; documentId: number }; result: Types.DocumentAnnotation[] };
+  add_document_annotation: { args: { input: Types.AddAnnotationInput }; result: Types.DocumentAnnotation };
+  remove_document_annotation: { args: { id: string }; result: null };
   list_claimed_requests: { args: NoArgs; result: Types.ClaimedRequest[] };
   claim_request: { args: { input: Types.ClaimRequestInput }; result: Types.ClaimedRequest };
   update_claimed_request: { args: { input: Types.UpdateClaimedRequestInput }; result: Types.ClaimedRequest };

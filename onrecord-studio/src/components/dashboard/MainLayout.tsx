@@ -27,7 +27,9 @@ import StoryDesk from './StoryDesk';
 import AgencyComparison from './AgencyComparison';
 import MeetingsView from './MeetingsView';
 import { documentBriefingEvidence, requestBriefingEvidence } from '../../utils/briefing';
+import DialogBackdrop from '../ui/DialogBackdrop';
 import AnalysisWorkbench from './AnalysisWorkbench';
+import { formatMatchCount, MATCH_BASIS_LABELS, matchBasis, SEARCH_RESULT_LIMIT } from '../../utils/searchResults';
 
 export default function MainLayout() {
   // Request selection lives in the shared workspace store and survives view switches. The open
@@ -36,6 +38,7 @@ export default function MainLayout() {
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
   const evidenceRefreshRequests = useAppStore((state) => state.evidenceRefreshRequests);
   const results = useAppStore((state) => state.filteredResults);
+  const resultsTerm = useAppStore((state) => state.filteredResultsTerm);
   const searchError = useAppStore((state) => state.searchError);
   const selectedRequestId = useAppStore((state) => state.selectedRequestId);
   const selectedRequestPortalKey = useAppStore((state) => state.selectedRequestPortalKey);
@@ -133,15 +136,6 @@ export default function MainLayout() {
       setPurgingDocument(false);
     }
   };
-
-  useEffect(() => {
-    if (!activeDocument) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setActiveDocument(null);
-    };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [activeDocument]);
 
   const openDocument = async (summary: RequestDocumentSummary, characterOffset = 0) => {
     setDocumentError(null);
@@ -252,12 +246,17 @@ export default function MainLayout() {
               </div>
               <div className="flex items-center gap-2">
                 <button type="button" onClick={() => setLegalLibraryOpen(true)} className="rounded border border-indigo-400/20 bg-indigo-500/[0.07] px-2 py-1 text-[9px] font-semibold text-indigo-200/80 transition hover:border-indigo-400/35 hover:bg-indigo-500/10">Legal authority library</button>
-                <span className="rounded border border-slate-800 bg-slate-950 px-2 py-1 font-mono text-[9px] text-slate-400">{results.length.toLocaleString()} records</span>
+                <span className="rounded border border-slate-800 bg-slate-950 px-2 py-1 font-mono text-[9px] text-slate-400">{formatMatchCount(results.length)} records</span>
               </div>
             </div>
+            {results.length >= SEARCH_RESULT_LIMIT && (
+              <p role="status" className="border-b border-amber-500/20 bg-amber-500/[0.05] px-4 py-2 text-[10px] text-amber-200">
+                Showing the first {SEARCH_RESULT_LIMIT.toLocaleString()} matches; more may exist. Narrow the search by agency, status, or a more specific term to see the rest.
+              </p>
+            )}
             <div className="min-h-0 flex-1 overflow-y-auto">
               {results.length === 0 ? (
-                <EmptyResults error={searchError} />
+                <EmptyResults error={searchError} sourceCount={portals.length} />
               ) : (
                 <div className="divide-y divide-slate-800/70">
                   {results.map((result) => {
@@ -279,6 +278,10 @@ export default function MainLayout() {
                           </div>
                           <div className="mt-1 truncate text-xs font-medium text-slate-200">{result.title || 'Untitled public-records request'}</div>
                           <div className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-slate-400">{result.descriptionPreview || 'No public description supplied.'}</div>
+                          {(() => {
+                            const basis = matchBasis(result, resultsTerm);
+                            return basis && <p className="mt-1 text-[8px] uppercase tracking-wider text-slate-400">{MATCH_BASIS_LABELS[basis]}</p>;
+                          })()}
                           {result.integrityFlags.length > 0 && (
                             <div className="mt-2 flex flex-wrap gap-1">
                               {result.integrityFlags.slice(0, 4).map((flag) => <PolicyBadge key={flag} flag={flag} />)}
@@ -419,7 +422,7 @@ export default function MainLayout() {
         </div>
       </div>
       {pendingDocumentPurge && (
-        <div className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="purge-document-title">
+        <DialogBackdrop labelledBy="purge-document-title" onClose={() => setPendingDocumentPurge(null)} className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm">
           <div className="app-panel w-full max-w-md overflow-hidden shadow-2xl shadow-black/40">
             <div className="border-b border-slate-800 p-4">
               <div className="app-eyebrow text-rose-300/70">Evidence</div>
@@ -439,10 +442,10 @@ export default function MainLayout() {
               <button type="button" disabled={isPurgingDocument} onClick={() => void purgeDocument()} className="focus-ring rounded-lg border border-rose-400/40 bg-rose-500/20 px-4 py-2 text-[9px] font-semibold text-rose-100 disabled:cursor-not-allowed disabled:opacity-60">{isPurgingDocument ? 'Deleting…' : 'Delete this document'}</button>
             </div>
           </div>
-        </div>
+        </DialogBackdrop>
       )}
       {activeDocument && (
-        <div className="app-backdrop fixed inset-0 z-50 grid place-items-center p-8 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`Document ${activeDocument.summary.fileName}`}>
+        <DialogBackdrop label={`Document ${activeDocument.summary.fileName}`} onClose={() => setActiveDocument(null)} className="app-backdrop fixed inset-0 z-50 grid place-items-center p-8 backdrop-blur-sm">
           <div className={cn('relative h-[min(760px,88vh)]', isPdfDocument(activeDocument.summary) ? 'w-[min(1440px,96vw)]' : 'w-[min(1080px,92vw)]')}>
             <button type="button" autoFocus onClick={() => setActiveDocument(null)} className="absolute -top-7 right-0 z-10 rounded-md border border-slate-700 bg-slate-950/90 px-2 py-1 text-[9px] font-semibold text-slate-300 shadow-lg hover:border-slate-500">Close</button>
             <div className="grid h-full grid-cols-[minmax(0,1fr)_360px] gap-4">
@@ -491,7 +494,7 @@ export default function MainLayout() {
               </aside>
             </div>
           </div>
-        </div>
+        </DialogBackdrop>
       )}
       <LegalAuthorityManager isOpen={isLegalLibraryOpen} onClose={closeLegalLibrary} />
     </main>
@@ -511,19 +514,50 @@ function readEvidenceLink() {
   return { portalKey, requestId, documentId, characterOffset };
 }
 
-function EmptyResults({ error }: { error: string | null }) {
+function EmptyResults({ error, sourceCount }: { error: string | null; sourceCount: number }) {
+  const searchTerm = useAppStore((state) => state.searchTerm);
+  const agencyId = useAppStore((state) => state.selectedAgencyId);
+  const status = useAppStore((state) => state.selectedStatus);
+  const policy = useAppStore((state) => state.selectedPolicyDeviation);
+  const activePortalKey = useAppStore((state) => state.activePortalKey);
+  const setSearchFilters = useAppStore((state) => state.setSearchFilters);
+  const setActivePortal = useAppStore((state) => state.setActivePortal);
+  const narrowing = [
+    searchTerm.trim() && { label: `the text "${searchTerm.trim()}"`, remove: () => setSearchFilters('', agencyId, status, policy) },
+    agencyId !== null && { label: 'the department filter', remove: () => setSearchFilters(searchTerm, null, status, policy) },
+    status && { label: `status "${status}"`, remove: () => setSearchFilters(searchTerm, agencyId, null, policy) },
+    policy && { label: 'the policy-deviation filter', remove: () => setSearchFilters(searchTerm, agencyId, status, null) },
+    activePortalKey && { label: `the ${activePortalKey} source only`, remove: () => setActivePortal(null) },
+  ].filter((item): item is { label: string; remove: () => void } => Boolean(item));
   return (
     <div className="grid h-full min-h-72 place-items-center p-8 text-center">
-      <div className="max-w-xs">
+      <div className="max-w-sm">
         <div className="mx-auto grid h-9 w-9 place-items-center rounded-lg border border-slate-800 bg-slate-950 text-slate-400">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5h18M5.25 3.75h13.5A2.25 2.25 0 0 1 21 6v12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 18V6a2.25 2.25 0 0 1 2.25-2.25Z" /></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5h18M5.25 3h13.5A2.25 2.25 0 0 1 21 5.25v13.5A2.25 2.25 0 0 1 18.75 21H5.25A2.25 2.25 0 0 1 3 18.75V5.25A2.25 2.25 0 0 1 5.25 3Z" /></svg>
         </div>
         <h2 className="mt-3 text-xs font-semibold text-slate-400">{error ? 'Search unavailable' : 'No matching evidence'}</h2>
-        <p className="mt-1 text-[10px] leading-relaxed text-slate-400">
-          {error
-            ? 'The query did not complete, so there is no result set to interpret. Retry before drawing a conclusion from these filters.'
-            : 'Add or synchronize a source, or broaden the active department, status, and policy filters.'}
-        </p>
+        {error ? (
+          <p className="mt-1 text-[10px] leading-relaxed text-slate-400">
+            The query did not complete, so there is no result set to interpret. Retry before drawing a conclusion from these filters.
+          </p>
+        ) : (
+          <>
+            <p className="mt-1 text-[10px] leading-relaxed text-slate-400">
+              {sourceCount === 0
+                ? 'No sources are added yet, so there is nothing to search.'
+                : `Searched ${activePortalKey ? '1 source' : `${sourceCount} source${sourceCount === 1 ? '' : 's'}`}: request titles and descriptions, and extracted text of documents already ingested. Nothing here shows that no such record exists. It may not have been collected, ingested yet, or readable as text.`}
+            </p>
+            {narrowing.length > 0 && (
+              <div className="mt-3 flex flex-wrap justify-center gap-1.5" role="group" aria-label="Narrowing the search">
+                {narrowing.map((item) => (
+                  <button key={item.label} type="button" onClick={item.remove} className="focus-ring rounded-full border border-slate-700 px-2.5 py-1 text-[9px] font-medium text-slate-300 hover:border-cyan-400/50">
+                    Remove {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

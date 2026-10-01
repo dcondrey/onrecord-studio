@@ -1,4 +1,5 @@
 import { cn } from '../../utils/cn';
+import DialogBackdrop from '../ui/DialogBackdrop';
 import Icon from '../ui/icons';
 import {
   DEFAULT_CRAWL_SETTINGS_DRAFT,
@@ -124,7 +125,7 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
   return (
     <>
       {pendingRemoval && (
-        <div className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="remove-source-title">
+        <DialogBackdrop labelledBy="remove-source-title" onClose={() => setPendingRemoval(null)} className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm">
           <div className="app-panel w-full max-w-md overflow-hidden shadow-2xl shadow-black/40">
             <div className="flex items-start justify-between border-b border-slate-800 p-4">
               <div>
@@ -145,10 +146,10 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
               <button type="button" onClick={() => void removeSource()} className="focus-ring rounded-lg border border-rose-400/25 bg-rose-500/10 px-4 py-2 text-[9px] font-semibold text-rose-200">Remove and keep documents</button>
             </div>
           </div>
-        </div>
+        </DialogBackdrop>
       )}
       {pendingPurge && (
-        <div className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="purge-source-title">
+        <DialogBackdrop labelledBy="purge-source-title" onClose={() => setPendingPurge(null)} className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm">
           <div className="app-panel w-full max-w-md overflow-hidden shadow-2xl shadow-black/40">
             <div className="flex items-start justify-between border-b border-slate-800 p-4">
               <div>
@@ -184,10 +185,10 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
               <button type="button" disabled={purgePreview === null || isPurging} onClick={() => void purgeSource()} className="focus-ring rounded-lg border border-rose-400/40 bg-rose-500/20 px-4 py-2 text-[9px] font-semibold text-rose-100 disabled:cursor-not-allowed disabled:border-slate-800 disabled:bg-slate-900 disabled:text-slate-400">{isPurging ? 'Deleting…' : 'Delete source and documents'}</button>
             </div>
           </div>
-        </div>
+        </DialogBackdrop>
       )}
       {isPasteOpen && (
-        <div className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="paste-source-title">
+        <DialogBackdrop labelledBy="paste-source-title" onClose={closePasteDialog} className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm">
           <form onSubmit={(event) => void importPaste(event)} className="app-panel w-full max-w-2xl overflow-hidden shadow-2xl shadow-black/40">
             <div className="flex items-start justify-between border-b border-slate-800 p-4">
               <div>
@@ -219,10 +220,10 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
               </div>
             </div>
           </form>
-        </div>
+        </DialogBackdrop>
       )}
       {isCrawlSettingsOpen && (
-        <div className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="crawl-settings-title">
+        <DialogBackdrop labelledBy="crawl-settings-title" onClose={() => setCrawlSettingsOpen(false)} className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm">
           <div className="app-panel w-full max-w-2xl overflow-hidden shadow-2xl shadow-black/40">
             <div className="flex items-start justify-between border-b border-slate-800 p-4">
               <div>
@@ -289,10 +290,10 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
               <button type="button" onClick={() => setCrawlSettingsOpen(false)} disabled={!crawlSettings.ok} className="focus-ring rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-4 py-2 text-[9px] font-semibold text-cyan-200 disabled:opacity-40">Done</button>
             </div>
           </div>
-        </div>
+        </DialogBackdrop>
       )}
       {repairPreview && (
-        <div className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="repair-source-title">
+        <DialogBackdrop labelledBy="repair-source-title" onClose={closeRepairDialog} className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm">
           <form onSubmit={(event) => void retryWithGuidance(event)} className="app-panel flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden shadow-2xl shadow-black/40">
             <div className="flex items-start justify-between border-b border-slate-800 p-4">
               <div>
@@ -421,7 +422,7 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
               <button type="submit" disabled={isDiscovering || !repairSeedUrl.trim() || !guidanceFilters.ok} className="focus-ring rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-4 py-2 text-[9px] font-semibold text-cyan-200 disabled:opacity-40">{isDiscovering ? 'Testing…' : 'Use this data source'}</button>
             </div>
           </form>
-        </div>
+        </DialogBackdrop>
       )}
     </>
   );

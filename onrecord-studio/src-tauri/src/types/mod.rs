@@ -88,6 +88,8 @@ pub use casework::*;
 pub mod monitoring;
 pub use monitoring::*;
 
+pub mod snapshot;
+
 pub mod watchlists;
 pub use watchlists::*;
 
@@ -97,6 +99,7 @@ pub mod lead_dossier;
 pub use lead_dossier::*;
 pub mod meetings;
 
+pub mod annotation;
 pub mod profile;
 pub mod report;
 pub mod tracker;

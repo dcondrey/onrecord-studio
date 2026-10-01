@@ -23,22 +23,26 @@ import { useAudioAlerts } from './hooks/useAudioAlerts';
 import { workspaceCommandRegistry } from './commands/registry';
 import LicenseSwitch from './components/licensing/LicenseSwitch';
 import { LicenseProvider } from './components/licensing/LicenseProvider';
+import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { AutomaticDiscoveryProvider } from './components/dashboard/AutomaticDiscoveryProvider';
 
 const RUNTIME_FAILURE_REMINDER_MILLISECONDS = 60_000;
 
 export default function App() {
   return (
-    <LicenseProvider>
-      <LicenseSwitch>
-        <LicensedWorkspace />
-      </LicenseSwitch>
-    </LicenseProvider>
+    <ErrorBoundary label="OnRecord Studio" fullScreen>
+      <LicenseProvider>
+        <LicenseSwitch>
+          <LicensedWorkspace />
+        </LicenseSwitch>
+      </LicenseProvider>
+    </ErrorBoundary>
   );
 }
 
 function LicensedWorkspace() {
   const theme = useAppStore((state) => state.theme);
+  const workspaceView = useAppStore((state) => state.workspaceView);
   const motion = useAppStore((state) => state.motion);
   const contrast = useAppStore((state) => state.contrast);
   const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(() =>
@@ -392,7 +396,9 @@ function LicensedWorkspace() {
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Header />
-        <AutomaticDiscoveryProvider><MainLayout /></AutomaticDiscoveryProvider>
+        <ErrorBoundary label="This view" resetKey={workspaceView}>
+          <AutomaticDiscoveryProvider><MainLayout /></AutomaticDiscoveryProvider>
+        </ErrorBoundary>
       </div>
       <CommandPalette />
       <HelpCenter />

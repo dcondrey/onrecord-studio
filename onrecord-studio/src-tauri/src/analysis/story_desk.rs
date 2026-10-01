@@ -244,7 +244,7 @@ fn lead_for(finding: &Finding, live: &[&Finding], now: DateTime<Utc>) -> StoryLe
         kind: finding.kind,
         headline: finding.headline.clone(),
         severity: finding.severity,
-        confidence: finding.confidence.clone(),
+        confidence: finding.confidence,
         subject: finding.subject.clone(),
         portal_key: finding.subject.portal_key.clone(),
         public_interest: PublicInterestScore {

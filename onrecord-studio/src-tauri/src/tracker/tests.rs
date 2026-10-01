@@ -180,6 +180,34 @@ fn a_proxy_determination_never_yields_a_violation() {
 }
 
 #[test]
+fn chronology_only_kinds_never_move_the_deadline() {
+    let mut document = TrackerDocument::default();
+    let id = tracked(&mut document);
+    add(
+        &mut document,
+        &id,
+        TimelineEventKind::Submitted,
+        "2026-01-01T09:00:00Z",
+    );
+    let before = request_deadline(&document.claims[0], at("2026-01-05"));
+    for kind in [
+        TimelineEventKind::ClarificationRequested,
+        TimelineEventKind::FeeNotice,
+        TimelineEventKind::PartialProduction,
+        TimelineEventKind::WithholdingNotice,
+        TimelineEventKind::FollowUpSent,
+        TimelineEventKind::AppealFiled,
+    ] {
+        add(&mut document, &id, kind, "2026-01-04T09:00:00Z");
+    }
+    let after = request_deadline(&document.claims[0], at("2026-01-05"));
+
+    assert_eq!(after.determination_basis, before.determination_basis);
+    assert_eq!(after.countdown.kind, before.countdown.kind);
+    assert_eq!(after.violation_asserted, before.violation_asserted);
+}
+
+#[test]
 fn a_confirmed_sourced_determination_beyond_the_allowed_days_is_a_violation() {
     let mut document = TrackerDocument::default();
     let id = tracked(&mut document);

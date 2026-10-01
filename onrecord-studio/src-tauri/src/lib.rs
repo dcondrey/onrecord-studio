@@ -1,7 +1,9 @@
 pub mod analysis;
+pub mod annotations;
 mod atomic_write;
 mod blocking;
 pub mod bundle;
+pub mod collaboration;
 pub mod commands;
 pub mod error;
 mod file_name;
@@ -29,8 +31,11 @@ const NATIVE_COMMAND_EVENT: &str = "onrecord-native-command";
 fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
     let command = invoke.message.command();
     if !licensing::command_is_unlicensed(command) {
-        let state = invoke.message.state();
-        let Some(license) = state.try_get::<licensing::LicenseGate>() else {
+        let Some(license) = invoke
+            .message
+            .webview_ref()
+            .try_state::<licensing::LicenseGate>()
+        else {
             invoke.resolver.reject(crate::error::AppError::License(
                 "The native paid-license gate was not initialized.".to_string(),
             ));
@@ -85,6 +90,7 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::maintenance::get_data_maintenance_status,
         commands::maintenance::set_data_maintenance_policy,
         commands::maintenance::run_data_maintenance,
+        commands::snapshot::export_research_snapshot,
         commands::reconstruction::reconstruct_document_context,
         commands::financial::get_financial_workspace,
         commands::financial::save_financial_mapping,
@@ -180,6 +186,16 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::verification::request_work_email_code,
         commands::verification::confirm_work_email_code,
         commands::verification::link_affiliation_verified_domain,
+        commands::collaboration::get_local_contributor_identity,
+        commands::collaboration::list_trusted_contributors,
+        commands::collaboration::trust_contributor,
+        commands::collaboration::untrust_contributor,
+        commands::collaboration::list_shared_folder_packets,
+        commands::collaboration::read_shared_folder_packet,
+        commands::collaboration::publish_packet_to_folder,
+        commands::annotations::list_document_annotations,
+        commands::annotations::add_document_annotation,
+        commands::annotations::remove_document_annotation,
         commands::tracker::list_claimed_requests,
         commands::tracker::claim_request,
         commands::tracker::update_claimed_request,

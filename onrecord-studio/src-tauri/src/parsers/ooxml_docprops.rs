@@ -235,8 +235,7 @@ mod tests {
     /// declared size passes the cap, so trusting it lets a small archive expand without bound.
     #[test]
     fn a_part_inflating_past_its_declared_size_is_not_read() {
-        let core = "<cp:lastModifiedBy>Bomb</cp:lastModifiedBy>".to_string()
-            + &" ".repeat(1 << 20);
+        let core = "<cp:lastModifiedBy>Bomb</cp:lastModifiedBy>".to_string() + &" ".repeat(1 << 20);
         let mut bytes = Vec::new();
         {
             let mut zip = zip::ZipWriter::new(std::io::Cursor::new(&mut bytes));

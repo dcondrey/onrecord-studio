@@ -37,10 +37,15 @@
   "bundle": {
     "active": true,
     "category": "Productivity",
+    "publisher": "WritersLogic",
+    "copyright": "Copyright © 2026 WritersLogic",
+    "homepage": "https://writerslogic.com",
+    "shortDescription": "Public-records investigation workspace",
+    "longDescription": "Analyze public-records requests and documents locally, track statutory deadlines, and export verifiable reports.",
     "targets": "all",
     "macOS": {
       "frameworks": [],
-      "minimumSystemVersion": "11.0",
+      "minimumSystemVersion": "13.0",
       "signingIdentity": null,
       "entitlements": null
     },
