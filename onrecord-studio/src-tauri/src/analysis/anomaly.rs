@@ -64,7 +64,8 @@ FROM (
 /// ordering use the `TIMESTAMPTZ`-derived instants, while every day count uses the recorded-offset
 /// date, because the statute counts days in the offset the agency wrote down.
 const AGENCY_PERFORMANCE_QUERY_TEMPLATE: &str = r#"
-WITH parsed AS (
+WITH {court_holidays_cte},
+parsed AS (
     SELECT
         requests.id,
         requests.portal_subdomain,
@@ -97,8 +98,14 @@ milestones AS (
     SELECT
         *,
         {determination_calendar_date} AS determination_date,
-        {valid_extension_predicate} AS has_valid_extension
+        {initial_deadline_date} AS initial_deadline_date
     FROM parsed
+),
+extended AS (
+    SELECT
+        *,
+        {valid_extension_predicate} AS has_valid_extension
+    FROM milestones
 ),
 evaluated AS (
     SELECT
@@ -112,7 +119,7 @@ evaluated AS (
                  / 1000000.0
             ELSE NULL
         END AS latency_seconds
-    FROM milestones
+    FROM extended
 ),
 request_counts AS (
     SELECT
@@ -847,6 +854,7 @@ mod tests {
         status: &'static str,
         closed_at: Option<&'static str>,
         extension: Option<StatutoryExtensionRecord>,
+        violation: bool,
     }
 
     fn parity_cases() -> Vec<ParityCase> {
@@ -858,6 +866,7 @@ mod tests {
                 status: "closed",
                 closed_at: Some("2024-01-11T00:00:00Z"),
                 extension: None,
+                violation: false,
             },
             ParityCase {
                 label: "utc late determination",
@@ -866,6 +875,7 @@ mod tests {
                 status: "closed",
                 closed_at: Some("2024-04-10T00:00:00Z"),
                 extension: None,
+                violation: true,
             },
             ParityCase {
                 label: "tenth calendar day is still timely",
@@ -874,17 +884,19 @@ mod tests {
                 status: "open",
                 closed_at: None,
                 extension: None,
+                violation: false,
             },
             ParityCase {
-                // Receipt late on 1 January Pacific is 2 January in UTC. Converting to a session
+                // Receipt late on 2 March Pacific is 3 March in UTC. Converting to a session
                 // time zone before counting days would clear this agency at ten days; counting in
                 // the recorded offset reports the eleventh day it actually took.
                 label: "near-midnight receipt in a western offset",
-                created_at: "2026-01-01T23:00:00-08:00",
-                updated_at: "2026-01-12T10:00:00-08:00",
+                created_at: "2026-03-02T23:00:00-08:00",
+                updated_at: "2026-03-13T10:00:00-08:00",
                 status: "open",
                 closed_at: None,
                 extension: None,
+                violation: true,
             },
             ParityCase {
                 label: "valid written extension",
@@ -898,6 +910,7 @@ mod tests {
                     reason: StatutoryExtensionReason::VoluminousRecords,
                     notice_source: "Portal message 17".to_string(),
                 }),
+                violation: false,
             },
             ParityCase {
                 label: "extension beyond fourteen days is defective",
@@ -907,10 +920,11 @@ mod tests {
                 closed_at: Some("2026-01-20T12:00:00-08:00"),
                 extension: Some(StatutoryExtensionRecord {
                     notice_at: "2026-01-08T12:00:00-08:00".to_string(),
-                    expected_determination_at: "2026-01-26T12:00:00-08:00".to_string(),
+                    expected_determination_at: "2026-01-27T12:00:00-08:00".to_string(),
                     reason: StatutoryExtensionReason::DataCompilation,
                     notice_source: "Portal notice".to_string(),
                 }),
+                violation: true,
             },
             ParityCase {
                 // A legacy row: the command path rejects a blank notice source, but a database
@@ -926,6 +940,48 @@ mod tests {
                     reason: StatutoryExtensionReason::InteragencyConsultation,
                     notice_source: "   ".to_string(),
                 }),
+                violation: true,
+            },
+            ParityCase {
+                label: "tenth day on a Saturday carries to Monday",
+                created_at: "2026-03-04T09:00:00-08:00",
+                updated_at: "2026-03-16T16:00:00-07:00",
+                status: "open",
+                closed_at: None,
+                extension: None,
+                violation: false,
+            },
+            ParityCase {
+                label: "the Tuesday after a carried deadline is late",
+                created_at: "2026-03-04T09:00:00-08:00",
+                updated_at: "2026-03-17T09:00:00-07:00",
+                status: "open",
+                closed_at: None,
+                extension: None,
+                violation: true,
+            },
+            ParityCase {
+                label: "tenth day on Thanksgiving carries past the weekend",
+                created_at: "2025-11-17T09:00:00-08:00",
+                updated_at: "2025-12-01T16:00:00-08:00",
+                status: "open",
+                closed_at: None,
+                extension: None,
+                violation: false,
+            },
+            ParityCase {
+                label: "extension noticed on the carried initial deadline is timely",
+                created_at: "2026-03-04T09:00:00-08:00",
+                updated_at: "2026-03-25T12:00:00-07:00",
+                status: "closed",
+                closed_at: Some("2026-03-25T12:00:00-07:00"),
+                extension: Some(StatutoryExtensionRecord {
+                    notice_at: "2026-03-16T12:00:00-07:00".to_string(),
+                    expected_determination_at: "2026-03-25T12:00:00-07:00".to_string(),
+                    reason: StatutoryExtensionReason::VoluminousRecords,
+                    notice_source: "Portal message 18".to_string(),
+                }),
+                violation: false,
             },
         ]
     }
@@ -1024,45 +1080,42 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        let rust_violation_count = rust_verdicts
-            .iter()
-            .filter(|(_, is_violation)| *is_violation)
-            .count();
-        // A fixture where every case agrees regardless of the day-count rule would pin nothing.
-        assert!(
-            rust_verdicts.iter().any(|(label, is_violation)| *label
-                == "near-midnight receipt in a western offset"
-                && *is_violation),
-            "the offset-sensitive case must be a violation or the fixture does not discriminate"
-        );
-        assert!(rust_violation_count > 0 && rust_violation_count < rust_verdicts.len());
+        for (case, (label, is_violation)) in cases.iter().zip(&rust_verdicts) {
+            assert_eq!(
+                *is_violation, case.violation,
+                "case '{label}': the per-request evaluator reached the wrong verdict"
+            );
+        }
 
         let mut applied_time_zones = Vec::new();
         for time_zone in PARITY_SESSION_TIME_ZONES {
-            let connection = parity_connection(&cases);
-            // A build without the ICU extension cannot change session time zone at all. Record
-            // which zones were exercised rather than reporting untested zones as passing.
-            if connection
-                .execute_batch(&format!("SET TimeZone = '{time_zone}';"))
-                .is_ok()
-            {
-                applied_time_zones.push(time_zone);
+            for (case, (label, is_violation)) in cases.iter().zip(&rust_verdicts) {
+                let connection = parity_connection(std::slice::from_ref(case));
+                // A build without the ICU extension cannot change session time zone at all.
+                // Record which zones were exercised rather than reporting untested zones as
+                // passing.
+                let applied = connection
+                    .execute_batch(&format!("SET TimeZone = '{time_zone}';"))
+                    .is_ok();
+                if applied && !applied_time_zones.contains(&time_zone) {
+                    applied_time_zones.push(time_zone);
+                }
+                let profiles = query_agency_performance_profiles(
+                    &connection,
+                    90.0,
+                    "",
+                    "",
+                    AnalyticsSource::ForeignSqlite.table_prefix(),
+                )
+                .unwrap();
+                assert_eq!(profiles.len(), 1);
+                assert_eq!(
+                    profiles[0].statutory_violation_count,
+                    usize::from(*is_violation),
+                    "case '{label}' under session time zone '{time_zone}': the aggregate \
+                     disagreed with the per-request evaluator"
+                );
             }
-            let profiles = query_agency_performance_profiles(
-                &connection,
-                90.0,
-                "",
-                "",
-                AnalyticsSource::ForeignSqlite.table_prefix(),
-            )
-            .unwrap();
-            assert_eq!(profiles.len(), 1);
-            assert_eq!(
-                profiles[0].statutory_violation_count, rust_violation_count,
-                "under session time zone '{time_zone}' the aggregate disagreed with the \
-                 per-request evaluator; per-request verdicts were {rust_verdicts:?}"
-            );
-            assert_eq!(profiles[0].total_requests_processed, cases.len());
         }
         assert!(
             applied_time_zones.len() >= 2,

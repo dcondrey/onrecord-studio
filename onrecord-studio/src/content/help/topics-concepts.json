@@ -170,6 +170,8 @@
       "calendar days",
       "10 days",
       "14 days",
+      "holiday",
+      "weekend",
       "proxy",
       "provisional",
       "sourced",
@@ -179,7 +181,7 @@
     "sections": [
       {
         "paragraphs": [
-          "For California Public Records Act requests the app evaluates the statutory period under Government Code section 7922.535: 10 calendar days from receipt to determine whether the request seeks disclosable records. One written extension can add up to 14 calendar days, so the longest valid period is 24. This is a calculator over recorded dates. It is not legal advice, and other jurisdictions have no deadline model here."
+          "For California Public Records Act requests the app evaluates the statutory period under Government Code section 7922.535: 10 calendar days from receipt to determine whether the request seeks disclosable records. One written extension can add up to 14 calendar days. When a period's last day is a Saturday, Sunday or California judicial holiday, it ends on the next court day instead (Code of Civil Procedure sections 12, 12a and 135); days proclaimed ad hoc by the Governor or President are not modeled. This is a calculator over recorded dates. It is not legal advice, and other jurisdictions have no deadline model here."
         ]
       },
       {

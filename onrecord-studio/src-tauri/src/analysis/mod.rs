@@ -2,6 +2,7 @@
 
 pub mod anomaly;
 pub mod cluster;
+pub mod court_calendar;
 pub mod reconstruction;
 pub(crate) mod sql;
 pub mod statute;
@@ -13,7 +14,7 @@ pub use cluster::{
     RedactionDensityMetric, RedactionMatchEvidence, RedactionPatternKind, TextLayerRedactionMetric,
     HEAVY_REDACTION_DENSITY_THRESHOLD,
 };
-pub use statute::{DeterminationBasis, CPRA_MAXIMUM_EXTENDED_DETERMINATION_DAYS};
+pub use statute::DeterminationBasis;
 pub use timeline::{
     calculate_operational_latency_for_status, detect_fast_drop_for_status,
     evaluate_statutory_compliance_at, evaluate_statutory_compliance_with_determination_at,

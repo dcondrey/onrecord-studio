@@ -187,7 +187,7 @@ fn a_confirmed_sourced_determination_beyond_the_allowed_days_is_a_violation() {
         &mut document,
         &id,
         TimelineEventKind::Submitted,
-        "2026-01-01T09:00:00Z",
+        "2026-03-02T09:00:00Z",
     );
     let late = confirm_from_email(
         &mut document,
@@ -195,7 +195,7 @@ fn a_confirmed_sourced_determination_beyond_the_allowed_days_is_a_violation() {
         "<det@x>",
         "The determination on your request is attached.",
         TimelineEventKind::Determination,
-        "2026-01-12T09:00:00Z",
+        "2026-03-13T09:00:00Z",
         None,
         None,
     )
@@ -216,7 +216,7 @@ fn a_confirmed_sourced_determination_beyond_the_allowed_days_is_a_violation() {
         &mut on_time,
         &id,
         TimelineEventKind::Submitted,
-        "2026-01-01T09:00:00Z",
+        "2026-03-02T09:00:00Z",
     );
     confirm_from_email(
         &mut on_time,
@@ -224,7 +224,7 @@ fn a_confirmed_sourced_determination_beyond_the_allowed_days_is_a_violation() {
         "<det2@x>",
         "The determination on your request is attached.",
         TimelineEventKind::Determination,
-        "2026-01-11T09:00:00Z",
+        "2026-03-12T09:00:00Z",
         None,
         None,
     )
@@ -300,7 +300,7 @@ fn only_an_email_sourced_extension_extends_the_deadline() {
             &mut document,
             &id,
             TimelineEventKind::Submitted,
-            "2026-01-01T09:00:00Z",
+            "2026-03-02T09:00:00Z",
         );
         if from_email {
             confirm_from_email(
@@ -309,30 +309,30 @@ fn only_an_email_sourced_extension_extends_the_deadline() {
                 "<ext@x>",
                 "We need an extension of time.",
                 TimelineEventKind::ExtensionNotice,
-                "2026-01-08T09:00:00Z",
+                "2026-03-09T09:00:00Z",
                 Some(StatutoryExtensionReason::VoluminousRecords),
-                Some("2026-01-20T09:00:00Z"),
+                Some("2026-03-19T09:00:00Z"),
             )
             .unwrap();
         } else {
             let mut input = event_input(
                 &id,
                 TimelineEventKind::ExtensionNotice,
-                "2026-01-08T09:00:00Z",
+                "2026-03-09T09:00:00Z",
             );
             input.extension_reason = Some(StatutoryExtensionReason::VoluminousRecords);
-            input.expected_determination_at = Some("2026-01-20T09:00:00Z".to_string());
+            input.expected_determination_at = Some("2026-03-19T09:00:00Z".to_string());
             add_event(&mut document, input, NOW).unwrap();
         }
-        request_deadline(&document.claims[0], at("2026-01-15"))
+        request_deadline(&document.claims[0], at("2026-03-16"))
     };
     let sourced = build(true);
-    assert_eq!(sourced.analysis.as_ref().unwrap().allowed_calendar_days, 19);
+    assert_eq!(sourced.analysis.as_ref().unwrap().allowed_calendar_days, 17);
     assert_eq!(
         sourced.countdown,
         Countdown {
             kind: CountdownKind::DaysRemaining,
-            days: Some(5)
+            days: Some(3)
         }
     );
     let entered = build(false);
@@ -351,25 +351,25 @@ fn the_countdown_crosses_zero_without_calling_the_provisional_period_a_violation
         &mut document,
         &id,
         TimelineEventKind::Submitted,
-        "2026-01-01T00:00:00Z",
+        "2026-03-02T00:00:00Z",
     );
     let claim = &document.claims[0];
     let at_day = |day| request_deadline(claim, at(day));
     assert_eq!(
-        at_day("2026-01-10").countdown,
+        at_day("2026-03-11").countdown,
         Countdown {
             kind: CountdownKind::DaysRemaining,
             days: Some(1)
         }
     );
     assert_eq!(
-        at_day("2026-01-11").countdown,
+        at_day("2026-03-12").countdown,
         Countdown {
             kind: CountdownKind::DaysRemaining,
             days: Some(0)
         }
     );
-    let passed = at_day("2026-01-12");
+    let passed = at_day("2026-03-13");
     assert_eq!(
         passed.countdown,
         Countdown {

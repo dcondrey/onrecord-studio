@@ -1,15 +1,15 @@
+use crate::analysis::court_calendar::{self, COURT_CALENDAR_BASIS};
 use crate::analysis::statute::DeterminationBasis;
 use crate::error::AppError;
 use crate::types::{StateTransitionLog, StatutoryExtensionRecord, TimelineAnomalyMarker};
-use chrono::{DateTime, Days, FixedOffset, TimeDelta, Utc};
+use chrono::{DateTime, Days, FixedOffset, NaiveDate, TimeDelta, Utc};
 use serde::{Deserialize, Serialize};
 
 // Thresholds and the citation live in `analysis::statute` because the vectorized aggregate in
 // `analysis::anomaly` renders its SQL from the same values. They are re-exported here so every
 // existing `analysis::timeline` import path keeps working.
 pub use crate::analysis::statute::{
-    CPRA_INITIAL_DETERMINATION_DAYS, CPRA_MAXIMUM_EXTENDED_DETERMINATION_DAYS,
-    CPRA_MAXIMUM_EXTENSION_DAYS, CPRA_STATUTE_CITATION, SUSPICIOUS_CLOSURE_THRESHOLD_SECONDS,
+    CPRA_INITIAL_DETERMINATION_DAYS, CPRA_MAXIMUM_EXTENSION_DAYS, CPRA_STATUTE_CITATION, SUSPICIOUS_CLOSURE_THRESHOLD_SECONDS,
 };
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -159,25 +159,29 @@ pub fn evaluate_statutory_compliance_with_determination_at(
             };
             (proxy, basis, None)
         };
-    let initial_deadline = created
-        .checked_add_days(Days::new(CPRA_INITIAL_DETERMINATION_DAYS))
-        .ok_or_else(|| {
-            AppError::Compliance(format!(
-                "Request {request_id} initial statutory deadline overflowed"
-            ))
-        })?;
-    let extension_evaluation = evaluate_extension(created, extension)?;
+    let created_date = created.date_naive();
+    let initial_deadline_date = court_calendar::court_day_on_or_after(
+        created_date
+            .checked_add_days(Days::new(CPRA_INITIAL_DETERMINATION_DAYS))
+            .ok_or_else(|| {
+                AppError::Compliance(format!(
+                    "Request {request_id} initial statutory deadline overflowed"
+                ))
+            })?,
+    )?;
+    let extension_evaluation = evaluate_extension(created, initial_deadline_date, extension)?;
+    let initial_deadline = on_date(created, initial_deadline_date)?;
     let effective_deadline = extension_evaluation
         .valid_deadline
         .unwrap_or(initial_deadline);
     let comparison_timestamp = determination.unwrap_or(observed);
     let calendar_days_elapsed = comparison_timestamp
         .date_naive()
-        .signed_duration_since(created.date_naive())
+        .signed_duration_since(created_date)
         .num_days();
     let allowed_calendar_days = effective_deadline
         .date_naive()
-        .signed_duration_since(created.date_naive())
+        .signed_duration_since(created_date)
         .num_days();
     let is_violation = calendar_days_elapsed > allowed_calendar_days;
     let mut anomaly_markers = Vec::with_capacity(2);
@@ -202,7 +206,7 @@ pub fn evaluate_statutory_compliance_with_determination_at(
         .map(|source| format!("; determination source: {source}"))
         .unwrap_or_default();
     let evidence_summary = format!(
-        "Request {request_id}: {calendar_days_elapsed} calendar days from receipt to {milestone_label}{determination_source_clause}; effective deadline was {} under {CPRA_STATUTE_CITATION}; extension status {:?}.",
+        "Request {request_id}: {calendar_days_elapsed} calendar days from receipt to {milestone_label}{determination_source_clause}; effective deadline was {} under {CPRA_STATUTE_CITATION}, where {COURT_CALENDAR_BASIS}; extension status {:?}.",
         effective_deadline.to_rfc3339(),
         extension_evaluation.status
     );
@@ -234,6 +238,7 @@ struct ExtensionEvaluation {
 
 fn evaluate_extension(
     created: DateTime<FixedOffset>,
+    initial_deadline_date: NaiveDate,
     extension: Option<&StatutoryExtensionRecord>,
 ) -> Result<ExtensionEvaluation, AppError> {
     let Some(extension) = extension else {
@@ -247,32 +252,49 @@ fn evaluate_extension(
         &extension.expected_determination_at,
         "extension expected determination",
     )?;
-    let notice_calendar_days = notice
-        .date_naive()
-        .signed_duration_since(created.date_naive())
-        .num_days();
-    let expected_calendar_days = expected
-        .date_naive()
-        .signed_duration_since(created.date_naive())
-        .num_days();
+    // The 14 days run from the initial deadline as carried past any closed days, the reading
+    // that grants the agency the most time.
+    let latest_extended_date = court_calendar::court_day_on_or_after(
+        initial_deadline_date
+            .checked_add_days(Days::new(CPRA_MAXIMUM_EXTENSION_DAYS))
+            .ok_or_else(|| AppError::Compliance("Extended deadline overflowed".to_string()))?,
+    )?;
     let status = if extension.notice_source.trim().is_empty() {
         StatutoryExtensionStatus::MissingNoticeSource
     } else if notice < created {
         StatutoryExtensionStatus::NoticeBeforeReceipt
-    } else if notice_calendar_days > CPRA_INITIAL_DETERMINATION_DAYS as i64 {
+    } else if notice.date_naive() > initial_deadline_date {
         StatutoryExtensionStatus::NoticeAfterInitialDeadline
-    } else if expected_calendar_days <= CPRA_INITIAL_DETERMINATION_DAYS as i64 {
+    } else if expected.date_naive() <= initial_deadline_date {
         StatutoryExtensionStatus::ExpectedDateNotExtended
-    } else if expected_calendar_days > CPRA_MAXIMUM_EXTENDED_DETERMINATION_DAYS as i64 {
+    } else if expected.date_naive() > latest_extended_date {
         StatutoryExtensionStatus::ExtensionExceedsFourteenDays
     } else {
         StatutoryExtensionStatus::Valid
     };
-
+    let valid_deadline = if status == StatutoryExtensionStatus::Valid {
+        Some(on_date(
+            expected,
+            court_calendar::court_day_on_or_after(expected.date_naive())?,
+        )?)
+    } else {
+        None
+    };
     Ok(ExtensionEvaluation {
         status,
-        valid_deadline: (status == StatutoryExtensionStatus::Valid).then_some(expected),
+        valid_deadline,
     })
+}
+
+/// `anchor`'s time of day and offset, moved to `date`.
+fn on_date(
+    anchor: DateTime<FixedOffset>,
+    date: NaiveDate,
+) -> Result<DateTime<FixedOffset>, AppError> {
+    let days = date.signed_duration_since(anchor.date_naive());
+    anchor
+        .checked_add_signed(days)
+        .ok_or_else(|| AppError::Compliance("Statutory deadline overflowed".to_string()))
 }
 
 fn earliest_milestone(
@@ -399,21 +421,21 @@ mod tests {
     fn eleven_calendar_days_without_extension_is_a_violation() {
         let boundary = evaluate_statutory_compliance_at(
             1,
-            "2026-01-01T00:01:00-08:00",
-            Some("2026-01-11T23:59:00-08:00"),
+            "2026-03-02T00:01:00-08:00",
+            Some("2026-03-12T23:59:00-07:00"),
             None,
             None,
-            "2026-01-11T23:59:00-08:00",
+            "2026-03-12T23:59:00-07:00",
         )
         .unwrap();
         assert!(!boundary.is_violation);
         let result = evaluate_statutory_compliance_at(
             1,
-            "2026-01-01T09:00:00-08:00",
-            Some("2026-01-12T09:00:00-08:00"),
+            "2026-03-02T09:00:00-08:00",
+            Some("2026-03-13T09:00:00-07:00"),
             None,
             None,
-            "2026-01-12T09:00:00-08:00",
+            "2026-03-13T09:00:00-07:00",
         )
         .unwrap();
         assert!(result.is_violation);
@@ -513,16 +535,16 @@ mod tests {
 
     #[test]
     fn calendar_days_are_counted_in_the_recorded_offset() {
-        // Receipt late on 1 January Pacific is 2 January in UTC. The statutory clock follows the
+        // Receipt late on 2 March Pacific is 3 March in UTC. The statutory clock follows the
         // offset the agency recorded, so this is an eleventh-day determination and a violation.
         // Counting from a UTC-shifted date would report ten days and clear the agency.
         let result = evaluate_statutory_compliance_at(
             4,
-            "2026-01-01T23:00:00-08:00",
-            Some("2026-01-12T10:00:00-08:00"),
+            "2026-03-02T23:00:00-08:00",
+            Some("2026-03-13T10:00:00-07:00"),
             None,
             None,
-            "2026-01-12T10:00:00-08:00",
+            "2026-03-13T10:00:00-07:00",
         )
         .unwrap();
         assert_eq!(result.calendar_days_elapsed, 11);
@@ -554,7 +576,7 @@ mod tests {
     fn extension_beyond_fourteen_days_is_defective_and_does_not_extend_deadline() {
         let extension = StatutoryExtensionRecord {
             notice_at: "2026-01-08T12:00:00-08:00".to_string(),
-            expected_determination_at: "2026-01-26T12:00:00-08:00".to_string(),
+            expected_determination_at: "2026-01-27T12:00:00-08:00".to_string(),
             reason: StatutoryExtensionReason::DataCompilation,
             notice_source: "Portal notice".to_string(),
         };
