@@ -90,9 +90,9 @@ describe('LicenseGate, direct build', () => {
     const { rerender } = render(<LicenseGate controller={c} />);
     const table = screen.getByRole('table');
     for (const tier of PRICE_TIERS) expect(within(table).getByText(`$${tier.usdPerSeatPerYear}`)).toBeTruthy();
-    expect(screen.getByText(/Taxes extra\. Coupons are accepted at checkout\./)).toBeTruthy();
+    expect(screen.getByText(/Taxes extra\. During the beta, coupon BETA20 takes 20% off at checkout\./)).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Seats'), { target: { value: '10' } });
-    expect(screen.getByText(/10 seats at \$49 = \$490 per year/)).toBeTruthy();
+    expect(screen.getByText(/10 seats at \$59 = \$590 per year/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Continue to checkout' }));
     expect(c.startCheckout).toHaveBeenCalledWith(10);
     fireEvent.change(screen.getByLabelText('Seats'), { target: { value: '5000' } });
