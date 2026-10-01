@@ -237,6 +237,10 @@
       "log",
       "telemetry",
       "ocr",
+      "tesseract",
+      "poppler",
+      "scanned",
+      "install",
       "worker",
       "runtime",
       "export json"
