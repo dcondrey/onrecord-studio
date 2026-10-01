@@ -3,6 +3,7 @@ import SearchFilter from '../filters/SearchFilter';
 import { useAppStore } from '../../store/useAppStore';
 import { cn } from '../../utils/cn';
 import DocumentViewer from '../documents/DocumentViewer';
+import AnnotationSearch from '../documents/AnnotationSearch';
 import UnredactorPanel from '../documents/UnredactorPanel';
 import LegalAuthorityManager from '../legal/LegalAuthorityManager';
 import LegalCompliancePanel from '../legal/LegalCompliancePanel';
@@ -191,6 +192,10 @@ export default function MainLayout() {
 
   useEffect(() => {
     if (!pendingEvidenceLink || documents.length === 0) return;
+    // `documents` still belongs to the previously selected request until the list effect has
+    // switched owners; looking the target up in it would reject a valid link.
+    const owner = documentOwnerRef.current;
+    if (owner?.requestId !== pendingEvidenceLink.requestId || owner?.portalKey !== pendingEvidenceLink.portalKey) return;
     const summary = documents.find((document) =>
       document.documentId === pendingEvidenceLink.documentId
       && document.portalKey === pendingEvidenceLink.portalKey
@@ -283,6 +288,7 @@ export default function MainLayout() {
       </div>
       {evidenceMode === 'timeline' ? <CaseTimeline /> : <>
       <SearchFilter />
+      <AnnotationSearch onOpen={setPendingEvidenceLink} />
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto grid min-h-[620px] w-full max-w-[1800px] grid-cols-1 gap-4 p-4 lg:p-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.75fr)]">
           <section className="app-panel flex min-h-[520px] flex-col overflow-hidden">
