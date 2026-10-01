@@ -89,6 +89,7 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::maintenance::get_data_maintenance_status,
         commands::maintenance::set_data_maintenance_policy,
         commands::maintenance::run_data_maintenance,
+        commands::snapshot::export_research_snapshot,
         commands::reconstruction::reconstruct_document_context,
         commands::financial::get_financial_workspace,
         commands::financial::save_financial_mapping,

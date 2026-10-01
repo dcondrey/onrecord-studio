@@ -13,6 +13,7 @@ pub mod reconstruction;
 pub mod research;
 pub mod runtime;
 pub mod semantic;
+pub mod snapshot;
 pub(crate) mod validation;
 
 pub use analysis_workbench::{

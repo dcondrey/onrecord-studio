@@ -12,6 +12,7 @@ import InvestigationDesk from './InvestigationDesk';
 import ResearchWorkspace from './ResearchWorkspace';
 import ProfessionalWorkbench from './ProfessionalWorkbench';
 import DataMaintenance from './DataMaintenance';
+import ResearchSnapshotExport from './ResearchSnapshotExport';
 import AutomaticDiscovery from './AutomaticDiscovery';
 import { invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
@@ -99,7 +100,7 @@ export default function OverviewDashboard() {
         </>}
         <ToolDrawer label="Topics: encampments, belongings, police spending, public restrooms"><TopicPacks /></ToolDrawer>
         <ToolDrawer label="Plan an investigation or draft a request manually"><InvestigationDesk /></ToolDrawer>
-        <ToolDrawer label="Collection, coverage and storage"><AutomaticDiscovery /><div className="mt-4"><DataMaintenance /></div></ToolDrawer>
+        <ToolDrawer label="Collection, coverage and storage"><AutomaticDiscovery /><div className="mt-4"><DataMaintenance /></div><ResearchSnapshotExport /></ToolDrawer>
         <ToolDrawer label="Browse sources and add records"><SanDiegoWorkspace /></ToolDrawer>
 
         {portals.length > 0 && <button type="button" onClick={() => setShowAnalytics((visible) => !visible)} aria-expanded={showAnalytics} className="secondary-action focus-ring rounded-xl border px-4 py-2 text-xs text-slate-300">{showAnalytics ? 'Hide response analytics' : 'Show response analytics'}</button>}

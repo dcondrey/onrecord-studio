@@ -28,6 +28,7 @@ pub mod maintenance;
 pub mod pii;
 pub mod reconstruction;
 pub mod research;
+pub mod snapshot_export;
 pub mod sqlite;
 #[cfg(test)]
 pub(crate) mod sqlite_snapshot;
