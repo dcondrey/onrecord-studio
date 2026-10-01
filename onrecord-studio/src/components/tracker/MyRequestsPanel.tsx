@@ -22,6 +22,12 @@ const KIND_LABELS: Record<TimelineEventKind, string> = {
   DETERMINATION: 'Determination',
   RECORDS_RELEASED: 'Records released',
   CLOSED: 'Closed',
+  CLARIFICATION_REQUESTED: 'Clarification requested by agency',
+  FEE_NOTICE: 'Fee notice',
+  PARTIAL_PRODUCTION: 'Partial production (installment)',
+  WITHHOLDING_NOTICE: 'Withholding / exemption notice',
+  FOLLOW_UP_SENT: 'Follow-up sent',
+  APPEAL_FILED: 'Appeal or escalation filed',
   OTHER: 'Other',
 };
 
@@ -45,6 +51,16 @@ function KindSelect({ value, onChange, label }: { value: TimelineEventKind; onCh
       ))}
     </select>
   );
+}
+
+export function chronologyText(claim: ClaimedRequest): string {
+  const events = [...claim.events].sort((a, b) => Date.parse(a.occurredAt) - Date.parse(b.occurredAt));
+  const lines = events.map((event) => {
+    const source = event.basis === 'EMAIL_CONFIRMED' ? 'confirmed from an email' : 'entered by requester';
+    const reason = event.extensionReason ? `; ${REASON_LABELS[event.extensionReason]}` : '';
+    return `${event.occurredAt.slice(0, 10)}  ${KIND_LABELS[event.kind]} (${source}${reason})`;
+  });
+  return [`Request ${claim.reference}${claim.title ? `: ${claim.title}` : ''}`, ...lines].join('\n');
 }
 
 function ExtensionFields({
@@ -204,6 +220,15 @@ function Detail({ claim, deadline, tracker }: { claim: ClaimedRequest; deadline:
   const [expected, setExpected] = useState('');
   const [pickError, setPickError] = useState<string | null>(null);
   const [confirmingRemoval, setConfirmingRemoval] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
+  const copyChronology = async () => {
+    try {
+      await navigator.clipboard.writeText(chronologyText(claim));
+      setCopyStatus('Chronology copied');
+    } catch {
+      setCopyStatus('The clipboard is unavailable');
+    }
+  };
   const occurredAt = localInputToRfc3339(when);
   const needsReason = kind === 'EXTENSION_NOTICE';
   const events = [...claim.events].sort((left, right) => left.occurredAt.localeCompare(right.occurredAt));
@@ -263,6 +288,12 @@ function Detail({ claim, deadline, tracker }: { claim: ClaimedRequest; deadline:
               </li>
             ))}
           </ol>
+        )}
+        {claim.events.length > 0 && (
+          <div className="mt-1.5 flex items-center gap-2">
+            <button type="button" className={button} onClick={() => void copyChronology()}>Copy chronology</button>
+            {copyStatus && <span role="status" className="text-emerald-300">{copyStatus}</span>}
+          </div>
         )}
         <form
           className="mt-2 grid gap-1.5"

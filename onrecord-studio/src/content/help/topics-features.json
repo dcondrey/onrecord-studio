@@ -149,7 +149,13 @@
       "sha-256",
       "excerpt",
       "evidence link",
-      "reference only"
+      "reference only",
+      "annotate",
+      "annotation",
+      "note",
+      "highlight",
+      "issue code",
+      "markdown"
     ],
     "sections": [
       {
@@ -174,6 +180,15 @@
         ]
       },
       {
+        "heading": "Annotations",
+        "items": [
+          "Annotate opens a panel for notes, highlights and issue codes. Select text in the document, choose Use selected text, then save. A note can also be saved without a passage; it is placed at the top of the page you are on.",
+          "An issue code needs a label you choose, such as amendment or missing attachment. Go to passage jumps to a saved mark that is in the chunk you are reading; marks in another chunk say so.",
+          "Copy as Markdown puts every annotation on this document on the clipboard with its character offset. Offsets locate text in the extracted copy, not the original file.",
+          "Annotations stay on this Mac in their own file and are not part of the record, a finding or any export. Deleting one asks for confirmation and cannot be undone."
+        ]
+      },
+      {
         "heading": "Provenance badge",
         "paragraphs": [
           "The badge reports one rung of the provenance ladder. See Provenance and C2PA. Quoted text drifted means the extracted text no longer hashes to the digest recorded at extraction, even if the file itself is intact."
@@ -182,7 +197,9 @@
     ],
     "views": [],
     "findingKinds": [],
-    "commandGroups": [],
+    "commandGroups": [
+      "annotations"
+    ],
     "related": [
       "provenance-c2pa",
       "redaction-tools",

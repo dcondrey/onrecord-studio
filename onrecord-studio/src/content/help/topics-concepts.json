@@ -339,7 +339,13 @@
       "deadline",
       "chip",
       "determination",
-      "extension notice"
+      "extension notice",
+      "fee",
+      "installment",
+      "withholding",
+      "appeal",
+      "follow-up",
+      "chronology"
     ],
     "screenshot": "tracker",
     "sections": [
@@ -351,7 +357,8 @@
       {
         "heading": "Timeline",
         "paragraphs": [
-          "Add a date for each event: submitted, acknowledged, extension notice, determination, records released, closed or other. For an extension notice, choose the statutory reason the notice gives and the date it says the agency will respond by. Without that date the extension is not applied. Each event can be removed."
+          "Add a date for each event: submitted, acknowledged, extension notice, determination, records released, closed, or other. You can also record events that only fill in the chronology and never change the deadline: a clarification request from the agency, a fee notice, a partial production, a withholding or exemption notice, a follow-up you sent, and an appeal or escalation. For an extension notice, choose the statutory reason the notice gives and the date it says the agency will respond by. Without that date the extension is not applied. Each event can be removed.",
+          "Copy chronology puts the dated events on the clipboard as plain text, oldest first."
         ]
       },
       {
