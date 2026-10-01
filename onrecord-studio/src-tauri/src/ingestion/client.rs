@@ -4375,6 +4375,7 @@ fn council_agendas_expose_item_indexes_without_spending_frontier_on_bootstrap_na
         .all(|link| link.follow_candidate && !link.download_candidate && !link.navigation_chrome));
 }
 
+#[cfg(test)]
 fn unused_acquisition() -> AcquisitionRecord {
     AcquisitionRecord {
         requested_url: String::new(),
