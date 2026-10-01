@@ -105,7 +105,7 @@ impl DuckDbRepository {
                 conn,
                 &output,
                 &[
-                    ("schema", RESEARCH_SNAPSHOT_SCHEMA),
+                    ("schema_version", RESEARCH_SNAPSHOT_SCHEMA),
                     ("app_version", app_version.as_str()),
                     ("created_at", manifest_created_at.as_str()),
                     ("corpus_state_digest", corpus_state_digest.as_str()),

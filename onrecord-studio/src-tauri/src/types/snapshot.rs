@@ -11,7 +11,7 @@ pub const RESEARCH_SNAPSHOT_SCHEMA: &str = "onrecord-research-snapshot-v1";
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ResearchSnapshotManifest {
-    pub schema: String,
+    pub schema_version: String,
     pub app_version: String,
     pub created_at: String,
     pub file_name: String,

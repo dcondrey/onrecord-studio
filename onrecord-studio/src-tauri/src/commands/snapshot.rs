@@ -32,7 +32,7 @@ pub async fn export_research_snapshot(
         .await
         .map_err(|error| AppError::Export(format!("Failed to hash the snapshot: {error}")))?;
     let manifest = ResearchSnapshotManifest {
-        schema: RESEARCH_SNAPSHOT_SCHEMA.to_string(),
+        schema_version: RESEARCH_SNAPSHOT_SCHEMA.to_string(),
         app_version: env!("CARGO_PKG_VERSION").to_string(),
         created_at: build.created_at,
         file_name,
