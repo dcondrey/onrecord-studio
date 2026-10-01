@@ -2890,6 +2890,9 @@ async fn record_inline_acquisition(
         .repository
         .insert_or_update_document(&context.portal.portal_key, request_id, document)
         .await?;
+    if let Some(path) = &document.local_path {
+        release_object_link(Path::new(path)).await;
+    }
     context
         .repository
         .record_document_acquisition(
@@ -3503,6 +3506,7 @@ async fn process_binary_payload(
         .repository
         .insert_or_update_document(&context.portal.portal_key, request_id, &document)
         .await?;
+    release_object_link(&local_path).await;
     // Recorded once the row exists and before extraction rewrites its digest, so the event
     // captures the digest this fetch replaced.
     if let Some(acquisition) = &acquisition {
@@ -5707,6 +5711,34 @@ async fn store_inline_payload(
     commit_staged_object(download_root, &staging_path, &sha256_hex(bytes)).await
 }
 
+/// Objects an ingestion task linked, or found already present, and may not yet reference from a
+/// committed row. Purge unlinks only under this lock and skips these, so it can never remove a file
+/// between a concurrent sync's link and that sync's row; the grace outlasts any task.
+static RECENT_OBJECT_LINKS: std::sync::LazyLock<Mutex<HashMap<PathBuf, std::time::Instant>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+const RECENT_OBJECT_LINK_GRACE: Duration = Duration::from_secs(6 * 60 * 60);
+
+/// Unlinks evidence files a committed purge released, except any a running sync has linked and
+/// not yet referenced. Returns the paths it left in place, so a caller never reports them deleted.
+pub(crate) async fn remove_released_evidence_files(paths: &[String]) -> Vec<String> {
+    let mut recent = RECENT_OBJECT_LINKS.lock().await;
+    recent.retain(|_, linked_at| linked_at.elapsed() < RECENT_OBJECT_LINK_GRACE);
+    let mut kept = Vec::new();
+    for path in paths {
+        if recent.contains_key(Path::new(path)) {
+            kept.push(path.clone());
+            continue;
+        }
+        let _ = tokio::fs::remove_file(path).await;
+    }
+    kept
+}
+
+/// A committed row now references `path`, so the purge-time reference check covers it.
+async fn release_object_link(path: &Path) {
+    RECENT_OBJECT_LINKS.lock().await.remove(path);
+}
+
 async fn commit_staged_object(
     download_root: &Path,
     staging_path: &Path,
@@ -5720,7 +5752,18 @@ async fn commit_staged_object(
         .await
         .map_err(|error| AppError::Storage(format!("Failed to create object store: {error}")))?;
     let final_path = object_directory.join(sha256);
-    match tokio::fs::hard_link(staging_path, &final_path).await {
+    let linked = {
+        let mut recent = RECENT_OBJECT_LINKS.lock().await;
+        let linked = tokio::fs::hard_link(staging_path, &final_path).await;
+        if linked.as_ref().map_or_else(
+            |error| error.kind() == std::io::ErrorKind::AlreadyExists,
+            |()| true,
+        ) {
+            recent.insert(final_path.clone(), std::time::Instant::now());
+        }
+        linked
+    };
+    match linked {
         Ok(()) => {
             // The object's bytes were synced while staged; its new directory entry is not durable
             // until the directory is, and a committed row may point at it after power loss.
@@ -6289,6 +6332,31 @@ mod tests {
     use super::*;
     use crate::ingestion::client::HttpClientConfig;
     use tempfile::tempdir;
+
+    /// A purge that released an object must not unlink it while a sync that just linked the same
+    /// bytes has yet to commit the row referencing it.
+    #[tokio::test]
+    async fn purge_leaves_an_object_a_running_sync_just_linked() {
+        let root = tempdir().unwrap();
+        let staging = root.path().join("staged");
+        tokio::fs::write(&staging, b"shared evidence")
+            .await
+            .unwrap();
+        let object = commit_staged_object(root.path(), &staging, &sha256_hex(b"shared evidence"))
+            .await
+            .unwrap();
+        let path = object.to_string_lossy().into_owned();
+        assert_eq!(
+            remove_released_evidence_files(std::slice::from_ref(&path)).await,
+            vec![path.clone()]
+        );
+        assert!(object.exists());
+
+        // Once a row references it, the purge-time reference check is the guard instead.
+        release_object_link(&object).await;
+        assert!(remove_released_evidence_files(&[path]).await.is_empty());
+        assert!(!object.exists());
+    }
 
     fn metadata_task(page: usize) -> IngestionTask {
         IngestionTask::FetchMetadataPage {

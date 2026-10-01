@@ -245,10 +245,11 @@ pub async fn purge_source(
 ) -> Result<SourcePurge, AppError> {
     let _maintenance = super::maintenance::MAINTENANCE_LOCK.lock().await;
     let source_key = validate_portal_key(&source_key)?;
-    let purge = manager.purge_source(source_key).await?;
+    let mut purge = manager.purge_source(source_key).await?;
     // Unlinked before the corpus purge can fail: once the core has committed, nothing references
     // these files, so a later error must not strand them where no retry can find them.
-    remove_evidence_files(&purge.local_paths).await;
+    let kept = remove_evidence_files(&purge.local_paths).await;
+    purge.local_paths.retain(|path| !kept.contains(path));
     index.purge_portal(source_key.to_string()).await?;
     Ok(purge)
 }
@@ -263,11 +264,19 @@ pub async fn purge_document(
 ) -> Result<DocumentPurge, AppError> {
     let _maintenance = super::maintenance::MAINTENANCE_LOCK.lock().await;
     let source_key = validate_portal_key(&source_key)?;
-    let purge = manager.purge_document(source_key, document_id).await?;
-    if let Some(path) = purge.local_path.as_ref() {
-        remove_evidence_files(std::slice::from_ref(path)).await;
+    let mut purge = manager.purge_document(source_key, document_id).await?;
+    if let Some(path) = purge.local_path.clone() {
+        if !remove_evidence_files(std::slice::from_ref(&path))
+            .await
+            .is_empty()
+        {
+            purge.local_path = None;
+        }
     }
-    remove_evidence_files(&purge.additional_local_paths).await;
+    let kept = remove_evidence_files(&purge.additional_local_paths).await;
+    purge
+        .additional_local_paths
+        .retain(|path| !kept.contains(path));
     index
         .purge_document(source_key.to_string(), document_id)
         .await?;
@@ -280,10 +289,8 @@ pub async fn purge_document(
 /// not fail a purge that has already committed: the rows describing the file are gone, so the file
 /// is an orphan blob rather than evidence, and reporting an error here would tell the operator the
 /// purge did not happen when it did.
-async fn remove_evidence_files(paths: &[String]) {
-    for path in paths {
-        let _ = tokio::fs::remove_file(path).await;
-    }
+async fn remove_evidence_files(paths: &[String]) -> Vec<String> {
+    crate::ingestion::queue::remove_released_evidence_files(paths).await
 }
 
 #[tauri::command]
