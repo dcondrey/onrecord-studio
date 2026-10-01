@@ -173,6 +173,12 @@ the remainder, and the first check after it ends locks the workspace until you s
 Your local evidence is never deleted by a lapse. App Store purchases are managed through the App
 Store.
 
+**Seats.** If you bought more than one seat, **Account** then **Seats** assigns them. Enter a
+colleague's email address; the app sends no mail. They sign in to OnRecord Studio with that address
+and the seat is theirs at their first license check, once their sign-in provider has confirmed the
+address. Your own seat is implicit. Revoke frees a seat and locks that colleague's workspace at
+their next check; their local evidence stays on their Mac. Add seats under Manage subscription.
+
 ## Support
 
 Questions, bug reports and feature requests go to

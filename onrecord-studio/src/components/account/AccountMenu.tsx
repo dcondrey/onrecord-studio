@@ -5,6 +5,7 @@ import { useProfileLensStore } from '../../store/useProfileLensStore';
 import { isDirectChannel } from '../../utils/licenseState';
 import type { LicenseStatus } from '../../types';
 import DeleteAccountResult from './DeleteAccountResult';
+import SeatsPanel from './SeatsPanel';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { openExternalUrl } from '../../utils/openExternal';
 
@@ -34,6 +35,7 @@ export default function AccountMenu() {
   const [confirming, setConfirming] = useState(false);
   const [billingBusy, setBillingBusy] = useState(false);
   const [billingNotice, setBillingNotice] = useState<string | null>(null);
+  const [seatsOpen, setSeatsOpen] = useState(false);
   const status = controller?.status ?? null;
   if (!controller || !status || !isDirectChannel(status)) return null;
 
@@ -99,6 +101,19 @@ export default function AccountMenu() {
                 {billingBusy ? 'Opening Stripe...' : 'Manage subscription'}
               </button>
             ) : null}
+            {status.state === 'LICENSED' ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  close();
+                  setSeatsOpen(true);
+                }}
+                className="focus-ring rounded-lg border border-slate-500 px-3 py-1.5 text-xs font-semibold hover:bg-slate-800 disabled:opacity-50"
+              >
+                Seats
+              </button>
+            ) : null}
             <button
               type="button"
               disabled={busy}
@@ -158,6 +173,7 @@ export default function AccountMenu() {
           <DeleteAccountResult report={controller.deleteReport} error={controller.deleteError} onDismiss={controller.dismissDeleteResult} />
         </ModalDialog>
       ) : null}
+      {seatsOpen ? <SeatsPanel onClose={() => setSeatsOpen(false)} /> : null}
     </>
   );
 }

@@ -163,8 +163,7 @@
         "heading": "Near term",
         "items": [
           "Standing searches: save a search and have it re-run after each sync against a recorded corpus state, so a changed answer is reported with the before and after snapshot digests.",
-          "Agency trends over time: closure latency, violation rate and spending compared across fiscal years, and outcome-per-dollar views where outcome data such as 311 resolutions or shelter placements is imported.",
-          "Organization seats: assign purchased seats to colleagues and manage them from the account menu."
+          "Agency trends over time: closure latency, violation rate and spending compared across fiscal years, and outcome-per-dollar views where outcome data such as 311 resolutions or shelter placements is imported."
         ]
       },
       {

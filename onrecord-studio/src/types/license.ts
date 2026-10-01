@@ -65,3 +65,17 @@ export interface DeleteAccountReport {
 export interface CheckoutSession {
   url: string;
 }
+
+export interface SeatEntry {
+  email: string;
+  invitedAt: string;
+  claimedAt: string | null;
+  revokedAt: string | null;
+}
+
+export interface SeatStatus {
+  subscriptionActive: boolean;
+  quantity: number;
+  usedSeats: number;
+  seats: SeatEntry[];
+}

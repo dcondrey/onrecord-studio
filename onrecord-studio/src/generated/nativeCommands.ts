@@ -13,6 +13,9 @@ export interface NativeCommandMap {
   delete_account: { args: NoArgs; result: Types.DeleteAccountReport };
   start_checkout: { args: { quantity?: number | null }; result: Types.CheckoutSession };
   start_billing_portal: { args: NoArgs; result: Types.CheckoutSession };
+  list_seats: { args: NoArgs; result: Types.SeatStatus };
+  invite_seat: { args: { email: string }; result: Types.SeatStatus };
+  revoke_seat: { args: { email: string }; result: Types.SeatStatus };
   activate_this_device: { args: { confirmRevokeOldest: boolean }; result: Types.LicenseStatus };
   pause_source_sync: { args: { sourceKey: string }; result: boolean };
   resume_source_sync: { args: { sourceKey: string }; result: Types.SourceIngestionStart };

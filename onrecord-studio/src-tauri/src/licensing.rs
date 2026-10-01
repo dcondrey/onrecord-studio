@@ -248,6 +248,15 @@ impl client::AccountServer for UnreachableServer {
         let error = client::FetchError::Unreachable(self.0.to_string());
         Box::pin(async move { Err(error) })
     }
+
+    fn seats<'a>(
+        &'a self,
+        _: &'a account::AccessToken,
+        _: &'a client::SeatRequest,
+    ) -> client::BoxFuture<'a, Result<Vec<u8>, client::FetchError>> {
+        let error = client::FetchError::Unreachable(self.0.to_string());
+        Box::pin(async move { Err(error) })
+    }
 }
 
 pub fn command_is_unlicensed(command: &str) -> bool {
