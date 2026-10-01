@@ -26,8 +26,8 @@
       {
         "heading": "Parts",
         "items": [
-          "Post-ingest brief: a non-modal panel that opens after a sync stops and lists findings discovered in the last 15 minutes. It appears only on this view.",
-          "Change feed: how many findings are new since you last opened the inbox. It also counts statutory deadline violations for the active source when the analytics for that source have loaded.",
+          "Post-ingest brief (headed Just landed): a non-modal panel that opens after a sync stops and lists findings discovered in the last 15 minutes. It appears only on this view.",
+          "Change feed (What changed since you last looked): how many findings are new since you last opened the inbox. It also counts statutory deadline violations for the active source when the analytics for that source have loaded.",
           "Findings inbox: ranked list of everything the detectors surfaced. See Findings inbox.",
           "Cross-corpus explorer: shared language, temporal shifts, orphan topics and reused grounds across agencies, with a jurisdiction by detector heat map.",
           "Three collapsed drawers: plan an investigation or draft a request manually; collection, coverage and storage; browse sources and add records.",
@@ -199,7 +199,7 @@
           "Select a record for its case context: dates, status, description and the Legal compliance panel.",
           "Save lead to briefing stores it locally for the Briefing view.",
           "Public documents lists files with their extraction state. Only searchable or recovered documents open. Personal information is masked in what you read.",
-          "Evidence links copy a portal, request, document and character offset so you can return to the same passage."
+          "Copy evidence link, in the document viewer, copies a portal, request, document and character offset so you can return to the same passage."
         ]
       },
       {
