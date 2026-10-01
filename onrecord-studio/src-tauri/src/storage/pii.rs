@@ -7,6 +7,11 @@ pub enum PiiKind {
     SocialSecurityNumber,
     TelephoneNumber,
     PrivateStreetAddress,
+    PaymentCardNumber,
+    DateOfBirth,
+    GovernmentIdentifier,
+    MedicalIdentifier,
+    BankAccountNumber,
 }
 
 impl PiiKind {
@@ -15,6 +20,11 @@ impl PiiKind {
             Self::SocialSecurityNumber => "[MASKED_SSN]",
             Self::TelephoneNumber => "[MASKED_PHONE]",
             Self::PrivateStreetAddress => "[MASKED_PRIVATE_ADDRESS]",
+            Self::PaymentCardNumber => "[MASKED_PAYMENT_CARD]",
+            Self::DateOfBirth => "[MASKED_DATE_OF_BIRTH]",
+            Self::GovernmentIdentifier => "[MASKED_GOVERNMENT_ID]",
+            Self::MedicalIdentifier => "[MASKED_MEDICAL_ID]",
+            Self::BankAccountNumber => "[MASKED_BANK_ACCOUNT]",
         }
     }
 
@@ -23,6 +33,12 @@ impl PiiKind {
             Self::SocialSecurityNumber => 3,
             Self::TelephoneNumber => 2,
             Self::PrivateStreetAddress => 1,
+            // A labelled value or a checksum-valid card is more specific than any shape match.
+            Self::PaymentCardNumber
+            | Self::DateOfBirth
+            | Self::GovernmentIdentifier
+            | Self::MedicalIdentifier
+            | Self::BankAccountNumber => 4,
         }
     }
 }
@@ -67,6 +83,8 @@ pub fn mask_pii(text: &str) -> Result<PiiMaskResult, AppError> {
     candidates.extend(detect_ssns(text));
     candidates.extend(detect_phone_numbers(text));
     candidates.extend(detect_street_addresses(text));
+    candidates.extend(detect_payment_cards(text));
+    candidates.extend(detect_labelled_identifiers(text));
     let selected = select_non_overlapping_candidates(candidates);
     let mut findings = Vec::with_capacity(selected.len());
     let mut copied_until = 0;
@@ -395,6 +413,246 @@ fn detect_street_addresses(text: &str) -> Vec<Candidate> {
     candidates
 }
 
+/// 13 to 19 digits in one run, separated at most by single spaces or hyphens, passing the Luhn
+/// check and starting with a major-network prefix. The checksum is what separates a card from the
+/// long numeric identifiers public records are full of.
+fn detect_payment_cards(text: &str) -> Vec<Candidate> {
+    let bytes = text.as_bytes();
+    let mut candidates = Vec::new();
+    let mut index = 0;
+    while index < bytes.len() {
+        if !bytes[index].is_ascii_digit() || (index > 0 && bytes[index - 1].is_ascii_alphanumeric())
+        {
+            index += 1;
+            continue;
+        }
+        let start = index;
+        let mut digits = Vec::with_capacity(19);
+        let mut end = index;
+        let mut cursor = index;
+        while cursor < bytes.len() && digits.len() <= 19 {
+            match bytes[cursor] {
+                byte if byte.is_ascii_digit() => {
+                    digits.push(byte - b'0');
+                    cursor += 1;
+                    end = cursor;
+                }
+                b' ' | b'-' if bytes.get(cursor + 1).is_some_and(u8::is_ascii_digit) => {
+                    cursor += 1;
+                }
+                _ => break,
+            }
+        }
+        let bounded = bytes
+            .get(end)
+            .is_none_or(|byte| !byte.is_ascii_alphanumeric());
+        if bounded
+            && (13..=19).contains(&digits.len())
+            && matches!(digits[0], 3..=6)
+            && luhn_valid(&digits)
+        {
+            candidates.push(Candidate {
+                kind: PiiKind::PaymentCardNumber,
+                start,
+                end,
+                confidence_basis_points: 9_800,
+            });
+        }
+        index = end.max(index + 1);
+    }
+    candidates
+}
+
+fn luhn_valid(digits: &[u8]) -> bool {
+    let sum: u32 = digits
+        .iter()
+        .rev()
+        .enumerate()
+        .map(|(position, &digit)| {
+            let digit = u32::from(digit);
+            if position % 2 == 1 {
+                let doubled = digit * 2;
+                if doubled > 9 {
+                    doubled - 9
+                } else {
+                    doubled
+                }
+            } else {
+                digit
+            }
+        })
+        .sum();
+    sum.is_multiple_of(10)
+}
+
+/// A value is masked only when a label naming it sits directly before it. Generic labels such as
+/// "account number" are deliberately absent: budget and procurement records publish ledger
+/// account numbers, and masking those would hide the public finance the product exists to read.
+const IDENTIFIER_LABELS: &[(&[&str], PiiKind)] = &[
+    (&["dob"], PiiKind::DateOfBirth),
+    (&["d", "o", "b"], PiiKind::DateOfBirth),
+    (&["date", "of", "birth"], PiiKind::DateOfBirth),
+    (&["birth", "date"], PiiKind::DateOfBirth),
+    (&["birthdate"], PiiKind::DateOfBirth),
+    (&["born"], PiiKind::DateOfBirth),
+    (&["driver's", "license"], PiiKind::GovernmentIdentifier),
+    (&["drivers", "license"], PiiKind::GovernmentIdentifier),
+    (&["driver", "license"], PiiKind::GovernmentIdentifier),
+    (&["driver's", "licence"], PiiKind::GovernmentIdentifier),
+    (&["dl"], PiiKind::GovernmentIdentifier),
+    (&["cdl"], PiiKind::GovernmentIdentifier),
+    (&["passport"], PiiKind::GovernmentIdentifier),
+    (&["mrn"], PiiKind::MedicalIdentifier),
+    (&["medical", "record"], PiiKind::MedicalIdentifier),
+    (&["patient", "id"], PiiKind::MedicalIdentifier),
+    (&["medi-cal"], PiiKind::MedicalIdentifier),
+    (&["medicare"], PiiKind::MedicalIdentifier),
+    (&["bank", "account"], PiiKind::BankAccountNumber),
+    (&["checking", "account"], PiiKind::BankAccountNumber),
+    (&["savings", "account"], PiiKind::BankAccountNumber),
+    (&["routing", "number"], PiiKind::BankAccountNumber),
+    (&["iban"], PiiKind::BankAccountNumber),
+];
+
+const LABEL_FILLERS: &[&str] = &["no", "number", "num", "id", "is", "on", "of", "#"];
+
+fn detect_labelled_identifiers(text: &str) -> Vec<Candidate> {
+    let tokens = tokens(text);
+    let mut candidates = Vec::new();
+    for start_index in 0..tokens.len() {
+        for (label, kind) in IDENTIFIER_LABELS {
+            let Some(label_tokens) = tokens.get(start_index..start_index + label.len()) else {
+                continue;
+            };
+            if !label_tokens
+                .iter()
+                .zip(label.iter())
+                .all(|(token, word)| token.normalized == *word)
+            {
+                continue;
+            }
+            let mut value_index = start_index + label.len();
+            let mut fillers = 0;
+            while let Some(token) = tokens.get(value_index) {
+                if fillers < 3 && LABEL_FILLERS.contains(&token.normalized.as_str()) {
+                    value_index += 1;
+                    fillers += 1;
+                } else {
+                    break;
+                }
+            }
+            let Some(value) = tokens.get(value_index) else {
+                continue;
+            };
+            let previous_end = tokens[value_index - 1].end;
+            if !text[previous_end..value.start].chars().all(|character| {
+                character.is_whitespace() || matches!(character, ':' | '.' | '#' | '-')
+            }) {
+                continue;
+            }
+            let span = if *kind == PiiKind::DateOfBirth {
+                date_end(text, value.start).map(|end| (value.start, end))
+            } else {
+                identifier_value_span(value)
+            };
+            if let Some((start, end)) = span {
+                candidates.push(Candidate {
+                    kind: *kind,
+                    start,
+                    end,
+                    confidence_basis_points: 9_500,
+                });
+            }
+        }
+    }
+    candidates
+}
+
+/// An identifier is one token of 4 to 34 letters, digits and hyphens holding at least 4 digits,
+/// less a glued `#` ("#X1234567").
+fn identifier_value_span(token: &Token<'_>) -> Option<(usize, usize)> {
+    let start = token.start + (token.text.len() - token.text.trim_start_matches('#').len());
+    let value = token
+        .text
+        .trim_start_matches('#')
+        .trim_end_matches(['-', '\'']);
+    let digit_count = value.bytes().filter(u8::is_ascii_digit).count();
+    ((4..=34).contains(&value.len())
+        && digit_count >= 4
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-'))
+    .then_some((start, start + value.len()))
+}
+
+/// The end of a calendar date starting at `start`: `3/14/1990`, `1990-03-14`, `03.14.90`, or
+/// `March 14, 1990`.
+fn date_end(text: &str, start: usize) -> Option<usize> {
+    let bytes = text.as_bytes();
+    let digits_at = |position: usize, minimum: usize, maximum: usize| -> Option<usize> {
+        let count = bytes[position..]
+            .iter()
+            .take_while(|byte| byte.is_ascii_digit())
+            .count();
+        (minimum..=maximum)
+            .contains(&count)
+            .then_some(position + count)
+    };
+    if let Some(first_end) = digits_at(start, 1, 4) {
+        let separator = *bytes.get(first_end)?;
+        if !matches!(separator, b'/' | b'-' | b'.') {
+            return None;
+        }
+        let second_end = digits_at(first_end + 1, 1, 2)?;
+        if bytes.get(second_end) != Some(&separator) {
+            return None;
+        }
+        return digits_at(second_end + 1, 2, 4);
+    }
+    const MONTHS: [&str; 12] = [
+        "january",
+        "february",
+        "march",
+        "april",
+        "may",
+        "june",
+        "july",
+        "august",
+        "september",
+        "october",
+        "november",
+        "december",
+    ];
+    let word_end = start
+        + bytes[start..]
+            .iter()
+            .take_while(|byte| byte.is_ascii_alphabetic())
+            .count();
+    let word = text[start..word_end].to_ascii_lowercase();
+    let word = word.trim_end_matches('.');
+    if word.len() < 3 || !MONTHS.iter().any(|month| month.starts_with(word)) {
+        return None;
+    }
+    let mut cursor = word_end;
+    if bytes.get(cursor) == Some(&b'.') {
+        cursor += 1;
+    }
+    cursor += bytes[cursor..]
+        .iter()
+        .take_while(|byte| **byte == b' ')
+        .count();
+    let day_end = digits_at(cursor, 1, 2)?;
+    cursor = day_end;
+    if bytes.get(cursor) == Some(&b',') {
+        cursor += 1;
+    }
+    cursor += bytes[cursor..]
+        .iter()
+        .take_while(|byte| **byte == b' ')
+        .count();
+    digits_at(cursor, 4, 4)
+}
+
 fn select_non_overlapping_candidates(mut candidates: Vec<Candidate>) -> Vec<Candidate> {
     candidates.sort_by(|left, right| {
         left.start
@@ -527,6 +785,35 @@ fn decimal_value(digits: &[u8]) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn masks_labelled_identifiers_and_checksum_valid_cards_only() {
+        let sensitive = [
+            ("Card 4111 1111 1111 1111 on file.", "4111 1111 1111 1111"),
+            ("DOB: 03/14/1990.", "03/14/1990"),
+            (
+                "Date of birth March 14, 1990, per intake.",
+                "March 14, 1990",
+            ),
+            ("Driver's License No. B1234567 was shown.", "B1234567"),
+            ("Passport #X12345678 expired.", "X12345678"),
+            ("MRN 00451234 admitted.", "00451234"),
+            ("Bank account number 000123456789 closed.", "000123456789"),
+        ];
+        for (input, value) in sensitive {
+            let masked = mask_pii(input).unwrap().masked_text;
+            assert!(!masked.contains(value), "{input} -> {masked}");
+        }
+        for public in [
+            // Ledger account numbers are public finance, and a Luhn failure is not a card.
+            "Account number 500128 funds overtime.",
+            "Invoice 4111 1111 1111 1112 was paid.",
+            "The program was born out of a 2019 audit.",
+            "Passport services moved downtown.",
+        ] {
+            assert_eq!(mask_pii(public).unwrap().masked_text, public);
+        }
+    }
 
     #[test]
     fn masks_high_confidence_pii_with_structural_detectors() {

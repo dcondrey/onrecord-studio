@@ -36,7 +36,7 @@
         "heading": "Privacy",
         "paragraphs": [
           "Quoted text, headlines and file names pass through the same personal-information masking as the verifiable report. A finding that rests on any record that is not public, or on a removed source, is left out whole, because its wording was written from that record. Dismissed findings, findings with no citation, and hypotheses about who a redaction hides are also left out. The review lists each omission with its reason.",
-          "Masking is structural: Social Security numbers, telephone numbers and street addresses. It is not a guarantee that no sensitive value remains. Read the list before you confirm."
+          "Masking is structural: Social Security numbers, telephone numbers, street addresses, checksum-valid payment card numbers, and dates of birth, driver's license and passport numbers, medical record numbers and bank account numbers when a label names them. It is not a guarantee that no sensitive value remains. Read the list before you confirm."
         ]
       },
       {
