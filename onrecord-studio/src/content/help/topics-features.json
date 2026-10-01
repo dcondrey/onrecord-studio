@@ -26,6 +26,12 @@
         ]
       },
       {
+        "heading": "Filter, sort and load more",
+        "paragraphs": [
+          "The inbox loads 50 findings at a time. When more exist it says so and offers Load 50 more. The severity buttons and the text box narrow only the findings already loaded, so a filter on a partial list is not a count of everything the detectors found. Sort switches between Ranked (the order above) and Newest first by last seen."
+        ]
+      },
+      {
         "heading": "On each row",
         "items": [
           "A basis chip says Legal claim: counted violation or Pattern signal, not a legal claim.",
