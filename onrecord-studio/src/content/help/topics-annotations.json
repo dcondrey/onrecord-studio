@@ -1,0 +1,82 @@
+[
+  {
+    "id": "annotations-depth",
+    "title": "Annotations: anchors, codebook, sharing",
+    "group": "Findings",
+    "summary": "How saved annotations find their passage again, how issue codes and agreement work, and how to cite or share a mark.",
+    "keywords": [
+      "annotation",
+      "anchor",
+      "orphaned",
+      "re-anchored",
+      "codebook",
+      "issue code",
+      "agreement",
+      "reviewer",
+      "status",
+      "confirmed",
+      "disputed",
+      "citation",
+      "signed packet",
+      "import",
+      "search annotations"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "An annotation is your reading of a passage, kept on this computer. It is not part of the record and nothing that produces findings reads it. Positions refer to the extracted text the application stored, not to PDF pages or regions: there is no page view to anchor to."
+        ]
+      },
+      {
+        "heading": "Anchors and what they mean",
+        "items": [
+          "A mark stores the quoted text, a short stretch of text before and after it, its character offset, and a SHA-256 digest of the document's stored text when it was made.",
+          "Anchored: the quote and its surrounding text are still where they were recorded.",
+          "Re-anchored: the document text changed, and the quote was found exactly once somewhere else, first with its surrounding text and then by the quote alone.",
+          "Orphaned: the quote is missing, or now appears more than once so its place cannot be told. An orphan is listed with the quote as saved, is never moved on a guess, and has no Go to passage.",
+          "A mark with no stored context (made before context was kept) is flagged as unanchored context. It is located by its quote and offset alone.",
+          "If the document's stored text could not be read, marks are shown as not checked. That is not a result.",
+          "A selection that appears more than once in the document is refused when you save it; select a longer passage that includes something unique."
+        ]
+      },
+      {
+        "heading": "Codebook and codes",
+        "items": [
+          "The codebook is a list of codes, each with a label and a definition, kept on this device. Choose a code from it when you mark an issue.",
+          "Free text is still allowed, and is flagged as uncoded. An uncoded mark does not agree with a coded one.",
+          "Export the codebook as a JSON file to share it. Importing shows what is new, what is identical, and every code defined differently. A differing definition is replaced only if you tick that code; unticked definitions stay as they are.",
+          "Deleting a code leaves the marks that used it in place, now flagged as uncoded."
+        ]
+      },
+      {
+        "heading": "Reviewer, status and agreement",
+        "items": [
+          "You enter your reviewer name once. It is stored with each mark you make and is a label, not a verified identity.",
+          "Status is Open, Confirmed or Disputed. It is your own judgement of your own mark and says nothing about the document. You cannot change the status of a colleague's mark; add your own mark to agree or disagree.",
+          "The agreement view pairs marks by different authors over overlapping passages and shows whether their codes match. Agreement means the same code, not that the code is right. Orphaned marks and marks with no recorded author are left out and counted."
+        ]
+      },
+      {
+        "heading": "Sharing a document's annotations",
+        "items": [
+          "Export signs your annotations of one document with this installation's key. A colleague previews the packet first. The preview shows whether the signing key is on their contributor list, how many marks are new, and which already exist.",
+          "The signature shows the packet is unchanged since it was signed. It does not show who holds the key, so compare the key with the sender before trusting it.",
+          "Importing adds marks by id and never overwrites. A mark with the same id but different content is reported and your copy is kept. Imported marks show the key that signed them and are re-checked against your copy of the document text.",
+          "If the sender's text digest differs from yours, some imported marks may re-anchor or be orphaned."
+        ]
+      },
+      {
+        "heading": "Searching and citing",
+        "items": [
+          "Search annotations across documents, in the evidence view, filters by code, author, status, text, or orphaned only. Results load in pages; Show more continues until the list says it is complete. Open at passage opens the document at that position; an orphan opens the document without a position.",
+          "Copy citation gives the portal, document id, character offset, quote, document text SHA-256 and application version, with a statement that offsets locate text in the extracted copy of the record.",
+          "A mark can be linked to one of the findings for that document. The link is a reference you chose, not a result of the analysis."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [],
+    "related": ["document-viewer"]
+  }
+]
