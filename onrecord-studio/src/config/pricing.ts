@@ -10,12 +10,15 @@ export const MIN_SEATS = 1;
 export const MAX_SEATS = 999;
 
 export const PRICE_TIERS: readonly PriceTier[] = [
-  { minSeats: 1, maxSeats: 1, usdPerSeatPerYear: 79 },
-  { minSeats: 2, maxSeats: 9, usdPerSeatPerYear: 69 },
-  { minSeats: 10, maxSeats: null, usdPerSeatPerYear: 49 },
+  { minSeats: 1, maxSeats: 1, usdPerSeatPerYear: 99 },
+  { minSeats: 2, maxSeats: 9, usdPerSeatPerYear: 89 },
+  { minSeats: 10, maxSeats: null, usdPerSeatPerYear: 59 },
 ];
 
-export const PRICE_TERMS = 'Per seat, billed yearly. Taxes extra. Coupons are accepted at checkout.';
+/** The beta discount is a coupon, never a lower list price, so the list price never has to rise. */
+export const BETA_COUPON_CODE = 'BETA20';
+
+export const PRICE_TERMS = `Per seat, billed yearly. Taxes extra. During the beta, coupon ${BETA_COUPON_CODE} takes 20% off at checkout.`;
 
 export function clampSeats(value: number): number {
   if (!Number.isFinite(value)) return MIN_SEATS;
