@@ -29,12 +29,14 @@ import MeetingsView from './MeetingsView';
 import { documentBriefingEvidence, requestBriefingEvidence } from '../../utils/briefing';
 import DialogBackdrop from '../ui/DialogBackdrop';
 import AnalysisWorkbench from './AnalysisWorkbench';
+import CaseTimeline from './CaseTimeline';
 import { formatMatchCount, MATCH_BASIS_LABELS, matchBasis, SEARCH_RESULT_LIMIT } from '../../utils/searchResults';
 
 export default function MainLayout() {
   // Request selection lives in the shared workspace store and survives view switches. The open
   // document chunk is session-local and is deliberately cleared when the selected request changes.
   const workspaceView = useAppStore((state) => state.workspaceView);
+  const [evidenceMode, setEvidenceMode] = useState<'records' | 'timeline'>('records');
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
   const evidenceRefreshRequests = useAppStore((state) => state.evidenceRefreshRequests);
   const results = useAppStore((state) => state.filteredResults);
@@ -233,8 +235,24 @@ export default function MainLayout() {
           <div className="app-eyebrow flex items-center gap-2 text-indigo-300/60"><Icon name="evidence" className="h-3.5 w-3.5" /> Evidence review</div>
           <h2 className="mt-1.5 text-[26px] font-semibold tracking-[-0.035em] text-slate-100 sm:text-[30px]">Search, inspect, and build the record.</h2>
         </div>
-        <div className="hidden items-center gap-2 text-[9px] text-slate-400 sm:flex"><Icon name="shield" className="h-3.5 w-3.5 text-emerald-400/60" /> Sensitive fields are masked locally</div>
+        <div className="flex items-center gap-3">
+          <div role="group" aria-label="Evidence view" className="flex gap-1 text-[10px]">
+            {(['records', 'timeline'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                aria-pressed={evidenceMode === mode}
+                onClick={() => setEvidenceMode(mode)}
+                className={cn('focus-ring rounded-md border px-2.5 py-1 font-semibold', evidenceMode === mode ? 'border-cyan-400/50 text-cyan-200' : 'border-slate-800 text-slate-400')}
+              >
+                {mode === 'records' ? 'Records' : 'Timeline'}
+              </button>
+            ))}
+          </div>
+          <div className="hidden items-center gap-2 text-[9px] text-slate-400 sm:flex"><Icon name="shield" className="h-3.5 w-3.5 text-emerald-400/60" /> Sensitive fields are masked locally</div>
+        </div>
       </div>
+      {evidenceMode === 'timeline' ? <CaseTimeline /> : <>
       <SearchFilter />
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto grid min-h-[620px] w-full max-w-[1800px] grid-cols-1 gap-4 p-4 lg:p-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.75fr)]">
@@ -421,6 +439,7 @@ export default function MainLayout() {
           </div>
         </div>
       </div>
+      </>}
       {pendingDocumentPurge && (
         <DialogBackdrop labelledBy="purge-document-title" onClose={() => setPendingDocumentPurge(null)} className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm">
           <div className="app-panel w-full max-w-md overflow-hidden shadow-2xl shadow-black/40">

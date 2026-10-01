@@ -4,6 +4,7 @@ import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { ShapeGlyph, type GlyphShape } from '../ui/shapeGlyph';
 import { useAppStore } from '../../store/useAppStore';
+import { useInspectFinding } from '../../hooks/useInspectFinding';
 import type { Finding, FindingCitation, FindingSeverity } from '../../types';
 import { FindingEvidence } from '../ui/EvidenceBasis';
 import ArtifactDrafts from './ArtifactDrafts';
@@ -65,7 +66,6 @@ export default function FindingsInbox() {
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
   const openLeadDossier = useAppStore((state) => state.openLeadDossier);
   const setActivePortal = useAppStore((state) => state.setActivePortal);
-  const setSearchFilters = useAppStore((state) => state.setSearchFilters);
   const findingsRefreshRequests = useAppStore((state) => state.findingsRefreshRequests);
   const requestFindingsRefresh = useAppStore((state) => state.requestFindingsRefresh);
   const markFindingsSeen = useAppStore((state) => state.markFindingsSeen);
@@ -152,15 +152,7 @@ export default function FindingsInbox() {
     [findings],
   );
 
-  const inspect = useCallback(
-    (finding: Finding) => {
-      const { portalKey, agencyId } = finding.subject;
-      if (portalKey) setActivePortal(portalKey);
-      setSearchFilters('', agencyId ?? null, null, null);
-      setWorkspaceView('evidence');
-    },
-    [setActivePortal, setSearchFilters, setWorkspaceView],
-  );
+  const inspect = useInspectFinding();
 
   // Evidence view is the deepest surface a citation can reach without a document deep link.
   const openSource = useCallback(
