@@ -104,6 +104,14 @@ information. Semantic search in Analysis needs the embedding model, downloaded o
 
 Reports, packets and snapshots are written to the `reports/` folder of the workspace directory above.
 
+## Working with collaborators
+
+Case packets can be exchanged without a server. In Casework, open **Collaborators and shared
+folder** and choose any folder everyone can reach, such as a synced folder, a network drive or a
+USB stick. The app reads and writes signed packets there over no network connection, and records
+which contributor keys you have verified. The in-app topic *Collaborating through a shared folder*
+covers verification and what a packet does and does not prove.
+
 ## Privacy
 
 Documents, extracted text, indexes, findings, tables, drafts, tracked requests and case files stay
