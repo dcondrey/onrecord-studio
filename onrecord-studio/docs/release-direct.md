@@ -44,6 +44,24 @@ node scripts/build-direct.mjs            # prepare, tauri build, notarize app, p
 
 Nothing is uploaded.
 
+### Xcode 27.0 linker
+
+Xcode 27.0 (27A266a) `ld`, at any deployment target of 12.0 or later (Tauri sets 13.0 from
+`minimumSystemVersion`), does not pad after an odd-length indirect symbol table, so about half of
+the linked images get a 4-byte-aligned string pool. macOS 27 dyld refuses them: the build stops with
+`can't find crate for <some>_derive` after `dlopen ... (mis-aligned LINKEDIT string pool)` on a
+proc-macro. Debug builds are unaffected (no deployment target). Until a fixed Xcode ships, link
+without chained fixups for the release build only, from `.env.direct.local`:
+
+```sh
+CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER=/Volumes/A/onrecord-studio/onrecord-studio/scripts/xcode27-linker/cc
+CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER=/Volumes/A/onrecord-studio/onrecord-studio/scripts/xcode27-linker/cc
+CARGO_TARGET_DIR=/Volumes/C/rust-target-onrecord-release
+```
+
+The `[target]` linker applies to host proc-macros too; target `rustflags` would not. The separate
+target directory keeps the changed linker from relinking everyone's shared dev artifacts.
+
 ## Feed format
 
 The app requests `https://updates.writerslogic.com/onrecord/updates/{{target}}/{{arch}}/{{current_version}}`

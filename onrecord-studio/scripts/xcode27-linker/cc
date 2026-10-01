@@ -1,0 +1,4 @@
+#!/bin/sh
+# See docs/release-direct.md "Xcode 27.0 linker". The file must be named `cc`: rustc infers the
+# linker flavor from the name and passes raw ld arguments to anything it does not recognize.
+exec /usr/bin/cc "$@" -Wl,-no_fixup_chains
