@@ -4,9 +4,10 @@ This specification maps the endpoint layouts, payload field keys, query strings,
 behavior for CivicPlus NextRequest portals, and records what this client actually sends.
 
 NextRequest publishes no stable contract, so the client does not hard-code an endpoint: it probes
-candidate pagination parameter layouts (`page`/`per_page`, then `page`/`page_size`) during portal
-discovery and persists whichever the portal accepts as `PortalApiLayout`
-(`ingestion/client.rs`). The endpoint below is the shape discovery looks for, not a constant.
+candidate pagination parameter layouts in order (`page`/`per_page`, `page`/`limit`,
+`page`/`page_size`, `offset`/`limit`) during portal discovery and persists whichever the portal
+accepts as `PortalApiLayout` (`ingestion/client.rs`). The endpoint below is the shape discovery
+looks for, not a constant.
 
 ---
 
@@ -25,16 +26,18 @@ Retrieves paginated arrays of public records requests and their associated metad
 | Parameter | Data Type | Default Value | Max Value Range | Functional Description |
 | :--- | :--- | :--- | :--- | :--- |
 | `page` | Unsigned Integer | `1` | None | Identifies the targeted paginated slice window to return. |
-| `per_page` | Unsigned Integer | `50` | `100` | Records per page. **This client** defaults to `50` (`commands/ingest.rs`) and rejects anything outside `1..=100` before sending (`ingestion/client.rs`). No client-side truncation exists; an out-of-range value is an error, not a clamp. The parameter may instead be named `page_size` depending on what discovery found. |
+| `per_page` | Unsigned Integer | `50` | `100` | Records per page. **This client** defaults to `50` (`PortalSyncWindow::default()`, `types/source.rs`) and rejects anything outside `1..=100` before sending (`ingestion/client.rs`, `ingestion/queue.rs`). No client-side truncation exists; an out-of-range value is an error, not a clamp. The parameter may instead be named `page_size` depending on what discovery found. |
 | `status` | String Option | None | `open`, `closed` | Accepted by the portal. **This client never sends it** — only the page and page-size parameters are attached. Status filtering happens locally, after ingestion. |
 
 ### Headers this client sends
 ```text
-User-Agent: OnRecord-Studio/1.0 public-records-audit-client
+User-Agent: OnRecordStudio/<CARGO_PKG_VERSION> (public-records archival client; <contact>)
 Accept: application/json, text/html;q=0.5, */*;q=0.1
 ```
-The client identifies itself honestly rather than impersonating a browser. Redirects are not
-followed automatically (`redirect::Policy::none()`); each hop is re-validated by the caller.
+`<contact>` is a configured `mailto:` or `https:` address prefixed with `+`, or the literal
+`no contact address configured` when none is set (`user_agent_value`, `ingestion/client.rs`). The
+client identifies itself honestly rather than impersonating a browser. Redirects are not followed
+automatically (`redirect::Policy::none()`); each hop is re-validated by the caller.
 
 ### Complete Response Payload Schema (`HTTP 200 OK`)
 ```json

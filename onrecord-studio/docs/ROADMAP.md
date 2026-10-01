@@ -268,13 +268,21 @@ that compiled, linted, and passed 283 tests.
 
 Open, and specific:
 
-- [ ] **The graph draws one edge kind, and it is the derived one.** Every arc is
-      `CO_OCCURS_IN_SEGMENT`, so the graph shows what the corpus computed and nothing it observed.
-      Email threading (`In-Reply-To` against an ingested `Message-ID`) and archive containment are
-      both read straight out of the bytes and are named in section 7 step 3 as the ones to do
-      first. The `basis` column and the reader that distinguishes it are already in place; what is
-      missing is an extractor that writes `OBSERVED` and a second `relationship_kind`, which the
-      CHECK makes another corpus schema bump.
+- [ ] **Every persisted edge is `COMPUTED`, by policy, not by a missing extractor.** The second
+      `relationship_kind` this item used to call for now exists: `RelationshipKind` has eight
+      variants (`CoOccurrence`, `SignedBy`, `Approved`, `Cites`, `Promises`, `Delivered`,
+      `Supersedes`, `Amends`), and `analysis/typed_edges.rs` (`derive_typed_edges`,
+      `role_and_signer_mentions`) actively extracts the typed ones from explicit textual cues
+      during indexing (`storage/corpus.rs`). What remains true is the basis: `insert_relationships`
+      hardcodes `RelationshipBasis::Computed` for every row regardless of kind, with the comment
+      "co-occurrence and cue-matched typed edges are derivations this app performed and can
+      re-derive; calling either observed would claim more than a pattern match." Email threading
+      (`In-Reply-To` against an ingested `Message-ID`, already read by
+      `detectors/email_thread_gap.rs` for a different purpose) and archive containment remain the
+      candidates for an edge backed by something stronger than a cue match, i.e. the first
+      extractor allowed to write `OBSERVED`. The `basis` column and the reader that distinguishes
+      it are already in place end to end (schema, write, and read-back are all covered by
+      `storage/corpus.rs` tests); only the OBSERVED-worthy source is missing.
 
 - [ ] **A crawl resume re-walks from its seed URL.** The same seed additivity, on the non-
       NextRequest arm of `resume_initial_tasks`: a resumed crawl re-enqueues its root at depth 0,

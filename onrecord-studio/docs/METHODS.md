@@ -260,6 +260,15 @@ The withholding copy's redaction spans come from the same structural detector th
 ### C. What a finding does and does not claim
 The finding states that two releases made different redaction decisions about the same passage. It does not say which was right: a later release may apply an exemption the earlier one did not, a requester may have been entitled to more, or the copies may be different versions of the record. It is a pattern signal; confidence is derived from the number of diverging passages (5000 basis points plus 500 per passage, to six).
 
+## 14. Plain-Language Layer
+`src/content/plainLanguage.ts` gives every `FindingKind` and every `VerificationState` three short statements for a non-specialist: what was observed, what it does not show, and what to do next. The finding card and inbox row show them behind an "In plain words" disclosure (`PlainLanguageDisclosure`), collapsed by default.
+
+### A. What it does and does not claim
+* It explains a finding; it never classifies one. The basis sentence under the text is derived from `isLegalClaimKind`, the same source as the basis chip, so a pattern signal cannot be upgraded and a counted comparison cannot be softened. Confidence and citations are unchanged and remain visible.
+* The tables are `Record`s over `FindingKind` and `VerificationState`, so a new variant fails `tsc` until it has text. `scripts/check-help-coverage.mjs` fails on the same omission, and on a key with an empty field, without a build.
+* `src/tests/plainLanguage.test.tsx` rejects accusatory wording for every kind, rejects wording of violation or breach for a kind or state that is not a legal claim, and requires the `LatencyOutlier` explanation to say it is a comparison with peers.
+* An evidence gap is an untested route. It is never explained as a finding and never as evidence of compliance or non-compliance.
+
 ---
 
 ## Appendix: Eval-Set Scorecards

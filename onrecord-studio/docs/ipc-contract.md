@@ -194,17 +194,31 @@ Any change to a serialized shape is a two-file change at minimum, and often four
 3. `src/ipc.ts` if the change touches a command's arguments or result.
 4. The consumer, if a new telemetry variant needs a handler.
 
-`npm run check:ipc` checks the generated bridge and its use:
+`node scripts/check-ipc-contract.mjs` (also runnable as `npm run check:ipc`) enforces six things:
 
-- **Command shapes.** `scripts/generate-contracts.mjs` derives every registered command's argument
-  names, optionality, and response type from its Rust signature into
-  `src/generated/nativeCommands.ts`.
-- **Shared protocol shapes.** The same generator derives all `IngestionProgress` payloads,
-  `VerificationState`, `TimelineAnomalyMarker`, and `AnalysisConfig` into `src/generated/`.
-- **Staleness.** Check mode regenerates all four files in memory and compares them byte-for-byte
-  with the checked-in output, so any supported Rust field or variant change fails the build.
+- **Generated-contract freshness.** It first runs `scripts/generate-contracts.mjs --check`, which
+  derives every registered command's argument names, optionality, and response type from its Rust
+  signature into `src/generated/nativeCommands.ts`, and derives `IngestionProgress` payloads,
+  `VerificationState`, `TimelineAnomalyMarker`, and `AnalysisConfig` into the other
+  `src/generated/*.ts` files. Check mode regenerates all of them in memory and compares them
+  byte-for-byte with the checked-in output, so any supported Rust field or variant change fails
+  the build before the remaining checks run.
+- **Command registry parity.** It re-parses `src-tauri/src/lib.rs`'s `generate_handler!` list and
+  `NativeCommandMap` in `src/generated/nativeCommands.ts` independently of the generator and diffs
+  the two command-name sets.
+- **`FindingKind` and legal-claim parity.** It parses `impl FindingKind` and `is_legal_claim` in
+  `src-tauri/src/analysis/finding.rs` and diffs them against `FindingKind` and
+  `LEGAL_CLAIM_KINDS` in `src/types/findings.ts` — both the set of kinds and which ones are legal
+  claims must match on both sides.
+- **Meeting-calendar enum parity.** It diffs `MeetingTiming`, `MeetingDocumentRole`,
+  `SuggestionBasis`, and `SuggestionReasonKind` between `src-tauri/src/types/meetings.rs` and
+  `src/types/meetings.ts`.
 - **Centralization.** It fails if any file under `src/` other than `src/ipc.ts` calls `invoke(`
   directly. All native calls must route through `invokeCommand`.
+
+A passing run reports its counts, e.g. `IPC contract verified: 144 commands are typed and
+centralized, 18 telemetry events and 6 verification states are generated from the native
+definitions; 40 finding kinds match.`
 
 The generator deliberately supports the Rust schema forms used by this bridge: named command
 parameters, `Result<T, AppError>`, struct-style ingestion variants, unit audit enums, `Option<T>`,

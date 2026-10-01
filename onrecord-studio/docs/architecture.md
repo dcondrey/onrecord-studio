@@ -18,7 +18,7 @@ storage, and analysis happen in the Rust backend.
 |  - Every invoke() call routed through src/ipc.ts              |
 +---------------------------------------------------------------+
                             |
-                            |  Tauri v2 IPC: 27 commands, typed on both sides.
+                            |  Tauri v2 IPC: 144 commands, typed on both sides.
                             |  scripts/check-ipc-contract.mjs fails the build if the
                             |  Rust handler list and NativeCommandMap disagree, or if
                             |  any invoke() appears outside src/ipc.ts.
@@ -150,7 +150,7 @@ investigator-supplied URLs.
 ## 5. Security model
 
 **IPC.** Tauri v2 capabilities gate `core:` and plugin commands. They do **not** gate
-`#[tauri::command]` handlers registered through `generate_handler!`, so all 36 application commands
+`#[tauri::command]` handlers registered through `generate_handler!`, so all 144 application commands
 are reachable from the webview by design. `capabilities/main.json` grants `core:path:default`,
 `core:app:allow-set-app-theme`, `core:event:default`, `core:window:default`,
 `core:webview:default`, and `dialog:allow-open`.

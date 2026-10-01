@@ -9,7 +9,9 @@ and reproducible.
 
 Every "already exists" statement below was verified against the working tree on 2026-08-30,
 with file:line evidence; corrections from that audit are integrated in place rather than
-footnoted. Paths are relative to `onrecord-studio/`.
+footnoted. Re-verified against the tree on 2026-09-30 after two weeks of active development;
+drifted line citations were corrected and the findings below updated in place. Paths are
+relative to `onrecord-studio/`.
 
 ## 1. Filing: the request becomes evidence
 
@@ -24,20 +26,22 @@ attached.
 
 Ground truth. The letter's numbers all exist:
 `evaluate_statutory_compliance_with_determination_at`
-(`src-tauri/src/analysis/timeline.rs:154-281`) returns elapsed and allowed calendar days,
+(`src-tauri/src/analysis/timeline.rs:101-228`) returns elapsed and allowed calendar days,
 extension status and reason, violation markers, the statute citation, and a rendered evidence
-summary, and `export_legal_brief` (`src-tauri/src/commands/export.rs:140-187`) already consumes
-all of it and emits an Ed25519-signed `.evidence.json` package (`export.rs:279-295`, signing at
-`export.rs:368-410`). So the follow-up generator is largely a new template over existing
-outputs. Three limits bound the rest of the item. The engine is single-statute: only the CPRA
-10-day determination clock is modeled (`src-tauri/src/analysis/statute.rs:40-47`). The
-NextRequest machinery (`src-tauri/src/ingestion/client.rs:394-548`, `805-865`,
-`src-tauri/src/types/nextrequest.rs`) is strictly read-only; there is no POST or form
-submission anywhere in `client.rs`, and no outbound email code exists in `src-tauri` (the email
-hits are parsers for received `.msg`/`.eml` evidence), so the filing transport is new
-capability, not reuse. And the signing key is a locally generated Ed25519 key with no identity
-binding (`identity_assurance = SELF_MANAGED_LOCAL_KEY_NOT_EXTERNALLY_ATTESTED`,
-`export.rs:407`), so today's signature proves package integrity, not who filed.
+summary, and `export_legal_brief` (`src-tauri/src/commands/export.rs:160-333`) already consumes
+all of it, signs the package (`export.rs:273`), and emits it as an Ed25519-signed
+`.evidence.json` file (`export.rs:283-296`). So the follow-up generator is largely a new template
+over existing outputs. Three limits bound the rest of the item. The engine is single-statute: only
+the CPRA 10-day determination clock is modeled (`src-tauri/src/analysis/statute.rs:40-47`). The
+NextRequest machinery (`src-tauri/src/ingestion/client.rs:396-558`, `876-944`,
+`src-tauri/src/types/nextrequest.rs`) is read-only for filing purposes. One correction: `client.rs`
+is not POST-free — `send_wordpress_google_drive_request` (`client.rs:1075-1109`) issues a single
+`.post()` (`client.rs:1083`) — but it is a WordPress-embedded Google Drive folder *listing* call
+used for crawl discovery, not a records-request submission, and no outbound email code exists in
+`src-tauri` (the email hits are parsers for received `.msg`/`.eml` evidence), so the filing
+transport is still new capability, not reuse. And the signing key is a locally generated Ed25519
+key with no identity binding (`identity_assurance = SELF_MANAGED_LOCAL_KEY_NOT_EXTERNALLY_ATTESTED`,
+`src-tauri/src/integrity.rs:247`), so today's signature proves package integrity, not who filed.
 
 ## 2. Transcription: timestamped spans with absence semantics
 
@@ -57,7 +61,7 @@ Ground truth. The span envelope and the Intact/Drifted/Stale resolution are spec
 written before any of it exists. No spans table or selector struct is in code. The nearest
 shipped machinery is document-granularity, not per-span: `verify_document_provenance` re-hashes
 the stored text projection and compares it against the digest recorded at extraction
-(`src-tauri/src/storage/sqlite.rs:4666-4680`, `4739-4752`). The absence rule itself is already
+(`src-tauri/src/storage/sqlite.rs:5963-6052`). The absence rule itself is already
 load-bearing in the shipped schema (`documents.shannon_entropy` nullable with no default). The
 dependency is the span primitive, build step 1 at
 `docs/investigative-workbench-architecture.md:191`.
@@ -80,7 +84,7 @@ routes including `ImageOcr` (`src-tauri/src/parsers/format.rs:77-89`). Below tha
 is one flat string per document; the engine call discards geometry and confidence, and the
 extraction and storage pipeline has no region entity. (The forensic auditor's `EvidenceLocator`
 does carry an optional page and bounds across IPC,
-`src-tauri/src/parsers/forensic_evidence.rs:36-44`, `src/types/investigation.ts:348-355`, but
+`src-tauri/src/parsers/forensic_evidence.rs:36-44`, `src/types/investigation.ts:360-366`, but
 its bounds are never populated and its findings are not persisted.) The missing dependency is a
 region-level extraction record; per-region confidence and image-anchored locators have no
 substrate until it exists.
@@ -96,12 +100,15 @@ already enforced on `statutory_violations.confidence_basis_points`. A match beco
 reproducible evidence: anyone can re-run the join against the pinned dataset and get the same
 answer. Nobody versions the watchlist into the finding.
 
-Ground truth. FtM is adopted in prose only: `docs/investigative-workbench-architecture.md:272-303`
+Ground truth. FtM is adopted in prose only: `docs/investigative-workbench-architecture.md:271-303`
 commits to vendoring `defaultModel.json` and codegen against a pinned version, but zero FtM
-code exists. Meanwhile a live non-FtM entity layer already ships on the projection side:
-`corpus_entities` with six fixed kinds and `corpus_entity_mentions` with character offsets and
-confidence (`src-tauri/src/storage/corpus.rs:2891-2945`), so the FtM layer is a migration
-target, not a green field. The basis-points pattern is real and CHECK-enforced 0-10000; the
+code exists (`followthemoney` has zero hits anywhere in `src-tauri/src` or `src`). Meanwhile a
+live non-FtM entity layer already ships on the projection side, and it has grown past "fixed":
+`CorpusEntityKind` (`src-tauri/src/types/corpus.rs:5-23`) now has twelve variants, including
+`Person`, `Role`, `Position`, and `DocumentClass` added for policy-vs-practice comparison, and
+`corpus_entity_mentions` carries character offsets and confidence
+(`src-tauri/src/storage/corpus.rs:2685-2753`), so the FtM layer is a migration target, not a
+green field. The basis-points pattern is real and CHECK-enforced 0-10000; the
 Rust function is `cpra_calendar_confidence_basis_points`, the column it feeds is
 `statutory_violations.confidence_basis_points`. One hard correction: the linked DuckDB cannot
 read parquet today. `src-tauri/Cargo.toml:36` enables only `features = ["bundled"]`, and the bundled
@@ -122,13 +129,13 @@ on someone else's server.
 
 Ground truth. The gate does not exist yet at the granularity the item needs. Today's verifier
 attests the whole projection (`verify_document_provenance`,
-`src-tauri/src/storage/sqlite.rs:4666-4680`, `4739-4752`): an invented quote over an intact
+`src-tauri/src/storage/sqlite.rs:5963-6052`): an invented quote over an intact
 projection passes untouched, which is exactly the hallucination case the gate is for. Per-span
 verification is the workbench doc's unbuilt resolver. Second correction: the extraction is
 tamper-evident, not immutable. Raw asset bytes are content-addressed and never overwritten
-(`commit_staged_object`, `src-tauri/src/ingestion/queue.rs:5279-5300`), but the quotable text
+(`commit_staged_object`, `src-tauri/src/ingestion/queue.rs:5593-5633`), but the quotable text
 projection `documents_fts.extracted_text` is updated in place
-(`src-tauri/src/storage/sqlite.rs:6222-6248`). No AI integration or disclosure ledger exists
+(`synchronize_fts_row`, `src-tauri/src/storage/sqlite.rs:7569-7581`). No AI integration or disclosure ledger exists
 anywhere in the code. Dependencies, in order: the span store and resolver, then span-resolving
 AI output, then the ledger.
 
@@ -147,7 +154,7 @@ recovers hidden content, and the layout side-channel and pixelation modules exis
 into the forensic pipeline (`src-tauri/src/parsers/forensic_evidence.rs:172`, `188`), though those two are deterministic measurement collectors
 rather than recovery tools. The producer side does not exist at all: there is no render-time
 redaction, no production output path in `export.rs`, and no production manifest;
-`RedactionSpan` (`src-tauri/src/analysis/cluster.rs:99-103`) is a detection heuristic, not a
+`RedactionSpan` (`src-tauri/src/analysis/cluster.rs:56-60`) is a detection heuristic, not a
 producer type. OnRecord today is a read-only forensic auditor of other people's redactions. The
 missing dependency is the entire production path, sitting on the span primitive.
 
@@ -160,11 +167,12 @@ DocumentCloud's scraper alerts on new documents; nobody records disappearance, a
 removing documents is a real, litigable phenomenon.
 
 Ground truth. The durable frontier and the per-portal rate limiter are live, and downloads are
-SHA-256'd as they stream (`src-tauri/src/ingestion/queue.rs:5155-5166`) into a
-content-addressed blob store, so both byte versions of a changed document would naturally
-coexist on disk. What is missing is the observation record: the hash lands only in the single
-overwritable `documents.raw_file_sha256` column via the UPDATE in `mark_document_downloaded`
-(`src-tauri/src/storage/sqlite.rs:2220-2236`) with no fetch instant recorded anywhere, so a
+SHA-256'd as they stream (`stream_response_to_path`, `src-tauri/src/ingestion/client.rs:1222`)
+into a content-addressed blob store (`commit_staged_object`,
+`src-tauri/src/ingestion/queue.rs:5593-5633`), so both byte versions of a changed document would
+naturally coexist on disk. What is missing is the observation record: the hash lands only in the
+single overwritable `documents.raw_file_sha256` column via the UPDATE in `mark_document_downloaded`
+(`src-tauri/src/storage/sqlite.rs:2815-2866`) with no fetch instant recorded anywhere, so a
 re-crawl destroys the prior fetch's hash and the altered/removed finding has no storage to land
 in. The dependency is an append-only per-fetch log, roughly (url, instant, sha256, outcome),
 plus a scheduler; ingestion today is operator-started.
@@ -228,7 +236,8 @@ corrections bound the rest. The package ships a report plus digests, not evidenc
 actual exchange needs the object-store payloads added to it. The layer annotations would anchor
 into is mutable: `documents_fts.extracted_text` is updated in place and deleted on removal, and
 the `documents` row itself is rewritten on re-extraction
-(`src-tauri/src/storage/sqlite.rs:3053-3061`). And the span subsystem, including deterministic
+(`finalize_document_extraction`, `src-tauri/src/storage/sqlite.rs:4205`, UPDATE at
+`sqlite.rs:4348-4365`). And the span subsystem, including deterministic
 anchors and
 Drifted/Stale, is the workbench doc's explicit pre-implementation spec with zero tables or code
 today. Beyond the spans dependency, package exchange needs a key and identity story; the
@@ -250,7 +259,7 @@ verifier could re-check today. But the bundle is not self-contained: source docu
 referenced by whole-file digest, never packaged, no viewer of any kind is emitted, and the key
 is unattested, so the proof chain ends at internal consistency. The excerpt-proof needs a
 structure that does not exist: every digest in the system is a flat whole-object SHA-256
-(`src-tauri/src/integrity.rs:8-47`), which can prove only the entire withheld original.
+(`sha256_hex`/`sha256_file`/`sha256_file_async`, `src-tauri/src/integrity.rs:150-174`), which can prove only the entire withheld original.
 Excerpt-plus-membership proofs require per-chunk or per-page commitments computed at ingestion.
 
 ## 12. API: the open file is the API
@@ -263,15 +272,15 @@ Ground truth. Both load-bearing premises are real code: the corpus index is a ge
 separate, versioned, delete-and-rebuild DuckDB projection (rebuild is the startup
 reconciliation loop; `replace_outdated_corpus_index` deletes on a schema-version mismatch), and
 the core has a serialized single-writer discipline: all core writes go through one persistent
-connection behind a mutex (`src-tauri/src/storage/sqlite.rs:356-359`), DuckDB's own exclusive
+connection behind a mutex (`src-tauri/src/storage/sqlite.rs:770-774`), DuckDB's own exclusive
 file lock covers cross-process access, and the corpus projection has its own dedicated writer
-thread (`src-tauri/src/storage/corpus.rs:194-196`). Two obstacles the thesis missed. The
-projection schema is deliberately unstable: `CORPUS_SCHEMA_VERSION = 6`
-(`src-tauri/src/storage/corpus.rs:33`), with revisions 3 through 6 recorded in the constant's
-own comment (`corpus.rs:17-32`) and the file discarded on every bump, and no doc describes the
+thread (`CorpusIndex::open`, `src-tauri/src/storage/corpus.rs:325-348`). Two obstacles the thesis
+missed. The projection schema is deliberately unstable: `CORPUS_SCHEMA_VERSION = 9`
+(`src-tauri/src/storage/corpus.rs:52`), with revisions 3 through 9 recorded in the constant's
+own comment (`corpus.rs:22-51`) and the file discarded on every bump, and no doc describes the
 schema for external consumers.
 And the running app holds a read-write connection on the corpus file itself
-(`open_writer_connection`, `corpus.rs:446-481`), so DuckDB's file lock means a Python or R
+(`open_writer_connection`, `corpus.rs:936-986`), so DuckDB's file lock means a Python or R
 process cannot open it during a session. The likely resolution is an exported snapshot copy (or
 a periodically refreshed read-only copy) with a documented, stability-guaranteed subset of the
 schema, rather than the live file.
