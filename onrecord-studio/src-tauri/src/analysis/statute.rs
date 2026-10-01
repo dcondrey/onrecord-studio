@@ -117,8 +117,8 @@ pub const RECOGNIZED_EXTENSION_REASONS: [StatutoryExtensionReason; 6] = [
 /// `TIMESTAMPTZ` conversion, produces the same answer on every machine.
 pub mod sql {
     use super::{
-        CPRA_INITIAL_DETERMINATION_DAYS, CPRA_MAXIMUM_EXTENSION_DAYS,
-        RECOGNIZED_EXTENSION_REASONS, SUSPICIOUS_CLOSURE_THRESHOLD_SECONDS,
+        CPRA_INITIAL_DETERMINATION_DAYS, CPRA_MAXIMUM_EXTENSION_DAYS, RECOGNIZED_EXTENSION_REASONS,
+        SUSPICIOUS_CLOSURE_THRESHOLD_SECONDS,
     };
     use crate::analysis::court_calendar::{
         modeled_weekday_holidays, FIRST_MODELED_YEAR, LAST_MODELED_YEAR,
@@ -200,9 +200,7 @@ pub mod sql {
 
     /// Last day of the initial period, mirroring `timeline`.
     pub fn initial_deadline_date() -> String {
-        court_day_on_or_after(&format!(
-            "created_date + {CPRA_INITIAL_DETERMINATION_DAYS}"
-        ))
+        court_day_on_or_after(&format!("created_date + {CPRA_INITIAL_DETERMINATION_DAYS}"))
     }
 
     /// Whether a recorded extension actually moves the deadline, mirroring
@@ -360,7 +358,6 @@ mod tests {
         assert!(sql::render("SELECT {calendar_date(oops").contains("{calendar_date("));
     }
 
-    #[test]
     #[test]
     fn only_the_recorded_activity_basis_measures_a_completed_period() {
         assert!(DeterminationBasis::EarliestRecordedActivityProxy.is_recorded_activity());

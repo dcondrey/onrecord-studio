@@ -9,7 +9,8 @@ use serde::{Deserialize, Serialize};
 // `analysis::anomaly` renders its SQL from the same values. They are re-exported here so every
 // existing `analysis::timeline` import path keeps working.
 pub use crate::analysis::statute::{
-    CPRA_INITIAL_DETERMINATION_DAYS, CPRA_MAXIMUM_EXTENSION_DAYS, CPRA_STATUTE_CITATION, SUSPICIOUS_CLOSURE_THRESHOLD_SECONDS,
+    CPRA_INITIAL_DETERMINATION_DAYS, CPRA_MAXIMUM_EXTENSION_DAYS, CPRA_STATUTE_CITATION,
+    SUSPICIOUS_CLOSURE_THRESHOLD_SECONDS,
 };
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
