@@ -250,3 +250,100 @@ impl CorpusIndex {
         .await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn the_scan_links_only_validated_identifiers_and_counts_distinct_documents() {
+        let directory = tempdir().expect("temp dir");
+        let path = directory.path().join("corpus.db");
+        drop(CorpusIndex::open(&path).expect("the index must open"));
+        let connection = Connection::open(&path).expect("the fresh index must open");
+        let document = |id: i64| {
+            format!(
+                "('records', 1, {id}, repeat('a', 64), repeat('b', 64), 3, repeat('0', 16),
+                  FALSE, 'deterministic-corpus-v3', '2026-09-29T00:00:00Z')"
+            )
+        };
+        let mention = |entity: &str, document: i64, start: i64, grade: &str| {
+            format!(
+                "('records', {document}, '{entity}', 0, {start}, {}, 5000, 'test', 1, '{grade}')",
+                start + 4
+            )
+        };
+        let edge = |email: &str, person: &str, document: i64| {
+            format!(
+                "('records', {document}, '{email}', '{person}', 'CO_OCCURRENCE', 'COMPUTED', 0, 0, 9, 4000, NULL, NULL)"
+            )
+        };
+        connection
+            .execute_batch(&format!(
+                "INSERT INTO corpus_documents VALUES {}, {};
+                 INSERT INTO corpus_entities VALUES
+                    ('e-good', 'EMAIL_ADDRESS', 'jd@x.org', 'jd@x.org', 'EXACT_NORMALIZED_MATCH'),
+                    ('e-weak', 'EMAIL_ADDRESS', 'weak@x.org', 'weak@x.org', 'EXACT_NORMALIZED_MATCH'),
+                    ('p-1', 'PERSON', 'jane doe', 'Jane Doe', 'EXACT_NORMALIZED_MATCH'),
+                    ('p-2', 'PERSON', 'j doe', 'J. Doe', 'EXACT_NORMALIZED_MATCH');
+                 INSERT INTO corpus_entity_document_counts VALUES
+                    ('e-good', 2), ('e-weak', 2), ('p-1', 2), ('p-2', 2);
+                 INSERT INTO corpus_entity_mentions VALUES {}, {}, {}, {}, {}, {}, {}, {};
+                 INSERT INTO corpus_entity_relationships VALUES {}, {}, {}, {}, {}, {};",
+                document(100),
+                document(101),
+                mention("e-good", 100, 0, "FORMAT_VALIDATED"),
+                mention("e-good", 101, 0, "FORMAT_VALIDATED"),
+                mention("e-weak", 100, 10, "FORMAT_VALIDATED"),
+                mention("e-weak", 101, 10, "PATTERN_ONLY"),
+                mention("p-1", 100, 20, "GAZETTEER_HIT"),
+                mention("p-1", 101, 20, "GAZETTEER_HIT"),
+                mention("p-2", 100, 30, "GAZETTEER_HIT"),
+                mention("p-2", 101, 30, "GAZETTEER_HIT"),
+                edge("e-good", "p-1", 100),
+                edge("e-good", "p-1", 101),
+                edge("e-good", "p-2", 100),
+                edge("e-good", "p-2", 101),
+                edge("e-weak", "p-1", 100),
+                edge("e-weak", "p-2", 100),
+            ))
+            .expect("fixture rows must insert");
+        drop(connection);
+
+        let index = CorpusIndex::open(&path).expect("the index must reopen");
+        let scan = index.resolution_scan().await.expect("the scan must read");
+        assert!(!scan.scan_truncated);
+        let mut people: Vec<_> = scan.entities.iter().map(|e| e.entity_id.as_str()).collect();
+        people.sort();
+        assert_eq!(people, vec!["p-1", "p-2"]);
+        let mut links: Vec<_> = scan
+            .links
+            .iter()
+            .map(|l| (l.identifier_id.as_str(), l.entity_id.as_str(), l.documents))
+            .collect();
+        links.sort();
+        assert_eq!(links, vec![("e-good", "p-1", 2), ("e-good", "p-2", 2)]);
+
+        let only = index
+            .resolution_links_for(vec!["p-1".to_string()])
+            .await
+            .unwrap();
+        assert_eq!(only.len(), 1);
+        let keyed = index
+            .resolution_entities_by_key(vec![ResolutionKey::new("PERSON", "j doe")])
+            .await
+            .unwrap();
+        assert_eq!(keyed.len(), 1);
+        assert_eq!(
+            (keyed[0].entity_id.as_str(), keyed[0].document_count),
+            ("p-2", 2)
+        );
+        let examples = index
+            .resolution_examples(vec!["p-1".to_string(), "p-2".to_string()])
+            .await
+            .unwrap();
+        assert_eq!(examples["p-1"].len(), 2);
+        assert_eq!(examples["p-1"][0].document_id, 100);
+    }
+}
