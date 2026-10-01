@@ -9,10 +9,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 const resolvers = new Map<string, (value: unknown) => void>();
+const calls: { command: string; args: Record<string, unknown> }[] = [];
+const counts = new Map<string, unknown>();
 
 vi.mock("@tauri-apps/api/core", () => ({
   isTauri: () => false,
   invoke: (command: string, args?: Record<string, unknown>) => {
+    calls.push({ command, args: args ?? {} });
     if (command === "get_affiliation_disclosure") {
       return Promise.resolve({
         status: "UNSET",
@@ -31,11 +34,19 @@ vi.mock("@tauri-apps/api/core", () => ({
         node("entity-fast", "rtfhsd.org", 4),
       ]);
     }
-    if (command === "get_corpus_entity_neighborhood") {
-      const entityId = String(args?.entityId);
+    if (command === "page_corpus_entity_neighbors") {
       // Held open so the test decides the resolution order, which is the whole point: the slow
-      // request is the first one issued and lands last.
-      return new Promise((resolve) => resolvers.set(entityId, resolve));
+      // request is the first one issued and lands last. A later page is held under its cursor.
+      const key = args?.cursor ? `${String(args.entityId)}:${String(args.cursor)}` : String(args?.entityId);
+      return new Promise((resolve) => resolvers.set(key, resolve));
+    }
+    if (command === "count_corpus_entity_neighbors") {
+      const entityId = String(args?.entityId);
+      return Promise.resolve(
+        counts.has(entityId)
+          ? counts.get(entityId)
+          : { total: 1, unfilteredTotal: 1, byKind: [{ kind: "ORGANIZATION", count: 1 }] },
+      );
     }
     if (command === "find_entity_paths") {
       const from = String(args?.fromEntityId);
@@ -73,12 +84,14 @@ function neighborhood(
         confidenceBasisPoints: 7000,
       },
     ],
-    truncated: false,
+    nextCursor: null,
   };
 }
 
 afterEach(() => {
   resolvers.clear();
+  counts.clear();
+  calls.length = 0;
   cleanup();
 });
 
@@ -97,7 +110,7 @@ describe("EntityGraph combining", () => {
           confidenceBasisPoints: 6000,
         },
       ],
-      truncated: false,
+      nextCursor: null,
     });
     const combine = await screen.findByRole("button", { name: /combine in this view/i });
     fireEvent.click(combine);
@@ -230,5 +243,113 @@ describe("EntityGraph", () => {
     resolvers.get("path:entity-slow")?.({ outcome: "unknownEntity", entityId: "entity-missing" });
     await screen.findByText(/entity-missing is not in the entity index/);
     expect(screen.queryByText(/not connected/)).toBeNull();
+  });
+});
+
+function manyEdges(prefix: string, count: number, kind: "ORGANIZATION" | "PERSON" = "ORGANIZATION") {
+  return Array.from({ length: count }, (_, index) => ({
+    neighbor: { ...node(`${prefix}-${index}`, `${prefix} ${index}`, 2), kind },
+    basis: "COMPUTED" as const,
+    kind: "CO_OCCURRENCE" as const,
+    sharedDocumentCount: count - index,
+    confidenceBasisPoints: 5000,
+  }));
+}
+
+describe("EntityGraph with more neighbours than a drawing holds", () => {
+  it("draws a bounded budget, names the rest by kind, and reaches every neighbour through paging", async () => {
+    counts.set("entity-slow", {
+      total: 30,
+      unfilteredTotal: 30,
+      byKind: [{ kind: "ORGANIZATION", count: 25 }, { kind: "PERSON", count: 5 }],
+    });
+    const { container } = render(<EntityGraph />);
+    await waitFor(() => expect(resolvers.has("entity-slow")).toBe(true));
+    resolvers.get("entity-slow")?.({
+      center: node("entity-slow", "Housing Authority", 9),
+      edges: manyEdges("org", 20),
+      nextCursor: "page-2",
+    });
+    await screen.findByText(/20 of 30 neighbours loaded/);
+
+    // The drawing holds its budget of 18 even though 20 are loaded; the rest are named, not dropped.
+    expect(container.querySelectorAll("svg [data-edge-family]").length).toBe(18);
+    expect(screen.getByRole("button", { name: /7 more of Organization/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /5 more of Person/ })).toBeTruthy();
+    expect(screen.queryByText(/cut at the limit/)).toBeNull();
+
+    // Neighbours beyond the first page are reachable: the window is near the end of the loaded
+    // rows, so the next page is requested by cursor without a click.
+    await waitFor(() => expect(resolvers.has("entity-slow:page-2")).toBe(true));
+    resolvers.get("entity-slow:page-2")?.({
+      center: node("entity-slow", "Housing Authority", 9),
+      edges: manyEdges("tail", 10),
+      nextCursor: null,
+    });
+    await screen.findByText(/30 of 30 neighbours loaded/);
+    expect(screen.getByText("End of the list.")).toBeTruthy();
+  });
+
+  it("expands a kind group by filtering the index, not the rows already loaded", async () => {
+    counts.set("entity-slow", {
+      total: 21,
+      unfilteredTotal: 21,
+      byKind: [{ kind: "ORGANIZATION", count: 18 }, { kind: "PERSON", count: 3 }],
+    });
+    render(<EntityGraph />);
+    await waitFor(() => expect(resolvers.has("entity-slow")).toBe(true));
+    resolvers.get("entity-slow")?.({
+      center: node("entity-slow", "Housing Authority", 9),
+      edges: manyEdges("org", 18),
+      nextCursor: "page-2",
+    });
+    fireEvent.click(await screen.findByRole("button", { name: /3 more of Person/ }));
+    await waitFor(() =>
+      expect(
+        calls.some(
+          (call) =>
+            call.command === "page_corpus_entity_neighbors" &&
+            (call.args.filter as { kind: string | null } | undefined)?.kind === "PERSON",
+        ),
+      ).toBe(true),
+    );
+  });
+
+  // A page for the entity the reader left is a statement about that entity. Landing under the
+  // current one it would list another entity's neighbours as this entity's relationships.
+  it("drops a later page that lands after the reader moved to another entity", async () => {
+    counts.set("entity-slow", { total: 30, unfilteredTotal: 30, byKind: [{ kind: "ORGANIZATION", count: 30 }] });
+    render(<EntityGraph />);
+    await waitFor(() => expect(resolvers.has("entity-slow")).toBe(true));
+    resolvers.get("entity-slow")?.({
+      center: node("entity-slow", "Housing Authority", 9),
+      edges: manyEdges("slow", 20),
+      nextCursor: "page-2",
+    });
+    await waitFor(() => expect(resolvers.has("entity-slow:page-2")).toBe(true));
+
+    screen.getByRole("button", { name: /rtfhsd\.org/ }).click();
+    await waitFor(() => expect(resolvers.has("entity-fast")).toBe(true));
+    resolvers.get("entity-fast")?.(neighborhood("entity-fast", "rtfhsd.org", "FAST NEIGHBOUR"));
+    await screen.findAllByText("FAST NEIGHBOUR");
+
+    resolvers.get("entity-slow:page-2")?.({
+      center: node("entity-slow", "Housing Authority", 9),
+      edges: manyEdges("LEAKED", 10),
+      nextCursor: null,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByText(/LEAKED/)).toBeNull();
+    expect(screen.getByText(/1 of 1 neighbours loaded/)).toBeTruthy();
+  });
+
+  it("says the total could not be counted rather than showing it as zero", async () => {
+    counts.set("entity-slow", null);
+    render(<EntityGraph />);
+    await waitFor(() => expect(resolvers.has("entity-slow")).toBe(true));
+    resolvers.get("entity-slow")?.(neighborhood("entity-slow", "Housing Authority", "ONLY NEIGHBOUR"));
+    await screen.findAllByText("ONLY NEIGHBOUR");
+    await screen.findByText(/the total could not be counted/);
+    expect(screen.queryByText(/\b0 neighbours/)).toBeNull();
   });
 });
