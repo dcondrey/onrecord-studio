@@ -215,11 +215,50 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
     native_handler(invoke)
 }
 
+/// Every workspace view, in the order and with the shortcuts of `src/commands/registry.ts`.
+const WORKSPACE_MENU: [(&str, &str); 9] = [
+    ("workspace-overview", "San Diego"),
+    ("workspace-patterns", "Patterns"),
+    ("workspace-analysis", "Analysis"),
+    ("workspace-evidence", "Evidence"),
+    ("workspace-activity", "Activity"),
+    ("workspace-briefing", "Briefing"),
+    ("workspace-story", "Story Desk"),
+    ("workspace-meetings", "Meetings"),
+    ("workspace-compare", "Compare Agencies"),
+];
+
+/// Menu ids forwarded to the frontend, which owns what each one does.
+fn is_native_command(id: &str) -> bool {
+    id.starts_with("workspace-")
+        || id.starts_with("theme-")
+        || id.starts_with("motion-")
+        || id.starts_with("contrast-")
+        || matches!(
+            id,
+            "add-source" | "command-palette" | "toggle-sidebar" | "open-help"
+        )
+}
+
 fn application_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
+    let item = |id: &str, label: &str, accelerator: Option<&str>| {
+        MenuItem::with_id(app, id, label, true, accelerator)
+    };
     let application = SubmenuBuilder::new(app, "OnRecord Studio")
         .about(None)
         .separator()
+        .services()
+        .separator()
+        .hide()
+        .hide_others()
+        .show_all()
+        .separator()
         .quit()
+        .build()?;
+    let file = SubmenuBuilder::new(app, "File")
+        .item(&item("add-source", "Add Data Source…", Some("CmdOrCtrl+N"))?)
+        .separator()
+        .close_window()
         .build()?;
     let edit = SubmenuBuilder::new(app, "Edit")
         .undo()
@@ -230,69 +269,42 @@ fn application_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .paste()
         .select_all()
         .build()?;
-    let overview = MenuItem::with_id(
-        app,
-        "workspace-overview",
-        "Overview",
-        true,
-        Some("CmdOrCtrl+1"),
-    )?;
-    let patterns = MenuItem::with_id(
-        app,
-        "workspace-patterns",
-        "Patterns",
-        true,
-        Some("CmdOrCtrl+2"),
-    )?;
-    let evidence = MenuItem::with_id(
-        app,
-        "workspace-evidence",
-        "Evidence",
-        true,
-        Some("CmdOrCtrl+4"),
-    )?;
-    let analysis = MenuItem::with_id(
-        app,
-        "workspace-analysis",
-        "Analysis",
-        true,
-        Some("CmdOrCtrl+3"),
-    )?;
-    let activity = MenuItem::with_id(
-        app,
-        "workspace-activity",
-        "Activity",
-        true,
-        Some("CmdOrCtrl+5"),
-    )?;
-    let briefing = MenuItem::with_id(
-        app,
-        "workspace-briefing",
-        "Briefing",
-        true,
-        Some("CmdOrCtrl+6"),
-    )?;
-    let add_source = MenuItem::with_id(
-        app,
-        "add-source",
-        "Add Data Source…",
-        true,
-        Some("CmdOrCtrl+N"),
-    )?;
-    let command_palette = MenuItem::with_id(
-        app,
-        "command-palette",
-        "Command Palette…",
-        true,
-        Some("CmdOrCtrl+K"),
-    )?;
-    let workspace = SubmenuBuilder::new(app, "Workspace")
-        .items(&[
-            &overview, &patterns, &analysis, &evidence, &activity, &briefing,
-        ])
+    let mut workspaces = SubmenuBuilder::new(app, "Go");
+    for (index, (id, label)) in WORKSPACE_MENU.iter().enumerate() {
+        let accelerator = format!("CmdOrCtrl+{}", index + 1);
+        workspaces = workspaces.item(&item(id, label, Some(&accelerator))?);
+    }
+    let workspaces = workspaces.build()?;
+    let appearance = SubmenuBuilder::new(app, "Appearance")
+        .item(&item("theme-auto", "Match System", None)?)
+        .item(&item("theme-light", "Light", None)?)
+        .item(&item("theme-dark", "Dark", None)?)
+        .build()?;
+    let accessibility = SubmenuBuilder::new(app, "Accessibility")
+        .item(&item("motion-system", "Motion: Match System", None)?)
+        .item(&item("motion-reduce", "Reduce Motion", None)?)
+        .item(&item("motion-full", "Full Motion", None)?)
         .separator()
-        .item(&add_source)
-        .item(&command_palette)
+        .item(&item("contrast-system", "Contrast: Match System", None)?)
+        .item(&item("contrast-more", "Increase Contrast", None)?)
+        .item(&item("contrast-standard", "Standard Contrast", None)?)
+        .build()?;
+    let view = SubmenuBuilder::new(app, "View")
+        .item(&item(
+            "command-palette",
+            "Command Palette…",
+            Some("CmdOrCtrl+K"),
+        )?)
+        .item(&item(
+            "toggle-sidebar",
+            "Toggle Sidebar",
+            Some("CmdOrCtrl+Backslash"),
+        )?)
+        .separator()
+        .item(&appearance)
+        .item(&accessibility)
+        .separator()
+        .fullscreen()
         .build()?;
     let window = SubmenuBuilder::new(app, "Window")
         .minimize()
@@ -300,8 +312,23 @@ fn application_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .separator()
         .close_window()
         .build()?;
+    let help = SubmenuBuilder::new(app, "Help")
+        .item(&item(
+            "open-help",
+            "OnRecord Studio Help",
+            Some("CmdOrCtrl+Shift+Slash"),
+        )?)
+        .build()?;
     MenuBuilder::new(app)
-        .items(&[&application, &edit, &workspace, &window])
+        .items(&[
+            &application,
+            &file,
+            &edit,
+            &view,
+            &workspaces,
+            &window,
+            &help,
+        ])
         .build()
 }
 
@@ -319,9 +346,7 @@ pub fn run() {
         .menu(application_menu)
         .on_menu_event(|app, event| {
             let command = event.id().0.as_str();
-            if command.starts_with("workspace-")
-                || matches!(command, "add-source" | "command-palette")
-            {
+            if is_native_command(command) {
                 let _ = app.emit(NATIVE_COMMAND_EVENT, command);
             }
         })
