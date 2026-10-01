@@ -20,7 +20,8 @@ import {
   systemAccessibilityPreferences,
 } from './utils/accessibility';
 import { useAudioAlerts } from './hooks/useAudioAlerts';
-import { workspaceCommandRegistry } from './commands/registry';
+import { contrastCommandRegistry, motionCommandRegistry, themeCommandRegistry, workspaceCommandRegistry } from './commands/registry';
+import { openHelp } from './components/help/helpEvents';
 import LicenseSwitch from './components/licensing/LicenseSwitch';
 import { LicenseProvider } from './components/licensing/LicenseProvider';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
@@ -234,12 +235,26 @@ function LicensedWorkspace() {
     let unlisten: (() => void) | null = null;
     void listen<string>('onrecord-native-command', ({ payload }) => {
       const workspace = workspaceCommandRegistry.find((command) => command.id === payload);
+      const theme = themeCommandRegistry.find((command) => command.id === payload);
+      const motion = motionCommandRegistry.find((command) => command.id === payload);
+      const contrast = contrastCommandRegistry.find((command) => command.id === payload);
+      const store = useAppStore.getState();
       if (workspace) {
         setWorkspaceView(workspace.view);
+      } else if (theme) {
+        store.setTheme(theme.theme);
+      } else if (motion) {
+        store.setMotion(motion.motion);
+      } else if (contrast) {
+        store.setContrast(contrast.contrast);
       } else if (payload === 'add-source') {
         document.getElementById('portal-url-desktop')?.focus();
       } else if (payload === 'command-palette') {
         window.dispatchEvent(new Event(OPEN_COMMAND_PALETTE_EVENT));
+      } else if (payload === 'toggle-sidebar') {
+        store.toggleSidebarCollapsed();
+      } else if (payload === 'open-help') {
+        openHelp();
       }
     }).then((stop) => {
       if (active) unlisten = stop;

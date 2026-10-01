@@ -55,7 +55,9 @@ the entity graph), Analysis (semantic search and read-only SQL over imported tab
 (request search and document reading), Activity (ingestion queues and errors), Briefing
 (public-comment outline), Story desk (findings ranked by observable factors), Meetings (council
 calendar from collected agendas) and Compare (agencies ranked on measured latencies). Switch with
-the sidebar, the command palette (Cmd+K) or Cmd+1 to Cmd+9.
+the sidebar, the command palette (Cmd+K), the Go menu or Cmd+1 to Cmd+9. The View menu also
+toggles the sidebar (Cmd+\\) and sets appearance, motion and contrast; Help > OnRecord Studio Help
+(Cmd+Shift+/) opens in-app help.
 
 ## Reading a finding
 
