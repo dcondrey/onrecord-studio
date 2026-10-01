@@ -136,17 +136,6 @@ export default function MainLayout() {
     }
   };
 
-  useEffect(() => {
-    // The delete confirmation owns Escape while it is open; closing the viewer underneath it too
-    // would discard the reader's place.
-    if (!activeDocument || pendingDocumentPurge) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setActiveDocument(null);
-    };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [activeDocument, pendingDocumentPurge]);
-
   const openDocument = async (summary: RequestDocumentSummary, characterOffset = 0) => {
     setDocumentError(null);
     // Identity is the request, not the document: two rapid clicks resolve out of order and reopen
@@ -451,7 +440,7 @@ export default function MainLayout() {
         </DialogBackdrop>
       )}
       {activeDocument && (
-        <div className="app-backdrop fixed inset-0 z-50 grid place-items-center p-8 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`Document ${activeDocument.summary.fileName}`}>
+        <DialogBackdrop label={`Document ${activeDocument.summary.fileName}`} onClose={() => setActiveDocument(null)} className="app-backdrop fixed inset-0 z-50 grid place-items-center p-8 backdrop-blur-sm">
           <div className={cn('relative h-[min(760px,88vh)]', isPdfDocument(activeDocument.summary) ? 'w-[min(1440px,96vw)]' : 'w-[min(1080px,92vw)]')}>
             <button type="button" autoFocus onClick={() => setActiveDocument(null)} className="absolute -top-7 right-0 z-10 rounded-md border border-slate-700 bg-slate-950/90 px-2 py-1 text-[9px] font-semibold text-slate-300 shadow-lg hover:border-slate-500">Close</button>
             <div className="grid h-full grid-cols-[minmax(0,1fr)_360px] gap-4">
@@ -500,7 +489,7 @@ export default function MainLayout() {
               </aside>
             </div>
           </div>
-        </div>
+        </DialogBackdrop>
       )}
       <LegalAuthorityManager isOpen={isLegalLibraryOpen} onClose={closeLegalLibrary} />
     </main>
