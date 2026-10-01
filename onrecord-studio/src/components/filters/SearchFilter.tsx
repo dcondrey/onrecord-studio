@@ -1,8 +1,8 @@
 import { formatMatchCount, SEARCH_RESULT_LIMIT } from '../../utils/searchResults';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import AgencySelector from './AgencySelector';
 import { useAppStore } from '../../store/useAppStore';
-import { searchRecordText } from '../../utils/searchResults';
+import { searchRecordText, type SearchRecordInput } from '../../utils/searchResults';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { compileToLegacyQuery, interpretNaturalLanguage, parseQualifierQuery, serializeQualifierQuery } from '../../query';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
@@ -24,6 +24,7 @@ export default function SearchFilter() {
   const [inputValue, setInputValue] = useState(searchTerm);
   const [interpretPlainLanguage, setInterpretPlainLanguage] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const appliedRecord = useRef<SearchRecordInput | null>(null);
   const [watchStatus, setWatchStatus] = useState<{ ok: boolean; text: string } | null>(null);
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
   const requestGate = useLatestRequestGate();
@@ -69,7 +70,22 @@ export default function SearchFilter() {
           policyDeviation: compiledQuery.policyDeviation ?? selectedPolicyDeviation,
           limit: SEARCH_RESULT_LIMIT,
         });
-        if (requestGate.isCurrent(request)) setFilteredResults(results, compiledQuery.searchTerm);
+        if (requestGate.isCurrent(request)) {
+          setFilteredResults(results, compiledQuery.searchTerm);
+          // Captured with the results it describes, so a record never pairs a newer query with an older count.
+          appliedRecord.current = {
+            ranAt: new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC',
+            query: inputValue,
+            filters: [
+              ...((compiledQuery.agencyId ?? selectedAgencyId) !== null ? [{ label: 'Department', value: agencyProfiles.find((profile) => profile.agencyId === (compiledQuery.agencyId ?? selectedAgencyId))?.agencyName ?? String(compiledQuery.agencyId ?? selectedAgencyId) }] : []),
+              ...((compiledQuery.status ?? selectedStatus) ? [{ label: 'Status', value: String(compiledQuery.status ?? selectedStatus) }] : []),
+              ...((compiledQuery.policyDeviation ?? selectedPolicyDeviation) ? [{ label: 'Policy deviation', value: formatPolicy(String(compiledQuery.policyDeviation ?? selectedPolicyDeviation)) }] : []),
+              ...((compiledQuery.portalKey ?? activePortalKey) ? [{ label: 'Source', value: String(compiledQuery.portalKey ?? activePortalKey) }] : []),
+            ],
+            sourceCount: (compiledQuery.portalKey ?? activePortalKey) ? 1 : portalCount,
+            resultCount: results.length,
+          };
+        }
       } catch (reason) {
         if (requestGate.isCurrent(request)) {
           // Keep the last successful result set. Clearing it turns a transport/query failure into
@@ -109,20 +125,13 @@ export default function SearchFilter() {
   };
 
   const copyRecord = async () => {
-    const text = searchRecordText({
-      ranAt: new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC',
-      query: inputValue,
-      filters: [
-        ...(selectedAgencyId !== null ? [{ label: 'Department', value: agencyProfiles.find((profile) => profile.agencyId === selectedAgencyId)?.agencyName ?? String(selectedAgencyId) }] : []),
-        ...(selectedStatus ? [{ label: 'Status', value: selectedStatus }] : []),
-        ...(selectedPolicyDeviation ? [{ label: 'Policy deviation', value: formatPolicy(selectedPolicyDeviation) }] : []),
-        ...(activePortalKey ? [{ label: 'Source', value: activePortalKey }] : []),
-      ],
-      sourceCount: activePortalKey ? 1 : portalCount,
-      resultCount,
-    });
+    const applied = appliedRecord.current;
+    if (!applied) {
+      setWatchStatus({ ok: false, text: 'No search has completed yet.' });
+      return;
+    }
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(searchRecordText(applied));
       setWatchStatus({ ok: true, text: 'Search record copied.' });
     } catch {
       setWatchStatus({ ok: false, text: 'The clipboard is unavailable.' });

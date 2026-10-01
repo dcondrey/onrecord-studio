@@ -197,7 +197,7 @@
       {
         "heading": "Timeline",
         "paragraphs": [
-          "Switch Records to Timeline for one dated list drawn from your tracked requests, detector findings and watch changes. Each row says what its date means. Event date is when something happened, as you recorded it. Last seen is when a detector last observed a finding, and Noticed by this app is when a watch check saw a change. Those two can be later than the event. Show basis reveals the quoted sentence or explanation behind a row. Inspect in evidence opens the finding's records.",
+          "Switch Records to Timeline, or run Show evidence timeline from the command palette, for one dated list drawn from your tracked requests, detector findings and watch changes. Each row says what its date means. Event date is when something happened, as you recorded it. Last seen is when a detector last observed a finding, and Noticed by this app is when a watch check saw a change. Those two can be later than the event. Show basis reveals the quoted sentence or explanation behind a row. Inspect in evidence opens the finding's records.",
           "Filter by source, date range or text. If a source cannot be read, the timeline names it as missing instead of showing the rest as complete. Only the most recent 500 findings and 200 watch changes are loaded, and the page says when that limit applies. A row whose date cannot be read is counted and left out, never placed at a guessed date."
         ]
       },

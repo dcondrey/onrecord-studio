@@ -7,6 +7,7 @@ import type {
   CorpusEntityKind,
   CorpusEntityNeighborhood,
   CorpusEntityNode,
+  EntityBroker,
   EntityPath,
   RelationshipBasis,
   RelationshipKind,
@@ -169,6 +170,20 @@ export default function EntityGraph() {
   const [asOf, setAsOf] = useState('');
   const [includeUndated, setIncludeUndated] = useState(true);
   const [pathAnswer, setPathAnswer] = useState<PathAnswer | null>(null);
+  const brokerGate = useLatestRequestGate();
+  const [brokers, setBrokers] = useState<EntityBroker[] | null>(null);
+  const [brokersFailed, setBrokersFailed] = useState(false);
+
+  useEffect(() => {
+    const token = brokerGate.begin();
+    invokeCommand('list_entity_brokers', { limit: 12 })
+      .then((rows) => {
+        if (brokerGate.isCurrent(token)) setBrokers(rows);
+      })
+      .catch(() => {
+        if (brokerGate.isCurrent(token)) setBrokersFailed(true);
+      });
+  }, [brokerGate]);
 
   useEffect(() => {
     const token = gate.begin();
@@ -275,6 +290,30 @@ export default function EntityGraph() {
           </button>
         ))}
       </div>
+
+      <details className="mt-2 text-[9px] text-slate-400">
+        <summary className="focus-ring cursor-pointer font-semibold text-slate-300">Entities that connect the most others</summary>
+        {brokersFailed ? (
+          <p role="alert" className="mt-1 text-rose-300">The ranking could not be read. This does not mean no entity bridges others.</p>
+        ) : brokers === null ? (
+          <p role="status" className="mt-1">Reading the ranking…</p>
+        ) : brokers.length === 0 ? (
+          <p className="mt-1">No entity has enough connections to rank yet.</p>
+        ) : (
+          <>
+            <p className="mt-1">Ranked by number of connections weighted by shared documents. This is an approximation, not a measure of influence, and a well-connected entity is a lead to check, not a finding of anything improper.</p>
+            <ol aria-label="Most connecting entities" className="mt-1 flex flex-col gap-1">
+              {brokers.map((broker) => (
+                <li key={broker.entity.entityId}>
+                  <button type="button" onClick={() => setSelectedId(broker.entity.entityId)} className="focus-ring rounded border border-slate-800 px-2 py-1 text-left text-slate-300 hover:border-slate-600">
+                    {truncateLabel(broker.entity.displayValue)} <span className="text-slate-400">· {broker.distinctNeighbors} connections · score {broker.brokerageScore.toLocaleString()}</span>
+                  </button>
+                </li>
+              ))}
+            </ol>
+          </>
+        )}
+      </details>
 
       {seeds.length === 0 ? (
         <div className="mt-6 grid flex-1 place-items-center text-center">
