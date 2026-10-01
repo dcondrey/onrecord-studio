@@ -98,6 +98,8 @@ interface AppState {
   selectedStatus: string | null;
   selectedPolicyDeviation: string | null;
   filteredResults: RequestSearchResult[];
+  /** The free-text term that produced `filteredResults`, kept with them so basis labels never describe a newer query. */
+  filteredResultsTerm: string;
   /** Set when the latest evidence query failed; retained results then belong to the last successful query. */
   searchError: string | null;
   selectedRequestId: number | null;
@@ -168,7 +170,7 @@ interface AppState {
     status: string | null,
     policyDeviation?: string | null,
   ) => void;
-  setFilteredResults: (results: RequestSearchResult[]) => void;
+  setFilteredResults: (results: RequestSearchResult[], appliedTerm?: string) => void;
   setSearchError: (message: string | null) => void;
   setSelectedRequest: (requestId: number | null, portalKey?: string | null) => void;
   setTerminalVisibility: (visible: boolean) => void;
@@ -230,6 +232,7 @@ export const useAppStore = create<AppState>((set) => ({
   selectedStatus: null,
   selectedPolicyDeviation: null,
   filteredResults: [],
+  filteredResultsTerm: '',
   searchError: null,
   selectedRequestId: null,
   selectedRequestPortalKey: null,
@@ -406,7 +409,8 @@ export const useAppStore = create<AppState>((set) => ({
     selectedPolicyDeviation = null,
   ) =>
     set({ searchTerm, selectedAgencyId, selectedStatus, selectedPolicyDeviation }),
-  setFilteredResults: (filteredResults) => set({ filteredResults, searchError: null }),
+  setFilteredResults: (filteredResults, filteredResultsTerm = '') =>
+    set({ filteredResults, filteredResultsTerm, searchError: null }),
   setSearchError: (searchError) => set({ searchError }),
   setSelectedRequest: (selectedRequestId, selectedRequestPortalKey = null) =>
     set({ selectedRequestId, selectedRequestPortalKey, activeLegalFindings: [] }),

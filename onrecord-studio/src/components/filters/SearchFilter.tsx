@@ -65,7 +65,7 @@ export default function SearchFilter() {
           policyDeviation: compiledQuery.policyDeviation ?? selectedPolicyDeviation,
           limit: SEARCH_RESULT_LIMIT,
         });
-        if (requestGate.isCurrent(request)) setFilteredResults(results);
+        if (requestGate.isCurrent(request)) setFilteredResults(results, compiledQuery.searchTerm);
       } catch (reason) {
         if (requestGate.isCurrent(request)) {
           // Keep the last successful result set. Clearing it turns a transport/query failure into
