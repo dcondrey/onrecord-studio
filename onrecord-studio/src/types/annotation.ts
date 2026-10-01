@@ -2,6 +2,28 @@ export type AnnotationKind = 'NOTE' | 'HIGHLIGHT' | 'ISSUE';
 export type AnnotationStatus = 'OPEN' | 'CONFIRMED' | 'DISPUTED';
 export type AnchorState = 'ANCHORED' | 'RE_ANCHORED' | 'ORPHANED';
 
+/** A rectangle on one page of the original file: fractions of the page, origin top-left. */
+export interface PageRectangle {
+  /** 0-based. */
+  pageIndex: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface PageRegion extends PageRectangle {
+  /** SHA-256 of the original file the rectangle was drawn on. */
+  originalSha256: string;
+}
+
+export type PageRegionState = 'ANCHORED' | 'ORIGINAL_CHANGED' | 'ORPHANED';
+
+export interface ResolvedPageRegion {
+  id: string;
+  state: PageRegionState;
+}
+
 export interface DocumentAnnotation {
   id: string;
   portalKey: string;
@@ -26,6 +48,8 @@ export interface DocumentAnnotation {
   /** The signing key of the packet this mark arrived in; null for a mark made here. */
   importedFromKey: string | null;
   createdAt: string;
+  /** Present on a mark drawn on a page; its quote is then page text, not a text anchor. */
+  pageRegion?: PageRegion;
 }
 
 export interface ResolvedAnchor {
@@ -56,6 +80,7 @@ export interface AddAnnotationInput {
   note: string;
   tag: string | null;
   findingId: string | null;
+  pageRegion?: PageRectangle | null;
 }
 
 export interface CodebookEntry {
@@ -136,4 +161,5 @@ export const ANNOTATION_LIMITS = {
   codeDefinitionCharacters: 2_000,
   contextCharacters: 32,
   searchPage: 50,
+  pageRegionsPerDocument: 500,
 } as const;

@@ -6,6 +6,8 @@ use crate::{
     annotation_packet,
     annotations::{self, clean_text, invalid, AnnotationStore, NewMark},
     blocking, codebook,
+    commands::investigation::AppInvestigationPaths,
+    commands::original_file::load_document_original,
     error::AppError,
     integrity::{
         check_revocation, load_or_create_signing_key, load_revocations, sign_package,
@@ -137,8 +139,13 @@ async fn text_view(
     Ok(Some(Arc::new(view)))
 }
 
+/// A page region is located by its rectangle, never by its quote, so the text is not consulted.
 fn resolve(view: Option<&TextView>, annotation: DocumentAnnotation) -> ResolvedAnnotation {
-    let anchor = view.and_then(|view| view.resolve(&annotation));
+    let anchor = if annotation.page_region.is_some() {
+        None
+    } else {
+        view.and_then(|view| view.resolve(&annotation))
+    };
     ResolvedAnnotation { annotation, anchor }
 }
 
@@ -166,7 +173,7 @@ async fn list_annotations(
     let facts = document_facts(repository, &portal, document_id).await?;
     let view = if matching
         .iter()
-        .any(|annotation| !annotation.quote.is_empty())
+        .any(|annotation| !annotation.quote.is_empty() && annotation.page_region.is_none())
     {
         text_view(repository, &portal, document_id).await?
     } else {
@@ -192,8 +199,11 @@ async fn list_annotations(
     })
 }
 
+/// `original_sha256` is the digest of the original file, supplied by the command only when the
+/// input carries a page region.
 async fn add_annotation(
     input: AddAnnotationInput,
+    original_sha256: Option<String>,
     store: &Arc<AnnotationStore>,
     repository: &DuckDbRepository,
 ) -> Result<DocumentAnnotation, AppError> {
@@ -205,7 +215,7 @@ async fn add_annotation(
     let text_sha256 = document_facts(repository, &portal, input.document_id)
         .await?
         .and_then(|facts| facts.text_sha256);
-    let placement = if quote.is_empty() {
+    let placement = if quote.is_empty() || input.page_region.is_some() {
         None
     } else {
         let view = text_view(repository, &portal, input.document_id)
@@ -222,6 +232,7 @@ async fn add_annotation(
                     author: reviewer,
                     placement,
                     text_sha256,
+                    original_sha256,
                 },
             )
         })
@@ -454,7 +465,8 @@ async fn search_annotations(
                 (Some(recorded), Some(current)) if recorded.eq_ignore_ascii_case(current)
             )
         };
-        let needs_text = !annotation.quote.is_empty() && !unchanged;
+        let needs_text =
+            !annotation.quote.is_empty() && annotation.page_region.is_none() && !unchanged;
         if needs_text && contexts[&key].view.is_none() {
             let view = if contexts[&key].facts.is_some() {
                 text_view(repository, &key.0, key.1).await?
@@ -466,7 +478,7 @@ async fn search_annotations(
             }
         }
         let context = &contexts[&key];
-        let resolved = if annotation.quote.is_empty() {
+        let resolved = if annotation.quote.is_empty() || annotation.page_region.is_some() {
             ResolvedAnnotation {
                 annotation,
                 anchor: None,
@@ -678,8 +690,59 @@ pub async fn add_document_annotation(
     input: AddAnnotationInput,
     store: State<'_, Arc<AnnotationStore>>,
     repository: State<'_, DuckDbRepository>,
+    paths: State<'_, AppInvestigationPaths>,
 ) -> Result<DocumentAnnotation, AppError> {
-    add_annotation(input, &store, &repository).await
+    // The digest of the file as it is now is computed here, not taken from the caller: it is
+    // what the region is recorded against.
+    let original_sha256 = if input.page_region.is_some() {
+        let portal = portal_key(&input.portal_key)?;
+        Some(
+            load_document_original(
+                &repository,
+                &paths.document_root,
+                input.document_id,
+                &portal,
+            )
+            .await?
+            .header
+            .sha256,
+        )
+    } else {
+        None
+    };
+    add_annotation(input, original_sha256, &store, &repository).await
+}
+
+/// Where this document's page regions stand against the original file the viewer has open.
+/// `original_sha256` and `page_count` are what the viewer measured from that file.
+#[tauri::command]
+pub async fn resolve_page_regions(
+    portal_key: String,
+    document_id: u64,
+    original_sha256: String,
+    page_count: u32,
+    store: State<'_, Arc<AnnotationStore>>,
+) -> Result<Vec<ResolvedPageRegion>, AppError> {
+    let portal = self::portal_key(&portal_key)?;
+    annotations::validate_original_digest(&original_sha256)?;
+    on_store(&store, "Page region read", move |store| {
+        Ok(store
+            .load()?
+            .annotations
+            .into_iter()
+            .filter(|annotation| {
+                annotation.portal_key == portal && annotation.document_id == document_id
+            })
+            .filter_map(|annotation| {
+                let region = annotation.page_region?;
+                Some(ResolvedPageRegion {
+                    state: annotations::resolve_page_region(&region, &original_sha256, page_count),
+                    id: annotation.id,
+                })
+            })
+            .collect())
+    })
+    .await
 }
 
 #[tauri::command]
@@ -738,6 +801,7 @@ mod tests {
             note: String::new(),
             tag: None,
             finding_id: None,
+            page_region: None,
         }
     }
 
@@ -747,7 +811,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let store = Arc::new(AnnotationStore::new(directory.path()));
         assert!(
-            add_annotation(highlight("fee", "", ""), &store, &repository)
+            add_annotation(highlight("fee", "", ""), None, &store, &repository)
                 .await
                 .is_err()
         );
@@ -759,14 +823,16 @@ mod tests {
             ("fee was waived", "", ""),
             ("Done", "", ""),
         ] {
-            add_annotation(highlight(quote, prefix, suffix), &store, &repository)
+            add_annotation(highlight(quote, prefix, suffix), None, &store, &repository)
                 .await
                 .unwrap();
         }
         // "e" appears many times: refused rather than filed under one of them.
-        assert!(add_annotation(highlight("e", "", ""), &store, &repository)
-            .await
-            .is_err());
+        assert!(
+            add_annotation(highlight("e", "", ""), None, &store, &repository)
+                .await
+                .is_err()
+        );
 
         let state = |list: &DocumentAnnotationList| -> Vec<(String, AnchorState, Option<u64>)> {
             list.annotations
