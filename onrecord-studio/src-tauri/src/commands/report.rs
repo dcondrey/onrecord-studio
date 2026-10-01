@@ -186,8 +186,8 @@ async fn packet_inputs(
 }
 
 /// Annotations on the documents the packet's claims cite.
-fn annotation_section(
-    store: &AnnotationStore,
+async fn annotation_section(
+    store: Arc<AnnotationStore>,
     inputs: &PacketInputs,
 ) -> Result<ReviewerAnnotations, AppError> {
     let cited = inputs
@@ -197,7 +197,8 @@ fn annotation_section(
         .flat_map(|claim| claim.citations.iter())
         .map(|citation| (citation.portal_key.clone(), citation.document_id))
         .collect::<BTreeSet<_>>();
-    build_section(&store.load()?, &cited, &inputs.documents).map_err(AppError::Export)
+    let document = crate::blocking::spawn("Annotation ledger read", move || store.load()).await??;
+    build_section(&document, &cited, &inputs.documents).map_err(AppError::Export)
 }
 
 /// What an export with annotations would write, before anything is written.
@@ -217,7 +218,9 @@ pub async fn preview_packet_annotations(
         &corpus,
     )
     .await?;
-    Ok(annotation_section(&annotations, &inputs)?.preview())
+    Ok(annotation_section(annotations.inner().clone(), &inputs)
+        .await?
+        .preview())
 }
 
 /// Exports a citable evidence packet: a Markdown file and a JSON file with the same content hash.
@@ -248,9 +251,10 @@ pub async fn export_evidence_packet(
         &corpus,
     )
     .await?;
-    let reviewer_annotations = include_annotations
-        .then(|| annotation_section(&annotations, &inputs))
-        .transpose()?;
+    let reviewer_annotations = match include_annotations {
+        true => Some(annotation_section(annotations.inner().clone(), &inputs).await?),
+        false => None,
+    };
     let PacketInputs {
         manifest,
         documents,

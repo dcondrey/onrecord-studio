@@ -84,6 +84,24 @@ function digestBanner(header: OriginalHeader) {
  */
 /** Bundled under public/ so a PDF that names a standard font without embedding it draws with the right metrics offline. */
 const STANDARD_FONT_URL = '/pdfjs/standard_fonts/';
+/**
+ * CCITT, JBIG2 and JPEG 2000 images (the encodings of scanned records) and ICC colour decode only
+ * through these modules; without them pdf.js draws the page with the image silently missing. The
+ * `_nowasm_fallback.js` files beside them cover a WebKit that refuses WebAssembly.
+ */
+const WASM_URL = '/pdfjs/wasm/';
+/**
+ * Backing-store pixel budget for one page. A tall MediaBox at zoom 3 on a Retina display asks
+ * for billions of pixels, which WebKit answers with a blank canvas or a hung webview.
+ */
+const MAXIMUM_CANVAS_PIXELS = 16_777_216;
+
+/** The device scale that keeps a page's backing store within the pixel budget. */
+export function canvasScale(width: number, height: number, devicePixelRatio: number): number {
+  const area = width * height;
+  if (area <= 0) return devicePixelRatio;
+  return Math.min(devicePixelRatio, Math.sqrt(MAXIMUM_CANVAS_PIXELS / area));
+}
 
 export default function PdfPageView({ portalKey, documentId, fileName }: { portalKey: string; documentId: number; fileName: string }) {
   const key = pageViewKey(portalKey, documentId);
@@ -124,7 +142,7 @@ export default function PdfPageView({ portalKey, documentId, fileName }: { porta
         const { bytes, header } = parseOriginalFrame(frame);
         const pdfjs = await loadPdfjs();
         if (!loadGate.isCurrent(request)) return;
-        const opened = await pdfjs.getDocument({ data: bytes, useWorkerFetch: false, standardFontDataUrl: STANDARD_FONT_URL }).promise;
+        const opened = await pdfjs.getDocument({ data: bytes, useWorkerFetch: false, standardFontDataUrl: STANDARD_FONT_URL, wasmUrl: WASM_URL }).promise;
         if (!loadGate.isCurrent(request)) {
           void opened.loadingTask.destroy();
           return;
@@ -189,7 +207,7 @@ export default function PdfPageView({ portalKey, documentId, fileName }: { porta
         page = opened;
         if (!renderGate.isCurrent(request)) return;
         const viewport = opened.getViewport({ scale: zoom });
-        const ratio = window.devicePixelRatio || 1;
+        const ratio = canvasScale(viewport.width, viewport.height, window.devicePixelRatio || 1);
         const context = canvas.getContext('2d');
         if (!context) throw new Error('This view cannot draw to a canvas.');
         canvas.width = Math.floor(viewport.width * ratio);

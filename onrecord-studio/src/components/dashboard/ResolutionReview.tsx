@@ -319,7 +319,7 @@ export default function ResolutionReview() {
   }, [loadLedger, historyOf]);
 
   const record = useCallback(
-    async (candidate: ResolutionCandidate, verdict: ResolutionVerdict, reason: string, supersedes: string | null) => {
+    async (candidate: ResolutionCandidate, verdict: ResolutionVerdict, reason: string, supersedes: string | null): Promise<boolean> => {
       setBusy(true);
       setError('');
       try {
@@ -327,11 +327,18 @@ export default function ResolutionReview() {
           input: { leftEntityId: candidate.leftEntityId, rightEntityId: candidate.rightEntityId, verdict, author: author.trim(), reason, supersedes },
         });
         // Removed by pair, not by position: the queue may have been reloaded while this was in flight.
-        setQueue((held) => (held ? { ...held, candidates: held.candidates.filter((entry) => entry.pairId !== candidate.pairId), remaining: Math.max(0, held.remaining - 1) } : held));
+        setQueue((held) => {
+          if (!held) return held;
+          const candidates = held.candidates.filter((entry) => entry.pairId !== candidate.pairId);
+          const removed = held.candidates.length - candidates.length;
+          return { ...held, candidates, remaining: Math.max(0, held.remaining - removed) };
+        });
         setLastDecision({ candidate, entryId: item.entry.id });
         loadLedger(historyOf);
+        return true;
       } catch (reason_) {
         setError(formatNativeError(reason_));
+        return false;
       } finally {
         setBusy(false);
       }
@@ -342,7 +349,8 @@ export default function ResolutionReview() {
   const undo = async () => {
     if (!lastDecision) return;
     const { candidate, entryId } = lastDecision;
-    await record(candidate, 'UNSURE', 'Undone', entryId);
+    // A failed undo leaves the judgment in force, so the pair stays judged and the undo stays offered.
+    if (!(await record(candidate, 'UNSURE', 'Undone', entryId))) return;
     setQueue((held) => (held ? { ...held, candidates: [candidate, ...held.candidates], remaining: held.remaining + 1 } : held));
     setLastDecision(null);
   };

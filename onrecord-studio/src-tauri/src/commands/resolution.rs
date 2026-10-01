@@ -9,10 +9,11 @@ use crate::{
         verify_package_detailed, SignedPackage,
     },
     resolution::{
-        self, apply_import, effective_entries, pair_lead, plan_import, rank_candidates, replay,
-        CandidateGuards, Contradiction, EntitySnapshot, EvidenceSnapshot, ImportConflict,
-        LedgerEntry, LedgerStore, NewJudgment, PairLead, PresentEntities, ResolutionEntity,
-        ResolutionKey, ResolutionPackage, SuggestionBasis, Verdict, MAXIMUM_PAGE,
+        self, apply_import, effective_entries, links_within_fanout, pair_lead, plan_import,
+        rank_candidates, replay, CandidateGuards, Contradiction, EntitySnapshot, EvidenceSnapshot,
+        IdentifierLink, ImportConflict, LedgerEntry, LedgerStore, NewJudgment, PairLead,
+        PresentEntities, ResolutionEntity, ResolutionKey, ResolutionPackage, SuggestionBasis,
+        Verdict, MAXIMUM_PAGE,
     },
     storage::{corpus::CorpusIndex, sqlite::DuckDbRepository},
 };
@@ -174,6 +175,38 @@ pub struct ResolutionLedgerItem {
     pub is_latest: bool,
 }
 
+/// The pair's identifier links, minus any identifier the candidate queue would have skipped for
+/// fanout. Links for just two entities cannot see the fanout, so the identifiers they share are
+/// re-read across every entity they link before the queue's own cut is applied.
+async fn fanout_checked_links(
+    index: &CorpusIndex,
+    pair: &[String],
+) -> Result<Vec<IdentifierLink>, AppError> {
+    let own = index.resolution_links_for(pair.to_vec()).await?;
+    let shared: Vec<String> = own
+        .iter()
+        .filter(|link| link.entity_id == pair[0])
+        .filter(|link| {
+            own.iter().any(|other| {
+                other.entity_id == pair[1] && other.identifier_id == link.identifier_id
+            })
+        })
+        .map(|link| link.identifier_id.clone())
+        .collect();
+    let all = index.resolution_links_of_identifiers(shared).await?;
+    let linked = index
+        .resolution_entities_by_id(all.iter().map(|link| link.entity_id.clone()).collect())
+        .await?;
+    let known = linked.iter().map(|e| (e.entity_id.as_str(), e)).collect();
+    let (within, _) = links_within_fanout(&all, &known);
+    Ok(within
+        .into_values()
+        .flatten()
+        .filter(|link| pair.contains(&link.entity_id))
+        .cloned()
+        .collect())
+}
+
 /// Records one judgment. The evidence snapshot is rebuilt here from the corpus, never taken from
 /// the caller, so an entry can only claim what the index showed.
 #[tauri::command]
@@ -195,7 +228,7 @@ pub async fn record_resolution_judgment(
             })
     };
     let (left, right) = (find(&input.left_entity_id)?, find(&input.right_entity_id)?);
-    let links = index.resolution_links_for(ids.clone()).await?;
+    let links = fanout_checked_links(&index, &ids).await?;
     let examples = index.resolution_examples(ids).await?;
     let lead = pair_lead(left, right, &links)?;
     let evidence = evidence_for(&lead, &examples);

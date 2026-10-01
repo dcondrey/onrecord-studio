@@ -62,12 +62,14 @@ fn entities_where(
 }
 
 /// Validated identifiers co-occurring with name-like entities, optionally only for `only`.
+/// `only` restricts to these ids in `column`: `named.entity_id` (links of given entities) or
+/// `linked.identifier_id` (every entity a given identifier links).
 fn identifier_links(
     connection: &Connection,
-    only: Option<&[String]>,
+    only: Option<(&str, &[String])>,
 ) -> Result<Vec<IdentifierLink>, AppError> {
     let restriction = match only {
-        Some(ids) => format!("AND named.entity_id IN ({})", placeholders(ids.len())),
+        Some((column, ids)) => format!("AND {column} IN ({})", placeholders(ids.len())),
         None => String::new(),
     };
     let identifier_kinds = IDENTIFIER_RULES
@@ -108,7 +110,7 @@ fn identifier_links(
                               identifier.display_value, linked.entity_id"
         ))
         .map_err(|error| storage("prepare the identifier links", error))?;
-    let values: &[String] = only.unwrap_or(&[]);
+    let values: &[String] = only.map_or(&[], |(_, ids)| ids);
     let links = statement
         .query_map(params_from_iter(values.iter()), |row| {
             Ok(IdentifierLink {
@@ -178,7 +180,21 @@ impl CorpusIndex {
         ids: Vec<String>,
     ) -> Result<Vec<IdentifierLink>, AppError> {
         self.read("Identifier lookup", move |connection| {
-            identifier_links(connection, Some(&ids))
+            identifier_links(connection, Some(("named.entity_id", &ids)))
+        })
+        .await
+    }
+
+    /// Every anchoring link of these identifiers, across all entities: what a fanout check needs.
+    pub async fn resolution_links_of_identifiers(
+        &self,
+        identifier_ids: Vec<String>,
+    ) -> Result<Vec<IdentifierLink>, AppError> {
+        if identifier_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        self.read("Identifier fanout lookup", move |connection| {
+            identifier_links(connection, Some(("linked.identifier_id", &identifier_ids)))
         })
         .await
     }

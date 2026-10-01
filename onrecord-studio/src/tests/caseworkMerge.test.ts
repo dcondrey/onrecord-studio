@@ -22,6 +22,14 @@ describe('case merge', () => {
     expect(applyMerge(local, incoming, new Set())).toEqual(local);
   });
 
+  it('keeps a removed citation that a surviving item still cites', () => {
+    const cited = make({ questions: [question('q1', 'cites', ['e1'])], evidence: [cite('e1')] });
+    const without = make({});
+    expect(mergeCandidates(cited, without).map((c) => c.key)).toEqual(['questions:q1', 'evidence:e1']);
+    expect(applyMerge(cited, without, new Set(['evidence:e1'])).evidence.map((e) => e.id)).toEqual(['e1']);
+    expect(applyMerge(cited, without, new Set(['evidence:e1', 'questions:q1'])).evidence).toEqual([]);
+  });
+
   it('brings across the evidence an adopted item cites, and honours a chosen removal', () => {
     const merged = applyMerge(local, incoming, new Set(['questions:q3', 'questions:q2']));
     expect(merged.evidence.map((e) => e.id)).toEqual(['e1', 'e9']);

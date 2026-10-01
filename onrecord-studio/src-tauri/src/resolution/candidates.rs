@@ -135,6 +135,37 @@ fn left_and_right_share_name(lead: &PairLead) -> bool {
         && name_key(&left.value) == name_key(&right.value)
 }
 
+/// Anchoring links grouped by identifier, minus every identifier linking more entities than its
+/// rule's fanout, with the count of those dropped. A hub identifier (a shared EIN, a county APN)
+/// is no evidence for any one pair, and the same cut applies when a judgment's evidence is rebuilt
+/// so the ledger never records a link the queue would not have shown.
+pub fn links_within_fanout<'a>(
+    links: &'a [IdentifierLink],
+    known: &BTreeMap<&str, &ResolutionEntity>,
+) -> (BTreeMap<&'a str, Vec<&'a IdentifierLink>>, u64) {
+    let mut by_identifier: BTreeMap<&str, Vec<&IdentifierLink>> = BTreeMap::new();
+    for link in links.iter().filter(|link| {
+        link.documents >= MINIMUM_IDENTIFIER_DOCUMENTS
+            && known
+                .get(link.entity_id.as_str())
+                .is_some_and(|entity| may_anchor(&link.identifier_kind, &entity.key.kind))
+    }) {
+        by_identifier
+            .entry(&link.identifier_id)
+            .or_default()
+            .push(link);
+    }
+    let mut skipped = 0;
+    by_identifier.retain(|_, group| {
+        let fanout = identifier_rule(&group[0].identifier_kind)
+            .map_or(MAXIMUM_IDENTIFIER_FANOUT, |rule| rule.maximum_fanout);
+        let within = group.len() <= fanout;
+        skipped += u64::from(!within);
+        within
+    });
+    (by_identifier, skipped)
+}
+
 /// Every pair worth a look that is not already settled by the ledger.
 pub fn rank_candidates(
     entities: &[ResolutionEntity],
@@ -183,25 +214,9 @@ pub fn rank_candidates(
 
     let known: BTreeMap<&str, &ResolutionEntity> =
         entities.iter().map(|e| (e.entity_id.as_str(), e)).collect();
-    let mut by_identifier: BTreeMap<&str, Vec<&IdentifierLink>> = BTreeMap::new();
-    for link in links.iter().filter(|link| {
-        link.documents >= MINIMUM_IDENTIFIER_DOCUMENTS
-            && known
-                .get(link.entity_id.as_str())
-                .is_some_and(|entity| may_anchor(&link.identifier_kind, &entity.key.kind))
-    }) {
-        by_identifier
-            .entry(&link.identifier_id)
-            .or_default()
-            .push(link);
-    }
+    let (by_identifier, skipped) = links_within_fanout(links, &known);
+    guards.skipped_identifiers = skipped;
     for group in by_identifier.values().filter(|group| group.len() > 1) {
-        let fanout = identifier_rule(&group[0].identifier_kind)
-            .map_or(MAXIMUM_IDENTIFIER_FANOUT, |rule| rule.maximum_fanout);
-        if group.len() > fanout {
-            guards.skipped_identifiers += 1;
-            continue;
-        }
         for (i, a) in group.iter().enumerate() {
             for b in &group[i + 1..] {
                 let (left, right) = (known[a.entity_id.as_str()], known[b.entity_id.as_str()]);
@@ -483,5 +498,15 @@ mod tests {
         let (leads, guards) = rank_candidates(&orgs, &links, &none, false);
         assert!(leads.is_empty());
         assert_eq!(guards.skipped_identifiers, 1);
+
+        // Rebuilt evidence for one pair of that hub must make the same cut the queue made.
+        assert_eq!(
+            pair_lead(&orgs[0], &orgs[1], &links).unwrap().basis,
+            SuggestionBasis::StrongIdentifier
+        );
+        let known = orgs.iter().map(|e| (e.entity_id.as_str(), e)).collect();
+        let (within, skipped) = links_within_fanout(&links, &known);
+        assert!(within.is_empty());
+        assert_eq!(skipped, 1);
     }
 }

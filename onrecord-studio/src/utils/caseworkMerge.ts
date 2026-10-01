@@ -60,8 +60,9 @@ function citedIds(item: Identified): string[] {
 
 /**
  * The open case with the chosen differences taken from the shared one. Evidence an adopted item
- * cites is copied across when missing, so no citation id is left pointing at nothing. Nothing is
- * saved: the result is a draft the reader reviews and saves as a new revision.
+ * cites is copied across when missing, and a chosen evidence removal is held back while any
+ * remaining item still cites it, so no citation id is left pointing at nothing. Nothing is saved:
+ * the result is a draft the reader reviews and saves as a new revision.
  */
 export function applyMerge(local: CaseworkCase, incoming: CaseworkCase, selected: ReadonlySet<string>): CaseworkCase {
   const next: CaseworkCase = { ...local };
@@ -81,12 +82,14 @@ export function applyMerge(local: CaseworkCase, incoming: CaseworkCase, selected
     merged = merged.filter((item) => !(selected.has(`${section}:${item.id}`) && !items(incoming, section).some((candidate) => candidate.id === item.id)));
     (next as unknown as Record<string, unknown>)[section] = merged;
   }
-  const have = new Set(next.evidence.map((citation) => citation.id));
+  const stillCited = new Set(ITEM_SECTIONS.filter((section) => section !== 'evidence').flatMap((section) => items(next, section).flatMap(citedIds)));
+  const retained = local.evidence.filter((citation) => stillCited.has(citation.id) && !next.evidence.some((held) => held.id === citation.id));
+  const have = new Set([...next.evidence, ...retained].map((citation) => citation.id));
   const missing: CaseworkCitation[] = [];
   for (const id of new Set(adopted.flatMap(citedIds))) {
     const cite = incoming.evidence.find((citation) => citation.id === id);
     if (cite && !have.has(id)) missing.push(cite);
   }
-  next.evidence = [...next.evidence, ...missing];
+  next.evidence = [...next.evidence, ...retained, ...missing];
   return next;
 }
