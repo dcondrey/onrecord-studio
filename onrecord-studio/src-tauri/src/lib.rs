@@ -1,8 +1,11 @@
 pub mod analysis;
+pub mod annotation_anchor;
+pub mod annotation_packet;
 pub mod annotations;
 mod atomic_write;
 mod blocking;
 pub mod bundle;
+pub mod codebook;
 pub mod collaboration;
 pub mod commands;
 pub mod error;
@@ -201,6 +204,18 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::annotations::list_document_annotations,
         commands::annotations::add_document_annotation,
         commands::annotations::remove_document_annotation,
+        commands::annotations::set_annotation_status,
+        commands::annotations::get_annotation_settings,
+        commands::annotations::set_annotation_reviewer,
+        commands::annotations::save_codebook_entry,
+        commands::annotations::delete_codebook_entry,
+        commands::annotations::export_codebook,
+        commands::annotations::preview_codebook_import,
+        commands::annotations::apply_codebook_import,
+        commands::annotations::search_document_annotations,
+        commands::annotations::export_document_annotations,
+        commands::annotations::preview_annotation_import,
+        commands::annotations::import_annotation_packet,
         commands::tracker::list_claimed_requests,
         commands::tracker::claim_request,
         commands::tracker::update_claimed_request,

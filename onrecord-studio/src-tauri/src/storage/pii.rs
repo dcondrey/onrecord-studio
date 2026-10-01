@@ -16,7 +16,7 @@ pub enum PiiKind {
 }
 
 impl PiiKind {
-    const fn replacement(self) -> &'static str {
+    pub(crate) const fn replacement(self) -> &'static str {
         match self {
             Self::SocialSecurityNumber => "[MASKED_SSN]",
             Self::TelephoneNumber => "[MASKED_PHONE]",
