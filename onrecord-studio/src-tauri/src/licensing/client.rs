@@ -21,6 +21,7 @@ pub const MAX_CHECKOUT_QUANTITY: u32 = 999;
 pub const BILLING_PORTAL_URL: &str = "https://auth.writerslogic.com/functions/v1/stripe-portal";
 const BILLING_PORTAL_HOST: &str = "billing.stripe.com";
 const BILLING_PORTAL_RETURN_URL: &str = "https://writerslogic.com/onrecord";
+pub const SEATS_URL: &str = "https://auth.writerslogic.com/functions/v1/onrecord-seats";
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
@@ -81,6 +82,49 @@ pub trait AccountServer: Send + Sync {
         &'a self,
         access_token: &'a AccessToken,
     ) -> BoxFuture<'a, Result<String, FetchError>>;
+
+    /// Seat management for the purchaser of an organization subscription. Returns the raw JSON
+    /// body; the server's documented refusals are turned into readable `Refused` errors here.
+    fn seats<'a>(
+        &'a self,
+        access_token: &'a AccessToken,
+        request: &'a SeatRequest,
+    ) -> BoxFuture<'a, Result<Vec<u8>, FetchError>>;
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "action", rename_all = "lowercase")]
+pub enum SeatRequest {
+    List,
+    Invite { email: String },
+    Revoke { email: String },
+}
+
+/// The `error` codes `onrecord-seats` documents, as sentences the account dialog can show.
+pub fn seat_refusal(status: reqwest::StatusCode, body: &[u8]) -> FetchError {
+    #[derive(Deserialize)]
+    struct ErrorBody {
+        error: String,
+    }
+    let code = serde_json::from_slice::<ErrorBody>(body)
+        .map(|parsed| parsed.error)
+        .unwrap_or_default();
+    let message = match code.as_str() {
+        "no_active_subscription" => {
+            "Only the purchaser of an active subscription can manage seats."
+        }
+        "seat_limit" => {
+            "Every purchased seat is assigned. Revoke one or add seats in Manage subscription."
+        }
+        "seat_not_found" => "No seat is assigned to that address.",
+        "owner_seat_is_implicit" => "Your own address already holds a seat as the purchaser.",
+        "invalid_email" => "That is not a valid email address.",
+        "rate_limited" => {
+            return FetchError::Unreachable("Too many seat changes; try again later.".to_string())
+        }
+        _ => return status_error(status),
+    };
+    FetchError::Refused(message.to_string())
 }
 
 /// The only URL the app will hand to the system browser from a server reply.
@@ -147,6 +191,7 @@ pub struct HttpAccountServer {
     delete_url: String,
     checkout_url: String,
     portal_url: String,
+    seats_url: String,
 }
 
 impl HttpAccountServer {
@@ -156,6 +201,7 @@ impl HttpAccountServer {
             DELETE_ACCOUNT_URL,
             CHECKOUT_URL,
             BILLING_PORTAL_URL,
+            SEATS_URL,
         )
     }
 
@@ -164,8 +210,15 @@ impl HttpAccountServer {
         delete_url: &str,
         checkout_url: &str,
         portal_url: &str,
+        seats_url: &str,
     ) -> Result<Self, FetchError> {
-        for url in [entitlement_url, delete_url, checkout_url, portal_url] {
+        for url in [
+            entitlement_url,
+            delete_url,
+            checkout_url,
+            portal_url,
+            seats_url,
+        ] {
             require_https(url)?;
         }
         let client = reqwest::Client::builder()
@@ -181,6 +234,7 @@ impl HttpAccountServer {
             delete_url: delete_url.to_string(),
             checkout_url: checkout_url.to_string(),
             portal_url: portal_url.to_string(),
+            seats_url: seats_url.to_string(),
         })
     }
 }
@@ -330,6 +384,29 @@ impl AccountServer for HttpAccountServer {
             validate_billing_portal_url(&parsed.url)
         })
     }
+
+    fn seats<'a>(
+        &'a self,
+        access_token: &'a AccessToken,
+        request: &'a SeatRequest,
+    ) -> BoxFuture<'a, Result<Vec<u8>, FetchError>> {
+        Box::pin(async move {
+            let response = self
+                .client
+                .post(&self.seats_url)
+                .bearer_auth(access_token.expose())
+                .json(request)
+                .send()
+                .await
+                .map_err(transport)?;
+            let status = response.status();
+            let body = bounded_body(response).await?;
+            if !status.is_success() {
+                return Err(seat_refusal(status, &body));
+            }
+            Ok(body)
+        })
+    }
 }
 
 #[cfg(test)]
@@ -345,13 +422,37 @@ mod tests {
                 DELETE_ACCOUNT_URL,
                 CHECKOUT_URL,
                 BILLING_PORTAL_URL,
+                SEATS_URL,
             ];
             for slot in 0..good.len() {
                 let mut urls = good;
                 urls[slot] = bad;
-                assert!(HttpAccountServer::with_urls(urls[0], urls[1], urls[2], urls[3]).is_err());
+                assert!(
+                    HttpAccountServer::with_urls(urls[0], urls[1], urls[2], urls[3], urls[4])
+                        .is_err()
+                );
             }
         }
+    }
+
+    #[test]
+    fn seat_refusals_become_readable_messages_and_unknown_codes_keep_the_status() {
+        let refused = |code: &str| {
+            seat_refusal(
+                reqwest::StatusCode::CONFLICT,
+                format!(r#"{{"error":"{code}"}}"#).as_bytes(),
+            )
+        };
+        assert!(matches!(refused("seat_limit"), FetchError::Refused(m) if m.contains("Revoke")));
+        assert!(matches!(
+            refused("rate_limited"),
+            FetchError::Unreachable(_)
+        ));
+        assert!(matches!(refused("something_new"), FetchError::Refused(m) if m.contains("409")));
+        assert!(matches!(
+            seat_refusal(reqwest::StatusCode::INTERNAL_SERVER_ERROR, b"not json"),
+            FetchError::Unreachable(_)
+        ));
     }
 
     #[test]

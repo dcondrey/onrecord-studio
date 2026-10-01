@@ -5,7 +5,7 @@
 use crate::error::AppError;
 use crate::licensing::LicenseGate;
 use crate::types::{
-    AccountStatus, CheckoutSession, DeleteAccountReport, LicenseStatus, SignInReport,
+    AccountStatus, CheckoutSession, DeleteAccountReport, LicenseStatus, SeatStatus, SignInReport,
 };
 use tauri::State;
 
@@ -165,6 +165,75 @@ pub async fn start_billing_portal(
     #[cfg(not(feature = "direct-license"))]
     {
         let _ = license;
+        Err(not_in_this_build())
+    }
+}
+
+/// The purchaser's seat list. A seat holder or trial user gets `subscriptionActive: false`.
+#[tauri::command]
+pub async fn list_seats(license: State<'_, LicenseGate>) -> Result<SeatStatus, AppError> {
+    seats(license, SeatAction::List).await
+}
+
+/// Feature-independent request shape; the direct build maps it onto the account client's type.
+#[cfg_attr(not(feature = "direct-license"), allow(dead_code))]
+enum SeatAction {
+    List,
+    Invite(String),
+    Revoke(String),
+}
+
+/// Assigns a seat to an email address. No mail is sent: the colleague signs in to OnRecord with
+/// that address and the seat is claimed at their first license check, once the provider has
+/// confirmed the address. Returns the updated list.
+#[tauri::command]
+pub async fn invite_seat(
+    email: String,
+    license: State<'_, LicenseGate>,
+) -> Result<SeatStatus, AppError> {
+    let email = seat_email(email)?;
+    seats(license, SeatAction::Invite(email)).await
+}
+
+/// Revokes a seat; the holder's next license check denies. Returns the updated list.
+#[tauri::command]
+pub async fn revoke_seat(
+    email: String,
+    license: State<'_, LicenseGate>,
+) -> Result<SeatStatus, AppError> {
+    let email = seat_email(email)?;
+    seats(license, SeatAction::Revoke(email)).await
+}
+
+fn seat_email(email: String) -> Result<String, AppError> {
+    let email = email.trim().to_string();
+    let shape = email.len() <= 254 && email.split('@').filter(|part| !part.is_empty()).count() == 2;
+    if shape {
+        Ok(email)
+    } else {
+        Err(AppError::License(
+            "Enter one email address, such as name@example.org.".to_string(),
+        ))
+    }
+}
+
+async fn seats(
+    license: State<'_, LicenseGate>,
+    request: SeatAction,
+) -> Result<SeatStatus, AppError> {
+    #[cfg(feature = "direct-license")]
+    {
+        use crate::licensing::client::SeatRequest;
+        let request = match request {
+            SeatAction::List => SeatRequest::List,
+            SeatAction::Invite(email) => SeatRequest::Invite { email },
+            SeatAction::Revoke(email) => SeatRequest::Revoke { email },
+        };
+        license.direct().clone().seats(request).await
+    }
+    #[cfg(not(feature = "direct-license"))]
+    {
+        let _ = (license, request);
         Err(not_in_this_build())
     }
 }

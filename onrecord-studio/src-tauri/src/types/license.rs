@@ -56,6 +56,29 @@ pub struct CheckoutSession {
     pub url: String,
 }
 
+/// One invited address on an organization subscription. The server stores only the normalized
+/// address; a seat is claimed when that address signs in with a provider-confirmed email.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SeatEntry {
+    #[serde(alias = "seat_email_normalized")]
+    pub email: String,
+    pub invited_at: String,
+    pub claimed_at: Option<String>,
+    pub revoked_at: Option<String>,
+}
+
+/// The purchaser's view of their seats. `subscription_active` is false for a seat holder or a
+/// trial user, who has no seats to manage. The purchaser's own seat is implicit and not counted.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SeatStatus {
+    pub subscription_active: bool,
+    pub quantity: u32,
+    pub used_seats: u32,
+    pub seats: Vec<SeatEntry>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountStatus {

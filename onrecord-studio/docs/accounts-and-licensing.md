@@ -90,7 +90,7 @@ Built and gated: server functions and webhook mapping (31+ Deno tests), Swift ac
 
 Not verified end to end: any real sign-in, Keychain and Secure Enclave use, `build:direct` and notarization, a live Stripe purchase, browser rendering of the website page.
 
-Open work: seat assignment for organization purchases (extra seats are billed but only the purchaser is licensed until a seat table and invite flow exist); signed updater; `SUPPORT_EMAIL` and `DOWNLOAD_URL` in the website config; scheduled deletion of trial-device rows older than 24 months and a privacy-policy disclosure; mounting the deadline-appeal and report-export panels; final full gate (fmt, clippy, tests, tsc, eslint, IPC check, vitest); Team ID stays `U3PZN7P3E5` (personal account) until the developer account is converted to an organization.
+Open work (seat assignment shipped in the app on 2026-10-01: Account, Seats, backed by `onrecord-seats`); signed updater; `SUPPORT_EMAIL` and `DOWNLOAD_URL` in the website config; scheduled deletion of trial-device rows older than 24 months and a privacy-policy disclosure; mounting the deadline-appeal and report-export panels; final full gate (fmt, clippy, tests, tsc, eslint, IPC check, vitest); Team ID stays `U3PZN7P3E5` (personal account) until the developer account is converted to an organization.
 
 ## v1 release checklist (2026-09-30)
 

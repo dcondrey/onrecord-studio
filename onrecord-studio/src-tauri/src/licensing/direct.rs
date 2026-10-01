@@ -10,11 +10,11 @@ use super::account::{
     AccessToken, AccountSession, DeviceSignature, IntegrityResult, NativeAccount, SessionResult,
     SignInResult,
 };
-use super::client::{AccountServer, EntitlementRequest, FetchError};
+use super::client::{AccountServer, EntitlementRequest, FetchError, SeatRequest};
 use super::clock::{ClockGuard, ClockMarks, ClockStore};
 use super::entitlement::{self, Denial, Grant, NonceCheck, PinnedKey, VerifyContext};
 use crate::error::AppError;
-use crate::types::{LicensePlan, LicenseState, LicenseStatus};
+use crate::types::{LicensePlan, LicenseState, LicenseStatus, SeatStatus};
 
 const TOKEN_KEY: &str = "entitlement_token";
 const CLOCK_KEY: &str = "max_seen_time";
@@ -432,18 +432,27 @@ impl DirectGate {
     }
 
     /// Requires a live session; the server decides the price and the quantity is bounded.
+    /// The access token of the signed-in session, or `License(not_signed_in)` when there is none.
+    /// The Keychain read happens off the async runtime like every other account call.
+    async fn signed_in_token(
+        self: &Arc<Self>,
+        not_signed_in: &'static str,
+    ) -> Result<AccessToken, AppError> {
+        let worker = self.clone();
+        tokio::task::spawn_blocking(move || match worker.account.session() {
+            Ok(SessionResult::SignedIn(_)) => worker.account.access_token(),
+            Ok(_) => Err(AppError::License(not_signed_in.to_string())),
+            Err(error) => Err(error),
+        })
+        .await
+        .map_err(|error| AppError::Internal(format!("Account worker failed: {error}")))?
+    }
+
     pub async fn start_checkout(
         self: &Arc<Self>,
         quantity: Option<u32>,
     ) -> Result<String, AppError> {
-        let worker = self.clone();
-        let token = tokio::task::spawn_blocking(move || match worker.account.session() {
-            Ok(SessionResult::SignedIn(_)) => worker.account.access_token(),
-            Ok(_) => Err(AppError::License("Sign in before purchasing.".to_string())),
-            Err(error) => Err(error),
-        })
-        .await
-        .map_err(|error| AppError::Internal(format!("Account worker failed: {error}")))??;
+        let token = self.signed_in_token("Sign in before purchasing.").await?;
         self.server
             .start_checkout(&token, quantity)
             .await
@@ -451,20 +460,36 @@ impl DirectGate {
     }
 
     pub async fn start_billing_portal(self: &Arc<Self>) -> Result<String, AppError> {
-        let worker = self.clone();
-        let token = tokio::task::spawn_blocking(move || match worker.account.session() {
-            Ok(SessionResult::SignedIn(_)) => worker.account.access_token(),
-            Ok(_) => Err(AppError::License(
-                "Sign in to manage your subscription.".to_string(),
-            )),
-            Err(error) => Err(error),
-        })
-        .await
-        .map_err(|error| AppError::Internal(format!("Account worker failed: {error}")))??;
+        let token = self
+            .signed_in_token("Sign in to manage your subscription.")
+            .await?;
         self.server
             .start_billing_portal(&token)
             .await
             .map_err(|error| AppError::Network(error.to_string()))
+    }
+
+    /// Applies an invite or revoke and returns the purchaser's current seat list; a bare `List`
+    /// only reads. A refusal the server documents arrives as a `License` error with its sentence.
+    pub async fn seats(self: &Arc<Self>, request: SeatRequest) -> Result<SeatStatus, AppError> {
+        let token = self.signed_in_token("Sign in to manage seats.").await?;
+        let token = &token;
+        let call = |request: SeatRequest| async move {
+            self.server
+                .seats(token, &request)
+                .await
+                .map_err(|error| match error {
+                    FetchError::Refused(message) => AppError::License(message),
+                    other => AppError::Network(other.to_string()),
+                })
+        };
+        if !matches!(request, SeatRequest::List) {
+            call(request).await?;
+        }
+        let body = call(SeatRequest::List).await?;
+        serde_json::from_slice::<SeatStatus>(&body).map_err(|_| {
+            AppError::Network("The account server sent an unusable seat list.".to_string())
+        })
     }
 
     pub fn begin_sign_in(&self, provider: &str) -> Result<SignInResult, AppError> {
@@ -703,6 +728,18 @@ mod tests {
             _: &'a AccessToken,
         ) -> BoxFuture<'a, Result<String, FetchError>> {
             Box::pin(async { Ok("https://billing.stripe.com/p/session/x".to_string()) })
+        }
+        fn seats<'a>(
+            &'a self,
+            _: &'a AccessToken,
+            _: &'a SeatRequest,
+        ) -> BoxFuture<'a, Result<Vec<u8>, FetchError>> {
+            Box::pin(async {
+                Ok(
+                    br#"{"subscriptionActive":true,"quantity":3,"usedSeats":0,"seats":[]}"#
+                        .to_vec(),
+                )
+            })
         }
     }
 

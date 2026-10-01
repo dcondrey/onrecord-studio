@@ -52,7 +52,7 @@ pub use legal::{
 };
 pub use license::{
     AccountStatus, CheckoutSession, DeleteAccountReport, LicensePlan, LicenseState, LicenseStatus,
-    SignInOutcome, SignInReport,
+    SeatEntry, SeatStatus, SignInOutcome, SignInReport,
 };
 pub use maintenance::{DataMaintenanceEvent, DataMaintenancePolicy, DataMaintenanceStatus};
 pub use nextrequest::{

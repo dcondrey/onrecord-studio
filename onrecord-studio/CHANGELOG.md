@@ -22,6 +22,9 @@ signed updates or as a Mac App Store build.
 - Entity graph: filter by relationship basis and date.
 - Manage subscription in the account menu opens Stripe's billing portal for seats, payment method
   and cancellation. Cancelling stops renewal at the period end; the license stays active until then.
+- Seats: the purchaser of an organization subscription assigns seats to colleagues by email
+  address and revokes them from the account menu. A seat is claimed at the colleague's first
+  license check with a provider-confirmed address; no email is sent by the app.
 - Support entry point (github.com/writerslogic/support) from the Help header and the Start here
   topic; the app version is shown in Help.
 - Help topics for every view, finding kind and command group, including *What's next*; a user
@@ -51,6 +54,4 @@ signed updates or as a Mac App Store build.
 ### Known limitations
 
 - OCR for scanned PDFs and images needs Tesseract (with `eng`) and Poppler installed.
-- Extra seats on an organization purchase are billed, but only the purchaser is licensed until
-  seat assignment ships.
 - Windows and Linux bundles are produced by CI as compile evidence only; they are not distributed.
