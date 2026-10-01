@@ -122,6 +122,12 @@ pub fn probe_ocr_capability() -> OcrCapability {
     }
     let image_ocr_available = engine_probe.available && english_available;
     let pdf_ocr_available = image_ocr_available && renderer_probe.available;
+    if !engine_probe.available || !renderer_probe.available {
+        diagnostics.push(
+            "Install both tools with `brew install tesseract poppler` (or MacPorts), then relaunch"
+                .to_string(),
+        );
+    }
     OcrCapability {
         engine: "tesseract".to_string(),
         engine_available: engine_probe.available,
