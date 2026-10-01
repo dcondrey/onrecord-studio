@@ -140,7 +140,8 @@ pub struct SourceRemoval {
 /// What purging a single document destroyed.
 ///
 /// `local_path` is reported rather than unlinked by the repository, because the repository owns
-/// rows and not the filesystem. A caller that ignores it leaves an orphaned evidence file, which is
+/// rows and not the filesystem. It is `None` when another surviving row still references the same
+/// content-addressed file, which must then outlive this purge. A caller that ignores it leaves an orphaned evidence file, which is
 /// recoverable; a repository that deleted the file inside its transaction would leave an
 /// unrecoverable gap whenever the transaction rolled back.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -165,6 +166,8 @@ pub struct SourcePurge {
     pub source_key: String,
     pub documents_removed: u64,
     pub requests_removed: u64,
+    /// Files no surviving row references; a content-addressed file shared with another source is
+    /// kept and not listed.
     pub local_paths: Vec<String>,
 }
 

@@ -12,6 +12,7 @@
 
 CREATE SEQUENCE IF NOT EXISTS source_ingestion_failure_seq;
 CREATE SEQUENCE IF NOT EXISTS ingestion_frontier_seq;
+CREATE SEQUENCE IF NOT EXISTS document_acquisition_seq;
 CREATE SEQUENCE IF NOT EXISTS document_integrity_flag_seq;
 CREATE SEQUENCE IF NOT EXISTS state_transition_log_seq;
 CREATE SEQUENCE IF NOT EXISTS provenance_assertion_seq;
@@ -733,3 +734,26 @@ CREATE INDEX IF NOT EXISTS idx_findings_subject_document
     ON findings(subject_portal_key, subject_document_id);
 CREATE INDEX IF NOT EXISTS idx_findings_subject_agency
     ON findings(subject_portal_key, subject_agency_id);
+
+-- Append-only: one row per network fetch of a document's bytes. `documents` holds only the latest
+-- digest, so without this a re-fetch that returned changed content would erase what was received
+-- before. `previous_raw_file_sha256` is the digest the document held when this fetch began.
+CREATE TABLE IF NOT EXISTS document_acquisitions (
+    acquisition_id BIGINT PRIMARY KEY DEFAULT nextval('document_acquisition_seq'),
+    portal_subdomain TEXT NOT NULL,
+    document_id BIGINT NOT NULL,
+    sync_run_id TEXT,
+    requested_url TEXT NOT NULL,
+    resolved_url TEXT NOT NULL,
+    redirect_chain_json TEXT NOT NULL,
+    http_status BIGINT NOT NULL,
+    content_type TEXT,
+    etag TEXT,
+    last_modified TEXT,
+    raw_file_sha256 TEXT NOT NULL CHECK (length(raw_file_sha256) = 64),
+    file_size BIGINT NOT NULL CHECK (file_size >= 0),
+    previous_raw_file_sha256 TEXT,
+    retrieved_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_document_acquisitions_document
+    ON document_acquisitions(portal_subdomain, document_id);

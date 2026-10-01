@@ -246,8 +246,10 @@ pub async fn purge_source(
     let _maintenance = super::maintenance::MAINTENANCE_LOCK.lock().await;
     let source_key = validate_portal_key(&source_key)?;
     let purge = manager.purge_source(source_key).await?;
-    index.purge_portal(source_key.to_string()).await?;
+    // Unlinked before the corpus purge can fail: once the core has committed, nothing references
+    // these files, so a later error must not strand them where no retry can find them.
     remove_evidence_files(&purge.local_paths).await;
+    index.purge_portal(source_key.to_string()).await?;
     Ok(purge)
 }
 
@@ -262,13 +264,13 @@ pub async fn purge_document(
     let _maintenance = super::maintenance::MAINTENANCE_LOCK.lock().await;
     let source_key = validate_portal_key(&source_key)?;
     let purge = manager.purge_document(source_key, document_id).await?;
-    index
-        .purge_document(source_key.to_string(), document_id)
-        .await?;
     if let Some(path) = purge.local_path.as_ref() {
         remove_evidence_files(std::slice::from_ref(path)).await;
     }
     remove_evidence_files(&purge.additional_local_paths).await;
+    index
+        .purge_document(source_key.to_string(), document_id)
+        .await?;
     Ok(purge)
 }
 

@@ -2890,6 +2890,64 @@ impl DuckDbRepository {
         .await
     }
 
+    /// Appends one fetch event. The digest the document held before this fetch is captured in the
+    /// same statement, so the history reads as a chain even when content changes between fetches.
+    pub async fn record_document_acquisition(
+        &self,
+        portal_subdomain: &str,
+        document_id: u64,
+        sync_run_id: Option<&str>,
+        raw_file_sha256: &str,
+        file_size: u64,
+        acquisition: &crate::ingestion::client::AcquisitionRecord,
+    ) -> Result<(), AppError> {
+        let document_id = i64::try_from(document_id).map_err(|error| {
+            AppError::DataParsing(format!("Document identifier cannot be stored: {error}"))
+        })?;
+        let file_size = i64::try_from(file_size).map_err(|error| {
+            AppError::DataParsing(format!("Document size cannot be stored: {error}"))
+        })?;
+        let raw_file_sha256 = normalize_sha256(raw_file_sha256)?;
+        let redirect_chain_json = serde_json::to_string(&acquisition.redirect_chain)
+            .map_err(|error| AppError::Internal(format!("Redirect chain encoding: {error}")))?;
+        let portal_subdomain = portal_subdomain.to_string();
+        let sync_run_id = sync_run_id.map(str::to_string);
+        let acquisition = acquisition.clone();
+        self.query_connection("Record document acquisition", move |conn| {
+            conn.execute(
+                "INSERT INTO document_acquisitions (
+                    portal_subdomain, document_id, sync_run_id, requested_url, resolved_url,
+                    redirect_chain_json, http_status, content_type, etag, last_modified,
+                    raw_file_sha256, file_size, previous_raw_file_sha256, retrieved_at
+                 ) VALUES (
+                    ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12,
+                    (SELECT raw_file_sha256 FROM documents WHERE id = ?2 AND portal_subdomain = ?1),
+                    ?13
+                 )",
+                params![
+                    portal_subdomain,
+                    document_id,
+                    sync_run_id,
+                    acquisition.requested_url,
+                    acquisition.resolved_url,
+                    redirect_chain_json,
+                    i64::from(acquisition.http_status),
+                    acquisition.content_type,
+                    acquisition.etag,
+                    acquisition.last_modified,
+                    raw_file_sha256,
+                    file_size,
+                    acquisition.retrieved_at,
+                ],
+            )
+            .map_err(|error| {
+                AppError::Storage(format!("Failed to record document acquisition: {error}"))
+            })?;
+            Ok(())
+        })
+        .await
+    }
+
     pub async fn mark_document_extraction_state(
         &self,
         document_id: u64,
@@ -4518,21 +4576,36 @@ impl DuckDbRepository {
         })?;
         let subdomain = subdomain.to_string();
         self.query_connection("Delete unextracted document", move |conn| {
-            let removed = conn
-                .execute(
-                    "DELETE FROM documents
-                 WHERE id = ?1 AND portal_subdomain = ?2
-                   AND NOT EXISTS (
-                     SELECT 1 FROM documents_fts
-                     WHERE documents_fts.document_id = documents.id
-                       AND documents_fts.portal_subdomain = documents.portal_subdomain
-                   )",
-                    params![document_id, subdomain],
-                )
-                .map_err(|error| {
-                    AppError::Internal(format!("Failed to discard refused document: {error}"))
-                })?;
-            Ok(removed > 0)
+            execute_transaction(conn, "refused document discard", |transaction| {
+                let removed = transaction
+                    .execute(
+                        "DELETE FROM documents
+                     WHERE id = ?1 AND portal_subdomain = ?2
+                       AND NOT EXISTS (
+                         SELECT 1 FROM documents_fts
+                         WHERE documents_fts.document_id = documents.id
+                           AND documents_fts.portal_subdomain = documents.portal_subdomain
+                       )",
+                        params![document_id, subdomain],
+                    )
+                    .map_err(|error| {
+                        AppError::Internal(format!("Failed to discard refused document: {error}"))
+                    })?;
+                if removed > 0 {
+                    transaction
+                        .execute(
+                            "DELETE FROM document_acquisitions
+                             WHERE document_id = ?1 AND portal_subdomain = ?2",
+                            params![document_id, subdomain],
+                        )
+                        .map_err(|error| {
+                            AppError::Internal(format!(
+                                "Failed to discard a refused document's fetch history: {error}"
+                            ))
+                        })?;
+                }
+                Ok(removed > 0)
+            })
         })
         .await
     }
@@ -4626,8 +4699,13 @@ impl DuckDbRepository {
                 )?,
                 request_count: count("SELECT COUNT(*) FROM requests WHERE portal_subdomain = ?1")?,
                 evidence_file_count: count(
-                    "SELECT COUNT(*) FROM documents
-                     WHERE portal_subdomain = ?1 AND local_path IS NOT NULL",
+                    "SELECT COUNT(DISTINCT d.local_path) FROM documents d
+                     WHERE d.portal_subdomain = ?1 AND d.local_path IS NOT NULL
+                       AND NOT EXISTS (
+                           SELECT 1 FROM documents other
+                           WHERE other.local_path = d.local_path
+                             AND other.portal_subdomain <> ?1
+                       )",
                 )?,
             })
         })
@@ -4646,9 +4724,24 @@ impl DuckDbRepository {
         let local_paths = {
             let mut statement = transaction
                 .prepare(
-                    "SELECT local_path FROM documents
-                     WHERE portal_subdomain = ?1 AND local_path IS NOT NULL
-                     UNION SELECT pending_path FROM data_retention_receipts WHERE portal_key = ?1 AND state IN ('PREPARED', 'REFERENCED')",
+                    "WITH candidates(path) AS (
+                         SELECT local_path FROM documents
+                         WHERE portal_subdomain = ?1 AND local_path IS NOT NULL
+                         UNION
+                         SELECT pending_path FROM data_retention_receipts
+                         WHERE portal_key = ?1 AND state IN ('PREPARED', 'REFERENCED')
+                     )
+                     SELECT path FROM candidates
+                     WHERE NOT EXISTS (
+                         SELECT 1 FROM documents other
+                         WHERE other.local_path = candidates.path AND other.portal_subdomain <> ?1
+                     )
+                     AND NOT EXISTS (
+                         SELECT 1 FROM data_retention_receipts other
+                         WHERE other.pending_path = candidates.path
+                           AND other.portal_key <> ?1
+                           AND other.state IN ('PREPARED', 'REFERENCED')
+                     )",
                 )
                 .map_err(|error| {
                     AppError::Storage(format!("Failed to prepare evidence path lookup: {error}"))
@@ -4673,11 +4766,15 @@ impl DuckDbRepository {
         let mut requests_removed = 0u64;
         // Innermost first. DuckDB implements no cascading foreign-key actions, so every one of
         // these is a relation the schema declares and this function has to honour by hand. The
-        // ordering is not cosmetic: `verify_logical_relations` audits nine of these relations at
+        // ordering is not cosmetic: `verify_logical_relations` audits ten of these relations at
         // startup and refuses to open a core database with orphans, so a table missed here does
         // not corrupt quietly, it makes the next launch fail.
         for (table, statement) in [
             ("data_retention_receipts", "DELETE FROM data_retention_receipts WHERE portal_key = ?1"),
+            (
+                "document_acquisitions",
+                "DELETE FROM document_acquisitions WHERE portal_subdomain = ?1",
+            ),
             ("data_maintenance_jobs", "DELETE FROM data_maintenance_jobs WHERE job_key = 'refresh:' || ?1 OR starts_with(job_key, 'import:' || ?1 || ':') OR starts_with(job_key, 'compact:' || ?1 || ':')"),
             (
                 "provenance_assertions",
@@ -7854,7 +7951,7 @@ fn retire_fk_parent_rows(
 ///
 /// DuckDB implements no cascading foreign-key actions, so this ordering is the schema's foreign-key
 /// ordering reversed and it has to be maintained by hand. It is also what keeps the next launch
-/// working: `verify_logical_relations` audits nine of these relations and refuses to open a core
+/// working: `verify_logical_relations` audits ten of these relations and refuses to open a core
 /// database containing orphans, so a table missed here does not produce quiet inconsistency, it
 /// makes the application unlaunchable.
 ///
@@ -7870,9 +7967,23 @@ fn purge_document_rows(
     stored_id: i64,
     document_id: u64,
 ) -> Result<(DocumentPurge, Vec<String>), AppError> {
+    // Objects are content-addressed, so identical bytes under another document share this file;
+    // a path any other row still references is not this purge's to release.
     let local_path = transaction
         .query_row(
-            "SELECT local_path FROM documents WHERE id = ?1 AND portal_subdomain = ?2",
+            "SELECT local_path FROM documents d
+             WHERE d.id = ?1 AND d.portal_subdomain = ?2
+               AND NOT EXISTS (
+                   SELECT 1 FROM documents other
+                   WHERE other.local_path = d.local_path
+                     AND NOT (other.id = ?1 AND other.portal_subdomain = ?2)
+               )
+               AND NOT EXISTS (
+                   SELECT 1 FROM data_retention_receipts other
+                   WHERE other.pending_path = d.local_path
+                     AND NOT (other.document_id = ?1 AND other.portal_key = ?2)
+                     AND other.state IN ('PREPARED', 'REFERENCED')
+               )",
             params![stored_id, subdomain],
             |row| row.get::<_, Option<String>>(0),
         )
@@ -7898,6 +8009,10 @@ fn purge_document_rows(
     let mut provenance_rows_removed = 0u64;
     for (table, statement) in [
         ("data_retention_receipts", "DELETE FROM data_retention_receipts WHERE document_id = ?1 AND portal_key = ?2"),
+        (
+            "document_acquisitions",
+            "DELETE FROM document_acquisitions WHERE document_id = ?1 AND portal_subdomain = ?2",
+        ),
         ("data_maintenance_jobs", "DELETE FROM data_maintenance_jobs WHERE starts_with(job_key, 'import:' || ?2 || ':' || CAST(?1 AS VARCHAR) || ':') OR starts_with(job_key, 'compact:' || ?2 || ':' || CAST(?1 AS VARCHAR) || ':')"),
         (
             "provenance_assertions",
@@ -7959,7 +8074,14 @@ fn purge_document_rows(
 }
 
 fn verify_logical_relations(conn: &Connection) -> Result<(), AppError> {
-    const CHECKS: [(&str, &str); 9] = [
+    const CHECKS: [(&str, &str); 10] = [
+        (
+            "document_acquisitions -> documents",
+            "SELECT COUNT(*) FROM document_acquisitions child
+             LEFT JOIN documents parent ON parent.id = child.document_id
+                AND parent.portal_subdomain = child.portal_subdomain
+             WHERE parent.id IS NULL",
+        ),
         (
             "statutory_extensions -> requests",
             "SELECT COUNT(*) FROM statutory_extensions child
@@ -9520,6 +9642,17 @@ mod tests {
             })
             .await
             .expect("the document must finalize");
+        repository
+            .record_document_acquisition(
+                PORTAL_SUBDOMAIN,
+                DOCUMENT_ID as u64,
+                None,
+                RAW_FILE_SHA256,
+                100,
+                &test_acquisition(),
+            )
+            .await
+            .expect("the fetch must be recorded");
 
         let purge = repository
             .purge_document(PORTAL_SUBDOMAIN, DOCUMENT_ID as u64)
@@ -9546,6 +9679,109 @@ mod tests {
             )
             .expect("the document count must be readable");
         assert_eq!(remaining, 0, "the document row itself must be gone");
+    }
+
+    fn test_acquisition() -> crate::ingestion::client::AcquisitionRecord {
+        crate::ingestion::client::AcquisitionRecord {
+            requested_url: "https://records.example.gov/doc".to_string(),
+            resolved_url: "https://cdn.example.gov/doc.pdf".to_string(),
+            redirect_chain: vec!["https://records.example.gov/doc".to_string()],
+            http_status: 200,
+            content_type: Some("application/pdf".to_string()),
+            etag: None,
+            last_modified: None,
+            retrieved_at: "2026-08-24T12:03:00.000000Z".to_string(),
+        }
+    }
+
+    /// A re-fetch that returns different bytes must leave the earlier digest on record, linked to
+    /// the one that replaced it.
+    #[tokio::test]
+    async fn refetching_changed_content_keeps_every_received_digest() {
+        let repository = repository_with_document().await;
+        let first = "a".repeat(64);
+        let second = "b".repeat(64);
+        for digest in [&first, &second] {
+            repository
+                .record_document_acquisition(
+                    PORTAL_SUBDOMAIN,
+                    DOCUMENT_ID as u64,
+                    Some("run"),
+                    digest,
+                    10,
+                    &test_acquisition(),
+                )
+                .await
+                .unwrap();
+            repository
+                .conn
+                .lock()
+                .await
+                .execute(
+                    "UPDATE documents SET raw_file_sha256 = ?1 WHERE id = ?2",
+                    params![digest, DOCUMENT_ID],
+                )
+                .unwrap();
+        }
+        let connection = repository.conn.lock().await;
+        let mut statement = connection
+            .prepare(
+                "SELECT raw_file_sha256, previous_raw_file_sha256 FROM document_acquisitions
+                 WHERE document_id = ?1 ORDER BY acquisition_id",
+            )
+            .unwrap();
+        let history = statement
+            .query_map(params![DOCUMENT_ID], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
+            })
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(history, vec![(first.clone(), None), (second, Some(first))]);
+    }
+
+    /// Identical bytes share one content-addressed object, so a purge that released the path of a
+    /// file another document still references would let the caller unlink that document's
+    /// evidence.
+    #[tokio::test]
+    async fn purging_a_document_keeps_an_object_another_document_references() {
+        const SHARED_PATH: &str = "/var/data/objects/ab/shared";
+        let repository = repository_with_document().await;
+        {
+            let connection = repository.conn.lock().await;
+            connection
+                .execute(
+                    "UPDATE documents SET local_path = ?1 WHERE id = ?2",
+                    params![SHARED_PATH, DOCUMENT_ID],
+                )
+                .unwrap();
+            connection
+                .execute(
+                    "INSERT INTO documents (
+                        id, request_id, portal_subdomain, file_name, visibility, created_at,
+                        updated_at, local_path
+                     ) VALUES (?1, ?2, ?3, 'copy.pdf', 'public', ?4, ?4, ?5)",
+                    params![
+                        DOCUMENT_ID + 1,
+                        REQUEST_ID,
+                        PORTAL_SUBDOMAIN,
+                        "2026-08-24T12:02:00Z",
+                        SHARED_PATH
+                    ],
+                )
+                .unwrap();
+        }
+
+        let first = repository
+            .purge_document(PORTAL_SUBDOMAIN, DOCUMENT_ID as u64)
+            .await
+            .unwrap();
+        assert_eq!(first.local_path, None);
+        let last = repository
+            .purge_document(PORTAL_SUBDOMAIN, DOCUMENT_ID as u64 + 1)
+            .await
+            .unwrap();
+        assert_eq!(last.local_path.as_deref(), Some(SHARED_PATH));
     }
 
     /// Every other test here opens a fresh database, so nothing about an upgraded one is covered.

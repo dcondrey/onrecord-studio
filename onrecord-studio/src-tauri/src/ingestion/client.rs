@@ -201,6 +201,35 @@ pub struct DownloadedPayload {
     pub path: PathBuf,
     pub byte_count: u64,
     pub sha256: String,
+    pub acquisition: AcquisitionRecord,
+}
+
+/// What the network said when it delivered a payload, retained as an immutable fetch event so a
+/// later fetch of the same document never erases what an earlier one received.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AcquisitionRecord {
+    pub requested_url: String,
+    pub resolved_url: String,
+    /// Every URL requested before the one that answered, in order.
+    pub redirect_chain: Vec<String>,
+    pub http_status: u16,
+    pub content_type: Option<String>,
+    pub etag: Option<String>,
+    pub last_modified: Option<String>,
+    /// Local clock when the response headers arrived; not a trusted timestamp.
+    pub retrieved_at: String,
+}
+
+const MAXIMUM_RECORDED_HEADER_CHARACTERS: usize = 512;
+
+fn recorded_header(headers: &HeaderMap, name: reqwest::header::HeaderName) -> Option<String> {
+    let value = headers.get(name)?.to_str().ok()?.trim();
+    (!value.is_empty()).then(|| {
+        value
+            .chars()
+            .take(MAXIMUM_RECORDED_HEADER_CHARACTERS)
+            .collect()
+    })
 }
 
 struct DiscoveredLayout {
@@ -1023,8 +1052,10 @@ impl ApiClient {
         initial_url: Url,
         maximum_bytes: usize,
     ) -> Result<(reqwest::Response, HostPermit), AppError> {
-        self.execute_with_retries(&initial_url, "Request", || {
+        self.execute_with_retries(&initial_url, "Request", || async {
             self.send_response_following_safe_redirects(initial_url.clone(), &[], maximum_bytes)
+                .await
+                .map(|(response, permit, _redirect_chain)| (response, permit))
         })
         .await
     }
@@ -1115,7 +1146,7 @@ impl ApiClient {
         query: &[(&str, String)],
         maximum_bytes: usize,
     ) -> Result<ResponsePayload, RetryDisposition> {
-        let (response, _host_permit) = self
+        let (response, _host_permit, _redirect_chain) = self
             .send_response_following_safe_redirects(initial_url, query, maximum_bytes)
             .await?;
         let content_type = response
@@ -1144,10 +1175,11 @@ impl ApiClient {
         initial_url: Url,
         query: &[(&str, String)],
         maximum_bytes: usize,
-    ) -> Result<(reqwest::Response, HostPermit), RetryDisposition> {
+    ) -> Result<(reqwest::Response, HostPermit, Vec<String>), RetryDisposition> {
         let mut current_url = initial_url;
         let mut current_query = Some(query);
         let mut visited_requests = BTreeSet::new();
+        let mut redirect_chain = Vec::new();
         // SECURITY(security): The loop bound is the redirect limit. After pure URL/query and loop
         // bookkeeping, validation is the first operation that can resolve or contact anything,
         // so the initial URL and every subsequent hop are validated before a socket is opened.
@@ -1194,6 +1226,7 @@ impl ApiClient {
                 current_url =
                     redirect_url_from_header(&request_url, response.headers().get(LOCATION))
                         .map_err(RetryDisposition::Terminal)?;
+                redirect_chain.push(request_url.to_string());
                 drop(host_permit);
                 continue;
             }
@@ -1212,7 +1245,7 @@ impl ApiClient {
                     )));
                 }
             }
-            return Ok((response, host_permit));
+            return Ok((response, host_permit, redirect_chain));
         }
         Err(RetryDisposition::Terminal(AppError::PortalSecurity(
             "Redirect processing reached an invalid terminal state".to_string(),
@@ -1225,10 +1258,21 @@ impl ApiClient {
         destination: &Path,
         maximum_bytes: usize,
     ) -> Result<DownloadedPayload, RetryDisposition> {
-        let (response, _host_permit) = self
-            .send_response_following_safe_redirects(initial_url, &[], maximum_bytes)
+        let (response, _host_permit, redirect_chain) = self
+            .send_response_following_safe_redirects(initial_url.clone(), &[], maximum_bytes)
             .await?;
         let final_url = response.url().clone();
+        let headers = response.headers();
+        let acquisition = AcquisitionRecord {
+            requested_url: initial_url.to_string(),
+            resolved_url: final_url.to_string(),
+            redirect_chain,
+            http_status: response.status().as_u16(),
+            content_type: recorded_header(headers, reqwest::header::CONTENT_TYPE),
+            etag: recorded_header(headers, reqwest::header::ETAG),
+            last_modified: recorded_header(headers, reqwest::header::LAST_MODIFIED),
+            retrieved_at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+        };
         let mut file = tokio::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -1281,6 +1325,7 @@ impl ApiClient {
             path: destination.to_path_buf(),
             byte_count,
             sha256: digest_hex(digest.finalize()),
+            acquisition,
         })
     }
 }

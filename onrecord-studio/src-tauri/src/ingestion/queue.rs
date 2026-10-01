@@ -6,8 +6,8 @@ use crate::file_name::sanitized_component;
 use crate::ingestion::backoff;
 use crate::ingestion::client::ApiClient;
 use crate::ingestion::client::{
-    DataCatalogEndpoint, PublicEmbeddedConnector, PublicResourceInspection, PublicResourceKind,
-    PublicResourceLink, WordPressGoogleDriveConnector,
+    DataCatalogEndpoint, DownloadedPayload, PublicEmbeddedConnector, PublicResourceInspection,
+    PublicResourceKind, PublicResourceLink, WordPressGoogleDriveConnector,
 };
 use crate::ingestion::host_policy::RequestRefusal;
 use crate::ingestion::limiter::RateLimiter;
@@ -3375,38 +3375,55 @@ async fn process_binary_payload(
         },
     )
     .await;
-    let (local_path, byte_count, raw_file_sha256) = if let Some(local_path) = &document.local_path {
-        let (path, count) = validate_cached_payload(
-            &context.download_root,
-            Path::new(local_path),
-            document.file_size,
-        )
-        .await?;
-        let hash = sha256_file(&path).await?;
-        (path, count, hash)
-    } else {
-        context
-            .repository
-            .check_retained_file_budget(&context.download_root)
+    let (local_path, byte_count, raw_file_sha256, acquisition) =
+        if let Some(local_path) = &document.local_path {
+            let (path, count) = validate_cached_payload(
+                &context.download_root,
+                Path::new(local_path),
+                document.file_size,
+            )
             .await?;
-        context.limiter.acquire(&context.portal.portal_key).await?;
-        let download_url = document
-            .download_url
-            .as_deref()
-            .filter(|value| !value.trim().is_empty())
-            .ok_or_else(|| {
-                AppError::DataParsing(format!("Document {} has no download URL", document.id))
-            })?;
-        let (path, byte_count, hash) = stream_download(
-            &context.client,
-            &context.portal,
-            download_url,
-            &context.download_root,
-            document.id,
-        )
-        .await?;
-        (path, byte_count, hash)
-    };
+            let hash = sha256_file(&path).await?;
+            // An object's file name is the digest it was committed under. Re-hashing a damaged or
+            // edited object and recording the new digest would make the corruption look like the
+            // evidence, so a mismatch stops here.
+            if let Some(committed) = content_address(&context.download_root, &path) {
+                if !constant_time_equal(committed.as_bytes(), hash.as_bytes()) {
+                    return Err(AppError::Storage(format!(
+                        "Stored evidence '{}' no longer matches the SHA-256 it was committed under",
+                        path.display()
+                    )));
+                }
+            }
+            (path, count, hash, None)
+        } else {
+            context
+                .repository
+                .check_retained_file_budget(&context.download_root)
+                .await?;
+            context.limiter.acquire(&context.portal.portal_key).await?;
+            let download_url = document
+                .download_url
+                .as_deref()
+                .filter(|value| !value.trim().is_empty())
+                .ok_or_else(|| {
+                    AppError::DataParsing(format!("Document {} has no download URL", document.id))
+                })?;
+            let downloaded = stream_download(
+                &context.client,
+                &context.portal,
+                download_url,
+                &context.download_root,
+                document.id,
+            )
+            .await?;
+            (
+                downloaded.path,
+                downloaded.byte_count,
+                downloaded.sha256,
+                Some(downloaded.acquisition),
+            )
+        };
     let entropy_path = local_path.clone();
     let entropy_file_name = document.file_name.clone();
     let entropy = spawn_blocking("Entropy assessment", move || {
@@ -3444,6 +3461,21 @@ async fn process_binary_payload(
         .repository
         .insert_or_update_document(&context.portal.portal_key, request_id, &document)
         .await?;
+    // Recorded once the row exists and before extraction rewrites its digest, so the event
+    // captures the digest this fetch replaced.
+    if let Some(acquisition) = &acquisition {
+        context
+            .repository
+            .record_document_acquisition(
+                &context.portal.portal_key,
+                document.id,
+                Some(&context.sync_run_id),
+                &raw_file_sha256,
+                byte_count,
+                acquisition,
+            )
+            .await?;
+    }
     expand_structured_document_links(context, request_id, &document, &local_path, depth).await?;
     let extracted_document = extract_document(
         context,
@@ -5205,6 +5237,34 @@ async fn refill_ingestion_frontier(context: &WorkerContext) -> Result<(), AppErr
                 claimed.frontier_id, context.portal.portal_key
             )));
         }
+        // Retries scheduled in-process stop at the cap, so a lease beyond it means every earlier
+        // attempt was interrupted, typically because processing the task ended the process.
+        // Leasing it again would repeat that on every launch.
+        if claimed.attempts > MAXIMUM_DURABLE_TASK_ATTEMPTS {
+            context
+                .repository
+                .complete_ingestion_frontier_task(claimed.frontier_id)
+                .await?;
+            decrement_atomic(&context.statistics.queued_tasks);
+            let error = AppError::Internal(format!(
+                "Ingestion task was interrupted on {} consecutive attempts and was abandoned",
+                claimed.attempts - 1
+            ));
+            context
+                .statistics
+                .failed_tasks
+                .fetch_add(1, Ordering::AcqRel);
+            context
+                .repository
+                .record_source_task_failure(
+                    &context.sync_run_id,
+                    &context.portal.portal_key,
+                    &task.target_id(),
+                    &error,
+                )
+                .await?;
+            continue;
+        }
         permit.send(ScheduledTask {
             task,
             frontier_id: Some(claimed.frontier_id),
@@ -5327,6 +5387,21 @@ fn validate_internal_output_directory(root: &Path, output: &Path) -> Result<(), 
         )));
     }
     Ok(())
+}
+
+/// The digest a file in the content-addressed object store was committed under, if `path` is one.
+fn content_address<'a>(download_root: &Path, path: &'a Path) -> Option<&'a str> {
+    let relative = path.strip_prefix(download_root.join("objects")).ok()?;
+    let mut components = relative.components();
+    let prefix = components.next()?.as_os_str().to_str()?;
+    let digest = components.next()?.as_os_str().to_str()?;
+    (components.next().is_none()
+        && digest.len() == 64
+        && digest
+            .bytes()
+            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+        && digest.starts_with(prefix))
+    .then_some(digest)
 }
 
 async fn validate_cached_payload(
@@ -5454,7 +5529,7 @@ async fn stream_download(
     download_url: &str,
     managed_root: &Path,
     document_id: u64,
-) -> Result<(PathBuf, u64, String), AppError> {
+) -> Result<DownloadedPayload, AppError> {
     let staging_directory = managed_root.join(".staging");
     tokio::fs::create_dir_all(&staging_directory)
         .await
@@ -5475,9 +5550,8 @@ async fn stream_download(
             "Document {document_id} download was empty"
         )));
     }
-    let final_path =
-        commit_staged_object(managed_root, &temporary_path, &downloaded.sha256).await?;
-    Ok((final_path, downloaded.byte_count, downloaded.sha256))
+    let path = commit_staged_object(managed_root, &temporary_path, &downloaded.sha256).await?;
+    Ok(DownloadedPayload { path, ..downloaded })
 }
 
 async fn import_local_payload(
@@ -5605,6 +5679,12 @@ async fn commit_staged_object(
     let final_path = object_directory.join(sha256);
     match tokio::fs::hard_link(staging_path, &final_path).await {
         Ok(()) => {
+            // The object's bytes were synced while staged; its new directory entry is not durable
+            // until the directory is, and a committed row may point at it after power loss.
+            let linked = final_path.clone();
+            let _ =
+                tokio::task::spawn_blocking(move || crate::atomic_write::sync_directory(&linked))
+                    .await;
             tokio::fs::remove_file(staging_path)
                 .await
                 .map_err(|error| {
