@@ -1,5 +1,6 @@
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -323,10 +324,7 @@ fn phone_candidates_in_segment(
             if digits.len() != digit_count || !valid_nanp_digits(&digits) {
                 continue;
             }
-            let has_format_signal = raw
-                .bytes()
-                .any(|byte| matches!(byte, b'+' | b'(' | b')' | b'-' | b'.' | b' '));
-            if !has_format_signal {
+            if !nanp_layout(raw) {
                 continue;
             }
             candidates.push(Candidate {
@@ -342,6 +340,50 @@ fn phone_candidates_in_segment(
         }
     }
     candidates
+}
+
+/// Whether `raw` is written the way a phone number is: separators only between the 3|3|4 groups,
+/// after an optional `1`/`+1` country code. Spaced digits in tables ("212 34 56 78 90") and runs
+/// of unrelated figures carry separators too, so the mere presence of one is not a signal.
+fn nanp_layout(raw: &str) -> bool {
+    fn digits(value: &str, count: usize) -> Option<&str> {
+        (value.len() >= count && value.as_bytes()[..count].iter().all(u8::is_ascii_digit))
+            .then(|| &value[count..])
+    }
+    fn separator(value: &str) -> Option<&str> {
+        value
+            .strip_prefix(' ')
+            .or_else(|| value.strip_prefix('-'))
+            .or_else(|| value.strip_prefix('.'))
+    }
+    let (rest, international) = if let Some(rest) = raw.strip_prefix("+1") {
+        (rest.strip_prefix(['-', ' ', '.']).unwrap_or(rest), true)
+    } else if let Some(rest) = raw.strip_prefix('1') {
+        let Some(rest) = separator(rest) else {
+            return false;
+        };
+        (rest, false)
+    } else {
+        (raw, false)
+    };
+    if international && rest.len() == 10 && rest.bytes().all(|byte| byte.is_ascii_digit()) {
+        return true;
+    }
+    let after_area = if let Some(rest) = rest.strip_prefix('(') {
+        let Some(rest) = digits(rest, 3).and_then(|rest| rest.strip_prefix(')')) else {
+            return false;
+        };
+        rest.strip_prefix(' ').unwrap_or(rest)
+    } else {
+        let Some(rest) = digits(rest, 3).and_then(separator) else {
+            return false;
+        };
+        rest
+    };
+    digits(after_area, 3)
+        .and_then(separator)
+        .and_then(|rest| digits(rest, 4))
+        .is_some_and(str::is_empty)
 }
 
 fn valid_nanp_digits(digits: &[u8]) -> bool {
@@ -413,9 +455,9 @@ fn detect_street_addresses(text: &str) -> Vec<Candidate> {
     candidates
 }
 
-/// 13 to 19 digits in one run, separated at most by single spaces or hyphens, passing the Luhn
-/// check and starting with a major-network prefix. The checksum is what separates a card from the
-/// long numeric identifiers public records are full of.
+/// 13 to 19 digits printed the way cards are, passing the Luhn check under a real issuer prefix
+/// and length. The checksum and layout are what separate a card from the long numeric
+/// identifiers public records are full of.
 fn detect_payment_cards(text: &str) -> Vec<Candidate> {
     let bytes = text.as_bytes();
     let mut candidates = Vec::new();
@@ -428,16 +470,25 @@ fn detect_payment_cards(text: &str) -> Vec<Candidate> {
         }
         let start = index;
         let mut digits = Vec::with_capacity(19);
+        let mut groups = vec![0_usize];
+        let mut separators = BTreeSet::new();
         let mut end = index;
         let mut cursor = index;
         while cursor < bytes.len() && digits.len() <= 19 {
             match bytes[cursor] {
                 byte if byte.is_ascii_digit() => {
                     digits.push(byte - b'0');
+                    if let Some(group) = groups.last_mut() {
+                        *group += 1;
+                    }
                     cursor += 1;
                     end = cursor;
                 }
-                b' ' | b'-' if bytes.get(cursor + 1).is_some_and(u8::is_ascii_digit) => {
+                separator @ (b' ' | b'-')
+                    if bytes.get(cursor + 1).is_some_and(u8::is_ascii_digit) =>
+                {
+                    separators.insert(separator);
+                    groups.push(0);
                     cursor += 1;
                 }
                 _ => break,
@@ -447,8 +498,9 @@ fn detect_payment_cards(text: &str) -> Vec<Candidate> {
             .get(end)
             .is_none_or(|byte| !byte.is_ascii_alphanumeric());
         if bounded
-            && (13..=19).contains(&digits.len())
-            && matches!(digits[0], 3..=6)
+            && separators.len() <= 1
+            && card_grouping(&groups)
+            && card_network_length(&digits)
             && luhn_valid(&digits)
         {
             candidates.push(Candidate {
@@ -461,6 +513,41 @@ fn detect_payment_cards(text: &str) -> Vec<Candidate> {
         index = end.max(index + 1);
     }
     candidates
+}
+
+/// Printed cards are one unbroken run or grouped 4-4-4-4(-3), 4-6-5 (Amex) or 4-6-4 (Diners).
+/// Space-separated ledger codes ("500128 500133 500124") fit none of these.
+fn card_grouping(groups: &[usize]) -> bool {
+    matches!(
+        groups,
+        [13..=19] | [4, 4, 4, 4] | [4, 4, 4, 4, 3] | [4, 6, 5] | [4, 6, 4]
+    )
+}
+
+/// Issuer prefix and length of Visa, Mastercard, American Express, Discover and Diners Club.
+fn card_network_length(digits: &[u8]) -> bool {
+    let prefix = |count: usize| {
+        digits
+            .iter()
+            .take(count)
+            .fold(0_u32, |value, digit| value * 10 + u32::from(*digit))
+    };
+    let length = digits.len();
+    match digits.first() {
+        Some(4) => matches!(length, 13 | 16 | 19),
+        Some(5) => (51..=55).contains(&prefix(2)) && length == 16,
+        Some(2) => (2221..=2720).contains(&prefix(4)) && length == 16,
+        Some(3) => {
+            (matches!(prefix(2), 34 | 37) && length == 15)
+                || (((300..=305).contains(&prefix(3)) || matches!(prefix(2), 36 | 38))
+                    && length == 14)
+        }
+        Some(6) => {
+            (prefix(4) == 6011 || (644..=649).contains(&prefix(3)) || prefix(2) == 65)
+                && (16..=19).contains(&length)
+        }
+        _ => false,
+    }
 }
 
 fn luhn_valid(digits: &[u8]) -> bool {
@@ -553,7 +640,7 @@ fn detect_labelled_identifiers(text: &str) -> Vec<Candidate> {
             let span = if *kind == PiiKind::DateOfBirth {
                 date_end(text, value.start).map(|end| (value.start, end))
             } else {
-                identifier_value_span(value)
+                identifier_value_span(*label == ["routing", "number"], value)
             };
             if let Some((start, end)) = span {
                 candidates.push(Candidate {
@@ -568,21 +655,43 @@ fn detect_labelled_identifiers(text: &str) -> Vec<Candidate> {
     candidates
 }
 
-/// An identifier is one token of 4 to 34 letters, digits and hyphens holding at least 4 digits,
-/// less a glued `#` ("#X1234567").
-fn identifier_value_span(token: &Token<'_>) -> Option<(usize, usize)> {
+/// An identifier is one token of 5 to 34 letters, digits and hyphens holding at least 5 digits,
+/// less a glued `#` ("#X1234567"). Five digits keeps years and fiscal-year spans ("Medi-Cal
+/// 2024 rates", "Medi-Cal 2023-24") out; a routing number must also pass the ABA checksum.
+fn identifier_value_span(routing_number: bool, token: &Token<'_>) -> Option<(usize, usize)> {
     let start = token.start + (token.text.len() - token.text.trim_start_matches('#').len());
     let value = token
         .text
         .trim_start_matches('#')
         .trim_end_matches(['-', '\'']);
-    let digit_count = value.bytes().filter(u8::is_ascii_digit).count();
-    ((4..=34).contains(&value.len())
-        && digit_count >= 4
+    let digits = value
+        .bytes()
+        .filter(u8::is_ascii_digit)
+        .map(|digit| digit - b'0')
+        .collect::<Vec<_>>();
+    let year_span = value.len() >= 7
+        && value.as_bytes()[4] == b'-'
         && value
             .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-'))
-    .then_some((start, start + value.len()))
+            .enumerate()
+            .all(|(index, byte)| index == 4 || byte.is_ascii_digit());
+    let shaped = (5..=34).contains(&value.len())
+        && digits.len() >= 5
+        && !year_span
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-');
+    let checksum = !routing_number || (digits.len() == 9 && aba_routing_valid(&digits));
+    (shaped && checksum).then_some((start, start + value.len()))
+}
+
+fn aba_routing_valid(digits: &[u8]) -> bool {
+    let weighted: u32 = digits
+        .iter()
+        .zip([3, 7, 1].iter().cycle())
+        .map(|(&digit, &weight)| u32::from(digit) * weight)
+        .sum();
+    weighted.is_multiple_of(10)
 }
 
 /// The end of a calendar date starting at `start`: `3/14/1990`, `1990-03-14`, `03.14.90`, or
@@ -799,6 +908,9 @@ mod tests {
             ("Passport #X12345678 expired.", "X12345678"),
             ("MRN 00451234 admitted.", "00451234"),
             ("Bank account number 000123456789 closed.", "000123456789"),
+            ("Routing number 121000358 printed.", "121000358"),
+            ("Amex 3782 822463 10005 charged.", "3782 822463 10005"),
+            ("Call +16195550198 now.", "6195550198"),
         ];
         for (input, value) in sensitive {
             let masked = mask_pii(input).unwrap().masked_text;
@@ -810,6 +922,11 @@ mod tests {
             "Invoice 4111 1111 1111 1112 was paid.",
             "The program was born out of a 2019 audit.",
             "Passport services moved downtown.",
+            "Ledger 500128 500133 500124 balanced.",
+            "Totals 212 34 56 78 90 units.",
+            "Medicare 2024 rates and Medi-Cal 2023-24 expansion.",
+            "Passport 2025 fee schedule; savings account 2019 audit.",
+            "Routing number 123456789 is a placeholder.",
         ] {
             assert_eq!(mask_pii(public).unwrap().masked_text, public);
         }

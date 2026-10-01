@@ -78,6 +78,11 @@ therefore rejects attachment outright.
 The aggregate cannot call the Rust evaluator row by row without giving up vectorized execution, so
 its SQL is *generated* from `statute::sql`. Thresholds, the determination proxy, the
 extension-validity rule, and the calendar-day derivation each have exactly one definition.
+Each statutory last day is carried past Saturdays, Sundays and California judicial holidays to the
+next court day (Code Civ. Proc. §§ 12, 12a, 135), with `analysis::court_calendar` as the one holiday
+definition and its weekday holidays rendered into the SQL as a `court_holidays` CTE. Ambiguities
+resolve toward the later deadline, and days proclaimed ad hoc are not modeled. When the rule
+changes, `CPRA_RULE_VERSION` is bumped and startup recomputes every stored CPRA finding once.
 `statutory_verdicts_match_the_per_request_evaluator` drives both renderings from one table of cases
 and fails if either changes alone.
 
@@ -465,6 +470,14 @@ signature only proves *a* key this installation once held signed it — a recipi
 `--revocations` is trusting the list's signer key implicitly, not verifying it is bound to a
 specific installation identity; comparing the signer key id against one obtained through a separate
 trusted channel is the recipient's responsibility, the same as for any manifest signer.
+
+Two limits follow from the key being self-managed under the user's own account, and neither is
+closed by more code here. The list carries no counter, so someone able to write the reports folder
+can restore an older valid copy that predates a COMPROMISED entry; and a RETIRED key's archived
+private file still signs valid packages, which verify as signed by a retired key whatever
+`generatedAt` they claim. Both require write access to this account's files, which already grants
+the active key. Treat a signature as evidence that this installation's key signed the bytes, not
+that the account holding it was uncompromised.
 
 ## 9. Follow-up
 
