@@ -91,9 +91,17 @@ The build is Apple silicon only, so the feed has no `darwin-x86_64` entry and an
 ## Owner-only steps
 
 1. Notary credentials: `xcrun notarytool store-credentials <profile>` (needs an app-specific
-   password); export `APPLE_NOTARY_KEYCHAIN_PROFILE`.
+   password); export `APPLE_NOTARY_KEYCHAIN_PROFILE`. The Developer ID provisioning profile must list
+   the certificate `APPLE_SIGNING_IDENTITY` names (`prepare-direct.mjs` refuses it otherwise; AMFI
+   would kill every launch).
 2. Host the DMG, `.app.tar.gz`, and `latest.json`. The Cloudflare worker `updates-writerslogic` (deployed) serves R2 bucket `writerslogic-releases` at `updates.writerslogic.com`: set `RELEASE_BASE_URL=https://updates.writerslogic.com/onrecord`, upload artifacts to `onrecord/<version>/` and the feed to key `onrecord/latest.json` (`wrangler r2 object put writerslogic-releases/onrecord/latest.json --file latest.json --content-type application/json --remote`). Until it exists the feed answers 204 (no update). Publish `latest.json` last: it is what makes clients update.
-3. Set `DOWNLOAD_URL` in the website config to the hosted DMG.
+   Follow the WritersProof R2 conventions (`writersproof/docs/RELEASING.md`): upload the immutable
+   versioned objects first, each with a `.sha256` beside it, download them back and compare against
+   the build hashes, never overwrite a versioned key with different bytes, and also upload the DMG
+   under a `latest` alias (`onrecord/OnRecord-Studio_latest_aarch64.dmg` plus its `.sha256`), which
+   is the URL to hand out. Only then publish the feed.
+3. Set `DOWNLOAD_URL` in the website config to the `latest` DMG alias, and say Apple silicon only on
+   the download page.
 4. Authorize the commit, tag, and release.
 
 ## Test an update locally
