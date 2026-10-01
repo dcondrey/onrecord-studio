@@ -1,4 +1,5 @@
 import type { ResearchEvidence } from "./research";
+import type { DeadlineDeterminationBasis } from "./tracker";
 export interface CaseworkCitation {
   id: string; reportId: string; evidenceId: string; label: string; quote: string;
   sourceUrl: string | null; sourceSha256: string;
@@ -19,6 +20,23 @@ export interface CaseworkRequest {
   state: string; expectedRecordTypes: string[]; expectedFields: string[]; expectedPeriod: string;
   submittedAt: string | null; responseDue: string | null; externalReference: string;
   productions: CaseworkProduction[]; unresolvedOmissions: string[]; followUpDraft: string; citationIds: string[];
+  compiledDraft: string; filingPlan: RequestFilingPlan | null;
+}
+export type FollowUpTrigger = 'DETERMINATION_DUE' | 'DETERMINATION_OVERDUE' | 'PRODUCTION_INCOMPLETE';
+export interface ScheduledFollowUp { trigger: FollowUpTrigger; scheduledFor: string; rationale: string }
+/** The modeled CPRA determination clock for a filed request, as counted on `evaluatedAt`. Absent on an unfiled one: no clock. */
+export interface RequestFilingPlan {
+  statuteCitation: string; evaluatedAt: string; filedOn: string; determinationDueOn: string;
+  calendarDaysElapsed: number; allowedCalendarDays: number;
+  determinationBasis: DeadlineDeterminationBasis;
+  measuredTo: string | null; deadlinePassedWithoutRecordedResponse: boolean;
+  followUps: ScheduledFollowUp[];
+}
+export interface FilingIdentifyingSource { label: string; sourceSha256: string; verification: string }
+export interface RequestFilingRecordResult {
+  caseId: string; requestId: string; outputPath: string; packageSha256: string;
+  signatureAlgorithm: string; signerKeyId: string; generatedAt: string;
+  determinationDueOn: string; remainingOmissions: string[]; verifierScriptPath: string;
 }
 export interface CaseworkDecision {
   id: string; body: string; date: string; agendaItem: string; proposedDecision: string;

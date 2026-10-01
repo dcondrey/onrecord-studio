@@ -4,6 +4,7 @@ pub mod anomaly;
 pub mod cluster;
 pub mod court_calendar;
 pub mod reconstruction;
+pub mod request_compiler;
 pub(crate) mod sql;
 pub mod statute;
 pub mod timeline;

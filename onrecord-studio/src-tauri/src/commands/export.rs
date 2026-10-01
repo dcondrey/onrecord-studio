@@ -10,7 +10,7 @@ use crate::integrity::{
 use crate::storage::casework::{EXPORT_OUTCOME_FAILED, EXPORT_OUTCOME_WRITTEN};
 use crate::storage::pii::mask_pii;
 use crate::storage::sqlite::{DuckDbRepository, EvidenceDocument, LegalBriefEvidence};
-use crate::types::casework::WithheldCitationRequest;
+use crate::types::casework::{RequestFilingRecordResult, WithheldCitationRequest};
 use crate::types::{
     CaseEvidencePackageResult, LegalBriefExportResult, LegalComplianceFinding,
     PackageVerificationResult, SigningKeyRevocations, SigningKeyRotationResult,
@@ -427,6 +427,68 @@ pub async fn export_case_evidence_package(
             .collect(),
         ledger_sequence: sequence,
         previous_export_sha256: package.manifest.previous_export_sha256,
+        verifier_script_path: verifier_script_path.to_string_lossy().into_owned(),
+    })
+}
+
+/// Signs and writes a filing record for one records request, through the same package path the
+/// legal brief and chain-of-custody exports use.
+///
+/// The operator files the request through their own channel and records the confirmed send date on
+/// the request; this writes what was filed, what it covers, and the modeled determination clock
+/// derived from that date. No transport exists here and none is implied: the signature proves the
+/// bytes have not changed since this installation produced them, nothing about who filed or
+/// whether a send occurred.
+#[tauri::command]
+pub async fn export_request_filing_record(
+    case_id: String,
+    request_id: String,
+    target_path: Option<String>,
+    repository: State<'_, DuckDbRepository>,
+    report_directory: State<'_, PathBuf>,
+    key_directory: State<'_, crate::integrity::SigningKeyDirectory>,
+) -> Result<RequestFilingRecordResult, AppError> {
+    let target_path = optional_text(target_path, "Filing record output path", MAXIMUM_PATH_BYTES)?;
+    let target_path = target_path.unwrap_or_else(|| {
+        let timestamp = chrono::Utc::now().format("%Y%m%dT%H%M%SZ");
+        report_directory
+            .join(format!(
+                "case-{case_id}-filing-{request_id}-{timestamp}.json"
+            ))
+            .to_string_lossy()
+            .into_owned()
+    });
+    let output_path = validate_report_path(&target_path, &report_directory, "json").await?;
+    let signing_key = load_or_create_signing_key(&key_directory.0).await?;
+    let verifier_script_path = ensure_verifier_script(&report_directory).await?;
+    let generated_at = chrono::Utc::now().to_rfc3339();
+    let package = repository
+        .sign_request_filing_record(
+            case_id.clone(),
+            request_id.clone(),
+            generated_at.clone(),
+            signing_key,
+        )
+        .await?;
+    let package_bytes = serde_json::to_vec_pretty(&package)
+        .map_err(|error| AppError::Export(format!("Failed to encode filing record: {error}")))?;
+    if package_bytes.len() > MAXIMUM_CASE_EVIDENCE_PACKAGE_BYTES {
+        return Err(AppError::Export(format!(
+            "Filing record exceeds the {MAXIMUM_CASE_EVIDENCE_PACKAGE_BYTES}-byte limit"
+        )));
+    }
+    let package_sha256 = sha256_hex(&package_bytes);
+    commit_new_report(&output_path, &package_bytes).await?;
+    Ok(RequestFilingRecordResult {
+        case_id,
+        request_id,
+        output_path: output_path.to_string_lossy().into_owned(),
+        package_sha256,
+        signature_algorithm: SIGNATURE_ALGORITHM.to_string(),
+        signer_key_id: package.signature.signer_key_id,
+        generated_at,
+        determination_due_on: package.manifest.filing_plan.determination_due_on,
+        remaining_omissions: package.manifest.remaining_omissions,
         verifier_script_path: verifier_script_path.to_string_lossy().into_owned(),
     })
 }

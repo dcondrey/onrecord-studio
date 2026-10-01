@@ -1,4 +1,5 @@
 use super::research::ResearchSourceReference;
+use crate::analysis::request_compiler::RequestFilingPlan;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -62,6 +63,12 @@ pub struct CaseworkRequest {
     pub unresolved_omissions: Vec<String>,
     pub follow_up_draft: String,
     pub citation_ids: Vec<String>,
+    /// The CPRA request compiled from this request's scope and its identifying citations.
+    /// Recomputed by the repository on every save; an operator edit belongs in `draft`.
+    pub compiled_draft: String,
+    /// The modeled determination clock for this request. `None` until a submission date is
+    /// recorded: a request that was never filed has no clock, which is not a clock reading zero.
+    pub filing_plan: Option<RequestFilingPlan>,
 }
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
@@ -193,6 +200,59 @@ pub struct CaseEvidenceManifest {
     pub withheld_citations: Vec<WithheldCitation>,
     pub previous_export_sha256: Option<String>,
     pub ledger_sequence: u64,
+}
+/// A signed record of one records request as filed: the exact draft, the scope it covers, the
+/// digests of the records that identified it, and the modeled determination clock as of the
+/// recorded filing date.
+///
+/// `filedAt` is the send instant the operator recorded after filing through their own channel.
+/// This application transmits nothing, so the instant is a recorded operator statement, not an
+/// observed transmission; the signature proves these bytes have not changed since this
+/// installation produced them, never that the request was actually sent.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RequestFilingRecord {
+    pub schema_version: String,
+    pub generated_at: String,
+    pub case_id: String,
+    pub case_revision: u64,
+    pub request_id: String,
+    pub title: String,
+    pub custodian: String,
+    pub external_reference: String,
+    pub filed_at: String,
+    pub request_text: String,
+    pub request_text_sha256: String,
+    pub expected_record_types: Vec<String>,
+    pub expected_fields: Vec<String>,
+    pub expected_period: String,
+    /// The records already held that identify what was requested, by label and digest.
+    pub identifying_sources: Vec<FilingIdentifyingSource>,
+    pub filing_plan: RequestFilingPlan,
+    /// Expectations the recorded productions do not cover. A comparison of this request against
+    /// what was recorded as produced; never a finding that a record was unlawfully withheld.
+    pub remaining_omissions: Vec<String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FilingIdentifyingSource {
+    pub label: String,
+    pub source_sha256: String,
+    pub verification: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RequestFilingRecordResult {
+    pub case_id: String,
+    pub request_id: String,
+    pub output_path: String,
+    pub package_sha256: String,
+    pub signature_algorithm: String,
+    pub signer_key_id: String,
+    pub generated_at: String,
+    pub determination_due_on: String,
+    pub remaining_omissions: Vec<String>,
+    pub verifier_script_path: String,
 }
 /// One entry of a case's local export ledger, joined with its recorded outcome (if any). `outcome`
 /// is `"RESERVED"` when a sequence position was signed and committed to the chain but no outcome

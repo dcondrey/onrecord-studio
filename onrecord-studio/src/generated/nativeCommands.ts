@@ -93,6 +93,7 @@ export interface NativeCommandMap {
   count_corpus_entity_neighbors: { args: { entityId: string; filter?: Types.EntityNeighborFilter | null }; result: Types.EntityNeighborCounts | null };
   export_legal_brief: { args: { requestId: number; portalKey: string; targetPath?: string | null; authorName?: string | null }; result: Types.LegalBriefExportResult };
   export_case_evidence_package: { args: { caseId: string; targetPath?: string | null; withheldCitations: Types.WithheldCitationRequest[] }; result: Types.CaseEvidencePackageResult };
+  export_request_filing_record: { args: { caseId: string; requestId: string; targetPath?: string | null }; result: Types.RequestFilingRecordResult };
   case_export_chain: { args: { caseId: string }; result: Types.CaseExportLedgerEntry[] };
   rotate_export_signing_key: { args: { reason: string; compromised: boolean }; result: Types.SigningKeyRotationResult };
   mark_signing_key_compromised: { args: { keyId: string; reason: string }; result: null };

@@ -1,5 +1,6 @@
 use super::sqlite::DuckDbRepository;
 use crate::{
+    analysis::request_compiler::{compile_cpra_request, plan_filing, RequestScope},
     error::AppError,
     integrity::{sha256_hex, sign_package, verify_package, SignedPackage},
     types::{casework::*, research::*},
@@ -15,6 +16,7 @@ const MAX_PACKET: usize = 2_000_000;
 /// Bumped from v1 to v2 alongside the ledger and redaction fields below; both landed in the same
 /// bump per CLAUDE.md's schema-version guidance, since both change the signed manifest shape.
 pub(crate) const CASE_EVIDENCE_PACKAGE_SCHEMA: &str = "onrecord-case-evidence-package-v2";
+pub(crate) const REQUEST_FILING_RECORD_SCHEMA: &str = "onrecord-request-filing-record-v1";
 /// `outcome` values for `casework_export_outcomes`. A reservation with no outcome row at all is a
 /// third, implicit state ("reserved, not confirmed written") that `case_export_chain` reports
 /// explicitly rather than folding into either of these.
@@ -639,6 +641,7 @@ fn validate(
             return Err(invalid("This request still has unresolved expected records, fields or periods. Keep it partial or resolve the omissions."));
         }
         r.follow_up_draft = follow_up(r);
+        compile_request(r, &case.evidence)?;
     }
     for d in &mut case.decisions {
         check_id(&d.id)?;
@@ -764,6 +767,41 @@ pub fn request_omissions(request: &CaseworkRequest) -> Vec<String> {
     missing.sort();
     missing.dedup();
     missing
+}
+/// Recomputes a request's CPRA draft and its statutory clock, so neither can be edited into
+/// disagreeing with the request's own recorded scope, citations and submission date.
+fn compile_request(r: &mut CaseworkRequest, evidence: &[CaseworkCitation]) -> Result<(), AppError> {
+    let identified_by = r
+        .citation_ids
+        .iter()
+        .filter_map(|id| evidence.iter().find(|e| &e.id == id))
+        .map(|e| (e.label.clone(), e.source_sha256.clone()))
+        .collect::<Vec<_>>();
+    r.compiled_draft = compile_cpra_request(&RequestScope {
+        title: &r.title,
+        custodian: &r.custodian,
+        record_types: &r.expected_record_types,
+        fields: &r.expected_fields,
+        period: &r.expected_period,
+        resolves: &r.resolves,
+        identified_by: &identified_by,
+    });
+    r.filing_plan = match &r.submitted_at {
+        // The clock position labels the engine's evidence summary only; a casework request's id is
+        // a string, and the engine counts in calendar days from the recorded filing date alone.
+        Some(filed_on) => Some(plan_filing(
+            0,
+            filed_on,
+            &r.productions
+                .iter()
+                .map(|p| p.received_at.clone())
+                .collect::<Vec<_>>(),
+            &request_omissions(r),
+            &now(),
+        )?),
+        None => None,
+    };
+    Ok(())
 }
 fn follow_up(r: &CaseworkRequest) -> String {
     let omissions = request_omissions(r);
@@ -1078,6 +1116,74 @@ if case.report_id!=prior.report_id||case.topic!=prior.topic{return Err(invalid("
                 return Err(invalid("Export exceeds the portable packet size limit."));
             }
             Ok(payload)
+        })
+        .await
+    }
+    /// Signs a filing record for one records request, reading the case fresh so the record carries
+    /// the request text, scope and clock the repository itself computed rather than whatever the
+    /// caller's copy held.
+    ///
+    /// Refuses a request with no recorded submission date: a filing record for an unfiled request
+    /// would state a filing that never happened.
+    pub(crate) async fn sign_request_filing_record(
+        &self,
+        case_id: String,
+        request_id: String,
+        generated_at: String,
+        signing_key: SigningKey,
+    ) -> Result<SignedPackage<RequestFilingRecord>, AppError> {
+        self.query_connection("Sign records-request filing record", move |conn| {
+            let mut case = read_case(conn, &case_id)?.ok_or_else(|| invalid("Case not found."))?;
+            refresh_case(conn, &mut case)?;
+            let request = case
+                .requests
+                .iter()
+                .find(|r| r.id == request_id)
+                .ok_or_else(|| invalid("This case has no such records request."))?
+                .clone();
+            let Some(filed_at) = request.submitted_at.clone() else {
+                return Err(invalid(
+                    "Record the confirmed submission date before signing a filing record; this \
+                     application does not send requests and cannot observe one.",
+                ));
+            };
+            let mut request = request;
+            compile_request(&mut request, &case.evidence)?;
+            let filing_plan = request
+                .filing_plan
+                .clone()
+                .ok_or_else(|| invalid("This request has no modeled determination clock."))?;
+            let manifest = RequestFilingRecord {
+                schema_version: REQUEST_FILING_RECORD_SCHEMA.to_string(),
+                generated_at,
+                case_id: case.id.clone(),
+                case_revision: case.revision,
+                request_id: request.id.clone(),
+                title: request.title.clone(),
+                custodian: request.custodian.clone(),
+                external_reference: request.external_reference.clone(),
+                filed_at,
+                request_text_sha256: sha256_hex(request.compiled_draft.as_bytes()),
+                request_text: request.compiled_draft.clone(),
+                expected_record_types: request.expected_record_types.clone(),
+                expected_fields: request.expected_fields.clone(),
+                expected_period: request.expected_period.clone(),
+                identifying_sources: request
+                    .citation_ids
+                    .iter()
+                    .filter_map(|id| case.evidence.iter().find(|e| &e.id == id))
+                    .map(|e| FilingIdentifyingSource {
+                        label: e.label.clone(),
+                        source_sha256: e.source_sha256.clone(),
+                        verification: e.verification.clone(),
+                    })
+                    .collect(),
+                filing_plan,
+                remaining_omissions: request_omissions(&request),
+            };
+            let package = sign_package(manifest, &signing_key).map_err(invalid)?;
+            verify_package(&package).map_err(invalid)?;
+            Ok(package)
         })
         .await
     }
@@ -2064,6 +2170,50 @@ mod tests {
             .factors
             .iter()
             .any(|f| f.reason.contains("not independent corroboration")));
+    }
+    /// The filing record is the only artifact in this application that states a request was filed,
+    /// and the application never observes a send. So it must refuse to exist for a request with no
+    /// recorded submission date, and must carry the digest of the exact text it names as filed.
+    #[tokio::test]
+    async fn a_filing_record_requires_a_recorded_submission_and_binds_the_request_text_digest() {
+        let db = setup(true).await;
+        let mut case = db.create_casework_case("report-1".into()).await.unwrap();
+        let request_id = case.requests[0].id.clone();
+        let key = SigningKey::from_bytes(&[7_u8; 32]);
+
+        let unfiled = db
+            .sign_request_filing_record(case.id.clone(), request_id.clone(), now(), key.clone())
+            .await
+            .unwrap_err();
+        assert!(unfiled.to_string().contains("confirmed submission date"));
+
+        case.requests[0].state = "SUBMITTED".into();
+        case.requests[0].submitted_at = Some("2026-09-01".into());
+        case.requests[0].expected_fields = vec!["occupied bed nights".into()];
+        let saved = db
+            .save_casework_case(case, 1, "Reporter".into())
+            .await
+            .unwrap();
+
+        let package = db
+            .sign_request_filing_record(saved.id.clone(), request_id, now(), key)
+            .await
+            .unwrap();
+        let manifest = &package.manifest;
+        assert_eq!(
+            manifest.request_text_sha256,
+            sha256_hex(manifest.request_text.as_bytes()),
+            "a filing record must bind the digest of the exact text it names as filed"
+        );
+        assert_eq!(manifest.filing_plan.filed_on, "2026-09-01");
+        assert!(manifest
+            .remaining_omissions
+            .iter()
+            .any(|omission| omission.contains("occupied bed nights")));
+        assert!(manifest
+            .identifying_sources
+            .iter()
+            .all(|source| !source.source_sha256.is_empty()));
     }
     #[tokio::test]
     async fn productions_reconcile_fields_and_periods_and_prepare_specific_unsent_followup() {

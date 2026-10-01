@@ -43,6 +43,15 @@ transport is still new capability, not reuse. And the signing key is a locally g
 key with no identity binding (`identity_assurance = SELF_MANAGED_LOCAL_KEY_NOT_EXTERNALLY_ATTESTED`,
 `src-tauri/src/integrity.rs:247`), so today's signature proves package integrity, not who filed.
 
+Built (2026-10-01). `src-tauri/src/analysis/request_compiler.rs` compiles a casework request
+into a CPRA draft scoped to its recorded record types, fields, period and identifying citations,
+and derives a `RequestFilingPlan` (determination date, elapsed days, follow-ups) from the
+statutory engine once a submission date is recorded; both are recomputed on every case save.
+`export_request_filing_record` signs that draft, its digest, and the plan as
+`onrecord-request-filing-record-v1`, and refuses a request with no recorded submission date.
+Transport remains deliberately absent, and the statute set is still the single CPRA
+determination clock.
+
 ## 2. Transcription: timestamped spans with absence semantics
 
 whisper.cpp locally, diarized, with the transcript as a derived projection that never touches

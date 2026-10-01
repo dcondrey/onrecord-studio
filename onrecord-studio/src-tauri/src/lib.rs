@@ -143,6 +143,7 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::paging::count_corpus_entity_neighbors,
         commands::export::export_legal_brief,
         commands::export::export_case_evidence_package,
+        commands::export::export_request_filing_record,
         commands::export::case_export_chain,
         commands::export::rotate_export_signing_key,
         commands::export::mark_signing_key_compromised,
