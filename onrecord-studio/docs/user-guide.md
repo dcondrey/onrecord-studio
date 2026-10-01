@@ -163,3 +163,19 @@ the App Store.
   version running.
 - **A panel says it did not complete**: a query behind it failed. It is not an empty result; check
   the Activity view for the error.
+
+## Subscription changes and cancellation
+
+In the direct build, **Account** then **Manage subscription** opens Stripe's billing portal in your
+browser, where you change seats or payment method, or cancel. Cancelling stops renewal at the end
+of the current billing period: the license stays active until that date, nothing is refunded for
+the remainder, and the first check after it ends locks the workspace until you subscribe again.
+Your local evidence is never deleted by a lapse. App Store purchases are managed through the App
+Store.
+
+## Support
+
+Questions, bug reports and feature requests go to
+[github.com/writerslogic/support](https://github.com/writerslogic/support); the **Support** button
+at the top of Help opens it. Include the version shown in the Help header. Do not attach
+confidential source documents to a public report.

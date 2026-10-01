@@ -11,6 +11,10 @@
       "license",
       "upgrade",
       "checkout",
+      "cancel",
+      "subscription",
+      "billing",
+      "refund",
       "seat",
       "stripe",
       "expired",
@@ -60,6 +64,7 @@
         "heading": "Account menu",
         "items": [
           "Shows your email, sign-in provider and plan. Profile settings opens the local profile.",
+          "Manage subscription (shown once licensed) opens Stripe's billing portal in your browser to change seats or payment method, or to cancel. Cancelling stops renewal at the end of the current billing period: the license stays active until that date, nothing is refunded for the remainder, and the next check after it ends locks the workspace until you subscribe again.",
           "Sign out clears the local sign-in and returns to the sign-in screen.",
           "Delete account deletes your license account on the server and removes local sign-in data. It does not delete local evidence, and a trial already used on this device is not restored. The result screen states which parts finished."
         ]

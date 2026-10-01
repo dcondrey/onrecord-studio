@@ -23,6 +23,12 @@
         },
         {
           "url": "https://writerslogic.com/*"
+        },
+        {
+          "url": "https://github.com/writerslogic/support"
+        },
+        {
+          "url": "https://github.com/writerslogic/support/*"
         }
       ]
     }

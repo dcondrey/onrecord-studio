@@ -4533,7 +4533,7 @@ dependencies = [
 
 [[package]]
 name = "onrecord-studio-lib"
-version = "1.0.0"
+version = "1.0.0-beta.1"
 dependencies = [
  "base64 0.22.1",
  "bzip2 0.6.1",

@@ -14,10 +14,10 @@ export async function openExternalUrl(url: string): Promise<OpenExternalResult> 
   try {
     parsed = new URL(url);
   } catch {
-    return { ok: false, reason: 'The checkout address is not a valid URL.' };
+    return { ok: false, reason: 'The address is not a valid URL.' };
   }
   if (parsed.protocol !== 'https:') {
-    return { ok: false, reason: 'Only secure (https) checkout addresses are opened.' };
+    return { ok: false, reason: 'Only secure (https) addresses are opened.' };
   }
   if (isTauri()) {
     try {
