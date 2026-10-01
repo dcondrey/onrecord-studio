@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { formatMatchCount, matchBasis, SEARCH_RESULT_LIMIT, searchQueryId, searchRecordText } from '../utils/searchResults';
+import { formatMatchCount, matchBasis, searchQueryId, searchRecordText } from '../utils/searchResults';
 
 describe('formatMatchCount', () => {
-  it('reports an exact total below the cap and a lower bound at it', () => {
-    expect(formatMatchCount(SEARCH_RESULT_LIMIT - 1)).toBe('499');
-    expect(formatMatchCount(SEARCH_RESULT_LIMIT)).toBe('500+');
+  it('states the exact total at any size and never a lower bound', () => {
+    expect(formatMatchCount(499)).toBe('499');
+    expect(formatMatchCount(500)).toBe('500');
+    expect(formatMatchCount(12431)).toBe('12,431');
   });
 });
 
@@ -19,13 +20,13 @@ describe('matchBasis', () => {
 });
 
 describe('searchRecordText', () => {
-  it('says when the result list was limited and never claims completeness', () => {
+  it('records the exact match count, not the number of rows that were loaded', () => {
     const base = { ranAt: '2026-09-30 20:00 UTC', query: 'sweep camp', filters: [{ label: 'Status', value: 'open' }], sourceCount: 3 };
-    const limited = searchRecordText({ ...base, resultCount: SEARCH_RESULT_LIMIT });
-    expect(limited).toContain('500+ (limited to the first 500; more may exist)');
-    expect(limited).toContain('Status: open');
-    expect(searchRecordText({ ...base, resultCount: 12 })).toContain('Records returned: 12\n');
-    expect(limited).toContain('request metadata can still change');
+    const text = searchRecordText({ ...base, resultCount: 12431 });
+    expect(text).toContain('Matches: 12,431 (exact count when the search ran)');
+    expect(text).not.toMatch(/limited|more may exist|\+/);
+    expect(text).toContain('Status: open');
+    expect(text).toContain('request metadata can still change');
   });
 });
 

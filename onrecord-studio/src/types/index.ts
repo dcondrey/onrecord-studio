@@ -49,3 +49,5 @@ export * from "./annotation";
 
 export * from "./snapshot";
 export * from "./collaboration";
+export * from "./paging";
+export * from "./resolution";

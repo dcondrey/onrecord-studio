@@ -23,12 +23,31 @@ pub async fn query_audit_records(
     let status = optional_text(status, "Request status", 128)?;
     let policy_deviation = optional_text(policy_deviation, "Policy deviation", 128)?;
     let limit = limit.unwrap_or(500);
+    refuse_while_indexing(&repository, search_term.trim())?;
+    repository
+        .search_requests(
+            search_term.trim(),
+            portal_key.as_deref(),
+            agency_id,
+            status.as_deref(),
+            policy_deviation.as_deref(),
+            limit,
+        )
+        .await
+}
+
+/// Refuses a query that reads the token projection while it is incomplete. Shared by every command
+/// that answers from it, so a count can never be true of a partial index when a page would not be.
+pub(crate) fn refuse_while_indexing(
+    repository: &DuckDbRepository,
+    search_term: &str,
+) -> Result<(), AppError> {
     // A corpus whose token projection is still being built would answer with fewer matches than it
     // holds, and a short result list reads as "these are the records", not as "the index is not
     // ready". Refusing is the only answer that is true while the arrears drain. Only a query that
     // reads the projection is affected: with no searchable term the filters alone decide the
     // result set, and refusing those would hide every record for the whole drain window.
-    let reads_token_projection = core_query_tokens(search_term.trim())
+    let reads_token_projection = core_query_tokens(search_term)
         .map(|tokens| !tokens.is_empty())
         .unwrap_or(false);
     let pending = repository.pending_search_index_documents();
@@ -45,14 +64,5 @@ pub async fn query_audit_records(
             )
         }));
     }
-    repository
-        .search_requests(
-            search_term.trim(),
-            portal_key.as_deref(),
-            agency_id,
-            status.as_deref(),
-            policy_deviation.as_deref(),
-            limit,
-        )
-        .await
+    Ok(())
 }

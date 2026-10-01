@@ -51,6 +51,9 @@ const CORPUS_ALGORITHM_VERSION: &str = "deterministic-corpus-v3";
 /// holds only `CO_OCCURRENCE` edges and would read as "no typed relationships exist".
 const CORPUS_SCHEMA_VERSION: i64 = 9;
 
+#[path = "corpus_neighbors.rs"]
+pub mod neighbors;
+
 /// Collapses a pair's edges to one kind. A typed edge is a stronger claim than proximity and
 /// `MIN` alone sorts `CO_OCCURRENCE` before `SIGNED_BY`, `PROMISES` and others, hiding them behind
 /// the weakest claim; `~` sorts after every kind name and reads back as `CoOccurrence`.
@@ -910,7 +913,11 @@ impl CorpusIndex {
     /// document still needs indexing -- so a stale answer is not a slow refresh, it is a wrong
     /// one. Reads therefore queue behind writes on the single writer thread, which is the
     /// consistency this index was already serialized for.
-    async fn read<T, F>(&self, operation: &'static str, function: F) -> Result<T, AppError>
+    pub(crate) async fn read<T, F>(
+        &self,
+        operation: &'static str,
+        function: F,
+    ) -> Result<T, AppError>
     where
         T: Send + 'static,
         F: FnOnce(&Connection) -> Result<T, AppError> + Send + 'static,

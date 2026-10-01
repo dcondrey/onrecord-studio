@@ -1,8 +1,11 @@
 pub mod analysis;
+pub mod annotation_anchor;
+pub mod annotation_packet;
 pub mod annotations;
 mod atomic_write;
 mod blocking;
 pub mod bundle;
+pub mod codebook;
 pub mod collaboration;
 pub mod commands;
 pub mod error;
@@ -16,6 +19,7 @@ pub mod profile;
 pub mod provenance;
 pub mod report;
 pub mod research;
+pub mod resolution;
 pub mod setup;
 pub mod storage;
 #[cfg(any(test, feature = "test-support"))]
@@ -133,6 +137,10 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::analysis_workbench::run_analytical_sql,
         commands::analysis_workbench::export_analytical_sql_csv,
         commands::query::query_audit_records,
+        commands::paging::query_audit_records_page,
+        commands::paging::count_audit_records,
+        commands::paging::page_corpus_entity_neighbors,
+        commands::paging::count_corpus_entity_neighbors,
         commands::export::export_legal_brief,
         commands::export::export_case_evidence_package,
         commands::export::case_export_chain,
@@ -201,6 +209,18 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::annotations::list_document_annotations,
         commands::annotations::add_document_annotation,
         commands::annotations::remove_document_annotation,
+        commands::annotations::set_annotation_status,
+        commands::annotations::get_annotation_settings,
+        commands::annotations::set_annotation_reviewer,
+        commands::annotations::save_codebook_entry,
+        commands::annotations::delete_codebook_entry,
+        commands::annotations::export_codebook,
+        commands::annotations::preview_codebook_import,
+        commands::annotations::apply_codebook_import,
+        commands::annotations::search_document_annotations,
+        commands::annotations::export_document_annotations,
+        commands::annotations::preview_annotation_import,
+        commands::annotations::import_annotation_packet,
         commands::tracker::list_claimed_requests,
         commands::tracker::claim_request,
         commands::tracker::update_claimed_request,
@@ -210,7 +230,14 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::tracker::import_request_emails,
         commands::tracker::confirm_suggested_event,
         commands::tracker::reject_suggested_event,
-        commands::tracker::get_request_deadline
+        commands::tracker::get_request_deadline,
+        commands::resolution::list_resolution_candidates,
+        commands::resolution::record_resolution_judgment,
+        commands::resolution::list_resolution_ledger,
+        commands::resolution::get_resolution_clusters,
+        commands::resolution::export_resolution_ledger,
+        commands::resolution::preview_resolution_import,
+        commands::resolution::import_resolution_ledger
     ];
     native_handler(invoke)
 }

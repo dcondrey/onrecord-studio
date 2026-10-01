@@ -87,6 +87,10 @@ export interface NativeCommandMap {
   run_analytical_sql: { args: { sql: string; limit?: number | null }; result: Types.SqlQueryResult };
   export_analytical_sql_csv: { args: { sql: string; outputPath: string; limit?: number | null }; result: Types.SqlExportResult };
   query_audit_records: { args: { searchTerm: string; portalKey?: string | null; agencyId?: number | null; status?: string | null; policyDeviation?: string | null; limit?: number | null }; result: Types.RequestSearchResult[] };
+  query_audit_records_page: { args: { searchTerm: string; portalKey?: string | null; agencyId?: number | null; status?: string | null; policyDeviation?: string | null; cursor?: string | null; pageSize: number }; result: Types.AuditRecordPage };
+  count_audit_records: { args: { searchTerm: string; portalKey?: string | null; agencyId?: number | null; status?: string | null; policyDeviation?: string | null }; result: Types.AuditRecordCount };
+  page_corpus_entity_neighbors: { args: { entityId: string; cursor?: string | null; pageSize: number; filter?: Types.EntityNeighborFilter | null }; result: Types.EntityNeighborPage | null };
+  count_corpus_entity_neighbors: { args: { entityId: string; filter?: Types.EntityNeighborFilter | null }; result: Types.EntityNeighborCounts | null };
   export_legal_brief: { args: { requestId: number; portalKey: string; targetPath?: string | null; authorName?: string | null }; result: Types.LegalBriefExportResult };
   export_case_evidence_package: { args: { caseId: string; targetPath?: string | null; withheldCitations: Types.WithheldCitationRequest[] }; result: Types.CaseEvidencePackageResult };
   case_export_chain: { args: { caseId: string }; result: Types.CaseExportLedgerEntry[] };
@@ -152,9 +156,21 @@ export interface NativeCommandMap {
   list_shared_folder_packets: { args: { folder: string }; result: Types.SharedFolderPacket[] };
   read_shared_folder_packet: { args: { folder: string; fileName: string }; result: string };
   publish_packet_to_folder: { args: { folder: string; fileName: string; payload: string }; result: null };
-  list_document_annotations: { args: { portalKey: string; documentId: number }; result: Types.DocumentAnnotation[] };
+  list_document_annotations: { args: { portalKey: string; documentId: number }; result: Types.DocumentAnnotationList };
   add_document_annotation: { args: { input: Types.AddAnnotationInput }; result: Types.DocumentAnnotation };
   remove_document_annotation: { args: { id: string }; result: null };
+  set_annotation_status: { args: { id: string; status: Types.AnnotationStatus }; result: null };
+  get_annotation_settings: { args: NoArgs; result: Types.AnnotationSettings };
+  set_annotation_reviewer: { args: { reviewer: string }; result: Types.AnnotationSettings };
+  save_codebook_entry: { args: { entry: Types.CodebookEntry }; result: Types.AnnotationSettings };
+  delete_codebook_entry: { args: { code: string }; result: Types.AnnotationSettings };
+  export_codebook: { args: NoArgs; result: string };
+  preview_codebook_import: { args: { payload: string }; result: Types.CodebookImportPreview };
+  apply_codebook_import: { args: { payload: string; overwriteCodes: string[] }; result: Types.AnnotationSettings };
+  search_document_annotations: { args: { query: Types.AnnotationSearchQuery }; result: Types.AnnotationSearchPage };
+  export_document_annotations: { args: { portalKey: string; documentId: number }; result: string };
+  preview_annotation_import: { args: { payload: string }; result: Types.AnnotationImportPreview };
+  import_annotation_packet: { args: { payload: string; packetSha256: string }; result: Types.AnnotationImportResult };
   list_claimed_requests: { args: NoArgs; result: Types.ClaimedRequest[] };
   claim_request: { args: { input: Types.ClaimRequestInput }; result: Types.ClaimedRequest };
   update_claimed_request: { args: { input: Types.UpdateClaimedRequestInput }; result: Types.ClaimedRequest };
@@ -165,4 +181,11 @@ export interface NativeCommandMap {
   confirm_suggested_event: { args: { input: Types.ConfirmSuggestedEventInput }; result: Types.TimelineEvent };
   reject_suggested_event: { args: { input: Types.RejectSuggestedEventInput }; result: null };
   get_request_deadline: { args: { claimId: string }; result: Types.RequestDeadline };
+  list_resolution_candidates: { args: { cursor?: string | null; limit?: number | null; includeUnsure?: boolean | null }; result: Types.ResolutionCandidatePage };
+  record_resolution_judgment: { args: { input: Types.RecordResolutionInput }; result: Types.ResolutionLedgerItem };
+  list_resolution_ledger: { args: { cursor?: string | null; limit?: number | null; pair?: string | null }; result: Types.ResolutionLedgerPage };
+  get_resolution_clusters: { args: { entityId: string }; result: Types.ResolutionClusterView | null };
+  export_resolution_ledger: { args: NoArgs; result: string };
+  preview_resolution_import: { args: { payload: string }; result: Types.ResolutionImportPreview };
+  import_resolution_ledger: { args: { payload: string; packetSha256: string }; result: Types.ResolutionImportResult };
 }

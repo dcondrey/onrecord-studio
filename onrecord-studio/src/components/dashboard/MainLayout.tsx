@@ -3,6 +3,7 @@ import SearchFilter from '../filters/SearchFilter';
 import { useAppStore } from '../../store/useAppStore';
 import { cn } from '../../utils/cn';
 import DocumentViewer from '../documents/DocumentViewer';
+import AnnotationSearch from '../documents/AnnotationSearch';
 import UnredactorPanel from '../documents/UnredactorPanel';
 import LegalAuthorityManager from '../legal/LegalAuthorityManager';
 import LegalCompliancePanel from '../legal/LegalCompliancePanel';
@@ -30,7 +31,11 @@ import { documentBriefingEvidence, requestBriefingEvidence } from '../../utils/b
 import DialogBackdrop from '../ui/DialogBackdrop';
 import AnalysisWorkbench from './AnalysisWorkbench';
 import CaseTimeline from './CaseTimeline';
-import { formatMatchCount, MATCH_BASIS_LABELS, matchBasis, SEARCH_RESULT_LIMIT } from '../../utils/searchResults';
+import { formatMatchCount, MATCH_BASIS_LABELS, matchBasis, SEARCH_PAGE_SIZE } from '../../utils/searchResults';
+import VirtualList from '../ui/VirtualList';
+
+/** Fixed so the list can be windowed from the scroll offset; the row clamps its text to fit. */
+const RESULT_ROW_HEIGHT = 128;
 
 export default function MainLayout() {
   // Request selection lives in the shared workspace store and survives view switches. The open
@@ -42,6 +47,8 @@ export default function MainLayout() {
   const evidenceRefreshRequests = useAppStore((state) => state.evidenceRefreshRequests);
   const results = useAppStore((state) => state.filteredResults);
   const resultsTerm = useAppStore((state) => state.filteredResultsTerm);
+  const resultsTotal = useAppStore((state) => state.filteredResultsTotal);
+  const searchPaging = useAppStore((state) => state.searchPaging);
   const searchError = useAppStore((state) => state.searchError);
   const selectedRequestId = useAppStore((state) => state.selectedRequestId);
   const selectedRequestPortalKey = useAppStore((state) => state.selectedRequestPortalKey);
@@ -67,6 +74,28 @@ export default function MainLayout() {
   const selected = results.find(
     (result) => result.requestId === selectedRequestId && result.portalKey === selectedRequestPortalKey,
   ) ?? null;
+  // A later page belongs to the query that was showing when it was requested. The generation is
+  // that identity: a page that lands after a new query replaced the list is dropped, not appended.
+  const loadMoreResults = useCallback(async (retry = false) => {
+    const { searchPaging: paging, ...store } = useAppStore.getState();
+    if (!paging || paging.nextCursor === null || paging.loadingMore || (paging.moreError !== null && !retry)) return;
+    const { generation, args, nextCursor } = paging;
+    const stillCurrent = () => useAppStore.getState().searchPaging?.generation === generation;
+    store.setSearchPageState(generation, { loadingMore: true, moreError: null });
+    try {
+      const page = await invokeCommand('query_audit_records_page', { ...args, cursor: nextCursor, pageSize: SEARCH_PAGE_SIZE });
+      if (!stillCurrent()) return;
+      store.appendFilteredResults(generation, page.records, page.nextCursor);
+      const after = useAppStore.getState();
+      if (page.nextCursor === null && after.filteredResults.length !== after.filteredResultsTotal) {
+        // The corpus changed while the pages were read; state the current total rather than the first one.
+        const count = await invokeCommand('count_audit_records', args).catch(() => null);
+        if (count && stillCurrent()) store.setFilteredResultsTotal(generation, count.total);
+      }
+    } catch (reason) {
+      if (stillCurrent()) store.setSearchPageState(generation, { loadingMore: false, moreError: String(reason) });
+    }
+  }, []);
   const documentListGate = useLatestRequestGate();
   const documentOpenGate = useLatestRequestGate();
   const exportGate = useLatestRequestGate();
@@ -163,6 +192,10 @@ export default function MainLayout() {
 
   useEffect(() => {
     if (!pendingEvidenceLink || documents.length === 0) return;
+    // `documents` still belongs to the previously selected request until the list effect has
+    // switched owners; looking the target up in it would reject a valid link.
+    const owner = documentOwnerRef.current;
+    if (owner?.requestId !== pendingEvidenceLink.requestId || owner?.portalKey !== pendingEvidenceLink.portalKey) return;
     const summary = documents.find((document) =>
       document.documentId === pendingEvidenceLink.documentId
       && document.portalKey === pendingEvidenceLink.portalKey
@@ -255,6 +288,7 @@ export default function MainLayout() {
       </div>
       {evidenceMode === 'timeline' ? <CaseTimeline /> : <>
       <SearchFilter />
+      <AnnotationSearch onOpen={setPendingEvidenceLink} />
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto grid min-h-[620px] w-full max-w-[1800px] grid-cols-1 gap-4 p-4 lg:p-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.75fr)]">
           <section className="app-panel flex min-h-[520px] flex-col overflow-hidden">
@@ -265,28 +299,56 @@ export default function MainLayout() {
               </div>
               <div className="flex items-center gap-2">
                 <button type="button" onClick={() => setLegalLibraryOpen(true)} className="rounded border border-indigo-400/20 bg-indigo-500/[0.07] px-2 py-1 text-[9px] font-semibold text-indigo-200/80 transition hover:border-indigo-400/35 hover:bg-indigo-500/10">Legal authority library</button>
-                <span className="rounded border border-slate-800 bg-slate-950 px-2 py-1 font-mono text-[9px] text-slate-400">{formatMatchCount(results.length)} records</span>
+                <span className="rounded border border-slate-800 bg-slate-950 px-2 py-1 font-mono text-[9px] text-slate-400">{formatMatchCount(resultsTotal)} records</span>
               </div>
             </div>
-            {results.length >= SEARCH_RESULT_LIMIT && (
-              <p role="status" className="border-b border-amber-500/20 bg-amber-500/[0.05] px-4 py-2 text-[10px] text-amber-200">
-                Showing the first {SEARCH_RESULT_LIMIT.toLocaleString()} matches; more may exist. Narrow the search by agency, status, or a more specific term to see the rest.
+            {resultsTotal > results.length && (
+              <p role="status" className="border-b border-slate-800 px-4 py-2 text-[10px] text-slate-400">
+                Showing {formatMatchCount(results.length)} of {formatMatchCount(resultsTotal)} matches. More load as you scroll, or use Load more below the list.
               </p>
             )}
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            {searchPaging?.nextCursor === null && results.length !== resultsTotal && (
+              <p role="status" className="border-b border-amber-500/20 bg-amber-500/[0.05] px-4 py-2 text-[10px] text-amber-200">
+                The records changed while the pages loaded, so the list holds {formatMatchCount(results.length)} and the count is {formatMatchCount(resultsTotal)}. Search again for a consistent view.
+              </p>
+            )}
+            <div className="flex min-h-0 flex-1 flex-col">
               {results.length === 0 ? (
                 <EmptyResults error={searchError} sourceCount={portals.length} />
               ) : (
-                <div className="divide-y divide-slate-800/70">
-                  {results.map((result) => {
+                <VirtualList
+                  items={results}
+                  rowHeight={RESULT_ROW_HEIGHT}
+                  ariaLabel="Search results"
+                  className="h-[60vh] min-h-[360px]"
+                  resetKey={String(searchPaging?.generation ?? 'complete')}
+                  initialActiveIndex={Math.max(0, results.findIndex((result) => result.requestId === selectedRequestId && result.portalKey === selectedRequestPortalKey))}
+                  getKey={(result) => `${result.portalKey}-${result.requestId}`}
+                  onNearEnd={() => void loadMoreResults()}
+                  footer={searchPaging?.nextCursor != null ? (
+                    <div className="flex items-center gap-2 px-4 py-3 text-[10px] text-slate-400">
+                      {searchPaging.moreError !== null && (
+                        <span role="alert" className="text-rose-300">The next page could not be read: {searchPaging.moreError}</span>
+                      )}
+                      <button
+                        type="button"
+                        disabled={searchPaging.loadingMore}
+                        onClick={() => void loadMoreResults(true)}
+                        className="focus-ring rounded border border-slate-700 px-2.5 py-1 font-semibold text-slate-200 hover:border-cyan-400/50 disabled:opacity-60"
+                      >
+                        {searchPaging.loadingMore ? 'Loading…' : searchPaging.moreError !== null ? 'Retry' : 'Load more'}
+                      </button>
+                    </div>
+                  ) : undefined}
+                  renderRow={(result, { tabIndex }) => {
                     const isSelected = selectedRequestId === result.requestId && selectedRequestPortalKey === result.portalKey;
                     return (
                       <button
-                        key={`${result.portalKey}-${result.requestId}`}
                         type="button"
+                        tabIndex={tabIndex}
                         onClick={() => setSelectedRequest(result.requestId, result.portalKey)}
                         className={cn(
-                          'grid w-full grid-cols-[minmax(0,1fr)_120px] gap-4 px-4 py-3 text-left outline-none transition hover:bg-slate-900/80 focus:bg-slate-900/80',
+                          'grid h-full w-full grid-cols-[minmax(0,1fr)_120px] gap-4 overflow-hidden border-b border-slate-800/70 px-4 py-3 text-left outline-none transition hover:bg-slate-900/80 focus:bg-slate-900/80',
                           isSelected && 'bg-indigo-500/[0.08] ring-1 ring-inset ring-indigo-400/25',
                         )}
                       >
@@ -314,8 +376,8 @@ export default function MainLayout() {
                         </div>
                       </button>
                     );
-                  })}
-                </div>
+                  }}
+                />
               )}
             </div>
           </section>

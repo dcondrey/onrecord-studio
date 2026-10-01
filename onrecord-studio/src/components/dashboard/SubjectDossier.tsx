@@ -27,6 +27,7 @@ export default function SubjectDossier() {
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
 
   const [resolution, setResolution] = useState<Resolution>({ status: 'RESOLVING' });
+  const [neighborTotal, setNeighborTotal] = useState<number | null>(null);
   const [neighborhood, setNeighborhood] = useState<SectionState<CorpusEntityNeighborhood | null>>({
     status: 'LOADING',
   });
@@ -79,6 +80,13 @@ export default function SubjectDossier() {
     (entityId: string) => {
       const request = neighborhoodGate.begin();
       setNeighborhood({ status: 'LOADING' });
+      setNeighborTotal(null);
+      // The list above is a preview; the total is read separately so "of N" is never the preview's own size.
+      invokeCommand('count_corpus_entity_neighbors', { entityId })
+        .then((counts) => {
+          if (neighborhoodGate.isCurrent(request) && counts) setNeighborTotal(counts.unfilteredTotal);
+        })
+        .catch(() => {});
       invokeCommand('get_corpus_entity_neighborhood', { entityId, limit: 24 })
         .then((value) => {
           if (!neighborhoodGate.isCurrent(request)) return;
@@ -282,10 +290,9 @@ export default function SubjectDossier() {
                       ))}
                     </ul>
                   )}
-                  {value.edges.length > 8 && (
+                  {(value.edges.length > 8 || (neighborTotal !== null && neighborTotal > 8)) && (
                     <p className="text-[8px] text-slate-400">
-                      Showing 8 of {value.edges.length}
-                      {value.truncated ? ' (server-truncated)' : ''}. Open the entity graph for the full view.
+                      Showing 8{neighborTotal !== null ? ` of ${neighborTotal.toLocaleString()}` : ''}. Open the entity graph to see every one.
                     </p>
                   )}
                 </div>

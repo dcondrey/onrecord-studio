@@ -24,12 +24,12 @@ vi.mock('@tauri-apps/api/core', () => ({
   isTauri: () => false,
   invoke: async (command: string, args: Record<string, unknown>) => {
     bridge.calls.push({ command, args });
-    if (command === 'query_audit_records') return [{
+    if (command === 'query_audit_records_page') return { nextCursor: null, total: 1, records: [{
       requestId: 42, portalKey: 'sandiego', agencyId: 7, agencyName: 'Police Department',
       title: 'San Diego surveillance policy', descriptionPreview: 'Retention and review requirements',
       status: 'closed', createdAt: '2026-09-01T00:00:00Z', closedAt: '2026-09-02T00:00:00Z',
       documentCount: bridge.hasNewDocument ? 2 : 1, integrityFlags: [],
-    }];
+    }] };
     if (command === 'list_request_documents') return bridge.hasNewDocument
       ? [documentSummary(1, 'policy.txt'), documentSummary(2, 'new-response.txt')]
       : [documentSummary(1, 'policy.txt')];

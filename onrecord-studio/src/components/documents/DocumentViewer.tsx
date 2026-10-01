@@ -3,7 +3,9 @@ import { useC2PA } from '../../hooks/useC2PA';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { invokeCommand } from '../../ipc';
 import type { DocumentClaimChecks, EvidenceBundle, ForensicFinding, ProvenanceConfidence, ProvenanceVerificationRecord, RecoveredVersionProfile } from '../../types';
-import DocumentAnnotations, { type AnnotationAnchor } from './DocumentAnnotations';
+import DocumentAnnotations, { type AnnotationAnchor, type PassageTarget } from './DocumentAnnotations';
+import { findPassageInText } from './annotationLogic';
+import { ANNOTATION_LIMITS } from '../../types';
 import UnredactorPanel from './UnredactorPanel';
 import ReconstructionPanel from './ReconstructionPanel';
 import RedactionInferencePanel from './RedactionInferencePanel';
@@ -218,18 +220,24 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
     const before = document.createRange();
     before.selectNodeContents(pane);
     before.setEnd(range.startContainer, range.startOffset);
-    const absolute = textPage * TEXT_PAGE_CHARACTERS + before.toString().length;
+    const selected = range.toString();
+    const quote = selected.trim();
+    if (quote === '') return null;
+    const start = textPage * TEXT_PAGE_CHARACTERS + before.toString().length + (selected.length - selected.trimStart().length);
     return {
-      quote: range.toString(),
-      characterOffset: characterOffset + Array.from(textContent.slice(0, absolute)).length,
+      quote,
+      prefix: textContent.slice(Math.max(0, start - ANNOTATION_LIMITS.contextCharacters), start),
+      suffix: textContent.slice(start + quote.length, start + quote.length + ANNOTATION_LIMITS.contextCharacters),
     };
   };
 
-  const jumpToCharacter = (sourceOffset: number): boolean => {
-    const local = sourceOffset - characterOffset;
-    const points = Array.from(textContent);
-    if (local < 0 || local > points.length) return false;
-    setTextPage(Math.floor(points.slice(0, local).join('').length / TEXT_PAGE_CHARACTERS));
+  // The text on screen is one masked chunk, so a stored position in the stored text is only a hint
+  // for which of several equal passages in the chunk is meant.
+  const jumpToPassage = (passage: PassageTarget): boolean => {
+    const expected = passage.sourceOffset === null ? 0 : passage.sourceOffset - characterOffset;
+    const index = findPassageInText(textContent, passage, expected);
+    if (index === null) return false;
+    setTextPage(Math.floor(index / TEXT_PAGE_CHARACTERS));
     return true;
   };
 
@@ -424,8 +432,7 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
           documentId={documentId}
           fileName={fileName}
           readSelection={readSelectionAnchor}
-          currentOffset={characterOffset + Array.from(textContent.slice(0, textPage * TEXT_PAGE_CHARACTERS)).length}
-          onJump={jumpToCharacter}
+          onJump={jumpToPassage}
         />
       )}
       <div ref={textPaneRef} className="min-h-0 flex-1 overflow-y-auto p-5 font-mono text-xs leading-relaxed text-slate-300 selection:bg-indigo-500/30">
