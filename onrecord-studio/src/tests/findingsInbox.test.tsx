@@ -159,6 +159,25 @@ describe('FindingsInbox', () => {
     expect(screen.getByRole('button', { name: /refresh findings/i })).toBeTruthy();
   });
 
+  it('only claims more findings exist when the backend returns more than the page size', async () => {
+    const rows = (count: number) =>
+      Array.from({ length: count }, (_, i) => sampleFinding({ id: `f${i}`, headline: `Finding ${i}` }));
+    bridge.listRows = rows(50);
+    await act(async () => {
+      render(<FindingsInbox />);
+    });
+    await waitFor(() => expect(screen.getByText('Finding 0')).toBeTruthy());
+    expect(screen.queryByText(/more exist/i)).toBeNull();
+    cleanup();
+    bridge.listRows = rows(51);
+    await act(async () => {
+      render(<FindingsInbox />);
+    });
+    await waitFor(() => expect(screen.getByText('Finding 49')).toBeTruthy());
+    expect(screen.getByText(/more exist/i)).toBeTruthy();
+    expect(screen.queryByText('Finding 50')).toBeNull();
+  });
+
   it('renders ranked findings from list_findings and shows their severity, headline, and explanation', async () => {
     bridge.listRows = [
       sampleFinding({
