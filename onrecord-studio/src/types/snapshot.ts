@@ -1,5 +1,5 @@
 export interface ResearchSnapshotManifest {
-  schema: string;
+  schemaVersion: string;
   appVersion: string;
   createdAt: string;
   fileName: string;

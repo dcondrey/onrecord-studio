@@ -25,7 +25,7 @@ format as every other signed export (`scripts/verify-evidence-package.mjs` verif
 
 | field | meaning |
 |---|---|
-| `schema` | `onrecord-research-snapshot-v1`; bumps only when a documented column changes meaning or disappears |
+| `schemaVersion` | `onrecord-research-snapshot-v1`; bumps only when a documented column changes meaning or disappears |
 | `appVersion` | the OnRecord Studio version that wrote the file |
 | `createdAt` | export instant, RFC 3339 UTC |
 | `fileName`, `fileSha256` | the `.duckdb` file and its digest |
@@ -81,10 +81,11 @@ state = con.sql("SELECT value FROM snapshot_manifest WHERE key = 'corpus_state_d
 df = con.sql("SELECT kind, severity, count(*) n FROM findings WHERE dismissed_at IS NULL GROUP BY 1, 2").df()
 ```
 
-Publish `state` beside any figure. To check a snapshot someone sent you:
+Publish `state` beside any figure. To check a snapshot someone sent you, keep the two files
+together and run the standalone verifier; it checks the signature and, when the `.duckdb` file is
+beside its manifest, that the file hashes to the signed `fileSha256`:
 
 ```sh
-shasum -a 256 onrecord-snapshot-*.duckdb          # must equal manifest.fileSha256
 node scripts/verify-evidence-package.mjs onrecord-snapshot-*.duckdb.manifest.json
 ```
 
