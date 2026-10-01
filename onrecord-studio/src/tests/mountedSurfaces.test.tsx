@@ -32,7 +32,7 @@ vi.mock('@tauri-apps/api/core', () => ({
   isTauri: () => bridge.tauri,
   invoke: (command: string) => {
     bridge.calls.push(command);
-    if (command === 'query_audit_records') return Promise.resolve([record()]);
+    if (command === 'query_audit_records_page') return Promise.resolve({ records: [record()], nextCursor: null, total: 1 });
     if (command === 'get_request_statutory_extension') return Promise.resolve(null);
     if (command === 'draft_appeal_from_statutory_deadline') return Promise.reject(new Error('determination date is a proxy'));
     if (command === 'export_verifiable_report') return Promise.reject(new Error('export refused'));

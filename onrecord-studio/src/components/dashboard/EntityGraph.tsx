@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { combineNeighbourhoods, filterEdges, lookalikeNeighbours } from '../../utils/entityEdges';
+import { combineNeighbourhoods, lookalikeNeighbours } from '../../utils/entityEdges';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
+import { useEntityNeighbors } from '../../hooks/useEntityNeighbors';
+import EntityNeighborTable from './EntityNeighborTable';
 import type {
   CorpusEntityEdge,
   CorpusEntityKind,
   CorpusEntityNeighborhood,
   CorpusEntityNode,
   EntityBroker,
+  EntityNeighborFilter,
   EntityPath,
   RelationshipBasis,
   RelationshipKind,
@@ -28,6 +31,11 @@ import {
   gradeLabel,
 } from '../ui/EvidenceBasis';
 
+/**
+ * Neighbours drawn at once. Readability, not a limit: every neighbour stays reachable in the table
+ * below, and the kinds the drawing leaves out are named with their counts.
+ */
+const DRAWING_BUDGET = 18;
 const VIEWPORT = 460;
 const CENTRE = VIEWPORT / 2;
 const INNER_RADIUS = 74;
@@ -128,17 +136,6 @@ function truncateLabel(value: string) {
   return value.length > 28 ? `${value.slice(0, 27)}…` : value;
 }
 
-/**
- * A neighbourhood answer records the entity it was requested for. The render derives everything
- * from `answer.entityId === selectedId`, so a selection change with no request yet issued, or one
- * whose request is still in flight, reads as pending rather than as the previous entity's verdict.
- * `neighborhood: null` is the index saying the entity is gone; a pending request says nothing.
- */
-interface NeighborhoodAnswer {
-  entityId: string;
-  neighborhood: CorpusEntityNeighborhood | null;
-}
-
 interface PathRequest {
   fromEntityId: string;
   toEntityId: string;
@@ -162,11 +159,11 @@ export default function EntityGraph() {
   const pathGate = useLatestRequestGate();
   const drawingRef = useRef<HTMLDivElement>(null);
   const [seeds, setSeeds] = useState<CorpusEntityNode[]>([]);
-  const [answer, setAnswer] = useState<NeighborhoodAnswer | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [pathTargetId, setPathTargetId] = useState('');
   const [shownBases, setShownBases] = useState<ReadonlySet<RelationshipBasis>>(() => new Set(ALL_BASES));
+  const [kindFilter, setKindFilter] = useState<CorpusEntityKind | null>(null);
   const [asOf, setAsOf] = useState('');
   const [includeUndated, setIncludeUndated] = useState(true);
   const [pathAnswer, setPathAnswer] = useState<PathAnswer | null>(null);
@@ -202,31 +199,23 @@ export default function EntityGraph() {
       });
   }, [gate]);
 
-  useEffect(() => {
-    if (!selectedId) return;
-    // The token is captured for the entity this request was made under. A neighbourhood that
-    // resolves after the investigator has clicked through to another node would otherwise be
-    // published as that node's relationships, which is a false statement about the corpus.
-    const token = gate.begin();
-    const entityId = selectedId;
-    invokeCommand('get_corpus_entity_neighborhood', { entityId, limit: 18 })
-      .then((result) => {
-        if (!gate.isCurrent(token)) return;
-        setAnswer({ entityId, neighborhood: result });
-      })
-      .catch(() => {
-        if (!gate.isCurrent(token)) return;
-        setFailed(true);
-      });
-  }, [selectedId, gate]);
-
-  // Only an answer for the entity now selected is a statement about it. Anything else is pending.
-  const current = answer !== null && answer.entityId === selectedId ? answer : null;
-  const baseNeighborhood = current?.neighborhood ?? null;
+  // The filter is evaluated by the index over every neighbour, so a filtered drawing and table are
+  // complete for the filter rather than limited to whatever was loaded.
+  const filter: EntityNeighborFilter = {
+    bases: ALL_BASES.filter((basis) => shownBases.has(basis)),
+    asOf: asOf || null,
+    includeUndated,
+    kind: kindFilter,
+  };
+  const filterKey = JSON.stringify(filter);
+  const { list, centre: knownCentre, loadMore, loadAll } = useEntityNeighbors(selectedId, filter);
+  const baseNeighborhood: CorpusEntityNeighborhood | null =
+    list.status === 'ready' ? { center: list.centre, edges: list.edges.slice(0, DRAWING_BUDGET), truncated: false } : null;
   const aliasState = combined !== null && combined.centreId === selectedId ? combined.aliases : {};
   const loadedAliases = Object.values(aliasState).filter((value): value is CorpusEntityNeighborhood => typeof value === 'object' && value !== null);
-  const neighborhood = baseNeighborhood && loadedAliases.length > 0 ? combineNeighbourhoods(baseNeighborhood, loadedAliases) : baseNeighborhood;
-  const lookalikes = baseNeighborhood ? lookalikeNeighbours(baseNeighborhood.center, baseNeighborhood.edges) : [];
+  const combinedView = baseNeighborhood && loadedAliases.length > 0 ? combineNeighbourhoods(baseNeighborhood, loadedAliases) : baseNeighborhood;
+  const neighborhood = combinedView ? { ...combinedView, edges: combinedView.edges.slice(0, DRAWING_BUDGET) } : null;
+  const lookalikes = list.status === 'ready' ? lookalikeNeighbours(list.centre, list.edges) : [];
   const combine = (alias: CorpusEntityNode) => {
     const centreId = selectedId;
     if (!centreId) return;
@@ -234,8 +223,8 @@ export default function EntityGraph() {
       centreId,
       aliases: { ...(previous?.centreId === centreId ? previous.aliases : {}), [alias.entityId]: 'loading' },
     }));
-    invokeCommand('get_corpus_entity_neighborhood', { entityId: alias.entityId, limit: 18 })
-      .then((result) => settleAlias(centreId, alias.entityId, result ?? 'failed'))
+    invokeCommand('page_corpus_entity_neighbors', { entityId: alias.entityId, pageSize: DRAWING_BUDGET, filter })
+      .then((page) => settleAlias(centreId, alias.entityId, page ? { center: page.center, edges: page.edges, truncated: false } : 'failed'))
       .catch(() => settleAlias(centreId, alias.entityId, 'failed'));
   };
   const settleAlias = (centreId: string, aliasId: string, value: CorpusEntityNeighborhood | 'failed') =>
@@ -249,17 +238,22 @@ export default function EntityGraph() {
       if (!previous) return previous;
       return { ...previous, aliases: Object.fromEntries(Object.entries(previous.aliases).filter(([id]) => id !== aliasId)) };
     });
-  const missing = current !== null && current.neighborhood === null;
+  const missing = list.status === 'missing';
   const pathView = pathAnswer !== null && pathAnswer.request.fromEntityId === selectedId ? pathAnswer : null;
 
   // On a narrow screen the drawing scrolls sideways; start with the centre entity in view.
-  const centredOn = neighborhood?.center.entityId ?? null;
+  const centredOn = knownCentre?.entityId ?? null;
   useEffect(() => {
     const el = drawingRef.current;
     if (el) el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2;
   }, [centredOn]);
 
-  if (failed) {
+  // A changed filter describes different relationships, so combined spellings do not carry over.
+  useEffect(() => {
+    setCombined(null);
+  }, [filterKey]);
+
+  if (failed || list.status === 'failed') {
     return (
       <section className="app-panel flex min-h-[420px] flex-col overflow-hidden p-5">
         <div className="app-eyebrow">Entity graph</div>
@@ -272,15 +266,15 @@ export default function EntityGraph() {
     );
   }
 
-  const totalEdgeCount = neighborhood?.edges.length ?? 0;
-  const visibleEdges = neighborhood
-    ? filterEdges(neighborhood.edges, { bases: shownBases, asOf: asOf || null, includeUndated })
-    : [];
-  const placed = placeEdges(visibleEdges);
-  const centre = neighborhood?.center ?? null;
-  const edgeCount = visibleEdges.length;
-  const isFiltered = shownBases.size < ALL_BASES.length || asOf !== '';
-  const edgesTruncated = neighborhood?.truncated ?? false;
+  const placed = placeEdges(neighborhood?.edges ?? []);
+  const centre = knownCentre;
+  const listing = list.status === 'ready' ? list : null;
+  const counts = listing?.counts ?? null;
+  const hiddenByFilters = counts !== null && counts.total !== counts.unfilteredTotal;
+  const drawnOfKind = (kind: CorpusEntityKind) => placed.filter(({ edge }) => edge.neighbor.kind === kind).length;
+  const undrawnGroups = (counts?.byKind ?? [])
+    .map(({ kind, count }) => ({ kind, undrawn: Math.max(0, count - drawnOfKind(kind)) }))
+    .filter(({ undrawn }) => undrawn > 0);
 
   return (
     <section className="app-panel flex flex-col overflow-hidden p-5">
@@ -437,9 +431,22 @@ export default function EntityGraph() {
                 <button type="button" className="focus-ring underline" onClick={() => setAsOf('')}>Clear date</button>
               </>
             )}
-            {isFiltered && (
+            <label className="flex items-center gap-1">
+              Kind
+              <select
+                value={kindFilter ?? ''}
+                onChange={(event) => setKindFilter((event.target.value || null) as CorpusEntityKind | null)}
+                className="focus-ring rounded border border-slate-800 bg-slate-950 px-1 py-0.5 text-slate-200"
+              >
+                <option value="">All kinds</option>
+                {(Object.keys(kindLabels) as CorpusEntityKind[]).map((kind) => (
+                  <option key={kind} value={kind}>{kindLabels[kind]}</option>
+                ))}
+              </select>
+            </label>
+            {hiddenByFilters && counts && (
               <span role="status">
-                Showing {edgeCount} of {totalEdgeCount}. Hidden relationships are filtered out, not absent.
+                The filters match {counts.total.toLocaleString('en-US')} of {counts.unfilteredTotal.toLocaleString('en-US')} neighbours. Hidden relationships are filtered out, not absent.
                 {asOf && !includeUndated ? ' Relationships with no recorded dates are hidden.' : ''}
               </span>
             )}
@@ -562,6 +569,33 @@ export default function EntityGraph() {
             </text>
           </svg>
           </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-[9px] text-slate-400" aria-busy={list.status === 'loading'}>
+            {list.status === 'loading' ? (
+              <span role="status">Updating the neighbours for this filter…</span>
+            ) : (
+              <span role="status">
+                {counts
+                  ? `Drawing the ${placed.length} strongest of ${counts.total.toLocaleString('en-US')} neighbours. All of them are listed in the table below.`
+                  : `Drawing the ${placed.length} strongest neighbours. The total is not available yet; the table below lists every neighbour.`}
+              </span>
+            )}
+            {kindFilter === null &&
+              undrawnGroups.map(({ kind, undrawn }) => (
+                <button
+                  key={kind}
+                  type="button"
+                  className="focus-ring rounded border border-slate-700 px-2 py-0.5 font-semibold text-slate-300 hover:border-cyan-400/50"
+                  onClick={() => setKindFilter(kind)}
+                >
+                  {undrawn.toLocaleString('en-US')} more of {kindLabels[kind]}
+                </button>
+              ))}
+            {kindFilter !== null && (
+              <button type="button" className="focus-ring rounded border border-slate-700 px-2 py-0.5 font-semibold text-slate-300 hover:border-cyan-400/50" onClick={() => setKindFilter(null)}>
+                Showing {kindLabels[kindFilter]} only. Show all kinds
+              </button>
+            )}
+          </div>
 
           <ul className="mt-2 flex flex-col gap-1.5" aria-label="Relationships and their evidence basis">
             {placed.map(({ edge }) => (
@@ -584,14 +618,35 @@ export default function EntityGraph() {
             ))}
           </ul>
 
+          {listing && (
+            <>
+              <EntityNeighborTable
+                centre={centre}
+                list={listing}
+                kindLabel={(kind) => kindLabels[kind]}
+                onSelect={setSelectedId}
+                onLoadMore={loadMore}
+                onLoadAll={loadAll}
+              />
+              {loadedAliases.length > 0 && (
+                <p className="mt-1 text-[9px] text-slate-400">
+                  The table lists {centre.displayValue}'s own neighbours. Combined spellings add their strongest neighbours to the drawing only.
+                </p>
+              )}
+            </>
+          )}
+
           <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-slate-800 pt-2 text-[9px] text-slate-400">
             <span>
               {kindLabels[centre.kind]} · {centre.documentCount} documents
             </span>
             <ValidationGradeChip grade={centre.validationGrade} />
             <span className="font-mono">
-              {edgeCount} neighbours
-              {edgesTruncated ? ' (list cut at the limit)' : ''}
+              {counts
+                ? `${counts.total.toLocaleString('en-US')} neighbours`
+                : listing?.countFailed
+                  ? 'Neighbour total unavailable'
+                  : 'Counting neighbours'}
             </span>
             <span className="ml-auto">
               Node badge shape carries validation grade; hollow badge with dashed outline is a lead.

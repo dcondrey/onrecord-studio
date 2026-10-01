@@ -51,6 +51,9 @@ const CORPUS_ALGORITHM_VERSION: &str = "deterministic-corpus-v3";
 /// holds only `CO_OCCURRENCE` edges and would read as "no typed relationships exist".
 const CORPUS_SCHEMA_VERSION: i64 = 9;
 
+#[path = "corpus_neighbors.rs"]
+pub mod neighbors;
+
 /// Collapses a pair's edges to one kind. A typed edge is a stronger claim than proximity and
 /// `MIN` alone sorts `CO_OCCURRENCE` before `SIGNED_BY`, `PROMISES` and others, hiding them behind
 /// the weakest claim; `~` sorts after every kind name and reads back as `CoOccurrence`.

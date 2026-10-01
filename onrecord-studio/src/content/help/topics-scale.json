@@ -1,0 +1,50 @@
+[
+  {
+    "id": "large-result-sets",
+    "title": "Large result sets and neighbour lists",
+    "group": "Concepts",
+    "summary": "Search and the entity graph show exact totals and reach every row. Nothing is cut at a fixed number.",
+    "keywords": [
+      "matches",
+      "total",
+      "count",
+      "load more",
+      "pages",
+      "paging",
+      "scroll",
+      "500",
+      "limit",
+      "neighbours",
+      "neighbors",
+      "more of kind",
+      "csv",
+      "export"
+    ],
+    "sections": [
+      {
+        "heading": "Search",
+        "items": [
+          "The match count is the exact number of requests that match the text and filters, counted separately from the list. It is not the number of rows loaded so far.",
+          "The list loads in pages as you scroll and has a Load more button. Only the rows near the window are drawn, so a list of tens of thousands stays responsive. The status line says how many are loaded of the total.",
+          "Pages follow a fixed order, newest first, then source, then request number. A request ingested while you scroll never makes a row repeat or vanish. A new request that sorts after your position is read once as you continue; one that sorts before it appears the next time you search.",
+          "If the total changes between the first page and the last, the list says so rather than showing more rows than the count.",
+          "Searching text is refused while the search index is still being built, because a count taken from a partial index would be too low. The count and the list give the same refusal."
+        ]
+      },
+      {
+        "heading": "Entity graph",
+        "items": [
+          "The drawing shows the strongest neighbours, the ones sharing the most documents with the entity. This is a drawing budget for readability, not a limit on what exists.",
+          "Neighbours that are not drawn are grouped by kind, for example 312 more Person. Selecting it limits the drawing and the table to that kind, so its strongest neighbours are drawn and every one of them is listed; Show all kinds returns to the full view.",
+          "The table lists all neighbours, strongest first, with ties ordered by name and then by identifier. It loads in pages and every neighbour is reachable by scrolling or Load more.",
+          "The basis, as-of date and kind filters are applied to every neighbour, not only the loaded ones, and the table states how many match out of how many exist.",
+          "Copy CSV copies the rows loaded in the table and says how many that is out of the total. Load all reads further pages, up to 20 pages at a time, and then offers to continue; it never stops silently."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": ["paging"],
+    "related": []
+  }
+]

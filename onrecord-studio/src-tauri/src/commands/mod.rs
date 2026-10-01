@@ -9,6 +9,7 @@ pub mod export;
 pub mod ingest;
 pub mod investigation;
 pub mod maintenance;
+pub mod paging;
 pub mod query;
 pub mod reconstruction;
 pub mod research;
