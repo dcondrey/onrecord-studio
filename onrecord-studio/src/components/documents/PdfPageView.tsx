@@ -82,6 +82,9 @@ function digestBanner(header: OriginalHeader) {
  * keyed by document. The page and its text layer are discarded unless they are still the page the
  * reader is on when they finish.
  */
+/** Bundled under public/ so a PDF that names a standard font without embedding it draws with the right metrics offline. */
+const STANDARD_FONT_URL = '/pdfjs/standard_fonts/';
+
 export default function PdfPageView({ portalKey, documentId, fileName }: { portalKey: string; documentId: number; fileName: string }) {
   const key = pageViewKey(portalKey, documentId);
   const bridge = usePageViewState(key);
@@ -121,7 +124,7 @@ export default function PdfPageView({ portalKey, documentId, fileName }: { porta
         const { bytes, header } = parseOriginalFrame(frame);
         const pdfjs = await loadPdfjs();
         if (!loadGate.isCurrent(request)) return;
-        const opened = await pdfjs.getDocument({ data: bytes, useWorkerFetch: false }).promise;
+        const opened = await pdfjs.getDocument({ data: bytes, useWorkerFetch: false, standardFontDataUrl: STANDARD_FONT_URL }).promise;
         if (!loadGate.isCurrent(request)) {
           void opened.loadingTask.destroy();
           return;
