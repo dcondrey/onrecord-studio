@@ -28,11 +28,22 @@ state lookup. Prefer `DuckDbRepository` in new code; both are exported from `sto
 
 Everything below is rebuildable from the core. None of it is evidence in its own right.
 
-**`documents_fts` — search projection.** A plain DuckDB table maintained transactionally by the
-repository inside the same transaction that finalizes a document extraction. **It is not an FTS5
-virtual table**: no tokenization, no ranking, no Boolean operators.
-`DuckDbRepository::full_text_search` reduces a query to a single term and matches it with a bounded
-`LIKE` substring scan. A mid-word fragment matches; `AND`/`OR`/`NOT` are dropped.
+**`documents_fts` — text storage, not the search index.** A plain DuckDB table maintained
+transactionally by the repository inside the same transaction that finalizes a document
+extraction. **It is not an FTS5 virtual table.**
+
+Request and document search (`DuckDbRepository::search_requests`,
+`storage::discovery_search::search_document_passages`) are matched against a separate persistent
+projection, `document_search_tokens`: one row per document, portal, and token, with a summed term
+frequency, written by `synchronize_search_tokens` inside the same transaction as `documents_fts`,
+up to a 4,000,000-character indexed prefix per document (`SEARCH_TOKEN_MAX_INDEXED_CHARACTERS`).
+`storage::fts::core_query_tokens` reduces a query to its distinct whole tokens and every one of
+them must be present (`AND` across tokens, matched exactly); there is still no Boolean grouping and
+a mid-word fragment no longer matches at all. Hits rank by summed term frequency, so this is no
+longer unranked. `documents_fts.extracted_text` remains a bounded `LIKE` substring scan in one
+narrow, separate path — `find_redaction_context_matches`, the redaction-inference engine's lexical
+fallback when the embedding model is not initialized — which is deliberately lightweight and does
+not feed general search.
 
 `storage::fts::format_sqlite_fts5_query` emits real SQLite FTS5 `MATCH` syntax and is tested
 against a real FTS5 virtual table, but **no core path calls it**. It is retained because it is the
@@ -106,6 +117,7 @@ they are holding.
 
 | level | evidence behind it |
 |---|---|
+| `EVIDENCE_FILE_UNAVAILABLE` | no readable evidence file: none was ever recorded, the recorded path no longer resolves, or it failed the managed-evidence-store gate. Weakest state, and deliberately not an error |
 | `DIGEST_MISMATCH` | stored bytes do not hash to the recorded digest |
 | `NO_RECORDED_DIGEST` | nothing recorded to compare against |
 | `RECORDED_CLAIM_ONLY` | manifest metadata on file, no digest to check it against |
@@ -485,21 +497,11 @@ trusted channel is the recipient's responsibility, the same as for any manifest 
   decision.
 - Model an explicit, sourced determination event in ingestion and promote both statutory paths off
   the activity proxy.
-- Give the core a persistent DuckDB token index and route `full_text_search` through a sanitizer
-  written for it, so the query language the frontend offers is the one the core executes.
 - Configure C2PA trust anchors. Without them validation stops at `VERIFIED_SIGNATURE` and no
   document can reach `TRUSTED_CHAIN_OF_CUSTODY`, which is the only level that is independent
   third-party evidence.
 - Validate provenance during ingestion, not only on demand. Manifests are currently read when a
   document is verified, so a document nobody has verified has no recorded manifest state.
-- Add a signed C2PA fixture to the test suite. The confidence rule is covered exhaustively as a
-  pure function, and the reader is covered for assets without provenance and for unparseable ones,
-  but no test exercises a genuinely signed asset end to end.
-- Derive `statutory_violations.confidence_basis_points` from `determination_basis`. Every finding is
-  persisted at 10000 (100%), including one measured to the observation instant because nothing was
-  recorded after receipt. The `evidence_summary` prose discloses the basis, so this is not a silent
-  mislabel, but a provisional finding exported to a legal brief should not carry the same
-  confidence as a completed one. This is the compliance analogue of section 5.
 
 ## 10. Citable evidence packets
 

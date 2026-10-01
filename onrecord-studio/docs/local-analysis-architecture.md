@@ -26,6 +26,12 @@ command attached so a later reader can check whether it still holds.
 `corpus::extract_iso_dates` matches `YYYY-MM-DD` only and is the sole `DATE` producer. The
 cross-document timeline has essentially no input, and no amount of downstream work changes that.
 
+**Closed 2026-08-25 (`82418a7`).** `extract_dates`/`match_date` in `storage/corpus.rs` now also
+read `Month D, YYYY`, `D Month, YYYY`, and `M/D/YYYY`-style numeric forms (with a plausible-year
+window so a hyphenated identifier does not parse as a date), each tagged with its own confidence.
+The function is no longer named `extract_iso_dates`. The 9-of-70 figure below predates this fix and
+has not been re-measured against the corrected extractor.
+
 **Only 9 of 70 indexed documents carry a `DATE` entity**, and one of them is a saturated
 spreadsheet (below). Sixty-one documents have no date in the index at all.
 
@@ -54,19 +60,23 @@ duckdb ~/Library/Application\ Support/com.onrecord.studio/onrecord_studio_corpus
 
 Copy the file before opening it with the CLI; the app holds a writer on the live one.
 
-## 2. The entity budget defect
+## 2. The entity budget defect — closed 2026-08-26
 
-`MAXIMUM_ENTITIES_PER_DOCUMENT = 20_000` is a single pool, and `extract_iso_dates` runs first in
-`analyze_document`. Document `6661148630021752` holds exactly 20,000 entities and **every one of
-them is a `DATE`**. Zero organizations, zero statutes, zero acronyms, zero email domains, zero URL
+`MAXIMUM_ENTITIES_PER_DOCUMENT = 20_000` was a single pool, and `extract_iso_dates` ran first in
+`analyze_document`. Document `6661148630021752` held exactly 20,000 entities and **every one of
+them was a `DATE`**. Zero organizations, zero statutes, zero acronyms, zero email domains, zero URL
 hosts. A spreadsheet of ISO dates consumed the whole budget and every other entity in that document
 was dropped without a record that dropping occurred.
 
-That is this project's absence-versus-measurement rule violated inside the entity pipeline: a
-reader cannot distinguish "this document contains no organizations" from "we stopped looking."
+That was this project's absence-versus-measurement rule violated inside the entity pipeline: a
+reader could not distinguish "this document contains no organizations" from "we stopped looking."
 
-The fix is a per-kind budget plus a persisted truncation flag per document and kind. A truncated
-extraction must be legible as truncated.
+**The fix (`8117b6a`): a per-kind budget plus a persisted truncation flag.** Each of the 12 entity
+kinds in `ENTITY_KINDS` now gets its own `MAXIMUM_ENTITIES_PER_KIND = 4_000` pool instead of one
+shared ceiling, and `corpus_entity_truncations` records, per document and kind, whether that kind's
+extraction hit its budget — including a `false` row for a kind with nothing in it, so "not
+truncated" is stated rather than left to be inferred from an absent row. `truncated_entity_kinds`
+reads it back. A truncated extraction is legible as truncated.
 
 ## 3. Organization extraction
 
@@ -144,9 +154,15 @@ is a claim about evidence, several hundred false failed-redaction findings are w
 nothing. Prerequisites, in order:
 
 1. Track nonstroking text colour alongside rendering mode; require dark-on-dark for an overlay
-   intersection.
+   intersection. **Still open**: `TextRun` in `unredactor.rs` carries `rendering_mode` only, no
+   fill colour.
 2. Exclude OCR layers from the invisible-text signal: a full-page invisible text layer correlated
-   with a full-page image is a scan, not concealment.
+   with a full-page image is a scan, not concealment. **Partly landed**: `classify_paint_operations`
+   now classifies a full-page image preceding every text run as a `raster_backdrop` rather than an
+   overlay or an unclassified fill, which closes the false positive this item names for a scanned
+   *image*. It does not touch the case these examples are actually about — invisible OCR text
+   intersecting a dark **vector-drawn rectangle** elsewhere on the page — which still reports
+   `PAGE_N_INVISIBLE_TEXT_BEHIND_DARK_OVERLAY` exactly as described above.
 3. Re-measure against this corpus and require a near-zero false-positive rate before it runs
    unattended.
 
@@ -268,15 +284,23 @@ bundled in the installer; tier 2/3 is roughly 1-2.5GB in total.
 
 ## 9. Provider integration, when it happens
 
-Consumer-subscription OAuth is closed by the providers themselves. Anthropic prohibits
+The deterministic pipeline in sections 1-8 above (`analysis/`, `storage/corpus.rs`) makes no
+network call. `research/model.rs` (`complete`, `discover`) is the one place this application calls
+out, and the key-field half of this section has since shipped: it dispatches to OpenAI's Responses
+API, OpenRouter's chat-completions endpoint (including an `openrouter:web_search` tool), or a local
+Ollama instance on `127.0.0.1`, selected by `ResearchPolicy::provider`, with the OpenAI/OpenRouter
+key read from `OPENAI_API_KEY`/`OPENROUTER_API_KEY` or `~/.env`. Its output is recorded
+`UNATTESTED` per section 6 above and never feeds a statutory finding.
+
+Consumer-subscription OAuth remains closed by the providers themselves. Anthropic prohibits
 subscription OAuth in third-party tools (documented February 2026, enforced April 2026). Google
 banned Gemini CLI token proxying in February 2026 and suspended accounts for it. OpenAI's
 "Sign in with OpenAI" is Codex-scoped and does not provision API billing.
 
-OpenRouter PKCE is the one real login-instead-of-key path, it works from a localhost callback on
-any port, the user's own balance pays, and it fronts every major model provider. One integration
-satisfies both "no key pasting" and "as many providers as they want." A plain key field covers
-users who already hold a direct key.
+OpenRouter PKCE is the one real login-instead-of-key path still proposed, not built: it would work
+from a localhost callback on any port, the user's own balance would pay, and it fronts every major
+model provider. One integration would satisfy both "no key pasting" and "as many providers as they
+want," on top of the plain key field that already covers users who hold a direct key.
 
 ## 10. Order of work
 
@@ -284,11 +308,14 @@ Every finding a journalist would care about lands in units 1 through 3, and none
 machine learning. That is deliberate: it makes the plan robust to `ort` native linking failing
 across the CI matrix, which is the largest single risk in it.
 
-1. `corpus_derivations` in the core database, with natural-language date extraction as its first
-   producer. Per-kind entity budgets with a recorded truncation flag. This is the largest
-   measured gap and the cheapest to close.
-2. Month names excluded from organization title-token runs, then entity resolution over the
-   surviving values. `The City` and `City of San Diego` are one actor.
+1. Natural-language date extraction (closed 2026-08-25) and per-kind entity budgets with a
+   recorded truncation flag (closed 2026-08-26) are done; see sections 1 and 2 above.
+   `corpus_derivations` in the core database is not: this was the largest measured gap and the
+   cheapest to close, and it is still the remaining piece of this item.
+2. Month names excluded from organization title-token runs is done (closed 2026-08-30; section 3).
+   Entity resolution over the surviving values — merging `The City` and `City of San Diego` as one
+   actor — is still open: `resolution_basis` exists and every row written today is still
+   `EXACT_NORMALIZED_MATCH`, so this is schema-ready but not implemented.
 3. Differential release comparison over shared segment hashes, with token-shingle alignment for
    text that has shifted. Gap detection from Bates sequences and page-count discontinuities.
 4. Text fill luminance and the OCR-layer exclusion in `unredactor.rs`, measured against the corpus,

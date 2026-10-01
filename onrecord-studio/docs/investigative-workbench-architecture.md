@@ -60,7 +60,7 @@ entities, and edges, that is the signal to stop and reconsider, not to add a tab
 
 ## 2a. What already exists, and the boundary that governs where new tables go
 
-Before adding anything, note that `storage/corpus.rs` (`CORPUS_SCHEMA_VERSION = 6`) already
+Before adding anything, note that `storage/corpus.rs` (`CORPUS_SCHEMA_VERSION = 9`) already
 implements a large part of this:
 
 | already built | where |
@@ -69,14 +69,18 @@ implements a large part of this:
 | term postings with frequency | `corpus_term_postings` |
 | SimHash per document and per segment, plus 4-band LSH | `corpus_documents`, `corpus_lsh_bands` |
 | entities with a normalized/display pair, unique per (kind, value) | `corpus_entities` |
-| entity **mentions carrying character offsets and confidence** | `corpus_entity_mentions` |
-| same-segment co-occurrence edges retaining their source offsets | `corpus_entity_relationships` |
+| entity **mentions carrying character offsets, confidence, extractor id/version, and a validation grade** | `corpus_entity_mentions` |
+| **typed** edges (`CoOccurrence`, `SignedBy`, `Cites`, `Promises`, `Delivered`, `Supersedes`, `Amends`), including cross-segment, with nullable `valid_from`/`valid_until` | `corpus_entity_relationships` |
 | per-kind truncation rows, so "none present" and "stopped looking" differ | `corpus_entity_truncations` |
 | materialized distinct-document counts per entity | `corpus_entity_document_counts` |
+| why an entity's mentions were merged (`EXACT_NORMALIZED_MATCH`, `HEURISTIC_SIMILARITY`, `INVESTIGATOR_CONFIRMED` — only the first is produced today) | `corpus_entities.resolution_basis` |
 
-Six entity kinds exist: `STATUTE`, `DATE`, `EMAIL_DOMAIN`, `URL_HOST`, `ACRONYM`, `ORGANIZATION`.
-Missing for leak and FOIA work: `PERSON`, a full `EMAIL_ADDRESS` rather than only its domain,
-`PHONE`, `CORPORATE_ID`, `MONEY`, `CASE_NUMBER`, `ADDRESS`, `BANK_ACCOUNT`.
+Twelve entity kinds are schema-defined; ten are populated by an extractor today: `STATUTE`,
+`DATE`, `EMAIL_DOMAIN`, `EMAIL_ADDRESS`, `URL_HOST`, `ACRONYM`, `ORGANIZATION`, `MONEY`, `PERSON`
+(cue-anchored: signature-position names only, not general running-prose detection), and `ROLE`.
+`POSITION` and `DOCUMENT_CLASS` exist in the schema and the truncation table but no extractor
+writes them yet. Still missing for leak and FOIA work: a general-prose `PERSON` detector, `PHONE`,
+`CORPORATE_ID`, `CASE_NUMBER`, `ADDRESS`, `BANK_ACCOUNT`.
 
 **The boundary.** The corpus index is a *rebuildable projection in a separate database file*, and
 `replace_outdated_corpus_index` **deletes that file outright** whenever `corpus_schema_version` no
@@ -119,9 +123,12 @@ edge and an observed edge be the same color on the graph.
 
 ## 4. Entities without a model
 
-There is no LLM in this application. That
-is a deliberate posture and this plan keeps it. Entity extraction is therefore deterministic, and
-that turns out to be the stronger design for evidence rather than a compromise:
+Entity extraction has no LLM in it, and this plan keeps that posture. (The separate Research
+feature, `research/model.rs`, does call out to OpenAI, OpenRouter, or a local Ollama instance for
+narrative research assistance; its output is recorded `UNATTESTED` per the attestability rule in
+`local-analysis-architecture.md` and never feeds the corpus, the graph, or a statutory finding.
+Nothing below changes because of it.) Entity extraction is therefore deterministic, and that turns
+out to be the stronger design for evidence rather than a compromise:
 
 **Extractors are validating, not merely matching.** An email address is parsed. A phone number is
 parsed to E.164 with a plausible NANP area code. An EIN, a routing number, a California corporate
@@ -147,16 +154,18 @@ splittable.
 
 ## 5. Search has to be rebuilt, not extended
 
-The current search is honest about what it is and it is not enough for this. Per
-`storage-and-evidence-architecture.md`, `documents_fts` is a plain table scanned with a bounded
-`LIKE` on a single reduced term: no tokenization, no ranking, no Boolean operators. Fuzzy search,
-cross-document correlation, and entity-scoped retrieval all need a real index.
+The current search is closer to this than it was, but still not enough for this. Per
+`storage-and-evidence-architecture.md`, request and document search now run against
+`document_search_tokens`, a persistent per-document token index with summed term frequency: every
+query token must be present (whole-token `AND`, no fragment matching), ranked by frequency. It
+still has no positions, no Boolean grouping, and no fuzzy or phonetic matching. Cross-document
+correlation and entity-scoped retrieval need those.
 
-The target is a token table with positions, which the corpus index is already shaped to hold,
-plus trigram similarity for the fuzzy path, plus phonetic keys for name variants. The critical
-property to preserve is the one commit `ef95155` established: when the index is incomplete, the
-query refuses to answer rather than under-reporting. A leak-analysis tool that quietly returns
-four of nine hits is not a slower correct tool, it is a wrong one.
+The target is the existing token table widened to carry positions, plus trigram similarity for the
+fuzzy path, plus phonetic keys for name variants — closer to extending `document_search_tokens`
+than replacing it. The critical property to preserve is the one commit `ef95155` established: when
+the index is incomplete, the query refuses to answer rather than under-reporting. A leak-analysis
+tool that quietly returns four of nine hits is not a slower correct tool, it is a wrong one.
 
 ## 6. Transform pipelines
 

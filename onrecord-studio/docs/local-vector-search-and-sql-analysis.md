@@ -85,8 +85,9 @@ The parser rejects mutation statements, arbitrary tables, table functions such a
 attachments, extension loading, and non-approved sources. The execution connection disables DuckDB
 external access before preparing the query. Exports are separate controlled application actions.
 
-Approved tables are `analysis_*`, `analytical_snapshots`, and `analytical_columns`. Row output is
-bounded by the command limit, and CSV export re-executes through the same restricted path.
+Approved tables are `analysis_*`, `analytical_snapshots`, `analytical_columns`, and
+`analytical_rows`. Row output is bounded by the command limit, and CSV export re-executes through
+the same restricted path.
 
 Numerical answers in the application should come from executed SQL. Embeddings can retrieve
 definitions and context; they are not authoritative for counts.
