@@ -202,6 +202,17 @@ describe('StarterSets panel', () => {
     await waitFor(() => expect(bridge.started).toEqual([FIRST, SECOND, SECOND]));
     await screen.findByText('Every source in this set is already in your library.');
   });
+
+  it('does not keep saying Started for a source that is no longer in the library', async () => {
+    useStarterRunStore.setState({
+      statuses: { 'sd-iba': { state: 'started', source: saved(FIRST).registration } },
+    });
+    render(<StarterSets />);
+    await screen.findByRole('button', { name: /Add 2 sources/ });
+    expect(screen.queryByText('Started')).toBeNull();
+    act(() => useAppStore.setState({ portals: [saved(FIRST)] } as never));
+    expect(screen.getByText('Started')).toBeTruthy();
+  });
 });
 
 describe('first-run empty state', () => {
