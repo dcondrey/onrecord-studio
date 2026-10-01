@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { ANNOTATION_LIMITS } from '../../types';
@@ -6,7 +6,9 @@ import type { AnnotationKind, AnnotationSettings, AnnotationStatus, DocumentAnno
 import AnnotationAgreement from './AnnotationAgreement';
 import AnnotationCodebook from './AnnotationCodebook';
 import AnnotationExchange from './AnnotationExchange';
-import { annotationCitation, isCoded, KIND_LABELS, OFFSET_STATEMENT, STATUS_LABELS } from './annotationLogic';
+import { annotationCitation, isCoded, KIND_LABELS, OFFSET_STATEMENT, REGION_STATEMENT, STATUS_LABELS } from './annotationLogic';
+import { pageViewBridge, pageViewKey, usePageViewState } from './pageViewBridge';
+import { percent } from './pageRegionLogic';
 import { annotationButton as button, annotationField as field } from './annotationStyles';
 
 export interface AnnotationAnchor {
@@ -26,7 +28,9 @@ export function annotationsToMarkdown(fileName: string, portalKey: string, docum
   const lines = [`## ${fileName} (${portalKey} / document ${documentId})`, ''];
   for (const item of annotations) {
     const label = item.tag ? `${KIND_LABELS[item.kind]}: ${item.tag}` : KIND_LABELS[item.kind];
-    const where = item.anchor?.state === 'ORPHANED'
+    const where = item.pageRegion
+      ? `page ${item.pageRegion.pageIndex + 1}, rectangle left ${percent(item.pageRegion.x)} top ${percent(item.pageRegion.y)} width ${percent(item.pageRegion.width)} height ${percent(item.pageRegion.height)} of the original file's page`
+      : item.anchor?.state === 'ORPHANED'
       ? 'passage not found in the current text'
       : item.anchor?.sourceOffset != null
         ? `character ${item.anchor.sourceOffset.toLocaleString('en-US')}`
@@ -35,7 +39,7 @@ export function annotationsToMarkdown(fileName: string, portalKey: string, docum
     if (item.quote) lines.push(`  > ${item.quote.replace(/\s*\n\s*/g, ' ')}`);
     if (item.note) lines.push(`  ${item.note.replace(/\n/g, '\n  ')}`);
   }
-  lines.push('', `${OFFSET_STATEMENT} Notes are the reviewer's own and are not part of the record.`);
+  lines.push('', `${OFFSET_STATEMENT} ${REGION_STATEMENT} Notes are the reviewer's own and are not part of the record.`);
   return lines.join('\n');
 }
 
@@ -62,6 +66,13 @@ export default function DocumentAnnotations({
   const findingGate = useLatestRequestGate();
   const gate = useLatestRequestGate();
   const saveGate = useLatestRequestGate();
+  const viewKey = pageViewKey(portalKey, documentId);
+  const pageView = usePageViewState(viewKey);
+  const pending = pageView.pending;
+  const pendingRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (pending) pendingRef.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [pending]);
   const [list, setList] = useState<DocumentAnnotationList | null>(null);
   const [settings, setSettings] = useState<AnnotationSettings | null>(null);
   const [findings, setFindings] = useState<Finding[]>([]);
@@ -82,6 +93,7 @@ export default function DocumentAnnotations({
   const load = useCallback(() => {
     const request = listGate.begin();
     setLoadError(null);
+    pageViewBridge.update(viewKey, (state) => ({ revision: state.revision + 1 }));
     invokeCommand('list_document_annotations', { portalKey, documentId })
       .then((result) => {
         if (listGate.isCurrent(request)) setList(result);
@@ -89,7 +101,7 @@ export default function DocumentAnnotations({
       .catch((reason) => {
         if (listGate.isCurrent(request)) setLoadError(formatNativeError(reason));
       });
-  }, [documentId, listGate, portalKey]);
+  }, [documentId, listGate, portalKey, viewKey]);
 
   const loadSettings = useCallback(() => {
     const request = settingsGate.begin();
@@ -138,7 +150,7 @@ export default function DocumentAnnotations({
   const needsPassage = kind !== 'NOTE';
   const canSave = !isSaving
     && settings?.reviewer != null
-    && (needsPassage ? anchor !== null : note.trim() !== '')
+    && (needsPassage ? anchor !== null || pending !== null : note.trim() !== '')
     && (kind !== 'ISSUE' || tag !== '');
 
   const save = async () => {
@@ -151,16 +163,18 @@ export default function DocumentAnnotations({
           portalKey,
           documentId,
           kind,
-          quote: anchor?.quote ?? '',
-          prefix: anchor?.prefix ?? '',
-          suffix: anchor?.suffix ?? '',
+          quote: pending ? pending.quote : anchor?.quote ?? '',
+          prefix: pending ? '' : anchor?.prefix ?? '',
+          suffix: pending ? '' : anchor?.suffix ?? '',
           note,
           tag: tag === '' ? null : tag,
           findingId: findingId === '' ? null : findingId,
+          pageRegion: pending ? pending.rectangle : null,
         },
       });
       if (!saveGate.isCurrent(request)) return;
       setAnchor(null);
+      pageViewBridge.update(viewKey, { pending: null });
       setNote('');
       setCodeChoice('');
       setFreeCode('');
@@ -234,16 +248,25 @@ export default function DocumentAnnotations({
     setStatus(reached ? null : 'That passage is not in the text chunk on screen. Use Previous or Next chunk to reach it.');
   };
 
-  const placed = items.filter((item) => item.anchor?.state !== 'ORPHANED');
-  const orphaned = items.filter((item) => item.anchor?.state === 'ORPHANED');
+  const regionState = (item: ResolvedAnnotation) => (item.pageRegion ? pageView.states[item.id] ?? null : null);
+  const isOrphan = (item: ResolvedAnnotation) => item.anchor?.state === 'ORPHANED' || regionState(item) === 'ORPHANED';
+  const placed = items.filter((item) => !isOrphan(item));
+  const orphaned = items.filter(isOrphan);
+
+  const showRegion = (item: ResolvedAnnotation) => {
+    pageViewBridge.update(viewKey, (state) => ({ selectedId: item.id, jump: state.jump + 1 }));
+    setStatus(pageView.open ? null : 'Turn on "Page view" in the viewer toolbar to see this region on its page.');
+  };
 
   const row = (item: ResolvedAnnotation) => {
     const state = item.anchor?.state ?? null;
+    const region = item.pageRegion;
+    const checked = regionState(item);
     const own = item.importedFromKey === null;
     const linked = item.findingId === null ? null : findings.find((finding) => finding.id === item.findingId);
     const changed = list?.currentTextSha256 != null && item.textSha256 !== null && item.textSha256 !== list.currentTextSha256;
     return (
-      <li key={item.id} className="rounded border border-slate-800 p-2">
+      <li key={item.id} className={`rounded border p-2 ${pageView.selectedId === item.id ? 'border-indigo-400' : 'border-slate-800'}`}>
         <div className="flex flex-wrap items-center gap-2 text-slate-400">
           <span className="font-semibold text-slate-200">{KIND_LABELS[item.kind]}</span>
           {item.tag && (
@@ -255,12 +278,18 @@ export default function DocumentAnnotations({
           {state === 'RE_ANCHORED' && <span className="rounded border border-amber-400/30 px-1.5 text-amber-200">Re-anchored</span>}
           {state === 'ORPHANED' && <span className="rounded border border-rose-400/40 px-1.5 text-rose-200">Orphaned</span>}
           {item.anchor?.sourceOffset != null && <span>character {item.anchor.sourceOffset.toLocaleString('en-US')}</span>}
-          {state === null && item.quote === '' && <span>whole document</span>}
-          {state === null && item.quote !== '' && <span>not checked: document text unavailable</span>}
+          {region && <span className="rounded border border-slate-500 px-1.5 text-slate-200">Page {region.pageIndex + 1}</span>}
+          {checked === 'ANCHORED' && <span className="rounded border border-emerald-400/30 px-1.5 text-emerald-200">Original matches</span>}
+          {checked === 'ORIGINAL_CHANGED' && <span className="rounded border border-amber-400/50 px-1.5 text-amber-200">Original changed</span>}
+          {checked === 'ORPHANED' && <span className="rounded border border-rose-400/40 px-1.5 text-rose-200">Orphaned: page missing</span>}
+          {region && checked === null && <span>original not checked</span>}
+          {!region && state === null && item.quote === '' && <span>whole document</span>}
+          {!region && state === null && item.quote !== '' && <span>not checked: document text unavailable</span>}
+          {region && checked !== 'ORPHANED' && <button type="button" className="underline" onClick={() => showRegion(item)}>Show on page {region.pageIndex + 1}</button>}
           {(state === 'ANCHORED' || state === 'RE_ANCHORED') && (
             <button type="button" className="underline" onClick={() => jump(item)}>Go to passage</button>
           )}
-          <button type="button" className="underline" onClick={() => void copy(annotationCitation(item, { fileName, currentTextSha256: list?.currentTextSha256 ?? null, appVersion: __APP_VERSION__ }), 'Copied citation')}>Copy citation</button>
+          <button type="button" className="underline" onClick={() => void copy(annotationCitation(item, { fileName, regionState: checked, currentTextSha256: list?.currentTextSha256 ?? null, appVersion: __APP_VERSION__ }), 'Copied citation')}>Copy citation</button>
           {confirmingRemoval === item.id ? (
             <>
               <button type="button" className="text-rose-300 underline" onClick={() => void remove(item.id)}>Confirm delete</button>
@@ -283,9 +312,13 @@ export default function DocumentAnnotations({
             </label>
           ) : STATUS_LABELS[item.status]}
         </p>
-        {item.contextUnanchored && item.quote !== '' && <p className="mt-1 text-amber-200">Unanchored context: made before surrounding text was kept, so it is located by its quote and position alone.</p>}
-        {item.quote !== '' && item.textSha256 === null && <p className="mt-1 text-slate-400">The document text digest was not recorded for this mark.</p>}
+        {!region && item.contextUnanchored && item.quote !== '' && <p className="mt-1 text-amber-200">Unanchored context: made before surrounding text was kept, so it is located by its quote and position alone.</p>}
+        {region && item.quote === '' && <p className="mt-1 text-slate-400">No text layer text in this region (an image, a scan, or no text layer), so nothing is quoted.</p>}
+        {region && checked === 'ORIGINAL_CHANGED' && <p className="mt-1 text-amber-200">The original file has changed since this region was drawn. The rectangle is shown where it was drawn and may no longer cover what it covered.</p>}
+        {region && <p className="mt-1 text-slate-400">Original file SHA-256 when drawn: {region.originalSha256}</p>}
+        {!region && item.quote !== '' && item.textSha256 === null && <p className="mt-1 text-slate-400">The document text digest was not recorded for this mark.</p>}
         {changed && <p className="mt-1 text-amber-200">The document text has changed since this was marked.</p>}
+        {checked === 'ORPHANED' && <p className="mt-1 text-rose-200">The original file no longer has page {(region?.pageIndex ?? 0) + 1}. The region is kept as saved and is not moved.</p>}
         {state === 'ORPHANED' && <p className="mt-1 text-rose-200">{item.anchor?.reason} Stored quote shown below; it is not located in the current text.</p>}
         {item.quote && <blockquote className="mt-1 border-l border-slate-600 pl-2 text-slate-300">{item.quote}</blockquote>}
         {item.note && <p className="mt-1 whitespace-pre-wrap">{item.note}</p>}
@@ -295,14 +328,14 @@ export default function DocumentAnnotations({
   };
 
   return (
-    <section aria-label="Annotations" className="space-y-2 border-b border-slate-800 p-3 text-[10px] text-slate-300">
+    <section aria-label="Annotations" className={`space-y-2 border-b border-slate-800 p-3 text-[10px] text-slate-300${pageView.open ? ' w-[24rem] max-w-[45%] shrink-0 overflow-y-auto border-r' : ''}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-[11px] font-semibold text-slate-200">Annotations</h3>
         <button type="button" className={button} disabled={items.length === 0} onClick={() => void copy(annotationsToMarkdown(fileName, portalKey, documentId, items), 'Copied annotations as Markdown')}>
           Copy as Markdown
         </button>
       </div>
-      <p className="text-slate-400">Your notes stay on this computer. They record your reading, not what the record shows. Positions refer to the extracted text, not to PDF pages or regions: this application has no page view to anchor to.</p>
+      <p className="text-slate-400">Your notes stay on this computer. They record your reading, not what the record shows. A text annotation's position refers to the extracted text. A region drawn in the page view refers to a rectangle on a page of the original PDF.</p>
 
       {settings && (settings.reviewer === null || editingReviewer) ? (
         <div className="flex flex-wrap items-end gap-2">
@@ -341,7 +374,16 @@ export default function DocumentAnnotations({
           <span className="text-amber-200">Not in the codebook, so it is flagged as uncoded and will not agree with a coded mark.</span>
         </label>
       )}
-      {needsPassage && (
+      {pending && (
+        <div ref={pendingRef} className="rounded border border-cyan-400/40 p-2">
+          <p className="font-semibold text-slate-200">
+            Region on page {pending.rectangle.pageIndex + 1}: left {percent(pending.rectangle.x)}, top {percent(pending.rectangle.y)}, width {percent(pending.rectangle.width)}, height {percent(pending.rectangle.height)}
+          </p>
+          {pending.quote ? <blockquote className="mt-1 border-l border-cyan-400 pl-2 text-slate-300">{pending.quote}</blockquote> : <p className="text-slate-400">No text layer text in this region (an image, a scan, or no text layer): nothing will be quoted.</p>}
+          <button type="button" className={`${button} mt-1`} onClick={() => pageViewBridge.update(viewKey, { pending: null })}>Discard region</button>
+        </div>
+      )}
+      {needsPassage && !pending && (
         <div>
           <button type="button" className={button} onClick={markSelection}>Use selected text</button>
           {anchor && <blockquote className="mt-1 border-l border-cyan-400 pl-2 text-slate-300">{anchor.quote}</blockquote>}

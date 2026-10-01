@@ -137,6 +137,7 @@ export interface NativeCommandMap {
   draft_appeal_from_statutory_deadline: { args: { portalKey: string; requestId: number; jurisdiction?: string | null }; result: Types.DraftedArtifact };
   export_verifiable_report: { args: { request: Types.VerifiableReportRequest }; result: Types.VerifiableReportExportResult };
   export_evidence_packet: { args: { request: Types.EvidencePacketRequest }; result: Types.EvidencePacketExportResult };
+  preview_packet_annotations: { args: { request: Types.PacketAnnotationPreviewRequest }; result: Types.AnnotationPreview };
   preview_shareable_bundle: { args: { request: Types.ShareableBundleRequest }; result: Types.BundlePreview };
   export_shareable_bundle: { args: { request: Types.ShareableBundleExportRequest }; result: Types.ShareableBundleResult };
   get_profile: { args: NoArgs; result: Types.ProfileState };
@@ -171,6 +172,8 @@ export interface NativeCommandMap {
   export_document_annotations: { args: { portalKey: string; documentId: number }; result: string };
   preview_annotation_import: { args: { payload: string }; result: Types.AnnotationImportPreview };
   import_annotation_packet: { args: { payload: string; packetSha256: string }; result: Types.AnnotationImportResult };
+  resolve_page_regions: { args: { portalKey: string; documentId: number; originalSha256: string; pageCount: number }; result: Types.ResolvedPageRegion[] };
+  read_document_original: { args: { documentId: number; portalKey: string }; result: ArrayBuffer };
   list_claimed_requests: { args: NoArgs; result: Types.ClaimedRequest[] };
   claim_request: { args: { input: Types.ClaimRequestInput }; result: Types.ClaimedRequest };
   update_claimed_request: { args: { input: Types.UpdateClaimedRequestInput }; result: Types.ClaimedRequest };

@@ -400,6 +400,7 @@ mod tests {
             author: None,
             status: AnnotationStatus::Open,
             finding_id: None,
+            page_region: None,
             imported_from_key: None,
             created_at: "2026-01-01T00:00:00Z".into(),
         };

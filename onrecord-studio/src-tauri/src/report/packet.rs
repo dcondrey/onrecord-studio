@@ -25,6 +25,10 @@ use crate::types::report::{
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
+pub mod annotations;
+
+use annotations::ReviewerAnnotations;
+
 pub const PACKET_SCHEMA_VERSION: &str = "onrecord-evidence-packet-v1";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -91,6 +95,10 @@ pub struct PacketContent {
     pub gaps: Vec<PacketGap>,
     pub withheld: Vec<WithheldItem>,
     pub limitations: Vec<String>,
+    /// Absent unless the reviewer asked for it, so an excluded section leaves the bytes (and the
+    /// hash) exactly as they were.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reviewer_annotations: Option<ReviewerAnnotations>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -265,6 +273,7 @@ pub fn build_packet(
     documents: &SourceDocuments,
     gaps: Vec<EvidenceGap>,
     gap_sweep_failures: &[String],
+    reviewer_annotations: Option<ReviewerAnnotations>,
     generated_at: String,
     build_version: &str,
 ) -> Result<EvidencePacket, String> {
@@ -357,6 +366,7 @@ pub fn build_packet(
         gaps: packet_gaps,
         withheld: manifest.withheld,
         limitations,
+        reviewer_annotations,
     };
     Ok(EvidencePacket {
         content_sha256: content_sha256(&content)?,
@@ -404,6 +414,78 @@ fn digest_line(label: &str, value: Option<&str>) -> String {
     match value {
         Some(value) => format!("- {label}: {}\n", code(value)),
         None => format!("- {label}: not recorded\n"),
+    }
+}
+
+fn render_annotations(out: &mut String, section: &ReviewerAnnotations) {
+    out.push_str(&format!(
+        "\n## {} ({})\n\n{}\n",
+        annotations::SECTION_TITLE,
+        section.annotations.len(),
+        prose(&section.notice)
+    ));
+    if section.annotations.is_empty() {
+        out.push_str("\nNo annotations were found on the cited public documents.\n");
+    }
+    for (index, mark) in section.annotations.iter().enumerate() {
+        out.push_str(&format!(
+            "\n### Annotation {}: {}\n\n",
+            index + 1,
+            mark.code.as_deref().map_or("no code".to_string(), code)
+        ));
+        out.push_str(&format!(
+            "- Author: {}\n",
+            mark.author
+                .as_deref()
+                .map_or("not recorded".to_string(), code)
+        ));
+        out.push_str(&format!(
+            "- Status: {}\n",
+            code(&format!("{:?}", mark.status))
+        ));
+        out.push_str(&format!(
+            "- Anchor: {}\n",
+            match (mark.anchor, &mark.unchecked_reason) {
+                (Some(state), _) => code(&format!("{state:?}")),
+                (None, Some(reason)) => format!("not checked. {}", prose(reason)),
+                (None, None) => "not checked".to_string(),
+            }
+        ));
+        out.push_str(&format!(
+            "- Cited: document {} in portal {}, offset {} now ({} when marked)\n",
+            mark.document_id,
+            code(&mark.portal_key),
+            mark.current_offset
+                .map_or("not located".to_string(), |offset| offset.to_string()),
+            mark.recorded_offset
+                .map_or("not recorded".to_string(), |offset| offset.to_string())
+        ));
+        out.push_str(&digest_line(
+            "Document text SHA-256 now",
+            mark.document_text_sha256.as_deref(),
+        ));
+        out.push_str(&digest_line(
+            "Document text SHA-256 when marked",
+            mark.marked_text_sha256.as_deref(),
+        ));
+        if !mark.quote.is_empty() {
+            out.push_str("\nQuote:\n\n");
+            out.push_str(&block_quote(&mark.quote));
+            out.push('\n');
+        }
+        out.push_str("\nReviewer's note:\n\n");
+        out.push_str(&if mark.note.trim().is_empty() {
+            "> (no note)".to_string()
+        } else {
+            block_quote(&mark.note)
+        });
+        out.push('\n');
+    }
+    if section.not_public_omitted > 0 {
+        out.push_str(&format!(
+            "\n{} annotation(s) on non-public cited documents were not written.\n",
+            section.not_public_omitted
+        ));
     }
 }
 
@@ -508,6 +590,9 @@ pub fn render_markdown(packet: &EvidencePacket) -> String {
             let keys: Vec<String> = claim.gap_keys.iter().map(|key| code(key)).collect();
             out.push_str(&format!("- Related gap keys: {}\n", keys.join(", ")));
         }
+    }
+    if let Some(section) = &content.reviewer_annotations {
+        render_annotations(&mut out, section);
     }
     out.push_str("\n## Evidence gaps (not findings)\n\n");
     out.push_str(

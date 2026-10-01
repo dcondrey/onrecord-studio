@@ -2,6 +2,7 @@
 
 use crate::{
     analysis::{finding::Finding, gaps},
+    annotations::AnnotationStore,
     commands::profile::disclosure_context,
     commands::validation::{optional_text, portal_key as validate_portal_key, MAXIMUM_PATH_BYTES},
     error::AppError,
@@ -10,13 +11,18 @@ use crate::{
     report::{
         builder::{build_manifest, ManifestOptions},
         output::{commit_new_file, validate_output_path, validate_output_path_with_extension},
-        packet::{build_packet, render_markdown},
+        packet::{
+            annotations::{build_section, AnnotationPreview, ReviewerAnnotations},
+            build_packet, render_markdown,
+        },
         sign_and_render,
         source::load_source_documents,
         template_sha256,
     },
     storage::{corpus::CorpusIndex, findings::FindingsFilter, sqlite::DuckDbRepository},
-    types::report::{EvidencePacketExportResult, VerifiableReportExportResult},
+    types::report::{
+        EvidencePacketExportResult, VerifiableReportExportResult, VerifiableReportManifest,
+    },
 };
 use std::{collections::BTreeSet, path::PathBuf, sync::Arc};
 use tauri::State;
@@ -119,35 +125,40 @@ pub struct EvidencePacketRequest {
     pub finding_ids: Option<Vec<String>>,
     /// A `.md` path inside the managed report directory; the JSON sits beside it.
     pub target_path: Option<String>,
+    /// Adds the reviewer's own annotations on the cited documents, in a separate section.
+    #[serde(default)]
+    pub include_annotations: bool,
 }
 
-/// Exports a citable evidence packet: a Markdown file and a JSON file with the same content hash.
-/// With `finding_ids`, exactly those findings; otherwise the highest-ranked active findings,
-/// optionally for one portal. Inferred-redaction hypotheses are never included.
-#[tauri::command]
-pub async fn export_evidence_packet(
-    request: EvidencePacketRequest,
-    repository: State<'_, DuckDbRepository>,
-    report_directory: State<'_, PathBuf>,
-    profile_store: State<'_, Arc<ProfileStore>>,
-    corpus: State<'_, CorpusIndex>,
-) -> Result<EvidencePacketExportResult, AppError> {
-    let EvidencePacketRequest {
-        portal_key,
-        finding_ids,
-        target_path,
-    } = request;
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PacketAnnotationPreviewRequest {
+    pub portal_key: Option<String>,
+    pub finding_ids: Option<Vec<String>>,
+}
+
+struct PacketInputs {
+    manifest: VerifiableReportManifest,
+    documents: crate::report::SourceDocuments,
+    generated_at: String,
+}
+
+async fn packet_inputs(
+    portal_key: Option<String>,
+    finding_ids: Option<Vec<String>>,
+    repository: &DuckDbRepository,
+    profile_store: &Arc<ProfileStore>,
+    corpus: &CorpusIndex,
+) -> Result<PacketInputs, AppError> {
     let portal_key = portal_key
         .as_deref()
         .map(|value| validate_portal_key(value).map(str::to_string))
         .transpose()?;
-    let target_path = optional_text(target_path, "Packet output path", MAXIMUM_PATH_BYTES)?;
     let finding_ids = finding_ids.map(validate_finding_ids).transpose()?;
-
     let (findings, extra_limitations) =
-        load_findings(&repository, portal_key.clone(), finding_ids, "packet").await?;
-    let documents = load_cited_documents(&repository, &findings).await?;
-    let disclosure = disclosure_context(&profile_store, &repository, &corpus).await?;
+        load_findings(repository, portal_key.clone(), finding_ids, "packet").await?;
+    let documents = load_cited_documents(repository, &findings).await?;
+    let disclosure = disclosure_context(profile_store, repository, corpus).await?;
     let generated_at = chrono::Utc::now().to_rfc3339();
     let manifest = build_manifest(
         findings,
@@ -167,6 +178,84 @@ pub async fn export_evidence_packet(
                 .to_string(),
         ));
     }
+    Ok(PacketInputs {
+        manifest,
+        documents,
+        generated_at,
+    })
+}
+
+/// Annotations on the documents the packet's claims cite.
+fn annotation_section(
+    store: &AnnotationStore,
+    inputs: &PacketInputs,
+) -> Result<ReviewerAnnotations, AppError> {
+    let cited = inputs
+        .manifest
+        .claims
+        .iter()
+        .flat_map(|claim| claim.citations.iter())
+        .map(|citation| (citation.portal_key.clone(), citation.document_id))
+        .collect::<BTreeSet<_>>();
+    build_section(&store.load()?, &cited, &inputs.documents).map_err(AppError::Export)
+}
+
+/// What an export with annotations would write, before anything is written.
+#[tauri::command]
+pub async fn preview_packet_annotations(
+    request: PacketAnnotationPreviewRequest,
+    repository: State<'_, DuckDbRepository>,
+    profile_store: State<'_, Arc<ProfileStore>>,
+    corpus: State<'_, CorpusIndex>,
+    annotations: State<'_, Arc<AnnotationStore>>,
+) -> Result<AnnotationPreview, AppError> {
+    let inputs = packet_inputs(
+        request.portal_key,
+        request.finding_ids,
+        &repository,
+        &profile_store,
+        &corpus,
+    )
+    .await?;
+    Ok(annotation_section(&annotations, &inputs)?.preview())
+}
+
+/// Exports a citable evidence packet: a Markdown file and a JSON file with the same content hash.
+/// With `finding_ids`, exactly those findings; otherwise the highest-ranked active findings,
+/// optionally for one portal. Inferred-redaction hypotheses are never included.
+#[tauri::command]
+pub async fn export_evidence_packet(
+    request: EvidencePacketRequest,
+    repository: State<'_, DuckDbRepository>,
+    report_directory: State<'_, PathBuf>,
+    profile_store: State<'_, Arc<ProfileStore>>,
+    corpus: State<'_, CorpusIndex>,
+    annotations: State<'_, Arc<AnnotationStore>>,
+) -> Result<EvidencePacketExportResult, AppError> {
+    let EvidencePacketRequest {
+        portal_key,
+        finding_ids,
+        target_path,
+        include_annotations,
+    } = request;
+    let target_path = optional_text(target_path, "Packet output path", MAXIMUM_PATH_BYTES)?;
+
+    let inputs = packet_inputs(
+        portal_key,
+        finding_ids,
+        &repository,
+        &profile_store,
+        &corpus,
+    )
+    .await?;
+    let reviewer_annotations = include_annotations
+        .then(|| annotation_section(&annotations, &inputs))
+        .transpose()?;
+    let PacketInputs {
+        manifest,
+        documents,
+        generated_at,
+    } = inputs;
     let withheld_count = manifest.withheld.iter().map(|item| item.count).sum();
 
     // A failed sweep is carried into the packet as a limitation; it never reads as "no gaps".
@@ -176,6 +265,7 @@ pub async fn export_evidence_packet(
         &documents,
         gaps,
         &gap_sweep_failures,
+        reviewer_annotations,
         generated_at.clone(),
         env!("CARGO_PKG_VERSION"),
     )
@@ -212,6 +302,11 @@ pub async fn export_evidence_packet(
         gap_count: packet.content.gaps.len(),
         withheld_count,
         generated_at,
+        annotation_count: packet
+            .content
+            .reviewer_annotations
+            .as_ref()
+            .map(|section| section.annotations.len()),
     })
 }
 

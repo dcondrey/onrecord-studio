@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useC2PA } from '../../hooks/useC2PA';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { invokeCommand } from '../../ipc';
@@ -9,6 +9,9 @@ import { ANNOTATION_LIMITS } from '../../types';
 import UnredactorPanel from './UnredactorPanel';
 import ReconstructionPanel from './ReconstructionPanel';
 import RedactionInferencePanel from './RedactionInferencePanel';
+
+// pdf.js loads only when a reader opens the page view.
+const PdfPageView = lazy(() => import('./PdfPageView'));
 
 interface DocumentViewerProps {
   documentId: number;
@@ -51,6 +54,8 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
   const [claimChecksState, setClaimChecksState] = useState<'idle' | 'pending' | 'failed'>('idle');
   const [claimChecksError, setClaimChecksError] = useState<string | null>(null);
   const [showAnnotations, setShowAnnotations] = useState(false);
+  const [showPageView, setShowPageView] = useState(false);
+  const canViewPages = originalAvailable && fileName.toLocaleLowerCase().endsWith('.pdf');
   const textPaneRef = useRef<HTMLDivElement>(null);
   const historyGate = useLatestRequestGate();
   const recoveryGate = useLatestRequestGate();
@@ -387,6 +392,7 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
         <button type="button" onClick={() => moveToMatch(1)} disabled={searchMatches.length === 0} className="rounded border border-slate-800 px-2 py-1 text-slate-400 disabled:opacity-40">Next</button>
         <button type="button" onClick={() => void shareEvidenceLocation()} className="rounded border border-indigo-400/25 bg-indigo-500/10 px-2 py-1 text-indigo-300">Copy evidence link</button>
         <button type="button" onClick={() => setShowAnnotations((visible) => !visible)} aria-expanded={showAnnotations} className="rounded border border-slate-700 px-2 py-1 text-slate-300">{showAnnotations ? 'Hide annotations' : 'Annotate'}</button>
+        {canViewPages && <button type="button" onClick={() => { setShowPageView((visible) => !visible); setShowAnnotations(true); }} aria-pressed={showPageView} className="rounded border border-slate-700 px-2 py-1 text-slate-300">Page view</button>}
         {onSaveEvidence && <button type="button" onClick={saveEvidenceToBriefing} className="rounded border border-amber-400/25 bg-amber-500/10 px-2 py-1 text-amber-200">Save excerpt to briefing</button>}
         {shareStatus && <span role="status" className="text-emerald-300">{shareStatus}</span>}
         {briefingStatus && <span role="status" className="text-emerald-300">{briefingStatus}</span>}
@@ -425,6 +431,7 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
           )}
         </div>
       )}
+      <div className={showPageView && canViewPages ? 'flex min-h-0 flex-1' : 'contents'}>
       {showAnnotations && (
         <DocumentAnnotations
           key={`${portalKey}:${documentId}`}
@@ -435,7 +442,13 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
           onJump={jumpToPassage}
         />
       )}
-      <div ref={textPaneRef} className="min-h-0 flex-1 overflow-y-auto p-5 font-mono text-xs leading-relaxed text-slate-300 selection:bg-indigo-500/30">
+      {showPageView && canViewPages && (
+        <Suspense fallback={<p role="status" className="p-3 text-[10px] text-slate-400">Loading the page viewer…</p>}>
+          <PdfPageView key={`${portalKey}:${documentId}`} portalKey={portalKey} documentId={documentId} fileName={fileName} />
+        </Suspense>
+      )}
+      </div>
+      <div ref={textPaneRef} hidden={showPageView && canViewPages} className="min-h-0 flex-1 overflow-y-auto p-5 font-mono text-xs leading-relaxed text-slate-300 selection:bg-indigo-500/30">
         <HighlightedTextPage text={textContent} query={documentSearch} page={textPage} activeMatchIndex={selectedMatch} />
       </div>
       {pageCount > 1 && <div className="flex items-center justify-center gap-3 border-t border-slate-900 px-4 py-2 text-[9px] text-slate-400"><button type="button" disabled={textPage === 0} onClick={() => setTextPage((page) => Math.max(0, page - 1))} className="rounded border border-slate-800 px-2 py-1 disabled:opacity-40">Previous text page</button><span className="font-mono">{textPage + 1}/{pageCount}</span><button type="button" disabled={textPage + 1 >= pageCount} onClick={() => setTextPage((page) => Math.min(pageCount - 1, page + 1))} className="rounded border border-slate-800 px-2 py-1 disabled:opacity-40">Next text page</button></div>}

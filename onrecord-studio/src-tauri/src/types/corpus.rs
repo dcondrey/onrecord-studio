@@ -22,6 +22,12 @@ pub enum CorpusEntityKind {
     /// A document's role in a policy-vs-practice comparison — policy vs. record vs. response vs.
     /// minutes vs. contract vs. denial vs. budget vs. other. Authoritative from observational.
     DocumentClass,
+    /// US employer identification number. Names an organization; format-validated only.
+    Ein,
+    /// California contractor license number read after an explicit label.
+    ContractorLicense,
+    /// California assessor's parcel number. Names a property, never a person or organization.
+    ParcelNumber,
 }
 
 impl CorpusEntityKind {
@@ -39,6 +45,9 @@ impl CorpusEntityKind {
             Self::Role => "ROLE",
             Self::Position => "POSITION",
             Self::DocumentClass => "DOCUMENT_CLASS",
+            Self::Ein => "EIN",
+            Self::ContractorLicense => "CONTRACTOR_LICENSE",
+            Self::ParcelNumber => "PARCEL_NUMBER",
         }
     }
 }

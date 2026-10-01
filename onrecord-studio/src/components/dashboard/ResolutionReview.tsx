@@ -13,6 +13,7 @@ import {
   type ResolutionVerdict,
   type ResolutionSuggestionBasis,
 } from '../../types';
+import { describeSharedIdentifier } from '../../utils/identifierEvidence';
 import { SignerTrustNotice } from './CaseSharing';
 import { useContributors } from './useContributors';
 
@@ -100,7 +101,7 @@ function CandidateCard({
     <article aria-label="Candidate pair" tabIndex={0} onKeyDown={onKeyDown} className="space-y-3 rounded border border-cyan-500/30 p-3 outline-none focus:ring-1 focus:ring-cyan-400">
       <p className="text-xs text-slate-300">
         {evidence.basis === 'STRONG_IDENTIFIER' && evidence.sharedIdentifier
-          ? `Both appear in the same text segment as ${evidence.sharedIdentifier.displayValue} (${evidence.sharedIdentifier.leftDocuments} and ${evidence.sharedIdentifier.rightDocuments} documents). Co-occurrence is not ownership; read the documents.`
+          ? describeSharedIdentifier(evidence.sharedIdentifier)
           : 'The names match once punctuation, word order and company suffixes are ignored. A similar name is a lead, not proof.'}
       </p>
       <div className="grid gap-3 sm:grid-cols-2">

@@ -104,7 +104,16 @@ fn packet_with(
         },
     )
     .unwrap();
-    build_packet(manifest, docs, gaps, &[], generated_at.to_string(), "1.2.3").unwrap()
+    build_packet(
+        manifest,
+        docs,
+        gaps,
+        &[],
+        None,
+        generated_at.to_string(),
+        "1.2.3",
+    )
+    .unwrap()
 }
 
 fn packet(findings: Vec<Finding>) -> EvidencePacket {
@@ -249,7 +258,16 @@ fn a_failed_gap_sweep_is_disclosed_not_read_as_no_gaps() {
     )
     .unwrap();
     let failures = vec!["policy_violation gap sweep failed: database is locked".to_string()];
-    let packet = build_packet(manifest, &docs, Vec::new(), &failures, "t0".into(), "1").unwrap();
+    let packet = build_packet(
+        manifest,
+        &docs,
+        Vec::new(),
+        &failures,
+        None,
+        "t0".into(),
+        "1",
+    )
+    .unwrap();
     let limits = packet.content.limitations.join("\n");
     assert!(limits.contains("policy_violation"));
     assert!(limits.contains("may be incomplete"));
@@ -338,4 +356,190 @@ fn a_download_url_carrying_a_personal_value_is_not_reproduced() {
         packet.content.claims[0].sources[0].download_url.as_deref(),
         Some("https://x.example/files/7.pdf")
     );
+}
+
+mod reviewer_annotations {
+    use super::*;
+    use crate::report::packet::annotations::{build_section, SECTION_KEY, SECTION_TITLE};
+    use crate::types::annotation::{
+        AnchorState, AnnotationDocument, AnnotationKind, AnnotationStatus, DocumentAnnotation,
+    };
+    use std::collections::BTreeSet;
+
+    const TEXT: &str = "The request was closed on March 3. Fees were waived in full.";
+
+    fn mark(
+        id: &str,
+        document_id: u64,
+        quote: &str,
+        offset: u64,
+        note: &str,
+    ) -> DocumentAnnotation {
+        DocumentAnnotation {
+            id: id.into(),
+            portal_key: "sd-city".into(),
+            document_id,
+            kind: AnnotationKind::Issue,
+            character_offset: Some(offset),
+            quote: quote.into(),
+            prefix: String::new(),
+            suffix: String::new(),
+            text_sha256: None,
+            context_unanchored: false,
+            note: note.into(),
+            tag: Some("CLOSED".into()),
+            author: Some("Reviewer A".into()),
+            status: AnnotationStatus::Disputed,
+            finding_id: None,
+            imported_from_key: None,
+            created_at: "2026-01-01T00:00:00Z".into(),
+            page_region: None,
+        }
+    }
+
+    fn docs_with_text() -> SourceDocuments {
+        let mut docs = documents("public", None);
+        docs.get_mut(&("sd-city".to_string(), 7)).unwrap().text = Some(TEXT.into());
+        docs
+    }
+
+    fn store() -> AnnotationDocument {
+        AnnotationDocument {
+            annotations: vec![
+                mark(
+                    "a-found",
+                    7,
+                    "closed on March 3",
+                    16,
+                    "Date matches the log.",
+                ),
+                mark(
+                    "b-gone",
+                    7,
+                    "text that was edited away",
+                    40,
+                    "Private view of this.",
+                ),
+                mark("c-other-doc", 8, "unrelated", 0, "Not cited."),
+            ],
+            ..AnnotationDocument::default()
+        }
+    }
+
+    fn cited() -> BTreeSet<(String, i64)> {
+        BTreeSet::from([("sd-city".to_string(), 7)])
+    }
+
+    fn with_section(docs: &SourceDocuments, store: &AnnotationDocument) -> EvidencePacket {
+        let manifest = build_manifest(
+            vec![legal("a-finding")],
+            docs,
+            ManifestOptions {
+                template_sha256: template_sha256(),
+                generated_at: "t0".into(),
+                author_name: None,
+                scope_portal_key: None,
+                extra_limitations: Vec::new(),
+                disclosure: crate::profile::DisclosureContext::unset(),
+            },
+        )
+        .unwrap();
+        let section = build_section(store, &cited(), docs).unwrap();
+        build_packet(
+            manifest,
+            docs,
+            Vec::new(),
+            &[],
+            Some(section),
+            "t0".into(),
+            "1",
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn a_packet_without_the_section_is_byte_identical_and_names_none_of_it() {
+        let docs = docs_with_text();
+        let first = packet_with(vec![legal("a-finding")], &docs, Vec::new(), "t0");
+        let second = packet_with(vec![legal("a-finding")], &docs, Vec::new(), "t0");
+        let json = serde_json::to_vec_pretty(&first).unwrap();
+        assert_eq!(json, serde_json::to_vec_pretty(&second).unwrap());
+        assert!(!String::from_utf8(json).unwrap().contains(SECTION_KEY));
+        assert!(!render_markdown(&first).contains(SECTION_TITLE));
+    }
+
+    #[test]
+    fn an_orphan_is_kept_and_labelled_and_the_hash_covers_the_section() {
+        let docs = docs_with_text();
+        let included = with_section(&docs, &store());
+        let section = included.content.reviewer_annotations.as_ref().unwrap();
+        let states: Vec<_> = section
+            .annotations
+            .iter()
+            .map(|mark| (mark.id.as_str(), mark.anchor))
+            .collect();
+        assert_eq!(
+            states,
+            [
+                ("a-found", Some(AnchorState::Anchored)),
+                ("b-gone", Some(AnchorState::Orphaned))
+            ]
+        );
+        let markdown = render_markdown(&included);
+        assert!(markdown.contains(SECTION_TITLE));
+        assert!(markdown.contains("`Orphaned`") && markdown.contains("Private view of this."));
+
+        let without = packet_with(vec![legal("a-finding")], &docs, Vec::new(), "t0");
+        assert_ne!(included.content_sha256, without.content_sha256);
+        assert!(hash_matches(&included));
+
+        let mut edited = store();
+        edited.annotations[0].note = "A different note.".into();
+        assert_ne!(
+            with_section(&docs, &edited).content_sha256,
+            included.content_sha256
+        );
+    }
+
+    #[test]
+    fn a_page_region_mark_is_located_by_page_never_text_anchored() {
+        let docs = docs_with_text();
+        let mut store = store();
+        // The text layer's words happen to match the document text; that must not anchor it.
+        let mut region = mark("c-region", 7, "alpha beta", 0, "On the page.");
+        region.page_region = Some(crate::types::annotation::PageRegion {
+            rectangle: crate::types::annotation::PageRectangle {
+                page_index: 2,
+                x: 0.1,
+                y: 0.2,
+                width: 0.3,
+                height: 0.1,
+            },
+            original_sha256: "ab".repeat(32),
+        });
+        store.annotations.push(region);
+        let section = with_section(&docs, &store)
+            .content
+            .reviewer_annotations
+            .unwrap();
+        let region = section
+            .annotations
+            .iter()
+            .find(|mark| mark.id == "c-region")
+            .unwrap();
+        assert_eq!(region.anchor, None);
+        assert!(region
+            .unchecked_reason
+            .as_deref()
+            .unwrap()
+            .contains("page and rectangle"));
+        assert_eq!(region.page_region.as_ref().unwrap().rectangle.page_index, 2);
+    }
+
+    #[test]
+    fn marks_on_a_non_public_document_are_counted_not_written() {
+        let section = build_section(&store(), &cited(), &documents("private", None)).unwrap();
+        assert!(section.annotations.is_empty());
+        assert_eq!(section.not_public_omitted, 2);
+    }
 }

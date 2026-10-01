@@ -8,10 +8,12 @@
 //! entry snapshots.
 
 mod candidates;
+mod identifiers;
 mod ledger;
 mod replay;
 
 pub use candidates::*;
+pub use identifiers::*;
 pub use ledger::*;
 pub use replay::*;
 
@@ -27,11 +29,6 @@ pub(crate) fn invalid(message: impl Into<String>) -> AppError {
 /// Kinds whose spelling can vary while naming one party; only these are proposed by name.
 pub fn is_name_kind(kind: &str) -> bool {
     matches!(kind, "PERSON" | "ORGANIZATION")
-}
-
-/// Kinds that are themselves a validated identifier (format-checked on extraction).
-pub fn is_identifier_kind(kind: &str) -> bool {
-    kind == "EMAIL_ADDRESS"
 }
 
 /// Identity of an entity that does not depend on its corpus `entity_id`: the entity kind and the

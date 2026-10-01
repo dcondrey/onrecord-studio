@@ -61,6 +61,9 @@ const kindLabels: Record<CorpusEntityKind, string> = {
   ROLE: 'Role',
   POSITION: 'Position',
   DOCUMENT_CLASS: 'Document class',
+  EIN: 'Employer ID',
+  CONTRACTOR_LICENSE: 'Contractor license',
+  PARCEL_NUMBER: 'Parcel',
 };
 
 const kindColors: Record<CorpusEntityKind, string> = {
@@ -76,6 +79,9 @@ const kindColors: Record<CorpusEntityKind, string> = {
   ROLE: 'var(--viz-indigo)',
   POSITION: 'var(--viz-purple)',
   DOCUMENT_CLASS: 'var(--viz-amber)',
+  EIN: 'var(--viz-emerald)',
+  CONTRACTOR_LICENSE: 'var(--viz-purple)',
+  PARCEL_NUMBER: 'var(--viz-red)',
 };
 
 const kindDescriptions: Record<RelationshipKind, string> = {

@@ -5,7 +5,9 @@
 //! id is already present is never overwritten: a differing one is reported and the local copy
 //! stays.
 
-use crate::annotations::{clean_author, clean_text, invalid};
+use crate::annotations::{
+    clean_author, clean_text, invalid, validate_original_digest, validate_rectangle,
+};
 use crate::error::AppError;
 use crate::types::annotation::*;
 use chrono::{DateTime, SecondsFormat, Utc};
@@ -91,7 +93,11 @@ fn validate_mark(
             return Err(invalid("a packet annotation has an invalid text digest"));
         }
     }
-    let has_passage = !quote.is_empty();
+    if let Some(region) = &mark.page_region {
+        validate_rectangle(&region.rectangle)?;
+        validate_original_digest(&region.original_sha256)?;
+    }
+    let has_passage = !quote.is_empty() || mark.page_region.is_some();
     if (mark.kind != AnnotationKind::Note && !has_passage)
         || (mark.kind == AnnotationKind::Issue && tag.is_none())
     {
@@ -203,6 +209,7 @@ mod tests {
             author: Some("Maria".into()),
             status: AnnotationStatus::Confirmed,
             finding_id: None,
+            page_region: None,
             imported_from_key: None,
             created_at: "2026-01-01T00:00:00Z".into(),
         }
@@ -218,6 +225,26 @@ mod tests {
             document_text_sha256: None,
             exporter: Some("Maria".into()),
             annotations: marks,
+        }
+    }
+
+    /// A mark drawn on a page: no text anchor, and no quote over an image.
+    fn region_mark(id: &str) -> DocumentAnnotation {
+        DocumentAnnotation {
+            quote: String::new(),
+            character_offset: None,
+            text_sha256: None,
+            page_region: Some(PageRegion {
+                rectangle: PageRectangle {
+                    page_index: 0,
+                    x: 0.1,
+                    y: 0.1,
+                    width: 0.5,
+                    height: 0.5,
+                },
+                original_sha256: "cd".repeat(32),
+            }),
+            ..mark(id, "region")
         }
     }
 
@@ -261,17 +288,31 @@ mod tests {
         bad_digest.text_sha256 = Some("zz".into());
         let mut no_passage = mark(B, "x");
         no_passage.quote.clear();
+        let mut off_page = region_mark(B);
+        off_page.page_region.as_mut().unwrap().rectangle.width = f64::MAX;
+        let mut bad_original = region_mark(B);
+        bad_original.page_region.as_mut().unwrap().original_sha256 = "zz".into();
         for bad in [
             vec![mark(A, "ok"), elsewhere],
             vec![mark(A, "ok"), long],
             vec![mark(A, "ok"), bad_digest],
             vec![mark(A, "ok"), no_passage],
+            vec![mark(A, "ok"), off_page],
+            vec![mark(A, "ok"), bad_original],
             vec![mark("not-a-uuid", "x")],
             vec![mark(A, "x"), mark(A, "y")],
         ] {
             assert!(apply_import(&mut local, &packet(bad), "signer").is_err());
         }
         assert!(local.annotations.is_empty());
+    }
+
+    #[test]
+    fn a_region_mark_with_no_quote_is_a_valid_packet_entry() {
+        let mut local = AnnotationDocument::default();
+        let result = apply_import(&mut local, &packet(vec![region_mark(A)]), "signer").unwrap();
+        assert_eq!(result.added, 1);
+        assert!(local.annotations[0].page_region.is_some());
     }
 
     #[test]
