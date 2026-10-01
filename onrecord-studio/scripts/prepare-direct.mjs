@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { chmodSync, copyFileSync, existsSync, lstatSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import process from 'node:process';
@@ -82,6 +83,7 @@ assert(
 const expiration = new Date(profileDateValue(profile, 'ExpirationDate'));
 assert(expiration.getTime() > Date.now(), `The provisioning profile expired on ${expiration.toISOString()}.`);
 assertProfileGrantsEntitlements(profile);
+assertProfileCoversSigningIdentity(profile, requiredEnvironment('APPLE_SIGNING_IDENTITY'));
 writeFileSync(join(tauriRoot, 'Info.direct.plist'), infoTemplate.replace('__SUPABASE_ANON_KEY__', anonKey), {
   mode: 0o600,
 });
@@ -140,6 +142,34 @@ function assertProfileGrantsEntitlements(profileXml) {
       );
     }
   }
+}
+
+// A profile vouches for its entitlements only when the app is signed by one of the profile's own
+// certificates; signed by any other identity of the same team, the build succeeds and AMFI kills
+// every launch ("Unsatisfied entitlements").
+function assertProfileCoversSigningIdentity(profileXml, signingIdentity) {
+  const identities = spawnSync('security', ['find-identity', '-v', '-p', 'codesigning'], { encoding: 'utf8' });
+  assert(identities.status === 0, 'The code-signing identities could not be listed.');
+  const matches = [...identities.stdout.matchAll(/^\s*\d+\) ([0-9A-F]{40}) "([^"]+)"/gm)]
+    .filter(([, hash, name]) => hash === signingIdentity.toUpperCase() || name === signingIdentity)
+    .map(([, hash]) => hash);
+  assert(new Set(matches).size === 1, `APPLE_SIGNING_IDENTITY matches ${new Set(matches).size} valid identities; set it to one certificate's SHA-1.`);
+  const count = Number(plistRaw(profileXml, 'DeveloperCertificates'));
+  assert(Number.isInteger(count) && count > 0, 'The provisioning profile lists no certificates.');
+  const profileHashes = Array.from({ length: count }, (_, index) => createHash('sha1')
+    .update(Buffer.from(plistRaw(profileXml, `DeveloperCertificates.${index}`), 'base64'))
+    .digest('hex')
+    .toUpperCase());
+  assert(
+    profileHashes.includes(matches[0]),
+    `The provisioning profile does not include the signing certificate ${matches[0]}; it lists ${profileHashes.join(', ')}. Regenerate the profile with that certificate.`,
+  );
+}
+
+function plistRaw(xml, keyPath) {
+  const result = spawnSync('plutil', ['-extract', keyPath, 'raw', '-o', '-', '-'], { input: xml, encoding: 'utf8' });
+  assert(result.status === 0, `The provisioning profile has no readable ${keyPath}.`);
+  return result.stdout.trim();
 }
 
 function plistJson(xml, label) {
