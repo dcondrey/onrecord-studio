@@ -14,3 +14,8 @@ export interface ResearchSnapshotResult {
   manifestPath: string;
   manifest: ResearchSnapshotManifest;
 }
+
+export interface CorpusStateIdentity {
+  digest: string;
+  documentCount: number;
+}

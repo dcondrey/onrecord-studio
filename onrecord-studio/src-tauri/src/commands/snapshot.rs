@@ -9,7 +9,7 @@ use crate::error::AppError;
 use crate::integrity::{load_or_create_signing_key, sha256_file_async, sign_package};
 use crate::storage::sqlite::DuckDbRepository;
 use crate::types::snapshot::{
-    ResearchSnapshotManifest, ResearchSnapshotResult, RESEARCH_SNAPSHOT_SCHEMA,
+    CorpusStateIdentity, ResearchSnapshotManifest, ResearchSnapshotResult, RESEARCH_SNAPSHOT_SCHEMA,
 };
 
 const SNAPSHOT_DIRECTORY: &str = "snapshots";
@@ -52,5 +52,16 @@ pub async fn export_research_snapshot(
         path: path.to_string_lossy().into_owned(),
         manifest_path: manifest_path.to_string_lossy().into_owned(),
         manifest,
+    })
+}
+
+#[tauri::command]
+pub async fn get_corpus_state_digest(
+    repository: State<'_, DuckDbRepository>,
+) -> Result<CorpusStateIdentity, AppError> {
+    let (digest, document_count) = repository.corpus_state_identity().await?;
+    Ok(CorpusStateIdentity {
+        digest,
+        document_count,
     })
 }

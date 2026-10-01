@@ -35,6 +35,10 @@ export const MATCH_BASIS_LABELS: Record<MatchBasis, string> = {
 };
 
 export interface SearchRecordInput {
+  /** Stable name for this exact query; see `searchQueryId`. Null when hashing was unavailable. */
+  queryId?: string | null;
+  /** Digest and size of the document corpus when the record was made; null when it could not be read. */
+  corpus?: { digest: string; documentCount: number } | null;
   ranAt: string;
   query: string;
   filters: { label: string; value: string }[];
@@ -48,10 +52,29 @@ export function searchRecordText(input: SearchRecordInput): string {
   const capped = input.resultCount >= SEARCH_RESULT_LIMIT;
   return [
     `OnRecord Studio search run ${input.ranAt}`,
+    ...(input.queryId ? [`Query ID: ${input.queryId}`] : []),
     `Text: ${input.query.trim() || '(none)'}`,
     `Filters: ${filters}`,
     `Sources searched: ${input.sourceCount}`,
     `Records returned: ${formatMatchCount(input.resultCount)}${capped ? ` (limited to the first ${SEARCH_RESULT_LIMIT}; more may exist)` : ''}`,
-    'Results reflect the sources ingested at that time and can change as sources synchronize.',
+    input.corpus
+      ? `Corpus state: sha256:${input.corpus.digest.slice(0, 16)} (${input.corpus.documentCount.toLocaleString('en-US')} documents). It covers extracted document text only, not request status or titles.`
+      : 'Corpus state: could not be read.',
+    'The query ID names the query, not its answer. Re-running it against the same corpus state returns the same document-text matches; request metadata can still change as sources synchronize.',
   ].join('\n');
+}
+
+/** A short, stable name for one exact query: the same text, filters and limit always give the same ID. */
+export async function searchQueryId(query: string, filters: { label: string; value: string }[]): Promise<string | null> {
+  const canonical = JSON.stringify({
+    text: query.trim().replace(/\s+/g, ' '),
+    filters: [...filters].sort((a, b) => a.label.localeCompare(b.label)).map((f) => [f.label, f.value]),
+    limit: SEARCH_RESULT_LIMIT,
+  });
+  try {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical));
+    return Array.from(new Uint8Array(digest).slice(0, 6), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  } catch {
+    return null;
+  }
 }

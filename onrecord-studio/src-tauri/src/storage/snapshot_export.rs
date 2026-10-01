@@ -78,6 +78,22 @@ pub struct SnapshotBuild {
 }
 
 impl DuckDbRepository {
+    /// The corpus digest a snapshot would carry, without writing one, so a search can name the
+    /// corpus state that answered it. Covers document text only: request metadata such as status
+    /// or title is not part of it.
+    pub async fn corpus_state_identity(&self) -> Result<(String, u64), AppError> {
+        self.query_connection("Read corpus state", |conn| {
+            let digest = corpus_state_digest(conn)?;
+            let documents: i64 = conn
+                .query_row("SELECT count(*) FROM documents", [], |row| row.get(0))
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to count documents: {error}"))
+                })?;
+            Ok((digest, u64::try_from(documents).unwrap_or(0)))
+        })
+        .await
+    }
+
     /// Writes the projection to a new DuckDB file at `output`. Refuses to overwrite: a snapshot
     /// that has been cited must never change underneath its citation.
     pub async fn export_research_snapshot(
@@ -306,6 +322,9 @@ mod tests {
             .await
             .expect("second snapshot");
         assert_ne!(second.corpus_state_digest, built.corpus_state_digest);
+        let (identity, documents) = repo.corpus_state_identity().await.expect("identity");
+        assert_eq!(identity, second.corpus_state_digest);
+        assert_eq!(documents, 1);
         assert_eq!(second.findings_digest, built.findings_digest);
     }
 }

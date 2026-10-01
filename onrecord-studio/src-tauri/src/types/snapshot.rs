@@ -24,6 +24,14 @@ pub struct ResearchSnapshotManifest {
     pub table_rows: BTreeMap<String, u64>,
 }
 
+/// Names the document corpus a search ran against.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CorpusStateIdentity {
+    pub digest: String,
+    pub document_count: u64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResearchSnapshotResult {

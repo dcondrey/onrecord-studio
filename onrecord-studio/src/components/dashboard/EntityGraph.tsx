@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { filterEdges } from '../../utils/entityEdges';
+import { combineNeighbourhoods, filterEdges, lookalikeNeighbours } from '../../utils/entityEdges';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type {
@@ -170,6 +170,9 @@ export default function EntityGraph() {
   const [asOf, setAsOf] = useState('');
   const [includeUndated, setIncludeUndated] = useState(true);
   const [pathAnswer, setPathAnswer] = useState<PathAnswer | null>(null);
+  // Entities the reader chose to treat as the same as the centre, for this session only. Keyed by
+  // the centre so a result that lands after the reader moved on can never merge into another entity.
+  const [combined, setCombined] = useState<{ centreId: string; aliases: Record<string, CorpusEntityNeighborhood | 'loading' | 'failed'> } | null>(null);
   const brokerGate = useLatestRequestGate();
   const [brokers, setBrokers] = useState<EntityBroker[] | null>(null);
   const [brokersFailed, setBrokersFailed] = useState(false);
@@ -219,7 +222,33 @@ export default function EntityGraph() {
 
   // Only an answer for the entity now selected is a statement about it. Anything else is pending.
   const current = answer !== null && answer.entityId === selectedId ? answer : null;
-  const neighborhood = current?.neighborhood ?? null;
+  const baseNeighborhood = current?.neighborhood ?? null;
+  const aliasState = combined !== null && combined.centreId === selectedId ? combined.aliases : {};
+  const loadedAliases = Object.values(aliasState).filter((value): value is CorpusEntityNeighborhood => typeof value === 'object' && value !== null);
+  const neighborhood = baseNeighborhood && loadedAliases.length > 0 ? combineNeighbourhoods(baseNeighborhood, loadedAliases) : baseNeighborhood;
+  const lookalikes = baseNeighborhood ? lookalikeNeighbours(baseNeighborhood.center, baseNeighborhood.edges) : [];
+  const combine = (alias: CorpusEntityNode) => {
+    const centreId = selectedId;
+    if (!centreId) return;
+    setCombined((previous) => ({
+      centreId,
+      aliases: { ...(previous?.centreId === centreId ? previous.aliases : {}), [alias.entityId]: 'loading' },
+    }));
+    invokeCommand('get_corpus_entity_neighborhood', { entityId: alias.entityId, limit: 18 })
+      .then((result) => settleAlias(centreId, alias.entityId, result ?? 'failed'))
+      .catch(() => settleAlias(centreId, alias.entityId, 'failed'));
+  };
+  const settleAlias = (centreId: string, aliasId: string, value: CorpusEntityNeighborhood | 'failed') =>
+    setCombined((previous) =>
+      previous && previous.centreId === centreId && aliasId in previous.aliases
+        ? { ...previous, aliases: { ...previous.aliases, [aliasId]: value } }
+        : previous,
+    );
+  const split = (aliasId: string) =>
+    setCombined((previous) => {
+      if (!previous) return previous;
+      return { ...previous, aliases: Object.fromEntries(Object.entries(previous.aliases).filter(([id]) => id !== aliasId)) };
+    });
   const missing = current !== null && current.neighborhood === null;
   const pathView = pathAnswer !== null && pathAnswer.request.fromEntityId === selectedId ? pathAnswer : null;
 
@@ -341,6 +370,39 @@ export default function EntityGraph() {
         </div>
       ) : (
         <>
+          {lookalikes.length > 0 && (
+            <div role="group" aria-label="Possible duplicate entities" className="mt-3 rounded border border-slate-800 p-2 text-[9px] text-slate-400">
+              <p>
+                These look like other spellings of {truncateLabel(centre.displayValue)}. A similar name is a lead, not proof they are the same. Combine them to see their relationships together; this changes only this view.
+              </p>
+              <ul className="mt-1 flex flex-col gap-1">
+                {lookalikes.map((alias) => {
+                  const state = aliasState[alias.entityId];
+                  return (
+                    <li key={alias.entityId} className="flex flex-wrap items-center gap-2">
+                      <span className="text-slate-300">{alias.displayValue}</span>
+                      {state === undefined && (
+                        <button type="button" className="focus-ring rounded border border-slate-700 px-2 py-0.5 font-semibold text-slate-300 hover:border-cyan-400/50" onClick={() => combine(alias)}>Combine in this view</button>
+                      )}
+                      {state === 'loading' && <span role="status">Reading its relationships…</span>}
+                      {state === 'failed' && (
+                        <>
+                          <span role="alert" className="text-rose-300">Its relationships could not be read, so nothing was combined.</span>
+                          <button type="button" className="focus-ring underline" onClick={() => combine(alias)}>Retry</button>
+                        </>
+                      )}
+                      {typeof state === 'object' && (
+                        <>
+                          <span role="status" className="text-emerald-300">Combined for this session. Shared-document counts keep the larger of the two, not their sum.</span>
+                          <button type="button" className="focus-ring underline" onClick={() => split(alias.entityId)}>Split</button>
+                        </>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
           <div className="mt-3 flex flex-wrap items-center gap-2 text-[9px] text-slate-400">
             <div role="group" aria-label="Show relationships by how they are known" className="flex gap-1">
               {ALL_BASES.map((basis) => (

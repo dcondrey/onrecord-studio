@@ -603,7 +603,10 @@
       "icloud",
       "dropbox",
       "usb",
-      "sync"
+      "sync",
+      "merge",
+      "conflict",
+      "revision"
     ],
     "sections": [
       {
@@ -617,6 +620,12 @@
           "Publish this case's packet writes a signed packet to the folder. It needs an open case and an author name. It never replaces a file that is already there.",
           "Check for new packets lists the .json files in the folder. Load for review puts one into Review a shared case packet. Nothing changes in your cases until you preview it and apply it.",
           "Publishing does not revoke access. Anyone who can open the folder can read what you put there."
+        ]
+      },
+      {
+        "heading": "Merging a shared case",
+        "paragraphs": [
+          "When a previewed packet is for a case you have open, Merge selected items lists each question, request, decision, commitment and evidence entry that is only in the shared case, different in it, or missing from it, plus the case title, owner, disposition and notes. Tick what to take and apply it. This changes your open draft only; review it, then save a new revision. If an adopted item cites evidence you do not have, that evidence comes with it. Nothing is ticked for you, and an item missing from the shared case is not treated as deleted, because that case may simply be older."
         ]
       },
       {
