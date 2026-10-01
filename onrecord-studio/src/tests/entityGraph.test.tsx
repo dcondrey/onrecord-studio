@@ -52,6 +52,7 @@ vi.mock("@tauri-apps/api/core", () => ({
       const from = String(args?.fromEntityId);
       return new Promise((resolve) => resolvers.set(`path:${from}`, resolve));
     }
+    if (command === "get_resolution_clusters") return Promise.resolve(null);
     return Promise.resolve([]);
   },
 }));

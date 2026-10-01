@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { combineNeighbourhoods, lookalikeNeighbours } from '../../utils/entityEdges';
+import { useResolutionClusters } from '../../hooks/useResolutionClusters';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useEntityNeighbors } from '../../hooks/useEntityNeighbors';
@@ -215,7 +216,12 @@ export default function EntityGraph() {
   const loadedAliases = Object.values(aliasState).filter((value): value is CorpusEntityNeighborhood => typeof value === 'object' && value !== null);
   const combinedView = baseNeighborhood && loadedAliases.length > 0 ? combineNeighbourhoods(baseNeighborhood, loadedAliases) : baseNeighborhood;
   const neighborhood = combinedView ? { ...combinedView, edges: combinedView.edges.slice(0, DRAWING_BUDGET) } : null;
-  const lookalikes = list.status === 'ready' ? lookalikeNeighbours(list.centre, list.edges) : [];
+  const resolution = useResolutionClusters(selectedId);
+  const reviewed = resolution.status === 'ready' && resolution.entityId === selectedId ? resolution.cluster : null;
+  const reviewedIds = reviewed ? reviewed.members.filter((member) => member.entityId !== selectedId).map((member) => member.entityId) : [];
+  const lookalikes = list.status === 'ready'
+    ? lookalikeNeighbours(list.centre, list.edges).filter((alias) => !reviewedIds.includes(alias.entityId))
+    : [];
   const combine = (alias: CorpusEntityNode) => {
     const centreId = selectedId;
     if (!centreId) return;
@@ -252,6 +258,17 @@ export default function EntityGraph() {
   useEffect(() => {
     setCombined(null);
   }, [filterKey]);
+
+  // Entities a reviewer judged the same are combined without a click. This runs after the reset
+  // above so a filter change re-reads them, and only starts members that have no state yet, so a
+  // failed read is shown and retried by the reader rather than looping.
+  const reviewedKey = reviewed ? `${reviewed.resolutionId}:${reviewedIds.join(',')}` : '';
+  useEffect(() => {
+    if (!reviewed || list.status !== 'ready') return;
+    for (const entityId of reviewedIds) {
+      if (!(entityId in aliasState)) combine({ entityId } as CorpusEntityNode);
+    }
+  }, [reviewedKey, combined, list.status]);
 
   if (failed || list.status === 'failed') {
     return (
@@ -364,6 +381,26 @@ export default function EntityGraph() {
         </div>
       ) : (
         <>
+          {reviewed && reviewedIds.length > 0 && (
+            <div role="group" aria-label="Entities combined by review" className="mt-3 rounded border border-emerald-500/25 p-2 text-[9px] text-slate-300">
+              <p className="font-semibold text-emerald-300">
+                Combined by your review: {reviewed.members.map((member) => member.displayValue).join(' · ')}
+              </p>
+              <ul className="mt-1 space-y-0.5 text-slate-400">
+                {reviewed.reasons.map((reason) => (
+                  <li key={reason.entryId}>
+                    {reason.author} judged "{reason.leftDisplayValue}" and "{reason.rightDisplayValue}" the same on {reason.decidedAt.slice(0, 10)}{reason.reason ? `: ${reason.reason}` : '.'}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1 text-slate-400">
+                Resolution <code>{reviewed.resolutionId.slice(0, 12)}</code>. Change a judgment in Resolution review; it is recorded there, not undone here. Shared-document counts keep the larger of the combined entities.
+              </p>
+              {reviewed.contradictions.length > 0 && (
+                <p role="alert" className="mt-1 text-amber-300">Some judgments contradict each other, so those entities are not combined until the conflict is resolved in Resolution review.</p>
+              )}
+            </div>
+          )}
           {lookalikes.length > 0 && (
             <div role="group" aria-label="Possible duplicate entities" className="mt-3 rounded border border-slate-800 p-2 text-[9px] text-slate-400">
               <p>
