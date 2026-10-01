@@ -48,10 +48,12 @@ Nothing is uploaded.
 
 Xcode 27.0 (27A266a) `ld`, at any deployment target of 12.0 or later (Tauri sets 13.0 from
 `minimumSystemVersion`), does not pad after an odd-length indirect symbol table, so about half of
-the linked images get a 4-byte-aligned string pool. macOS 27 dyld refuses them: the build stops with
-`can't find crate for <some>_derive` after `dlopen ... (mis-aligned LINKEDIT string pool)` on a
-proc-macro. Debug builds are unaffected (no deployment target). Until a fixed Xcode ships, link
-without chained fixups for the release build only, from `.env.direct.local`:
+the linked images get a 4-byte-aligned string pool. macOS 27 dyld refuses such an image on `dlopen`
+(the main executable still launches), so the build stops with `can't find crate for <some>_derive`
+after `dlopen ... (mis-aligned LINKEDIT string pool)` on a host proc-macro. Debug builds are
+unaffected (no deployment target). Linking without chained fixups gave all 45 proc-macro dylibs an
+aligned pool (measured, not explained: the shipped executable itself stays unpadded and runs). Until
+a fixed Xcode ships, set for the release build only, in `.env.direct.local`:
 
 ```sh
 CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER=/Volumes/A/onrecord-studio/onrecord-studio/scripts/xcode27-linker/cc
