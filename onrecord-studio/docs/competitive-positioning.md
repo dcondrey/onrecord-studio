@@ -318,3 +318,12 @@ Far and hardest: the filing transport (1), because no outbound channel of any ki
 portal submission surfaces churn under both dominant vendors, and email filing needs careful
 account integration; and package-exchange collaboration (10), which needs a key and identity
 story before anything else, the current signature proving integrity but not identity.
+
+Built (2026-10-01), timeline ledger. `src/utils/caseTimeline.ts` places case records on the
+evidence timeline: filings, recorded and modeled due dates, follow-ups, productions, decisions
+and commitments, each carrying its citations and their verification rung, with a per-request
+statutory clock lane from `RequestFilingPlan` and a lane per question hypothesis. Two recorded
+sources giving one subject different dates (a recorded response due date against the modeled
+determination date; two agenda entries for one item) are listed as contradictions with both
+readings. No date is extracted from a document: the span primitive (step 1 above) does not
+exist, so every case date is an operator entry or a modeled derivation of one, and the view says so.

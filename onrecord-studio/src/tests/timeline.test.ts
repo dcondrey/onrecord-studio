@@ -35,3 +35,22 @@ describe('buildTimeline', () => {
     expect(view.unreadableDates).toBe(0);
   });
 });
+
+describe('caseItems', () => {
+  it('lists both readings of a contradicted date, lanes events by clock and hypothesis, and marks an uncited date', async () => {
+    const { caseItems } = await import('../utils/caseTimeline');
+    const cite = { id: 'e1', reportId: 'r', evidenceId: 'e1', label: 'Agenda', quote: '', sourceUrl: null, sourceSha256: 'a', sourceReferences: [], portalKey: null, documentId: null, characterOffset: null, verification: 'SAVED_REPORT' };
+    const plan = { statuteCitation: 'Gov. Code § 7922.535', evaluatedAt: '2026-09-20', filedOn: '2026-09-01', determinationDueOn: '2026-09-11', calendarDaysElapsed: 19, allowedCalendarDays: 10, determinationBasis: 'OBSERVATION_WITHOUT_RECORDED_ACTIVITY' as const, measuredTo: null, deadlinePassedWithoutRecordedResponse: true, followUps: [] };
+    const request = { id: 'q', title: 'Reports', custodian: 'Agency', gap: '', resolves: '', draft: '', state: 'SUBMITTED', expectedRecordTypes: [], expectedFields: [], expectedPeriod: '', submittedAt: '2026-09-01', responseDue: '2026-09-15', externalReference: '', productions: [], unresolvedOmissions: [], followUpDraft: '', citationIds: ['e1'], compiledDraft: '', filingPlan: plan };
+    const decision = (id: string, date: string) => ({ id, body: 'Council', date, agendaItem: 'Item 4', proposedDecision: '', action: '', outcome: '', vote: '', state: 'PROPOSED', citationIds: id === 'd1' ? ['e1'] : [], outcomeCitationIds: [] });
+    const built = caseItems([{ id: 'c', reportId: 'r', topic: '', title: 'Case', owner: '', disposition: '', revision: 1, createdAt: '', updatedAt: '', notes: '', evidence: [cite], requests: [request], decisions: [decision('d1', '2026-08-03'), decision('d2', '2026-08-10')], commitments: [], questions: [{ id: 'h', question: '', hypothesis: 'Delayed on purpose', nextTest: '', disposition: 'OPEN', owner: '', citationIds: ['e1'], counterCitationIds: [] }] }]);
+
+    expect(built.contradictions.map((c) => c.readings.map((r) => r.date))).toEqual([['2026-09-15', '2026-09-11'], ['2026-08-03', '2026-08-10']]);
+    expect(built.contradictions[1].readings[1].basis).toBe('No citation recorded for this date.');
+    const filed = built.items.find((i) => i.id === 'clock:c:q:filed');
+    expect(filed?.lanes).toEqual(['clock:c:q', 'hypothesis:c:h']);
+    expect(filed?.citations).toEqual([{ label: 'Agenda', grade: 'SAVED_REPORT' }]);
+    expect(built.items.find((i) => i.id === 'clock:c:q:determination-due')?.citations).toEqual([]);
+    expect(buildTimeline(built.items, { sources: new Set(['CASE']), from: '', to: '', text: '', lane: 'hypothesis:c:h' }).items.map((i) => i.id)).toEqual(['clock:c:q:filed', 'decision:c:d1']);
+  });
+});

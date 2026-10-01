@@ -1,13 +1,19 @@
 import type { ClaimedRequest, Finding, TimelineEventKind, WatchChange } from '../types';
 
-export type TimelineSource = 'REQUEST' | 'FINDING' | 'WATCH';
+export type TimelineSource = 'REQUEST' | 'FINDING' | 'WATCH' | 'CASE';
 
 /**
  * What a timeline date means. They are not interchangeable: an event date is when something
  * happened, the other two are when this app saw it. Mixing them silently would make "noticed
  * Tuesday" read as "happened Tuesday".
  */
-export type DateMeaning = 'OCCURRED' | 'LAST_SEEN' | 'DETECTED';
+export type DateMeaning = 'OCCURRED' | 'LAST_SEEN' | 'DETECTED' | 'DUE';
+
+/** A case citation behind an item, with the verification rung it was saved at. */
+export interface TimelineCitation {
+  label: string;
+  grade: string;
+}
 
 export interface TimelineItem {
   id: string;
@@ -19,18 +25,24 @@ export interface TimelineItem {
   provenance: string;
   evidence: string | null;
   findingId: string | null;
+  /** Only case items carry this. An empty list is a case item with no citation recorded. */
+  citations?: TimelineCitation[];
+  /** Lane ids this item belongs to; see `caseTimeline.ts`. */
+  lanes?: string[];
 }
 
 export const DATE_MEANING_LABELS: Record<DateMeaning, string> = {
   OCCURRED: 'Event date',
   LAST_SEEN: 'Last seen',
   DETECTED: 'Noticed by this app',
+  DUE: 'Due or modeled date',
 };
 
 export const SOURCE_LABELS: Record<TimelineSource, string> = {
   REQUEST: 'My requests',
   FINDING: 'Findings',
   WATCH: 'Watch changes',
+  CASE: 'Case records',
 };
 
 export function requestItems(claims: ClaimedRequest[], kindLabels: Record<TimelineEventKind, string>): TimelineItem[] {
@@ -87,6 +99,8 @@ export interface TimelineFilter {
   from: string;
   to: string;
   text: string;
+  /** Keep only items in this lane; null shows every lane. */
+  lane?: string | null;
 }
 
 export interface TimelineView {
@@ -109,6 +123,7 @@ export function buildTimeline(all: TimelineItem[], filter: TimelineFilter): Time
   const dated: { item: TimelineItem; time: number }[] = [];
   for (const item of all) {
     if (!filter.sources.has(item.source)) continue;
+    if (filter.lane && !(item.lanes ?? []).includes(filter.lane)) continue;
     const time = Date.parse(item.at);
     if (!Number.isFinite(time)) {
       unreadableDates += 1;

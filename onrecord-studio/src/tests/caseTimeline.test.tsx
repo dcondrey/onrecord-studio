@@ -39,6 +39,7 @@ describe('CaseTimeline', () => {
           { id: 'w1', watchId: 'x', dimension: 'DOCUMENTS', changeKind: 'NEW_DOCUMENT', subject: 'Budget memo', oldValue: null, newValue: 'added', oldAsOf: null, newAsOf: '2026-09-01T00:00:00Z', basis: 'OBSERVED', detectedAt: '2026-09-02T00:00:00Z', portalKey: null },
         ]);
       }
+      if (command === 'get_casework_state') return Promise.resolve({ cases: [], events: [], leads: [], availableEvidence: [] });
       return Promise.resolve([]);
     });
     render(<CaseTimeline />);
