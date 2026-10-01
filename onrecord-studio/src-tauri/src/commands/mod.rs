@@ -9,6 +9,7 @@ pub mod export;
 pub mod ingest;
 pub mod investigation;
 pub mod maintenance;
+pub mod original_file;
 pub mod paging;
 pub mod query;
 pub mod reconstruction;

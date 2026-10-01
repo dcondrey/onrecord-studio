@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-pub const ANNOTATION_SCHEMA_VERSION: u32 = 2;
+pub const ANNOTATION_SCHEMA_VERSION: u32 = 3;
 pub const MAXIMUM_ANNOTATIONS: usize = 5_000;
 pub const MAXIMUM_NOTE_CHARACTERS: usize = 4_000;
 pub const MAXIMUM_QUOTE_CHARACTERS: usize = 2_000;
@@ -14,6 +14,10 @@ pub const MAXIMUM_CONTEXT_CHARACTERS: usize = 200;
 pub const MAXIMUM_CODEBOOK_ENTRIES: usize = 500;
 pub const MAXIMUM_CODE_LABEL_CHARACTERS: usize = 120;
 pub const MAXIMUM_CODE_DEFINITION_CHARACTERS: usize = 2_000;
+/// Page regions kept per document, so a stray drag cannot fill the notebook with rectangles.
+pub const MAXIMUM_PAGE_REGIONS_PER_DOCUMENT: usize = 500;
+/// Largest 0-based page index accepted; far above any real file, it bounds the stored number.
+pub const MAXIMUM_PAGE_INDEX: u32 = 100_000;
 pub const DEFAULT_SEARCH_PAGE: usize = 50;
 pub const MAXIMUM_SEARCH_PAGE: usize = 200;
 
@@ -34,6 +38,52 @@ pub enum AnnotationStatus {
     Open,
     Confirmed,
     Disputed,
+}
+
+/// A rectangle on one page of the original file, as drawn by the reader. Coordinates are
+/// fractions of the page (0..=1, origin top-left), so they do not depend on zoom or rotation.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PageRectangle {
+    pub page_index: u32,
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+// Sound because every `PageRectangle` stored or compared has passed `validate_rectangle`, which
+// admits finite values only; NaN, the one value that breaks reflexivity, never reaches one.
+impl Eq for PageRectangle {}
+
+/// A rectangle plus the SHA-256 of the original file it was drawn on. The rectangle locates an
+/// area of that file's page; it says nothing about the extracted text.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PageRegion {
+    #[serde(flatten)]
+    pub rectangle: PageRectangle,
+    pub original_sha256: String,
+}
+
+/// How a stored region relates to the original file as it is now.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum PageRegionState {
+    /// The file is the one the region was drawn on and the page exists.
+    Anchored,
+    /// The file's digest differs from the recorded one. The region is shown where it was drawn
+    /// and must not be trusted to still cover what it covered.
+    OriginalChanged,
+    /// The page no longer exists.
+    Orphaned,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedPageRegion {
+    pub id: String,
+    pub state: PageRegionState,
 }
 
 /// A reviewer's mark on extracted text. `quote` with `prefix`/`suffix` is the anchor that can be
@@ -73,6 +123,10 @@ pub struct DocumentAnnotation {
     #[serde(default)]
     pub imported_from_key: Option<String>,
     pub created_at: String,
+    /// Set on a mark drawn on a page of the original file. Its `quote` is then the page's text
+    /// layer inside the rectangle (empty over an image) and is not a text anchor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page_region: Option<PageRegion>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -91,6 +145,8 @@ pub struct AddAnnotationInput {
     pub tag: Option<String>,
     #[serde(default)]
     pub finding_id: Option<String>,
+    #[serde(default)]
+    pub page_region: Option<PageRectangle>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

@@ -1,4 +1,5 @@
-import type { AnnotationKind, AnnotationStatus, ResolvedAnnotation } from '../../types';
+import type { AnnotationKind, AnnotationStatus, PageRegionState, ResolvedAnnotation } from '../../types';
+import { percent } from './pageRegionLogic';
 
 export const KIND_LABELS: Record<AnnotationKind, string> = {
   NOTE: 'Note',
@@ -18,8 +19,12 @@ export function isCoded(tag: string | null, codes: readonly { code: string }[]):
   return tag !== null && codes.some((entry) => entry.code === tag);
 }
 
+export const REGION_STATEMENT = 'The rectangle locates an area of the original file\'s page, as drawn by the reviewer; it is not a position in the extracted text.';
+
 export interface CitationContext {
   fileName?: string | null;
+  /** Where a page region stands against the original file; null or absent when it was not checked. */
+  regionState?: PageRegionState | null;
   /** Digest of the document's stored text as it is now; null when it is not recorded. */
   currentTextSha256: string | null;
   appVersion: string;
@@ -31,6 +36,7 @@ export interface CitationContext {
  * says so.
  */
 export function annotationCitation(annotation: ResolvedAnnotation, context: CitationContext): string {
+  if (annotation.pageRegion) return regionCitation(annotation, annotation.pageRegion, context);
   const located = annotation.anchor && annotation.anchor.state !== 'ORPHANED' ? annotation.anchor : null;
   const offset = located?.sourceOffset ?? annotation.characterOffset;
   const length = located?.sourceLength ?? null;
@@ -54,6 +60,32 @@ export function annotationCitation(annotation: ResolvedAnnotation, context: Cita
     OFFSET_STATEMENT,
   );
   return lines.join('\n');
+}
+
+function regionCitation(annotation: ResolvedAnnotation, region: NonNullable<ResolvedAnnotation['pageRegion']>, context: CitationContext): string {
+  const status =
+    context.regionState === 'ORIGINAL_CHANGED'
+      ? 'The original file has changed since this region was drawn; the rectangle may no longer cover what it covered.'
+      : context.regionState === 'ORPHANED'
+        ? 'The original file no longer has this page.'
+        : context.regionState === 'ANCHORED'
+          ? 'The original file matches the digest recorded with this region.'
+          : 'The original file was not compared with the recorded digest.';
+  return [
+    'OnRecord Studio citation',
+    `Portal: ${annotation.portalKey}`,
+    `Document id: ${annotation.documentId}${context.fileName ? ` (${context.fileName})` : ''}`,
+    `Page: ${region.pageIndex + 1} (page index ${region.pageIndex}, counted from 0)`,
+    `Rectangle: left ${percent(region.x)}, top ${percent(region.y)}, width ${percent(region.width)}, height ${percent(region.height)} of the page, origin top left`,
+    annotation.quote
+      ? `Text layer text in the rectangle: "${annotation.quote.replace(/\s*\n\s*/g, ' ')}"`
+      : 'Text layer text in the rectangle: none (an image or a scan, or no text layer)',
+    `Original file SHA-256: ${region.originalSha256}`,
+    status,
+    `Annotation: ${annotation.id}${annotation.author ? ` by ${annotation.author}` : ''}, ${STATUS_LABELS[annotation.status].toLowerCase()}${annotation.tag ? `, code ${annotation.tag}` : ''}`,
+    `OnRecord Studio version ${context.appVersion}`,
+    REGION_STATEMENT,
+  ].join('\n');
 }
 
 export type AgreementVerdict = 'AGREE' | 'DISAGREE' | 'UNCODED';

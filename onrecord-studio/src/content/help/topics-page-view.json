@@ -1,0 +1,75 @@
+[
+  {
+    "id": "page-view",
+    "title": "Page view and region annotations",
+    "group": "Findings",
+    "summary": "Read the original PDF page by page, draw a rectangle on a page, and keep it as an annotation tied to the original file.",
+    "keywords": [
+      "page view",
+      "pdf",
+      "region",
+      "rectangle",
+      "page",
+      "original file",
+      "text layer",
+      "zoom",
+      "original changed",
+      "orphaned",
+      "annotation"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "This replaces the earlier statement that there is no page view to anchor to. For a PDF whose original file is stored on this computer, the Page view button in the document viewer shows the original file one page at a time. Text annotations still anchor to the extracted text and work as before; a region annotation anchors to a rectangle on a page of the original file."
+        ]
+      },
+      {
+        "heading": "Reading the original",
+        "items": [
+          "The page is drawn from the original file with PDF.js, bundled with the application. Nothing is requested from the network.",
+          "Use Previous page, Next page, or the page box to move. When the page area has focus, Page Down at the end of a page and Page Up at the top move between pages, and + and - change the zoom.",
+          "The banner above the page states whether the file's SHA-256 matches the digest recorded when the document was saved. If it does not match, the banner says so and the page is not the verified original. If no digest was recorded, it says that instead of implying a match.",
+          "Selectable text is the PDF's own text layer. It can differ from the extracted text stored for search, which is why a region keeps its own copy of the text it covers."
+        ]
+      },
+      {
+        "heading": "Marking a region",
+        "items": [
+          "Draw region: choose it, then drag a rectangle on the page.",
+          "Mark selected text: select text on the page in Select text mode, then choose Mark selected text.",
+          "Mark region with keyboard: a rectangle appears; arrow keys move it, Shift with arrow keys resizes it, Enter keeps it, Escape cancels.",
+          "The region then appears in the annotations panel. Choose a type, an optional code and a note, then Save annotation. Nothing is saved until then.",
+          "Coordinates are fractions of the page, from the top left, so they do not depend on the zoom you were using."
+        ]
+      },
+      {
+        "heading": "What a region records",
+        "items": [
+          "The page number, the rectangle, and the SHA-256 of the original file as it was when you saved.",
+          "The text layer text inside the rectangle, as the quote. Over an image or a scan there is none, and the region says so rather than inventing a quote.",
+          "The rectangle locates an area of the original file's page. It is not a position in the extracted text, and the quote is not a text anchor."
+        ]
+      },
+      {
+        "heading": "When the file is not the one you marked",
+        "items": [
+          "Original changed: the file's digest differs from the one the region recorded. The rectangle is still shown where it was drawn, with a warning, and must not be trusted to cover what it covered.",
+          "Orphaned: the region's page is beyond the file's page count. It is kept as saved, listed as orphaned, and not shown on any page.",
+          "A region's state is checked each time the page view opens the file."
+        ]
+      },
+      {
+        "heading": "Citing and limits",
+        "items": [
+          "Copy citation on a region gives the page, the rectangle, the original file's SHA-256 and the statement that the rectangle locates an area of the original file's page.",
+          "Files over 256 MB are not opened in the page view; the message names the limit. At most 500 regions are kept per document.",
+          "Annotations are your reading on this computer. They are not part of the record and nothing that produces findings reads them."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": ["original_file"],
+    "related": ["annotations-depth", "document-viewer"]
+  }
+]
