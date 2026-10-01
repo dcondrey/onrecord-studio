@@ -28,6 +28,7 @@ import AgencyComparison from './AgencyComparison';
 import MeetingsView from './MeetingsView';
 import { documentBriefingEvidence, requestBriefingEvidence } from '../../utils/briefing';
 import AnalysisWorkbench from './AnalysisWorkbench';
+import { formatMatchCount, SEARCH_RESULT_LIMIT } from '../../utils/searchResults';
 
 export default function MainLayout() {
   // Request selection lives in the shared workspace store and survives view switches. The open
@@ -252,9 +253,14 @@ export default function MainLayout() {
               </div>
               <div className="flex items-center gap-2">
                 <button type="button" onClick={() => setLegalLibraryOpen(true)} className="rounded border border-indigo-400/20 bg-indigo-500/[0.07] px-2 py-1 text-[9px] font-semibold text-indigo-200/80 transition hover:border-indigo-400/35 hover:bg-indigo-500/10">Legal authority library</button>
-                <span className="rounded border border-slate-800 bg-slate-950 px-2 py-1 font-mono text-[9px] text-slate-400">{results.length.toLocaleString()} records</span>
+                <span className="rounded border border-slate-800 bg-slate-950 px-2 py-1 font-mono text-[9px] text-slate-400">{formatMatchCount(results.length)} records</span>
               </div>
             </div>
+            {results.length >= SEARCH_RESULT_LIMIT && (
+              <p role="status" className="border-b border-amber-500/20 bg-amber-500/[0.05] px-4 py-2 text-[10px] text-amber-200">
+                Showing the first {SEARCH_RESULT_LIMIT.toLocaleString()} matches; more may exist. Narrow the search by agency, status, or a more specific term to see the rest.
+              </p>
+            )}
             <div className="min-h-0 flex-1 overflow-y-auto">
               {results.length === 0 ? (
                 <EmptyResults error={searchError} />

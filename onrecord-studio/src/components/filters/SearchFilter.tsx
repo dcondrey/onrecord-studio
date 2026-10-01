@@ -1,3 +1,4 @@
+import { formatMatchCount, SEARCH_RESULT_LIMIT } from '../../utils/searchResults';
 import { useEffect, useMemo, useState } from 'react';
 import AgencySelector from './AgencySelector';
 import { useAppStore } from '../../store/useAppStore';
@@ -62,7 +63,7 @@ export default function SearchFilter() {
           agencyId: compiledQuery.agencyId ?? selectedAgencyId,
           status: compiledQuery.status ?? selectedStatus,
           policyDeviation: compiledQuery.policyDeviation ?? selectedPolicyDeviation,
-          limit: 500,
+          limit: SEARCH_RESULT_LIMIT,
         });
         if (requestGate.isCurrent(request)) setFilteredResults(results);
       } catch (reason) {
@@ -128,7 +129,7 @@ export default function SearchFilter() {
           </button>
         )}
         <div className="ml-auto hidden shrink-0 border-l border-slate-800 px-2 text-right sm:block">
-          <div className="font-mono text-[11px] font-semibold text-slate-300">{isSearching ? '—' : resultCount.toLocaleString()}</div>
+          <div className="font-mono text-[11px] font-semibold text-slate-300">{isSearching ? '—' : formatMatchCount(resultCount)}</div>
           <div className="text-[7px] uppercase tracking-wider text-slate-400">matches</div>
         </div>
       </div>
