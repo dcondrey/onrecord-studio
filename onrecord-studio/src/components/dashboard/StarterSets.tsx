@@ -106,7 +106,7 @@ function EntryRow({ entry, saved, status }: { entry: StarterEntry; saved: boolea
         <a href={entry.url} target="_blank" rel="noreferrer" className="font-semibold text-cyan-300">{entry.title}</a>
         <span className="text-slate-400">{entry.kind === 'RECORD_REQUEST_TARGET' ? 'Records request portal' : 'Source'}</span>
         {status === 'adding' ? <span className="text-slate-400">Adding…</span>
-          : status?.state === 'started' ? <span className="text-emerald-300">Started</span>
+          : status?.state === 'started' && saved ? <span className="text-emerald-300">Started</span>
           : status?.state === 'unavailable' ? <span role="alert" className="text-amber-300">Unavailable: {status.reason}</span>
           : saved ? <span className="text-slate-400">In your library</span> : null}
       </div>

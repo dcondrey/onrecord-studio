@@ -400,3 +400,71 @@ async fn saving_validates_targets_and_refuses_duplicates() {
         .unwrap()
         .is_empty());
 }
+
+#[tokio::test]
+async fn a_watch_deleted_during_a_check_is_not_recreated_by_it() {
+    let db = setup().await;
+    add_document(&db, 1, "Shelter contract").await;
+    let saved = db
+        .save_watch(watch(WatchKind::Entity, "Shelter"))
+        .await
+        .unwrap();
+    // The check read the watch, then the operator removed it before the check's transaction ran.
+    db.delete_watch(saved.id.clone()).await.unwrap();
+    let stale = saved.clone();
+    let outcome = db
+        .query_connection("stale check", move |conn| {
+            check_one(conn, &stale, Prefetch::default(), "2026-10-01T00:00:00Z")
+        })
+        .await
+        .unwrap();
+    assert!(outcome.is_none());
+    let conn = db.analytics_connection().await.unwrap();
+    for table in ["watch_baselines", "watch_runs", "watch_changes"] {
+        let rows: i64 = conn
+            .query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(rows, 0, "{table} kept rows for a deleted watch");
+    }
+}
+
+#[tokio::test]
+async fn changes_with_no_owning_watch_are_not_listed() {
+    let db = setup().await;
+    let conn = db.analytics_connection().await.unwrap();
+    conn.execute_batch("INSERT INTO watch_changes VALUES ('c1','gone','DOCUMENTS','2026-10-01T00:00:00Z',NULL,'{}')").unwrap();
+    assert!(db.list_watch_changes(None, 10).await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn an_agency_watch_over_the_document_cap_does_not_report_findings_as_resolved() {
+    let db = setup().await;
+    for id in 1..=MAX_SCOPE_DOCUMENTS as i64 {
+        add_document(&db, id, "Shelter contract").await;
+    }
+    let conn = db.analytics_connection().await.unwrap();
+    conn.execute_batch("INSERT INTO findings(id,kind,severity,headline,explanation,discovered_at,last_seen_at,source_detector,subject_portal_key,subject_document_id) VALUES ('f1','ABSENCE_OF_RECORDS','NOTABLE','Gap in numbering','x','2026-09-30','2026-09-30','d','city',1)").unwrap();
+    db.save_watch(watch(WatchKind::Agency, "Housing Commission"))
+        .await
+        .unwrap();
+    // At the cap the scope is complete and the finding is reachable through its document.
+    let at_cap = db
+        .check_watches_at(None, "2026-10-01T00:00:00Z".into())
+        .await
+        .unwrap();
+    assert_eq!(
+        dimension(&at_cap[0], WatchDimension::Findings).outcome,
+        DimensionOutcome::BaselineRecorded
+    );
+    // One document over the cap: the scope is unknown, so nothing is compared.
+    add_document(&db, MAX_SCOPE_DOCUMENTS as i64 + 1, "Shelter contract").await;
+    let over = db
+        .check_watches_at(None, "2026-10-02T00:00:00Z".into())
+        .await
+        .unwrap();
+    assert!(over[0].new_changes.is_empty());
+    assert_eq!(
+        dimension(&over[0], WatchDimension::Findings).outcome,
+        DimensionOutcome::NotMeasured
+    );
+}

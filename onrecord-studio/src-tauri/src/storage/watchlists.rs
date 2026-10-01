@@ -32,7 +32,11 @@ CREATE TABLE IF NOT EXISTS watch_changes(id TEXT PRIMARY KEY, watch_id TEXT NOT 
 ";
 
 pub const MAX_WATCHES: usize = 50;
+#[cfg(not(test))]
 const MAX_SCOPE_DOCUMENTS: usize = 20_000;
+/// Small under test so the cap's three sides are reachable without twenty thousand rows.
+#[cfg(test)]
+const MAX_SCOPE_DOCUMENTS: usize = 3;
 const MAX_SCOPE_FINDINGS: usize = 50_000;
 const MAX_FIGURE_SOURCES: usize = 500;
 const MAX_FIGURES_PER_SOURCE: usize = 40;
@@ -249,6 +253,7 @@ impl DuckDbRepository {
             let mut statement = conn
                 .prepare(
                     "SELECT payload FROM watch_changes c WHERE (?1 IS NULL OR c.watch_id=?1)
+                     AND EXISTS(SELECT 1 FROM watches w WHERE w.id=c.watch_id)
                      AND (c.portal_key IS NULL OR EXISTS(SELECT 1 FROM portals p WHERE p.subdomain=c.portal_key AND p.lifecycle_state<>'REMOVED'))
                      ORDER BY c.detected_at DESC, c.id LIMIT ?2",
                 )
@@ -316,12 +321,18 @@ impl DuckDbRepository {
                     Some(topic_scope(topic_report.as_ref().unwrap(), &watch.target));
             }
             let at = checked_at.clone();
-            checks.push(
-                self.query_connection("Check watch", move |conn| {
+            // A watch deleted while this run was in flight is skipped, not recreated.
+            if let Some(check) = self
+                .query_connection("Check watch", move |conn| {
                     check_one(conn, &watch, watch_prefetch, &at)
                 })
-                .await?,
-            );
+                .await?
+            {
+                checks.push(check);
+            }
+        }
+        if watch_id.is_some() && checks.is_empty() {
+            return Err(invalid("That watch no longer exists."));
         }
         Ok(checks)
     }
@@ -472,9 +483,21 @@ fn check_one(
     watch: &Watch,
     prefetch: Prefetch,
     checked_at: &str,
-) -> Result<WatchCheck, AppError> {
+) -> Result<Option<WatchCheck>, AppError> {
     conn.execute_batch(SCHEMA).map_err(err)?;
     let tx = conn.transaction().map_err(err)?;
+    // The watch was read before this transaction. Writing a baseline, run or change for one that
+    // was deleted since would leave rows no watch owns, still listed in the all-watches feed.
+    let still_saved: bool = tx
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM watches WHERE id=?1)",
+            params![watch.id],
+            |r| r.get(0),
+        )
+        .map_err(err)?;
+    if !still_saved {
+        return Ok(None);
+    }
     let baseline = read_baseline(&tx, &watch.id)?;
     let current = observe(&tx, watch, &baseline, &prefetch, checked_at)?;
     let out = diff(&watch.id, &baseline, &current, checked_at);
@@ -532,13 +555,13 @@ fn check_one(
     )
     .map_err(err)?;
     tx.commit().map_err(err)?;
-    Ok(WatchCheck {
+    Ok(Some(WatchCheck {
         watch_id: watch.id.clone(),
         checked_at: checked_at.to_string(),
         status: out.status,
         dimensions: out.dimensions,
         new_changes,
-    })
+    }))
 }
 
 fn table_exists(conn: &Connection, name: &str) -> Result<bool, AppError> {
@@ -811,7 +834,12 @@ fn observe_findings(
         }
         return Ok(Slot::measured(found, now));
     }
-    if matches!(watch.kind, WatchKind::Entity | WatchKind::Query) {
+    // Without the document scope an agency or text watch cannot tell a finding that left from one
+    // it could no longer reach through a document, so the dimension is not measured.
+    if matches!(
+        watch.kind,
+        WatchKind::Entity | WatchKind::Query | WatchKind::Agency
+    ) {
         if let Err(reason) = documents {
             return Ok(Slot::not_measured(reason.clone()));
         }
