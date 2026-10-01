@@ -162,7 +162,7 @@ pub fn audit_document_path<P: AsRef<Path>>(
     let format = detect_document_format(path, file_name, None)?;
     match format {
         DocumentFormat::Pdf => {
-            let document = lopdf::Document::load(path).map_err(|error| {
+            let document = crate::parsers::pdf::load_bounded(path).map_err(|error| {
                 AppError::DataParsing(format!("FORENSIC_PDF_LOAD_FAILED: {error}"))
             })?;
             let mut bundle =

@@ -157,7 +157,7 @@ fn extract_creation_date(path: PathBuf) -> Result<Option<DateTime<Utc>>, AppErro
     if metadata.len() > MAX_PDF_BYTES_FOR_METADATA {
         return Ok(None);
     }
-    let document = Document::load(&path).map_err(|error| {
+    let document = crate::parsers::pdf::load_bounded(&path).map_err(|error| {
         AppError::DataParsing(format!("Failed to open PDF for metadata: {error}"))
     })?;
     Ok(read_info_date(&document, b"CreationDate").or_else(|| read_xmp_create_date(&document)))
@@ -192,7 +192,9 @@ fn read_xmp_create_date(document: &Document) -> Option<DateTime<Utc>> {
         },
         _ => return None,
     };
-    let content = stream_object.decompressed_content().ok()?;
+    let content = stream_object
+        .decompressed_content_with_limit(crate::parsers::pdf::MAX_DECOMPRESSED_STREAM_BYTES)
+        .ok()?;
     let text = std::str::from_utf8(&content).ok()?;
     let start = text.find("<xmp:CreateDate>")?;
     let after_open = start + "<xmp:CreateDate>".len();

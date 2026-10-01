@@ -138,7 +138,9 @@ pub fn carve_historical_pdf_versions<P: AsRef<Path>>(
         inspected_historical_versions += 1;
         let revision_number = first_revision + selected_index + 1;
         let xref_start_offset = find_startxref_offset(&source[..snapshot_end]);
-        let historical_document = match Document::load_mem(&source[..snapshot_end]) {
+        let historical_document = match crate::parsers::pdf::load_bounded_mem(
+            &source[..snapshot_end],
+        ) {
             Ok(document) => document,
             Err(error) => {
                 revision_diagnostics.push(RecoveredRevisionDiagnostic {
@@ -202,7 +204,10 @@ pub fn carve_historical_pdf_versions<P: AsRef<Path>>(
         let mut recovered_text = String::new();
         let mut recovered_text_characters = 0_usize;
         for page_number in pages.keys().take(MAXIMUM_PAGES_PER_REVISION) {
-            let page_text = match historical_document.extract_text(&[*page_number]) {
+            let page_text = match historical_document.extract_text_with_limit(
+                &[*page_number],
+                crate::parsers::pdf::MAX_DECOMPRESSED_STREAM_BYTES,
+            ) {
                 Ok(text) => text,
                 Err(error) => {
                     let diagnostic = &mut revision_diagnostics[diagnostic_index];

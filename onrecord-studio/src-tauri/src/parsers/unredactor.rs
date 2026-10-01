@@ -415,7 +415,7 @@ pub fn evaluate_vector_redaction_leaks<P: AsRef<Path>>(
         )));
     }
     let source_sha256 = sha256_hex(&source_bytes);
-    let document = Document::load_mem(&source_bytes).map_err(|error| {
+    let document = crate::parsers::pdf::load_bounded_mem(&source_bytes).map_err(|error| {
         AppError::DataParsing(format!(
             "Failed to parse PDF structure '{}': {error}",
             path.display()

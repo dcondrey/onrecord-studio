@@ -104,10 +104,24 @@ pub fn audit_office_package<P: AsRef<Path>>(
                 .push("OFFICE_AUDIT_TOTAL_XML_LIMIT_REACHED".to_string());
             break;
         }
-        let mut bytes = Vec::with_capacity(entry.size() as usize);
-        entry.read_to_end(&mut bytes).map_err(|error| {
-            AppError::DataParsing(format!("OFFICE_AUDIT_PART_READ_FAILED:{name}:{error}"))
-        })?;
+        // The declared size is attacker-written; bounding the read by it is what keeps a deflate
+        // bomb that lies about its size from inflating past the caps checked above.
+        let declared_size = entry.size();
+        let mut bytes = Vec::with_capacity(declared_size as usize);
+        entry
+            .by_ref()
+            .take(declared_size + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|error| {
+                AppError::DataParsing(format!("OFFICE_AUDIT_PART_READ_FAILED:{name}:{error}"))
+            })?;
+        if bytes.len() as u64 != declared_size {
+            bundle.coverage_complete = false;
+            bundle
+                .warnings
+                .push(format!("OFFICE_AUDIT_PART_SIZE_MISMATCH:{name}"));
+            continue;
+        }
         let Ok(xml) = std::str::from_utf8(&bytes) else {
             bundle.coverage_complete = false;
             bundle

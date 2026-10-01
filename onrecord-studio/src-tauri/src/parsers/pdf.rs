@@ -9,7 +9,23 @@ pub const MINIMUM_CHARACTER_LAYER_DENSITY: f64 = 0.15;
 const MAX_PDF_BYTES: u64 = 256 * 1024 * 1024;
 const MAX_PDF_PAGES: usize = 25_000;
 const MAX_EXTRACTED_BYTES: usize = 128 * 1024 * 1024;
-const MAX_DECOMPRESSED_STREAM_BYTES: usize = 16 * 1024 * 1024;
+pub(crate) const MAX_DECOMPRESSED_STREAM_BYTES: usize = 16 * 1024 * 1024;
+
+/// Every lopdf load goes through these. Plain `Document::load` inflates object and xref streams
+/// without any output limit, so one hostile stream aborts the process with an allocation failure.
+pub(crate) fn load_bounded(path: &Path) -> lopdf::Result<Document> {
+    Document::load_with_options(
+        path,
+        LoadOptions::with_max_decompressed_size(MAX_DECOMPRESSED_STREAM_BYTES),
+    )
+}
+
+pub(crate) fn load_bounded_mem(bytes: &[u8]) -> lopdf::Result<Document> {
+    Document::load_mem_with_options(
+        bytes,
+        LoadOptions::with_max_decompressed_size(MAX_DECOMPRESSED_STREAM_BYTES),
+    )
+}
 
 pub fn character_layer_density(text: &str) -> f64 {
     let total_character_count = text.chars().count();
@@ -31,11 +47,7 @@ pub fn extract_text_layers<P: AsRef<Path>>(file_path: P) -> Result<String, AppEr
     // resident source buffer. Its bounded load option separately caps eager object/xref stream
     // inflation, and the page loop below uses the bounded extractor so content and font streams
     // cannot bypass that protection during lazy page decoding.
-    let document = Document::load_with_options(
-        path,
-        LoadOptions::with_max_decompressed_size(MAX_DECOMPRESSED_STREAM_BYTES),
-    )
-    .map_err(|error| {
+    let document = load_bounded(path).map_err(|error| {
         AppError::DataParsing(format!(
             "PDF_LOAD_FAILED: failed to load '{}': {}",
             path.display(),

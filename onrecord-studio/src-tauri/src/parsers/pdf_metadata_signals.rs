@@ -102,7 +102,7 @@ pub fn read_pdf_metadata_signals(path: &Path) -> Result<PdfMetadataSignals, AppE
             "PDF exceeds {MAX_PDF_BYTES}-byte metadata read cap"
         )));
     }
-    let Ok(document) = Document::load(path) else {
+    let Ok(document) = crate::parsers::pdf::load_bounded(path) else {
         // A file that lopdf refuses to open is not a signal by itself — an unrelated forensic
         // audit path already records that as an ingestion issue.
         return Ok(PdfMetadataSignals::default());
@@ -188,7 +188,9 @@ fn read_xmp_stream(document: &Document) -> Option<String> {
         },
         _ => return None,
     };
-    let content = stream.decompressed_content().ok()?;
+    let content = stream
+        .decompressed_content_with_limit(crate::parsers::pdf::MAX_DECOMPRESSED_STREAM_BYTES)
+        .ok()?;
     String::from_utf8(content).ok()
 }
 

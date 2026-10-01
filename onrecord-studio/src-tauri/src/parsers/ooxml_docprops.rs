@@ -119,19 +119,24 @@ pub fn read_ooxml_docprops(path: &Path) -> Result<OoxmlDocProps, AppError> {
         if name.contains("../") || entry.size() > MAX_PART_BYTES {
             continue;
         }
-        if name.ends_with("docprops/core.xml") {
-            let mut buffer = Vec::with_capacity(entry.size() as usize);
-            if std::io::Read::read_to_end(&mut entry, &mut buffer).is_ok() {
-                if let Ok(text) = std::str::from_utf8(&buffer) {
-                    apply_core_xml(&mut props, text);
-                }
-            }
+        let apply: fn(&mut OoxmlDocProps, &str) = if name.ends_with("docprops/core.xml") {
+            apply_core_xml
         } else if name.ends_with("docprops/app.xml") {
-            let mut buffer = Vec::with_capacity(entry.size() as usize);
-            if std::io::Read::read_to_end(&mut entry, &mut buffer).is_ok() {
-                if let Ok(text) = std::str::from_utf8(&buffer) {
-                    apply_app_xml(&mut props, text);
-                }
+            apply_app_xml
+        } else {
+            continue;
+        };
+        // Bounded by the declared size, which the cap above checked: an entry that inflates past
+        // what it declares is a bomb or corrupt, and either way is not read.
+        let declared_size = entry.size();
+        let mut buffer = Vec::with_capacity(declared_size as usize);
+        let read = std::io::Read::read_to_end(
+            &mut std::io::Read::take(&mut entry, declared_size + 1),
+            &mut buffer,
+        );
+        if read.is_ok() && buffer.len() as u64 == declared_size {
+            if let Ok(text) = std::str::from_utf8(&buffer) {
+                apply(&mut props, text);
             }
         }
     }

@@ -193,7 +193,7 @@ fn extract_metadata_dates(path: PathBuf) -> Result<PdfMetadataDates, AppError> {
             "PDF is larger than the {MAX_PDF_BYTES_FOR_METADATA}-byte metadata read cap"
         )));
     }
-    let document = Document::load(&path).map_err(|error| {
+    let document = crate::parsers::pdf::load_bounded(&path).map_err(|error| {
         AppError::DataParsing(format!("Failed to open PDF for metadata: {error}"))
     })?;
     let mod_date = read_info_date(&document, b"ModDate");
@@ -235,7 +235,9 @@ fn read_xmp_modify_date(document: &Document) -> Option<DateTime<Utc>> {
         },
         _ => return None,
     };
-    let content = stream_object.decompressed_content().ok()?;
+    let content = stream_object
+        .decompressed_content_with_limit(crate::parsers::pdf::MAX_DECOMPRESSED_STREAM_BYTES)
+        .ok()?;
     let text = std::str::from_utf8(&content).ok()?;
     let start = text.find("<xmp:ModifyDate>")?;
     let after_open = start + "<xmp:ModifyDate>".len();

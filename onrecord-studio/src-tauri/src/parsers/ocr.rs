@@ -382,7 +382,7 @@ fn ocr_pdf(path: &Path, deadline: Instant) -> Result<String, AppError> {
 }
 
 fn pdf_page_count(path: &Path, deadline: Instant) -> Result<usize, AppError> {
-    if let Ok(document) = lopdf::Document::load(path) {
+    if let Ok(document) = crate::parsers::pdf::load_bounded(path) {
         return Ok(document.get_pages().len());
     }
     let inspector =
