@@ -48,7 +48,7 @@ pub async fn export_casework_packet(
     case_id: String,
     contributor: String,
     repository: State<'_, DuckDbRepository>,
-    report_directory: State<'_, PathBuf>,
+    key_directory: State<'_, crate::integrity::SigningKeyDirectory>,
 ) -> Result<String, AppError> {
     let payload = repository
         .export_casework_packet(case_id, contributor)
@@ -56,7 +56,7 @@ pub async fn export_casework_packet(
     let packet: CaseworkPacket = serde_json::from_str(&payload).map_err(|error| {
         AppError::DataParsing(format!("Failed to encode portable case packet: {error}"))
     })?;
-    let signing_key = load_or_create_signing_key(&report_directory).await?;
+    let signing_key = load_or_create_signing_key(&key_directory.0).await?;
     let signed = sign_package(packet, &signing_key).map_err(AppError::Export)?;
     let envelope = serde_json::to_string_pretty(&signed).map_err(|error| {
         AppError::DataParsing(format!("Failed to encode signed case packet: {error}"))
@@ -325,6 +325,7 @@ mod tests {
 
         crate::integrity::rotate_signing_key(
             directory.path(),
+            directory.path(),
             "Key left the organization.".into(),
             true,
         )
@@ -352,6 +353,7 @@ mod tests {
         let payload = serde_json::to_string(&signed).unwrap();
 
         crate::integrity::rotate_signing_key(
+            directory.path(),
             directory.path(),
             "Routine hygiene rotation.".into(),
             false,

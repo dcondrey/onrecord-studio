@@ -31,6 +31,22 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
     create_runtime_directory(&app_data_dir)?;
     let report_directory = app_data_dir.join("reports");
     create_runtime_directory(&report_directory)?;
+    let signing_key_directory = app_data_dir.join("signing-keys");
+    create_runtime_directory(&signing_key_directory)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(
+            &signing_key_directory,
+            std::fs::Permissions::from_mode(0o700),
+        )
+        .map_err(|error| {
+            AppError::Storage(format!(
+                "Failed to restrict the signing key directory: {error}"
+            ))
+        })?;
+    }
+    crate::integrity::relocate_legacy_signing_keys(&report_directory, &signing_key_directory)?;
     let core_db_file = app_data_dir.join("onrecord_studio_core.db");
     let corpus_db_file = app_data_dir.join("onrecord_studio_corpus.db");
     let vector_db_file = app_data_dir.join("onrecord_studio_vectors.db");
@@ -106,6 +122,7 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
         );
     }
     start_search_token_backfill(repository.clone());
+    start_cpra_rule_recompute(repository.clone());
     start_corpus_reconciliation(app_handle, repository.clone(), corpus_index.clone());
     app.manage(repository);
     app.manage(corpus_index);
@@ -117,6 +134,7 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
         &app_data_dir,
     )));
     app.manage(report_directory);
+    app.manage(crate::integrity::SigningKeyDirectory(signing_key_directory));
     app.manage(AppInvestigationPaths::new(download_root));
     app.manage(manager);
     app.manage(agency_engine);
@@ -139,6 +157,18 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
 /// startup: on a large corpus it is minutes of single-threaded DuckDB work, and running it inside
 /// the setup hook kept the event loop from ever presenting the window. Until it finishes,
 /// `query_audit_records` refuses rather than returning a partial answer.
+fn start_cpra_rule_recompute(repository: DuckDbRepository) {
+    tauri::async_runtime::spawn(async move {
+        match repository.recompute_cpra_findings_for_rule_change().await {
+            Ok(0) => {}
+            Ok(count) => {
+                eprintln!("Recomputed {count} CPRA findings under the current deadline rule")
+            }
+            Err(error) => eprintln!("CPRA finding recompute stopped: {error}"),
+        }
+    });
+}
+
 fn start_search_token_backfill(repository: DuckDbRepository) {
     let pending = repository.pending_search_index_documents();
     if pending == 0 {

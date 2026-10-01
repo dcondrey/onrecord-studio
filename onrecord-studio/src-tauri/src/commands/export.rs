@@ -164,6 +164,7 @@ pub async fn export_legal_brief(
     author_name: Option<String>,
     repository: State<'_, DuckDbRepository>,
     report_directory: State<'_, PathBuf>,
+    key_directory: State<'_, crate::integrity::SigningKeyDirectory>,
 ) -> Result<LegalBriefExportResult, AppError> {
     let portal_key = validate_portal_key(&portal_key)?;
     let author_name = optional_text(author_name, "Report author name", 256)?;
@@ -225,7 +226,7 @@ pub async fn export_legal_brief(
             package_path.display()
         )));
     }
-    let signing_key = load_or_create_signing_key(&report_directory).await?;
+    let signing_key = load_or_create_signing_key(&key_directory.0).await?;
     let verifier_script_path = ensure_verifier_script(&report_directory).await?;
     let manifest = validate_evidence_manifest(EvidencePackageManifest {
         schema_version: EVIDENCE_PACKAGE_SCHEMA.to_string(),
@@ -337,6 +338,7 @@ pub async fn export_case_evidence_package(
     withheld_citations: Vec<WithheldCitationRequest>,
     repository: State<'_, DuckDbRepository>,
     report_directory: State<'_, PathBuf>,
+    key_directory: State<'_, crate::integrity::SigningKeyDirectory>,
 ) -> Result<CaseEvidencePackageResult, AppError> {
     let target_path = optional_text(target_path, "Case export output path", MAXIMUM_PATH_BYTES)?;
     let target_path = target_path.unwrap_or_else(|| {
@@ -350,7 +352,7 @@ pub async fn export_case_evidence_package(
     // sequence reserved, so a bad output path (the overwhelmingly common failure) never burns a
     // position in the case's append-only export chain.
     let output_path = validate_report_path(&target_path, &report_directory, "json").await?;
-    let signing_key = load_or_create_signing_key(&report_directory).await?;
+    let signing_key = load_or_create_signing_key(&key_directory.0).await?;
     let verifier_script_path = ensure_verifier_script(&report_directory).await?;
     let generated_at = chrono::Utc::now().to_rfc3339();
     let package = repository
@@ -451,8 +453,9 @@ pub async fn rotate_export_signing_key(
     reason: String,
     compromised: bool,
     report_directory: State<'_, PathBuf>,
+    key_directory: State<'_, crate::integrity::SigningKeyDirectory>,
 ) -> Result<SigningKeyRotationResult, AppError> {
-    rotate_signing_key(&report_directory, reason, compromised).await
+    rotate_signing_key(&report_directory, &key_directory.0, reason, compromised).await
 }
 
 /// Escalates a key already listed as retired (routine rotation) to compromised, without rotating
@@ -463,8 +466,10 @@ pub async fn mark_signing_key_compromised(
     key_id: String,
     reason: String,
     report_directory: State<'_, PathBuf>,
+    key_directory: State<'_, crate::integrity::SigningKeyDirectory>,
 ) -> Result<(), AppError> {
-    crate::integrity::mark_key_compromised(&report_directory, key_id, reason).await
+    crate::integrity::mark_key_compromised(&report_directory, &key_directory.0, key_id, reason)
+        .await
 }
 
 /// This installation's local record of retired signing keys, for display in the UI. The
@@ -1194,9 +1199,14 @@ mod tests {
         )
         .await
         .unwrap();
-        rotate_signing_key(directory.path(), "Suspected compromise.".to_string(), true)
-            .await
-            .unwrap();
+        rotate_signing_key(
+            directory.path(),
+            directory.path(),
+            "Suspected compromise.".to_string(),
+            true,
+        )
+        .await
+        .unwrap();
 
         let result = verify_evidence_package_inner(payload, directory.path())
             .await
@@ -1237,6 +1247,7 @@ mod tests {
         .await
         .unwrap();
         rotate_signing_key(
+            directory.path(),
             directory.path(),
             "Routine hygiene rotation.".to_string(),
             false,

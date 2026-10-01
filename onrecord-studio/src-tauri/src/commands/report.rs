@@ -232,6 +232,7 @@ pub async fn export_verifiable_report(
     request: VerifiableReportRequest,
     repository: State<'_, DuckDbRepository>,
     report_directory: State<'_, PathBuf>,
+    key_directory: State<'_, crate::integrity::SigningKeyDirectory>,
     profile_store: State<'_, Arc<ProfileStore>>,
     corpus: State<'_, CorpusIndex>,
 ) -> Result<VerifiableReportExportResult, AppError> {
@@ -283,7 +284,7 @@ pub async fn export_verifiable_report(
             .into_owned()
     });
     let output_path = validate_output_path(&target_path, &report_directory).await?;
-    let signing_key = load_or_create_signing_key(&report_directory).await?;
+    let signing_key = load_or_create_signing_key(&key_directory.0).await?;
     let rendered = sign_and_render(manifest, &signing_key)?;
     commit_new_file(&output_path, rendered.html.as_bytes()).await?;
     Ok(VerifiableReportExportResult {

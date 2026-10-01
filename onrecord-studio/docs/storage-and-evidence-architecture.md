@@ -310,8 +310,9 @@ on that agreement. `scripts/verify-evidence-package.mjs` verifies a package with
 and no trust in this application's own code, which is the actual point of a signature: a party who
 does not trust OnRecord Studio's export can still check what it produced.
 
-The signing key (`.onrecord-export-signing-key-v1`, alongside the report directory) is
-self-managed and local. Every package's `signature.identityAssurance` says so verbatim
+The signing key (`.onrecord-export-signing-key-v1`, with any retired keys, in the owner-only
+`signing-keys` directory next to `reports`, never inside it, so sharing the reports folder cannot
+share the key; older installations' keys are moved there at startup) is self-managed and local. Every package's `signature.identityAssurance` says so verbatim
 (`SELF_MANAGED_LOCAL_KEY_NOT_EXTERNALLY_ATTESTED`) so a reader cannot mistake it for a notarized or
 third-party-attested identity — the same distinction section 5 draws between `VERIFIED_SIGNATURE`
 and `TRUSTED_CHAIN_OF_CUSTODY` on the ingest side. The signature proves the exported bytes have not

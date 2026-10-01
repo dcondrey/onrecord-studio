@@ -69,6 +69,47 @@ pub(crate) const SIGNATURE_ALGORITHM: &str = "Ed25519";
 pub(crate) const SELF_MANAGED_LOCAL_KEY: &str = "SELF_MANAGED_LOCAL_KEY_NOT_EXTERNALLY_ATTESTED";
 pub(crate) const SIGNING_KEY_FILE: &str = ".onrecord-export-signing-key-v1";
 
+/// Where private signing keys live: outside the reports directory, which users zip and send on,
+/// so sharing exports can never carry the key that signed them.
+pub struct SigningKeyDirectory(pub std::path::PathBuf);
+
+/// Moves key files an older build wrote into the reports directory. Same volume, so each move is
+/// an atomic rename; a destination that already exists is left alone rather than overwritten.
+pub(crate) fn relocate_legacy_signing_keys(
+    report_directory: &Path,
+    key_directory: &Path,
+) -> Result<(), AppError> {
+    let entries = match std::fs::read_dir(report_directory) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => {
+            return Err(AppError::Export(format!(
+                "Failed to scan for legacy signing keys: {error}"
+            )))
+        }
+    };
+    for entry in entries {
+        let entry = entry.map_err(|error| {
+            AppError::Export(format!("Failed to scan for signing keys: {error}"))
+        })?;
+        let name = entry.file_name();
+        if !name.to_string_lossy().starts_with(SIGNING_KEY_FILE) {
+            continue;
+        }
+        let destination = key_directory.join(&name);
+        if destination.exists() {
+            continue;
+        }
+        std::fs::rename(entry.path(), &destination).map_err(|error| {
+            AppError::Export(format!(
+                "Failed to move signing key '{}' out of the reports directory: {error}",
+                name.to_string_lossy()
+            ))
+        })?;
+    }
+    Ok(())
+}
+
 /// Loads this installation's local Ed25519 signing key, creating it on first use. Every signed
 /// package this application produces — evidence exports, chain-of-custody exports, and portable
 /// casework packets — is signed with this same key, so a recipient of two packets claiming
@@ -84,9 +125,9 @@ fn generate_signing_key_seed() -> [u8; 32] {
 }
 
 pub(crate) async fn load_or_create_signing_key(
-    report_directory: &Path,
+    key_directory: &Path,
 ) -> Result<SigningKey, AppError> {
-    let key_path = report_directory.join(SIGNING_KEY_FILE);
+    let key_path = key_directory.join(SIGNING_KEY_FILE);
     match tokio::fs::read(&key_path).await {
         Ok(bytes) => return signing_key_from_bytes(&bytes, &key_path),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -490,6 +531,7 @@ async fn write_revocations_durably(
 /// have actually been compromised. Idempotent: escalating an already-COMPROMISED key is a no-op.
 pub(crate) async fn mark_key_compromised(
     report_directory: &Path,
+    key_directory: &Path,
     key_id: String,
     reason: String,
 ) -> Result<(), AppError> {
@@ -523,7 +565,7 @@ pub(crate) async fn mark_key_compromised(
         reason,
         status: REVOCATION_STATUS_COMPROMISED.to_string(),
     });
-    let signing_key = load_or_create_signing_key(report_directory).await?;
+    let signing_key = load_or_create_signing_key(key_directory).await?;
     write_revocations_durably(report_directory, revocations, &signing_key).await
 }
 
@@ -539,6 +581,7 @@ pub(crate) async fn mark_key_compromised(
 /// future, must read as failing verification everywhere this revocation list is checked.
 pub(crate) async fn rotate_signing_key(
     report_directory: &Path,
+    key_directory: &Path,
     reason: String,
     compromised: bool,
 ) -> Result<SigningKeyRotationResult, AppError> {
@@ -550,9 +593,9 @@ pub(crate) async fn rotate_signing_key(
     }
     let _lock = REVOCATION_WRITE_LOCK.lock().await;
     let _cross_process_lock = acquire_cross_process_revocation_lock(report_directory).await?;
-    let old_key = load_or_create_signing_key(report_directory).await?;
+    let old_key = load_or_create_signing_key(key_directory).await?;
     let old_key_id = sha256_hex(&old_key.verifying_key().to_bytes());
-    let key_path = report_directory.join(SIGNING_KEY_FILE);
+    let key_path = key_directory.join(SIGNING_KEY_FILE);
 
     // The new key is generated and used to build and durably write the revocation list *before*
     // anything about the active key file changes. If any of that fails, the old key is still
@@ -598,7 +641,7 @@ pub(crate) async fn rotate_signing_key(
     // `rename` of the staged file over `key_path`, which POSIX guarantees is atomic: the file at
     // `key_path` is never briefly absent.
     let staged_key_path =
-        report_directory.join(format!("{SIGNING_KEY_FILE}.staged-{}", Uuid::new_v4()));
+        key_directory.join(format!("{SIGNING_KEY_FILE}.staged-{}", Uuid::new_v4()));
     let mut options = tokio::fs::OpenOptions::new();
     options.create_new(true).write(true);
     #[cfg(unix)]
@@ -627,7 +670,7 @@ pub(crate) async fn rotate_signing_key(
         }
     }
 
-    let archived_key_path = report_directory.join(format!(
+    let archived_key_path = key_directory.join(format!(
         "{SIGNING_KEY_FILE}.retired-{}-{}",
         chrono::Utc::now().format("%Y%m%dT%H%M%SZ"),
         &old_key_id[..12]
@@ -690,6 +733,30 @@ mod tests {
         assert!(!constant_time_equal(digest.as_bytes(), b"different"));
     }
 
+    /// The move must carry an older build's active and retired keys out of the shared reports
+    /// directory and must never replace a key already at the destination.
+    #[tokio::test]
+    async fn legacy_keys_leave_the_reports_directory_without_overwriting() {
+        let reports = tempfile::tempdir().unwrap();
+        let keys = tempfile::tempdir().unwrap();
+        let active = load_or_create_signing_key(reports.path()).await.unwrap();
+        let retired_name = format!("{SIGNING_KEY_FILE}.retired-1-abc");
+        std::fs::write(reports.path().join(&retired_name), [9_u8; 32]).unwrap();
+        std::fs::write(reports.path().join("report.md"), b"kept").unwrap();
+
+        super::relocate_legacy_signing_keys(reports.path(), keys.path()).unwrap();
+        assert!(!reports.path().join(SIGNING_KEY_FILE).exists());
+        assert!(!reports.path().join(&retired_name).exists());
+        assert!(reports.path().join("report.md").exists());
+        let moved = load_or_create_signing_key(keys.path()).await.unwrap();
+        assert_eq!(moved.to_bytes(), active.to_bytes());
+
+        std::fs::write(reports.path().join(SIGNING_KEY_FILE), [1_u8; 32]).unwrap();
+        super::relocate_legacy_signing_keys(reports.path(), keys.path()).unwrap();
+        let kept = load_or_create_signing_key(keys.path()).await.unwrap();
+        assert_eq!(kept.to_bytes(), active.to_bytes());
+    }
+
     #[tokio::test]
     async fn export_signing_key_is_created_once_and_reused() {
         let directory = tempfile::tempdir().unwrap();
@@ -727,7 +794,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         load_or_create_signing_key(directory.path()).await.unwrap();
         assert!(
-            rotate_signing_key(directory.path(), "   ".to_string(), false)
+            rotate_signing_key(directory.path(), directory.path(), "   ".to_string(), false)
                 .await
                 .is_err()
         );
@@ -747,9 +814,14 @@ mod tests {
             .await
             .unwrap();
 
-        let rotated = rotate_signing_key(directory.path(), "Routine rotation.".to_string(), false)
-            .await
-            .unwrap();
+        let rotated = rotate_signing_key(
+            directory.path(),
+            directory.path(),
+            "Routine rotation.".to_string(),
+            false,
+        )
+        .await
+        .unwrap();
 
         let archived_bytes = tokio::fs::read(&rotated.archived_key_path).await.unwrap();
         assert_eq!(
@@ -783,9 +855,14 @@ mod tests {
     async fn rotate_signing_key_records_retired_or_compromised_status_correctly() {
         let directory = tempfile::tempdir().unwrap();
         load_or_create_signing_key(directory.path()).await.unwrap();
-        let retired = rotate_signing_key(directory.path(), "Routine.".to_string(), false)
-            .await
-            .unwrap();
+        let retired = rotate_signing_key(
+            directory.path(),
+            directory.path(),
+            "Routine.".to_string(),
+            false,
+        )
+        .await
+        .unwrap();
         let revocations = load_revocations(directory.path()).await.unwrap();
         assert_eq!(
             check_revocation(&retired.retired_key_id, &revocations)
@@ -794,9 +871,14 @@ mod tests {
             REVOCATION_STATUS_RETIRED
         );
 
-        let compromised = rotate_signing_key(directory.path(), "Compromise.".to_string(), true)
-            .await
-            .unwrap();
+        let compromised = rotate_signing_key(
+            directory.path(),
+            directory.path(),
+            "Compromise.".to_string(),
+            true,
+        )
+        .await
+        .unwrap();
         let revocations = load_revocations(directory.path()).await.unwrap();
         assert_eq!(
             check_revocation(&compromised.retired_key_id, &revocations)
@@ -861,11 +943,17 @@ mod tests {
     async fn mark_key_compromised_escalates_an_already_retired_key() {
         let directory = tempfile::tempdir().unwrap();
         load_or_create_signing_key(directory.path()).await.unwrap();
-        let retired = rotate_signing_key(directory.path(), "Routine.".to_string(), false)
-            .await
-            .unwrap();
+        let retired = rotate_signing_key(
+            directory.path(),
+            directory.path(),
+            "Routine.".to_string(),
+            false,
+        )
+        .await
+        .unwrap();
 
         mark_key_compromised(
+            directory.path(),
             directory.path(),
             retired.retired_key_id.clone(),
             "Found on a leaked backup.".to_string(),
@@ -887,8 +975,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         load_or_create_signing_key(directory.path()).await.unwrap();
         assert!(
-            mark_key_compromised(
-                directory.path(),
+            mark_key_compromised(directory.path(), directory.path(),
                 "never-recorded-key-id".to_string(),
                 "Reason.".to_string(),
             )
@@ -902,25 +989,39 @@ mod tests {
     async fn mark_key_compromised_rejects_an_empty_reason() {
         let directory = tempfile::tempdir().unwrap();
         load_or_create_signing_key(directory.path()).await.unwrap();
-        let retired = rotate_signing_key(directory.path(), "Routine.".to_string(), false)
-            .await
-            .unwrap();
-        assert!(
-            mark_key_compromised(directory.path(), retired.retired_key_id, "   ".to_string())
-                .await
-                .is_err()
-        );
+        let retired = rotate_signing_key(
+            directory.path(),
+            directory.path(),
+            "Routine.".to_string(),
+            false,
+        )
+        .await
+        .unwrap();
+        assert!(mark_key_compromised(
+            directory.path(),
+            directory.path(),
+            retired.retired_key_id,
+            "   ".to_string()
+        )
+        .await
+        .is_err());
     }
 
     #[tokio::test]
     async fn mark_key_compromised_is_idempotent_and_never_duplicates_the_entry() {
         let directory = tempfile::tempdir().unwrap();
         load_or_create_signing_key(directory.path()).await.unwrap();
-        let retired = rotate_signing_key(directory.path(), "Routine.".to_string(), false)
-            .await
-            .unwrap();
+        let retired = rotate_signing_key(
+            directory.path(),
+            directory.path(),
+            "Routine.".to_string(),
+            false,
+        )
+        .await
+        .unwrap();
 
         mark_key_compromised(
+            directory.path(),
             directory.path(),
             retired.retired_key_id.clone(),
             "First report.".to_string(),
@@ -928,6 +1029,7 @@ mod tests {
         .await
         .unwrap();
         mark_key_compromised(
+            directory.path(),
             directory.path(),
             retired.retired_key_id.clone(),
             "Second report of the same compromise.".to_string(),
@@ -983,6 +1085,7 @@ mod tests {
 
         let rotated = rotate_signing_key(
             directory.path(),
+            directory.path(),
             "Escalating to compromised.".to_string(),
             true,
         )
@@ -1010,18 +1113,28 @@ mod tests {
         for _ in 0..20 {
             let directory = tempfile::tempdir().unwrap();
             load_or_create_signing_key(directory.path()).await.unwrap();
-            let first_rotation =
-                rotate_signing_key(directory.path(), "Routine.".to_string(), false)
-                    .await
-                    .unwrap();
+            let first_rotation = rotate_signing_key(
+                directory.path(),
+                directory.path(),
+                "Routine.".to_string(),
+                false,
+            )
+            .await
+            .unwrap();
 
             let (mark_result, second_rotation_result) = tokio::join!(
                 mark_key_compromised(
                     directory.path(),
+                    directory.path(),
                     first_rotation.retired_key_id.clone(),
                     "Found on a leaked backup.".to_string(),
                 ),
-                rotate_signing_key(directory.path(), "Second rotation.".to_string(), false),
+                rotate_signing_key(
+                    directory.path(),
+                    directory.path(),
+                    "Second rotation.".to_string(),
+                    false
+                ),
             );
             mark_result.unwrap();
             let second_rotation = second_rotation_result.unwrap();
