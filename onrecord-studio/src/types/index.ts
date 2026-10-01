@@ -46,3 +46,4 @@ export * from "./starterSets";
 
 export * from "./bundle";
 export * from "./annotation";
+export * from "./collaboration";

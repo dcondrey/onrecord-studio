@@ -33,3 +33,25 @@ export const MATCH_BASIS_LABELS: Record<MatchBasis, string> = {
   description: 'Term in description',
   unshown: 'Match not shown here: full description or document text',
 };
+
+export interface SearchRecordInput {
+  ranAt: string;
+  query: string;
+  filters: { label: string; value: string }[];
+  sourceCount: number;
+  resultCount: number;
+}
+
+/** A citable account of one search. It records what was asked and answered, not that the answer is complete or permanent. */
+export function searchRecordText(input: SearchRecordInput): string {
+  const filters = input.filters.length === 0 ? 'none' : input.filters.map((f) => `${f.label}: ${f.value}`).join('; ');
+  const capped = input.resultCount >= SEARCH_RESULT_LIMIT;
+  return [
+    `OnRecord Studio search run ${input.ranAt}`,
+    `Text: ${input.query.trim() || '(none)'}`,
+    `Filters: ${filters}`,
+    `Sources searched: ${input.sourceCount}`,
+    `Records returned: ${formatMatchCount(input.resultCount)}${capped ? ` (limited to the first ${SEARCH_RESULT_LIMIT}; more may exist)` : ''}`,
+    'Results reflect the sources ingested at that time and can change as sources synchronize.',
+  ].join('\n');
+}

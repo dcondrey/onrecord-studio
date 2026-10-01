@@ -2,7 +2,8 @@ import { formatMatchCount, SEARCH_RESULT_LIMIT } from '../../utils/searchResults
 import { useEffect, useMemo, useState } from 'react';
 import AgencySelector from './AgencySelector';
 import { useAppStore } from '../../store/useAppStore';
-import { invokeCommand } from '../../ipc';
+import { searchRecordText } from '../../utils/searchResults';
+import { formatNativeError, invokeCommand } from '../../ipc';
 import { compileToLegacyQuery, interpretNaturalLanguage, parseQualifierQuery, serializeQualifierQuery } from '../../query';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 
@@ -19,9 +20,12 @@ export default function SearchFilter() {
   const setSearchError = useAppStore((state) => state.setSearchError);
   const resultCount = useAppStore((state) => state.filteredResults.length);
   const agencyProfiles = useAppStore((state) => state.agencyProfiles);
+  const portalCount = useAppStore((state) => state.portals.length);
   const [inputValue, setInputValue] = useState(searchTerm);
   const [interpretPlainLanguage, setInterpretPlainLanguage] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [watchStatus, setWatchStatus] = useState<{ ok: boolean; text: string } | null>(null);
+  const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
   const requestGate = useLatestRequestGate();
   // The parser accepts only fields the native command can execute. The compiler still returns
   // negated, duplicate, or ambiguous filters so they can be labeled instead of ignored.
@@ -87,6 +91,42 @@ export default function SearchFilter() {
   const clear = () => {
     setInputValue('');
     setSearchFilters('', null, null, null);
+  };
+
+  const watchWords = compiledQuery.searchTerm.trim().split(/\s+/).filter(Boolean);
+  const canWatch = watchWords.length >= 1 && watchWords.length <= 8;
+  const watchTerm = async () => {
+    const term = watchWords.join(' ');
+    setWatchStatus(null);
+    try {
+      await invokeCommand('save_watch', {
+        watch: { id: '', kind: 'QUERY', target: term, label: '', createdAt: '', enabled: true },
+      });
+      setWatchStatus({ ok: true, text: `Watching "${term}". It is checked after each ingest; changes appear in the watchlist.` });
+    } catch (reason) {
+      setWatchStatus({ ok: false, text: `Could not watch "${term}": ${formatNativeError(reason)}` });
+    }
+  };
+
+  const copyRecord = async () => {
+    const text = searchRecordText({
+      ranAt: new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC',
+      query: inputValue,
+      filters: [
+        ...(selectedAgencyId !== null ? [{ label: 'Department', value: agencyProfiles.find((profile) => profile.agencyId === selectedAgencyId)?.agencyName ?? String(selectedAgencyId) }] : []),
+        ...(selectedStatus ? [{ label: 'Status', value: selectedStatus }] : []),
+        ...(selectedPolicyDeviation ? [{ label: 'Policy deviation', value: formatPolicy(selectedPolicyDeviation) }] : []),
+        ...(activePortalKey ? [{ label: 'Source', value: activePortalKey }] : []),
+      ],
+      sourceCount: activePortalKey ? 1 : portalCount,
+      resultCount,
+    });
+    try {
+      await navigator.clipboard.writeText(text);
+      setWatchStatus({ ok: true, text: 'Search record copied.' });
+    } catch {
+      setWatchStatus({ ok: false, text: 'The clipboard is unavailable.' });
+    }
   };
 
   const hasFilters = Boolean(inputValue || selectedAgencyId || selectedStatus || selectedPolicyDeviation);
@@ -162,6 +202,20 @@ export default function SearchFilter() {
           <button type="button" onClick={() => setSearchFilters(inputValue, selectedAgencyId, selectedStatus, null)} className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 font-semibold text-amber-300">
             {formatPolicy(selectedPolicyDeviation)} ×
           </button>
+        )}
+        <button type="button" onClick={() => void copyRecord()} disabled={isSearching} className="rounded-full border border-slate-800 px-2 py-0.5 font-semibold text-slate-400 hover:text-slate-300">
+          Copy search record
+        </button>
+        {canWatch && (
+          <button type="button" onClick={() => void watchTerm()} title="Watches this text across all sources. The agency, status and policy filters are not part of a watch." className="rounded-full border border-slate-800 px-2 py-0.5 font-semibold text-slate-400 hover:text-slate-300">
+            Watch this text for changes
+          </button>
+        )}
+        {watchStatus && (
+          <span role={watchStatus.ok ? 'status' : 'alert'} className={watchStatus.ok ? 'text-emerald-300' : 'text-rose-300'}>
+            {watchStatus.text}
+            {watchStatus.ok && <button type="button" onClick={() => setWorkspaceView('overview')} className="ml-1 underline">Open watchlist</button>}
+          </span>
         )}
         {error && (
           <span role="alert" className="truncate text-rose-300">

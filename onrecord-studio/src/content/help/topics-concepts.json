@@ -581,5 +581,63 @@
       "evidence-review",
       "case-workbench"
     ]
+  },
+  {
+    "id": "shared-folder-collaboration",
+    "title": "Collaborating through a shared folder",
+    "group": "Concepts",
+    "summary": "Exchange signed case packets through any folder, and record which contributor keys you have verified.",
+    "keywords": [
+      "collaborate",
+      "collaboration",
+      "share",
+      "shared folder",
+      "packet",
+      "contributor",
+      "key",
+      "fingerprint",
+      "verify",
+      "trust",
+      "icloud",
+      "dropbox",
+      "usb",
+      "sync"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "Case packets can be exchanged without a server. Open Casework, then Collaborators and shared folder. Choose any folder you and your collaborators can both reach: a synced folder, a network drive or a USB stick. The app reads and writes files in that folder and uses no network connection."
+        ]
+      },
+      {
+        "heading": "Publishing and reviewing",
+        "items": [
+          "Publish this case's packet writes a signed packet to the folder. It needs an open case and an author name. It never replaces a file that is already there.",
+          "Check for new packets lists the .json files in the folder. Load for review puts one into Review a shared case packet. Nothing changes in your cases until you preview it and apply it.",
+          "Publishing does not revoke access. Anyone who can open the folder can read what you put there."
+        ]
+      },
+      {
+        "heading": "Who signed it",
+        "paragraphs": [
+          "A valid signature shows the file is unchanged since a key signed it. It does not show who holds that key. Your key is shown as eight groups of characters. Read it to a collaborator by phone or in person, and have them read theirs to you. Compare, then add their key with a name. Packets from a key you verified show that name in the preview. Packets from any other key are marked as unverified."
+        ]
+      },
+      {
+        "heading": "Limits",
+        "paragraphs": [
+          "Packets over 8 MB are listed but cannot be reviewed. Up to 500 files are listed and up to 500 verified contributors are kept. Symbolic links in the folder are ignored. The contributor list is stored on this Mac."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [
+      "collaboration"
+    ],
+    "related": [
+      "request-tracker",
+      "data-handling"
+    ]
   }
 ]

@@ -88,7 +88,8 @@
       {
         "heading": "Entity graph",
         "paragraphs": [
-          "Pick one of the most-cited entities to centre the graph. Dotted arcs with a hollow marker are co-occurrence: proximity this app computed, not a relationship any document stated. Labelled arcs with a solid diamond are relations read from the text (signed by, approved, cites, promises, delivered, supersedes, amends). Line thickness reads shared documents. Node shape shows the validation grade: check digit passed, format validated, gazetteer hit, or pattern only, which is a lead. Trace finds a path of up to four hops between two entity ids."
+          "Pick one of the most-cited entities to centre the graph. Dotted arcs with a hollow marker are co-occurrence: proximity this app computed, not a relationship any document stated. Labelled arcs with a solid diamond are relations read from the text (signed by, approved, cites, promises, delivered, supersedes, amends). Line thickness reads shared documents. Node shape shows the validation grade: check digit passed, format validated, gazetteer hit, or pattern only, which is a lead. Trace finds a path of up to four hops between two entity ids.",
+          "Above the drawing, three toggles show relationships by how they are known: stated in text, derived by this app, or asserted by a source. As of shows relationships whose recorded dates include that day. A relationship with no recorded dates is not assumed valid on any date, so it is hidden unless Include undated is checked. Filtered relationships are hidden, not absent, and the count says how many are shown."
         ]
       },
       {
@@ -184,13 +185,18 @@
       "documents",
       "delete document",
       "deep link",
-      "appeal"
+      "appeal",
+      "watch",
+      "search record",
+      "500+"
     ],
     "sections": [
       {
         "heading": "Searching",
         "paragraphs": [
-          "The search box looks in request metadata and extracted text. Qualifiers agency:, portal:, status: and flag: narrow results. Plain-language mode turns a sentence into those filters. Results are capped at 500. If a search fails, the last successful results stay on screen with a banner saying so."
+          "The search box looks in request metadata and extracted text. Qualifiers agency:, portal:, status: and flag: narrow results. Plain-language mode turns a sentence into those filters. Results are capped at 500, and a count of 500+ means more may exist. If a search fails, the last successful results stay on screen with a banner saying so.",
+          "Each result says where your text is visible: in the title, in the description, or not shown here. Not shown means the match may be in the full description or in a document's extracted text. It does not mean the text is absent. An empty result lists what was searched and offers to remove each filter that narrowed it. It does not show that no such record exists.",
+          "Watch this text for changes saves the words as a watch that is checked after each ingest. It covers all sources and ignores the department, status and policy filters. Copy search record puts the text, filters, source count and result count on the clipboard, with the time of the search. Results can change as sources synchronize."
         ]
       },
       {
