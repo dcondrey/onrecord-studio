@@ -256,7 +256,11 @@ fn application_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .quit()
         .build()?;
     let file = SubmenuBuilder::new(app, "File")
-        .item(&item("add-source", "Add Data Source…", Some("CmdOrCtrl+N"))?)
+        .item(&item(
+            "add-source",
+            "Add Data Source…",
+            Some("CmdOrCtrl+N"),
+        )?)
         .separator()
         .close_window()
         .build()?;
