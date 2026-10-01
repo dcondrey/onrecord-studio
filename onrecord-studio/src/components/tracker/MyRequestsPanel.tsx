@@ -15,7 +15,7 @@ import { DeadlineChip } from './DeadlineChip';
 import { localInputToRfc3339, rfc3339ToLocalInput } from './rfc3339';
 import { useMyRequests } from './useMyRequests';
 
-const KIND_LABELS: Record<TimelineEventKind, string> = {
+export const KIND_LABELS: Record<TimelineEventKind, string> = {
   SUBMITTED: 'Submitted',
   ACKNOWLEDGED: 'Acknowledged',
   EXTENSION_NOTICE: 'Extension notice',
