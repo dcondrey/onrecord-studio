@@ -276,8 +276,10 @@ mod tests {
 
     #[test]
     fn export_carries_only_this_documents_own_marks() {
-        let mut document = AnnotationDocument::default();
-        document.reviewer = Some("Maria".into());
+        let mut document = AnnotationDocument {
+            reviewer: Some("Maria".into()),
+            ..Default::default()
+        };
         let mut theirs = mark(B, "theirs");
         theirs.imported_from_key = Some("other".into());
         let mut elsewhere = mark("33333333-3333-4333-8333-333333333333", "else");

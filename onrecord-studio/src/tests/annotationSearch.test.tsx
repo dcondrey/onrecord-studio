@@ -82,6 +82,17 @@ describe('AnnotationSearch', () => {
     expect(screen.queryByText('first page hit')).toBeNull();
   });
 
+  it('keeps a space typed inside a filter and sends it trimmed', async () => {
+    invoke.mockResolvedValue(page([]));
+    render(<AnnotationSearch onOpen={() => {}} />);
+    const author = screen.getByLabelText('Author') as HTMLInputElement;
+    fireEvent.change(author, { target: { value: 'Maria ' } });
+    expect(author.value).toBe('Maria ');
+    search();
+    await screen.findByText('No annotations match.');
+    expect(invoke.mock.calls[0][1].query.author).toBe('Maria');
+  });
+
   it('opens an anchored passage at its position and offers no passage jump for an orphan', async () => {
     const onOpen = vi.fn();
     invoke.mockResolvedValue(page([

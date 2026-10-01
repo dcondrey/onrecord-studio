@@ -61,6 +61,7 @@ export default function DocumentAnnotations({
   const settingsGate = useLatestRequestGate();
   const findingGate = useLatestRequestGate();
   const gate = useLatestRequestGate();
+  const saveGate = useLatestRequestGate();
   const [list, setList] = useState<DocumentAnnotationList | null>(null);
   const [settings, setSettings] = useState<AnnotationSettings | null>(null);
   const [findings, setFindings] = useState<Finding[]>([]);
@@ -141,7 +142,7 @@ export default function DocumentAnnotations({
     && (kind !== 'ISSUE' || tag !== '');
 
   const save = async () => {
-    const request = gate.begin();
+    const request = saveGate.begin();
     setIsSaving(true);
     setActionError(null);
     try {
@@ -158,7 +159,7 @@ export default function DocumentAnnotations({
           findingId: findingId === '' ? null : findingId,
         },
       });
-      if (!gate.isCurrent(request)) return;
+      if (!saveGate.isCurrent(request)) return;
       setAnchor(null);
       setNote('');
       setCodeChoice('');
@@ -167,9 +168,9 @@ export default function DocumentAnnotations({
       setStatus('Saved on this computer');
       load();
     } catch (reason) {
-      if (gate.isCurrent(request)) setActionError(formatNativeError(reason));
+      if (saveGate.isCurrent(request)) setActionError(formatNativeError(reason));
     } finally {
-      if (gate.isCurrent(request)) setIsSaving(false);
+      if (saveGate.isCurrent(request)) setIsSaving(false);
     }
   };
 

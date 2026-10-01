@@ -151,7 +151,7 @@ async fn list_annotations(
     let portal = self::portal_key(&portal_key)?;
     let matching: Vec<DocumentAnnotation> = {
         let portal = portal.clone();
-        on_store(&store, "Annotation read", move |store| {
+        on_store(store, "Annotation read", move |store| {
             Ok(store
                 .load()?
                 .annotations
@@ -163,12 +163,12 @@ async fn list_annotations(
         })
         .await?
     };
-    let facts = document_facts(&repository, &portal, document_id).await?;
+    let facts = document_facts(repository, &portal, document_id).await?;
     let view = if matching
         .iter()
         .any(|annotation| !annotation.quote.is_empty())
     {
-        text_view(&repository, &portal, document_id).await?
+        text_view(repository, &portal, document_id).await?
     } else {
         None
     };
@@ -186,7 +186,7 @@ async fn list_annotations(
         (position, resolved.annotation.created_at.clone())
     });
     Ok(DocumentAnnotationList {
-        text_available: view.is_some() || facts.is_some(),
+        text_available: view.is_some(),
         current_text_sha256: facts.and_then(|facts| facts.text_sha256),
         annotations,
     })
@@ -198,24 +198,22 @@ async fn add_annotation(
     repository: &DuckDbRepository,
 ) -> Result<DocumentAnnotation, AppError> {
     let portal = self::portal_key(&input.portal_key)?;
-    let reviewer = on_store(&store, "Annotation read", |store| {
-        Ok(store.load()?.reviewer)
-    })
-    .await?
-    .ok_or_else(|| invalid("enter your reviewer name before adding annotations"))?;
+    let reviewer = on_store(store, "Annotation read", |store| Ok(store.load()?.reviewer))
+        .await?
+        .ok_or_else(|| invalid("enter your reviewer name before adding annotations"))?;
     let quote = clean_text("quote", &input.quote, MAXIMUM_QUOTE_CHARACTERS, true)?;
-    let text_sha256 = document_facts(&repository, &portal, input.document_id)
+    let text_sha256 = document_facts(repository, &portal, input.document_id)
         .await?
         .and_then(|facts| facts.text_sha256);
     let placement = if quote.is_empty() {
         None
     } else {
-        let view = text_view(&repository, &portal, input.document_id)
+        let view = text_view(repository, &portal, input.document_id)
             .await?
             .ok_or_else(|| invalid("this document's text is not available to anchor to"))?;
         Some(view.place_selection(&quote, &input.prefix, &input.suffix)?)
     };
-    on_store(&store, "Annotation write", move |store| {
+    on_store(store, "Annotation write", move |store| {
         store.update(|document| {
             annotations::add_annotation(
                 document,
@@ -422,7 +420,7 @@ async fn search_annotations(
     let after = query.cursor.as_deref().map(parse_cursor).transpose()?;
     let candidates = {
         let query = query.clone();
-        on_store(&store, "Annotation search", move |store| {
+        on_store(store, "Annotation search", move |store| {
             let mut kept: Vec<DocumentAnnotation> = store
                 .load()?
                 .annotations
@@ -446,7 +444,7 @@ async fn search_annotations(
         }
         let key = (annotation.portal_key.clone(), annotation.document_id);
         if !contexts.contains_key(&key) {
-            let facts = document_facts(&repository, &key.0, key.1).await?;
+            let facts = document_facts(repository, &key.0, key.1).await?;
             contexts.insert(key.clone(), DocumentContext { facts, view: None });
         }
         let unchanged = {
@@ -459,7 +457,7 @@ async fn search_annotations(
         let needs_text = !annotation.quote.is_empty() && !unchanged;
         if needs_text && contexts[&key].view.is_none() {
             let view = if contexts[&key].facts.is_some() {
-                text_view(&repository, &key.0, key.1).await?
+                text_view(repository, &key.0, key.1).await?
             } else {
                 None
             };

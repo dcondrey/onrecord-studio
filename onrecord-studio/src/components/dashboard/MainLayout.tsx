@@ -164,6 +164,10 @@ export default function MainLayout() {
 
   useEffect(() => {
     if (!pendingEvidenceLink || documents.length === 0) return;
+    // `documents` still belongs to the previously selected request until the list effect has
+    // switched owners; looking the target up in it would reject a valid link.
+    const owner = documentOwnerRef.current;
+    if (owner?.requestId !== pendingEvidenceLink.requestId || owner?.portalKey !== pendingEvidenceLink.portalKey) return;
     const summary = documents.find((document) =>
       document.documentId === pendingEvidenceLink.documentId
       && document.portalKey === pendingEvidenceLink.portalKey

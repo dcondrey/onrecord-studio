@@ -23,7 +23,9 @@ const BLANK: AnnotationSearchQuery = {
   limit: ANNOTATION_LIMITS.searchPage,
 };
 
-const blankToNull = (value: string) => (value.trim() === '' ? null : value.trim());
+// Kept as typed so a space inside a name or phrase survives; trimmed when the search is sent.
+const blankToNull = (value: string) => (value === '' ? null : value);
+const trimmedOrNull = (value: string | null) => (value === null || value.trim() === '' ? null : value.trim());
 
 /** Annotations across every document on this device, with the same placement checks as the document view. */
 export default function AnnotationSearch({ onOpen }: { onOpen: (link: EvidenceLink) => void }) {
@@ -54,7 +56,13 @@ export default function AnnotationSearch({ onOpen }: { onOpen: (link: EvidenceLi
     }
   };
 
-  const search = () => void fetchPage({ ...draft, cursor: null }, false);
+  const search = () => void fetchPage({
+    ...draft,
+    code: trimmedOrNull(draft.code),
+    author: trimmedOrNull(draft.author),
+    text: trimmedOrNull(draft.text),
+    cursor: null,
+  }, false);
   const more = () => {
     if (applied && nextCursor) void fetchPage({ ...applied, cursor: nextCursor }, true);
   };
