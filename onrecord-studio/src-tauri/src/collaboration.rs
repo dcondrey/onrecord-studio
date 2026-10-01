@@ -19,6 +19,8 @@ pub const CONTRIBUTOR_FILE_NAME: &str = "contributors.json";
 pub const MAXIMUM_TRUSTED_CONTRIBUTORS: usize = 500;
 pub const MAXIMUM_LABEL_CHARACTERS: usize = 120;
 pub const MAXIMUM_FOLDER_ENTRIES: usize = 500;
+/// Most packet files read from a folder before listing stops: a resource guard, reported as truncation.
+pub const MAXIMUM_FOLDER_SCAN: usize = 50_000;
 /// Matches the transport limit enforced when a packet is previewed or imported.
 pub const MAXIMUM_PACKET_FILE_BYTES: u64 = 8 * 1024 * 1024;
 const MAXIMUM_FILE_NAME_CHARACTERS: usize = 120;
@@ -154,6 +156,14 @@ pub struct SharedFolderPacket {
     pub oversized: bool,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SharedFolderListing {
+    pub packets: Vec<SharedFolderPacket>,
+    /// More packets exist than are listed. The listed ones are the newest.
+    pub truncated: bool,
+}
+
 /// One plain file name inside the shared folder: no separators, no traversal, a `.json` suffix.
 pub fn validate_packet_file_name(name: &str) -> Result<(), AppError> {
     let allowed = |byte: u8| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-');
@@ -185,11 +195,12 @@ fn checked_folder(folder: &str) -> Result<PathBuf, AppError> {
 
 /// Regular `.json` files only. A symlink is skipped, not followed: the folder is shared with
 /// other people, and a link must not be able to point a read at some other file on this computer.
-pub fn list_packets(folder: &str) -> Result<Vec<SharedFolderPacket>, AppError> {
+pub fn list_packets(folder: &str) -> Result<SharedFolderListing, AppError> {
     let folder = checked_folder(folder)?;
     let entries = fs::read_dir(&folder)
         .map_err(|error| invalid(format!("the shared folder cannot be listed: {error}")))?;
     let mut packets = Vec::new();
+    let mut scan_cut = false;
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
         if validate_packet_file_name(&name).is_err() {
@@ -210,16 +221,21 @@ pub fn list_packets(folder: &str) -> Result<Vec<SharedFolderPacket>, AppError> {
                 .map(|time| DateTime::<Utc>::from(time).to_rfc3339_opts(SecondsFormat::Secs, true)),
             oversized: metadata.len() > MAXIMUM_PACKET_FILE_BYTES,
         });
-        if packets.len() >= MAXIMUM_FOLDER_ENTRIES {
+        if packets.len() >= MAXIMUM_FOLDER_SCAN {
+            scan_cut = true;
             break;
         }
     }
+    // Newest first, then cut: truncating in directory order would drop whichever files the
+    // filesystem happens to list last, which can be the newest ones.
     packets.sort_by(|a, b| {
         b.modified_at
             .cmp(&a.modified_at)
             .then(a.file_name.cmp(&b.file_name))
     });
-    Ok(packets)
+    let truncated = scan_cut || packets.len() > MAXIMUM_FOLDER_ENTRIES;
+    packets.truncate(MAXIMUM_FOLDER_ENTRIES);
+    Ok(SharedFolderListing { packets, truncated })
 }
 
 #[cfg(unix)]
@@ -325,7 +341,7 @@ mod tests {
         std::fs::create_dir(directory.path().join("sub.json")).unwrap();
         #[cfg(unix)]
         std::os::unix::fs::symlink("/etc/hosts", directory.path().join("link.json")).unwrap();
-        let listed = list_packets(folder).unwrap();
+        let listed = list_packets(folder).unwrap().packets;
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].file_name, "case-1.json");
         for bad in [
@@ -344,6 +360,34 @@ mod tests {
     }
 
     #[test]
+    fn a_crowded_folder_keeps_the_newest_packets_and_says_it_cut_the_rest() {
+        let directory = tempfile::tempdir().unwrap();
+        let folder = directory.path().to_str().unwrap();
+        for index in 0..MAXIMUM_FOLDER_ENTRIES + 3 {
+            let path = directory.path().join(format!("p{index:04}.json"));
+            std::fs::write(&path, "{}").unwrap();
+            let when = std::time::UNIX_EPOCH
+                + std::time::Duration::from_secs(1_700_000_000 + index as u64);
+            std::fs::File::options()
+                .write(true)
+                .open(&path)
+                .unwrap()
+                .set_modified(when)
+                .unwrap();
+        }
+        let listing = list_packets(folder).unwrap();
+        assert!(listing.truncated);
+        assert_eq!(listing.packets.len(), MAXIMUM_FOLDER_ENTRIES);
+        let newest = format!("p{:04}.json", MAXIMUM_FOLDER_ENTRIES + 2);
+        assert_eq!(listing.packets[0].file_name, newest);
+        assert!(
+            !list_packets(tempfile::tempdir().unwrap().path().to_str().unwrap())
+                .unwrap()
+                .truncated
+        );
+    }
+
+    #[test]
     fn publishing_never_overwrites_and_reading_enforces_the_size_limit() {
         let directory = tempfile::tempdir().unwrap();
         let folder = directory.path().to_str().unwrap();
@@ -358,6 +402,7 @@ mod tests {
         assert!(read_packet(folder, "big.json").is_err());
         assert!(list_packets(folder)
             .unwrap()
+            .packets
             .iter()
             .any(|p| p.file_name == "big.json" && p.oversized));
         assert!(list_packets("relative/path").is_err());

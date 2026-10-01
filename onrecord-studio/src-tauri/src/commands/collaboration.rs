@@ -3,7 +3,7 @@
 
 use crate::{
     blocking,
-    collaboration::{self, ContributorStore, SharedFolderPacket, TrustedContributor},
+    collaboration::{self, ContributorStore, SharedFolderListing, TrustedContributor},
     error::AppError,
     integrity::{load_or_create_signing_key, sha256_hex},
 };
@@ -56,9 +56,7 @@ pub async fn untrust_contributor(
 }
 
 #[tauri::command]
-pub async fn list_shared_folder_packets(
-    folder: String,
-) -> Result<Vec<SharedFolderPacket>, AppError> {
+pub async fn list_shared_folder_packets(folder: String) -> Result<SharedFolderListing, AppError> {
     blocking::spawn("Shared folder listing", move || {
         collaboration::list_packets(&folder)
     })

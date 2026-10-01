@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { open as chooseFolder } from '@tauri-apps/plugin-dialog';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
-import type { SharedFolderPacket } from '../../types';
+import type { SharedFolderListing } from '../../types';
 import { groupKeyId, type useContributors } from './useContributors';
 
 const FOLDER_KEY = 'onrecord.sharedFolder';
@@ -42,11 +42,13 @@ export function SignerTrustNotice({
   if (contributors.state.status !== 'ready') {
     return <p role="status" className="text-xs text-slate-400">Checking your contributor list…</p>;
   }
-  const known = contributors.state.contributors.find((entry) => entry.keyId === signerKeyId);
+  // The signer id arrives outside the signed bytes and may be in any case; stored keys are lowercase.
+  const signer = signerKeyId.toLowerCase();
+  const known = contributors.state.contributors.find((entry) => entry.keyId === signer);
   if (known) {
     return <p role="status" className="text-xs text-emerald-300">Signed by {known.label}, a contributor whose key you verified on {known.trustedAt.slice(0, 10)}.</p>;
   }
-  const own = contributors.state.identity?.keyId === signerKeyId;
+  const own = contributors.state.identity?.keyId === signer;
   if (own) return <p role="status" className="text-xs text-slate-300">Signed by this installation's own key.</p>;
   return (
     <div role="status" className="rounded border border-amber-500/30 p-2 text-xs text-amber-200">
@@ -75,7 +77,8 @@ export default function CaseSharing({
 }) {
   const gate = useLatestRequestGate();
   const [folder, setFolder] = useState(readSavedFolder);
-  const [packets, setPackets] = useState<SharedFolderPacket[] | null>(null);
+  const [listing, setListing] = useState<SharedFolderListing | null>(null);
+  const packets = listing?.packets ?? null;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -99,7 +102,7 @@ export default function CaseSharing({
   };
 
   const scan = (target: string) =>
-    run(() => invokeCommand('list_shared_folder_packets', { folder: target }), setPackets);
+    run(() => invokeCommand('list_shared_folder_packets', { folder: target }), setListing);
 
   const pickFolder = async () => {
     const chosen = await chooseFolder({ directory: true, multiple: false });
@@ -107,7 +110,7 @@ export default function CaseSharing({
     gate.invalidate();
     setFolder(chosen);
     saveFolder(chosen);
-    setPackets(null);
+    setListing(null);
     await scan(chosen);
   };
 
@@ -122,7 +125,7 @@ export default function CaseSharing({
         return { fileName, listed: await invokeCommand('list_shared_folder_packets', { folder }) };
       },
       ({ fileName, listed }) => {
-        setPackets(listed);
+        setListing(listed);
         setMessage(`Signed packet written to the shared folder as ${fileName}. Anyone with access to the folder can read it.`);
       },
     );
@@ -191,6 +194,9 @@ export default function CaseSharing({
         </div>
         {error && <p role="alert" className="mt-2 text-xs text-rose-300">{error}</p>}
         {message && <p role="status" className="mt-2 text-xs text-emerald-300">{message}</p>}
+        {listing?.truncated && (
+          <p role="status" className="mt-2 text-xs text-amber-200">This folder holds more packets than are listed. These are the newest; move older ones out of the folder to see them.</p>
+        )}
         {packets && packets.length === 0 && <p className="mt-2 text-xs text-slate-400">No packets in this folder. Files must be signed case packets ending in .json.</p>}
         {packets && packets.length > 0 && (
           <ul aria-label="Packets in the shared folder" className="mt-2 space-y-1 text-xs text-slate-300">

@@ -459,7 +459,7 @@ pub(crate) fn check_revocation<'a>(
     let mut matching = revocations
         .entries
         .iter()
-        .filter(|entry| entry.key_id == key_id);
+        .filter(|entry| entry.key_id.eq_ignore_ascii_case(key_id));
     matching
         .clone()
         .find(|entry| entry.status != REVOCATION_STATUS_RETIRED)
@@ -903,6 +903,23 @@ mod tests {
             reason: "test".to_string(),
             status: status.to_string(),
         }
+    }
+
+    /// The signature block sits outside the signed bytes, so a packet can carry its signer id in
+    /// any case and still verify. A revocation must match all of them.
+    #[test]
+    fn check_revocation_matches_the_signer_id_in_any_case() {
+        let revocations = SigningKeyRevocations {
+            schema_version: REVOCATION_LIST_SCHEMA.to_string(),
+            entries: vec![revoked("abcdef0123", REVOCATION_STATUS_COMPROMISED)],
+        };
+        for spelling in ["abcdef0123", "ABCDEF0123", "AbCdEf0123"] {
+            assert!(
+                check_revocation(spelling, &revocations).is_some(),
+                "{spelling}"
+            );
+        }
+        assert!(check_revocation("abcdef0124", &revocations).is_none());
     }
 
     /// Proves the fix directly: returning the *first* matching entry instead of the worst one

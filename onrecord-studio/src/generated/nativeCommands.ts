@@ -154,7 +154,7 @@ export interface NativeCommandMap {
   list_trusted_contributors: { args: NoArgs; result: Types.TrustedContributor[] };
   trust_contributor: { args: { keyId: string; label: string }; result: Types.TrustedContributor };
   untrust_contributor: { args: { keyId: string }; result: null };
-  list_shared_folder_packets: { args: { folder: string }; result: Types.SharedFolderPacket[] };
+  list_shared_folder_packets: { args: { folder: string }; result: Types.SharedFolderListing };
   read_shared_folder_packet: { args: { folder: string; fileName: string }; result: string };
   publish_packet_to_folder: { args: { folder: string; fileName: string; payload: string }; result: null };
   list_document_annotations: { args: { portalKey: string; documentId: number }; result: Types.DocumentAnnotationList };
