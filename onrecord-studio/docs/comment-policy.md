@@ -30,8 +30,8 @@ If you cannot write the "why" without restating the "what", delete the comment.
 ## The tag form
 
 Every tagged comment is `PREFIX(area):`. This is the form already in the tree
-(`NOTE(runtime):` in `blocking.rs`, `PERF(pii):` in `storage/pii.rs`, `TODO(ipc):` in
-`src/ipc.ts`), and it is what makes `rg 'SECURITY\('` a complete audit.
+(`NOTE(runtime):` in `blocking.rs`, `SECURITY(pii):` in `storage/pii.rs`, `NOTE(ipc):` in
+`error.rs`), and it is what makes `rg 'SECURITY\('` a complete audit.
 
 Areas in use, extend as needed rather than inventing a synonym:
 
@@ -49,11 +49,12 @@ Areas in use, extend as needed rather than inventing a synonym:
 | `perf` | Complexity and allocation problems with a measured or obvious cost |
 | `test` | A missing test, especially one backing a `SECURITY(...)` comment |
 
-Two prefixes already in the tree keep working and are not being swept:
+Two further prefixes are part of this scheme and are not being swept:
 
-- `NOTE(area):` is the general why-comment. Reach for a more specific prefix below when one
-  fits; `NOTE` is correct when none does.
+- `NOTE(area):` is the general why-comment, already used throughout the tree. Reach for a more
+  specific prefix below when one fits; `NOTE` is correct when none does.
 - `PERF(area):` is a cost note. It is a `LIMIT`-flavored comment specialized to performance.
+  No instance exists in the tree yet; use it the first time a comment needs it.
 
 **Pre-existing comments are grandfathered.** Do not open a diff purely to retag them, and do
 not retag files another session owns. Apply this policy to comments you are writing or

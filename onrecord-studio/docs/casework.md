@@ -19,7 +19,7 @@ The lead queue takes the latest saved dossier per topic and explains four rankin
 
 ## Portable collaboration
 
-A saved case exports as a versioned JSON packet with its revision base, source identity, contribution trail and contributor label. Later exports carry received contribution events forward with their source packet hashes. These labels and imported histories are not authenticated identities.
+A saved case exports as a versioned JSON packet with its revision base, source identity, contribution trail and contributor label. Later exports carry received contribution events forward with their source packet hashes. These labels and imported histories are not authenticated identities. The export is Ed25519-signed by the exporting installation's local key, and import verifies that signature before anything is previewed, rejecting a packet whose bytes changed after signing or whose signer this installation has since recorded as compromised; a routine (non-compromising) key rotation does not block it. That proves the file's origin and integrity, not the contributor's real-world identity.
 
 Open a packet file or paste its JSON, then preview it. The preview classifies the packet as new, identical, compatible with the unchanged local base, or conflicting. A readable comparison shows changed, added and removed questions, tests, request scopes and productions, outcomes, commitments and evidence. Applying is a separate action, and the native layer rechecks both the local revision and packet digest. Conflicts cannot overwrite local work; compare the versions and merge selected edits into a new local revision. Raw JSON is available as an advanced view.
 

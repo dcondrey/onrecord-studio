@@ -76,14 +76,18 @@ The archive is universal, so both entries carry the same signature and URL. Taur
 
 ## Test an update locally
 
-1. Build and package a higher version (for example 1.0.1) as above, with
-   `RELEASE_BASE_URL=http://localhost:8000/releases`.
-2. Serve `dist-tauri/release/1.0.1` so that `latest.json` is at the feed path and the archive at its
-   URL (any static server; rewrite the three trailing path segments to `latest.json`).
+1. Build and package a higher version (for example 1.0.1) as above, with `RELEASE_BASE_URL` set to
+   an **https** local address, for example `https://localhost:8443/releases` served through a local
+   TLS proxy (e.g. `mkcert` plus a static server, or `npx local-ssl-proxy`). `package-direct.mjs`
+   asserts `RELEASE_BASE_URL` matches `^https://` unconditionally, including in `--check`/`--dry-run`,
+   so a plain `http://` value fails packaging before anything is written.
+2. Serve `dist-tauri/release/1.0.1` behind that same https address so that `latest.json` is at the
+   feed path and the archive at its URL (rewrite the three trailing path segments to `latest.json`).
 3. Build a lower version (1.0.0) with a temporary endpoint override, for example
-   `--config` with `{"plugins":{"updater":{"endpoints":["http://localhost:8000/latest.json"]}}}`
+   `--config` with `{"plugins":{"updater":{"endpoints":["https://localhost:8443/latest.json"]}}}`
    (plain http is refused by the plugin in release builds unless `dangerousInsecureTransportProtocol`
-   is set in that same temporary config). Do not commit either override.
+   is set in that same temporary config, which still would not satisfy step 1's packaging-time check).
+   Do not commit either override.
 4. Launch the 1.0.0 app: the prompt shows 1.0.1. Install and restart, then confirm the version and
    that the account and license state are unchanged.
 

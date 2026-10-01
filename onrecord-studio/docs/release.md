@@ -29,9 +29,13 @@ authorizes the workspace only when StoreKit reports a verified, unrevoked purcha
 verification failures fail closed.
 
 The decision is enforced twice: Swift validates the Apple transaction and Rust independently
-checks the returned bundle identifier. A global Tauri invoke handler rejects every application
-command while unauthorized except `get_license_status` and the user-initiated `refresh_license`.
-The React lock screen is therefore presentation, not the security boundary.
+checks the returned bundle identifier. A global Tauri invoke handler (`licensing::command_is_unlicensed`
+in `src-tauri/src/licensing.rs`) rejects every application command while unauthorized except
+`get_license_status`, the user-initiated `refresh_license`, and the direct-build account commands
+(`get_account_status`, `begin_sign_in`, `sign_out`, `delete_account`, `start_checkout`,
+`activate_this_device`). In an App Store build those account commands are registered but inert:
+without the `direct-license` feature each one returns "Accounts are not part of this build." The
+React lock screen is therefore presentation, not the security boundary.
 
 `AppTransaction.shared` may require App Store authentication or network access. The automatic
 launch check is bounded to 20 seconds so StoreKit cannot hold application startup forever. The
@@ -115,8 +119,11 @@ export ONRECORD_EXPORT_COMPLIANCE="exempt"
 npm run prepare:app-store
 ```
 
-The script validates formats, refuses symlinked or empty profiles, XML-escapes the optional export
-code, and writes ignored files with private permissions. It does not log credential values. It also
+The script validates formats, refuses symlinked or empty profiles, and XML-escapes the optional
+export code. It writes the materialized entitlements and `Info.plist` as mode 600; the copied
+provisioning profile is deliberately made world-readable (mode 644) afterward, because Tauri embeds
+it in the bundle and App Store Connect rejects any package file a non-root user cannot read — the
+profile carries certificates and entitlements, no secret. It does not log credential values. It also
 decodes the profile and refuses to materialize one whose `com.apple.application-identifier` is not
 exactly `$APPLE_APP_ID_PREFIX.com.onrecord.studio`, whose team entitlement is not `$APPLE_TEAM_ID`,
 or whose `ExpirationDate` has passed, so a wrong or stale profile fails before the build rather than
@@ -151,7 +158,12 @@ npm run package:app-store
 ```
 
 The packaging script validates the `.app` again, runs `productbuild`, and requires `pkgutil` to
-report a macOS-trusted installer signature. Follow Tauri's current
+report the resulting package as signed by this team's `3rd Party Mac Developer Installer`
+certificate, chaining to the Apple Worldwide Developer Relations and Apple Root certificate
+authorities. That chain is accepted by App Store Connect but is deliberately not the
+macOS-trusted Developer ID Installer chain used for direct installation; `pkgutil` reports it as
+"signed by a developer certificate issued by Apple (Development)" rather than as notarized. Follow
+Tauri's current
 [Mac App Store guide](https://tauri.app/distribute/app-store/) if Apple's certificate names change.
 
 ## Upload and App Store verification

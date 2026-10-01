@@ -17,7 +17,7 @@ Direct distribution (Developer ID, notarized) is the primary and launch channel.
 
 ## Identity
 
-Reuse the WritersLogic Supabase project (`auth.writerslogic.com`): email, Google, Apple, LinkedIn, GitHub. The client is public and holds no secret; Supabase holds the provider secrets, which is why Apple works.
+Reuse the WritersLogic Supabase project (`auth.writerslogic.com`): email, Google, Apple, LinkedIn, GitHub are the backend-recognized providers (`PROVIDERS` in `licensing/account.rs`). The client is public and holds no secret; Supabase holds the provider secrets, which is why Apple works. The current sign-in screen (`LicenseGate.tsx`) only renders buttons for Google, Apple, LinkedIn, and GitHub; email is accepted by the backend but not yet wired into that UI.
 
 - Flow: `ASWebAuthenticationSession`, PKCE, callback `com.onrecord.studio://auth/callback`. No loopback listener, so no `network.server`.
 - Session and device key live in the data-protection Keychain. Nothing else is stored.
@@ -62,7 +62,7 @@ No client-side scheme is uncrackable. A determined attacker who controls the mac
 | Patch one boolean | The gate is checked in several independent places, including at command dispatch and again before evidence is read for analysis |
 | Inject code, attach a debugger | Hardened runtime, library validation, `PT_DENY_ATTACH` in release, runtime code-signature self-check |
 | Share one account across many people | Account-bound, device-bound; the server limits active devices per account |
-| Reuse one account on many Macs, or many macOS users on one Mac | The device key is per macOS user, not per physical machine: a second user on the same Mac holds a second key and counts as a second device. The server device limit is the bound; a third device is refused with `device_limit` until the user confirms revoking the oldest. App Attest is the planned machine-level improvement |
+| Reuse one account on many Macs, or many macOS users on one Mac | The device key is per macOS user, not per physical machine: a second user on the same Mac holds a second key and counts as a second device. The device count itself is enforced server-side; the client only recognizes the server's HTTP 409 `device_limit` response (`client.rs`) and offers to revoke the oldest device, so the exact number of allowed devices is not a value in this codebase and is unverifiable here. App Attest is the planned machine-level improvement |
 | Run a modified build that reports integrity `unknown` | Accepted risk: `unknown` (for example an unsigned or development build) still runs, because denying it would brick legitimate debug and repackaged-for-support builds. Only `tampered` denies |
 
 Out of scope: defeating a reverse engineer who patches every check. The value of this app is also in updates and server-side entitlement, which a cracked copy does not get.
@@ -74,15 +74,15 @@ Out of scope: defeating a reverse engineer who patches every check. The value of
 
 ## Direct build operations
 
-- Signing: Developer ID Application certificate and a Developer ID provisioning profile for `com.onrecord.studio`, embedded so keychain access groups and the App Attest opt-in entitlement are honored.
+- Signing: Developer ID Application certificate and a Developer ID provisioning profile for `com.onrecord.studio`, embedded so the `keychain-access-groups` entitlement in `src-tauri/Entitlements.direct.plist` is honored (plus `network.client` and `files.user-selected.read-write`; no App Attest entitlement exists yet, see below).
 - Notarization and stapling are part of the release script; a build that is not notarized is not released.
 - Updates: signed updater (key kept offline), never an unsigned download. Version and entitlement are independent: an update does not extend a trial or license.
-- Payment: Stripe product for OnRecord Studio in the WritersLogic Stripe account; the webhook maps the price id to the entitlement plan. Refund and revocation set `revoked` server-side and the next refresh denies.
-- App Attest (`app-attest-opt-in`, `CDhash`, macOS 27 and later) is an optional extra signal for the direct build only, never a gate.
+- Payment: Stripe product for OnRecord Studio in the WritersLogic Stripe account; the webhook maps the price id to the entitlement plan. Refund and revocation set `revoked` server-side and the next refresh denies. Display pricing is a client-side constant, `src/config/pricing.ts` ("the only place price facts live"): $79/seat/year for 1 seat, $69/seat/year for 2-9 seats, $49/seat/year for 10 or more seats, billed yearly, 1-999 seats. `start_checkout` passes the chosen seat count as `quantity`, capped at `MAX_CHECKOUT_QUANTITY = 999` in `client.rs`; Stripe is still the source of truth for what is actually charged.
+- App Attest: not implemented. No `app-attest-opt-in` feature, entitlement, or `CDhash` check exists anywhere in `src-tauri/` or the native bridge; it remains the planned machine-level improvement noted above, never a gate when it ships.
 
 ## Status (2026-09-30, updated)
 
-Deployed to the WritersLogic Supabase project (ref aswcfxodrgcnjbwrcjrl): migrations `20260930120000` and `20260930130000`, secrets (entitlement signing key id `or-2026-1`, peppers, `ONRECORD_STRIPE_PRICE_IDS` = the live price, `TRIAL_DAYS=30`), functions `onrecord-entitlement`, `onrecord-verify-work-email`, `onrecord-checkout`, and the edited `stripe-webhook`. Deployed functions answer 401 to an unauthenticated call. The entitlement public key is pinned by kid in `src-tauri/src/licensing` (verify it is there before release). The signing private key is backed up only at `~/.config/onrecord-studio/signing/entitlement-signing.pem`; keep a copy in a password manager.
+Deployed to the WritersLogic Supabase project (ref aswcfxodrgcnjbwrcjrl): migrations `20260930120000` and `20260930130000`, secrets (entitlement signing key id `or-2026-1`, peppers, `ONRECORD_STRIPE_PRICE_IDS` = the live price, `TRIAL_DAYS=30`), functions `onrecord-entitlement`, `onrecord-verify-work-email`, `onrecord-checkout`, and the edited `stripe-webhook`. These are server secrets with no client-side counterpart; the trial length is not a constant in this repository and cannot be verified here (the 14-day figure in `entitlement.rs`'s `test_support::trial_claims` is only a test fixture, not the deployed value). Deployed functions answer 401 to an unauthenticated call. The entitlement public key is pinned by kid (`or-2026-1`) in `src-tauri/src/licensing/entitlement.rs`'s `ENTITLEMENT_PUBLIC_KEYS`; an empty list there denies every token by design, so confirm the key is still present before release. The signing private key is backed up only at `~/.config/onrecord-studio/signing/entitlement-signing.pem`; keep a copy in a password manager.
 
 Local build inputs live in the git-ignored `.env.direct.local`: anon key, `APPLE_SIGNING_IDENTITY` (Developer ID Application, pinned by SHA-1), Developer ID profile path (`~/.config/onrecord-studio/provisioning/current/`), notary profile name `onrecord-notary` (the credential itself must be created with `xcrun notarytool store-credentials`, which needs an app-specific password).
 
