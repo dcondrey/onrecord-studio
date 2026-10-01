@@ -29,8 +29,11 @@ const NATIVE_COMMAND_EVENT: &str = "onrecord-native-command";
 fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
     let command = invoke.message.command();
     if !licensing::command_is_unlicensed(command) {
-        let state = invoke.message.state();
-        let Some(license) = state.try_get::<licensing::LicenseGate>() else {
+        let Some(license) = invoke
+            .message
+            .webview_ref()
+            .try_state::<licensing::LicenseGate>()
+        else {
             invoke.resolver.reject(crate::error::AppError::License(
                 "The native paid-license gate was not initialized.".to_string(),
             ));

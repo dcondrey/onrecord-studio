@@ -1562,7 +1562,8 @@ mod tests {
             precision_cents,
             hedge: Hedge::Exact,
         };
-        let cases: &[(&str, Option<ClaimKind>, Option<i32>, Option<&str>)] = &[
+        type Case<'a> = (&'a str, Option<ClaimKind>, Option<i32>, Option<&'a str>);
+        let cases: &[Case] = &[
             (
                 "The FY 2024 budget was balanced with no deficit in the General Fund.",
                 Some(ClaimKind::BudgetBalance(BalanceState::Balanced)),
