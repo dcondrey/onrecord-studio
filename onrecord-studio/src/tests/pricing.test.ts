@@ -13,13 +13,13 @@ function sourceFiles(dir: string): string[] {
 
 describe('pricing', () => {
   it('prices by tier at the boundaries and never leaves the seat range', () => {
-    expect(tierForSeats(1).usdPerSeatPerYear).toBe(79);
-    expect(tierForSeats(2).usdPerSeatPerYear).toBe(69);
-    expect(tierForSeats(9).usdPerSeatPerYear).toBe(69);
-    expect(tierForSeats(10).usdPerSeatPerYear).toBe(49);
-    expect(tierForSeats(MAX_SEATS).usdPerSeatPerYear).toBe(49);
-    expect(yearlyTotalUsd(9)).toBe(621);
-    expect(yearlyTotalUsd(10)).toBe(490);
+    expect(tierForSeats(1).usdPerSeatPerYear).toBe(99);
+    expect(tierForSeats(2).usdPerSeatPerYear).toBe(89);
+    expect(tierForSeats(9).usdPerSeatPerYear).toBe(89);
+    expect(tierForSeats(10).usdPerSeatPerYear).toBe(59);
+    expect(tierForSeats(MAX_SEATS).usdPerSeatPerYear).toBe(59);
+    expect(yearlyTotalUsd(9)).toBe(801);
+    expect(yearlyTotalUsd(10)).toBe(590);
     expect([clampSeats(0), clampSeats(1000), clampSeats(Number.NaN), clampSeats(2.9)]).toEqual([1, 999, 1, 2]);
   });
 
