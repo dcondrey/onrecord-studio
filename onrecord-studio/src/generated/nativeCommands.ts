@@ -169,4 +169,11 @@ export interface NativeCommandMap {
   confirm_suggested_event: { args: { input: Types.ConfirmSuggestedEventInput }; result: Types.TimelineEvent };
   reject_suggested_event: { args: { input: Types.RejectSuggestedEventInput }; result: null };
   get_request_deadline: { args: { claimId: string }; result: Types.RequestDeadline };
+  list_resolution_candidates: { args: { cursor?: string | null; limit?: number | null; includeUnsure?: boolean | null }; result: Types.ResolutionCandidatePage };
+  record_resolution_judgment: { args: { input: Types.RecordResolutionInput }; result: Types.ResolutionLedgerItem };
+  list_resolution_ledger: { args: { cursor?: string | null; limit?: number | null; pair?: string | null }; result: Types.ResolutionLedgerPage };
+  get_resolution_clusters: { args: { entityId: string }; result: Types.ResolutionClusterView | null };
+  export_resolution_ledger: { args: NoArgs; result: string };
+  preview_resolution_import: { args: { payload: string }; result: Types.ResolutionImportPreview };
+  import_resolution_ledger: { args: { payload: string; packetSha256: string }; result: Types.ResolutionImportResult };
 }

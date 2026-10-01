@@ -20,6 +20,7 @@ import {
 } from '../../utils/patternRecipes';
 import Icon from '../ui/icons';
 import EntityGraph from './EntityGraph';
+import ResolutionReview from './ResolutionReview';
 
 const patternLabels: Record<CorpusPatternKind, string> = {
   EXACT_DUPLICATE: 'Exact copies',
@@ -355,6 +356,8 @@ export default function PatternExplorer() {
         </div>
 
         <EntityGraph />
+
+        <ResolutionReview />
 
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Pattern type">
           <FilterButton selected={kindFilter === 'ALL'} onClick={() => setKindFilter('ALL')}>

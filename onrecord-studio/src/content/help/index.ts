@@ -14,6 +14,7 @@ import evidencePackets from './topics-evidence-packets.json';
 import bundle from './topics-bundle.json';
 import watchlists from './topics-watchlists.json';
 import scale from './topics-scale.json';
+import resolution from './topics-resolution.json';
 
 export type HelpGroup =
   | 'Getting started'
@@ -74,6 +75,7 @@ export const HELP_TOPICS = [
   ...bundle,
   ...watchlists,
   ...scale,
+  ...resolution,
 ] as HelpTopic[];
 
 export function findHelpTopic(id: string): HelpTopic | undefined {

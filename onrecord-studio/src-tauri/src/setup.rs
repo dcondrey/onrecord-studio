@@ -139,6 +139,9 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
     app.manage(std::sync::Arc::new(
         crate::collaboration::ContributorStore::new(&app_data_dir),
     ));
+    app.manage(std::sync::Arc::new(crate::resolution::LedgerStore::new(
+        &app_data_dir,
+    )));
     app.manage(report_directory);
     app.manage(crate::integrity::SigningKeyDirectory(signing_key_directory));
     app.manage(AppInvestigationPaths::new(download_root));

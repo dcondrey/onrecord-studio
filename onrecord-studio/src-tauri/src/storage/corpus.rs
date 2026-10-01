@@ -913,7 +913,11 @@ impl CorpusIndex {
     /// document still needs indexing -- so a stale answer is not a slow refresh, it is a wrong
     /// one. Reads therefore queue behind writes on the single writer thread, which is the
     /// consistency this index was already serialized for.
-    async fn read<T, F>(&self, operation: &'static str, function: F) -> Result<T, AppError>
+    pub(crate) async fn read<T, F>(
+        &self,
+        operation: &'static str,
+        function: F,
+    ) -> Result<T, AppError>
     where
         T: Send + 'static,
         F: FnOnce(&Connection) -> Result<T, AppError> + Send + 'static,

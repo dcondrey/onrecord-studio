@@ -13,6 +13,7 @@ pub mod paging;
 pub mod query;
 pub mod reconstruction;
 pub mod research;
+pub mod resolution;
 pub mod runtime;
 pub mod semantic;
 pub mod snapshot;

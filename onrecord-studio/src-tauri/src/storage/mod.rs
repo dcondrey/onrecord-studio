@@ -29,6 +29,7 @@ pub mod pii;
 pub mod reconstruction;
 pub mod research;
 pub mod search_paging;
+pub mod resolution_source;
 pub mod snapshot_export;
 pub mod sqlite;
 #[cfg(test)]
