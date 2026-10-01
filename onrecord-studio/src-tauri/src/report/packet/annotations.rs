@@ -47,6 +47,10 @@ pub struct PacketAnnotation {
     pub quote: String,
     pub note: String,
     pub imported_from_key: Option<String>,
+    /// Present for a mark drawn on a page of the original file. It is located by page and
+    /// rectangle, never by text, so `anchor` stays `None` for it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page_region: Option<crate::types::annotation::PageRegion>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -115,7 +119,9 @@ pub fn build_section(
             not_public_omitted += marks.len();
             continue;
         };
-        let any_quote = marks.iter().any(|mark| !mark.quote.is_empty());
+        let any_quote = marks
+            .iter()
+            .any(|mark| mark.page_region.is_none() && !mark.quote.is_empty());
         let view = match (&document.text, any_quote) {
             (Some(text), true) => Some(
                 TextView::new(text)
@@ -124,11 +130,19 @@ pub fn build_section(
             _ => None,
         };
         for mark in marks {
-            let resolved = view.as_ref().and_then(|view| view.resolve(mark));
-            let unchecked_reason = match (&resolved, mark.quote.is_empty()) {
-                (Some(_), _) => None,
-                (None, true) => Some("A note on the whole document has no quote to anchor."),
-                (None, false) => Some("The document's stored text was not available to check."),
+            let is_region = mark.page_region.is_some();
+            let resolved = if is_region {
+                None
+            } else {
+                view.as_ref().and_then(|view| view.resolve(mark))
+            };
+            let unchecked_reason = match (&resolved, is_region, mark.quote.is_empty()) {
+                (Some(_), _, _) => None,
+                (None, true, _) => Some(
+                    "Drawn on a page of the original file: located by page and rectangle, not by text.",
+                ),
+                (None, false, true) => Some("A note on the whole document has no quote to anchor."),
+                (None, false, false) => Some("The document's stored text was not available to check."),
             };
             annotations.push(PacketAnnotation {
                 id: mark.id.clone(),
@@ -147,6 +161,7 @@ pub fn build_section(
                 quote: masked(&mark.quote)?,
                 note: masked(&mark.note)?,
                 imported_from_key: mark.imported_from_key.clone(),
+                page_region: mark.page_region.clone(),
             });
         }
     }

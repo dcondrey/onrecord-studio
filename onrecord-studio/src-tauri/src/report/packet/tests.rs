@@ -393,6 +393,7 @@ mod reviewer_annotations {
             finding_id: None,
             imported_from_key: None,
             created_at: "2026-01-01T00:00:00Z".into(),
+            page_region: None,
         }
     }
 
@@ -498,6 +499,41 @@ mod reviewer_annotations {
             with_section(&docs, &edited).content_sha256,
             included.content_sha256
         );
+    }
+
+    #[test]
+    fn a_page_region_mark_is_located_by_page_never_text_anchored() {
+        let docs = docs_with_text();
+        let mut store = store();
+        // The text layer's words happen to match the document text; that must not anchor it.
+        let mut region = mark("c-region", 7, "alpha beta", 0, "On the page.");
+        region.page_region = Some(crate::types::annotation::PageRegion {
+            rectangle: crate::types::annotation::PageRectangle {
+                page_index: 2,
+                x: 0.1,
+                y: 0.2,
+                width: 0.3,
+                height: 0.1,
+            },
+            original_sha256: "ab".repeat(32),
+        });
+        store.annotations.push(region);
+        let section = with_section(&docs, &store)
+            .content
+            .reviewer_annotations
+            .unwrap();
+        let region = section
+            .annotations
+            .iter()
+            .find(|mark| mark.id == "c-region")
+            .unwrap();
+        assert_eq!(region.anchor, None);
+        assert!(region
+            .unchecked_reason
+            .as_deref()
+            .unwrap()
+            .contains("page and rectangle"));
+        assert_eq!(region.page_region.as_ref().unwrap().rectangle.page_index, 2);
     }
 
     #[test]
