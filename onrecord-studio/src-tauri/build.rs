@@ -41,7 +41,9 @@ fn main() {
         // internal Swift bridges. Keeping only the process entry point in the Mach-O export trie
         // lets Cargo's release stripping remove thousands of third-party symbol names without
         // changing Rust's link-time references or relying on runtime anti-debugging behavior.
-        println!("cargo:rustc-link-arg-bin=onrecord-studio-lib=-Wl,-exported_symbol,_main");
+        // The bin target is `onrecord-studio` (Cargo.toml [[bin]]); the flag names the binary, not
+        // the crate, and Cargo refuses a name no bin target carries.
+        println!("cargo:rustc-link-arg-bin=onrecord-studio=-Wl,-exported_symbol,_main");
     }
     tauri_build::build();
 }

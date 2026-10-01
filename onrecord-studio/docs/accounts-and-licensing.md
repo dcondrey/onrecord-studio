@@ -112,10 +112,14 @@ Unverified end to end: real sign-in, Keychain and Secure Enclave, a live Stripe 
 
 ## Billing portal and plan intervals (2026-10-01)
 
-Cancellation uses Stripe's Customer Portal through the shared `stripe-portal` function
-(`https://auth.writerslogic.com/functions/v1/stripe-portal`, deployed from the website repo). The
-app's `start_billing_portal` command sends the signed-in session and a fixed return URL and opens
-only a `https://billing.stripe.com` address. No new server code is needed: the webhook already
+Cancellation uses Stripe's Customer Portal through `onrecord-billing-portal`
+(`https://auth.writerslogic.com/functions/v1/onrecord-billing-portal`, deployed 2026-10-01 from the
+website repo), which binds the session to the OnRecord portal configuration
+(`ONRECORD_STRIPE_PORTAL_CONFIGURATION_ID`: cancel at period end, seat quantity changes, payment
+method, invoices; return URL fixed to the product page). The app's `start_billing_portal` command
+sends the signed-in session and opens only a `https://billing.stripe.com` address. The shared
+`stripe-portal` slug is not used: it is deployed from the writersproof repo and relies on a default
+portal configuration that does not exist. Entitlement needs no change: the webhook already
 keeps a subscription `active` until Stripe sends `customer.subscription.deleted` at the period end,
 so a portal cancellation (`cancel_at_period_end`) leaves the license valid until then and is not
 refunded; the next entitlement refresh after that denies. The portal's own configuration in the
