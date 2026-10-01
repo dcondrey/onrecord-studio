@@ -3,6 +3,7 @@ pub mod annotations;
 mod atomic_write;
 mod blocking;
 pub mod bundle;
+pub mod collaboration;
 pub mod commands;
 pub mod error;
 mod file_name;
@@ -185,6 +186,13 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::verification::request_work_email_code,
         commands::verification::confirm_work_email_code,
         commands::verification::link_affiliation_verified_domain,
+        commands::collaboration::get_local_contributor_identity,
+        commands::collaboration::list_trusted_contributors,
+        commands::collaboration::trust_contributor,
+        commands::collaboration::untrust_contributor,
+        commands::collaboration::list_shared_folder_packets,
+        commands::collaboration::read_shared_folder_packet,
+        commands::collaboration::publish_packet_to_folder,
         commands::annotations::list_document_annotations,
         commands::annotations::add_document_annotation,
         commands::annotations::remove_document_annotation,

@@ -3,6 +3,7 @@
 pub mod account;
 pub mod analysis_workbench;
 pub mod annotations;
+pub mod collaboration;
 pub mod corpus;
 pub mod export;
 pub mod ingest;

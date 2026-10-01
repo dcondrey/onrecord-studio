@@ -6,6 +6,11 @@ import type { CaseEvidencePackageResult } from "../types/investigation";
 const bridge=vi.hoisted(()=>({invoke:vi.fn()}));
 vi.mock("../ipc",()=>({invokeCommand:bridge.invoke}));
 vi.mock("@tauri-apps/api/core",()=>({isTauri:()=>true}));
+vi.mock("../components/dashboard/useContributors",()=>({
+  groupKeyId:(id:string)=>id,
+  useContributors:()=>({state:{status:"ready",contributors:[],identity:null},reload:()=>{},trust:async()=>{},untrust:async()=>{}}),
+}));
+vi.mock("@tauri-apps/plugin-dialog",()=>({open:()=>null}));
 import CaseworkPanel from "../components/dashboard/CaseworkPanel";
 const caseA:CaseworkCase={id:"case-a",reportId:"report-a",topic:"homelessness",title:"Shelter contract",owner:"",disposition:"OPEN",revision:1,createdAt:"2026-09-26T12:00:00Z",updatedAt:"2026-09-26T12:00:00Z",questions:[{id:"q1",question:"Were bed nights delivered?",hypothesis:"Reports may exist separately.",nextTest:"Obtain the monthly reports.",owner:"",disposition:"OPEN",citationIds:["e1"],counterCitationIds:[]}],requests:[{id:"r1",title:"Monthly reports",custodian:"Housing Commission",gap:"Bed nights",resolves:"Delivered service volume",draft:"Please provide the reports.",state:"DRAFT",expectedRecordTypes:["monthly report"],expectedFields:["occupied bed nights"],expectedPeriod:"FY2025",submittedAt:null,responseDue:null,externalReference:"",productions:[],unresolvedOmissions:[],followUpDraft:"",citationIds:["e1"]}],decisions:[],commitments:[],evidence:[{id:"e1",reportId:"report-a",evidenceId:"e1",label:"Shelter contract",quote:"Provider shall report occupied bed nights.",sourceUrl:"https://www.sandiego.gov/contract.pdf",sourceSha256:"a",sourceReferences:[],portalKey:"city",documentId:1,characterOffset:0,verification:"SAVED_REPORT"}],notes:"Scope note"};
 const caseB:CaseworkCase={...caseA,id:"case-b",reportId:"report-b",title:"Public bathrooms",topic:"bathrooms",notes:"Bathroom scope"};

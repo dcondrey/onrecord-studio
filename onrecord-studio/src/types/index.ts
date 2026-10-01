@@ -48,3 +48,4 @@ export * from "./bundle";
 export * from "./annotation";
 
 export * from "./snapshot";
+export * from "./collaboration";

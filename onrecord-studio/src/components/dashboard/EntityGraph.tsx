@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { filterEdges } from '../../utils/entityEdges';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type {
@@ -7,6 +8,7 @@ import type {
   CorpusEntityNeighborhood,
   CorpusEntityNode,
   EntityPath,
+  RelationshipBasis,
   RelationshipKind,
 } from '../../types';
 import { cn } from '../../utils/cn';
@@ -94,6 +96,13 @@ interface PlacedEdge {
  * the more documents a neighbour shares with the centre, the closer it sits -- and it is
  * deterministic, so the same corpus draws the same graph twice.
  */
+const ALL_BASES: RelationshipBasis[] = ['OBSERVED', 'COMPUTED', 'ASSERTED'];
+const BASIS_FILTER_LABELS: Record<RelationshipBasis, string> = {
+  OBSERVED: 'Stated in text',
+  COMPUTED: 'Derived by this app',
+  ASSERTED: 'Asserted by a source',
+};
+
 function placeEdges(edges: CorpusEntityEdge[]): PlacedEdge[] {
   const strongest = edges.reduce((most, edge) => Math.max(most, edge.sharedDocumentCount), 1);
   const weakest = edges.reduce((least, edge) => Math.min(least, edge.sharedDocumentCount), strongest);
@@ -156,6 +165,9 @@ export default function EntityGraph() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [pathTargetId, setPathTargetId] = useState('');
+  const [shownBases, setShownBases] = useState<ReadonlySet<RelationshipBasis>>(() => new Set(ALL_BASES));
+  const [asOf, setAsOf] = useState('');
+  const [includeUndated, setIncludeUndated] = useState(true);
   const [pathAnswer, setPathAnswer] = useState<PathAnswer | null>(null);
 
   useEffect(() => {
@@ -216,9 +228,14 @@ export default function EntityGraph() {
     );
   }
 
-  const placed = neighborhood ? placeEdges(neighborhood.edges) : [];
+  const totalEdgeCount = neighborhood?.edges.length ?? 0;
+  const visibleEdges = neighborhood
+    ? filterEdges(neighborhood.edges, { bases: shownBases, asOf: asOf || null, includeUndated })
+    : [];
+  const placed = placeEdges(visibleEdges);
   const centre = neighborhood?.center ?? null;
-  const edgeCount = neighborhood?.edges.length ?? 0;
+  const edgeCount = visibleEdges.length;
+  const isFiltered = shownBases.size < ALL_BASES.length || asOf !== '';
   const edgesTruncated = neighborhood?.truncated ?? false;
 
   return (
@@ -285,6 +302,47 @@ export default function EntityGraph() {
         </div>
       ) : (
         <>
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-[9px] text-slate-400">
+            <div role="group" aria-label="Show relationships by how they are known" className="flex gap-1">
+              {ALL_BASES.map((basis) => (
+                <button
+                  key={basis}
+                  type="button"
+                  aria-pressed={shownBases.has(basis)}
+                  onClick={() =>
+                    setShownBases((current) => {
+                      const next = new Set(current);
+                      if (next.has(basis)) next.delete(basis);
+                      else next.add(basis);
+                      return next;
+                    })
+                  }
+                  className={cn('focus-ring rounded border px-2 py-1 font-semibold', shownBases.has(basis) ? 'border-cyan-400/50 text-cyan-200' : 'border-slate-800 text-slate-400')}
+                >
+                  {BASIS_FILTER_LABELS[basis]}
+                </button>
+              ))}
+            </div>
+            <label className="flex items-center gap-1">
+              As of
+              <input type="date" value={asOf} onChange={(event) => setAsOf(event.target.value)} className="focus-ring rounded border border-slate-800 bg-slate-950 px-1 py-0.5 text-slate-200" />
+            </label>
+            {asOf && (
+              <>
+                <label className="flex items-center gap-1">
+                  <input type="checkbox" checked={includeUndated} onChange={(event) => setIncludeUndated(event.target.checked)} />
+                  Include undated
+                </label>
+                <button type="button" className="focus-ring underline" onClick={() => setAsOf('')}>Clear date</button>
+              </>
+            )}
+            {isFiltered && (
+              <span role="status">
+                Showing {edgeCount} of {totalEdgeCount}. Hidden relationships are filtered out, not absent.
+                {asOf && !includeUndated ? ' Relationships with no recorded dates are hidden.' : ''}
+              </span>
+            )}
+          </div>
           <div
             ref={drawingRef}
             className="focus-ring mt-3 overflow-x-auto"
