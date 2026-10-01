@@ -139,6 +139,9 @@ export interface NativeCommandMap {
   request_work_email_code: { args: { email: string }; result: Types.WorkEmailCodeReport };
   confirm_work_email_code: { args: { email: string; code: string }; result: Types.WorkEmailConfirmReport };
   link_affiliation_verified_domain: { args: { input: Types.AffiliationDomainLinkInput }; result: Types.AffiliationLinkReport };
+  list_document_annotations: { args: { portalKey: string; documentId: number }; result: Types.DocumentAnnotation[] };
+  add_document_annotation: { args: { input: Types.AddAnnotationInput }; result: Types.DocumentAnnotation };
+  remove_document_annotation: { args: { id: string }; result: null };
   list_claimed_requests: { args: NoArgs; result: Types.ClaimedRequest[] };
   claim_request: { args: { input: Types.ClaimRequestInput }; result: Types.ClaimedRequest };
   update_claimed_request: { args: { input: Types.UpdateClaimedRequestInput }; result: Types.ClaimedRequest };

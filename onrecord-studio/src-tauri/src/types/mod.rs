@@ -97,6 +97,7 @@ pub mod lead_dossier;
 pub use lead_dossier::*;
 pub mod meetings;
 
+pub mod annotation;
 pub mod profile;
 pub mod report;
 pub mod tracker;

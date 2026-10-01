@@ -36,6 +36,13 @@ pub enum TimelineEventKind {
     Determination,
     RecordsReleased,
     Closed,
+    /// Recorded for the chronology only. The kinds below never move the statutory clock.
+    ClarificationRequested,
+    FeeNotice,
+    PartialProduction,
+    WithholdingNotice,
+    FollowUpSent,
+    AppealFiled,
     Other,
 }
 

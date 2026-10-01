@@ -23,6 +23,12 @@ export type TimelineEventKind =
   | 'DETERMINATION'
   | 'RECORDS_RELEASED'
   | 'CLOSED'
+  | 'CLARIFICATION_REQUESTED'
+  | 'FEE_NOTICE'
+  | 'PARTIAL_PRODUCTION'
+  | 'WITHHOLDING_NOTICE'
+  | 'FOLLOW_UP_SENT'
+  | 'APPEAL_FILED'
   | 'OTHER';
 
 /** A suggestion is not a basis: it lives in `ClaimedRequest.suggestions` and counts toward nothing. */

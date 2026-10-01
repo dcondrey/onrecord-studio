@@ -1,4 +1,5 @@
 pub mod analysis;
+pub mod annotations;
 mod atomic_write;
 mod blocking;
 pub mod bundle;
@@ -180,6 +181,9 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::verification::request_work_email_code,
         commands::verification::confirm_work_email_code,
         commands::verification::link_affiliation_verified_domain,
+        commands::annotations::list_document_annotations,
+        commands::annotations::add_document_annotation,
+        commands::annotations::remove_document_annotation,
         commands::tracker::list_claimed_requests,
         commands::tracker::claim_request,
         commands::tracker::update_claimed_request,
