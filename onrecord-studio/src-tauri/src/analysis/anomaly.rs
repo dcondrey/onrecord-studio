@@ -296,7 +296,7 @@ impl AnalyticsEngine {
     /// Creates a standalone node for inspecting a foreign SQLite database supplied by the
     /// investigator. Call `attach_sqlite_source_path` before querying.
     pub fn new() -> Result<Self, AppError> {
-        let connection = Connection::open_in_memory().map_err(|error| {
+        let connection = crate::storage::open_duckdb(None).map_err(|error| {
             AppError::Analysis(format!(
                 "Failed to initialize DuckDB analytics node: {error}"
             ))
@@ -344,7 +344,7 @@ impl AnalyticsEngine {
             if state.attached_sqlite_path.as_ref() == Some(&canonical_path) {
                 return validate_attached_sqlite_layout(&state.connection);
             }
-            let replacement = Connection::open_in_memory().map_err(|error| {
+            let replacement = crate::storage::open_duckdb(None).map_err(|error| {
                 AppError::Analysis(format!("Failed to initialize SQLite snapshot: {error}"))
             })?;
             import_sqlite_snapshot(&replacement, &canonical_path, &ANALYTICS_SQLITE_TABLES)?;
