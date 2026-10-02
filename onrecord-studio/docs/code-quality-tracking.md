@@ -58,6 +58,8 @@ Maintainability/Complexity, Comment/Code Clarity.
 - `9d3ff4d` storage/review.rs: relationship evidence-check errors propagate (were shown as "source
   needs review"); each source report decompressed once, not once per relationship
 - `cc6c6fb` commands/account.rs: seat email validation rejects `a@@b`, `@a@b`, `a@b@`, whitespace
+- `7f6ed0a` commands/semantic.rs: hybrid_search lexical dedup via HashSet (was quadratic over up
+  to 5,000 rows per palette query; not benchmarked)
 
 Known flake, pre-existing (reproduced with pre-`7b05600` code): two `sanDiegoWorkflow.test.tsx`
 full-`<App />` tests time out under full-suite load; they pass when run alone.
