@@ -144,9 +144,9 @@ function Heatmap({
     );
   }
   return (
-    <div className="rounded-lg border border-slate-800/70 bg-slate-950/30 p-3" aria-label="Jurisdiction × detector heatmap">
+    <div className="rounded-lg border border-slate-800/70 bg-slate-950/30 p-3">
       <p className="text-[9px] uppercase tracking-wider text-slate-400">Jurisdiction × detector</p>
-      <div className="mt-2 overflow-x-auto">
+      <div role="region" tabIndex={0} aria-label="Jurisdiction × detector heatmap" className="focus-ring mt-2 overflow-x-auto">
         <table className="w-full text-[9px] text-slate-300">
           <thead>
             <tr>

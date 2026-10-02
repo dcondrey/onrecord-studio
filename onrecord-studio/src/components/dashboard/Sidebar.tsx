@@ -43,6 +43,7 @@ export default function Sidebar() {
         />
       )}
       <aside
+        aria-label="Workspace navigation"
         className={cn(
           'sidebar-surface fixed inset-y-0 left-0 z-50 flex shrink-0 flex-col border-r shadow-2xl shadow-black/10 backdrop-blur-xl transition-[width,transform] duration-300 md:relative md:z-20 md:translate-x-0 md:shadow-none',
           isCollapsed ? 'w-[68px]' : 'w-[248px]',
@@ -79,6 +80,8 @@ export default function Sidebar() {
                 <button
                   key={item.view}
                   type="button"
+                  aria-current={selected ? 'page' : undefined}
+                  aria-label={isCollapsed ? item.navigationLabel : undefined}
                   title={`${item.navigationLabel} (${isApplePlatform() ? '⌘' : 'Ctrl'}${item.shortcutIndex}) — ${item.detail}`}
                   onClick={() => setWorkspaceView(item.view)}
                   className={cn(
@@ -288,7 +291,7 @@ export default function Sidebar() {
           <button
             type="button"
             onClick={toggleSidebarCollapsed}
-            aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={isCollapsed ? 'Expand navigation' : undefined}
             className="focus-ring mt-1.5 hidden w-full items-center justify-center gap-2 rounded-lg py-1.5 text-[12px] font-medium text-slate-400 transition hover:bg-slate-800/50 hover:text-slate-300 md:flex"
           >
             <Icon name="collapse" className={cn('h-3.5 w-3.5 transition-transform', isCollapsed && 'rotate-180')} />

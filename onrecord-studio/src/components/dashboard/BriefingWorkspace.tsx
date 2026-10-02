@@ -267,7 +267,7 @@ export default function BriefingWorkspace() {
             </section>
           </div>
 
-          <aside className="space-y-4">
+          <aside aria-label="Briefing sources" className="space-y-4">
             <section className="app-panel overflow-hidden">
               <SectionHeader step="A" title="Primary-source queue" detail="Stage a target in the top source bar, then press Add to preserve and index it locally." />
               <div className="space-y-2 p-3">

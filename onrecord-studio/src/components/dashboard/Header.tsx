@@ -9,10 +9,8 @@ import { SourceConnectorDialogs } from './SourceConnectorDialogs';
 
 export default function Header() {
   const workspaceView = useAppStore((state) => state.workspaceView);
-  const theme = useAppStore((state) => state.theme);
   const audioAlertsEnabled = useAppStore((state) => state.audioAlertsEnabled);
   const setSidebarOpen = useAppStore((state) => state.setSidebarOpen);
-  const setTheme = useAppStore((state) => state.setTheme);
   const setAudioAlertsEnabled = useAppStore((state) => state.setAudioAlertsEnabled);
 
   const connector = useSourceConnector();
@@ -46,8 +44,6 @@ export default function Header() {
           <HeaderControls
             audioAlertsEnabled={audioAlertsEnabled}
             setAudioAlertsEnabled={setAudioAlertsEnabled}
-            theme={theme}
-            setTheme={setTheme}
             syncingPortalKeys={syncingPortalKeys}
             isConnectorOpen={isConnectorOpen}
             onToggleConnector={toggleConnector}

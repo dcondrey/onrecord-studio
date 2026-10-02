@@ -401,10 +401,11 @@ function FindingRow({
           type="button"
           onClick={onInspect}
           className="min-w-0 text-left"
-          aria-label={`Inspect finding: ${finding.headline}`}
+          aria-label={finding.headline}
+          aria-describedby={`finding-${finding.id}-explanation`}
         >
           <p className="text-[11px] font-semibold text-slate-100">{finding.headline}</p>
-          <p className="mt-1 text-[10px] leading-relaxed text-slate-400">{finding.explanation}</p>
+          <p id={`finding-${finding.id}-explanation`} className="mt-1 text-[10px] leading-relaxed text-slate-400">{finding.explanation}</p>
           <p className="mt-1 text-[8px] uppercase tracking-wider text-slate-400">
             {severityLabel(finding.severity)} · {formatRelativeTime(finding.lastSeenAt)}
           </p>

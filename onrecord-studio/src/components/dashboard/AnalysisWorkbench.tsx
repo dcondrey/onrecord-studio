@@ -176,7 +176,7 @@ export default function AnalysisWorkbench() {
     <main className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto grid w-full max-w-[1800px] gap-4 p-4 lg:grid-cols-[minmax(360px,0.9fr)_minmax(0,1.3fr)] lg:p-5">
         <div className="lg:col-span-2"><AutomaticDiscovery /></div>
-        <section className="space-y-4">
+        <section className="min-w-0 space-y-4">
           <Panel title="Semantic Index" icon="sparkles">
             <div className="grid gap-2 text-[11px] text-slate-300">
               <Metric label="Model" value={modelStatus ? modelStatus.modelId : 'Checking'} />
@@ -208,7 +208,7 @@ export default function AnalysisWorkbench() {
 
           <Panel title="Analytical Import" icon="database">
             <p className="mb-3 text-xs leading-relaxed text-slate-400">Choose an acquired table or a local CSV, TSV, JSON, GeoJSON, JSONL, XLSX, XLS, or ODS export. General regional data infers numeric columns while preserving codes and suppression markers.</p>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
               <select aria-label="Acquired table" value={selectedCandidate ? `${selectedCandidate.portalKey}:${selectedCandidate.documentId}` : ''} onChange={(event) => {
                 const candidate = candidates.find((item) => `${item.portalKey}:${item.documentId}` === event.target.value) ?? null;
                 setSelectedCandidate(candidate);
@@ -279,7 +279,7 @@ export default function AnalysisWorkbench() {
             <p className="mb-2 text-xs text-slate-400">Search extracted text across reports, budgets, minutes, and articles. Exact search requires every word in the document; excerpts show the closest matching passage. Semantic matches are added when the model is ready. Text indexing covers the first four million characters per document.</p>
             <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_220px_auto]">
               <input aria-label="Document evidence query" className="analysis-input" value={hybridQuery} onChange={(event) => setHybridQuery(event.target.value)} />
-              <select className="analysis-input" value={jurisdiction} onChange={(event) => setJurisdiction(event.target.value)}>
+              <select aria-label="Source jurisdiction" className="analysis-input" value={jurisdiction} onChange={(event) => setJurisdiction(event.target.value)}>
                 <option value="">All source jurisdictions</option>
                 <option>City of San Diego</option>
                 <option>San Diego County</option>

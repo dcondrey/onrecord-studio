@@ -119,7 +119,7 @@ export default function AgencyComparison() {
             statutory violation column is a counted violation, and the slower-than-peers marker is a
             statistical comparison with every other agency that no statute speaks to. An agency with
             fewer than {SMALL_SAMPLE_CLOSURES} measured closures is marked small sample because one
-            closure moves its average; an agency that has closed nothing measurable shows {NO_MEASURABLE_CLOSURE}
+            closure moves its average; an agency that has closed nothing measurable shows {NO_MEASURABLE_CLOSURE}{' '}
             rather than a number.
           </p>
         </header>

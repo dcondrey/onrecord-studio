@@ -35,7 +35,7 @@ import { formatMatchCount, MATCH_BASIS_LABELS, matchBasis, SEARCH_PAGE_SIZE } fr
 import VirtualList from '../ui/VirtualList';
 
 /** Fixed so the list can be windowed from the scroll offset; the row clamps its text to fit. */
-const RESULT_ROW_HEIGHT = 128;
+const RESULT_ROW_HEIGHT = 148;
 
 export default function MainLayout() {
   // Request selection lives in the shared workspace store and survives view switches. The open
