@@ -66,6 +66,33 @@ export interface NavigationEntry {
 
 export const NAVIGATION_HISTORY_LIMIT = 50;
 
+/** Anything the inspector can open. `label` is what the opener displayed, shown until the layer loads. */
+export type InspectorTarget =
+  | { kind: 'finding'; id: string; label?: string }
+  | { kind: 'entity'; entityId: string; label: string }
+  | { kind: 'document'; portalKey: string; documentId: number; requestId: number | null; characterStart: number | null; characterEnd: number | null; label?: string }
+  | { kind: 'agency'; portalKey: string; agencyId: number; label: string }
+  | { kind: 'request'; portalKey: string; requestId: number; label?: string };
+
+export const INSPECTOR_DEPTH_LIMIT = 8;
+
+export function inspectorTargetKey(target: InspectorTarget): string {
+  switch (target.kind) {
+    case 'finding': return `finding:${target.id}`;
+    case 'entity': return `entity:${target.entityId}`;
+    case 'document': return `document:${target.portalKey}:${target.documentId}:${target.characterStart ?? ''}`;
+    case 'agency': return `agency:${target.portalKey}:${target.agencyId}`;
+    case 'request': return `request:${target.portalKey}:${target.requestId}`;
+  }
+}
+
+export interface EvidenceLinkRequest {
+  portalKey: string;
+  requestId: number;
+  documentId: number;
+  characterOffset: number;
+}
+
 export interface PatternEvidenceSelection {
   patternId: string;
   portalKey: string | null;
@@ -157,6 +184,15 @@ interface AppState {
    * session — treat every finding as new.
    */
   lastFindingsSeenAt: string | null;
+  /** Stacked detail layers; the last is visible. Opening from a view starts a new stack, from a layer pushes. */
+  inspectorStack: InspectorTarget[];
+  inspect: (target: InspectorTarget, from?: 'view' | 'layer') => void;
+  inspectorBack: () => void;
+  closeInspector: () => void;
+  /** A document to open in the evidence viewer, from any surface; the evidence view consumes it. */
+  requestedEvidenceLink: EvidenceLinkRequest | null;
+  openEvidenceLink: (link: EvidenceLinkRequest) => void;
+  consumeEvidenceLink: () => EvidenceLinkRequest | null;
   navigationBack: NavigationEntry[];
   navigationForward: NavigationEntry[];
   /** Set by back/forward: the scroll offset the restored view should return to once it renders. */
@@ -294,6 +330,24 @@ export const useAppStore = create<AppState>((set, get) => ({
   dossierFindingId: null,
   postIngestBriefOpen: false,
   lastFindingsSeenAt: null,
+  inspectorStack: [],
+  inspect: (target, from = 'view') => set((state) => {
+    const key = inspectorTargetKey(target);
+    if (from === 'view') return { inspectorStack: [target] };
+    // Re-opening a layer already on the stack returns to it instead of growing a loop.
+    const existing = state.inspectorStack.findIndex((entry) => inspectorTargetKey(entry) === key);
+    if (existing >= 0) return { inspectorStack: state.inspectorStack.slice(0, existing + 1) };
+    return { inspectorStack: [...state.inspectorStack, target].slice(-INSPECTOR_DEPTH_LIMIT) };
+  }),
+  inspectorBack: () => set((state) => ({ inspectorStack: state.inspectorStack.slice(0, -1) })),
+  closeInspector: () => set({ inspectorStack: [] }),
+  requestedEvidenceLink: null,
+  openEvidenceLink: (requestedEvidenceLink) => set({ requestedEvidenceLink }),
+  consumeEvidenceLink: () => {
+    const link = get().requestedEvidenceLink;
+    if (link) set({ requestedEvidenceLink: null });
+    return link;
+  },
   navigationBack: [],
   navigationForward: [],
   pendingScrollRestore: null,
@@ -583,7 +637,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   }),
   openSubjectDossier: (target) => set({ subjectDossierTarget: target }),
   clearSubjectDossier: () => set({ subjectDossierTarget: null }),
-  openLeadDossier: (dossierFindingId) => set({ dossierFindingId }),
+  openLeadDossier: (dossierFindingId) => set({ dossierFindingId, inspectorStack: [{ kind: 'finding', id: dossierFindingId }] }),
   closeLeadDossier: () => set({ dossierFindingId: null }),
   setPostIngestBriefOpen: (postIngestBriefOpen) => set({ postIngestBriefOpen }),
   markFindingsSeen: () => set({ lastFindingsSeenAt: new Date().toISOString() }),

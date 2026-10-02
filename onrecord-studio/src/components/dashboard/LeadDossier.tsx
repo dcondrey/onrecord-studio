@@ -5,6 +5,8 @@ import { useAppStore } from '../../store/useAppStore';
 import type { DossierGap, EvidenceLink, LeadDossier as LeadDossierData } from '../../types';
 import { findingToBriefingEvidence } from './BriefingWorkspace';
 import ArtifactDrafts from './ArtifactDrafts';
+import EvidenceChain from '../objects/EvidenceChain';
+import ObjectLink from '../objects/ObjectLink';
 
 type DossierState =
   | { status: 'pending' }
@@ -16,15 +18,12 @@ type DossierState =
  * request or documents, what would disconfirm it, and which figures in the cited documents could
  * not be checked. Every fetch is gated on the finding it was requested for.
  */
-export default function LeadDossier() {
-  const findingId = useAppStore((state) => state.dossierFindingId);
-  const close = useAppStore((state) => state.closeLeadDossier);
+export default function LeadDossier({ findingId }: { findingId: string }) {
   const addBriefingEvidence = useAppStore((state) => state.addBriefingEvidence);
   const [state, setState] = useState<DossierState>({ status: 'pending' });
   const gate = useLatestRequestGate();
 
   useEffect(() => {
-    if (!findingId) return;
     const request = gate.begin();
     setState({ status: 'pending' });
     invokeCommand('build_lead_dossier', { findingId })
@@ -38,8 +37,6 @@ export default function LeadDossier() {
       });
     return gate.invalidate;
   }, [findingId, gate]);
-
-  if (!findingId) return null;
 
   const addToBriefing = (dossier: LeadDossierData) => {
     const item = findingToBriefingEvidence(dossier.finding);
@@ -56,28 +53,12 @@ export default function LeadDossier() {
   };
 
   return (
-    <section aria-label="Lead dossier" className="mt-4 rounded-xl border border-line bg-canvas/40 p-4 text-label text-fg-secondary">
-      <div className="flex items-start justify-between gap-3">
-        <h3 className="text-label font-semibold text-fg">Lead dossier</h3>
-        <button type="button" onClick={close} className="focus-ring rounded-md border border-control px-2 py-1 text-caption text-muted hover:text-fg">Close</button>
-      </div>
-      {state.status === 'pending' && <p role="status" className="mt-2 text-muted">Assembling the dossier…</p>}
+    <section aria-label="Lead dossier" className="text-label text-fg-secondary">
+      {state.status === 'pending' && <DossierSkeleton />}
       {state.status === 'failed' && <p role="alert" className="mt-2 text-danger">The dossier could not be assembled: {state.message}</p>}
       {state.status === 'ready' && (
-        <div className="mt-2 space-y-4">
-          <div>
-            <p className="font-semibold text-fg">{state.dossier.finding.headline}</p>
-            <p className="mt-1 text-muted">{state.dossier.finding.explanation}</p>
-          </div>
-          <Section title={`Evidence chain (${state.dossier.evidence.length}${state.dossier.evidenceTruncated ? ', more not shown' : ''})`}>
-            {state.dossier.evidence.length === 0 ? (
-              <p className="text-muted">This finding cites no document span.</p>
-            ) : (
-              <ul className="space-y-1.5">
-                {state.dossier.evidence.map((link, index) => <li key={`${link.portalKey}:${link.documentId}:${index}`}>{evidenceLine(link)}</li>)}
-              </ul>
-            )}
-          </Section>
+        <div className="space-y-4">
+          <EvidenceChain dossier={state.dossier} />
           <Section title="Draft from this finding">
             <ArtifactDrafts findingId={state.dossier.finding.id} />
           </Section>
@@ -88,7 +69,8 @@ export default function LeadDossier() {
               <ul className="space-y-1">
                 {state.dossier.related.map((related) => (
                   <li key={related.id}>
-                    <span className="text-muted">{related.basis === 'SAME_REQUEST' ? 'same request' : 'same document'}</span> · {related.headline}
+                    <span className="text-muted">{related.basis === 'SAME_REQUEST' ? 'same request' : 'same document'}</span> ·{' '}
+                    <ObjectLink target={{ kind: 'finding', id: related.id, label: related.headline }}>{related.headline}</ObjectLink>
                   </li>
                 ))}
               </ul>
@@ -141,6 +123,17 @@ function evidenceLine(link: EvidenceLink): string {
   const digest = link.rawFileSha256 ? ` · sha256 ${link.rawFileSha256.slice(0, 12)}…` : '';
   const quote = link.quote ? ` — “${link.quote}”` : '';
   return `${link.portalKey} / ${name}${agency}${span}${digest}${quote}`;
+}
+
+function DossierSkeleton() {
+  return (
+    <div role="status" aria-label="Assembling the dossier" className="space-y-2">
+      <div className="skeleton h-4 w-3/4 rounded" />
+      <div className="skeleton h-3 w-full rounded" />
+      <div className="skeleton h-3 w-5/6 rounded" />
+      <div className="skeleton mt-4 h-20 w-full rounded-lg" />
+    </div>
+  );
 }
 
 type CopyState = { kind: 'idle' } | { kind: 'copied' } | { kind: 'fallback'; text: string };

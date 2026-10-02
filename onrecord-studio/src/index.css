@@ -587,3 +587,15 @@ a[href] {
 
 .motion-lift { transition: transform 160ms ease-out, border-color 160ms ease, background-color 160ms ease; }
 .motion-lift:hover { transform: translateY(-1px); }
+
+/* A loading placeholder is a shape, never a digit, so it cannot be read as a zero. */
+.skeleton {
+  background: linear-gradient(90deg, rgb(var(--line) / 0.25), rgb(var(--line) / 0.5), rgb(var(--line) / 0.25));
+  background-size: 200% 100%;
+  animation: skeleton-sweep 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-sweep {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
