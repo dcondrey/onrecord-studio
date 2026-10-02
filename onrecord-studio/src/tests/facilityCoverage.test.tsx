@@ -9,7 +9,7 @@ import FacilityCoveragePanel from '../components/dashboard/FacilityCoveragePanel
 afterEach(cleanup);
 const area = (areaName: string, patch: Partial<FacilityAreaCoverage>): FacilityAreaCoverage => ({
   areaName, boundary: 'box', publicRestrooms: 0, withRecordedHours: 0, hoursUninterpretable: 0, hoursNotRecorded: 0,
-  openMinutesCovered: null, minutesWithNoneOpen: null, unmatchedFacilityIds: [], facilities: [], facilitiesOmitted: 0, ...patch,
+  openMinutesCovered: null, minutesWithNoneOpen: null, unmatchedFacilityIds: [], excludedFacilityIds: [], facilities: [], facilitiesOmitted: 0, ...patch,
 });
 const workspace: FacilityCoverageWorkspace = {
   warnings: [],

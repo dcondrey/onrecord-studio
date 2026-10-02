@@ -51,6 +51,8 @@ export interface FacilityAreaCoverage {
   openMinutesCovered: number | null;
   minutesWithNoneOpen: number | null;
   unmatchedFacilityIds: string[];
+  /** Listed ids present in the import but outside the mapped restroom categories. */
+  excludedFacilityIds: string[];
   facilities: FacilityCoverageFacility[];
   facilitiesOmitted: number;
 }

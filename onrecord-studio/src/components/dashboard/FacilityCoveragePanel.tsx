@@ -164,7 +164,7 @@ function CoverageReport({ report }: { report: FacilityCoverageReport }) {
           <tbody>
             {report.areas.map((area) => (
               <tr key={area.areaName} className="border-t border-line text-fg">
-                <td className="p-1.5">{area.areaName}<div className="text-caption text-muted">{area.boundary}</div>{area.unmatchedFacilityIds.length > 0 && <div className="text-caption text-warning">Not found: {area.unmatchedFacilityIds.join(', ')}</div>}</td>
+                <td className="p-1.5">{area.areaName}<div className="text-caption text-muted">{area.boundary}</div>{area.unmatchedFacilityIds.length > 0 && <div className="text-caption text-warning">Not found: {area.unmatchedFacilityIds.join(', ')}</div>}{area.excludedFacilityIds.length > 0 && <div className="text-caption text-muted">In the data but not a mapped restroom category: {area.excludedFacilityIds.join(', ')}</div>}</td>
                 <td className="p-1.5">{area.publicRestrooms}</td>
                 <td className="p-1.5">{area.withRecordedHours}</td>
                 <td className="p-1.5">{area.hoursUninterpretable}</td>

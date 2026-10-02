@@ -166,6 +166,7 @@ pub fn summarize_area(
         open_minutes_covered: measured.then_some(covered),
         minutes_with_none_open: measured.then_some(MINUTES_PER_DAY - covered),
         unmatched_facility_ids,
+        excluded_facility_ids: Vec::new(),
         facilities: facilities.into_iter().take(MAX_LISTED_FACILITIES).collect(),
         facilities_omitted,
     }

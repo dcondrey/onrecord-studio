@@ -90,7 +90,11 @@ pub struct FacilityAreaCoverage {
     /// Minutes of the day in which no facility with recorded hours is open.
     /// `None` when no facility in the area has recorded hours.
     pub minutes_with_none_open: Option<u32>,
+    /// Listed ids no imported row carries.
     pub unmatched_facility_ids: Vec<String>,
+    /// Listed ids an imported row carries but whose category is not a mapped restroom category.
+    /// Kept apart from `unmatched_facility_ids`: "in the data but excluded" is not "not found".
+    pub excluded_facility_ids: Vec<String>,
     pub facilities: Vec<FacilityCoverageFacility>,
     pub facilities_omitted: u64,
 }

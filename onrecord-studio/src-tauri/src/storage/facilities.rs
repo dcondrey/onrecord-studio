@@ -190,6 +190,10 @@ fn build_report(
         .map(|c| c.trim().to_lowercase())
         .collect::<BTreeSet<_>>();
     let mut category_missing = 0u64;
+    let imported_ids = rows
+        .iter()
+        .filter_map(|row| row.id.clone())
+        .collect::<BTreeSet<_>>();
     let restrooms = rows
         .into_iter()
         .filter(|row| {
@@ -261,9 +265,14 @@ fn build_report(
                     .iter()
                     .filter_map(|f| f.facility_id.clone())
                     .collect::<BTreeSet<_>>();
-                let unmatched = listed.difference(&found).cloned().collect();
+                let (excluded, unmatched): (Vec<_>, Vec<_>) = listed
+                    .difference(&found)
+                    .cloned()
+                    .partition(|id| imported_ids.contains(id));
                 let boundary = format!("{} listed facility ids", listed.len());
-                summarize_area(area.name.clone(), boundary, members, unmatched)
+                let mut summary = summarize_area(area.name.clone(), boundary, members, unmatched);
+                summary.excluded_facility_ids = excluded;
+                summary
             }
         })
         .collect::<Vec<_>>();
@@ -479,7 +488,7 @@ mod tests {
         mapping.areas.push(FacilityArea {
             name: "Listed".into(),
             bounding_box: None,
-            facility_ids: vec!["R4".into(), "R6".into(), "R9".into()],
+            facility_ids: vec!["R4".into(), "R5".into(), "R6".into(), "R9".into()],
         });
         let workspace = repo.save_facility_coverage_mapping(mapping).await.unwrap();
         assert!(workspace.warnings.is_empty());
@@ -501,5 +510,7 @@ mod tests {
         assert_eq!(listed.open_minutes_covered, Some(1440));
         assert_eq!(listed.minutes_with_none_open, Some(0));
         assert_eq!(listed.unmatched_facility_ids, vec!["R9".to_string()]);
+        // R5 is imported but is a drinking fountain: excluded, never reported as missing.
+        assert_eq!(listed.excluded_facility_ids, vec!["R5".to_string()]);
     }
 }
