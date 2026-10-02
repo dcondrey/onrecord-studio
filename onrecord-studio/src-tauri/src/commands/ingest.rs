@@ -8,6 +8,7 @@ use crate::ingestion::limiter::RateLimiter;
 use crate::ingestion::queue::{ingestion_telemetry_envelope, IngestionProgress, QueueManager};
 use crate::storage::corpus::CorpusIndex;
 use crate::storage::sqlite::{DuckDbRepository, SourceConnectorRecipe};
+use crate::storage::vector::VectorIndex;
 use crate::types::{
     CrawlPolicy, DocumentPurge, MetadataPageWindow, PastedContentInput, PortalRuntimeSnapshot,
     RateLimitPolicy, SavedSource, SourceDiscoveryPreview, SourceGuidance, SourceIngestionStart,
@@ -242,16 +243,20 @@ pub async fn purge_source(
     source_key: String,
     manager: State<'_, Arc<QueueManager>>,
     index: State<'_, CorpusIndex>,
+    vectors: State<'_, VectorIndex>,
 ) -> Result<SourcePurge, AppError> {
     let _maintenance = super::maintenance::MAINTENANCE_LOCK.lock().await;
     let source_key = validate_portal_key(&source_key)?;
     let committed = manager.purge_source(source_key).await?;
     let mut purge = committed.purge;
-    // Unlinked before the corpus purge can fail: once the core has committed, nothing references
+    // Unlinked before the projection purges can fail: once the core has committed, nothing references
     // these files, so a later error must not strand them where no retry can find them.
     let kept = remove_evidence_files(&purge.local_paths).await;
     purge.local_paths.retain(|path| !kept.contains(path));
-    index.purge_portal(source_key.to_string()).await?;
+    let corpus = index.purge_portal(source_key.to_string()).await;
+    let embeddings = vectors.purge_portal(source_key.to_string()).await;
+    corpus?;
+    embeddings?;
     match committed.retirement_error {
         Some(error) => Err(error),
         None => Ok(purge),
@@ -265,6 +270,7 @@ pub async fn purge_document(
     document_id: u64,
     manager: State<'_, Arc<QueueManager>>,
     index: State<'_, CorpusIndex>,
+    vectors: State<'_, VectorIndex>,
 ) -> Result<DocumentPurge, AppError> {
     let _maintenance = super::maintenance::MAINTENANCE_LOCK.lock().await;
     let source_key = validate_portal_key(&source_key)?;
@@ -282,9 +288,14 @@ pub async fn purge_document(
     purge
         .additional_local_paths
         .retain(|path| !kept.contains(path));
-    index
+    let corpus = index
         .purge_document(source_key.to_string(), document_id)
-        .await?;
+        .await;
+    let embeddings = vectors
+        .purge_document(source_key.to_string(), document_id)
+        .await;
+    corpus?;
+    embeddings?;
     match committed.retirement_error {
         Some(error) => Err(error),
         None => Ok(purge),

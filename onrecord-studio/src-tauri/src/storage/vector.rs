@@ -214,6 +214,45 @@ impl VectorIndex {
         self.cancelled.store(true, Ordering::SeqCst);
     }
 
+    /// Removes a purged document's embeddings. They hold excerpts of its text, so leaving them
+    /// would keep a destroyed document searchable and citable as evidence.
+    pub async fn purge_document(
+        &self,
+        portal_key: String,
+        document_id: u64,
+    ) -> Result<(), AppError> {
+        let document_id = i64::try_from(document_id).map_err(|_| {
+            AppError::DataParsing("Document identifier exceeds supported capacity".to_string())
+        })?;
+        self.query_connection("Purge document embeddings", move |connection| {
+            delete_embeddings(connection, &[(portal_key, document_id)])
+        })
+        .await
+    }
+
+    /// Removes every embedding of a purged source. See [`Self::purge_document`].
+    pub async fn purge_portal(&self, portal_key: String) -> Result<(), AppError> {
+        self.query_connection("Purge source embeddings", move |connection| {
+            let transaction = connection.transaction().map_err(|error| {
+                AppError::Storage(format!("Failed to open an embedding purge: {error}"))
+            })?;
+            for table in ["embedding_chunks", "embedding_document_state"] {
+                transaction
+                    .execute(
+                        &format!("DELETE FROM {table} WHERE portal_key = ?1"),
+                        params![portal_key],
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to purge {table}: {error}"))
+                    })?;
+            }
+            transaction.commit().map_err(|error| {
+                AppError::Storage(format!("Failed to commit an embedding purge: {error}"))
+            })
+        })
+        .await
+    }
+
     pub async fn index_status(
         &self,
         total_source_documents: usize,
@@ -435,6 +474,7 @@ impl VectorIndex {
             first_error: None,
         };
         let mut after = None;
+        let mut visited = std::collections::HashSet::new();
         'pages: loop {
             let page = repository
                 .list_vector_source_documents_page(after.take(), VECTOR_SOURCE_PAGE_SIZE)
@@ -448,6 +488,7 @@ impl VectorIndex {
                     report.cancelled = true;
                     break 'pages;
                 }
+                visited.insert((document.portal_key.clone(), document.document_id));
                 match self.index_one_document(document).await {
                     Ok(IndexOneOutcome::Indexed(chunks)) => {
                         report.indexed_documents += 1;
@@ -464,6 +505,39 @@ impl VectorIndex {
                 }
                 tokio::task::yield_now().await;
             }
+        }
+        if !report.cancelled {
+            // A completed pass visited every document that still qualifies, so an indexed one it
+            // did not visit was withdrawn from public view or lost its text, and its excerpts
+            // must not stay searchable.
+            self.query_connection("Prune withdrawn embeddings", move |connection| {
+                let indexed = {
+                    let mut statement = connection
+                        .prepare(
+                            "SELECT DISTINCT portal_key, document_id FROM embedding_document_state",
+                        )
+                        .map_err(|error| {
+                            AppError::Storage(format!("Failed to read embedding state: {error}"))
+                        })?;
+                    statement
+                        .query_map([], |row| {
+                            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+                        })
+                        .and_then(|rows| rows.collect::<duckdb::Result<Vec<_>>>())
+                        .map_err(|error| {
+                            AppError::Storage(format!("Failed to read embedding state: {error}"))
+                        })?
+                };
+                let withdrawn = indexed
+                    .into_iter()
+                    .filter(|(portal_key, document_id)| {
+                        u64::try_from(*document_id)
+                            .map_or(true, |id| !visited.contains(&(portal_key.clone(), id)))
+                    })
+                    .collect::<Vec<_>>();
+                delete_embeddings(connection, &withdrawn)
+            })
+            .await?;
         }
         Ok(report)
     }
@@ -882,6 +956,29 @@ fn ranges_overlap(a_start: usize, a_end: usize, b_start: usize, b_end: usize) ->
     a_start < b_end && b_start < a_end
 }
 
+/// Deletes every embedding of the given documents in one transaction.
+fn delete_embeddings(
+    connection: &mut Connection,
+    documents: &[(String, i64)],
+) -> Result<(), AppError> {
+    let transaction = connection.transaction().map_err(|error| {
+        AppError::Storage(format!("Failed to open an embedding purge: {error}"))
+    })?;
+    for (portal_key, document_id) in documents {
+        for table in ["embedding_chunks", "embedding_document_state"] {
+            transaction
+                .execute(
+                    &format!("DELETE FROM {table} WHERE portal_key = ?1 AND document_id = ?2"),
+                    params![portal_key, document_id],
+                )
+                .map_err(|error| AppError::Storage(format!("Failed to purge {table}: {error}")))?;
+        }
+    }
+    transaction
+        .commit()
+        .map_err(|error| AppError::Storage(format!("Failed to commit an embedding purge: {error}")))
+}
+
 const VECTOR_SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS vector_schema_version (
     singleton BOOLEAN PRIMARY KEY CHECK (singleton),
@@ -952,6 +1049,69 @@ CREATE INDEX IF NOT EXISTS idx_embedding_chunks_model ON embedding_chunks(model_
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Embeddings carry excerpts of the document's text, so purging a document or a source must
+    /// remove exactly its rows from both tables and leave every other document's alone.
+    #[tokio::test]
+    async fn purging_removes_only_the_purged_documents_embeddings() {
+        let temp = tempfile::tempdir().unwrap();
+        let index =
+            VectorIndex::open(&temp.path().join("vectors.db"), temp.path().join("cache")).unwrap();
+        let rows = [("north", 1_i64), ("north", 2), ("south", 1)];
+        {
+            let connection = index.connection.lock().await;
+            for (portal_key, document_id) in rows {
+                connection
+                    .execute(
+                        "INSERT INTO embedding_chunks (
+                            stable_id, portal_key, request_id, document_id, file_name, title,
+                            agency_name, jurisdiction, character_start, character_end, excerpt,
+                            content_sha256, chunk_sha256, model_id, model_revision, dimension,
+                            distance_metric, normalization, chunking_version, vector, indexed_at
+                         ) VALUES (?1, ?2, 1, ?3, 'f', 't', 'a', 'j', 0, 1, 'excerpt', 'c', 'h',
+                            'm', 'r', 1, 'd', 'n', 'v', ''::BLOB, 'now')",
+                        params![
+                            format!("{portal_key}-{document_id}"),
+                            portal_key,
+                            document_id
+                        ],
+                    )
+                    .unwrap();
+                connection
+                    .execute(
+                        "INSERT INTO embedding_document_state (
+                            portal_key, document_id, content_sha256, raw_file_sha256, model_id,
+                            model_revision, dimension, distance_metric, normalization,
+                            chunking_version, chunk_count, indexed_at
+                         ) VALUES (?1, ?2, 'c', 'r', 'm', 'r', 1, 'd', 'n', 'v', 1, 'now')",
+                        params![portal_key, document_id],
+                    )
+                    .unwrap();
+            }
+        }
+        let remaining = |index: VectorIndex| async move {
+            let connection = index.connection.lock().await;
+            ["embedding_chunks", "embedding_document_state"].map(|table| {
+                connection
+                    .prepare(&format!(
+                        "SELECT portal_key, document_id FROM {table} ORDER BY portal_key, document_id"
+                    ))
+                    .unwrap()
+                    .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))
+                    .unwrap()
+                    .collect::<duckdb::Result<Vec<_>>>()
+                    .unwrap()
+            })
+        };
+
+        index.purge_document("north".to_string(), 1).await.unwrap();
+        let expected = vec![("north".to_string(), 2), ("south".to_string(), 1)];
+        assert_eq!(remaining(index.clone()).await, [expected.clone(), expected]);
+
+        index.purge_portal("north".to_string()).await.unwrap();
+        let expected = vec![("south".to_string(), 1)];
+        assert_eq!(remaining(index).await, [expected.clone(), expected]);
+    }
 
     #[tokio::test]
     async fn searching_without_initialization_does_not_download_a_model() {
