@@ -2736,6 +2736,25 @@ fn persist_analyzed_document(
                 AppError::Storage(format!("Failed to decode prior entity mentions: {error}"))
             })?
     };
+    // Child rows are deleted before the corpus_documents upsert: DuckDB implements
+    // `ON CONFLICT DO UPDATE` as an internal delete+reinsert of the parent row, and it refuses to
+    // delete a row still referenced by a foreign key. Re-indexing an already-indexed document
+    // (present as leftover child rows from its prior indexing) would otherwise fail that way.
+    for table in [
+        "corpus_segments",
+        "corpus_term_postings",
+        "corpus_entity_mentions",
+        "corpus_entity_relationships",
+        "corpus_entity_truncations",
+        "corpus_lsh_bands",
+    ] {
+        transaction
+            .execute(
+                &format!("DELETE FROM {table} WHERE portal_key = ?1 AND document_id = ?2"),
+                params![document.portal_key, document.document_id],
+            )
+            .map_err(|error| AppError::Storage(format!("Failed to refresh {table}: {error}")))?;
+    }
     transaction
         .execute(
             "INSERT INTO corpus_documents (
@@ -2764,21 +2783,6 @@ fn persist_analyzed_document(
             ],
         )
         .map_err(|error| AppError::Storage(format!("Failed to upsert corpus document: {error}")))?;
-    for table in [
-        "corpus_segments",
-        "corpus_term_postings",
-        "corpus_entity_mentions",
-        "corpus_entity_relationships",
-        "corpus_entity_truncations",
-        "corpus_lsh_bands",
-    ] {
-        transaction
-            .execute(
-                &format!("DELETE FROM {table} WHERE portal_key = ?1 AND document_id = ?2"),
-                params![document.portal_key, document.document_id],
-            )
-            .map_err(|error| AppError::Storage(format!("Failed to refresh {table}: {error}")))?;
-    }
     insert_segments(&transaction, &document)?;
     insert_terms(&transaction, &document)?;
     insert_entities(&transaction, &document)?;
