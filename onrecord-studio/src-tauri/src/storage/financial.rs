@@ -458,21 +458,26 @@ impl DuckDbRepository {
                 for field in ["fy", "fund", "department"] {
                     let expr = expression(mapping, field);
                     let sql=format!("SELECT DISTINCT {expr} AS value FROM {} WHERE {expr} IS NOT NULL ORDER BY value DESC",quote(&dataset.table_name));
-                    if let Ok(result) = self.execute_restricted_sql(&sql, 1000).await {
-                        let values = result
-                            .rows
-                            .iter()
-                            .filter_map(|r| r.first())
-                            .filter_map(value_string)
-                            .collect::<Vec<_>>();
-                        match field {
-                            "fy" => {
-                                fiscal_years =
-                                    values.iter().filter_map(|s| s.parse().ok()).collect()
+                    match self.execute_restricted_sql(&sql, 1000).await {
+                        Ok(result) => {
+                            let values = result
+                                .rows
+                                .iter()
+                                .filter_map(|r| r.first())
+                                .filter_map(value_string)
+                                .collect::<Vec<_>>();
+                            match field {
+                                "fy" => {
+                                    fiscal_years =
+                                        values.iter().filter_map(|s| s.parse().ok()).collect()
+                                }
+                                "fund" => funds = values,
+                                _ => departments = values,
                             }
-                            "fund" => funds = values,
-                            _ => departments = values,
                         }
+                        Err(e) => warnings.push(format!(
+                            "could not read distinct {field} values for default scope: {e}"
+                        )),
                     }
                 }
             }
