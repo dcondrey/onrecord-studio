@@ -13,8 +13,8 @@ Use **Analysis** to select an acquired table or import a local CSV, TSV, JSON, G
 OnRecord Studio ships for macOS 13 or later as a Mac App Store app and as a notarized direct
 download. The [user guide](docs/user-guide.md) covers installation, first launch, the investigation
 workflow, privacy, data location and backup, updates, and troubleshooting. The same material is in
-the app under Help (Cmd+Shift+/). Scanned documents are only searchable when
-[Tesseract and Poppler](docs/user-guide.md#optional-ocr) are installed; everything else is built in.
+the app under Help (Cmd+Shift+/). Scanned documents are made searchable with macOS's built-in
+[text recognition](docs/user-guide.md#ocr); nothing else needs to be installed.
 
 ## Developing
 

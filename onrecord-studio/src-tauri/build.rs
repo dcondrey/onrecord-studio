@@ -5,6 +5,20 @@ use std::process::Command;
 fn main() {
     println!("cargo:rerun-if-changed=native/AppLicense.swift");
     println!("cargo:rerun-if-changed=native/AppAccount.swift");
+    println!("cargo:rerun-if-changed=native/VisionOcr.swift");
+    let target_os = env::var("CARGO_CFG_TARGET_OS").expect("Cargo must provide target OS");
+    if target_os == "macos" {
+        // OCR is not a feature: every macOS build, including `cargo test`, links Vision so the
+        // sandboxed App Store build can read scanned documents without external tools.
+        compile_swift_bridge(&SwiftBridge {
+            feature: "macOS OCR",
+            source: "native/VisionOcr.swift",
+            module: "OnRecordVisionOcr",
+            library: "onrecord_vision_ocr",
+            frameworks: &["Vision", "PDFKit", "ImageIO", "CoreGraphics", "Foundation"],
+            extra_swift_flags: &[],
+        });
+    }
     let app_store = env::var_os("CARGO_FEATURE_APP_STORE").is_some();
     let direct_license = env::var_os("CARGO_FEATURE_DIRECT_LICENSE").is_some();
     if app_store {
