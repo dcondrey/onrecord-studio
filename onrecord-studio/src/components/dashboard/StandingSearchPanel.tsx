@@ -3,10 +3,21 @@ import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
 import { openHelp } from '../help/helpEvents';
-import type { SeriesGapReport, StandingQueryOutcome, StandingQuerySummary } from '../../types/standingSearch';
+import type { SeriesGapReport, StandingQueryFilters, StandingQueryOutcome, StandingQuerySummary } from '../../types/standingSearch';
 import { describeCountBasis, describeGap, describeRun, formatFacetCount } from '../../utils/standingSearch';
 
 const FACET_LABELS: Record<string, string> = { status: 'Status', agency: 'Department', portal: 'Source', year: 'Year filed' };
+
+/** The executed query in full: the text plus every flat filter, including ones chosen by dropdown. */
+function describeFilters(filters: StandingQueryFilters): string {
+  return [
+    filters.searchTerm.trim() ? `“${filters.searchTerm.trim()}”` : null,
+    filters.status ? `status:${filters.status}` : null,
+    filters.policyDeviation ? `flag:${filters.policyDeviation}` : null,
+    filters.agencyId !== null ? `agency #${filters.agencyId}` : null,
+    filters.portalKey ? `source:${filters.portalKey}` : null,
+  ].filter((part): part is string => part !== null).join(' ') || '(every request)';
+}
 
 /**
  * Saved searches re-run against each new corpus state, shown as breakdowns and clusters before
@@ -16,6 +27,7 @@ const FACET_LABELS: Record<string, string> = { status: 'Status', agency: 'Depart
 export default function StandingSearchPanel() {
   const refreshRequests = useAppStore((state) => state.findingsRefreshRequests);
   const setSearchFilters = useAppStore((state) => state.setSearchFilters);
+  const setActivePortal = useAppStore((state) => state.setActivePortal);
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
   const [summaries, setSummaries] = useState<StandingQuerySummary[] | null>(null);
   const [gaps, setGaps] = useState<SeriesGapReport | null>(null);
@@ -77,7 +89,8 @@ export default function StandingSearchPanel() {
   };
 
   const open = (summary: StandingQuerySummary) => {
-    const { searchTerm, agencyId, status, policyDeviation } = summary.query.filters;
+    const { searchTerm, agencyId, status, policyDeviation, portalKey } = summary.query.filters;
+    setActivePortal(portalKey);
     setSearchFilters(searchTerm, agencyId, status, policyDeviation);
     setWorkspaceView('evidence');
   };
@@ -107,7 +120,7 @@ export default function StandingSearchPanel() {
             <li key={summary.query.id} className="rounded-lg border border-line p-3 text-label">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-semibold text-fg">{summary.query.label || '(untitled)'}</span>
-                <span className="font-mono text-muted">{JSON.parse(summary.query.astJson).text || ''}</span>
+                <span className="font-mono text-muted">{describeFilters(summary.query.filters)}</span>
                 {summary.due && <span className="rounded-full border border-warning/30 px-2 py-0.5 text-warning">Corpus changed since last run</span>}
                 <span className="ml-auto flex gap-2">
                   <button type="button" className="underline" onClick={() => open(summary)}>Open rows in evidence search</button>

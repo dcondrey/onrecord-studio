@@ -163,8 +163,7 @@ fn latest_run(
     .map_err(err)
 }
 
-fn filters_for(conn: &Connection, query: &StandingQuery) -> Result<Filters, AppError> {
-    let _ = conn;
+fn filters_for(query: &StandingQuery) -> Result<Filters, AppError> {
     build_filters(
         &query.filters.search_term,
         query.filters.portal_key.as_deref(),
@@ -547,7 +546,7 @@ impl DuckDbRepository {
                 .map_err(err)?;
             let mut outcomes = Vec::with_capacity(queries.len());
             for query in queries {
-                let filters = filters_for(conn, &query)?;
+                let filters = filters_for(&query)?;
                 if !force
                     && latest_run(conn, &query.id)?
                         .is_some_and(|(run, _)| run.corpus_digest == corpus_digest)
