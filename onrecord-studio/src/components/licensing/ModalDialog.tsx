@@ -11,7 +11,7 @@ export default function ModalDialog({
   onClose: () => void;
   children: ReactNode;
 }) {
-  const { ref, onKeyDown } = useDialogFocus(onClose);
+  const { ref, onKeyDown, onOverlayMouseDown } = useDialogFocus(onClose);
 
   return (
     <div
@@ -20,6 +20,7 @@ export default function ModalDialog({
       aria-label={label}
       className="fixed inset-0 z-[110] grid place-items-center bg-black/60 p-4"
       onKeyDown={onKeyDown}
+      onMouseDown={onOverlayMouseDown}
     >
       <div
         ref={ref}

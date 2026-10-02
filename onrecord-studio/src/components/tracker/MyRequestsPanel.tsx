@@ -413,7 +413,7 @@ export default function MyRequestsPanel({ onClose }: { onClose: () => void }) {
   const selected = tracker.claims.find((claim) => claim.id === selectedId) ?? null;
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="My requests" className="fixed inset-0 z-50 flex justify-end bg-black/60" onKeyDown={dialogFocus.onKeyDown}>
+    <div role="dialog" aria-modal="true" aria-label="My requests" className="fixed inset-0 z-50 flex justify-end bg-black/60" onKeyDown={dialogFocus.onKeyDown} onMouseDown={dialogFocus.onOverlayMouseDown}>
       <div ref={dialogFocus.ref} tabIndex={-1} className="app-panel h-full w-full max-w-xl overflow-y-auto p-4 text-label text-fg-secondary outline-none">
         <div className="flex items-center justify-between">
           <h2 className="text-label font-semibold text-fg">My requests</h2>

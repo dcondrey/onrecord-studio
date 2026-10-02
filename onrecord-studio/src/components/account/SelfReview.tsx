@@ -72,7 +72,7 @@ export function SelfReviewPanel({ onClose }: { onClose: () => void }) {
       disclosure.ownEntityIds.length > 0);
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="Records self-review" className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onKeyDown={dialogFocus.onKeyDown}>
+    <div role="dialog" aria-modal="true" aria-label="Records self-review" className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onKeyDown={dialogFocus.onKeyDown} onMouseDown={dialogFocus.onOverlayMouseDown}>
       <div ref={dialogFocus.ref} tabIndex={-1} className="app-panel max-h-[90vh] w-full max-w-2xl overflow-y-auto p-4 text-label text-fg-secondary outline-none">
         <div className="flex items-center justify-between">
           <h2 className="text-label font-semibold text-fg">What the public record shows about your organization</h2>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type KeyboardEvent } from 'react';
+import { useEffect, useRef, type KeyboardEvent, type MouseEvent } from 'react';
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -6,7 +6,8 @@ const FOCUSABLE =
 /**
  * Focus moves into the dialog on open, Tab wraps inside it, Escape closes it, and focus returns
  * to the opener. `aria-modal` promises the page behind is inert, so the wrap is not optional.
- * Attach `ref` (with `tabIndex={-1}`) to the dialog panel and `onKeyDown` to the overlay.
+ * Attach `ref` (with `tabIndex={-1}`) to the dialog panel, and both `onKeyDown` and
+ * `onOverlayMouseDown` to the overlay element the panel sits inside.
  */
 export function useDialogFocus(onClose: () => void) {
   const ref = useRef<HTMLDivElement>(null);
@@ -41,5 +42,11 @@ export function useDialogFocus(onClose: () => void) {
     }
   };
 
-  return { ref, onKeyDown };
+  // Only when the mousedown itself targets the overlay, not a click that started inside the
+  // panel and was dragged out (a text selection must not also dismiss the dialog).
+  const onOverlayMouseDown = (event: MouseEvent<HTMLElement>) => {
+    if (event.target === event.currentTarget) onCloseRef.current();
+  };
+
+  return { ref, onKeyDown, onOverlayMouseDown };
 }
