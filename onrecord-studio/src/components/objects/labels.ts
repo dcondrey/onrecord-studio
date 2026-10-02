@@ -41,3 +41,16 @@ export function formatShortDate(value: string): string {
     ? value
     : new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
 }
+
+/**
+ * What one provenance check established. A check that hashed nothing, or had no recorded digest
+ * to compare against, says so; it is never reported as a mismatch.
+ */
+export function provenanceVerdict(check: { evidenceFilePresent: boolean | null; expectedSha256: string | null; hashMatches: boolean; verifiedAt?: string }): { tone: 'success' | 'danger' | 'muted'; text: string } {
+  const when = check.verifiedAt ? ` (${formatShortDate(check.verifiedAt)})` : '';
+  if (check.evidenceFilePresent === false) return { tone: 'muted', text: `No stored file to check; nothing was hashed${when}` };
+  if (!check.expectedSha256) return { tone: 'muted', text: `No digest was recorded, so the file could not be compared${when}` };
+  return check.hashMatches
+    ? { tone: 'success', text: `File matched its recorded digest${when}` }
+    : { tone: 'danger', text: `File did not match its recorded digest${when}` };
+}

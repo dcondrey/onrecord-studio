@@ -5,7 +5,7 @@ import type { EvidenceLink, LeadDossier, ProvenanceVerificationRecord } from '..
 import { cn } from '../../utils/cn';
 import Icon, { type IconName } from '../ui/icons';
 import ObjectLink from './ObjectLink';
-import { claimBasisLabel, confidenceLabel, findingKindLabel, formatShortDate, severityLabel, severityTone } from './labels';
+import { claimBasisLabel, confidenceLabel, findingKindLabel, formatShortDate, provenanceVerdict, severityLabel, severityTone } from './labels';
 
 const PROVENANCE_LOOKUP_LIMIT = 12;
 
@@ -120,9 +120,8 @@ function ProvenanceLabel({ state }: { state: ProvenanceState | undefined }) {
   if (state.status === 'pending') return <span className="skeleton inline-block h-3 w-28 rounded" aria-label="Checking provenance" />;
   if (state.status === 'failed') return <span className="text-warning">Provenance history unavailable</span>;
   if (!state.record) return <span>Never verified</span>;
-  const { record } = state;
-  if (!record.hashMatches) return <span className="text-danger">Hash mismatch at last check, {formatShortDate(record.verifiedAt)}</span>;
-  return <span className="text-success">File matched its digest, {formatShortDate(record.verifiedAt)}{record.isCryptographicallySigned ? ' · signed manifest' : ''}</span>;
+  const verdict = provenanceVerdict(state.record);
+  return <span className={verdict.tone === 'success' ? 'text-success' : verdict.tone === 'danger' ? 'text-danger' : undefined}>{verdict.text}</span>;
 }
 
 function spanLabel(link: EvidenceLink): string {

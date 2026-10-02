@@ -7,6 +7,7 @@ import MainLayout from './components/dashboard/MainLayout';
 import Sidebar from './components/dashboard/Sidebar';
 import CommandPalette, { OPEN_COMMAND_PALETTE_EVENT } from './components/dashboard/CommandPalette';
 import HelpCenter from './components/help/HelpCenter';
+import Inspector from './components/objects/Inspector';
 import { useAppStore } from './store/useAppStore';
 import { invokeCommand } from './ipc';
 import type { IngestionTelemetry } from './types';
@@ -410,6 +411,7 @@ function LicensedWorkspace() {
           <AutomaticDiscoveryProvider><MainLayout /></AutomaticDiscoveryProvider>
         </ErrorBoundary>
       </div>
+      <Inspector />
       <CommandPalette />
       <HelpCenter />
     </div>
