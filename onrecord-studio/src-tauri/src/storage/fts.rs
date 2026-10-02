@@ -6,7 +6,8 @@
 //! FTS5 virtual table in this module's tests. **No core path calls it.** The core search
 //! projection `documents_fts` is a plain DuckDB table. The core's persistent token projection
 //! implements the same intentionally small contract as the typed frontend: every unqualified
-//! text token must occur, while agency, portal, status, and flag qualifiers travel as separate
+//! text token must occur, each quoted phrase ([`core_query_phrases`]) must occur as consecutive
+//! tokens, while agency, portal, status, and flag qualifiers travel as separate
 //! typed command parameters. Boolean operators and field clauses are deliberately not part of
 //! that contract.
 //!
@@ -27,6 +28,7 @@ const MAXIMUM_INDEX_TOKEN_CHARACTERS: usize = 128;
 
 pub const MAXIMUM_CORE_QUERY_BYTES: usize = MAXIMUM_QUERY_BYTES;
 pub const MAXIMUM_CORE_QUERY_TOKENS: usize = MAXIMUM_QUERY_LEXEMES;
+const MAXIMUM_CORE_QUERY_PHRASE_TOKENS: usize = 64;
 
 pub fn token_frequencies(text: &str) -> BTreeMap<String, u64> {
     let mut frequencies = BTreeMap::new();
@@ -72,6 +74,40 @@ pub fn core_query_tokens(query: &str) -> Result<Vec<String>, &'static str> {
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect())
+}
+
+/// The quoted phrases of a query, each as its lowercased tokens in order. A phrase must occur as
+/// consecutive tokens, so `"body camera"` does not match a record that only says "camera ... body".
+/// A one-token phrase adds nothing beyond [`core_query_tokens`] and is omitted, as is an unclosed
+/// quote. Tokens are not truncated: the phrase is matched against the full text, not the index.
+pub fn core_query_phrases(query: &str) -> Result<Vec<Vec<String>>, &'static str> {
+    let segments: Vec<&str> = query.split('"').collect();
+    // Odd segments sit inside quotes; the last one is inside only if a closing quote follows it.
+    let closed = &segments[..segments.len() - 1];
+    let mut phrases: Vec<Vec<String>> = closed
+        .iter()
+        .skip(1)
+        .step_by(2)
+        .map(|quoted| {
+            quoted
+                .split(|character: char| !character.is_alphanumeric())
+                .filter(|token| !token.is_empty())
+                .map(str::to_lowercase)
+                .collect::<Vec<_>>()
+        })
+        .filter(|tokens| tokens.len() > 1)
+        .collect();
+    // Each phrase compiles to one regular expression; DuckDB's engine refused one of 512 words as
+    // too large, so the limit is stated here instead of surfacing as an engine error.
+    if phrases
+        .iter()
+        .any(|tokens| tokens.len() > MAXIMUM_CORE_QUERY_PHRASE_TOKENS)
+    {
+        return Err("A quoted phrase can hold at most 64 words");
+    }
+    phrases.sort();
+    phrases.dedup();
+    Ok(phrases)
 }
 
 /// Converts untrusted user input into a valid, parameter-ready SQLite FTS5 Boolean expression.

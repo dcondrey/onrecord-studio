@@ -34,7 +34,9 @@ use crate::integrity::{constant_time_equal, sha256_file, sha256_hex};
 use crate::normalization::collapse_whitespace;
 use crate::parsers::{policy_tokens, token_sequence_match_count, ParsedLegalAuthority};
 use crate::provenance::{classify_confidence, read_asset_provenance, AssetProvenance};
-use crate::storage::fts::{clean_plain_text_for_index, core_query_tokens, token_frequencies};
+use crate::storage::fts::{
+    clean_plain_text_for_index, core_query_phrases, core_query_tokens, token_frequencies,
+};
 use crate::storage::vector::VectorSourceDocument;
 use crate::types::c2pa::{ProvenanceConfidence, RecordedDigestSource, SignatureVerificationState};
 use crate::types::ProvenanceVerificationRecord;

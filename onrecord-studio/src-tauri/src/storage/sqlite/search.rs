@@ -297,7 +297,9 @@ impl DuckDbRepository {
         let search_tokens = core_query_tokens(search_term)
             .map_err(|message| AppError::DataParsing(message.to_string()))?;
         let fts_query = (!search_tokens.is_empty()).then_some(search_term.trim().to_string());
-        let filters = request_search_filters(&search_tokens);
+        let phrases = core_query_phrases(search_term)
+            .map_err(|message| AppError::DataParsing(message.to_string()))?;
+        let filters = request_search_filters(&search_tokens, &phrases);
         let agency_id = agency_id.map(i64::try_from).transpose().map_err(|_| {
             AppError::DataParsing("Agency identifier exceeds SQLite capacity".to_string())
         })?;
@@ -408,7 +410,11 @@ impl DuckDbRepository {
 /// The WHERE conditions shared by every request search: `?1` portal, `?2` agency, `?3` status,
 /// `?4` policy flag, `?5` the free-text term (NULL when none). Counting and paging reuse this
 /// text so a total can never describe a different set than the pages it is shown beside.
-pub(crate) fn request_search_filters(search_tokens: &[String]) -> String {
+///
+/// Every phrase must also occur as consecutive tokens within one field of the request or within
+/// one linked document's text. The token test runs first and gates it, so the full-text scan only
+/// reaches requests that already hold every term.
+pub(crate) fn request_search_filters(search_tokens: &[String], phrases: &[Vec<String>]) -> String {
     let token_predicate = if search_tokens.is_empty() {
         "TRUE".to_string()
     } else {
@@ -436,6 +442,16 @@ pub(crate) fn request_search_filters(search_tokens: &[String]) -> String {
             search_tokens.len()
         )
     };
+    let token_predicate = if phrases.is_empty() {
+        token_predicate
+    } else {
+        let phrase_predicates = phrases
+            .iter()
+            .map(|phrase| phrase_predicate(phrase))
+            .collect::<Vec<_>>()
+            .join(" AND ");
+        format!("CASE WHEN {token_predicate} THEN ({phrase_predicates}) ELSE FALSE END")
+    };
     format!(
         "(?1 IS NULL OR requests.portal_subdomain = ?1)
            AND (?2 IS NULL OR requests.agency_id = ?2)
@@ -450,6 +466,36 @@ pub(crate) fn request_search_filters(search_tokens: &[String]) -> String {
                   AND document_integrity_flags.flag_type = ?4
            ))
            AND (?5 IS NULL OR {token_predicate})"
+    )
+}
+
+/// Matches the phrase's tokens separated by non-alphanumeric runs and bounded by non-alphanumerics,
+/// which is where the tokenizer would emit them in a row. A match-and-stop search rather than
+/// rewriting the text first: measured over 365 MB of real extracted text, 0.03-0.8 s against 4.9 s.
+fn phrase_predicate(phrase: &[String]) -> String {
+    // Tokens are alphanumeric by construction, so they carry no regex metacharacter; the quote
+    // escape keeps the literal well-formed regardless.
+    let pattern = format!(
+        "'(?i)(^|[^\\p{{L}}\\p{{N}}]){}($|[^\\p{{L}}\\p{{N}}])'",
+        phrase.join("[^\\p{L}\\p{N}]+").replace('\'', "''")
+    );
+    let matches = |field: &str| format!("regexp_matches({field}, {pattern})");
+    let request_fields = ["requests.title", "requests.description", "requests.rpid"]
+        .iter()
+        .map(|field| matches(field))
+        .collect::<Vec<_>>()
+        .join(" OR ");
+    format!(
+        "({request_fields} OR EXISTS (
+            SELECT 1
+            FROM documents
+            INNER JOIN documents_fts
+              ON documents_fts.document_id = documents.id
+             AND documents_fts.portal_subdomain = documents.portal_subdomain
+            WHERE documents.request_id = requests.id
+              AND documents.portal_subdomain = requests.portal_subdomain
+              AND {}))",
+        matches("documents_fts.extracted_text")
     )
 }
 

@@ -83,9 +83,10 @@ Evidence offer an appeal draft. Drafts are text for you to submit; the app sends
 
 ## Search
 
-The Evidence search box looks in request metadata and extracted text. Qualifiers `agency:`,
-`portal:`, `status:` and `flag:` narrow results, and plain-language mode turns a sentence into those
-filters. Results are capped at 500. A missing match does not show the sources lack the
+The Evidence search box looks in request metadata and extracted text. Every word must occur;
+words in double quotes, such as `"body camera"`, must occur together in that order within one
+request field or one document. Qualifiers `agency:`, `portal:`, `status:` and `flag:` narrow
+results, and plain-language mode turns a sentence into those filters. Results are capped at 500. A missing match does not show the sources lack the
 information. Semantic search in Analysis needs the embedding model, downloaded once on
 **Initialize model**; until then search is exact-word only.
 

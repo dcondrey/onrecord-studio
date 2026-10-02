@@ -8,7 +8,7 @@
 //! would shift by one for every insert and repeat or skip a row.
 
 use crate::error::AppError;
-use crate::storage::fts::core_query_tokens;
+use crate::storage::fts::{core_query_phrases, core_query_tokens};
 use crate::storage::pii::mask_pii;
 use crate::storage::sqlite::{request_search_filters, DuckDbRepository};
 use crate::types::RequestSearchResult;
@@ -120,6 +120,8 @@ pub(crate) fn build_filters(
 ) -> Result<Filters, AppError> {
     let tokens = core_query_tokens(search_term)
         .map_err(|message| AppError::DataParsing(message.to_string()))?;
+    let phrases = core_query_phrases(search_term)
+        .map_err(|message| AppError::DataParsing(message.to_string()))?;
     Ok(Filters {
         portal_key: trimmed(portal_key),
         agency_id: agency_id.map(i64::try_from).transpose().map_err(|_| {
@@ -128,7 +130,7 @@ pub(crate) fn build_filters(
         status: trimmed(status),
         policy_deviation: trimmed(policy_deviation),
         fts_query: (!tokens.is_empty()).then(|| search_term.trim().to_string()),
-        sql: request_search_filters(&tokens),
+        sql: request_search_filters(&tokens, &phrases),
     })
 }
 
@@ -494,6 +496,72 @@ mod tests {
             !unique.iter().any(|key| key.2 == 900_001),
             "a row that sorts before the cursor is not shown retroactively"
         );
+    }
+
+    #[tokio::test]
+    async fn a_quoted_phrase_requires_consecutive_tokens_within_one_field_or_document() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let repo = DuckDbRepository::new(dir.path().join("core.duckdb")).expect("core opens");
+        repo.run_migrations(MIGRATION).await.expect("migrations");
+        repo.query_connection("seed", |conn| {
+            conn.execute_batch(
+                "INSERT INTO portals (subdomain, display_name, base_url, origin_url) VALUES
+                    ('sd', 'San Diego', 'https://sd.example', 'https://sd.example');
+                 INSERT INTO requests (id, portal_subdomain, title, description, status,
+                                       created_at, updated_at) VALUES
+                    (1, 'sd', 'Footage', 'plain', 'open', '2024-01-01T00:00:01Z', '2024-01-01T00:00:00Z'),
+                    (2, 'sd', 'Footage', 'plain', 'open', '2024-01-01T00:00:02Z', '2024-01-01T00:00:00Z'),
+                    (3, 'sd', 'Body', 'Camera', 'open', '2024-01-01T00:00:03Z', '2024-01-01T00:00:00Z'),
+                    (4, 'sd', 'Body Camera Policy', 'plain', 'open', '2024-01-01T00:00:04Z', '2024-01-01T00:00:00Z');
+                 INSERT INTO documents (id, request_id, portal_subdomain, file_name, visibility,
+                                        created_at, updated_at) VALUES
+                    (10, 1, 'sd', 'a.pdf', 'public', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z'),
+                    (20, 2, 'sd', 'b.pdf', 'public', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z');
+                 INSERT INTO documents_fts (document_id, portal_subdomain, file_name, extracted_text) VALUES
+                    (10, 'sd', 'a.pdf', 'Released BODY-\ncamera footage'),
+                    (20, 'sd', 'b.pdf', 'The camera was worn on the body');
+                 INSERT INTO document_search_tokens (document_id, portal_subdomain, token, term_frequency)
+                 SELECT d, 'sd', t, 1 FROM (VALUES (10), (20)) a(d), (VALUES ('body'), ('camera')) b(t);",
+            )
+            .map_err(|error| AppError::Storage(error.to_string()))
+        })
+        .await
+        .expect("seed");
+        let ids = |records: &[RequestSearchResult]| {
+            let mut ids: Vec<u64> = records.iter().map(|record| record.request_id).collect();
+            ids.sort_unstable();
+            ids
+        };
+        let unquoted = repo
+            .search_requests("body camera", None, None, None, None, 100)
+            .await
+            .unwrap();
+        assert_eq!(ids(&unquoted), vec![1, 2, 3, 4]);
+        let quoted = repo
+            .search_requests("\"body camera\"", None, None, None, None, 100)
+            .await
+            .unwrap();
+        assert_eq!(ids(&quoted), vec![1, 4]);
+        let (keys, total) = all_pages(&repo, "\"body camera\"", 1).await;
+        assert_eq!(
+            (keys.len(), total),
+            (2, 2),
+            "paging and count apply the phrase too"
+        );
+    }
+
+    #[test]
+    fn only_closed_multi_token_quotes_are_phrases() {
+        use crate::storage::fts::core_query_phrases;
+        assert_eq!(
+            core_query_phrases(r#"x "Body  Camera" "single" "body camera" "unclosed tail"#)
+                .unwrap(),
+            vec![vec!["body".to_string(), "camera".to_string()]]
+        );
+        let phrase = |words: usize| format!("\"{}\"", vec!["w"; words].join(" "));
+        assert!(core_query_phrases(&phrase(63)).is_ok());
+        assert!(core_query_phrases(&phrase(64)).is_ok());
+        assert!(core_query_phrases(&phrase(65)).is_err());
     }
 
     #[tokio::test]

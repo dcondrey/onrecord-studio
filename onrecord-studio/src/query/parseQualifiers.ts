@@ -20,7 +20,8 @@ export function parseQualifierQuery(input: string): QueryAst {
   for (const token of tokens) {
     const match = token.match(/^(-)?([a-z][a-z-]*):(.*)$/i);
     if (!match) {
-      textTokens.push(stripQuotes(token));
+      // Quotes stay in the text: the native search reads a quoted span as a phrase.
+      textTokens.push(token);
       continue;
     }
 

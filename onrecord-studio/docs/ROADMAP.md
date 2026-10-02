@@ -891,6 +891,25 @@ the audit report it came from.
 - No deterministic regression tests for the queue counter/refill fixes (needs repository fault
   injection).
 
+Triaged 2026-10-02 from an external model review (DeepSeek, docs-only, so each claim was checked
+against code first). Built: phrase search, storage-version compression. Deferred, with the
+evidence:
+
+- Ingest-time C2PA reading: none of the 91 stored files in the real installation carries a C2PA
+  manifest (every `c2pa`/`jumb` byte match was CSS or prose), and nothing outside purge reads
+  `provenance_manifests`. Recording manifest state at ingest would write "no manifest" for the whole
+  corpus with no reader. Revisit when a source publishes signed assets; record it as its own
+  trigger, never as a `provenance_verification_log` row (an ingest-time digest equals the recorded
+  one by construction, so it checks nothing).
+- Multi-statute, event-based deadline engine (replacing `EARLIEST_RECORDED_ACTIVITY_PROXY` with a
+  recorded determination event): legal scope, needs per-jurisdiction rules and counsel review.
+- Citation span primitive with Intact/Drifted/Stale resolution: foundation for redaction production
+  and transcript anchoring; large schema and viewer change.
+- Redaction production with self-attack, and excerpted verifiable bundles: depends on spans.
+- Outbound filing with proof of transmission: a new outbound trust boundary (mail/portal accounts).
+- Rewriting existing installations to storage `v1.5.0`: needs a foreign-key-ordered copy with
+  per-table row-count verification and an atomic swap; `COPY FROM DATABASE` fails on the real core.
+
 Closed on 2026-09-30 (second batch): `count_findings` and `FindingsFilter.id`; Story desk and
 dossier draft records requests (10da52e); cross-agency comparison view (604a610); response-time
 claim detector (§12 of analysis_methods.md); redaction-consistency detector and the

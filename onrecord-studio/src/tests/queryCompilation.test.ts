@@ -16,7 +16,7 @@ describe('qualifier query compilation', () => {
     );
 
     expect(compiled).toEqual({
-      searchTerm: 'body camera',
+      searchTerm: '"body camera"',
       portalKey: 'oakland',
       agencyId: 10,
       status: 'closed',
