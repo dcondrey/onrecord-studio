@@ -19,6 +19,7 @@ export const OBJECT_ICONS: Record<InspectorTarget['kind'], IconName> = {
   document: 'evidence',
   agency: 'building',
   request: 'clipboard',
+  case: 'briefcase',
 };
 
 let closeOpenPeek: (() => void) | null = null;

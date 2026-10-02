@@ -8,7 +8,7 @@ import { cn } from '../../utils/cn';
 import LeadDossier from '../dashboard/LeadDossier';
 import Icon from '../ui/icons';
 import ObjectLink from './ObjectLink';
-import { enumLabel, provenanceVerdict, severityLabel, severityTone } from './labels';
+import { enumLabel, formatShortDate, provenanceVerdict, severityLabel, severityTone } from './labels';
 
 const DOCUMENT_CONTEXT = 600;
 const RELATED_FINDINGS_LIMIT = 8;
@@ -22,6 +22,7 @@ export function LayerBody({ target }: { target: InspectorTarget }) {
     case 'document': return <DocumentLayer target={target} />;
     case 'agency': return <AgencyLayer target={target} />;
     case 'request': return <RequestLayer target={target} />;
+    case 'case': return <CaseLayer target={target} />;
   }
 }
 
@@ -242,6 +243,68 @@ function RequestLayer({ target }: { target: Target<'request'> }) {
         <ActionButton icon="evidence" onClick={openInEvidence}>Open in Evidence</ActionButton>
       </Actions>
     </div>
+  );
+}
+
+function CaseLayer({ target }: { target: Target<'case'> }) {
+  const activeCaseId = useAppStore((state) => state.activeCaseId);
+  const setActiveCase = useAppStore((state) => state.setActiveCase);
+  const openCasework = useAppStore((state) => state.openCasework);
+  const state = useGatedLoad(target.caseId, () => invokeCommand('get_casework_state', {}));
+  return (
+    <Loaded state={state}>
+      {(casework) => {
+        const found = casework.cases.find((entry) => entry.id === target.caseId);
+        if (!found) return <p className="text-muted">This case is no longer stored. It may have been removed or replaced by an import.</p>;
+        const openRequests = found.requests.filter((request) => request.state.toUpperCase() !== 'CLOSED');
+        return (
+          <div className="space-y-4">
+            <Facts items={[
+              ['Topic', found.topic || 'Not set'],
+              ['Disposition', enumLabel(found.disposition)],
+              ['Sources cited', found.evidence.length.toLocaleString()],
+              ['Requests', `${openRequests.length.toLocaleString()} open of ${found.requests.length.toLocaleString()}`],
+              ['Questions', found.questions.length.toLocaleString()],
+              ['Revision', `${found.revision} · ${formatShortDate(found.updatedAt)}`],
+            ]} />
+            <Section title="Requests">
+              {found.requests.length === 0 ? <p className="text-muted">No request is tracked in this case.</p> : (
+                <ul className="motion-stagger space-y-1.5">
+                  {found.requests.map((request) => (
+                    <li key={request.id} className="flex items-baseline justify-between gap-3">
+                      <span className="text-fg-secondary">{request.title || request.custodian || 'Untitled request'}</span>
+                      <span className="shrink-0 text-caption text-muted">
+                        {enumLabel(request.state)}{request.responseDue ? ` · due ${formatShortDate(request.responseDue)}` : ''}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Section>
+            <Section title="Cited sources">
+              {found.evidence.length === 0 ? <p className="text-muted">No source is cited in this case yet.</p> : (
+                <ul className="motion-stagger space-y-2">
+                  {found.evidence.map((citation) => (
+                    <li key={citation.id}>
+                      {citation.portalKey && citation.documentId !== null
+                        ? <ObjectLink target={{ kind: 'document', portalKey: citation.portalKey, documentId: citation.documentId, requestId: null, characterStart: citation.characterOffset, characterEnd: null, label: citation.label }}>{citation.label}</ObjectLink>
+                        : <span className="text-fg-secondary">{citation.label}</span>}
+                      {citation.quote && <p className="mt-0.5 line-clamp-2 text-caption text-muted">“{citation.quote}”</p>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Section>
+            <Actions>
+              <ActionButton icon="briefcase" onClick={() => openCasework(found.reportId)}>Open casework</ActionButton>
+              {activeCaseId === found.id
+                ? <ActionButton icon="x" onClick={() => setActiveCase(null)}>Stop working this case</ActionButton>
+                : <ActionButton icon="briefcase" onClick={() => setActiveCase(found.id)}>Work this case</ActionButton>}
+            </Actions>
+          </div>
+        );
+      }}
+    </Loaded>
   );
 }
 

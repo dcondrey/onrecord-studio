@@ -33,6 +33,14 @@ export default function OverviewDashboard() {
   const portals = useAppStore((state) => state.portals);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [workbench, setWorkbench] = useState<{ reportId: string; review: boolean } | null>(null);
+  const requestedCasework = useAppStore((state) => state.requestedCasework);
+  const consumeCasework = useAppStore((state) => state.consumeCasework);
+  // Casework opened from the case switcher or the inspector lands here.
+  useEffect(() => {
+    if (!requestedCasework) return;
+    const request = consumeCasework();
+    if (request) setWorkbench({ reportId: request.reportId, review: false });
+  }, [consumeCasework, requestedCasework]);
   const workspaceInitializationStatus = useAppStore((state) => state.workspaceInitializationStatus);
   // Stays up after the first source lands, so the outcome of every source in a run is visible.
   const starterRunShown = useStarterRunStore((state) => Object.keys(state.statuses).length > 0);

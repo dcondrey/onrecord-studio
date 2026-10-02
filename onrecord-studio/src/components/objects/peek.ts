@@ -97,6 +97,19 @@ async function fetchPeek(target: InspectorTarget): Promise<PeekData> {
         ],
       };
     }
+    case 'case': {
+      const state = await invokeCommand('get_casework_state', {});
+      const found = state.cases.find((entry) => entry.id === target.caseId);
+      if (!found) return { eyebrow: 'Case', title: target.label ?? 'Case', lines: ['This case is no longer stored.'] };
+      return {
+        eyebrow: `Case · ${found.disposition.toLowerCase()}`,
+        title: found.title,
+        lines: [
+          `${found.evidence.length} cited source${found.evidence.length === 1 ? '' : 's'} · ${found.requests.length} request${found.requests.length === 1 ? '' : 's'} · ${found.questions.length} open question${found.questions.length === 1 ? '' : 's'}`,
+          `Updated ${formatShortDate(found.updatedAt)}`,
+        ],
+      };
+    }
     case 'request': {
       const documents = await invokeCommand('list_request_documents', { requestId: target.requestId, portalKey: target.portalKey });
       return {

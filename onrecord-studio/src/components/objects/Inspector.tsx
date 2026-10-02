@@ -11,6 +11,7 @@ const KIND_LABELS: Record<InspectorTarget['kind'], string> = {
   document: 'Document',
   agency: 'Agency',
   request: 'Request',
+  case: 'Case',
 };
 
 export function targetTitle(target: InspectorTarget): string {
@@ -20,6 +21,7 @@ export function targetTitle(target: InspectorTarget): string {
     case 'document': return target.label ?? `Document ${target.documentId}`;
     case 'agency': return target.label;
     case 'request': return target.label ?? `Request ${target.requestId}`;
+    case 'case': return target.label ?? 'Case';
   }
 }
 

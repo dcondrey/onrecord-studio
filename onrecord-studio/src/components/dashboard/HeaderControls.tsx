@@ -1,4 +1,5 @@
 import { cn } from '../../utils/cn';
+import CaseSwitcher from './CaseSwitcher';
 import Icon from '../ui/icons';
 import { useProfileLensStore } from '../../store/useProfileLensStore';
 import ProfileSettings from '../account/ProfileSettings';
@@ -26,6 +27,7 @@ export function HeaderControls({
   const setProfileOpen = useProfileLensStore((state) => state.setSettingsOpen);
   return (
     <div className="ml-auto flex shrink-0 items-center gap-2">
+      <CaseSwitcher />
       <button
         type="button"
         title={audioAlertsEnabled ? 'Disable completion and failure sounds' : 'Enable completion and failure sounds'}

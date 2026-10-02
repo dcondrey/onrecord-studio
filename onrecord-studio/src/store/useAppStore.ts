@@ -72,7 +72,8 @@ export type InspectorTarget =
   | { kind: 'entity'; entityId: string; label: string }
   | { kind: 'document'; portalKey: string; documentId: number; requestId: number | null; characterStart: number | null; characterEnd: number | null; label?: string }
   | { kind: 'agency'; portalKey: string; agencyId: number; label: string }
-  | { kind: 'request'; portalKey: string; requestId: number; label?: string };
+  | { kind: 'request'; portalKey: string; requestId: number; label?: string }
+  | { kind: 'case'; caseId: string; label?: string };
 
 export const INSPECTOR_DEPTH_LIMIT = 8;
 
@@ -83,6 +84,7 @@ export function inspectorTargetKey(target: InspectorTarget): string {
     case 'document': return `document:${target.portalKey}:${target.documentId}:${target.characterStart ?? ''}`;
     case 'agency': return `agency:${target.portalKey}:${target.agencyId}`;
     case 'request': return `request:${target.portalKey}:${target.requestId}`;
+    case 'case': return `case:${target.caseId}`;
   }
 }
 
@@ -109,6 +111,17 @@ export function sinceInstant(preset: SincePreset, previousOpenAt: string | null,
   if (preset === 'all') return null;
   if (preset === 'lastOpened') return previousOpenAt;
   return new Date(now - days[preset] * 86_400_000).toISOString();
+}
+
+const ACTIVE_CASE_STORAGE_KEY = 'onrecord-active-case';
+
+function readActiveCase(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem(ACTIVE_CASE_STORAGE_KEY);
+  } catch {
+    return null;
+  }
 }
 
 export interface EvidenceLinkRequest {
@@ -210,6 +223,13 @@ interface AppState {
    */
   lastFindingsSeenAt: string | null;
   /** Stacked detail layers; the last is visible. Opening from a view starts a new stack, from a layer pushes. */
+  /** The case the user is working; persisted. A stored id whose case no longer exists is shown as missing, not silently cleared. */
+  activeCaseId: string | null;
+  setActiveCase: (caseId: string | null) => void;
+  /** Casework to open in the overview workbench, from any surface. */
+  requestedCasework: { reportId: string } | null;
+  openCasework: (reportId: string) => void;
+  consumeCasework: () => { reportId: string } | null;
   sincePreset: SincePreset;
   previousOpenAt: string | null;
   setSincePreset: (preset: SincePreset) => void;
@@ -358,6 +378,26 @@ export const useAppStore = create<AppState>((set, get) => ({
   dossierFindingId: null,
   postIngestBriefOpen: false,
   lastFindingsSeenAt: null,
+  activeCaseId: readActiveCase(),
+  setActiveCase: (activeCaseId) => set(() => {
+    try {
+      if (activeCaseId) window.localStorage.setItem(ACTIVE_CASE_STORAGE_KEY, activeCaseId);
+      else window.localStorage.removeItem(ACTIVE_CASE_STORAGE_KEY);
+    } catch {
+      // Storage unavailable: the choice lasts for this session only.
+    }
+    return { activeCaseId };
+  }),
+  requestedCasework: null,
+  openCasework: (reportId) => {
+    get().setWorkspaceView('overview');
+    set({ requestedCasework: { reportId }, inspectorStack: [] });
+  },
+  consumeCasework: () => {
+    const request = get().requestedCasework;
+    if (request) set({ requestedCasework: null });
+    return request;
+  },
   sincePreset: 'lastOpened',
   previousOpenAt: readPreviousOpen(),
   setSincePreset: (sincePreset) => set({ sincePreset }),
