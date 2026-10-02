@@ -4,6 +4,7 @@ import type { AgencyPerformanceProfile } from '../../types/analysis';
 import PageHeader from '../ui/PageHeader';
 import EmptyState from '../ui/EmptyState';
 import { openSourceConnector } from './sourceEvents';
+import ObjectLink from '../objects/ObjectLink';
 
 /**
  * Mirrors `STATUTORY_DEADLINE_Z_SCORE` in `src-tauri/src/analysis/anomaly.rs`, which is not
@@ -209,7 +210,9 @@ export default function AgencyComparison() {
                     return (
                       <tr key={`${profile.portalSubdomain}-${profile.agencyId}`} className="text-fg-secondary">
                         <td className="px-3 py-2 font-mono text-muted">{index + 1}</td>
-                        <td className="px-3 py-2 font-semibold text-fg">{profile.agencyName}</td>
+                        <td className="px-3 py-2 font-semibold">
+                          <ObjectLink target={{ kind: 'agency', portalKey: profile.portalSubdomain, agencyId: profile.agencyId, label: profile.agencyName }} className="text-fg decoration-line-strong hover:text-accent">{profile.agencyName}</ObjectLink>
+                        </td>
                         <td className="px-3 py-2 text-muted">{profile.portalSubdomain}</td>
                         {COLUMNS.map((definition) => (
                           <td key={definition.key} className="px-3 py-2 font-mono">

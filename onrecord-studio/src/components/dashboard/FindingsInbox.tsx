@@ -62,9 +62,7 @@ export default function FindingsInbox() {
   const setLensEnabled = useProfileLensStore((state) => state.setLensEnabled);
   const setSelfReviewOpen = useProfileLensStore((state) => state.setSelfReviewOpen);
   const { disclosure, status: disclosureStatus } = useAffiliationDisclosure();
-  const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
   const openLeadDossier = useAppStore((state) => state.openLeadDossier);
-  const setActivePortal = useAppStore((state) => state.setActivePortal);
   const findingsRefreshRequests = useAppStore((state) => state.findingsRefreshRequests);
   const requestFindingsRefresh = useAppStore((state) => state.requestFindingsRefresh);
   const markFindingsSeen = useAppStore((state) => state.markFindingsSeen);
@@ -153,13 +151,22 @@ export default function FindingsInbox() {
 
   const inspect = useInspectFinding();
 
-  // Evidence view is the deepest surface a citation can reach without a document deep link.
+  // A citation opens its passage in the inspector; the citation does not record its request, so the
+  // document layer says so rather than guessing one for the viewer.
+  const inspectObject = useAppStore((state) => state.inspect);
   const openSource = useCallback(
     (citation: FindingCitation) => {
-      setActivePortal(citation.portalKey);
-      setWorkspaceView('evidence');
+      inspectObject({
+        kind: 'document',
+        portalKey: citation.portalKey,
+        documentId: citation.documentId,
+        requestId: null,
+        characterStart: citation.characterStart,
+        characterEnd: citation.characterEnd,
+        label: citation.label ?? undefined,
+      });
     },
-    [setActivePortal, setWorkspaceView],
+    [inspectObject],
   );
 
   const hasConfirmedSubject =
@@ -426,7 +433,7 @@ function FindingRow({
             className="focus-ring rounded-md border border-control px-2 py-1 text-caption font-medium text-muted transition hover:border-accent/30 hover:text-fg"
             aria-label={`Assemble dossier: ${finding.headline}`}
           >
-            Assemble dossier
+            Evidence chain
           </button>
           <button
             type="button"
