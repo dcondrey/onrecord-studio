@@ -583,3 +583,45 @@ fn publisher_recipe_patterns_are_exact_normalized_hostnames() {
     );
     assert_eq!(publisher_pattern_for_url("not a URL"), None);
 }
+
+/// A cancelled run was stopped by the operator or by a failed start, so it is no evidence about
+/// the source: a paused healthy source must not turn degraded, and a degraded one must not be
+/// cleared, by cancelling.
+#[tokio::test]
+async fn a_cancelled_sync_run_leaves_source_health_as_it_was() {
+    let repository = repository_with_document().await;
+    let mut observed = Vec::new();
+    for (run_id, status) in [
+        ("run-completed", "COMPLETED"),
+        ("run-paused", "CANCELLED"),
+        ("run-with-errors", "COMPLETED_WITH_ERRORS"),
+        ("run-paused-again", "CANCELLED"),
+    ] {
+        repository
+            .begin_portal_sync_run(run_id, PORTAL_SUBDOMAIN)
+            .await
+            .expect("sync run should begin");
+        repository
+            .finish_portal_sync_run(PortalSyncRunFinalization {
+                run_id,
+                portal_key: PORTAL_SUBDOMAIN,
+                status,
+                pages_processed: 0,
+                requests_processed: 0,
+                documents_processed: 0,
+                failures: 0,
+            })
+            .await
+            .expect("sync run should finalize");
+        let connection = repository.conn.lock().await;
+        let health: String = connection
+            .query_row(
+                "SELECT health_status FROM portals WHERE subdomain = ?1",
+                params![PORTAL_SUBDOMAIN],
+                |row| row.get(0),
+            )
+            .expect("portal health should be readable");
+        observed.push(health);
+    }
+    assert_eq!(observed, ["verified", "verified", "degraded", "degraded"]);
+}

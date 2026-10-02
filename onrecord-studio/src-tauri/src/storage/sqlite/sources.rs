@@ -486,10 +486,10 @@ impl DuckDbRepository {
         let portal_key = portal_key.to_string();
         let status = status.to_string();
         self.query_connection("Finish portal sync run", move |conn| {
-        execute_transaction(conn, "portal sync finalization", |transaction| {
-            let updated = transaction
-                .execute(
-                    "UPDATE portal_sync_runs SET
+            execute_transaction(conn, "portal sync finalization", |transaction| {
+                let updated = transaction
+                    .execute(
+                        "UPDATE portal_sync_runs SET
                     completed_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'),
                     status = ?1,
                     pages_processed = ?2,
@@ -497,38 +497,44 @@ impl DuckDbRepository {
                     documents_processed = ?4,
                     failures = ?5
                  WHERE run_id = ?6 AND portal_subdomain = ?7 AND status = 'RUNNING'",
-                    params![
-                        status,
-                        pages_processed,
-                        requests_processed,
-                        documents_processed,
-                        failures,
-                        run_id,
-                        portal_key,
-                    ],
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to finalize portal sync run: {error}"))
-                })?;
-            if updated != 1 {
-                return Err(AppError::Storage(format!(
-                    "Portal sync run '{run_id}' was missing or already finalized"
-                )));
-            }
-            transaction
-                .execute(
-                    "UPDATE portals SET
+                        params![
+                            status,
+                            pages_processed,
+                            requests_processed,
+                            documents_processed,
+                            failures,
+                            run_id,
+                            portal_key,
+                        ],
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to finalize portal sync run: {error}"))
+                    })?;
+                if updated != 1 {
+                    return Err(AppError::Storage(format!(
+                        "Portal sync run '{run_id}' was missing or already finalized"
+                    )));
+                }
+                // A cancelled run was stopped by the operator (pause, removal) or by a failed start,
+                // so it says nothing about the source's health and leaves it as it was.
+                transaction
+                    .execute(
+                        "UPDATE portals SET
                         last_synced_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'),
-                        health_status = CASE WHEN ?2 = 'COMPLETED' THEN 'verified' ELSE 'degraded' END,
+                        health_status = CASE ?2
+                            WHEN 'COMPLETED' THEN 'verified'
+                            WHEN 'CANCELLED' THEN health_status
+                            ELSE 'degraded'
+                        END,
                         last_error = CASE WHEN ?2 = 'COMPLETED' THEN NULL ELSE last_error END
                      WHERE subdomain = ?1",
-                    params![portal_key, status],
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to update portal sync time: {error}"))
-                })?;
-            Ok(())
-        })
+                        params![portal_key, status],
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to update portal sync time: {error}"))
+                    })?;
+                Ok(())
+            })
         })
         .await
     }
