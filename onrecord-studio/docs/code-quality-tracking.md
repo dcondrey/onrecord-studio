@@ -57,6 +57,7 @@ Maintainability/Complexity, Comment/Code Clarity.
 - `149bdf0` sanDiegoWorkflow.test.tsx: valid meeting-calendar mock (`[]` crashed AttentionFeed)
 - `9d3ff4d` storage/review.rs: relationship evidence-check errors propagate (were shown as "source
   needs review"); each source report decompressed once, not once per relationship
+- `cc6c6fb` commands/account.rs: seat email validation rejects `a@@b`, `@a@b`, `a@b@`, whitespace
 
 Known flake, pre-existing (reproduced with pre-`7b05600` code): two `sanDiegoWorkflow.test.tsx`
 full-`<App />` tests time out under full-suite load; they pass when run alone.
