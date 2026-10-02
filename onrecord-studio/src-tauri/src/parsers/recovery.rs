@@ -168,9 +168,15 @@ pub fn carve_historical_pdf_versions<P: AsRef<Path>>(
         let pages = historical_document.get_pages();
         let (unreferenced_object_count, unreferenced_stream_count, graph_complete) =
             object_graph_diagnostics(&historical_document);
-        let declared_previous_xref_offset = xref_start_offset.and_then(|start| {
-            find_declared_previous_xref_offset(&source[start as usize..snapshot_end])
-        });
+        let declared_previous_xref_offset = match xref_start_offset {
+            Some(start) => declared_previous_xref_offset_for_revision(
+                &source,
+                start,
+                snapshot_end,
+                revision_number,
+            )?,
+            None => None,
+        };
         let diagnostic_index = revision_diagnostics.len();
         revision_diagnostics.push(RecoveredRevisionDiagnostic {
             revision_number,
@@ -304,6 +310,31 @@ fn find_declared_previous_xref_offset(xref_tail: &[u8]) -> Option<u64> {
         .windows(marker.len())
         .rposition(|window| window == marker)?;
     parse_leading_pdf_integer(xref_tail.get(offset + marker.len()..)?)
+}
+
+/// `start` is the raw `startxref` integer text taken from attacker/caller-controlled PDF bytes
+/// (see `find_startxref_offset`), so it carries no relationship to `snapshot_end` or the source
+/// buffer length. Slicing `source[start..snapshot_end]` without validating it first is a
+/// reachable slice-index panic on a crafted historical revision; return a parse error instead.
+fn declared_previous_xref_offset_for_revision(
+    source: &[u8],
+    start: u64,
+    snapshot_end: usize,
+    revision_number: usize,
+) -> Result<Option<u64>, AppError> {
+    let start = usize::try_from(start).map_err(|_| {
+        AppError::DataParsing(format!(
+            "Historical revision {revision_number} declared a startxref offset that does not fit this platform's address space"
+        ))
+    })?;
+    if start > snapshot_end || snapshot_end > source.len() {
+        return Err(AppError::DataParsing(format!(
+            "Historical revision {revision_number} declared a startxref offset outside its snapshot bounds"
+        )));
+    }
+    Ok(find_declared_previous_xref_offset(
+        &source[start..snapshot_end],
+    ))
 }
 
 fn parse_leading_pdf_integer(value: &[u8]) -> Option<u64> {
@@ -545,8 +576,8 @@ mod tests {
     use lopdf::{dictionary, Document, Stream};
 
     use super::{
-        find_declared_previous_xref_offset, find_eof_markers, find_startxref_offset,
-        object_graph_diagnostics,
+        declared_previous_xref_offset_for_revision, find_declared_previous_xref_offset,
+        find_eof_markers, find_startxref_offset, object_graph_diagnostics,
     };
 
     #[test]
@@ -554,6 +585,20 @@ mod tests {
         let source = b"%PDF-1.7\n(stream %%EOF bytes)\n%%EOF\nrevision\n%%EOF\n";
         assert_eq!(find_eof_markers(source)?.len(), 2);
         Ok(())
+    }
+
+    #[test]
+    fn rejects_out_of_range_declared_startxref_instead_of_panicking() {
+        // A crafted historical revision can declare any `startxref` integer text, unrelated to
+        // this snapshot's actual length. The old code sliced `source[start..snapshot_end]`
+        // directly on this attacker-controlled value and panicked with a slice-index error
+        // ("range start index 92 out of range for slice of length 47" for this input).
+        let source = b"xref\ntrailer << /Prev 41 >>\nstartxref\n92\n%%EOF";
+        assert_eq!(find_startxref_offset(source), Some(92));
+        assert!(92 > source.len());
+
+        let result = declared_previous_xref_offset_for_revision(source, 92, source.len(), 1);
+        assert!(matches!(result, Err(AppError::DataParsing(_))));
     }
 
     #[test]
