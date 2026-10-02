@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import DeleteAccountResult from '../account/DeleteAccountResult';
+import { PRODUCT_BYLINE, PRODUCT_NAME } from '../../config/brand';
 import { isDirectChannel } from '../../utils/licenseState';
 import type { LicenseState, LicenseStatus } from '../../types';
 import { type LicenseController, type SignInProvider } from './LicenseProvider';
@@ -114,7 +115,8 @@ export default function LicenseGate({ controller }: { controller: LicenseControl
   return (
     <main className="app-theme flex h-screen w-screen items-center justify-center overflow-y-auto bg-canvas px-6 text-fg">
       <section className="my-auto w-full max-w-lg rounded-2xl border border-line-strong bg-surface/70 p-8 shadow-2xl" aria-labelledby="license-gate-heading">
-        <p className="text-label leading-4 font-semibold uppercase tracking-[0.24em] text-accent">OnRecord Studio</p>
+        <p className="text-label leading-4 font-semibold uppercase tracking-[0.24em] text-accent">{PRODUCT_NAME}</p>
+        <p className="mt-1 text-caption text-muted">{PRODUCT_BYLINE}</p>
         <h1 id="license-gate-heading" ref={headingRef} tabIndex={-1} className="mt-3 text-2xl font-semibold outline-none">
           {copy.heading}
         </h1>

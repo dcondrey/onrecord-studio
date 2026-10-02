@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { HELP_GROUP_ORDER, HELP_TOPICS, findHelpTopic, type HelpTopic } from '../../content/help';
 import { cn } from '../../utils/cn';
+import { PRODUCT_BYLINE } from '../../config/brand';
 import Icon from '../ui/icons';
 import { useDialogFocus } from '../licensing/useDialogFocus';
 import { EvidenceLadderFigure, ProvenanceLadderFigure } from './HelpFigures';
@@ -92,7 +93,7 @@ export function HelpDialog({ initialTopicId, onClose }: { initialTopicId: string
         <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
           <div>
             <h2 id="help-title" className="text-[15px] font-semibold text-fg">OnRecord Studio Help</h2>
-            <p className="text-label text-muted">Version {__APP_VERSION__}. Cmd/Ctrl+Shift+/ opens Help from anywhere. Esc closes it.</p>
+            <p className="text-label text-muted">{PRODUCT_BYLINE}. Version {__APP_VERSION__}. Cmd/Ctrl+Shift+/ opens Help from anywhere. Esc closes it.</p>
             {supportNotice ? <p role="alert" className="mt-1 text-label text-warning">{supportNotice}</p> : null}
           </div>
           <div className="flex shrink-0 items-center gap-2">

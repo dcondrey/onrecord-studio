@@ -1,5 +1,7 @@
 # OnRecord Studio user guide
 
+OnRecord Studio by WritersLogic.
+
 OnRecord Studio collects public records you point it at, reads them on your Mac, looks for patterns
 and counted deadline failures, and keeps every claim tied to a passage in a source document. It
 never files a request, sends an appeal, or contacts an agency for you. The in-app Help

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { cn } from '../../utils/cn';
+import { PRODUCT_BYLINE, PRODUCT_NAME } from '../../config/brand';
 import Icon from '../ui/icons';
 import { OPEN_COMMAND_PALETTE_EVENT } from './CommandPalette';
 import { workspaceCommandRegistry } from '../../commands/registry';
@@ -54,8 +55,8 @@ export default function Sidebar() {
           <img src="/brand-mark.png" alt="" className="h-9 w-9 shrink-0 rounded-[9px]" />
           {!isCollapsed && (
             <div className="min-w-0">
-              <div className="truncate text-label font-semibold tracking-[-0.015em] text-fg">OnRecord Studio</div>
-              <div className="mt-0.5 text-label text-muted">San Diego research workspace</div>
+              <div className="truncate text-label font-semibold tracking-[-0.015em] text-fg">{PRODUCT_NAME}</div>
+              <div className="mt-0.5 truncate text-caption text-muted">{PRODUCT_BYLINE}</div>
             </div>
           )}
           <button
