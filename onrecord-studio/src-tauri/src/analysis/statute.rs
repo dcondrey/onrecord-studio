@@ -22,6 +22,7 @@
 //! | column | meaning |
 //! |---|---|
 //! | `created_timestamp` | receipt instant |
+//! | `created_local_timestamp` | receipt wall-clock time in its recorded offset, from [`sql::recorded_wall_clock`] |
 //! | `updated_timestamp` / `closed_timestamp` | activity instants, nullable |
 //! | `created_date` / `updated_date` / `closed_date` | the *recorded-offset* calendar dates |
 //! | `determination_timestamp` / `explicit_determination_date` | sourced determination, nullable |
@@ -128,14 +129,20 @@ pub mod sql {
         MAXIMUM_CONSECUTIVE_CLOSED_DAYS,
     };
 
-    /// Observation date used when nothing was recorded after receipt.
+    /// Observation date used when nothing was recorded after receipt, read in the receipt's
+    /// recorded offset like every other date the clock compares.
     ///
-    /// `CURRENT_TIMESTAMP` is a `TIMESTAMPTZ`; the inner cast pins it to the session's civil time
-    /// the same way every other timestamp in the schema is written, so the aggregate and the Rust
-    /// evaluator agree whenever the session runs in UTC, which is DuckDB's default here.
-    const OBSERVATION_CALENDAR_DATE: &str = "CAST(CAST(CURRENT_TIMESTAMP AS TIMESTAMP) AS DATE)";
+    /// `CURRENT_TIMESTAMP` cast to `TIMESTAMP` is the session's civil time, the same frame as
+    /// `created_timestamp`; shifting it by the receipt's offset from that frame gives "now" as the
+    /// agency recorded time. Without the shift, an evening observation on a request's last legal
+    /// day is already the next day in UTC and reports a violation the agency has not committed.
+    const OBSERVATION_CALENDAR_DATE: &str = "CAST(
+        CAST(CURRENT_TIMESTAMP AS TIMESTAMP)
+            + COALESCE(created_local_timestamp - created_timestamp, INTERVAL 0 SECOND)
+        AS DATE)";
 
     const CALENDAR_DATE_OPEN: &str = "{calendar_date(";
+    const RECORDED_WALL_CLOCK_OPEN: &str = "{recorded_wall_clock(";
     const CALENDAR_DATE_CLOSE: &str = ")}";
 
     /// The calendar date of an RFC 3339 timestamp string, in the offset it was recorded with.
@@ -148,6 +155,12 @@ pub mod sql {
     /// `TRY_CAST` keeps malformed input NULL, which every consuming predicate already excludes.
     pub fn calendar_date(timestamp_expression: &str) -> String {
         format!("TRY_CAST(substr({timestamp_expression}, 1, 10) AS DATE)")
+    }
+
+    /// The wall-clock time of an RFC 3339 timestamp string in the offset it was recorded with,
+    /// offset-preserving for the reason given on [`calendar_date`].
+    pub fn recorded_wall_clock(timestamp_expression: &str) -> String {
+        format!("TRY_CAST(substr({timestamp_expression}, 1, 19) AS TIMESTAMP)")
     }
 
     /// Calendar date of a sourced determination, or otherwise the earliest recorded activity at
@@ -281,7 +294,11 @@ pub mod sql {
     /// Templates keep DuckDB's own `{db}` table qualifier untouched; the caller applies that
     /// afterwards.
     pub fn render(template: &str) -> String {
-        let rendered = substitute_calendar_dates(template);
+        let rendered = substitute(
+            &substitute(template, CALENDAR_DATE_OPEN, calendar_date),
+            RECORDED_WALL_CLOCK_OPEN,
+            recorded_wall_clock,
+        );
         rendered
             .replace("{court_holidays_cte}", &court_holidays_cte())
             .replace("{initial_deadline_date}", &initial_deadline_date())
@@ -301,22 +318,22 @@ pub mod sql {
             )
     }
 
-    /// Expands every `{calendar_date(<expression>)}` placeholder.
-    fn substitute_calendar_dates(template: &str) -> String {
+    /// Expands every `{<function>(<expression>)}` placeholder that opens with `open`.
+    fn substitute(template: &str, open: &str, expand: fn(&str) -> String) -> String {
         let mut rendered = String::with_capacity(template.len());
         let mut remainder = template;
-        while let Some(start) = remainder.find(CALENDAR_DATE_OPEN) {
+        while let Some(start) = remainder.find(open) {
             let (before, rest) = remainder.split_at(start);
             rendered.push_str(before);
-            let rest = &rest[CALENDAR_DATE_OPEN.len()..];
+            let rest = &rest[open.len()..];
             let Some(end) = rest.find(CALENDAR_DATE_CLOSE) else {
                 // An unterminated placeholder is a template bug, not user input. Emit it verbatim
                 // so DuckDB reports the offending text instead of silently dropping a column.
-                rendered.push_str(CALENDAR_DATE_OPEN);
+                rendered.push_str(open);
                 remainder = rest;
                 continue;
             };
-            rendered.push_str(&calendar_date(rest[..end].trim()));
+            rendered.push_str(&expand(rest[..end].trim()));
             remainder = &rest[end + CALENDAR_DATE_CLOSE.len()..];
         }
         rendered.push_str(remainder);

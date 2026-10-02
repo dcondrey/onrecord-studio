@@ -175,9 +175,14 @@ pub fn evaluate_statutory_compliance_with_determination_at(
     let effective_deadline = extension_evaluation
         .valid_deadline
         .unwrap_or(initial_deadline);
-    let comparison_timestamp = determination.unwrap_or(observed);
-    let calendar_days_elapsed = comparison_timestamp
-        .date_naive()
+    // A recorded milestone is dated in its own recorded offset. The observation instant is the
+    // evaluator's clock and carries no agency offset, so it is read in the receipt's: otherwise
+    // an evening observation on the last legal day is already the next day in UTC.
+    let comparison_date = match determination {
+        Some(determination) => determination.date_naive(),
+        None => observed.with_timezone(created.offset()).date_naive(),
+    };
+    let calendar_days_elapsed = comparison_date
         .signed_duration_since(created_date)
         .num_days();
     let allowed_calendar_days = effective_deadline
@@ -532,6 +537,23 @@ mod tests {
             "2026-01-20T09:00:00-08:00",
         )
         .is_err());
+    }
+
+    #[test]
+    fn an_evening_observation_on_the_last_legal_day_is_not_a_violation() {
+        // 17:30 Pacific on the tenth day is already the eleventh in UTC. The evaluator's clock
+        // carries no agency offset, so it is read in the receipt's, and the agency is still timely.
+        let result = evaluate_statutory_compliance_at(
+            5,
+            "2026-03-02T09:00:00-08:00",
+            None,
+            None,
+            None,
+            "2026-03-13T00:30:00Z",
+        )
+        .unwrap();
+        assert_eq!(result.calendar_days_elapsed, 10);
+        assert!(!result.is_violation);
     }
 
     #[test]

@@ -77,6 +77,7 @@ parsed AS (
         CAST(TRY_CAST(requests.closed_at AS TIMESTAMPTZ) AS TIMESTAMP) AS closed_timestamp,
         CAST(TRY_CAST(requests.determination_at AS TIMESTAMPTZ) AS TIMESTAMP) AS determination_timestamp,
         {calendar_date(requests.created_at)} AS created_date,
+        {recorded_wall_clock(requests.created_at)} AS created_local_timestamp,
         {calendar_date(requests.updated_at)} AS updated_date,
         {calendar_date(requests.closed_at)} AS closed_date,
         {calendar_date(requests.determination_at)} AS explicit_determination_date,
