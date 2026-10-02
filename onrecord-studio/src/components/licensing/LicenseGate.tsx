@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import DeleteAccountResult from '../account/DeleteAccountResult';
+import UpdatePrompt from '../updates/UpdatePrompt';
 import { PRODUCT_BYLINE, PRODUCT_NAME } from '../../config/brand';
 import { isDirectChannel } from '../../utils/licenseState';
 import type { LicenseState, LicenseStatus } from '../../types';
@@ -106,14 +107,21 @@ export default function LicenseGate({ controller }: { controller: LicenseControl
 
   const showSignIn = direct && status !== null && SHOWS_SIGN_IN.has(status.state);
   const showDeviceLimit = direct && status?.state === 'DEVICE_LIMIT_REACHED';
-  const showUpgrade = direct && status?.state === 'TRIAL_EXPIRED';
+  // Not UNAVAILABLE or ENTITLEMENT_EXPIRED: those mean the server could not be reached, and a
+  // paying subscriber who is merely offline must never be offered checkout, which could start a
+  // second subscription for an account that already has one.
+  const showUpgrade = direct && (status?.state === 'TRIAL_EXPIRED' || status?.state === 'REVOKED');
   const showVerify = status !== null && (!direct || status.state !== 'SIGN_IN_REQUIRED');
   const detail = direct && status && status.message !== copy.sentence && status.state !== 'SIGN_IN_REQUIRED'
     ? status.message
     : null;
 
   return (
+    // A bug that denies every license check (like the Keychain allow-list bug fixed in beta.3)
+    // can only reach an affected user through a signed update offered here, since LicenseSwitch
+    // never mounts the workspace's own UpdatePrompt while the gate is showing.
     <main className="app-theme flex h-screen w-screen items-center justify-center overflow-y-auto bg-canvas px-6 text-fg">
+      <UpdatePrompt />
       <section className="my-auto w-full max-w-lg rounded-2xl border border-line-strong bg-surface/70 p-8 shadow-2xl" aria-labelledby="license-gate-heading">
         <p className="text-label leading-4 font-semibold uppercase tracking-[0.24em] text-accent">{PRODUCT_NAME}</p>
         <p className="mt-1 text-caption text-muted">{PRODUCT_BYLINE}</p>
