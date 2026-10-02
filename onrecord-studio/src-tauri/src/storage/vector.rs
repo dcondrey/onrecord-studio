@@ -123,7 +123,7 @@ impl VectorIndex {
     }
 
     /// Runs a synchronous DuckDB operation on a blocking worker rather than directly in the async
-    /// body, mirroring `DuckDbRepository::query_connection` (`storage/sqlite.rs`). Holding the
+    /// body, mirroring `DuckDbRepository::query_connection` (`storage/sqlite/connection.rs`). Holding the
     /// connection lock while running a blocking DuckDB call straight on a tokio worker thread
     /// blocks that worker for the query's duration; this moves the call off it instead.
     async fn query_connection<T, F>(&self, operation: &'static str, query: F) -> Result<T, AppError>
