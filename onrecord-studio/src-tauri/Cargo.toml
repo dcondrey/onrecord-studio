@@ -1,6 +1,6 @@
 [package]
 name = "onrecord-studio-lib"
-version = "1.0.0-beta.2"
+version = "1.0.0-beta.3"
 edition = "2021"
 
 # The app binary is named for the product; `onrecord-studio-lib` stays the library crate name.

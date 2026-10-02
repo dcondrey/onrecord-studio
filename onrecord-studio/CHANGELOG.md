@@ -3,6 +3,18 @@
 Notable, user-visible changes. The in-app Help topic *What's next* lists planned enhancements;
 `docs/ROADMAP.md` holds the engineering record.
 
+## 1.0.0-beta.3 (2026-10-02)
+
+### Fixed
+
+- The license check and the 30-day trial were always refused with "The clock guard is
+  unavailable": the native Keychain bridge refused one of the three values the check reads and
+  writes.
+- Eight buttons and one PDF annotation label drew text the same color as their own background,
+  including "Verify license again", "Continue to checkout", "Use this Mac and sign out my oldest
+  Mac", "Delete account", "Revoke", and "Open checkout in your browser". Every solid button/text
+  color pairing in the app was checked against the WCAG contrast minimum in both themes.
+
 ## 1.0.0-beta.2 (2026-10-02)
 
 ### Added

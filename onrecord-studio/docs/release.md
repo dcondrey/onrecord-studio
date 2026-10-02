@@ -11,7 +11,7 @@ installer package (this document). The Developer ID build is notarized and self-
 ## Distribution contract
 
 - Product and bundle identifier: `OnRecord Studio` / `com.onrecord.studio`.
-- Current version: `1.0.0-beta.2` in `package.json`, `src-tauri/Cargo.toml`, and
+- Current version: `1.0.0-beta.3` in `package.json`, `src-tauri/Cargo.toml`, and
   `src-tauri/tauri.conf.json`. The pre-release suffix is for the direct channel; the App Store
   build needs a numeric version, so drop the suffix in all three files before an App Store
   submission (`prepare-app-store.mjs --check` requires them to agree).
