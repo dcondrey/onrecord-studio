@@ -705,14 +705,27 @@ fn request_number(words: &[Word]) -> Option<u64> {
     {
         index += 1;
     }
-    let candidate = &words.get(index)?.text;
+    let candidate = words.get(index)?;
     if !candidate
+        .text
         .chars()
         .all(|character| character.is_ascii_digit())
     {
         return None;
     }
-    candidate.parse().ok()
+    // `26-0412`, `4.2` and `12/2026` tokenize as a number joined to more digits; the leading part
+    // alone names a different request.
+    let joined_to_more = matches!(candidate.followed_by, Some('-' | '.' | '/'))
+        && words.get(index + 1).is_some_and(|next| {
+            next.text
+                .chars()
+                .next()
+                .is_some_and(|character| character.is_ascii_digit())
+        });
+    if joined_to_more {
+        return None;
+    }
+    candidate.text.parse().ok()
 }
 
 /// Spans between straight or curly double quotes, verbatim and trimmed. An unclosed quote yields
@@ -869,6 +882,9 @@ mod tests {
             "why did my request miss its deadline",
             "why did request 99999999999999999999999 miss its deadline",
             "why did request 4x2 miss its deadline",
+            "why did request 26-0412 miss its deadline",
+            "why did request 4.2 miss its deadline",
+            "why did request 12/2026 miss its deadline",
         ] {
             assert!(
                 matches!(parse(text), ParsedIntent::NeedsSubject { .. }),
