@@ -333,7 +333,7 @@ pub fn extract_claims(text: &str) -> Vec<QuantitativeClaim> {
 }
 
 fn hedge(tokens: &[Word]) -> Hedge {
-    if has_phrase(tokens, AT_LEAST) {
+    if has_at_least_hedge(tokens) {
         Hedge::AtLeast
     } else if has_phrase(tokens, AT_MOST) {
         Hedge::AtMost
@@ -342,6 +342,38 @@ fn hedge(tokens: &[Word]) -> Hedge {
     } else {
         Hedge::Exact
     }
+}
+
+/// Word indices a `phrase` matches at, in `tokens`.
+fn phrase_starts<'a>(tokens: &'a [Word], phrase: &'a [&str]) -> impl Iterator<Item = usize> + 'a {
+    tokens
+        .windows(phrase.len())
+        .enumerate()
+        .filter_map(move |(i, window)| {
+            window
+                .iter()
+                .zip(phrase)
+                .all(|(word, cue)| word.text == *cue)
+                .then_some(i)
+        })
+}
+
+/// `AT_LEAST`'s bare `"over"` also opens "year over year" and "over the prior/previous year" /
+/// "over last year" in `PRIOR_YEAR`: those name a comparison period, not an at-least hedge. A
+/// match is only a hedge when its span doesn't overlap a `PRIOR_YEAR` match.
+fn has_at_least_hedge(tokens: &[Word]) -> bool {
+    let prior_year_spans: Vec<(usize, usize)> = PRIOR_YEAR
+        .iter()
+        .flat_map(|phrase| phrase_starts(tokens, phrase).map(|start| (start, start + phrase.len())))
+        .collect();
+    AT_LEAST.iter().any(|phrase| {
+        phrase_starts(tokens, phrase).any(|start| {
+            let end = start + phrase.len();
+            !prior_year_spans
+                .iter()
+                .any(|&(span_start, span_end)| start < span_end && end > span_start)
+        })
+    })
 }
 
 fn classify(sentence: &str, tokens: &[Word]) -> Option<ClaimKind> {
@@ -1154,38 +1186,53 @@ impl Evaluator {
         query_ids.sort();
         query_ids.dedup();
 
-        let verdict =
-            |claimed: String, observed: String, band: String, difference: i64, reference: i64| {
-                if difference == 0 {
-                    return ClaimEvaluation::Consistent {
-                        query_ids: query_ids.clone(),
-                        observed,
-                        band,
-                        bound_scope: bound_scope.clone(),
-                    };
-                }
-                let relative_basis_points = if reference == 0 {
-                    10_000
-                } else {
-                    (difference.unsigned_abs() as u128 * 10_000 / reference.unsigned_abs() as u128)
-                        .min(u64::MAX as u128) as u64
-                };
-                ClaimEvaluation::Mismatch {
+        // `outside` is the claim kind's own pass/fail signal; `difference_magnitude` is only a
+        // display/severity figure and must never substitute for it; the two can coincide at a
+        // boundary (e.g. an "exceeded budget" claim at actual == budget) without the claim being
+        // true.
+        let verdict = |claimed: String,
+                       observed: String,
+                       band: String,
+                       outside: bool,
+                       difference_display: String,
+                       difference_magnitude: i64,
+                       reference: i64| {
+            if !outside {
+                return ClaimEvaluation::Consistent {
                     query_ids: query_ids.clone(),
-                    claimed,
                     observed,
-                    difference: AssertionValue::Cents(difference).display(),
                     band,
                     bound_scope: bound_scope.clone(),
-                    fund_explicit,
-                    relative_basis_points,
-                }
+                };
+            }
+            let relative_basis_points = if reference == 0 {
+                10_000
+            } else {
+                (difference_magnitude.unsigned_abs() as u128 * 10_000
+                    / reference.unsigned_abs() as u128)
+                    .min(u64::MAX as u128) as u64
             };
+            ClaimEvaluation::Mismatch {
+                query_ids: query_ids.clone(),
+                claimed,
+                observed,
+                difference: difference_display,
+                band,
+                bound_scope: bound_scope.clone(),
+                fund_explicit,
+                relative_basis_points,
+            }
+        };
         Ok(match claim.kind {
             ClaimKind::Total { measure, amount } => {
                 let observed = totals[measure.role().unwrap_or_default()];
                 let (lower, upper) = money_band(amount);
                 let outside = observed < lower || observed > upper;
+                let difference = if outside {
+                    observed.saturating_sub(amount.cents)
+                } else {
+                    0
+                };
                 verdict(
                     format!(
                         "{} of {}",
@@ -1198,11 +1245,9 @@ impl Evaluator {
                         AssertionValue::Cents(observed).display()
                     ),
                     describe_band(amount.cents, lower, upper),
-                    if outside {
-                        observed.saturating_sub(amount.cents)
-                    } else {
-                        0
-                    },
+                    outside,
+                    AssertionValue::Cents(difference).display(),
+                    difference,
                     observed,
                 )
             }
@@ -1212,6 +1257,15 @@ impl Evaluator {
                 // "Within budget" is read at dollar precision: an overrun of less than a dollar is
                 // bookkeeping noise, not a contradiction.
                 let overspent = actual > budget.saturating_add(100);
+                // The claim is false exactly when the observed overspend state contradicts what it
+                // asserted, independent of whether the dollar gap at that boundary happens to be 0
+                // (e.g. an "exceeded budget" claim when actual == budget exactly).
+                let outside = overspent == within;
+                let difference = if outside {
+                    actual.saturating_sub(budget)
+                } else {
+                    0
+                };
                 verdict(
                     if within {
                         "spending within the adopted budget".to_string()
@@ -1224,11 +1278,9 @@ impl Evaluator {
                         AssertionValue::Cents(actual).display()
                     ),
                     "±$1.00 of the adopted total".to_string(),
-                    if overspent == within {
-                        actual.saturating_sub(budget)
-                    } else {
-                        0
-                    },
+                    outside,
+                    AssertionValue::Cents(difference).display(),
+                    difference,
                     budget,
                 )
             }
@@ -1249,6 +1301,17 @@ impl Evaluator {
                     as i64;
                 let (lower, upper) = percent_band(change);
                 let outside = observed_bp < lower || observed_bp > upper;
+                // The claim asserts a *percent* change; the gap must be measured against the
+                // observed percent, not a raw dollar delta against `previous` (a flat year over
+                // year total has `current == previous`, a zero dollar delta, even when the claimed
+                // percent change is false).
+                let gap_bp = if observed_bp < lower {
+                    lower - observed_bp
+                } else if observed_bp > upper {
+                    observed_bp - upper
+                } else {
+                    0
+                };
                 verdict(
                     format!(
                         "{} changed by {}",
@@ -1267,12 +1330,10 @@ impl Evaluator {
                         display_basis_points(lower),
                         display_basis_points(upper)
                     ),
-                    if outside {
-                        current.saturating_sub(previous)
-                    } else {
-                        0
-                    },
-                    previous,
+                    outside,
+                    display_basis_points(gap_bp),
+                    gap_bp,
+                    observed_bp,
                 )
             }
             ClaimKind::BudgetBalance(state) => {
@@ -1327,18 +1388,21 @@ impl Evaluator {
                         },
                     ),
                 };
+                let difference = if outside {
+                    match amount {
+                        Some(amount) => gap.saturating_sub(amount.cents),
+                        None => gap,
+                    }
+                } else {
+                    0
+                };
                 verdict(
                     claimed,
                     observed,
                     band,
-                    if outside {
-                        match amount {
-                            Some(amount) => gap.saturating_sub(amount.cents),
-                            None => gap,
-                        }
-                    } else {
-                        0
-                    },
+                    outside,
+                    AssertionValue::Cents(difference).display(),
+                    difference,
                     revenue,
                 )
             }
@@ -1966,6 +2030,125 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    /// Fixture for the false-Consistent regression cases: `difference == 0` is never the sole
+    /// pass/fail signal, so each case below is a kind whose claim is false despite a boundary
+    /// value computing to exactly zero.
+    async fn repository_with_boundary_cases() -> (tempfile::TempDir, DuckDbRepository) {
+        let (temp, repo) = repository_with_city_exports().await;
+        let conn = repo.analytics_connection().await.unwrap();
+        conn.execute_batch(
+            // The official-export filter keeps only 5xxx accounts for actual/budget; fund 100000's
+            // FY 2023 actual (5001 rows only, the 4001 row is revenue-coded) is 120.03, so FY 2022 is
+            // given the same 5xxx total to make the year-over-year total flat.
+            "INSERT INTO analysis_fin_actual VALUES (22,'100000','5001','001','Police',120.03);
+             INSERT INTO analysis_fin_actual VALUES (23,'200000','5001','001','Police',9000.00);
+             CREATE TABLE analysis_fin_revenue(report_fy INTEGER,fund_number VARCHAR,account_number VARCHAR,funds_center_number VARCHAR,dept_name VARCHAR,amount DECIMAL(28,4));
+             INSERT INTO analysis_fin_revenue VALUES (23,'400000','4001','001','Police',1000.00);
+             INSERT INTO analysis_fin_actual VALUES (23,'400000','5001','001','Police',1000.00);",
+        )
+        .unwrap();
+        drop(conn);
+        crate::test_support::register_analytical_table(
+            &repo,
+            "revenue",
+            "analysis_fin_revenue",
+            "https://seshat.datasd.org/revenue/revenue_datasd.csv",
+            'b',
+        )
+        .await
+        .unwrap();
+        repo.save_financial_mapping(crate::types::FinancialMapping {
+            role: "revenue".to_string(),
+            snapshot_id: "revenue".to_string(),
+            columns: [
+                ("fy", "report_fy"),
+                ("fund", "fund_number"),
+                ("account", "account_number"),
+                ("department", "dept_name"),
+                ("amount", "amount"),
+            ]
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
+            currency: Some("USD".to_string()),
+            agency: Some("City of San Diego".to_string()),
+        })
+        .await
+        .unwrap();
+        (temp, repo)
+    }
+
+    #[tokio::test]
+    async fn a_flat_year_over_year_total_does_not_report_a_false_percent_change_as_consistent() {
+        let (_temp, repo) = repository_with_boundary_cases().await;
+        let mut evaluator = Evaluator::load(&repo).await.unwrap();
+        // Fund 100000's actual total (5xxx accounts only) is 120.03 in both FY 2022 and FY 2023: a
+        // flat total, so a claimed 5% increase is false even though `current - previous == 0`.
+        let claim = extract_claims(
+            "Total expenditures increased by 5% in fiscal year 2023 from the prior year in fund 100000.",
+        )
+        .remove(0);
+        let evaluation = evaluator.evaluate(&repo, "sandiego", &claim).await.unwrap();
+        assert!(
+            matches!(evaluation, ClaimEvaluation::Mismatch { ref observed, .. } if observed.contains("+0.00%")),
+            "a flat total falsely claimed as a 5% increase must not be Consistent: {evaluation:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_exact_budget_boundary_does_not_report_a_false_overspend_claim_as_consistent() {
+        let (_temp, repo) = repository_with_boundary_cases().await;
+        let mut evaluator = Evaluator::load(&repo).await.unwrap();
+        // Fund 200000: adopted budget 9000.00, actual 9000.00 exactly. A claim that spending
+        // exceeded the budget is false, even though actual - budget == 0.
+        let claim =
+            extract_claims("Spending exceeded the adopted budget in FY 2023 for fund 200000.")
+                .remove(0);
+        let evaluation = evaluator.evaluate(&repo, "sandiego", &claim).await.unwrap();
+        assert!(
+            matches!(evaluation, ClaimEvaluation::Mismatch { .. }),
+            "actual == budget exactly contradicts an 'exceeded budget' claim: {evaluation:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_zero_gap_does_not_report_a_false_deficit_claim_as_consistent() {
+        let (_temp, repo) = repository_with_boundary_cases().await;
+        let mut evaluator = Evaluator::load(&repo).await.unwrap();
+        // Fund 400000: revenue 1000.00 against actual 1000.00, an exactly balanced year. A bare
+        // "a deficit" claim is false, even though actual - revenue == 0.
+        let claim = extract_claims("Fund 400000 closed FY 2023 with a deficit.").remove(0);
+        let evaluation = evaluator.evaluate(&repo, "sandiego", &claim).await.unwrap();
+        assert!(
+            matches!(evaluation, ClaimEvaluation::Mismatch { .. }),
+            "a balanced year (gap == 0) contradicts a bare deficit claim: {evaluation:?}"
+        );
+    }
+
+    #[test]
+    fn year_over_year_phrasing_is_not_mistaken_for_an_at_least_hedge() {
+        for text in [
+            "Total spending increased by 5% year over year in FY 2024.",
+            "Total spending increased by 5% over the prior year in FY 2024.",
+            "Total spending increased by 5% over the previous year in FY 2024.",
+            "Total spending increased by 5% over last year in FY 2024.",
+        ] {
+            let claims = extract_claims(text);
+            let ClaimKind::PercentChange { change, .. } = claims[0].kind else {
+                panic!("{claims:?}");
+            };
+            assert_eq!(change.hedge, Hedge::Exact, "{text}");
+        }
+        // A genuine at-least hedge elsewhere in the sentence must still be recognized.
+        let claims = extract_claims(
+            "The proposed budget of over $1.2 billion for FY 2025 is the largest ever.",
+        );
+        let ClaimKind::Total { amount, .. } = claims[0].kind else {
+            panic!("{claims:?}");
+        };
+        assert_eq!(amount.hedge, Hedge::AtLeast);
     }
 }
 
