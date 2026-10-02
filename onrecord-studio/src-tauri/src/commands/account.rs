@@ -207,7 +207,11 @@ pub async fn revoke_seat(
 
 fn seat_email(email: String) -> Result<String, AppError> {
     let email = email.trim().to_string();
-    let shape = email.len() <= 254 && email.split('@').filter(|part| !part.is_empty()).count() == 2;
+    let shape = email.len() <= 254
+        && !email.chars().any(char::is_whitespace)
+        && email.split_once('@').is_some_and(|(local, domain)| {
+            !local.is_empty() && !domain.is_empty() && !domain.contains('@')
+        });
     if shape {
         Ok(email)
     } else {
@@ -253,5 +257,24 @@ pub async fn activate_this_device(
     {
         let _ = (confirm_revoke_oldest, license);
         Err(not_in_this_build())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::seat_email;
+
+    #[test]
+    fn a_seat_email_has_exactly_one_at_between_nonempty_parts() {
+        assert_eq!(
+            seat_email(" name@example.org ".into()).unwrap(),
+            "name@example.org"
+        );
+        for malformed in ["a@@b", "@a@b", "a@b@", "a@", "@b", "ab", "a b@c", ""] {
+            assert!(
+                seat_email(malformed.into()).is_err(),
+                "{malformed:?} accepted"
+            );
+        }
     }
 }
