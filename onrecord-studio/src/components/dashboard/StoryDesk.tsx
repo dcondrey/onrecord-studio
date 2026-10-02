@@ -5,7 +5,12 @@ import { useAppStore } from '../../store/useAppStore';
 import type { FindingKind, FindingSeverity, StoryLead } from '../../types';
 import { isLegalClaimKind } from '../../types/findings';
 import { findingToBriefingEvidence } from './BriefingWorkspace';
-import LeadDossier from './LeadDossier';
+import FindingsInbox from './FindingsInbox';
+import PageHeader from '../ui/PageHeader';
+import EmptyState from '../ui/EmptyState';
+import ObjectLink from '../objects/ObjectLink';
+import { openSourceConnector } from './sourceEvents';
+import { cn } from '../../utils/cn';
 import ArtifactDrafts from './ArtifactDrafts';
 
 type DeskState =
@@ -28,6 +33,9 @@ export default function StoryDesk() {
   const setWorkspaceView = useAppStore((s) => s.setWorkspaceView);
   const addBriefingEvidence = useAppStore((s) => s.addBriefingEvidence);
   const openLeadDossier = useAppStore((s) => s.openLeadDossier);
+  const requestFindingsRefresh = useAppStore((s) => s.requestFindingsRefresh);
+  const savedSourceCount = useAppStore((s) => s.portals.length);
+  const [mode, setMode] = useState<'ranked' | 'all'>('ranked');
 
   const load = useCallback(() => {
     const token = gate.begin();
@@ -85,22 +93,42 @@ export default function StoryDesk() {
   return (
     <main className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto w-full max-w-[1200px] space-y-4 p-4 lg:p-6">
-        <header className="space-y-1">
-          <h2 className="text-sm font-semibold text-fg">Story desk</h2>
-          <p className="text-label leading-relaxed text-muted">
-            Findings ordered by what the records show: money at stake, how many documents, requests and
-            agencies repeat the pattern, a record contradicting a statement, a counted violation, evidence
-            strength and freshness. The score ranks attention; it is not a measure of newsworthiness and
-            not a claim about any record.
-          </p>
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={load} className="focus-ring rounded-lg border border-control px-3 py-1.5 text-label font-semibold text-fg-secondary hover:border-accent/30">
-              Refresh
-            </button>
-            {notice && <span role="status" className="text-label text-success">{notice}</span>}
-          </div>
-        </header>
+        <PageHeader
+          icon="flag"
+          eyebrow="Story desk"
+          title="What the records point to"
+          summary="Findings ranked by what the records show, with every claim one click from its source."
+          method={<>
+            The ranking weighs money at stake, how many documents, requests and agencies repeat the
+            pattern, a record contradicting a statement, a counted violation, evidence strength and
+            freshness. The score ranks attention; it is not a measure of newsworthiness and not a claim
+            about any record. Only a counted violation is a legal claim; everything else is a pattern signal.
+          </>}
+          actions={<>
+            <div role="tablist" aria-label="Story desk view" className="flex rounded-lg border border-control p-0.5">
+              {(['ranked', 'all'] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === value}
+                  onClick={() => setMode(value)}
+                  className={cn('motion-press focus-ring rounded-md px-3 py-1 text-label font-semibold transition', mode === value ? 'bg-accent/10 text-accent' : 'text-muted hover:text-fg')}
+                >
+                  {value === 'ranked' ? 'Ranked leads' : 'All findings'}
+                </button>
+              ))}
+            </div>
+            {mode === 'ranked' && (
+              <button type="button" onClick={load} className="motion-press focus-ring rounded-lg border border-control px-3 py-1.5 text-label font-semibold text-fg-secondary hover:border-accent/30">
+                Refresh
+              </button>
+            )}
+          </>}
+        />
+        {notice && <p role="status" className="motion-reveal text-label text-success">{notice}</p>}
 
+        {mode === 'all' ? <FindingsInbox /> : <>
         {state.status === 'PENDING' && <p role="status" className="text-label text-muted">Ranking leads…</p>}
         {state.status === 'FAILED' && (
           <p role="alert" className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-label text-danger">
@@ -108,19 +136,39 @@ export default function StoryDesk() {
           </p>
         )}
         {state.status === 'READY' && state.leads.length === 0 && (
-          <p className="text-label text-muted">No leads yet. Run analysis on an ingested source to produce findings.</p>
+          savedSourceCount === 0 ? (
+            <EmptyState
+              icon="flag"
+              title="No leads yet"
+              body="Leads come from findings on the records you collect. Add a records portal, website or file to start."
+              actions={<button type="button" onClick={openSourceConnector} className="motion-press focus-ring rounded-lg border border-transparent primary-action px-3 py-1.5 text-label font-semibold text-white">Add a source</button>}
+            />
+          ) : (
+            <EmptyState
+              icon="flag"
+              title="No leads yet"
+              body="Findings appear when the detectors finish a sweep of what has been ingested. Run the sweep again, or check whether a sync is still running."
+              actions={<>
+                <button type="button" onClick={requestFindingsRefresh} className="motion-press focus-ring rounded-lg border border-transparent primary-action px-3 py-1.5 text-label font-semibold text-white">Refresh findings</button>
+                <button type="button" onClick={() => setWorkspaceView('activity')} className="motion-press focus-ring rounded-lg border border-control px-3 py-1.5 text-label font-semibold text-fg-secondary">See sync activity</button>
+              </>}
+            />
+          )
         )}
         {state.status === 'READY' && state.leads.length > 0 && (
-          <ol className="space-y-3" aria-label="Ranked story leads">
+          <ol className="motion-stagger space-y-3" aria-label="Ranked story leads">
             {state.leads.map((lead, index) => (
-              <li key={lead.findingId} className="rounded-xl border border-line bg-canvas/40 p-4">
+              <li key={lead.findingId} className="motion-lift rounded-xl border border-line bg-canvas/40 p-4 hover:border-line-strong">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="text-caption font-semibold uppercase tracking-wider text-accent">
                       #{index + 1} · {kindLabel(lead.kind)} · {severityLabel(lead.severity)}
                       {isLegalClaimKind(lead.kind) ? ' · counted violation' : ' · pattern signal'}
                     </div>
-                    <h3 className="mt-1 text-label font-semibold text-fg">{lead.headline}</h3>
+                    <h3 className="mt-1 text-sm font-semibold leading-snug">
+                      <ObjectLink target={{ kind: 'finding', id: lead.findingId, label: lead.headline }} className="text-fg decoration-line-strong hover:text-accent">{lead.headline}</ObjectLink>
+                    </h3>
+                    <AgencyReference lead={lead} />
                   </div>
                   <div className="text-right">
                     <div className="text-caption uppercase tracking-wider text-muted">Attention score</div>
@@ -152,9 +200,9 @@ export default function StoryDesk() {
                     type="button"
                     onClick={() => openLeadDossier(lead.findingId)}
                     aria-label={`Assemble dossier: ${lead.headline}`}
-                    className="focus-ring rounded-lg border border-control px-2.5 py-1 font-semibold text-fg-secondary hover:border-accent/30"
+                    className="motion-press focus-ring rounded-lg border border-control px-2.5 py-1 font-semibold text-fg-secondary hover:border-accent/30"
                   >
-                    Assemble dossier
+                    Open evidence chain
                   </button>
                   {lead.relatedFindingIds.length > 0 && (
                     <span className="text-muted">
@@ -167,8 +215,8 @@ export default function StoryDesk() {
             ))}
           </ol>
         )}
+        </>}
       </div>
-      <LeadDossier />
     </main>
   );
 }
@@ -177,6 +225,18 @@ export default function StoryDesk() {
  * Keeps the desk compact: the drafts panel mounts only once the reader opens it, so the desk does
  * not ask the backend which drafts apply to every ranked lead on load.
  */
+/** The agency a lead is about, as a link, when the analytics profile names it. */
+function AgencyReference({ lead }: { lead: StoryLead }) {
+  const { agencyId, portalKey } = lead.subject;
+  const profile = useAppStore((state) => agencyId === null ? null : state.agencyProfiles.find((entry) => entry.agencyId === agencyId && entry.portalSubdomain === portalKey) ?? null);
+  if (agencyId === null || !portalKey || !profile) return null;
+  return (
+    <p className="mt-1 text-caption text-muted">
+      About <ObjectLink target={{ kind: 'agency', portalKey, agencyId, label: profile.agencyName }}>{profile.agencyName}</ObjectLink>
+    </p>
+  );
+}
+
 function LeadDraftToggle({ findingId }: { findingId: string }) {
   const [open, setOpen] = useState(false);
   return (

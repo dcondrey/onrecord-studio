@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import SearchFilter from '../filters/SearchFilter';
 import { useAppStore } from '../../store/useAppStore';
 import { useScrollRestore } from '../../hooks/useScrollRestore';
+import ObjectLink from '../objects/ObjectLink';
 import { cn } from '../../utils/cn';
 import DocumentViewer from '../documents/DocumentViewer';
 import AnnotationSearch from '../documents/AnnotationSearch';
@@ -64,6 +65,14 @@ export default function MainLayout() {
   const [documentError, setDocumentError] = useState<string | null>(null);
   const [activeDocument, setActiveDocument] = useState<{ summary: RequestDocumentSummary; chunk: DocumentTextChunk } | null>(null);
   const [pendingEvidenceLink, setPendingEvidenceLink] = useState(readEvidenceLink);
+  const requestedEvidenceLink = useAppStore((state) => state.requestedEvidenceLink);
+  const consumeEvidenceLink = useAppStore((state) => state.consumeEvidenceLink);
+  // Any surface may ask for a document; the evidence view owns opening it.
+  useEffect(() => {
+    if (!requestedEvidenceLink) return;
+    const link = consumeEvidenceLink();
+    if (link) setPendingEvidenceLink(link);
+  }, [consumeEvidenceLink, requestedEvidenceLink]);
   // Held as the summary rather than an id, so the confirmation names the file the operator clicked
   // even if the list refreshes under it.
   const [pendingDocumentPurge, setPendingDocumentPurge] = useState<RequestDocumentSummary | null>(null);
@@ -392,7 +401,13 @@ export default function MainLayout() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <h2 className="text-sm font-semibold leading-snug text-fg">{selected.title || 'Untitled request'}</h2>
-                      <p className="mt-1 text-label text-muted">{selected.agencyName} · {selected.portalKey}</p>
+                      <p className="mt-1 text-label text-muted">
+                        {selected.agencyId === null
+                          ? selected.agencyName
+                          : <ObjectLink target={{ kind: 'agency', portalKey: selected.portalKey, agencyId: selected.agencyId, label: selected.agencyName }}>{selected.agencyName}</ObjectLink>}
+                        {' · '}{selected.portalKey}
+                        {' · '}<ObjectLink target={{ kind: 'request', portalKey: selected.portalKey, requestId: selected.requestId, label: selected.title || `Request ${selected.requestId}` }}>Findings and documents</ObjectLink>
+                      </p>
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-2">
                       <StatusBadge status={selected.status} />

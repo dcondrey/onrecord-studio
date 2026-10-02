@@ -9,7 +9,6 @@ import type { Finding, FindingCitation, FindingSeverity } from '../../types';
 import { FindingEvidence } from '../ui/EvidenceBasis';
 import ArtifactDrafts from './ArtifactDrafts';
 import EvidenceGaps from './EvidenceGaps';
-import LeadDossier from './LeadDossier';
 import EvidencePacketExport from './EvidencePacketExport';
 
 import ShareableBundleExport from './ShareableBundleExport';
@@ -358,7 +357,6 @@ export default function FindingsInbox() {
           </button>
         </div>
       )}
-      <LeadDossier />
       <EvidenceGaps />
     </section>
   );
