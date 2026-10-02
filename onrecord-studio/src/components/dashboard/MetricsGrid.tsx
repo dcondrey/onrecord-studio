@@ -43,8 +43,8 @@ export default function MetricsGrid() {
       value: unavailable ? '—' : values.requests.toLocaleString(),
       detail: `${values.closed.toLocaleString()} closed · ${metrics.pagesProcessed.toLocaleString()} pages ingested`,
       ratio: values.requests > 0 ? values.closed / values.requests : 0,
-      accent: 'text-indigo-300',
-      bar: 'bg-indigo-400',
+      accent: 'text-highlight',
+      bar: 'bg-highlight',
       icon: 'database',
       status: null,
       policy: null,
@@ -56,8 +56,8 @@ export default function MetricsGrid() {
         ? 'Analytics unavailable'
         : values.requests > 0 ? `${formatPercent(values.statutory / values.requests)} of reviewed requests` : 'Statutory review is ready',
       ratio: values.requests > 0 ? values.statutory / values.requests : 0,
-      accent: values.statutory > 0 ? 'text-amber-300' : 'text-slate-300',
-      bar: 'bg-amber-400',
+      accent: values.statutory > 0 ? 'text-warning' : 'text-fg-secondary',
+      bar: 'bg-warning',
       icon: 'shield',
       status: null,
       policy: 'STATUTORY_LATENCY_VIOLATION',
@@ -69,8 +69,8 @@ export default function MetricsGrid() {
         ? 'Analytics unavailable'
         : values.fastClosures > 0 ? 'Closed within the 5-minute review window' : 'No fast-drop signals detected',
       ratio: values.closed > 0 ? values.fastClosures / values.closed : 0,
-      accent: values.fastClosures > 0 ? 'text-rose-300' : 'text-slate-300',
-      bar: 'bg-rose-400',
+      accent: values.fastClosures > 0 ? 'text-danger' : 'text-fg-secondary',
+      bar: 'bg-danger',
       icon: 'activity',
       status: 'closed',
       policy: 'SUSPICIOUSLY_FAST_CLOSURE',
@@ -80,8 +80,8 @@ export default function MetricsGrid() {
       value: unavailable ? '—' : values.correlations.toLocaleString(),
       detail: `${formatBytes(metrics.bytesTransferred)} preserved locally`,
       ratio: Math.min(1, values.correlations / Math.max(1, values.requests)),
-      accent: values.correlations > 0 ? 'text-cyan-300' : 'text-slate-300',
-      bar: 'bg-cyan-400',
+      accent: values.correlations > 0 ? 'text-accent' : 'text-fg-secondary',
+      bar: 'bg-accent',
       icon: 'sparkles',
       status: null,
       policy: 'CROSS_AGENCY_311_CORRELATION',
@@ -98,17 +98,17 @@ export default function MetricsGrid() {
           <span className={`instrument-accent absolute left-0 top-5 h-8 w-0.5 rounded-full ${card.bar}`} aria-hidden="true" />
           <div className="relative flex items-center justify-between gap-3">
             <div className="app-eyebrow min-w-0 leading-snug">{card.label}</div>
-            <div className="metric-icon grid h-8 w-8 shrink-0 place-items-center rounded-[10px] border text-slate-400">
+            <div className="metric-icon grid h-8 w-8 shrink-0 place-items-center rounded-[10px] border text-muted">
               <Icon name={card.icon} className="h-[17px] w-[17px]" />
             </div>
           </div>
           <div className={`numeric-value relative mt-3 text-[28px] font-semibold leading-none tracking-[-0.045em] ${card.accent}`}>{card.value}</div>
-          <div className="relative mt-2 min-h-9 text-caption leading-snug text-slate-400">{card.detail}</div>
+          <div className="relative mt-2 min-h-9 text-caption leading-snug text-muted">{card.detail}</div>
           <div className="relative mt-3 flex items-center gap-2">
-            <div className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-800/80" role="progressbar" aria-label={`${card.label} ratio`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(card.ratio * 100)}>
+            <div className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-raised/70" role="progressbar" aria-label={`${card.label} ratio`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(card.ratio * 100)}>
               <div className={`h-full min-w-[4px] rounded-full transition-[width] duration-500 ${card.bar}`} style={{ width: `${Math.min(100, Math.max(0, card.ratio * 100))}%` }} />
             </div>
-            <span className="numeric-value w-10 text-right text-label text-slate-400">{formatPercent(card.ratio)}</span>
+            <span className="numeric-value w-10 text-right text-label text-muted">{formatPercent(card.ratio)}</span>
           </div>
         </button>
       ))}

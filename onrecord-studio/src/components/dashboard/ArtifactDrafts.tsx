@@ -7,7 +7,7 @@ import DraftedArtifactView from './DraftedArtifactView';
 type DraftKind = 'followup' | 'appeal';
 
 const BUTTON =
-  'focus-ring rounded-md border border-slate-700 bg-slate-900/60 px-3 py-1 text-label font-semibold text-slate-200 transition disabled:opacity-60';
+  'focus-ring rounded-md border border-line-strong bg-surface/70 px-3 py-1 text-label font-semibold text-fg transition disabled:opacity-60';
 
 /**
  * Offers the drafts that apply to one finding and shows the result. Which buttons appear comes
@@ -67,7 +67,7 @@ export default function ArtifactDrafts({ findingId }: { findingId: string }) {
   return (
     <div
       role="region"
-      className="mt-2 rounded-lg border border-slate-800/70 bg-slate-950/40 p-3"
+      className="mt-2 rounded-lg border border-line bg-canvas/40 p-3"
       aria-label="Drafted artifacts"
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -76,7 +76,7 @@ export default function ArtifactDrafts({ findingId }: { findingId: string }) {
             type="button"
             onClick={() => runDraft('followup')}
             disabled={busy === 'followup'}
-            className={`${BUTTON} hover:border-cyan-400/40`}
+            className={`${BUTTON} hover:border-accent/30`}
           >
             {busy === 'followup' ? 'Drafting…' : 'Draft records request'}
           </button>
@@ -86,20 +86,20 @@ export default function ArtifactDrafts({ findingId }: { findingId: string }) {
             type="button"
             onClick={() => runDraft('appeal')}
             disabled={busy === 'appeal'}
-            className={`${BUTTON} hover:border-amber-400/40`}
+            className={`${BUTTON} hover:border-warning/30`}
           >
             {busy === 'appeal' ? 'Drafting…' : 'Draft appeal or complaint'}
           </button>
         )}
         {availability && !availability.followup && !availability.appeal && (
-          <span className="text-caption text-slate-400">
+          <span className="text-caption text-muted">
             This finding names no specific gap to ask about, so no draft applies.
           </span>
         )}
       </div>
 
       {error && (
-        <div role="alert" className="mt-2 rounded-md border border-rose-500/20 bg-rose-500/[0.04] px-2 py-1.5 text-caption text-rose-200">
+        <div role="alert" className="mt-2 rounded-md border border-danger/30 bg-danger/5 px-2 py-1.5 text-caption text-danger">
           {error}
         </div>
       )}

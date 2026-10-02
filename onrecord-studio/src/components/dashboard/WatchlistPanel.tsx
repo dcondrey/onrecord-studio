@@ -155,22 +155,22 @@ export default function WatchlistPanel() {
   const selected = summaries.find((summary) => summary.watch.id === selectedId) ?? null;
 
   return (
-    <section aria-label="Watchlist" className="app-panel space-y-3 p-4 text-label text-slate-300">
+    <section aria-label="Watchlist" className="app-panel space-y-3 p-4 text-label text-fg-secondary">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="app-eyebrow">Watchlist</div>
-          <h3 className="mt-1 text-sm font-semibold text-slate-100">What changed for the things you follow</h3>
+          <h3 className="mt-1 text-sm font-semibold text-fg">What changed for the things you follow</h3>
         </div>
         <button type="button" className="analysis-button" disabled={busy || summaries.length === 0} onClick={() => void sync(selectedId, true)}>
           {busy ? 'Checking…' : 'Check now'}
         </button>
       </div>
-      <p className="text-slate-400">
+      <p className="text-muted">
         A check reads the records already stored here; it fetches nothing. The first check of a watch records a baseline and reports no changes.
         A dimension with no data in a run says so and is never shown as unchanged.
       </p>
       {error && (
-        <p role="alert" className="text-rose-300">
+        <p role="alert" className="text-danger">
           Watchlist: {error}
         </p>
       )}
@@ -201,25 +201,25 @@ export default function WatchlistPanel() {
       </form>
 
       {!loaded && !error && <p role="status">Reading the watchlist…</p>}
-      {loaded && summaries.length === 0 && <p className="text-slate-400">Nothing is being watched yet.</p>}
+      {loaded && summaries.length === 0 && <p className="text-muted">Nothing is being watched yet.</p>}
       <ul className="space-y-2">
         {summaries.map(({ watch, lastCheckedAt, lastDimensions }) => (
-          <li key={watch.id} className={`rounded-lg border p-2 ${watch.id === selectedId ? 'border-cyan-500/50' : 'border-slate-800'}`}>
+          <li key={watch.id} className={`rounded-lg border p-2 ${watch.id === selectedId ? 'border-accent/60' : 'border-line'}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <button type="button" className="text-left font-semibold text-slate-100" aria-pressed={watch.id === selectedId} onClick={() => setSelectedId(watch.id === selectedId ? null : watch.id)}>
-                {watch.label} <span className="font-normal text-slate-400">({KIND_LABELS[watch.kind]})</span>
+              <button type="button" className="text-left font-semibold text-fg" aria-pressed={watch.id === selectedId} onClick={() => setSelectedId(watch.id === selectedId ? null : watch.id)}>
+                {watch.label} <span className="font-normal text-muted">({KIND_LABELS[watch.kind]})</span>
               </button>
               <button type="button" className="analysis-button" aria-label={`Stop watching ${watch.label}`} onClick={() => void remove(watch.id)}>
                 Remove
               </button>
             </div>
-            <p className="mt-1 text-slate-400">{lastCheckedAt ? `Last checked ${lastCheckedAt}` : 'Not checked yet'}</p>
+            <p className="mt-1 text-muted">{lastCheckedAt ? `Last checked ${lastCheckedAt}` : 'Not checked yet'}</p>
             {lastDimensions.length > 0 && (
               <ul className="mt-1 space-y-0.5">
                 {lastDimensions.map((result) => {
                   const { text, tone } = describeDimension(result);
                   return (
-                    <li key={result.dimension} className={tone === 'missing' ? 'text-amber-300' : tone === 'changed' ? 'text-cyan-200' : 'text-slate-400'}>
+                    <li key={result.dimension} className={tone === 'missing' ? 'text-warning' : tone === 'changed' ? 'text-accent' : 'text-muted'}>
                       <span className="font-semibold">{DIMENSION_LABELS[result.dimension]}:</span> {text}
                     </li>
                   );
@@ -234,13 +234,13 @@ export default function WatchlistPanel() {
         <div aria-label="Recorded changes">
           <h4 className="analysis-label">{selected ? `Changes for ${selected.watch.label}` : 'Changes across all watches'}</h4>
           {changes.length === 0 ? (
-            <p className="mt-1 text-slate-400">No changes recorded. This lists only changes that were detected; see each watch above for what a check could and could not observe.</p>
+            <p className="mt-1 text-muted">No changes recorded. This lists only changes that were detected; see each watch above for what a check could and could not observe.</p>
           ) : (
             <ul className="mt-1 space-y-2">
               {changes.map((change) => (
-                <li key={change.id} className="rounded-lg border border-slate-800 p-2">
-                  <div className="font-semibold text-slate-100">{CHANGE_LABELS[change.changeKind] ?? change.changeKind}</div>
-                  <div className="text-slate-400">{change.subject}</div>
+                <li key={change.id} className="rounded-lg border border-line p-2">
+                  <div className="font-semibold text-fg">{CHANGE_LABELS[change.changeKind] ?? change.changeKind}</div>
+                  <div className="text-muted">{change.subject}</div>
                   <dl className="mt-1 grid gap-0.5 sm:grid-cols-2">
                     <div>
                       <dt className="analysis-label">Before{change.oldAsOf ? `, as of ${change.oldAsOf}` : ''}</dt>
@@ -251,7 +251,7 @@ export default function WatchlistPanel() {
                       <dd>{change.newValue ?? 'Not present now'}</dd>
                     </div>
                   </dl>
-                  <p className="mt-1 text-slate-400">Basis: {change.basis}</p>
+                  <p className="mt-1 text-muted">Basis: {change.basis}</p>
                 </li>
               ))}
             </ul>

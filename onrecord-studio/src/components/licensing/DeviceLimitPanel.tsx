@@ -19,7 +19,7 @@ export default function DeviceLimitPanel({ busy, activating, onActivate, onSignO
   return (
     <div className="mt-6 space-y-3" role="group" aria-label="Device limit options">
       {confirming ? (
-        <div className="rounded-lg border border-amber-600 bg-amber-950/50 px-4 py-3 text-sm leading-6 text-amber-50">
+        <div className="rounded-lg border border-warning bg-warning/40 px-4 py-3 text-sm leading-6 text-warning">
           <p ref={confirmRef} tabIndex={-1} className="font-semibold outline-none">
             Sign out your oldest Mac and use this one?
           </p>
@@ -33,7 +33,7 @@ export default function DeviceLimitPanel({ busy, activating, onActivate, onSignO
               disabled={busy}
               aria-busy={activating}
               onClick={() => onActivate(true)}
-              className="focus-ring inline-flex min-h-[24px] items-center rounded-lg bg-amber-300 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-amber-200 disabled:cursor-wait disabled:opacity-50"
+              className="focus-ring inline-flex min-h-[24px] items-center rounded-lg bg-warning px-3 py-2 text-sm font-semibold text-muted hover:bg-warning disabled:cursor-wait disabled:opacity-50"
             >
               {activating ? 'Signing out oldest Mac...' : 'Yes, sign out my oldest Mac'}
             </button>
@@ -41,7 +41,7 @@ export default function DeviceLimitPanel({ busy, activating, onActivate, onSignO
               type="button"
               disabled={busy}
               onClick={() => setConfirming(false)}
-              className="focus-ring inline-flex min-h-[24px] items-center rounded-lg border border-slate-500 px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-slate-800 disabled:opacity-50"
+              className="focus-ring inline-flex min-h-[24px] items-center rounded-lg border border-control px-3 py-2 text-sm font-semibold text-fg hover:bg-raised disabled:opacity-50"
             >
               Cancel
             </button>
@@ -52,7 +52,7 @@ export default function DeviceLimitPanel({ busy, activating, onActivate, onSignO
           type="button"
           disabled={busy}
           onClick={() => setConfirming(true)}
-          className="focus-ring inline-flex min-h-[24px] w-full items-center justify-center rounded-lg bg-cyan-500 px-4 py-3 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:opacity-50"
+          className="focus-ring inline-flex min-h-[24px] w-full items-center justify-center rounded-lg bg-accent px-4 py-3 text-sm font-semibold text-muted hover:bg-accent disabled:opacity-50"
         >
           Use this Mac and sign out my oldest Mac
         </button>
@@ -61,7 +61,7 @@ export default function DeviceLimitPanel({ busy, activating, onActivate, onSignO
         type="button"
         disabled={busy}
         onClick={onSignOut}
-        className="focus-ring inline-flex min-h-[24px] w-full items-center justify-center rounded-lg border border-slate-500 px-4 py-3 text-sm font-semibold text-slate-100 hover:bg-slate-800 disabled:opacity-50"
+        className="focus-ring inline-flex min-h-[24px] w-full items-center justify-center rounded-lg border border-control px-4 py-3 text-sm font-semibold text-fg hover:bg-raised disabled:opacity-50"
       >
         Sign out
       </button>

@@ -10,14 +10,14 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
     return (
       <div className="flex flex-col space-y-1 select-none font-sans">
         {label && (
-          <label className="text-label font-bold text-slate-400 uppercase tracking-wider block px-0.5">
+          <label className="text-label font-bold text-muted uppercase tracking-wider block px-0.5">
             {label}
           </label>
         )}
         <div className="relative">
           <select
             className={cn(
-              "w-full bg-slate-950 text-slate-300 text-label leading-4 border border-slate-800 rounded-lg pl-3 pr-8 py-2 appearance-none focus:outline-none focus:border-indigo-500 font-medium shadow-sm transition-all cursor-pointer",
+              "w-full bg-canvas text-fg-secondary text-label leading-4 border border-control rounded-lg pl-3 pr-8 py-2 appearance-none focus:outline-none focus:border-highlight font-medium shadow-sm transition-all cursor-pointer",
               className
             )}
             ref={ref}
@@ -26,7 +26,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
             {children}
           </select>
           {/* Native dropdown chevron mask indicator */}
-          <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+          <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-muted">
             <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>

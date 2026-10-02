@@ -84,31 +84,31 @@ export default function CrossCorpusExplorer() {
     <section className="app-panel flex flex-col gap-3 p-4" aria-label="Cross-corpus findings">
       <div className="min-w-0">
         <div className="app-eyebrow">Cross-corpus explorer</div>
-        <h3 className="mt-1 text-label font-semibold text-slate-200">
+        <h3 className="mt-1 text-label font-semibold text-fg">
           Patterns that span jurisdictions, agencies, and time
         </h3>
-        <p className="mt-1 text-caption text-slate-400">
+        <p className="mt-1 text-caption text-muted">
           Coordinated language, behavioral change-points, orphan topics, and reused denial
           grounds — signals no single-agency detector can see.
         </p>
       </div>
 
       {error && (
-        <div role="alert" className="rounded-lg border border-rose-500/20 bg-rose-500/[0.04] px-3 py-2 text-caption text-rose-200">
+        <div role="alert" className="rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-caption text-danger">
           Cross-corpus findings unavailable: {error}
         </div>
       )}
 
       {isLoading && findings.length === 0 ? (
-        <div role="status" className="text-label text-slate-400">
+        <div role="status" className="text-label text-muted">
           Loading cross-corpus findings…
         </div>
       ) : findings.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-800 bg-slate-950/25 p-4 text-center">
-          <p className="text-label font-medium text-slate-300">
+        <div className="rounded-xl border border-dashed border-line bg-canvas/40 p-4 text-center">
+          <p className="text-label font-medium text-fg-secondary">
             No cross-corpus patterns surfaced yet.
           </p>
-          <p className="mt-1 text-caption leading-relaxed text-slate-400">
+          <p className="mt-1 text-caption leading-relaxed text-muted">
             These detectors compare across agencies, time windows, and jurisdictions; they need
             a broader ingest to fire.
           </p>
@@ -138,21 +138,21 @@ function Heatmap({
 }) {
   if (heatmap.portals.length === 0 || heatmap.maxCount === 0) {
     return (
-      <div className="rounded-lg border border-slate-800/70 bg-slate-950/30 p-3 text-caption text-slate-400">
+      <div className="rounded-lg border border-line bg-canvas/40 p-3 text-caption text-muted">
         No jurisdictions to plot yet.
       </div>
     );
   }
   return (
-    <div className="rounded-lg border border-slate-800/70 bg-slate-950/30 p-3">
-      <p className="text-caption uppercase tracking-wider text-slate-400">Jurisdiction × detector</p>
+    <div className="rounded-lg border border-line bg-canvas/40 p-3">
+      <p className="text-caption uppercase tracking-wider text-muted">Jurisdiction × detector</p>
       <div role="region" tabIndex={0} aria-label="Jurisdiction × detector heatmap" className="focus-ring mt-2 overflow-x-auto">
-        <table className="w-full text-caption text-slate-300">
+        <table className="w-full text-caption text-fg-secondary">
           <thead>
             <tr>
-              <th className="pr-2 text-left font-normal text-slate-400">Portal</th>
+              <th className="pr-2 text-left font-normal text-muted">Portal</th>
               {(Object.keys(KIND_LABEL) as (keyof typeof KIND_LABEL)[]).map((kind) => (
-                <th key={kind} className="px-1 text-center font-normal text-slate-400">
+                <th key={kind} className="px-1 text-center font-normal text-muted">
                   {KIND_LABEL[kind].split(' ')[0]}
                 </th>
               ))}
@@ -161,7 +161,7 @@ function Heatmap({
           <tbody>
             {heatmap.portals.map((portal) => (
               <tr key={portal}>
-                <td className="pr-2 text-caption text-slate-300">{portal}</td>
+                <td className="pr-2 text-caption text-fg-secondary">{portal}</td>
                 {(Object.keys(KIND_LABEL) as (keyof typeof KIND_LABEL)[]).map((kind) => {
                   const label = KIND_LABEL[kind];
                   const count = heatmap.cellCounts.get(`${portal}\u001f${label}`) ?? 0;
@@ -197,18 +197,18 @@ function Heatmap({
 function CrossCorpusRow({ finding, onInspect }: { finding: Finding; onInspect: () => void }) {
   const [shape, tone] = severityGlyph(finding.severity);
   return (
-    <li className="focus-within:ring-1 focus-within:ring-cyan-400/40 rounded-xl border border-slate-800/70 bg-slate-950/30 p-3 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.03]">
+    <li className="focus-within:ring-1 focus-within:ring-accent/50 rounded-xl border border-line bg-canvas/40 p-3 transition hover:border-accent/30 hover:bg-accent/5">
       <button type="button" onClick={onInspect} className="min-w-0 flex-1 text-left" aria-label={`Inspect: ${finding.headline}`}>
         <div className="flex items-start gap-3">
-          <span className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-slate-900/70 ${tone}`} aria-hidden="true">
+          <span className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-surface/70 ${tone}`} aria-hidden="true">
             <svg viewBox="-6 -6 12 12" className="h-3 w-3">
               <ShapeGlyph shape={shape} cx={0} cy={0} radius={4.5} fill="currentColor" />
             </svg>
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-label font-semibold text-slate-100">{finding.headline}</p>
-            <p className="mt-1 text-label leading-relaxed text-slate-400">{finding.explanation}</p>
-            <p className="mt-1 text-caption uppercase tracking-wider text-slate-400">
+            <p className="text-label font-semibold text-fg">{finding.headline}</p>
+            <p className="mt-1 text-label leading-relaxed text-muted">{finding.explanation}</p>
+            <p className="mt-1 text-caption uppercase tracking-wider text-muted">
               {isCrossCorpusKind(finding.kind) ? KIND_LABEL[finding.kind] : finding.kind}
               {finding.confidence.kind === 'MEASURED' &&
                 ` · ${(finding.confidence.basisPoints / 100).toFixed(0)}% confidence`}
@@ -223,12 +223,12 @@ function CrossCorpusRow({ finding, onInspect }: { finding: Finding; onInspect: (
 function severityGlyph(severity: FindingSeverity): [GlyphShape, string] {
   switch (severity) {
     case 'CRITICAL':
-      return ['diamond', 'text-rose-300'];
+      return ['diamond', 'text-danger'];
     case 'SERIOUS':
-      return ['triangle', 'text-amber-300'];
+      return ['triangle', 'text-warning'];
     case 'NOTABLE':
-      return ['circle', 'text-cyan-300'];
+      return ['circle', 'text-accent'];
     case 'INFO':
-      return ['ring', 'text-slate-400'];
+      return ['ring', 'text-muted'];
   }
 }

@@ -52,11 +52,11 @@ function Chip({ shape, dashed, tone, border, children, ...rest }: {
  */
 export function FindingBasisChip({ kind }: { kind: FindingKind }) {
   return isLegalClaimKind(kind) ? (
-    <Chip data-basis="legal-claim" shape="diamond" tone="text-rose-200" border="border-rose-400/60 bg-rose-500/10">
+    <Chip data-basis="legal-claim" shape="diamond" tone="text-danger" border="border-danger/60 bg-danger/10">
       Legal claim: counted violation
     </Chip>
   ) : (
-    <Chip data-basis="pattern-signal" shape="ring" dashed tone="text-slate-200" border="border-dashed border-slate-500 bg-slate-800/40">
+    <Chip data-basis="pattern-signal" shape="ring" dashed tone="text-fg" border="border-dashed border-line-strong bg-raised/40">
       Pattern signal, not a legal claim
     </Chip>
   );
@@ -74,11 +74,11 @@ export function ConfidenceMeter({ confidence }: { confidence: FindingConfidence 
         data-confidence="unassessed"
         role="img"
         aria-label="Confidence unassessed: no measurement was made"
-        className="inline-flex items-center gap-1 text-caption font-medium text-slate-300"
+        className="inline-flex items-center gap-1 text-caption font-medium text-fg-secondary"
       >
         <span
           aria-hidden="true"
-          className="h-1.5 w-12 rounded-sm border border-dashed border-slate-400"
+          className="h-1.5 w-12 rounded-sm border border-dashed border-line-strong"
           style={{ backgroundImage: 'repeating-linear-gradient(135deg, transparent 0 3px, rgba(148,163,184,0.45) 3px 4px)' }}
         />
         <span>Unassessed</span>
@@ -88,7 +88,7 @@ export function ConfidenceMeter({ confidence }: { confidence: FindingConfidence 
   const bp = Math.min(10000, Math.max(0, Math.round(confidence.basisPoints)));
   const percent = Math.round(bp / 100);
   return (
-    <span data-confidence="measured" className="inline-flex items-center gap-1 text-caption font-medium text-slate-200">
+    <span data-confidence="measured" className="inline-flex items-center gap-1 text-caption font-medium text-fg">
       <span
         role="meter"
         aria-label="Measured confidence"
@@ -96,9 +96,9 @@ export function ConfidenceMeter({ confidence }: { confidence: FindingConfidence 
         aria-valuemax={100}
         aria-valuenow={percent}
         aria-valuetext={`${percent}% measured`}
-        className="h-1.5 w-12 overflow-hidden rounded-sm border border-slate-400 bg-slate-900"
+        className="h-1.5 w-12 overflow-hidden rounded-sm border border-line-strong bg-surface"
       >
-        <span className="block h-full bg-cyan-300" style={{ width: `${percent}%` }} />
+        <span className="block h-full bg-accent" style={{ width: `${percent}%` }} />
       </span>
       <span>{percent}% measured</span>
     </span>
@@ -106,10 +106,10 @@ export function ConfidenceMeter({ confidence }: { confidence: FindingConfidence 
 }
 
 const GRADES: Record<EntityValidationGrade, { shape: GlyphShape; label: string; detail: string; tone: string }> = {
-  CHECK_DIGIT_PASSED: { shape: 'diamond', label: 'Check digit passed', detail: 'The matched string passed its own check-digit test.', tone: 'text-emerald-200' },
-  FORMAT_VALIDATED: { shape: 'circle', label: 'Format validated', detail: 'The matched string parsed as a well-formed value of its kind.', tone: 'text-cyan-200' },
-  GAZETTEER_HIT: { shape: 'triangle', label: 'Gazetteer hit', detail: 'The string matched a known-name list; it was not otherwise verified.', tone: 'text-amber-200' },
-  PATTERN_ONLY: { shape: 'ring', label: 'Pattern only: a lead', detail: 'Matched by pattern alone with no validation. A lead, not a parsed value.', tone: 'text-slate-200' },
+  CHECK_DIGIT_PASSED: { shape: 'diamond', label: 'Check digit passed', detail: 'The matched string passed its own check-digit test.', tone: 'text-success' },
+  FORMAT_VALIDATED: { shape: 'circle', label: 'Format validated', detail: 'The matched string parsed as a well-formed value of its kind.', tone: 'text-accent' },
+  GAZETTEER_HIT: { shape: 'triangle', label: 'Gazetteer hit', detail: 'The string matched a known-name list; it was not otherwise verified.', tone: 'text-warning' },
+  PATTERN_ONLY: { shape: 'ring', label: 'Pattern only: a lead', detail: 'Matched by pattern alone with no validation. A lead, not a parsed value.', tone: 'text-fg' },
 };
 
 export function gradeGlyphShape(grade: EntityValidationGrade): GlyphShape {
@@ -129,7 +129,7 @@ export function ValidationGradeChip({ grade }: { grade: EntityValidationGrade })
         shape={shape}
         dashed={grade === 'PATTERN_ONLY'}
         tone={tone}
-        border={grade === 'PATTERN_ONLY' ? 'border-dashed border-slate-500 bg-slate-800/40' : 'border-slate-600 bg-slate-900/60'}
+        border={grade === 'PATTERN_ONLY' ? 'border-dashed border-line-strong bg-raised/40' : 'border-line-strong bg-surface/70'}
       >
         {label}
       </Chip>
@@ -193,11 +193,11 @@ export function edgeVisual(kind: RelationshipKind, basis: RelationshipBasis): Ed
 export function EdgeBasisChip({ kind, basis }: { kind: RelationshipKind; basis: RelationshipBasis }) {
   const visual = edgeVisual(kind, basis);
   return visual.family === 'proximity' ? (
-    <Chip data-edge-family="proximity" shape="ring" dashed tone="text-slate-200" border="border-dashed border-slate-500 bg-slate-800/40">
+    <Chip data-edge-family="proximity" shape="ring" dashed tone="text-fg" border="border-dashed border-line-strong bg-raised/40">
       Co-occurrence: proximity only ({BASIS_TEXT[basis]})
     </Chip>
   ) : (
-    <Chip data-edge-family="typed" shape="diamond" tone="text-cyan-100" border="border-cyan-400/60 bg-cyan-500/10">
+    <Chip data-edge-family="typed" shape="diamond" tone="text-accent" border="border-accent/60 bg-accent/10">
       {visual.label}: relation read from text ({BASIS_TEXT[basis]})
     </Chip>
   );
@@ -254,34 +254,34 @@ export function EvidenceTrace({
         aria-controls={panelId}
         aria-label={`Why we believe this: ${label}`}
         onClick={() => setOpen((current) => !current)}
-        className="focus-ring inline-flex items-center gap-1 rounded-md border border-slate-600 px-1.5 py-1 font-semibold text-slate-200 transition hover:border-cyan-400/60"
+        className="focus-ring inline-flex items-center gap-1 rounded-md border border-control px-1.5 py-1 font-semibold text-fg transition hover:border-accent/60"
       >
         <span aria-hidden="true">{open ? '−' : '+'}</span>
         Why we believe this
       </button>
       {open && (
-        <div id={panelId} role="group" aria-label={`Evidence trace: ${label}`} className="mt-1 rounded-lg border border-slate-700 bg-slate-950/80 p-2 text-slate-300">
+        <div id={panelId} role="group" aria-label={`Evidence trace: ${label}`} className="mt-1 rounded-lg border border-line-strong bg-canvas/70 p-2 text-fg-secondary">
           <p className="leading-relaxed">{explanation}</p>
           {citations.length === 0 ? (
-            <p className="mt-1 text-slate-300">{emptyNote}</p>
+            <p className="mt-1 text-fg-secondary">{emptyNote}</p>
           ) : (
             <ol className="mt-1 flex flex-col gap-1.5" aria-label="Citations">
               {citations.map((citation, index) => (
-                <li key={`${citation.portalKey}-${citation.documentId}-${index}`} className="rounded border border-slate-800 p-1.5">
-                  <div className="font-semibold text-slate-100">{citation.label ?? `Document ${citation.documentId}`}</div>
-                  <div className="text-slate-400">
+                <li key={`${citation.portalKey}-${citation.documentId}-${index}`} className="rounded border border-line p-1.5">
+                  <div className="font-semibold text-fg">{citation.label ?? `Document ${citation.documentId}`}</div>
+                  <div className="text-muted">
                     {citation.portalKey} · document {citation.documentId} · {citationRange(citation)}
                   </div>
                   {citation.quote === null ? (
-                    <div className="text-slate-400">No quote recorded.</div>
+                    <div className="text-muted">No quote recorded.</div>
                   ) : (
-                    <blockquote className="mt-0.5 border-l-2 border-slate-500 pl-1.5 italic text-slate-200">{citation.quote}</blockquote>
+                    <blockquote className="mt-0.5 border-l-2 border-line-strong pl-1.5 italic text-fg">{citation.quote}</blockquote>
                   )}
                   {onOpenSource && (
                     <button
                       type="button"
                       onClick={() => onOpenSource(citation)}
-                      className="focus-ring mt-1 rounded border border-slate-600 px-1.5 py-0.5 font-semibold text-cyan-200 hover:border-cyan-400/60"
+                      className="focus-ring mt-1 rounded border border-control px-1.5 py-0.5 font-semibold text-accent hover:border-accent/60"
                     >
                       Open source document {citation.documentId}
                     </button>
@@ -316,24 +316,24 @@ export function PlainLanguageDisclosure({ kind, label }: { kind: FindingKind; la
         aria-controls={panelId}
         aria-label={`In plain words: ${label}`}
         onClick={() => setOpen((current) => !current)}
-        className="focus-ring inline-flex items-center gap-1 rounded-md border border-slate-600 px-1.5 py-1 font-semibold text-slate-200 transition hover:border-cyan-400/60"
+        className="focus-ring inline-flex items-center gap-1 rounded-md border border-control px-1.5 py-1 font-semibold text-fg transition hover:border-accent/60"
       >
         <span aria-hidden="true">{open ? '−' : '+'}</span>
         In plain words
       </button>
       {open && (
-        <div id={panelId} role="group" aria-label={`Plain-language explanation of ${label}`} className="mt-1 rounded-lg border border-slate-700 bg-slate-950/80 p-2 text-slate-300">
+        <div id={panelId} role="group" aria-label={`Plain-language explanation of ${label}`} className="mt-1 rounded-lg border border-line-strong bg-canvas/70 p-2 text-fg-secondary">
           <dl className="flex flex-col gap-1 leading-relaxed">
             <div>
-              <dt className="font-semibold text-slate-100">What was observed</dt>
+              <dt className="font-semibold text-fg">What was observed</dt>
               <dd>{text.observed}</dd>
             </div>
             <div>
-              <dt className="font-semibold text-slate-100">What it does not show</dt>
+              <dt className="font-semibold text-fg">What it does not show</dt>
               <dd>{text.notShown}</dd>
             </div>
             <div>
-              <dt className="font-semibold text-slate-100">What to do next</dt>
+              <dt className="font-semibold text-fg">What to do next</dt>
               <dd>{text.next}</dd>
             </div>
           </dl>

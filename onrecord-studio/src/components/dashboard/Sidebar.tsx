@@ -50,19 +50,19 @@ export default function Sidebar() {
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
-        <div className={cn('flex h-[64px] shrink-0 items-center border-b border-slate-800/70', isCollapsed ? 'justify-center px-3' : 'gap-2.5 px-3.5')}>
+        <div className={cn('flex h-[64px] shrink-0 items-center border-b border-line', isCollapsed ? 'justify-center px-3' : 'gap-2.5 px-3.5')}>
           <img src="/brand-mark.png" alt="" className="h-9 w-9 shrink-0 rounded-[9px]" />
           {!isCollapsed && (
             <div className="min-w-0">
-              <div className="truncate text-label font-semibold tracking-[-0.015em] text-slate-100">OnRecord Studio</div>
-              <div className="mt-0.5 text-label text-slate-400">San Diego research workspace</div>
+              <div className="truncate text-label font-semibold tracking-[-0.015em] text-fg">OnRecord Studio</div>
+              <div className="mt-0.5 text-label text-muted">San Diego research workspace</div>
             </div>
           )}
           <button
             type="button"
             aria-label="Close navigation"
             onClick={() => setSidebarOpen(false)}
-            className="focus-ring ml-auto rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-200 md:hidden"
+            className="focus-ring ml-auto rounded-lg p-2 text-muted hover:bg-raised hover:text-fg md:hidden"
           >
             <Icon name="x" />
           </button>
@@ -85,30 +85,30 @@ export default function Sidebar() {
                     'sidebar-nav-item focus-ring group relative flex w-full items-center overflow-hidden rounded-lg border text-left transition',
                     isCollapsed ? 'justify-center px-2 py-2' : 'gap-2 px-2 py-1.5',
                     selected
-                      ? 'sidebar-nav-item-active border-transparent text-cyan-100'
-                      : 'border-transparent text-slate-400 hover:bg-slate-800/55 hover:text-slate-200',
+                      ? 'sidebar-nav-item-active border-transparent text-accent'
+                      : 'border-transparent text-muted hover:bg-raised/70 hover:text-fg',
                   )}
                 >
-                  <span className={cn('grid h-7 w-7 shrink-0 place-items-center rounded-md transition', selected ? 'bg-cyan-400/10 text-cyan-300' : 'text-slate-400 group-hover:text-slate-300')}>
+                  <span className={cn('grid h-7 w-7 shrink-0 place-items-center rounded-md transition', selected ? 'bg-accent/10 text-accent' : 'text-muted group-hover:text-fg-secondary')}>
                     <Icon name={item.icon} className="h-4 w-4" />
                   </span>
                   {!isCollapsed && (
                     <span className="min-w-0 flex-1 truncate text-label font-medium">{item.navigationLabel}</span>
                   )}
-                  {!isCollapsed && <span className="text-label text-slate-400">{isApplePlatform() ? '⌘' : 'Ctrl'}{item.shortcutIndex}</span>}
+                  {!isCollapsed && <span className="text-label text-muted">{isApplePlatform() ? '⌘' : 'Ctrl'}{item.shortcutIndex}</span>}
                 </button>
               );
             })}
           </div>
         </nav>
 
-        <div className="mx-4 h-px bg-slate-800/70" />
+        <div className="mx-4 h-px bg-raised/70" />
 
         <nav aria-label="Data sources" className="min-h-0 flex-1 overflow-y-auto px-2.5 py-3">
           {!isCollapsed && (
             <div className="mb-2 flex items-center justify-between px-2">
               <span className="sidebar-section-label">Data sources</span>
-              <span className="numeric-value text-label text-slate-400">{portals.length}</span>
+              <span className="numeric-value text-label text-muted">{portals.length}</span>
             </div>
           )}
           <button
@@ -119,15 +119,15 @@ export default function Sidebar() {
               'sidebar-nav-item focus-ring relative mb-0.5 flex w-full items-center overflow-hidden rounded-lg border text-left transition',
               isCollapsed ? 'justify-center px-2 py-2' : 'gap-2 px-2 py-1.5',
               activePortalKey === null
-                ? 'sidebar-source-active border-transparent text-indigo-100'
-                : 'border-transparent text-slate-400 hover:bg-slate-800/50 hover:text-slate-200',
+                ? 'sidebar-source-active border-transparent text-highlight'
+                : 'border-transparent text-muted hover:bg-raised/70 hover:text-fg',
             )}
           >
             <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md">
               <Icon name="globe" className="h-4 w-4" />
             </span>
             {!isCollapsed && <span className="min-w-0 flex-1 text-label font-medium">All saved sources</span>}
-            {!isCollapsed && <span className="numeric-value rounded-md bg-slate-900 px-1.5 py-0.5 text-label text-slate-400">{portals.length}</span>}
+            {!isCollapsed && <span className="numeric-value rounded-md bg-surface px-1.5 py-0.5 text-label text-muted">{portals.length}</span>}
           </button>
 
           {portals.map(({ registration: portal, lifecycleState, healthStatus, lastError }) => {
@@ -164,11 +164,11 @@ export default function Sidebar() {
                   isCollapsed ? 'grid place-items-center px-2 py-2' : 'px-2 py-1.5',
                   selected
                     ? 'sidebar-source-active border-transparent'
-                    : 'border-transparent hover:border-slate-800 hover:bg-slate-800/45',
+                    : 'border-transparent hover:border-control hover:bg-raised/40',
                 )}
               >
                 <div className={cn('flex items-center', isCollapsed ? 'justify-center' : 'gap-2.5')}>
-                  <span className={cn('relative grid h-7 w-7 shrink-0 place-items-center rounded-lg font-mono text-caption font-semibold', selected ? 'bg-indigo-400/10 text-indigo-200' : 'bg-slate-900 text-slate-400')}>
+                  <span className={cn('relative grid h-7 w-7 shrink-0 place-items-center rounded-lg font-mono text-caption font-semibold', selected ? 'bg-highlight/10 text-highlight' : 'bg-surface text-muted')}>
                     {portal.displayName.slice(0, 2).toUpperCase()}
                     {/* Paused is its own colour rather than the idle grey. A source the operator
                         halted and one that has simply finished are different facts, and a shared
@@ -177,20 +177,20 @@ export default function Sidebar() {
                       <StatusDot
                         state={degraded ? 'error' : syncing ? 'active' : paused ? 'note' : 'idle'}
                         label={degraded ? `${portal.displayName} needs attention` : syncing ? `${portal.displayName} is syncing` : paused ? `${portal.displayName} is paused` : `${portal.displayName} is idle`}
-                        className={cn('h-2 w-2', paused && 'text-amber-400')}
+                        className={cn('h-2 w-2', paused && 'text-warning')}
                       />
                     </span>
                   </span>
-                  {!isCollapsed && <span className={cn('min-w-0 flex-1 truncate text-label font-medium', selected ? 'text-indigo-100' : 'text-slate-300')}>{portal.displayName}</span>}
-                  {!isCollapsed && paused && <span className="shrink-0 rounded-md bg-amber-400/10 px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wide text-amber-300/90">Paused</span>}
-                  {!isCollapsed && degraded && <span className="shrink-0 rounded-md bg-rose-400/10 px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wide text-rose-300/90">Attention</span>}
+                  {!isCollapsed && <span className={cn('min-w-0 flex-1 truncate text-label font-medium', selected ? 'text-highlight' : 'text-fg-secondary')}>{portal.displayName}</span>}
+                  {!isCollapsed && paused && <span className="shrink-0 rounded-md bg-warning/10 px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wide text-warning">Paused</span>}
+                  {!isCollapsed && degraded && <span className="shrink-0 rounded-md bg-danger/10 px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wide text-danger">Attention</span>}
                 </div>
                 {!isCollapsed && runtime && totalTasks > 0 && (
                   <div className="mt-1 pl-9">
-                    <div className="numeric-value text-label text-slate-400">
+                    <div className="numeric-value text-label text-muted">
                       {settledTasks.toLocaleString()} of {totalTasks.toLocaleString()} done
                       {runtime.failedTasks > 0 && (
-                        <span className="text-amber-500/80"> · {runtime.failedTasks.toLocaleString()} failed</span>
+                        <span className="text-warning"> · {runtime.failedTasks.toLocaleString()} failed</span>
                       )}
                     </div>
                     <div
@@ -199,10 +199,10 @@ export default function Sidebar() {
                       aria-valuemin={0}
                       aria-valuemax={100}
                       aria-label={`${portal.displayName} ingestion progress`}
-                      className="mt-1 h-1 w-full overflow-hidden rounded-full bg-slate-800"
+                      className="mt-1 h-1 w-full overflow-hidden rounded-full bg-raised"
                     >
                       <div
-                        className={cn('h-full rounded-full transition-[width] duration-500', syncing ? 'bg-emerald-400' : 'bg-slate-600')}
+                        className={cn('h-full rounded-full transition-[width] duration-500', syncing ? 'bg-success' : 'bg-muted')}
                         style={{ width: `${percentComplete}%` }}
                       />
                     </div>
@@ -213,16 +213,16 @@ export default function Sidebar() {
           })}
 
           {portals.length === 0 && !isCollapsed && (
-            <div className="mx-1 mt-3 rounded-xl border border-dashed border-slate-800 bg-slate-900/25 p-3.5">
-              <div className="flex items-center gap-2 text-label font-semibold text-slate-400">
-                <Icon name="database" className="h-4 w-4 text-cyan-400/70" />
+            <div className="mx-1 mt-3 rounded-xl border border-dashed border-line bg-surface/40 p-3.5">
+              <div className="flex items-center gap-2 text-label font-semibold text-muted">
+                <Icon name="database" className="h-4 w-4 text-accent" />
                 {workspaceInitializationStatus === 'loading'
                   ? 'Loading saved sources'
                   : workspaceInitializationStatus === 'error'
                     ? 'Saved sources unavailable'
                     : 'No sources connected'}
               </div>
-              <p className="mt-2 text-caption leading-relaxed text-slate-400">
+              <p className="mt-2 text-caption leading-relaxed text-muted">
                 {workspaceInitializationStatus === 'loading'
                   ? 'Checking the local source catalog.'
                   : workspaceInitializationStatus === 'error'
@@ -233,20 +233,20 @@ export default function Sidebar() {
           )}
         </nav>
 
-        <div className="border-t border-slate-800/70 p-2.5">
+        <div className="border-t border-line p-2.5">
           {!isCollapsed ? (
             <>
-              <button type="button" onClick={openCommandPalette} className="command-trigger focus-ring flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-label font-medium text-slate-400 transition hover:text-slate-200">
+              <button type="button" onClick={openCommandPalette} className="command-trigger focus-ring flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-label font-medium text-muted transition hover:text-fg">
                 <Icon name="search" className="h-4 w-4" />
                 <span className="flex-1 text-left">Commands</span>
                 <span className="keycap rounded-md border px-1.5 py-0.5 text-label">{isApplePlatform() ? '⌘K' : 'Ctrl K'}</span>
               </button>
-              <div className="mt-2 flex items-center justify-between px-2 text-label text-slate-400">
+              <div className="mt-2 flex items-center justify-between px-2 text-label text-muted">
                 <span className="flex items-center gap-2"><StatusDot state={syncingPortalKeys.length ? 'active' : 'idle'} label={syncingPortalKeys.length ? 'Workers busy' : 'Workers idle'} /> Worker capacity</span>
-                <span className={cn('numeric-value', syncingPortalKeys.length > 0 && 'font-semibold text-emerald-300')}>{syncingPortalKeys.length}/5</span>
+                <span className={cn('numeric-value', syncingPortalKeys.length > 0 && 'font-semibold text-success')}>{syncingPortalKeys.length}/5</span>
               </div>
               <div
-                className="mt-1 flex items-center justify-between gap-3 px-2 text-label text-slate-400"
+                className="mt-1 flex items-center justify-between gap-3 px-2 text-label text-muted"
                 title={ocrCapability
                   ? [
                       `${ocrCapability.engine}${ocrCapability.engineVersion ? ` ${ocrCapability.engineVersion}` : ''}`,
@@ -264,10 +264,10 @@ export default function Sidebar() {
                   <span className={cn(
                     'h-1.5 w-1.5 shrink-0 rounded-full',
                     ocrCapability?.imageOcrAvailable && ocrCapability.pdfOcrAvailable
-                      ? 'bg-emerald-400'
+                      ? 'bg-success'
                       : ocrCapability
-                        ? 'bg-amber-400'
-                        : 'bg-slate-600',
+                        ? 'bg-warning'
+                        : 'bg-muted',
                   )} />
                   Local OCR
                 </span>
@@ -283,13 +283,13 @@ export default function Sidebar() {
               </div>
             </>
           ) : (
-            <button type="button" onClick={openCommandPalette} title={`Commands (${isApplePlatform() ? '⌘' : 'Ctrl'}K)`} aria-label="Open command palette" className="command-trigger focus-ring mx-auto grid h-9 w-9 place-items-center rounded-lg border text-slate-400"><Icon name="search" className="h-4 w-4" /></button>
+            <button type="button" onClick={openCommandPalette} title={`Commands (${isApplePlatform() ? '⌘' : 'Ctrl'}K)`} aria-label="Open command palette" className="command-trigger focus-ring mx-auto grid h-9 w-9 place-items-center rounded-lg border text-muted"><Icon name="search" className="h-4 w-4" /></button>
           )}
           <button
             type="button"
             onClick={toggleSidebarCollapsed}
             aria-label={isCollapsed ? 'Expand navigation' : undefined}
-            className="focus-ring mt-1.5 hidden w-full items-center justify-center gap-2 rounded-lg py-1.5 text-label font-medium text-slate-400 transition hover:bg-slate-800/50 hover:text-slate-300 md:flex"
+            className="focus-ring mt-1.5 hidden w-full items-center justify-center gap-2 rounded-lg py-1.5 text-label font-medium text-muted transition hover:bg-raised/70 hover:text-fg-secondary md:flex"
           >
             <Icon name="collapse" className={cn('h-3.5 w-3.5 transition-transform', isCollapsed && 'rotate-180')} />
             {!isCollapsed && 'Collapse navigation'}

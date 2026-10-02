@@ -266,22 +266,22 @@ export default function DocumentAnnotations({
     const linked = item.findingId === null ? null : findings.find((finding) => finding.id === item.findingId);
     const changed = list?.currentTextSha256 != null && item.textSha256 !== null && item.textSha256 !== list.currentTextSha256;
     return (
-      <li key={item.id} className={`rounded border p-2 ${pageView.selectedId === item.id ? 'border-indigo-400' : 'border-slate-800'}`}>
-        <div className="flex flex-wrap items-center gap-2 text-slate-400">
-          <span className="font-semibold text-slate-200">{KIND_LABELS[item.kind]}</span>
+      <li key={item.id} className={`rounded border p-2 ${pageView.selectedId === item.id ? 'border-highlight' : 'border-line'}`}>
+        <div className="flex flex-wrap items-center gap-2 text-muted">
+          <span className="font-semibold text-fg">{KIND_LABELS[item.kind]}</span>
           {item.tag && (
-            <span className="rounded border border-cyan-400/30 px-1.5 text-cyan-200">
+            <span className="rounded border border-accent/30 px-1.5 text-accent">
               {item.tag}{!isCoded(item.tag, codes) && ' (uncoded)'}
             </span>
           )}
-          {state === 'ANCHORED' && <span className="rounded border border-emerald-400/30 px-1.5 text-emerald-200">Anchored</span>}
-          {state === 'RE_ANCHORED' && <span className="rounded border border-amber-400/30 px-1.5 text-amber-200">Re-anchored</span>}
-          {state === 'ORPHANED' && <span className="rounded border border-rose-400/40 px-1.5 text-rose-200">Orphaned</span>}
+          {state === 'ANCHORED' && <span className="rounded border border-success/30 px-1.5 text-success">Anchored</span>}
+          {state === 'RE_ANCHORED' && <span className="rounded border border-warning/30 px-1.5 text-warning">Re-anchored</span>}
+          {state === 'ORPHANED' && <span className="rounded border border-danger/30 px-1.5 text-danger">Orphaned</span>}
           {item.anchor?.sourceOffset != null && <span>character {item.anchor.sourceOffset.toLocaleString('en-US')}</span>}
-          {region && <span className="rounded border border-slate-500 px-1.5 text-slate-200">Page {region.pageIndex + 1}</span>}
-          {checked === 'ANCHORED' && <span className="rounded border border-emerald-400/30 px-1.5 text-emerald-200">Original matches</span>}
-          {checked === 'ORIGINAL_CHANGED' && <span className="rounded border border-amber-400/50 px-1.5 text-amber-200">Original changed</span>}
-          {checked === 'ORPHANED' && <span className="rounded border border-rose-400/40 px-1.5 text-rose-200">Orphaned: page missing</span>}
+          {region && <span className="rounded border border-line-strong px-1.5 text-fg">Page {region.pageIndex + 1}</span>}
+          {checked === 'ANCHORED' && <span className="rounded border border-success/30 px-1.5 text-success">Original matches</span>}
+          {checked === 'ORIGINAL_CHANGED' && <span className="rounded border border-warning/60 px-1.5 text-warning">Original changed</span>}
+          {checked === 'ORPHANED' && <span className="rounded border border-danger/30 px-1.5 text-danger">Orphaned: page missing</span>}
           {region && checked === null && <span>original not checked</span>}
           {!region && state === null && item.quote === '' && <span>whole document</span>}
           {!region && state === null && item.quote !== '' && <span>not checked: document text unavailable</span>}
@@ -292,50 +292,50 @@ export default function DocumentAnnotations({
           <button type="button" className="underline" onClick={() => void copy(annotationCitation(item, { fileName, regionState: checked, currentTextSha256: list?.currentTextSha256 ?? null, appVersion: __APP_VERSION__ }), 'Copied citation')}>Copy citation</button>
           {confirmingRemoval === item.id ? (
             <>
-              <button type="button" className="text-rose-300 underline" onClick={() => void remove(item.id)}>Confirm delete</button>
+              <button type="button" className="text-danger underline" onClick={() => void remove(item.id)}>Confirm delete</button>
               <button type="button" className="underline" onClick={() => setConfirmingRemoval(null)}>Keep</button>
             </>
           ) : (
             <button type="button" className="underline" aria-label={`Delete ${KIND_LABELS[item.kind].toLowerCase()}${item.quote ? ` "${item.quote.slice(0, 40)}"` : ''}`} onClick={() => setConfirmingRemoval(item.id)}>Delete</button>
           )}
         </div>
-        <p className="mt-1 text-slate-400">
+        <p className="mt-1 text-muted">
           {item.author ?? 'Author not recorded'}
           {item.importedFromKey && ` · from a colleague, signed by key ${item.importedFromKey.slice(0, 12)}`}
           {' · '}
           {own ? (
             <label>
               <span className="sr-only">Status</span>
-              <select aria-label={`Status of ${KIND_LABELS[item.kind].toLowerCase()} ${item.id.slice(0, 8)}`} className="focus-ring rounded border border-slate-700 bg-slate-950 px-1 text-slate-200" value={item.status} onChange={(event) => void changeStatus(item.id, event.target.value as AnnotationStatus)}>
+              <select aria-label={`Status of ${KIND_LABELS[item.kind].toLowerCase()} ${item.id.slice(0, 8)}`} className="focus-ring rounded border border-control bg-canvas px-1 text-fg" value={item.status} onChange={(event) => void changeStatus(item.id, event.target.value as AnnotationStatus)}>
                 {(Object.keys(STATUS_LABELS) as AnnotationStatus[]).map((value) => <option key={value} value={value}>{STATUS_LABELS[value]}</option>)}
               </select>
             </label>
           ) : STATUS_LABELS[item.status]}
         </p>
-        {!region && item.contextUnanchored && item.quote !== '' && <p className="mt-1 text-amber-200">Unanchored context: made before surrounding text was kept, so it is located by its quote and position alone.</p>}
-        {region && item.quote === '' && <p className="mt-1 text-slate-400">No text layer text in this region (an image, a scan, or no text layer), so nothing is quoted.</p>}
-        {region && checked === 'ORIGINAL_CHANGED' && <p className="mt-1 text-amber-200">The original file has changed since this region was drawn. The rectangle is shown where it was drawn and may no longer cover what it covered.</p>}
-        {region && <p className="mt-1 text-slate-400">Original file SHA-256 when drawn: {region.originalSha256}</p>}
-        {!region && item.quote !== '' && item.textSha256 === null && <p className="mt-1 text-slate-400">The document text digest was not recorded for this mark.</p>}
-        {changed && <p className="mt-1 text-amber-200">The document text has changed since this was marked.</p>}
-        {checked === 'ORPHANED' && <p className="mt-1 text-rose-200">The original file no longer has page {(region?.pageIndex ?? 0) + 1}. The region is kept as saved and is not moved.</p>}
-        {state === 'ORPHANED' && <p className="mt-1 text-rose-200">{item.anchor?.reason} Stored quote shown below; it is not located in the current text.</p>}
-        {item.quote && <blockquote className="mt-1 border-l border-slate-600 pl-2 text-slate-300">{item.quote}</blockquote>}
+        {!region && item.contextUnanchored && item.quote !== '' && <p className="mt-1 text-warning">Unanchored context: made before surrounding text was kept, so it is located by its quote and position alone.</p>}
+        {region && item.quote === '' && <p className="mt-1 text-muted">No text layer text in this region (an image, a scan, or no text layer), so nothing is quoted.</p>}
+        {region && checked === 'ORIGINAL_CHANGED' && <p className="mt-1 text-warning">The original file has changed since this region was drawn. The rectangle is shown where it was drawn and may no longer cover what it covered.</p>}
+        {region && <p className="mt-1 text-muted">Original file SHA-256 when drawn: {region.originalSha256}</p>}
+        {!region && item.quote !== '' && item.textSha256 === null && <p className="mt-1 text-muted">The document text digest was not recorded for this mark.</p>}
+        {changed && <p className="mt-1 text-warning">The document text has changed since this was marked.</p>}
+        {checked === 'ORPHANED' && <p className="mt-1 text-danger">The original file no longer has page {(region?.pageIndex ?? 0) + 1}. The region is kept as saved and is not moved.</p>}
+        {state === 'ORPHANED' && <p className="mt-1 text-danger">{item.anchor?.reason} Stored quote shown below; it is not located in the current text.</p>}
+        {item.quote && <blockquote className="mt-1 border-l border-line-strong pl-2 text-fg-secondary">{item.quote}</blockquote>}
         {item.note && <p className="mt-1 whitespace-pre-wrap">{item.note}</p>}
-        {item.findingId && <p className="mt-1 text-slate-400">Linked finding: {linked ? linked.headline : `${item.findingId} (not in this document's current findings)`}</p>}
+        {item.findingId && <p className="mt-1 text-muted">Linked finding: {linked ? linked.headline : `${item.findingId} (not in this document's current findings)`}</p>}
       </li>
     );
   };
 
   return (
-    <section aria-label="Annotations" className={`space-y-2 border-b border-slate-800 p-3 text-label text-slate-300${pageView.open ? ' w-[24rem] max-w-[45%] shrink-0 overflow-y-auto border-r' : ''}`}>
+    <section aria-label="Annotations" className={`space-y-2 border-b border-line p-3 text-label text-fg-secondary${pageView.open ? ' w-[24rem] max-w-[45%] shrink-0 overflow-y-auto border-r' : ''}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-label font-semibold text-slate-200">Annotations</h3>
+        <h3 className="text-label font-semibold text-fg">Annotations</h3>
         <button type="button" className={button} disabled={items.length === 0} onClick={() => void copy(annotationsToMarkdown(fileName, portalKey, documentId, items), 'Copied annotations as Markdown')}>
           Copy as Markdown
         </button>
       </div>
-      <p className="text-slate-400">Your notes stay on this computer. They record your reading, not what the record shows. A text annotation's position refers to the extracted text. A region drawn in the page view refers to a rectangle on a page of the original PDF.</p>
+      <p className="text-muted">Your notes stay on this computer. They record your reading, not what the record shows. A text annotation's position refers to the extracted text. A region drawn in the page view refers to a rectangle on a page of the original PDF.</p>
 
       {settings && (settings.reviewer === null || editingReviewer) ? (
         <div className="flex flex-wrap items-end gap-2">
@@ -346,7 +346,7 @@ export default function DocumentAnnotations({
           <button type="button" className={button} disabled={reviewerDraft.trim() === ''} onClick={() => void saveReviewer()}>Save name</button>
         </div>
       ) : settings && (
-        <p className="text-slate-400">Annotating as <span className="text-slate-200">{settings.reviewer}</span>. <button type="button" className="underline" onClick={() => setEditingReviewer(true)}>Change</button></p>
+        <p className="text-muted">Annotating as <span className="text-fg">{settings.reviewer}</span>. <button type="button" className="underline" onClick={() => setEditingReviewer(true)}>Change</button></p>
       )}
 
       <div className="grid gap-1.5 sm:grid-cols-[9rem_minmax(0,1fr)]">
@@ -371,22 +371,22 @@ export default function DocumentAnnotations({
         <label className="block">
           Free-text label
           <input className={field} maxLength={ANNOTATION_LIMITS.tagCharacters} value={freeCode} onChange={(event) => setFreeCode(event.target.value)} />
-          <span className="text-amber-200">Not in the codebook, so it is flagged as uncoded and will not agree with a coded mark.</span>
+          <span className="text-warning">Not in the codebook, so it is flagged as uncoded and will not agree with a coded mark.</span>
         </label>
       )}
       {pending && (
-        <div ref={pendingRef} className="rounded border border-cyan-400/40 p-2">
-          <p className="font-semibold text-slate-200">
+        <div ref={pendingRef} className="rounded border border-accent/30 p-2">
+          <p className="font-semibold text-fg">
             Region on page {pending.rectangle.pageIndex + 1}: left {percent(pending.rectangle.x)}, top {percent(pending.rectangle.y)}, width {percent(pending.rectangle.width)}, height {percent(pending.rectangle.height)}
           </p>
-          {pending.quote ? <blockquote className="mt-1 border-l border-cyan-400 pl-2 text-slate-300">{pending.quote}</blockquote> : <p className="text-slate-400">No text layer text in this region (an image, a scan, or no text layer): nothing will be quoted.</p>}
+          {pending.quote ? <blockquote className="mt-1 border-l border-accent pl-2 text-fg-secondary">{pending.quote}</blockquote> : <p className="text-muted">No text layer text in this region (an image, a scan, or no text layer): nothing will be quoted.</p>}
           <button type="button" className={`${button} mt-1`} onClick={() => pageViewBridge.update(viewKey, { pending: null })}>Discard region</button>
         </div>
       )}
       {needsPassage && !pending && (
         <div>
           <button type="button" className={button} onClick={markSelection}>Use selected text</button>
-          {anchor && <blockquote className="mt-1 border-l border-cyan-400 pl-2 text-slate-300">{anchor.quote}</blockquote>}
+          {anchor && <blockquote className="mt-1 border-l border-accent pl-2 text-fg-secondary">{anchor.quote}</blockquote>}
         </div>
       )}
       <label className="block">
@@ -399,27 +399,27 @@ export default function DocumentAnnotations({
           <option value="">No linked finding</option>
           {findings.map((finding) => <option key={finding.id} value={finding.id}>{finding.headline}</option>)}
         </select>
-        {findings.length >= FINDING_PICKER_LIMIT && <span className="text-amber-200">Showing the first {FINDING_PICKER_LIMIT} findings for this document.</span>}
+        {findings.length >= FINDING_PICKER_LIMIT && <span className="text-warning">Showing the first {FINDING_PICKER_LIMIT} findings for this document.</span>}
       </label>
       <button type="button" className={button} disabled={!canSave} onClick={() => void save()}>
         {isSaving ? 'Saving…' : 'Save annotation'}
       </button>
-      {actionError && <p role="alert" className="text-rose-300">{actionError}</p>}
-      {status && <p role="status" className="text-emerald-300">{status}</p>}
+      {actionError && <p role="alert" className="text-danger">{actionError}</p>}
+      {status && <p role="status" className="text-success">{status}</p>}
       {loadError && (
-        <p role="alert" className="text-rose-300">
+        <p role="alert" className="text-danger">
           Annotations could not be read: {loadError} <button type="button" className="underline" onClick={() => { load(); loadSettings(); }}>Retry</button>
         </p>
       )}
-      {list && list.annotations.length === 0 && !loadError && <p className="text-slate-400">No annotations on this document yet.</p>}
+      {list && list.annotations.length === 0 && !loadError && <p className="text-muted">No annotations on this document yet.</p>}
       {list && !list.textAvailable && items.some((item) => item.quote !== '') && (
-        <p className="text-amber-200">This document's text is not available, so where each passage now sits could not be checked.</p>
+        <p className="text-warning">This document's text is not available, so where each passage now sits could not be checked.</p>
       )}
       {placed.length > 0 && <ul aria-label="Saved annotations" className="flex flex-col gap-1.5">{placed.map(row)}</ul>}
       {orphaned.length > 0 && (
         <div>
-          <h4 className="font-semibold text-rose-200">Orphaned annotations ({orphaned.length})</h4>
-          <p className="text-slate-400">The quoted text is missing from the current document text, or now appears more than once. These are kept with the quote as it was saved and are not moved on a guess.</p>
+          <h4 className="font-semibold text-danger">Orphaned annotations ({orphaned.length})</h4>
+          <p className="text-muted">The quoted text is missing from the current document text, or now appears more than once. These are kept with the quote as it was saved and are not moved on a guess.</p>
           <ul aria-label="Orphaned annotations" className="mt-1 flex flex-col gap-1.5">{orphaned.map(row)}</ul>
         </div>
       )}

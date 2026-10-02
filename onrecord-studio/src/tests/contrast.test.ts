@@ -1,62 +1,78 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import colors from 'tailwindcss/colors';
 import { describe, expect, it } from 'vitest';
 
-// The dark appearance paints panels with the raw Tailwind slate scale, so a text utility below
-// 4.5:1 on those surfaces is unreadable no matter how the tokens are tuned. That is the whole
-// basis of the App Store "Sufficient Contrast" claim, and a single `text-slate-500` re-introduced
-// in a later component would quietly falsify it. Light appearance is covered by the
-// `[data-theme="light"]` remaps in index.css, which repoint every accent family at a --viz-* token.
-const DARK_SURFACES = ['#020617', '#0f172a', '#1e293b'];
-const MINIMUM_RATIO = 4.5;
+// Every UI colour is a semantic role defined once per mode in index.css. These checks are the
+// basis of the App Store "Sufficient Contrast" label: each text role must stay readable on each
+// surface in every mode, and a component may not bypass the roles with a raw palette utility.
+const css = readFileSync(join(__dirname, '..', 'index.css'), 'utf8');
 
-// A dark utility is correct on a light chip; those lines are excluded rather than exempted.
-const LIGHT_CHIP = /bg-(white|slate-(50|100|200|300)|(amber|cyan|emerald|rose|indigo|red|fuchsia|purple)-(100|200|300|400|500))(?![/[0-9])/;
-
-function channel(value: number) {
-  const v = value / 255;
-  return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+function block(selector: string): Record<string, string> {
+  const start = css.indexOf(`${selector} {`);
+  if (start < 0) throw new Error(`missing ${selector}`);
+  const body = css.slice(start, css.indexOf('}', start));
+  return Object.fromEntries([...body.matchAll(/--([\w-]+):\s*(\d+ \d+ \d+);/g)].map(([, name, value]) => [name, value]));
 }
 
-function luminance(hex: string) {
-  const value = hex.replace('#', '');
-  const [r, g, b] = [0, 2, 4].map((i) => channel(parseInt(value.slice(i, i + 2), 16)));
+const light = block(':root');
+const dark = { ...light, ...block(':root[data-theme="dark"]') };
+const more = block(':root[data-contrast="more"]');
+const MODES = {
+  light,
+  dark,
+  'light, increased contrast': { ...light, ...more },
+  'dark, increased contrast': { ...dark, ...more, ...block(':root[data-contrast="more"][data-theme="dark"]') },
+};
+const TEXT = ['fg', 'fg-secondary', 'muted', 'accent', 'highlight', 'success', 'warning', 'danger'];
+const SURFACES = ['canvas', 'surface', 'raised'];
+
+function luminance(channels: string) {
+  const [r, g, b] = channels.split(' ').map((value) => {
+    const v = Number(value) / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  });
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-function contrast(foreground: string, background: string) {
-  const [a, b] = [luminance(foreground), luminance(background)];
-  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+function contrast(a: string, b: string) {
+  const [x, y] = [luminance(a), luminance(b)];
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
 }
 
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) return sourceFiles(path);
-    return entry.isFile() && path.endsWith('.tsx') ? [path] : [];
+    return entry.isFile() && /\.tsx?$/.test(path) ? [path] : [];
   });
 }
 
-describe('dark appearance text contrast', () => {
-  it('keeps every text utility at or above 4.5:1 on the slate surfaces it renders on', () => {
-    const palette = colors as unknown as Record<string, Record<string, string>>;
+describe('colour roles', () => {
+  it('keep every text role readable on every surface in every mode', () => {
     const failures: string[] = [];
-
-    for (const file of sourceFiles(join(__dirname, '..', 'components'))) {
-      readFileSync(file, 'utf8').split('\n').forEach((line, index) => {
-        if (LIGHT_CHIP.test(line)) return;
-        for (const [, family, shade] of line.matchAll(/\btext-([a-z]+)-(\d{2,3})\b/g)) {
-          const hex = palette[family]?.[shade];
-          if (typeof hex !== 'string' || !hex.startsWith('#')) continue;
-          const worst = Math.min(...DARK_SURFACES.map((surface) => contrast(hex, surface)));
-          if (worst < MINIMUM_RATIO) {
-            failures.push(`${file.split('/src/')[1]}:${index + 1} text-${family}-${shade} (${worst.toFixed(2)}:1)`);
-          }
+    for (const [mode, tokens] of Object.entries(MODES)) {
+      const increased = mode.includes('increased');
+      for (const text of TEXT) {
+        const minimum = increased && ['fg', 'fg-secondary', 'muted'].includes(text) ? 7 : 4.5;
+        for (const surface of SURFACES) {
+          const ratio = contrast(tokens[text], tokens[surface]);
+          if (ratio < minimum) failures.push(`${mode}: ${text} on ${surface} ${ratio.toFixed(2)}:1 < ${minimum}`);
         }
-      });
+      }
+      for (const surface of SURFACES) {
+        const ratio = contrast(tokens.control, tokens[surface]);
+        if (ratio < 3) failures.push(`${mode}: control border on ${surface} ${ratio.toFixed(2)}:1 < 3`);
+      }
     }
-
     expect(failures).toEqual([]);
+  });
+
+  it('are the only colours components use', () => {
+    const raw = /\b(?:text|bg|border|ring|ring-offset|fill|stroke|from|via|to|divide|outline|placeholder|decoration|shadow|caret)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}\b/;
+    const offenders = sourceFiles(join(__dirname, '..', 'components'))
+      .flatMap((file) => readFileSync(file, 'utf8').split('\n').map((line, index) => [file, index, line] as const))
+      .filter(([, , line]) => raw.test(line))
+      .map(([file, index, line]) => `${file.split('/src/')[1]}:${index + 1} ${line.match(raw)?.[0]}`);
+    expect(offenders).toEqual([]);
   });
 });

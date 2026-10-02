@@ -27,12 +27,12 @@ export default function AnalyticsUnavailable({ heading, detail, className }: Ana
   return (
     <div
       role="status"
-      className={`grid h-full min-h-40 place-items-center rounded-xl border border-dashed border-amber-500/30 bg-amber-500/[0.04] p-4 text-center ${className ?? ''}`}
+      className={`grid h-full min-h-40 place-items-center rounded-xl border border-dashed border-warning/30 bg-warning/5 p-4 text-center ${className ?? ''}`}
     >
       <div className="max-w-xs">
-        <Icon name="shield" className="mx-auto h-5 w-5 text-amber-400/70" />
-        <div className="mt-2 text-label font-semibold text-amber-200/90">{heading}</div>
-        <p className="mt-1 text-caption leading-relaxed text-slate-400">
+        <Icon name="shield" className="mx-auto h-5 w-5 text-warning" />
+        <div className="mt-2 text-label font-semibold text-warning">{heading}</div>
+        <p className="mt-1 text-caption leading-relaxed text-muted">
           {detail ?? 'The analytics query did not complete, so this panel has nothing to report either way. The activity log records the failure.'}
         </p>
       </div>

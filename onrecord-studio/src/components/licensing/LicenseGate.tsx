@@ -112,40 +112,40 @@ export default function LicenseGate({ controller }: { controller: LicenseControl
     : null;
 
   return (
-    <main className="app-theme flex h-screen w-screen items-center justify-center overflow-y-auto bg-slate-950 px-6 text-slate-100">
-      <section className="my-auto w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900/80 p-8 shadow-2xl" aria-labelledby="license-gate-heading">
-        <p className="text-label leading-4 font-semibold uppercase tracking-[0.24em] text-cyan-400">OnRecord Studio</p>
+    <main className="app-theme flex h-screen w-screen items-center justify-center overflow-y-auto bg-canvas px-6 text-fg">
+      <section className="my-auto w-full max-w-lg rounded-2xl border border-line-strong bg-surface/70 p-8 shadow-2xl" aria-labelledby="license-gate-heading">
+        <p className="text-label leading-4 font-semibold uppercase tracking-[0.24em] text-accent">OnRecord Studio</p>
         <h1 id="license-gate-heading" ref={headingRef} tabIndex={-1} className="mt-3 text-2xl font-semibold outline-none">
           {copy.heading}
         </h1>
-        <p className="mt-4 text-sm leading-6 text-slate-300">{copy.sentence}</p>
-        {detail ? <p className="mt-2 text-label leading-5 text-slate-400">Detail: {detail}</p> : null}
+        <p className="mt-4 text-sm leading-6 text-fg-secondary">{copy.sentence}</p>
+        {detail ? <p className="mt-2 text-label leading-5 text-muted">Detail: {detail}</p> : null}
         {direct && status?.accountEmail && !showDeviceLimit ? (
-          <p className="mt-3 text-label leading-4 text-slate-300">
+          <p className="mt-3 text-label leading-4 text-fg-secondary">
             Signed in as {status.accountEmail}
             {status.signInProvider ? ` with ${status.signInProvider}` : ''}.{' '}
             <button
               type="button"
               disabled={busy}
               onClick={controller.signOut}
-              className="focus-ring inline-flex min-h-[24px] items-center rounded px-1.5 font-semibold text-cyan-300 underline disabled:opacity-50"
+              className="focus-ring inline-flex min-h-[24px] items-center rounded px-1.5 font-semibold text-accent underline disabled:opacity-50"
             >
               Sign out
             </button>
           </p>
         ) : null}
         {error ? (
-          <p role="alert" className="mt-4 rounded-lg border border-rose-700 bg-rose-950/60 px-4 py-3 text-sm text-rose-100">
+          <p role="alert" className="mt-4 rounded-lg border border-danger bg-danger px-4 py-3 text-sm text-danger">
             {error}
           </p>
         ) : null}
         {signInNotice ? (
-          <p role="alert" className="mt-4 rounded-lg border border-rose-700 bg-rose-950/60 px-4 py-3 text-sm text-rose-100">
+          <p role="alert" className="mt-4 rounded-lg border border-danger bg-danger px-4 py-3 text-sm text-danger">
             Sign-in did not complete. {signInNotice}
           </p>
         ) : null}
         {signInProvider ? (
-          <p role="status" className="mt-4 text-sm text-slate-300">Waiting for {providerLabel(signInProvider)} sign-in in your browser window...</p>
+          <p role="status" className="mt-4 text-sm text-fg-secondary">Waiting for {providerLabel(signInProvider)} sign-in in your browser window...</p>
         ) : null}
         <DeleteAccountResult report={controller.deleteReport} error={controller.deleteError} onDismiss={controller.dismissDeleteResult} />
 
@@ -158,7 +158,7 @@ export default function LicenseGate({ controller }: { controller: LicenseControl
                 disabled={busy}
                 aria-busy={signInProvider === provider.id}
                 onClick={() => controller.signIn(provider.id)}
-                className="focus-ring rounded-lg border border-slate-500 px-3 py-2.5 text-sm font-semibold text-slate-100 hover:bg-slate-800 disabled:cursor-wait disabled:opacity-50"
+                className="focus-ring rounded-lg border border-control px-3 py-2.5 text-sm font-semibold text-fg hover:bg-raised disabled:cursor-wait disabled:opacity-50"
               >
                 {signInProvider === provider.id ? `Signing in with ${provider.label}...` : `Continue with ${provider.label}`}
               </button>
@@ -178,7 +178,7 @@ export default function LicenseGate({ controller }: { controller: LicenseControl
         {showUpgrade ? <UpgradePanel checkout={controller.checkout} onStartCheckout={controller.startCheckout} /> : null}
 
         {!loading && !direct ? (
-          <div className="mt-5 space-y-2 rounded-lg bg-slate-950/70 px-4 py-3 text-label leading-5 text-slate-400">
+          <div className="mt-5 space-y-2 rounded-lg bg-canvas/70 px-4 py-3 text-label leading-5 text-muted">
             <p>Open the Mac App Store and sign in with the Apple Account that purchased this app.</p>
             <p>This is a one-time paid app; no subscription or separate license key is required.</p>
           </div>
@@ -189,7 +189,7 @@ export default function LicenseGate({ controller }: { controller: LicenseControl
             type="button"
             disabled={busy || (loading && !error)}
             onClick={controller.refresh}
-            className="focus-ring mt-6 w-full rounded-lg bg-cyan-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-wait disabled:opacity-50"
+            className="focus-ring mt-6 w-full rounded-lg bg-accent px-4 py-3 text-sm font-semibold text-muted transition hover:bg-accent disabled:cursor-wait disabled:opacity-50"
           >
             {refreshing || (loading && !error)
               ? direct || loading
@@ -201,7 +201,7 @@ export default function LicenseGate({ controller }: { controller: LicenseControl
           </button>
         ) : null}
         {refreshing ? <p role="status" className="sr-only">Checking license</p> : null}
-        <p className="mt-4 text-center text-label leading-4 text-slate-400">
+        <p className="mt-4 text-center text-label leading-4 text-muted">
           {loading
             ? 'Workspace commands stay locked until the license check finishes. Local evidence on this Mac is not deleted.'
             : direct

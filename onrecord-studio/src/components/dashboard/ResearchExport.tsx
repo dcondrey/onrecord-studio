@@ -37,11 +37,11 @@ export default function ResearchExport({
   };
   const filename = `${report.topic.replace(/[^a-z0-9_-]/gi, "-")}-${report.createdAt.slice(0, 10)}-case-packet`;
   return (
-    <section aria-label="Export investigation case packet" className="rounded-xl border border-slate-700 p-4">
+    <section aria-label="Export investigation case packet" className="rounded-xl border border-line-strong p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h4 className="text-sm font-semibold text-slate-100">Take the case forward</h4>
-          <p className="mt-1 max-w-3xl text-label leading-relaxed text-slate-400">
+          <h4 className="text-sm font-semibold text-fg">Take the case forward</h4>
+          <p className="mt-1 max-w-3xl text-label leading-relaxed text-muted">
             A portable packet with linked citations, exact query results, source hashes,
             request drafts, meeting actions, and your follow-through states.
           </p>
@@ -52,11 +52,11 @@ export default function ResearchExport({
       </div>
       {packet && (
         <div className="mt-4 space-y-3">
-          <p role="status" className="text-label leading-4 text-slate-400">
+          <p role="status" className="text-label leading-4 text-muted">
             Snapshot prepared {new Date(packet.exportedAt).toLocaleString()}. Refresh
             the packet to include later casework changes.
           </p>
-          <label className="block text-label leading-4 text-slate-300">
+          <label className="block text-label leading-4 text-fg-secondary">
             Review case packet
             <textarea
               ref={preview}
@@ -83,7 +83,7 @@ export default function ResearchExport({
               Close packet preview
             </button>
           </div>
-          <p className="text-label leading-4 text-slate-400">
+          <p className="text-label leading-4 text-muted">
             Markdown is ready for editorial review. JSON preserves the exact saved evidence,
             SQL, and provenance for independent checking. Exporting does not submit requests
             or mark findings verified.

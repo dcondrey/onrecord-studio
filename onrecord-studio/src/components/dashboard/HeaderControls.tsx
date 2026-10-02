@@ -32,7 +32,7 @@ export function HeaderControls({
         aria-label={audioAlertsEnabled ? 'Disable audio alerts' : 'Enable audio alerts'}
         aria-pressed={audioAlertsEnabled}
         onClick={() => setAudioAlertsEnabled(!audioAlertsEnabled)}
-        className={cn('focus-ring grid h-9 w-9 place-items-center rounded-xl border transition', audioAlertsEnabled ? 'border-cyan-400/30 bg-cyan-400/10 text-cyan-300' : 'border-slate-800 bg-slate-900/50 text-slate-400 hover:text-slate-300')}
+        className={cn('focus-ring grid h-9 w-9 place-items-center rounded-xl border transition', audioAlertsEnabled ? 'border-accent/30 bg-accent/10 text-accent' : 'border-control bg-surface/70 text-muted hover:text-fg-secondary')}
       >
         <Icon name="volume" className="h-3.5 w-3.5" />
       </button>
@@ -41,7 +41,7 @@ export function HeaderControls({
         title="Local profile and declared organization"
         aria-label="Open local profile"
         onClick={() => setProfileOpen(true)}
-        className="focus-ring grid h-9 w-9 place-items-center rounded-xl border border-slate-800 bg-slate-900/50 text-slate-400 transition hover:text-slate-300"
+        className="focus-ring grid h-9 w-9 place-items-center rounded-xl border border-control bg-surface/70 text-muted transition hover:text-fg-secondary"
       >
         <Icon name="shield" className="h-3.5 w-3.5" />
       </button>
@@ -52,16 +52,16 @@ export function HeaderControls({
       <ProfileSettings />
       <SelfReview />
       <div className="system-status hidden h-9 items-center gap-2 rounded-xl border px-2.5 text-caption sm:flex" role="status" title={syncingPortalKeys.length > 0 ? `${syncingPortalKeys.length} sources synchronizing` : 'All systems ready'}>
-        <span className={cn('grid h-5 w-5 place-items-center rounded-md', syncingPortalKeys.length > 0 ? 'status-pulse bg-emerald-400/10 text-emerald-300' : 'bg-emerald-400/10 text-emerald-300')}>
+        <span className={cn('grid h-5 w-5 place-items-center rounded-md', syncingPortalKeys.length > 0 ? 'status-pulse bg-success/10 text-success' : 'bg-success/10 text-success')}>
           <Icon name={syncingPortalKeys.length > 0 ? 'sync' : 'shield'} className={cn('h-3.5 w-3.5', syncingPortalKeys.length > 0 && 'animate-spin')} />
         </span>
-        <span className="hidden text-slate-400 2xl:inline">{syncingPortalKeys.length > 0 ? `${syncingPortalKeys.length} source${syncingPortalKeys.length === 1 ? '' : 's'} live` : 'System ready'}</span>
+        <span className="hidden text-muted 2xl:inline">{syncingPortalKeys.length > 0 ? `${syncingPortalKeys.length} source${syncingPortalKeys.length === 1 ? '' : 's'} live` : 'System ready'}</span>
       </div>
       <button
         type="button"
         aria-label="Connect a data source"
         onClick={onToggleConnector}
-        className={cn('focus-ring rounded-xl border p-2.5 transition lg:hidden', isConnectorOpen ? 'border-cyan-400/30 bg-cyan-400/10 text-cyan-300' : 'border-slate-800 bg-slate-900/50 text-slate-400 hover:text-slate-100')}
+        className={cn('focus-ring rounded-xl border p-2.5 transition lg:hidden', isConnectorOpen ? 'border-accent/30 bg-accent/10 text-accent' : 'border-control bg-surface/70 text-muted hover:text-fg')}
       >
         <Icon name="database" />
       </button>

@@ -250,13 +250,13 @@ describe('provenance shield', () => {
       verificationErrors: ['Stored bytes do not match the recorded digest.'],
     });
     expect(badge).toBe('Digest mismatch');
-    expect(document.querySelector('span.text-rose-300')).not.toBeNull();
+    expect(document.querySelector('span.text-danger')).not.toBeNull();
   });
 
   it('separates a checked-and-missing evidence file from a check that never ran', async () => {
     const [missing] = await badgeFor({ provenanceConfidence: 'EVIDENCE_FILE_UNAVAILABLE', evidenceFilePresent: false, hashMatches: false, computedSha256: '' });
     expect(missing).toBe('Evidence file missing');
-    expect(document.querySelector('span.text-amber-300')).not.toBeNull();
+    expect(document.querySelector('span.text-warning')).not.toBeNull();
   });
 
   it('surfaces an invalid manifest signature without discarding the rung the digest earned', async () => {

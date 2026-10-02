@@ -80,25 +80,25 @@ export default function ResearchWorkspace({ onReview }: { onReview?: (reportId: 
     : missingCredential ? "Model access is unavailable. Configure a credential to run another investigation."
     : status.phase;
   return <section ref={workspaceRef} aria-label="Autonomous research" className="space-y-4">
-    <div className="flex flex-wrap items-center justify-between gap-3 text-label leading-4 text-slate-400"><p role="status">{stage}</p>{status && <p className={status.policy.provider === "ollama" ? "text-emerald-300" : "text-amber-200"}>{status.policy.provider === "ollama" ? "Model: local Ollama. Nothing is sent off this computer." : `Model: ${status.policy.provider === "openrouter" ? "OpenRouter" : "OpenAI"} (external). Investigations${status.policy.enabled ? "" : " you run manually"} send selected public-record excerpts to it.`}</p>}{latestSavedAt && <p>Latest saved dossier: {new Date(latestSavedAt).toLocaleString()}</p>}</div>
-    {status && (missingCredential || budgetMessage) && <div className="rounded-lg border border-amber-700 p-3 text-sm text-amber-200">
+    <div className="flex flex-wrap items-center justify-between gap-3 text-label leading-4 text-muted"><p role="status">{stage}</p>{status && <p className={status.policy.provider === "ollama" ? "text-success" : "text-warning"}>{status.policy.provider === "ollama" ? "Model: local Ollama. Nothing is sent off this computer." : `Model: ${status.policy.provider === "openrouter" ? "OpenRouter" : "OpenAI"} (external). Investigations${status.policy.enabled ? "" : " you run manually"} send selected public-record excerpts to it.`}</p>}{latestSavedAt && <p>Latest saved dossier: {new Date(latestSavedAt).toLocaleString()}</p>}</div>
+    {status && (missingCredential || budgetMessage) && <div className="rounded-lg border border-warning p-3 text-sm text-warning">
       {missingCredential && <p>Add <code>{status.policy.provider === "openrouter" ? "OPENROUTER_API_KEY" : "OPENAI_API_KEY"}</code> to <code>~/.env</code> for the selected {status.policy.provider === "openrouter" ? "OpenRouter" : "OpenAI API"} provider. The app checks this file automatically. If your key is for another provider, select that provider in Research settings.</p>}
       {budgetMessage && <p className={missingCredential ? "mt-2" : undefined}>{budgetMessage}</p>}
       <button type="button" className="analysis-button mt-2" onClick={openSettings}>Open Research settings</button>
     </div>}
-    {error && <div role="alert" className="rounded-lg border border-rose-700 p-3 text-sm text-rose-300"><p>Research status could not be refreshed{status ? "; showing the last loaded saved records" : ""}.</p><p className="mt-1">{error}</p><button type="button" className="analysis-button mt-2" onClick={() => void refresh()}>Retry research status</button></div>}
-    {status?.lastError && <div role="alert" className="rounded-lg border border-amber-700 p-3 text-sm text-amber-200"><p>Latest research attempt needs attention</p><p className="mt-1">{status.lastError}</p></div>}
-    {sourceIssues.length > 0 && <details className="rounded-lg border border-amber-800 p-3 text-label leading-4 text-amber-200"><summary className="cursor-pointer">Collection gaps affect the available evidence: {sourceIssues.map((source) => source.label).slice(0, 3).join("; ")}{sourceIssues.length > 3 ? "; additional sources" : ""}</summary><ul className="mt-2 space-y-2">{sourceIssues.map((source) => <li key={source.url}>{/^https?:\/\//.test(source.url) ? <a className="text-cyan-300" href={source.url} target="_blank" rel="noreferrer">{source.label}</a> : source.label}: {source.detail}</li>)}</ul></details>}
-    {selectedReport && status && !report && <p role="alert" className="rounded-lg border border-amber-700 p-3 text-sm text-amber-200">The selected dossier is no longer in the current catalog. It may have aged out of the recent list or become unavailable. Its cached evidence is no longer displayed; use the original dossier in a saved case to check availability.</p>}
+    {error && <div role="alert" className="rounded-lg border border-danger p-3 text-sm text-danger"><p>Research status could not be refreshed{status ? "; showing the last loaded saved records" : ""}.</p><p className="mt-1">{error}</p><button type="button" className="analysis-button mt-2" onClick={() => void refresh()}>Retry research status</button></div>}
+    {status?.lastError && <div role="alert" className="rounded-lg border border-warning p-3 text-sm text-warning"><p>Latest research attempt needs attention</p><p className="mt-1">{status.lastError}</p></div>}
+    {sourceIssues.length > 0 && <details className="rounded-lg border border-warning p-3 text-label leading-4 text-warning"><summary className="cursor-pointer">Collection gaps affect the available evidence: {sourceIssues.map((source) => source.label).slice(0, 3).join("; ")}{sourceIssues.length > 3 ? "; additional sources" : ""}</summary><ul className="mt-2 space-y-2">{sourceIssues.map((source) => <li key={source.url}>{/^https?:\/\//.test(source.url) ? <a className="text-accent" href={source.url} target="_blank" rel="noreferrer">{source.label}</a> : source.label}: {source.detail}</li>)}</ul></details>}
+    {selectedReport && status && !report && <p role="alert" className="rounded-lg border border-warning p-3 text-sm text-warning">The selected dossier is no longer in the current catalog. It may have aged out of the recent list or become unavailable. Its cached evidence is no longer displayed; use the original dossier in a saved case to check availability.</p>}
     {report && status ? <><button type="button" className="analysis-button" onClick={() => setSelectedReport(null)}>Back to investigation briefing</button><Dossier key={`${report.id}:${selectedSection}:${selectedItemIndex}`} initialSection={selectedSection} initialItemIndex={selectedItemIndex} report={report} actionStates={status.actionStates} onChanged={() => void refresh()} /></>
       : status && status.reports.length > 0 ? <ResearchBriefing reports={status.reports} states={status.actionStates} onOpen={open} onReview={onReview} />
-      : <div className="app-panel p-5 text-sm leading-relaxed text-slate-400"><h3 className="font-semibold text-slate-200">{!isTauri() ? "Open the desktop workspace to read saved investigations" : !status ? error ? "The saved investigation catalog could not be read" : "Checking for saved investigations" : !status.policy.enabled ? "No saved dossier yet; research is paused" : missingCredential ? "No saved dossier yet; model access needs setup" : "No completed investigation is available yet"}</h3><p className="mt-2">{!status ? "Findings will appear after the local research catalog is available. No research progress is assumed while it is unavailable." : status.policy.enabled && !missingCredential ? `Current recorded stage: ${status.phase}. A dossier appears only after the research run saves its evidence and conclusions.` : "Open Research settings below to configure the next run. Existing public records can still be reviewed from the evidence workspace."}</p></div>}
-    <details ref={controlsRef} className="app-panel p-4" open={!status || status.reports.length === 0}><summary className="cursor-pointer text-sm font-semibold text-slate-300">Research controls and saved dossiers</summary><div className="space-y-4 pt-4">
-      {status && status.reports.length > 0 && <label className="flex flex-wrap items-center gap-3 text-label leading-4 text-slate-300">Open a saved dossier<select aria-label="Research dossier" className="analysis-input min-w-0 flex-1" value={report?.id ?? ""} onChange={(event) => open(event.target.value, "findings")}><option value="">Choose an investigation</option>{report && !status.reports.some((item) => item.id === report.id) && <option value={report.id}>{report.synthesis.title} · currently open</option>}{status.reports.map((item) => <option key={item.id} value={item.id}>{item.synthesis.title} · {new Date(item.createdAt).toLocaleDateString()}</option>)}</select></label>}
-      <div className="flex flex-wrap items-center gap-3"><label htmlFor="research-topic" className="text-label leading-4 text-slate-300">Investigate next</label><select id="research-topic" aria-label="Research topic" className="analysis-input" value={topic} onChange={(event) => setTopic(event.target.value)}>{INVESTIGATION_TOPICS.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select><button type="button" disabled={pending || !status?.policy.enabled || !!missingCredential || !!budgetMessage || !isTauri()} onClick={() => void run()} className="primary-action focus-ring rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{pending ? "Starting…" : "Investigate now"}</button></div>
+      : <div className="app-panel p-5 text-sm leading-relaxed text-muted"><h3 className="font-semibold text-fg">{!isTauri() ? "Open the desktop workspace to read saved investigations" : !status ? error ? "The saved investigation catalog could not be read" : "Checking for saved investigations" : !status.policy.enabled ? "No saved dossier yet; research is paused" : missingCredential ? "No saved dossier yet; model access needs setup" : "No completed investigation is available yet"}</h3><p className="mt-2">{!status ? "Findings will appear after the local research catalog is available. No research progress is assumed while it is unavailable." : status.policy.enabled && !missingCredential ? `Current recorded stage: ${status.phase}. A dossier appears only after the research run saves its evidence and conclusions.` : "Open Research settings below to configure the next run. Existing public records can still be reviewed from the evidence workspace."}</p></div>}
+    <details ref={controlsRef} className="app-panel p-4" open={!status || status.reports.length === 0}><summary className="cursor-pointer text-sm font-semibold text-fg-secondary">Research controls and saved dossiers</summary><div className="space-y-4 pt-4">
+      {status && status.reports.length > 0 && <label className="flex flex-wrap items-center gap-3 text-label leading-4 text-fg-secondary">Open a saved dossier<select aria-label="Research dossier" className="analysis-input min-w-0 flex-1" value={report?.id ?? ""} onChange={(event) => open(event.target.value, "findings")}><option value="">Choose an investigation</option>{report && !status.reports.some((item) => item.id === report.id) && <option value={report.id}>{report.synthesis.title} · currently open</option>}{status.reports.map((item) => <option key={item.id} value={item.id}>{item.synthesis.title} · {new Date(item.createdAt).toLocaleDateString()}</option>)}</select></label>}
+      <div className="flex flex-wrap items-center gap-3"><label htmlFor="research-topic" className="text-label leading-4 text-fg-secondary">Investigate next</label><select id="research-topic" aria-label="Research topic" className="analysis-input" value={topic} onChange={(event) => setTopic(event.target.value)}>{INVESTIGATION_TOPICS.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select><button type="button" disabled={pending || !status?.policy.enabled || !!missingCredential || !!budgetMessage || !isTauri()} onClick={() => void run()} className="primary-action focus-ring rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{pending ? "Starting…" : "Investigate now"}</button></div>
       {status && <ResearchSettings settingsRef={settingsRef} policy={status.policy} callsToday={status.callsToday} available={status.credentialAvailable} onSaved={(value) => { gate.invalidate(); setStatus(value); }} />}
     </div></details>
-    {status && <details className="app-panel p-4 text-label leading-4 text-slate-400"><summary className="cursor-pointer font-semibold text-slate-200">Collection coverage and source issues</summary><div className="mt-3 grid gap-3 md:grid-cols-2">{status.sources.map((source) => <div key={source.url}><a href={source.url} target="_blank" rel="noreferrer" className="text-cyan-300">{source.label}</a><p className="mt-1">{source.state}: {source.detail}</p></div>)}</div><p className="mt-3">{status.sources.length === 0 ? "No collection results were returned in this status response. " : ""}Collections are bounded. Paused and removed sources remain under your control. Review Activity for extraction failures and the actual documents acquired.</p></details>}
+    {status && <details className="app-panel p-4 text-label leading-4 text-muted"><summary className="cursor-pointer font-semibold text-fg">Collection coverage and source issues</summary><div className="mt-3 grid gap-3 md:grid-cols-2">{status.sources.map((source) => <div key={source.url}><a href={source.url} target="_blank" rel="noreferrer" className="text-accent">{source.label}</a><p className="mt-1">{source.state}: {source.detail}</p></div>)}</div><p className="mt-3">{status.sources.length === 0 ? "No collection results were returned in this status response. " : ""}Collections are bounded. Paused and removed sources remain under your control. Review Activity for extraction failures and the actual documents acquired.</p></details>}
   </section>;
 }
 
@@ -146,7 +146,7 @@ function ResearchSettings({
     }
   };
   return (
-    <details ref={settingsRef} className="mt-4 text-label leading-4 text-slate-400">
+    <details ref={settingsRef} className="mt-4 text-label leading-4 text-muted">
       <summary className="cursor-pointer">Research settings</summary>
       <fieldset disabled={saving} className="mt-3 space-y-3">
         <div className="flex flex-wrap gap-4">
@@ -279,7 +279,7 @@ function ResearchSettings({
           {saving ? "Saving…" : "Save research settings"}
         </button>
         {error && (
-          <p role="alert" className="text-rose-300">
+          <p role="alert" className="text-danger">
             {error}
           </p>
         )}
@@ -309,14 +309,14 @@ function Dossier({
   return (
     <div className="app-panel space-y-5 p-5 sm:p-6">
       <div>
-        <div className="app-eyebrow text-cyan-300">
+        <div className="app-eyebrow text-accent">
           Evidence-grounded analysis · Researcher review needed
         </div>
-        <h3 className="mt-2 text-xl font-semibold text-slate-100">
+        <h3 className="mt-2 text-xl font-semibold text-fg">
           {tab === "findings" ? report.synthesis.title : tab === "requests" ? "Request the records that can move this case forward" : "Follow the decision and establish its outcome"}
         </h3>
-        {tab === "findings" ? <p className="mt-2 text-sm leading-relaxed text-slate-300">{report.synthesis.summary}</p> : <details className="mt-2 text-label leading-4 text-slate-400"><summary className="cursor-pointer">Investigation context</summary><p className="mt-2 font-semibold text-slate-300">{report.synthesis.title}</p><p className="mt-2 leading-relaxed">{report.synthesis.summary}</p></details>}
-        <p className="mt-2 text-label leading-4 text-slate-400">
+        {tab === "findings" ? <p className="mt-2 text-sm leading-relaxed text-fg-secondary">{report.synthesis.summary}</p> : <details className="mt-2 text-label leading-4 text-muted"><summary className="cursor-pointer">Investigation context</summary><p className="mt-2 font-semibold text-fg-secondary">{report.synthesis.title}</p><p className="mt-2 leading-relaxed">{report.synthesis.summary}</p></details>}
+        <p className="mt-2 text-label leading-4 text-muted">
           {new Date(report.createdAt).toLocaleString()} · {report.model} · Saved evidence is reproduced below; source versions and interpretations need review.
         </p>
       </div>
@@ -344,7 +344,7 @@ function Dossier({
       {tab === "findings" && (
         <>
           {report.synthesis.findings.length === 0 && (
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-muted">
               This investigation did not establish a useful finding yet. The
               questions and recommended requests identify what evidence is
               needed.
@@ -353,21 +353,21 @@ function Dossier({
           {ordered(report.synthesis.findings, "findings").map(({ item: finding, index }) => (
             <article
               key={index}
-              className="space-y-3 rounded-xl border border-slate-700 p-4"
+              className="space-y-3 rounded-xl border border-line-strong p-4"
             >
-              <h4 className="text-base font-semibold text-slate-100">
+              <h4 className="text-base font-semibold text-fg">
                 {finding.title}
               </h4>
-              <p className="text-sm leading-relaxed text-slate-300">
+              <p className="text-sm leading-relaxed text-fg-secondary">
                 {finding.interpretation}
               </p>
-              <p className="text-sm text-cyan-200">
+              <p className="text-sm text-accent">
                 Why it matters: {finding.whyItMatters}
               </p>
               <Citations citations={finding.citations} report={report} />
               {finding.counterEvidence.length > 0 && (
                 <div>
-                  <h5 className="text-label leading-4 font-semibold text-slate-300">
+                  <h5 className="text-label leading-4 font-semibold text-fg-secondary">
                     Counter-evidence
                   </h5>
                   <Citations
@@ -376,8 +376,8 @@ function Dossier({
                   />
                 </div>
               )}
-              <div className="text-label leading-relaxed text-slate-400">
-                <span className="font-semibold text-slate-300">
+              <div className="text-label leading-relaxed text-muted">
+                <span className="font-semibold text-fg-secondary">
                   Other explanations to test
                 </span>
                 <ul className="mt-1 list-disc space-y-1 pl-4">
@@ -386,7 +386,7 @@ function Dossier({
                   ))}
                 </ul>
               </div>
-              <p className="text-sm text-slate-200">
+              <p className="text-sm text-fg">
                 Next test: {finding.nextTest}
               </p>
               {finding.citations.some((c) =>
@@ -414,14 +414,14 @@ function Dossier({
             </article>
           ))}
           <div>
-            <h4 className="text-sm font-semibold text-slate-200">
+            <h4 className="text-sm font-semibold text-fg">
               Questions developed from the evidence
             </h4>
             <div className="mt-3 space-y-3">
               {report.synthesis.questions.map((question, index) => (
                 <div key={index}>
-                  <p className="text-sm text-slate-200">{question.question}</p>
-                  <p className="mt-1 text-label leading-4 text-slate-400">{question.why}</p>
+                  <p className="text-sm text-fg">{question.question}</p>
+                  <p className="mt-1 text-label leading-4 text-muted">{question.why}</p>
                   <EvidenceLinks ids={question.evidenceIds} report={report} />
                 </div>
               ))}
@@ -432,7 +432,7 @@ function Dossier({
       {tab === "requests" && (
         <div className="space-y-4">
           {report.synthesis.requests.length === 0 && (
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-muted">
               No evidence-grounded records requests were identified in this
               pass.
             </p>
@@ -440,25 +440,25 @@ function Dossier({
           {ordered(report.synthesis.requests, "requests").filter(({ index }) => initialSection !== "requests" || initialItemIndex === undefined || showAllRequests || index === initialItemIndex).map(({ item: request, index }) => (
             <article
               key={index}
-              className="space-y-3 rounded-xl border border-slate-700 p-4"
+              className="space-y-3 rounded-xl border border-line-strong p-4"
             >
-              <h4 className="text-base font-semibold text-slate-100">
+              <h4 className="text-base font-semibold text-fg">
                 {request.title}
               </h4>
-              <p className="text-label leading-4 text-cyan-200">
+              <p className="text-label leading-4 text-accent">
                 Suggested custodian: {request.custodian}
               </p>
-              <p className="text-sm text-slate-300">
+              <p className="text-sm text-fg-secondary">
                 Missing evidence: {request.gap}
               </p>
-              <p className="text-sm text-slate-300">
+              <p className="text-sm text-fg-secondary">
                 What it would resolve: {request.resolves}
               </p>
               <details open={initialSection === "requests" && initialItemIndex === index}>
-                <summary className="cursor-pointer text-sm text-cyan-300">
+                <summary className="cursor-pointer text-sm text-accent">
                   Review request draft
                 </summary>
-                <pre className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-300">
+                <pre className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-fg-secondary">
                   {request.draft}
                 </pre>
                 <button
@@ -473,15 +473,15 @@ function Dossier({
                 >
                   Download draft
                 </button>
-                <p className="mt-2 text-label leading-4 text-slate-400">
+                <p className="mt-2 text-label leading-4 text-muted">
                   Review scope and recipient before submitting. No request has
                   been sent.
                 </p>
               </details>
-              <details className="text-label leading-4 text-slate-400"><summary className="cursor-pointer text-cyan-300">Evidence behind this request</summary><div className="mt-3 space-y-3">
+              <details className="text-label leading-4 text-muted"><summary className="cursor-pointer text-accent">Evidence behind this request</summary><div className="mt-3 space-y-3">
               {requestFindingLinks(report, request.evidenceIds).length > 0 && (
-                <div className="text-label leading-4 text-slate-400">
-                  <p className="font-semibold text-slate-300">Related findings sharing cited sources</p>
+                <div className="text-label leading-4 text-muted">
+                  <p className="font-semibold text-fg-secondary">Related findings sharing cited sources</p>
                   <ul className="mt-1 list-disc space-y-1 pl-4">
                     {requestFindingLinks(report, request.evidenceIds).map((finding) => (
                       <li key={finding.index}>{finding.title}</li>
@@ -504,14 +504,14 @@ function Dossier({
       {tab === "meetings" && (
         <div className="space-y-4">
           {report.synthesis.meetings.length === 0 && (
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-muted">
               No relevant meeting with a verified date was found in the
               retrieved agendas. The engine will recheck as new records arrive.{" "}
               <a
                 href="https://www.sandiego.gov/city-clerk/officialdocs/legisdocs/brown-act"
                 target="_blank"
                 rel="noreferrer"
-                className="text-cyan-300"
+                className="text-accent"
               >
                 Check current Council agendas
               </a>
@@ -521,25 +521,25 @@ function Dossier({
           {ordered(report.synthesis.meetings, "meetings").map(({ item: meeting, index }) => (
             <article
               key={index}
-              className="space-y-3 rounded-xl border border-slate-700 p-4"
+              className="space-y-3 rounded-xl border border-line-strong p-4"
             >
-              <div className="text-label leading-4 text-cyan-300">
+              <div className="text-label leading-4 text-accent">
                 {meeting.date < localDateInput(new Date())
                   ? "Historical meeting · follow-through"
                   : "Upcoming or current meeting · confirm agenda"}
               </div>
-              <h4 className="text-base font-semibold text-slate-100">
+              <h4 className="text-base font-semibold text-fg">
                 {meeting.body} · {meeting.date}
               </h4>
-              <p className="text-sm text-slate-200">
+              <p className="text-sm text-fg">
                 Agenda item: {meeting.agendaItem}
               </p>
-              <p className="text-sm text-slate-300">{meeting.relevance}</p>
-              <p className="text-sm text-cyan-200">
+              <p className="text-sm text-fg-secondary">{meeting.relevance}</p>
+              <p className="text-sm text-accent">
                 Recommended action: {meeting.action}
               </p>
               <Citations citations={meeting.citations} report={report} />
-              <p className="text-label leading-4 text-slate-400">
+              <p className="text-label leading-4 text-muted">
                 Confirm the latest agenda, participation instructions, and any
                 deadline at the official source.
               </p>
@@ -553,7 +553,7 @@ function Dossier({
         </div>
       )}
       <ResearchExport report={report} actionStates={actionStates} />
-      <details className="text-label leading-4 text-slate-400">
+      <details className="text-label leading-4 text-muted">
         <summary className="cursor-pointer">
           Coverage, limitations, and investigation trail
         </summary>
@@ -637,7 +637,7 @@ function ActionState({
   };
   return (
     <div>
-      <label className="text-label leading-4 text-slate-400">
+      <label className="text-label leading-4 text-muted">
         Follow-through{" "}
         <select
           aria-label={`Follow-through ${actionKey}`}
@@ -653,7 +653,7 @@ function ActionState({
         </select>
       </label>
       {error && (
-        <p role="alert" className="mt-2 text-label leading-4 text-rose-300">
+        <p role="alert" className="mt-2 text-label leading-4 text-danger">
           {error}
         </p>
       )}

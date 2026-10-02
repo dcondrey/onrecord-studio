@@ -112,8 +112,8 @@ export default function AgencyComparison() {
     <main className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto w-full max-w-[1400px] space-y-4 p-4 lg:p-6">
         <header className="space-y-1">
-          <h2 className="text-sm font-semibold text-slate-200">Compare agencies</h2>
-          <p className="text-label leading-relaxed text-slate-400">
+          <h2 className="text-sm font-semibold text-fg">Compare agencies</h2>
+          <p className="text-label leading-relaxed text-muted">
             Every agency with an analytics profile, across portals, ranked on one measured column at a
             time. A rank is a position on a latency or a count, not a compliance judgment: only the
             statutory violation column is a counted violation, and the slower-than-peers marker is a
@@ -125,29 +125,29 @@ export default function AgencyComparison() {
         </header>
 
         {agencyProfiles.length === 0 ? (
-          <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
-            <p role="status" className="text-label text-slate-400">
+          <div className="rounded-xl border border-line bg-canvas/40 p-4">
+            <p role="status" className="text-label text-muted">
               Analytics has not produced agency profiles yet. Profiles are computed after a source
               finishes syncing; refresh analytics to recompute from what has already been ingested.
             </p>
             <button
               type="button"
               onClick={requestAnalyticsRefresh}
-              className="focus-ring mt-3 rounded-lg border border-slate-700 px-3 py-1.5 text-label font-semibold text-slate-300 hover:border-cyan-400/40"
+              className="focus-ring mt-3 rounded-lg border border-control px-3 py-1.5 text-label font-semibold text-fg-secondary hover:border-accent/30"
             >
               Refresh analytics
             </button>
           </div>
         ) : (
           <>
-            <div className="flex flex-wrap items-center gap-3 text-label text-slate-400">
+            <div className="flex flex-wrap items-center gap-3 text-label text-muted">
               <label className="flex items-center gap-2">
                 <span>Portal</span>
                 <select
                   aria-label="Portal filter"
                   value={portalFilter}
                   onChange={(event) => setPortalFilter(event.target.value)}
-                  className="focus-ring rounded-lg border border-slate-700 bg-slate-950 px-2 py-1 text-label text-slate-200"
+                  className="focus-ring rounded-lg border border-control bg-canvas px-2 py-1 text-label text-fg"
                 >
                   <option value="">All portals</option>
                   {portals.map((portal) => (
@@ -160,9 +160,9 @@ export default function AgencyComparison() {
               <span className="font-mono">{rows.length.toLocaleString()} agencies</span>
             </div>
 
-            <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40">
+            <div className="overflow-x-auto rounded-xl border border-line bg-canvas/40">
               <table className="w-full text-left text-label" aria-label="Agency comparison">
-                <thead className="border-b border-slate-800 text-caption uppercase tracking-wider text-slate-400">
+                <thead className="border-b border-line text-caption uppercase tracking-wider text-muted">
                   <tr>
                     <th scope="col" className="px-3 py-2">Rank</th>
                     <th scope="col" className="px-3 py-2">Agency</th>
@@ -179,7 +179,7 @@ export default function AgencyComparison() {
                           <button
                             type="button"
                             onClick={() => toggleSort(definition.key)}
-                            className={`focus-ring rounded px-1 uppercase tracking-wider hover:text-cyan-300 ${active ? 'text-cyan-300' : ''}`}
+                            className={`focus-ring rounded px-1 uppercase tracking-wider hover:text-accent ${active ? 'text-accent' : ''}`}
                           >
                             {definition.label}
                             {active ? (direction === 'desc' ? ' ▾' : ' ▴') : ''}
@@ -190,15 +190,15 @@ export default function AgencyComparison() {
                     <th scope="col" className="px-3 py-2">Marks</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/70">
+                <tbody className="divide-y divide-line">
                   {rows.map((profile, index) => {
                     const outlier = isPeerLatencyOutlier(profile);
                     const smallSample = profile.validLatencySampleSize < SMALL_SAMPLE_CLOSURES;
                     return (
-                      <tr key={`${profile.portalSubdomain}-${profile.agencyId}`} className="text-slate-300">
-                        <td className="px-3 py-2 font-mono text-slate-400">{index + 1}</td>
-                        <td className="px-3 py-2 font-semibold text-slate-200">{profile.agencyName}</td>
-                        <td className="px-3 py-2 text-slate-400">{profile.portalSubdomain}</td>
+                      <tr key={`${profile.portalSubdomain}-${profile.agencyId}`} className="text-fg-secondary">
+                        <td className="px-3 py-2 font-mono text-muted">{index + 1}</td>
+                        <td className="px-3 py-2 font-semibold text-fg">{profile.agencyName}</td>
+                        <td className="px-3 py-2 text-muted">{profile.portalSubdomain}</td>
                         {COLUMNS.map((definition) => (
                           <td key={definition.key} className="px-3 py-2 font-mono">
                             {definition.format(profile)}
@@ -209,7 +209,7 @@ export default function AgencyComparison() {
                             {outlier && (
                               <span
                                 title={`Closure latency z-score at or above ${PEER_LATENCY_OUTLIER_Z_SCORE.toFixed(1)}: slower than peers. Not a statutory finding.`}
-                                className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-caption font-semibold text-amber-200"
+                                className="rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-caption font-semibold text-warning"
                               >
                                 slower than peers
                               </span>
@@ -217,7 +217,7 @@ export default function AgencyComparison() {
                             {smallSample && (
                               <span
                                 title={`${profile.validLatencySampleSize} measured closures; the average rests on few observations.`}
-                                className="rounded-full border border-slate-700 px-2 py-0.5 text-caption text-slate-400"
+                                className="rounded-full border border-line-strong px-2 py-0.5 text-caption text-muted"
                               >
                                 small sample
                               </span>

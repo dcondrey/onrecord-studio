@@ -103,13 +103,13 @@ export default function PostIngestBrief() {
       role="dialog"
       aria-modal="false"
       aria-labelledby="post-ingest-brief-title"
-      className="fixed inset-x-0 top-0 z-40 border-b border-cyan-400/20 bg-slate-950/95 shadow-lg backdrop-blur"
+      className="fixed inset-x-0 top-0 z-40 border-b border-accent/30 bg-canvas shadow-lg backdrop-blur"
     >
       <div className="mx-auto flex w-full max-w-[1800px] flex-col gap-3 p-4 sm:p-5">
         <header className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="app-eyebrow text-cyan-300/70">Just landed</div>
-            <h2 id="post-ingest-brief-title" className="mt-1 text-[14px] font-semibold text-slate-100">
+            <div className="app-eyebrow text-accent">Just landed</div>
+            <h2 id="post-ingest-brief-title" className="mt-1 text-[14px] font-semibold text-fg">
               {error !== null && notable.length === 0
                 ? 'Ingest complete. The new findings could not be read.'
                 : notable.length === 0
@@ -117,7 +117,7 @@ export default function PostIngestBrief() {
                   : `${notable.length} new finding${notable.length === 1 ? '' : 's'} from this ingest`}
             </h2>
             {error && (
-              <p role="alert" className="mt-1 text-caption text-rose-300">
+              <p role="alert" className="mt-1 text-caption text-danger">
                 Findings load failed: {error}
               </p>
             )}
@@ -125,17 +125,17 @@ export default function PostIngestBrief() {
           <button
             type="button"
             onClick={() => close(false)}
-            className="focus-ring shrink-0 rounded-lg border border-slate-800 px-3 py-1.5 text-label font-semibold text-slate-300 transition hover:border-slate-600 hover:text-slate-100"
+            className="focus-ring shrink-0 rounded-lg border border-control px-3 py-1.5 text-label font-semibold text-fg-secondary transition hover:border-control hover:text-fg"
           >
             Dismiss
           </button>
         </header>
         {isLoading && notable.length === 0 ? (
-          <p role="status" className="text-label text-slate-400">
+          <p role="status" className="text-label text-muted">
             Reading detector output…
           </p>
         ) : notable.length === 0 ? (
-          <p className="text-label text-slate-400">
+          <p className="text-label text-muted">
             {error !== null
               ? 'Whether this ingest surfaced anything is not known until the findings load.'
               : 'The findings inbox below carries anything the detectors have surfaced on prior data.'}
@@ -143,19 +143,19 @@ export default function PostIngestBrief() {
         ) : (
           <ul className="grid gap-2 md:grid-cols-2 xl:grid-cols-3" aria-label="New findings from this ingest">
             {notable.map((finding) => (
-              <li key={finding.id} className="flex flex-col gap-2 rounded-xl border border-slate-800/70 bg-slate-950/40 p-3">
+              <li key={finding.id} className="flex flex-col gap-2 rounded-xl border border-line bg-canvas/40 p-3">
                 <button
                   type="button"
                   onClick={() => inspect(finding)}
                   aria-label={`Open finding: ${finding.headline}`}
-                  className="focus-ring group flex w-full items-start gap-3 rounded-lg text-left transition hover:bg-cyan-400/[0.03]"
+                  className="focus-ring group flex w-full items-start gap-3 rounded-lg text-left transition hover:bg-accent/5"
                 >
                   <PostIngestSeverityGlyph severity={finding.severity} />
                   <span className="min-w-0 flex-1">
-                    <span className="block text-label font-semibold text-slate-100">
+                    <span className="block text-label font-semibold text-fg">
                       {finding.headline}
                     </span>
-                    <span className="mt-1 block text-caption leading-relaxed text-slate-400">
+                    <span className="mt-1 block text-caption leading-relaxed text-muted">
                       {finding.explanation}
                     </span>
                   </span>
@@ -175,7 +175,7 @@ function PostIngestSeverityGlyph({ severity }: { severity: FindingSeverity }) {
   return (
     <span
       aria-hidden="true"
-      className={`grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-slate-900/70 ${tone}`}
+      className={`grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-surface/70 ${tone}`}
     >
       <svg viewBox="-6 -6 12 12" className="h-3 w-3">
         <ShapeGlyph shape={shape} cx={0} cy={0} radius={4.5} fill="currentColor" />
@@ -187,12 +187,12 @@ function PostIngestSeverityGlyph({ severity }: { severity: FindingSeverity }) {
 function severityGlyph(severity: FindingSeverity): [GlyphShape, string] {
   switch (severity) {
     case 'CRITICAL':
-      return ['diamond', 'text-rose-300'];
+      return ['diamond', 'text-danger'];
     case 'SERIOUS':
-      return ['triangle', 'text-amber-300'];
+      return ['triangle', 'text-warning'];
     case 'NOTABLE':
-      return ['circle', 'text-cyan-300'];
+      return ['circle', 'text-accent'];
     case 'INFO':
-      return ['ring', 'text-slate-400'];
+      return ['ring', 'text-muted'];
   }
 }

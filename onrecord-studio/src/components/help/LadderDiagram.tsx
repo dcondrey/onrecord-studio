@@ -54,7 +54,7 @@ export default function LadderDiagram({
         role="img"
         aria-labelledby={`${id}-title ${id}-desc`}
         viewBox={`0 0 ${WIDTH} ${height}`}
-        className="h-auto w-full max-w-[560px] text-slate-200"
+        className="h-auto w-full max-w-[560px] text-fg"
       >
         <title id={`${id}-title`}>{title}</title>
         <desc id={`${id}-desc`}>{description}</desc>

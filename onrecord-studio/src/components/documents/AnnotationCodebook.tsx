@@ -87,23 +87,23 @@ export default function AnnotationCodebook({
   const entries = settings?.codebook ?? [];
 
   return (
-    <details className="rounded border border-slate-800 p-2">
-      <summary className="cursor-pointer font-semibold text-slate-200">Codebook ({entries.length})</summary>
+    <details className="rounded border border-line p-2">
+      <summary className="cursor-pointer font-semibold text-fg">Codebook ({entries.length})</summary>
       <div className="mt-2 space-y-2">
-        <p className="text-slate-400">Issue codes you choose from when marking a passage. A mark with a label that is not here is flagged as uncoded. Share the codebook as a plain JSON file.</p>
-        {entries.length === 0 && <p className="text-slate-400">No codes yet.</p>}
+        <p className="text-muted">Issue codes you choose from when marking a passage. A mark with a label that is not here is flagged as uncoded. Share the codebook as a plain JSON file.</p>
+        {entries.length === 0 && <p className="text-muted">No codes yet.</p>}
         <ul aria-label="Codebook" className="space-y-1">
           {entries.map((entry) => (
-            <li key={entry.code} className="rounded border border-slate-800 p-1.5">
-              <span className="font-semibold text-cyan-200">{entry.code}</span> {entry.label}
-              {entry.definition && <p className="whitespace-pre-wrap text-slate-400">{entry.definition}</p>}
+            <li key={entry.code} className="rounded border border-line p-1.5">
+              <span className="font-semibold text-accent">{entry.code}</span> {entry.label}
+              {entry.definition && <p className="whitespace-pre-wrap text-muted">{entry.definition}</p>}
               <div className="flex gap-2">
                 <button type="button" className="underline" onClick={() => setDraft(entry)}>Edit</button>
                 {removing === entry.code ? (
                   <>
-                    <button type="button" className="text-rose-300 underline" onClick={() => void remove(entry.code)}>Confirm delete</button>
+                    <button type="button" className="text-danger underline" onClick={() => void remove(entry.code)}>Confirm delete</button>
                     <button type="button" className="underline" onClick={() => setRemoving(null)}>Keep</button>
-                    <span className="text-slate-400">Marks using this code stay and become uncoded.</span>
+                    <span className="text-muted">Marks using this code stay and become uncoded.</span>
                   </>
                 ) : (
                   <button type="button" className="underline" aria-label={`Delete code ${entry.code}`} onClick={() => setRemoving(entry.code)}>Delete</button>
@@ -134,22 +134,22 @@ export default function AnnotationCodebook({
           <div className="space-y-1.5" aria-label="Codebook import preview">
             <p role="status">{preview.added.length} new, {preview.identical} identical, {preview.conflicts.length} with a different definition.</p>
             {preview.conflicts.map((conflict) => (
-              <div key={conflict.code} className="rounded border border-amber-500/30 p-1.5">
-                <p className="font-semibold text-amber-200">{conflict.code} is defined differently</p>
-                <p><span className="text-slate-400">Yours:</span> {conflict.local.label}. {conflict.local.definition}</p>
-                <p><span className="text-slate-400">Incoming:</span> {conflict.incoming.label}. {conflict.incoming.definition}</p>
+              <div key={conflict.code} className="rounded border border-warning/30 p-1.5">
+                <p className="font-semibold text-warning">{conflict.code} is defined differently</p>
+                <p><span className="text-muted">Yours:</span> {conflict.local.label}. {conflict.local.definition}</p>
+                <p><span className="text-muted">Incoming:</span> {conflict.incoming.label}. {conflict.incoming.definition}</p>
                 <label className="flex items-center gap-1">
                   <input type="checkbox" checked={overwrite.includes(conflict.code)} onChange={(event) => setOverwrite(event.target.checked ? [...overwrite, conflict.code] : overwrite.filter((code) => code !== conflict.code))} />
                   Replace my definition of {conflict.code} with the incoming one
                 </label>
               </div>
             ))}
-            {preview.conflicts.length > 0 && <p className="text-slate-400">Definitions you leave unchecked are kept as they are.</p>}
+            {preview.conflicts.length > 0 && <p className="text-muted">Definitions you leave unchecked are kept as they are.</p>}
             <button type="button" className={button} onClick={() => void applyImport()}>Apply import</button>
           </div>
         )}
-        {error && <p role="alert" className="text-rose-300">{error}</p>}
-        {status && <p role="status" className="text-emerald-300">{status}</p>}
+        {error && <p role="alert" className="text-danger">{error}</p>}
+        {status && <p role="status" className="text-success">{status}</p>}
       </div>
     </details>
   );

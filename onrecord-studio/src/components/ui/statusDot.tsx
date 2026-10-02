@@ -4,10 +4,10 @@ import { ShapeGlyph } from './shapeGlyph';
 export type StatusDotState = 'active' | 'idle' | 'error' | 'note';
 
 const SHAPE: Record<StatusDotState, { path: 'circle' | 'ring' | 'diamond' | 'bar'; radius: number; className: string }> = {
-  active: { path: 'circle', radius: 4.5, className: 'text-emerald-400' },
-  idle: { path: 'ring', radius: 3.8, className: 'text-slate-400' },
-  error: { path: 'diamond', radius: 5, className: 'text-rose-400' },
-  note: { path: 'bar', radius: 5, className: 'text-cyan-400' },
+  active: { path: 'circle', radius: 4.5, className: 'text-success' },
+  idle: { path: 'ring', radius: 3.8, className: 'text-muted' },
+  error: { path: 'diamond', radius: 5, className: 'text-danger' },
+  note: { path: 'bar', radius: 5, className: 'text-accent' },
 };
 
 /**

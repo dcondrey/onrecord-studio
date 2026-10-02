@@ -90,15 +90,15 @@ export default function ShareableBundleExport({ findings }: ShareableBundleExpor
 
   return (
     <section className="app-panel p-4" aria-label="Shareable bundle">
-      <h3 className="font-semibold text-slate-200">Shareable read-only bundle</h3>
-      <p className="mt-2 text-label leading-4 text-slate-400">
+      <h3 className="font-semibold text-fg">Shareable read-only bundle</h3>
+      <p className="mt-2 text-label leading-4 text-muted">
         Writes one HTML file anyone can open without this app. It has no edit controls, loads nothing from the
         network, and holds only masked text from public records. Findings that rest on a private or removed record
         are left out. You review exactly what it will contain before anything is written.
       </p>
       {step.kind === 'select' && (
         <>
-          <ul className="mt-3 max-h-40 overflow-y-auto text-label leading-4 text-slate-300" aria-label="Findings to share">
+          <ul className="mt-3 max-h-40 overflow-y-auto text-label leading-4 text-fg-secondary" aria-label="Findings to share">
             {findings.map((finding) => (
               <li key={finding.id}>
                 <label className="flex items-start gap-2">
@@ -115,7 +115,7 @@ export default function ShareableBundleExport({ findings }: ShareableBundleExpor
           </ul>
           <button
             type="button"
-            className="focus-ring mt-3 rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-100 disabled:opacity-50"
+            className="focus-ring mt-3 rounded border border-control px-3 py-1.5 text-sm text-fg disabled:opacity-50"
             disabled={busy || selected.length === 0}
             onClick={() => void review()}
           >
@@ -124,8 +124,8 @@ export default function ShareableBundleExport({ findings }: ShareableBundleExpor
         </>
       )}
       {step.kind === 'preview' && (
-        <div className="mt-3 text-label leading-4 text-slate-300" role="region" aria-label="What will be shared">
-          <p className="font-semibold text-slate-200">
+        <div className="mt-3 text-label leading-4 text-fg-secondary" role="region" aria-label="What will be shared">
+          <p className="font-semibold text-fg">
             This file will contain {step.preview.included.length} finding(s) and name{' '}
             {step.preview.sourceNames.length} source file(s).
           </p>
@@ -142,7 +142,7 @@ export default function ShareableBundleExport({ findings }: ShareableBundleExpor
           )}
           {step.preview.excluded.length > 0 && (
             <>
-              <p className="mt-2 font-semibold text-slate-200">
+              <p className="mt-2 font-semibold text-fg">
                 Left out ({step.preview.excluded.length}):
               </p>
               <ul className="list-disc pl-5" aria-label="Findings left out">
@@ -154,7 +154,7 @@ export default function ShareableBundleExport({ findings }: ShareableBundleExpor
               </ul>
             </>
           )}
-          <p className="mt-2 break-all text-slate-400">Content SHA-256 {step.preview.contentSha256}</p>
+          <p className="mt-2 break-all text-muted">Content SHA-256 {step.preview.contentSha256}</p>
           <label className="mt-3 flex items-start gap-2">
             <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
             <span>
@@ -165,7 +165,7 @@ export default function ShareableBundleExport({ findings }: ShareableBundleExpor
           <div className="mt-3 flex gap-2">
             <button
               type="button"
-              className="focus-ring rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-100 disabled:opacity-50"
+              className="focus-ring rounded border border-control px-3 py-1.5 text-sm text-fg disabled:opacity-50"
               disabled={busy || !confirmed || step.preview.included.length === 0}
               onClick={() => void write(step.ids, step.preview)}
             >
@@ -173,7 +173,7 @@ export default function ShareableBundleExport({ findings }: ShareableBundleExpor
             </button>
             <button
               type="button"
-              className="focus-ring rounded border border-slate-700 px-3 py-1.5 text-sm text-slate-300"
+              className="focus-ring rounded border border-control px-3 py-1.5 text-sm text-fg-secondary"
               disabled={busy}
               onClick={() => setStep({ kind: 'select' })}
             >
@@ -183,18 +183,18 @@ export default function ShareableBundleExport({ findings }: ShareableBundleExpor
         </div>
       )}
       {error && (
-        <p role="alert" className="mt-3 text-sm text-rose-300">
+        <p role="alert" className="mt-3 text-sm text-danger">
           {error}
         </p>
       )}
       {step.kind === 'done' && (
-        <div role="status" className="mt-3 rounded border border-slate-700 bg-slate-950/60 p-3 text-label leading-4 text-slate-300">
-          <p className="font-semibold text-slate-200">
+        <div role="status" className="mt-3 rounded border border-line-strong bg-canvas/70 p-3 text-label leading-4 text-fg-secondary">
+          <p className="font-semibold text-fg">
             Wrote {step.result.findingCount} finding(s); {step.result.excludedCount} left out.
           </p>
           <p className="mt-1 break-all">{step.result.outputPath}</p>
           <p className="mt-1 break-all">Content SHA-256 {step.result.contentSha256}</p>
-          <p className="mt-1 text-slate-400">Generated {step.result.generatedAt}</p>
+          <p className="mt-1 text-muted">Generated {step.result.generatedAt}</p>
         </div>
       )}
     </section>

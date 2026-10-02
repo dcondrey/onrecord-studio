@@ -29,7 +29,7 @@ export default function LifecycleFunnel() {
   return (
     <section className="app-panel min-h-[360px] overflow-hidden p-5">
       <div className="app-eyebrow">Evidence lifecycle</div>
-      <div className="mt-1 text-label text-slate-400">Select a stage to open its matching records. Multiple predicates use AND semantics.</div>
+      <div className="mt-1 text-label text-muted">Select a stage to open its matching records. Multiple predicates use AND semantics.</div>
       {!hasData && analyticsError ? (
         <AnalyticsUnavailable className="mt-6" heading="Lifecycle counts unavailable" />
       ) : (
@@ -47,14 +47,14 @@ export default function LifecycleFunnel() {
               }}
             >
               <div className="mb-1 flex items-center justify-between font-mono text-label">
-                <span className="text-slate-400 transition-colors group-hover:text-slate-200">{stage.label}</span>
-                <span className={cn('flex items-center gap-1', stage.policy ? 'text-amber-300' : 'text-slate-400')}>
+                <span className="text-muted transition-colors group-hover:text-fg">{stage.label}</span>
+                <span className={cn('flex items-center gap-1', stage.policy ? 'text-warning' : 'text-muted')}>
                   {stage.policy && <FlagMark label="Policy flagged" />}
                   {stage.value.toLocaleString()}
                 </span>
               </div>
-              <div className="mb-1 text-caption text-slate-400">{stage.predicate}</div>
-              <div className="h-8 overflow-hidden rounded-lg border border-slate-800/90 bg-slate-950/60 p-1">
+              <div className="mb-1 text-caption text-muted">{stage.predicate}</div>
+              <div className="h-8 overflow-hidden rounded-lg border border-line bg-canvas/70 p-1">
                 {hasData && (
                   <div
                     className="flex h-full items-center justify-end rounded-md px-2 text-caption font-bold shadow-[0_0_18px_rgba(15,23,42,0.2)] transition-[width,filter] duration-500 group-hover:brightness-110"

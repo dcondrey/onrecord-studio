@@ -74,9 +74,9 @@ function CandidateRow({
   onReject: () => void;
 }) {
   return (
-    <li className="rounded-lg border border-slate-800 p-2 text-label">
-      <div className="font-semibold text-slate-100">{candidate.displayValue}</div>
-      <div className="text-slate-400">
+    <li className="rounded-lg border border-line p-2 text-label">
+      <div className="font-semibold text-fg">{candidate.displayValue}</div>
+      <div className="text-muted">
         {candidate.kind === 'PORTAL'
           ? 'Registered source'
           : candidate.kind === 'AGENCY'
@@ -89,7 +89,7 @@ function CandidateRow({
         {candidate.documentCount !== null && ` · ${candidate.documentCount} documents`}
       </div>
       <div className="mt-1 flex items-center gap-2">
-        <span className="text-slate-300">
+        <span className="text-fg-secondary">
           {candidate.decision === 'PENDING'
             ? 'Undecided'
             : candidate.decision === 'CONFIRMED'
@@ -100,7 +100,7 @@ function CandidateRow({
           type="button"
           disabled={disabled || candidate.decision === 'CONFIRMED'}
           onClick={onConfirm}
-          className="focus-ring rounded border border-slate-700 px-2 py-0.5"
+          className="focus-ring rounded border border-control px-2 py-0.5"
         >
           Confirm
         </button>
@@ -108,7 +108,7 @@ function CandidateRow({
           type="button"
           disabled={disabled || candidate.decision === 'REJECTED'}
           onClick={onReject}
-          className="focus-ring rounded border border-slate-700 px-2 py-0.5"
+          className="focus-ring rounded border border-control px-2 py-0.5"
         >
           Reject
         </button>
@@ -150,21 +150,21 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Local profile" className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onKeyDown={dialogFocus.onKeyDown}>
-      <div ref={dialogFocus.ref} tabIndex={-1} className="app-panel max-h-[90vh] w-full max-w-2xl overflow-y-auto p-4 text-label text-slate-300 outline-none">
+      <div ref={dialogFocus.ref} tabIndex={-1} className="app-panel max-h-[90vh] w-full max-w-2xl overflow-y-auto p-4 text-label text-fg-secondary outline-none">
         <div className="flex items-center justify-between">
-          <h2 className="text-label font-semibold text-slate-100">Local profile</h2>
-          <button type="button" onClick={onClose} className="focus-ring rounded border border-slate-700 px-2 py-1">
+          <h2 className="text-label font-semibold text-fg">Local profile</h2>
+          <button type="button" onClick={onClose} className="focus-ring rounded border border-control px-2 py-1">
             Close
           </button>
         </div>
-        <p className="mt-2 text-label leading-relaxed text-slate-400">
+        <p className="mt-2 text-label leading-relaxed text-muted">
           Affiliation is self-declared: you type the name and nothing checks it against a list. It
           is stored only on this device and never transmitted. It never changes any finding,
           confidence, severity, statutory result or ranking. It only filters, highlights and adds a
           disclosure to what you export.
         </p>
         {profile.error && (
-          <div role="alert" className="mt-2 text-rose-300">
+          <div role="alert" className="mt-2 text-danger">
             {profile.error}
           </div>
         )}
@@ -176,25 +176,25 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
             value={draft.displayName}
             maxLength={PROFILE_LIMITS.displayName}
             onChange={(event) => setDraft({ ...draft, displayName: event.target.value })}
-            className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1"
+            className="mt-1 w-full rounded border border-control bg-canvas px-2 py-1"
           />
         </label>
 
-        <h3 className="mt-4 font-semibold text-slate-200">
+        <h3 className="mt-4 font-semibold text-fg">
           Organizations ({draft.affiliations.length}/{PROFILE_LIMITS.affiliations})
         </h3>
         {draft.affiliations.map((affiliation, index) => (
-          <fieldset key={affiliation.id ?? `new-${index}`} className="mt-2 rounded-lg border border-slate-800 p-2">
+          <fieldset key={affiliation.id ?? `new-${index}`} className="mt-2 rounded-lg border border-line p-2">
             <label className="block">
               Organization name ({affiliation.name.length}/{PROFILE_LIMITS.affiliationName})
               <input
                 value={affiliation.name}
                 maxLength={PROFILE_LIMITS.affiliationName}
                 onChange={(event) => updateAffiliation(index, { ...affiliation, name: event.target.value })}
-                className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1"
+                className="mt-1 w-full rounded border border-control bg-canvas px-2 py-1"
               />
             </label>
-            <div className="mt-1 text-slate-400">
+            <div className="mt-1 text-muted">
               Aliases ({affiliation.aliases.length}/{PROFILE_LIMITS.aliasesPerAffiliation})
             </div>
             {affiliation.aliases.map((alias, aliasIndex) => (
@@ -209,7 +209,7 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
                       aliases: affiliation.aliases.map((a, i) => (i === aliasIndex ? event.target.value : a)),
                     })
                   }
-                  className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1"
+                  className="w-full rounded border border-control bg-canvas px-2 py-1"
                 />
                 <button
                   type="button"
@@ -219,7 +219,7 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
                       aliases: affiliation.aliases.filter((_, i) => i !== aliasIndex),
                     })
                   }
-                  className="focus-ring rounded border border-slate-700 px-2"
+                  className="focus-ring rounded border border-control px-2"
                 >
                   Remove alias
                 </button>
@@ -230,7 +230,7 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
                 type="button"
                 disabled={affiliation.aliases.length >= PROFILE_LIMITS.aliasesPerAffiliation}
                 onClick={() => updateAffiliation(index, { ...affiliation, aliases: [...affiliation.aliases, ''] })}
-                className="focus-ring rounded border border-slate-700 px-2 py-0.5"
+                className="focus-ring rounded border border-control px-2 py-0.5"
               >
                 Add alias
               </button>
@@ -242,7 +242,7 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
                     affiliations: current.affiliations.filter((_, i) => i !== index),
                   }))
                 }
-                className="focus-ring rounded border border-slate-700 px-2 py-0.5"
+                className="focus-ring rounded border border-control px-2 py-0.5"
               >
                 Remove organization
               </button>
@@ -264,7 +264,7 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
                 affiliations: [...current.affiliations, { id: null, name: '', aliases: [] }],
               }))
             }
-            className="focus-ring rounded border border-slate-700 px-2 py-1"
+            className="focus-ring rounded border border-control px-2 py-1"
           >
             Add organization
           </button>
@@ -277,13 +277,13 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
                 affiliations: draft.affiliations,
               })
             }
-            className="focus-ring profile-save rounded border border-cyan-400/40 px-2 py-1 text-cyan-200"
+            className="focus-ring profile-save rounded border border-accent/30 px-2 py-1 text-accent"
           >
             Save profile
           </button>
         </div>
 
-        <h3 className="mt-4 font-semibold text-slate-200">Matches</h3>
+        <h3 className="mt-4 font-semibold text-fg">Matches</h3>
         {profile.matches && (
           <>
             <MatchStatusNotice list={profile.matches} />
@@ -306,7 +306,7 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
               })}
             </ul>
             {profile.matches.limitations.length > 0 && (
-              <ul className="mt-2 list-disc pl-4 text-label text-slate-400" aria-label="Match limitations">
+              <ul className="mt-2 list-disc pl-4 text-label text-muted" aria-label="Match limitations">
                 {profile.matches.limitations.map((line) => (
                   <li key={line}>{line}</li>
                 ))}
@@ -315,14 +315,14 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
           </>
         )}
 
-        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-800 pt-3">
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-3">
           <button
             type="button"
             onClick={() => {
               setSelfReviewOpen(true);
               onClose();
             }}
-            className="focus-ring rounded border border-slate-700 px-2 py-1"
+            className="focus-ring rounded border border-control px-2 py-1"
           >
             Open records self-review
           </button>
@@ -331,7 +331,7 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
               type="button"
               disabled={!stored}
               onClick={() => setConfirmingDelete(true)}
-              className="focus-ring ml-auto rounded border border-rose-500/40 px-2 py-1 text-rose-200"
+              className="focus-ring ml-auto rounded border border-danger/30 px-2 py-1 text-danger"
             >
               Delete local profile
             </button>
@@ -344,11 +344,11 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
                   setConfirmingDelete(false);
                   void profile.remove();
                 }}
-                className="focus-ring rounded border border-rose-500/60 px-2 py-1 text-rose-200"
+                className="focus-ring rounded border border-danger/60 px-2 py-1 text-danger"
               >
                 Yes, delete
               </button>
-              <button type="button" onClick={() => setConfirmingDelete(false)} className="focus-ring rounded border border-slate-700 px-2 py-1">
+              <button type="button" onClick={() => setConfirmingDelete(false)} className="focus-ring rounded border border-control px-2 py-1">
                 Keep
               </button>
             </div>

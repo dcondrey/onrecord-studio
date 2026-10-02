@@ -60,8 +60,8 @@ export default function DataDiscovery({ schema, onInspect }: { schema: Analytica
     anchor.click();
     URL.revokeObjectURL(url);
   };
-  return <div className="space-y-3 text-label leading-4 text-slate-300">
-    <p className="leading-relaxed text-slate-400">Explore coverage, group differences, changes over time, unusual values, and repeated records. Each check runs across the imported snapshot and retains its query for review.</p>
+  return <div className="space-y-3 text-label leading-4 text-fg-secondary">
+    <p className="leading-relaxed text-muted">Explore coverage, group differences, changes over time, unusual values, and repeated records. Each check runs across the imported snapshot and retains its query for review.</p>
     {!schema.datasets.length && <p>Import an acquired table to begin discovery. Document excerpts are searchable below.</p>}
     <fieldset disabled={running} className="space-y-2 disabled:opacity-70">
       <label className="block">Discovery snapshot<select className="analysis-input mt-1 w-full" aria-label="Discovery snapshot" value={selection.snapshotId} onChange={(event) => setSelection(discoveryDefaults(schema, event.target.value))}>
@@ -96,23 +96,23 @@ export default function DataDiscovery({ schema, onInspect }: { schema: Analytica
       })}
       <button type="button" className="analysis-button" disabled={!columns.length || selection.filters.length >= 8} onClick={() => patch({ filters: [...selection.filters, { column: columns[0].columnName, operator: 'equals', value: '' }] })}>Add scope filter</button>
     </fieldset>
-    {selection.aggregation !== 'count' && <p className="text-amber-200">Confirm units and row meaning. Separate budget phases, account classes, overlapping totals, and populations before interpreting this calculation.</p>}
+    {selection.aggregation !== 'count' && <p className="text-warning">Confirm units and row meaning. Separate budget phases, account classes, overlapping totals, and populations before interpreting this calculation.</p>}
     <div className="flex flex-wrap gap-2">
       <button type="button" className="analysis-button" disabled={running || !dataset} onClick={() => void analyze()}>Discover patterns</button>
       {running && <button type="button" className="analysis-button" onClick={() => { cancelled.current = true; setProgress('Stopping after the current query…'); }}>Stop after current query</button>}
       {report && <button type="button" className="analysis-button" disabled={running} onClick={exportReport}>Export discovery report</button>}
     </div>
-    {progress && <p role="status">{progress}</p>}{error && <p role="alert" className="text-rose-300">{error}</p>}
-    {report && <div className="space-y-3 border-t border-slate-800 pt-3">
-      {stale && <p role="status" className="text-amber-200">Controls changed. Results below still describe the previous analysis; run discovery to update them.</p>}
-      <p className="break-all text-slate-400">Results: {report.plan.dataset.displayName} · {report.plan.dataset.sourceUri ?? 'Local export'}<br />Snapshot {report.plan.dataset.snapshotId} · SHA-256 {report.plan.dataset.sourceSha256}<br />{report.createdAt} · {report.results.length}/{report.plan.queries.length} checks returned</p>
+    {progress && <p role="status">{progress}</p>}{error && <p role="alert" className="text-danger">{error}</p>}
+    {report && <div className="space-y-3 border-t border-line pt-3">
+      {stale && <p role="status" className="text-warning">Controls changed. Results below still describe the previous analysis; run discovery to update them.</p>}
+      <p className="break-all text-muted">Results: {report.plan.dataset.displayName} · {report.plan.dataset.sourceUri ?? 'Local export'}<br />Snapshot {report.plan.dataset.snapshotId} · SHA-256 {report.plan.dataset.sourceSha256}<br />{report.createdAt} · {report.results.length}/{report.plan.queries.length} checks returned</p>
       <ul className="list-disc space-y-1 pl-4">{discoveryFindings(report).map((finding) => <li key={finding}>{finding}</li>)}</ul>
-      <details><summary className="cursor-pointer text-amber-200">Coverage and interpretation</summary><ul className="mt-2 list-disc space-y-1 pl-4 text-slate-400">{report.plan.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></details>
-      {report.results.map(({ query, result, error: queryError }) => <details key={query.id} open={query.id === 'groups' || query.id === 'changes'} className="rounded border border-slate-800 p-2">
+      <details><summary className="cursor-pointer text-warning">Coverage and interpretation</summary><ul className="mt-2 list-disc space-y-1 pl-4 text-muted">{report.plan.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></details>
+      {report.results.map(({ query, result, error: queryError }) => <details key={query.id} open={query.id === 'groups' || query.id === 'changes'} className="rounded border border-line p-2">
         <summary className="cursor-pointer font-semibold">{query.title}{result ? ` · ${result.rowCount}${result.truncated ? '+' : ''} results` : ' · failed'}</summary>
-        <p className="my-2 leading-relaxed text-slate-400">{query.method}</p>
+        <p className="my-2 leading-relaxed text-muted">{query.method}</p>
         <button type="button" className="analysis-button" onClick={() => onInspect(query.sql)}>Open query in SQL</button>
-        {queryError && <p role="alert" className="mt-2 text-rose-300">{queryError}</p>}
+        {queryError && <p role="alert" className="mt-2 text-danger">{queryError}</p>}
         {result && <DiscoveryTable result={result} onRow={query.id === 'groups' ? (row) => onInspect(discoveryDrilldown(report.plan, row[result.columns.indexOf('group_value')])) : undefined} />}
       </details>)}
     </div>}
@@ -121,10 +121,10 @@ export default function DataDiscovery({ schema, onInspect }: { schema: Analytica
 
 function DiscoveryTable({ result, onRow }: { result: SqlQueryResult; onRow?: (row: unknown[]) => void }) {
   return <div className="mt-2">
-    {result.truncated && <p className="mb-1 text-amber-200">First {result.rowCount} results shown. Calculations use all matching records. Open the query to explore or export more.</p>}
+    {result.truncated && <p className="mb-1 text-warning">First {result.rowCount} results shown. Calculations use all matching records. Open the query to explore or export more.</p>}
     {!result.rowCount ? <p>No matching results for this check.</p> : <div className="max-h-72 overflow-auto"><table className="w-full text-left text-label">
-      <thead><tr>{result.columns.map((name) => <th key={name} className="whitespace-nowrap border-b border-slate-700 p-1">{name}</th>)}{onRow && <th>Evidence</th>}</tr></thead>
-      <tbody>{result.rows.map((row, i) => <tr key={i}>{row.map((cell, j) => <td key={j} title={cell === null ? 'Missing / unavailable' : String(cell)} className="max-w-64 truncate border-b border-slate-800 p-1">{cell === null ? '—' : String(cell)}</td>)}{onRow && <td><button type="button" className="analysis-button whitespace-nowrap" onClick={() => onRow(row)}>Explore records</button></td>}</tr>)}</tbody>
+      <thead><tr>{result.columns.map((name) => <th key={name} className="whitespace-nowrap border-b border-line-strong p-1">{name}</th>)}{onRow && <th>Evidence</th>}</tr></thead>
+      <tbody>{result.rows.map((row, i) => <tr key={i}>{row.map((cell, j) => <td key={j} title={cell === null ? 'Missing / unavailable' : String(cell)} className="max-w-64 truncate border-b border-line p-1">{cell === null ? '—' : String(cell)}</td>)}{onRow && <td><button type="button" className="analysis-button whitespace-nowrap" onClick={() => onRow(row)}>Explore records</button></td>}</tr>)}</tbody>
     </table></div>}
   </div>;
 }

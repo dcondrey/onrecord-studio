@@ -56,11 +56,11 @@ export function decisionLines(summary: DecisionSummary): string[] {
 
 function Side({ title, side }: { title: string; side: ResolutionEntitySnapshot }) {
   return (
-    <section aria-label={title} className="rounded border border-slate-700 p-3 text-label leading-4 text-slate-300">
-      <p className="text-label uppercase tracking-wide text-slate-400">{title} · {side.key.kind.toLowerCase()}</p>
-      <p className="mt-1 text-sm font-semibold text-slate-100">{side.displayValue}</p>
+    <section aria-label={title} className="rounded border border-line-strong p-3 text-label leading-4 text-fg-secondary">
+      <p className="text-label uppercase tracking-wide text-muted">{title} · {side.key.kind.toLowerCase()}</p>
+      <p className="mt-1 text-sm font-semibold text-fg">{side.displayValue}</p>
       <p className="mt-1">Appears in {side.documentCount} document{side.documentCount === 1 ? '' : 's'}.</p>
-      <p className="mt-2 text-slate-400">Showing {side.examples.length} of {side.documentCount}:</p>
+      <p className="mt-2 text-muted">Showing {side.examples.length} of {side.documentCount}:</p>
       <ul className="mt-1 space-y-0.5">
         {side.examples.map((example) => (
           <li key={`${example.portalKey}:${example.documentId}:${example.characterStart}`}>
@@ -99,8 +99,8 @@ function CandidateCard({
     }
   };
   return (
-    <article aria-label="Candidate pair" tabIndex={0} onKeyDown={onKeyDown} className="space-y-3 rounded border border-cyan-500/30 p-3 outline-none focus:ring-1 focus:ring-cyan-400">
-      <p className="text-label leading-4 text-slate-300">
+    <article aria-label="Candidate pair" tabIndex={0} onKeyDown={onKeyDown} className="space-y-3 rounded border border-accent/30 p-3 outline-none focus:ring-1 focus:ring-accent">
+      <p className="text-label leading-4 text-fg-secondary">
         {evidence.basis === 'STRONG_IDENTIFIER' && evidence.sharedIdentifier
           ? describeSharedIdentifier(evidence.sharedIdentifier)
           : 'The names match once punctuation, word order and company suffixes are ignored. A similar name is a lead, not proof.'}
@@ -112,7 +112,7 @@ function CandidateCard({
         <Side title="Entity A" side={evidence.left} />
         <Side title="Entity B" side={evidence.right} />
       </div>
-      <label className="block text-label leading-4 text-slate-300">
+      <label className="block text-label leading-4 text-fg-secondary">
         Reason (optional, kept in the ledger)
         <textarea className="analysis-input mt-1 w-full" rows={2} maxLength={RESOLUTION_REASON_MAX} value={reason} onChange={(event) => setReason(event.target.value)} />
       </label>
@@ -120,7 +120,7 @@ function CandidateCard({
         <button type="button" className="analysis-button" disabled={disabled} aria-keyshortcuts="s" onClick={() => decide('SAME')}>Same (S)</button>
         <button type="button" className="analysis-button" disabled={disabled} aria-keyshortcuts="d" onClick={() => decide('DIFFERENT')}>Different (D)</button>
         <button type="button" className="analysis-button" disabled={disabled} aria-keyshortcuts="u" onClick={() => decide('UNSURE')}>Unsure (U)</button>
-        {!author.trim() && <span className="text-label leading-4 text-amber-200">Enter your name above to record a judgment.</span>}
+        {!author.trim() && <span className="text-label leading-4 text-warning">Enter your name above to record a judgment.</span>}
       </div>
     </article>
   );
@@ -185,7 +185,7 @@ function SharePanel({ onChanged }: { onChanged: () => void }) {
   };
 
   return (
-    <div className="space-y-3 text-label leading-4 text-slate-300">
+    <div className="space-y-3 text-label leading-4 text-fg-secondary">
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" className="analysis-button" disabled={busy} onClick={() => void exportLedger()}>Export signed ledger</button>
         <label className="flex items-center gap-2">
@@ -194,16 +194,16 @@ function SharePanel({ onChanged }: { onChanged: () => void }) {
         </label>
       </div>
       {preview && (
-        <div className="space-y-2 rounded border border-slate-700 p-3">
-          <p role="status" className="font-semibold text-cyan-200">
+        <div className="space-y-2 rounded border border-line-strong p-3">
+          <p role="status" className="font-semibold text-accent">
             {preview.additions} new entr{preview.additions === 1 ? 'y' : 'ies'}, {preview.alreadyPresent} already here, {preview.conflicts.length} conflict{preview.conflicts.length === 1 ? '' : 's'}.
           </p>
           <SignerTrustNotice signerKeyId={preview.signerKeyId} contributors={contributors} />
           {preview.contradictionsAfter > preview.contradictionsBefore && (
-            <p className="text-amber-200">Importing would raise contradictions from {preview.contradictionsBefore} to {preview.contradictionsAfter}. They stay unmerged until you resolve them.</p>
+            <p className="text-warning">Importing would raise contradictions from {preview.contradictionsBefore} to {preview.contradictionsAfter}. They stay unmerged until you resolve them.</p>
           )}
           {preview.conflicts.map((conflict) => (
-            <p key={conflict.entryId} className="text-amber-200">Entry {conflict.entryId}: {conflict.reason}</p>
+            <p key={conflict.entryId} className="text-warning">Entry {conflict.entryId}: {conflict.reason}</p>
           ))}
           <button
             type="button"
@@ -225,17 +225,17 @@ function SharePanel({ onChanged }: { onChanged: () => void }) {
           </button>
         </div>
       )}
-      {message && <p role="status" className="text-emerald-300">{message}</p>}
-      {error && <p role="alert" className="text-rose-300">{error}</p>}
+      {message && <p role="status" className="text-success">{message}</p>}
+      {error && <p role="alert" className="text-danger">{error}</p>}
     </div>
   );
 }
 
 function LedgerView({ page, onHistory, historyOf }: { page: ResolutionLedgerPage; onHistory: (pair: string | null) => void; historyOf: string | null }) {
   return (
-    <div className="space-y-2 text-label leading-4 text-slate-300">
+    <div className="space-y-2 text-label leading-4 text-fg-secondary">
       {page.contradictions.map((contradiction) => (
-        <p key={contradiction.sameEntryIds.join(',')} role="alert" className="rounded border border-amber-500/40 p-2 text-amber-200">
+        <p key={contradiction.sameEntryIds.join(',')} role="alert" className="rounded border border-warning/30 p-2 text-warning">
           Contradiction: {contradiction.keys.map((key) => key.value).join(', ')} are linked by SAME judgments and also separated by a DIFFERENT one. They are left unmerged. Record a new judgment to resolve it.
         </p>
       ))}
@@ -249,7 +249,7 @@ function LedgerView({ page, onHistory, historyOf }: { page: ResolutionLedgerPage
         {page.items.map((item) => {
           const pair = `${item.entry.left.kind}|${item.entry.left.value}||${item.entry.right.kind}|${item.entry.right.value}`;
           return (
-            <li key={item.entry.id} className={`rounded border p-2 ${item.isLatest ? 'border-slate-600' : 'border-slate-800 text-slate-400'}`}>
+            <li key={item.entry.id} className={`rounded border p-2 ${item.isLatest ? 'border-line-strong' : 'border-line text-muted'}`}>
               <p>
                 <strong>{VERDICT_LABEL[item.entry.verdict]}</strong>: {item.entry.evidence.left.displayValue} and {item.entry.evidence.right.displayValue}
                 {!item.isLatest && ' (superseded)'}
@@ -365,10 +365,10 @@ export default function ResolutionReview() {
     <section aria-label="Entity resolution" className="app-panel space-y-3 p-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-slate-100">Resolve entities</h3>
-          <p className="text-label leading-4 text-slate-400">Your judgments are kept in a ledger on this device, survive an index rebuild, and are never edited or deleted. Nothing is merged without you.</p>
+          <h3 className="text-sm font-semibold text-fg">Resolve entities</h3>
+          <p className="text-label leading-4 text-muted">Your judgments are kept in a ledger on this device, survive an index rebuild, and are never edited or deleted. Nothing is merged without you.</p>
         </div>
-        <label className="text-label leading-4 text-slate-300">
+        <label className="text-label leading-4 text-fg-secondary">
           Your name
           <input className="analysis-input ml-2" value={author} maxLength={120} onChange={(event) => { setAuthor(event.target.value); saveAuthor(event.target.value); }} />
         </label>
@@ -380,37 +380,37 @@ export default function ResolutionReview() {
           </button>
         ))}
       </div>
-      {error && <p role="alert" className="text-label leading-4 text-rose-300">{error}</p>}
+      {error && <p role="alert" className="text-label leading-4 text-danger">{error}</p>}
       {ledger && (
-        <ul className="text-label leading-4 text-slate-400" aria-label="Your decisions so far">
+        <ul className="text-label leading-4 text-muted" aria-label="Your decisions so far">
           {decisionLines(ledger.summary).map((line) => <li key={line}>{line}</li>)}
           {ledger.summary.byBasis.length > 0 && <li>These are counts of your own decisions, not a measure of how accurate anyone was.</li>}
         </ul>
       )}
       {view === 'queue' && (
         <div className="space-y-3">
-          <label className="flex items-center gap-2 text-label leading-4 text-slate-300">
+          <label className="flex items-center gap-2 text-label leading-4 text-fg-secondary">
             <input type="checkbox" checked={includeUnsure} onChange={(event) => setIncludeUnsure(event.target.checked)} />
             Include pairs I marked unsure
           </label>
-          {queue === null && !error && <p role="status" className="text-label leading-4 text-slate-400">Looking for candidate pairs…</p>}
-          {queue?.scanTruncated && <p className="text-label leading-4 text-amber-200">The index has more names than one scan reads, so some pairs were not considered.</p>}
+          {queue === null && !error && <p role="status" className="text-label leading-4 text-muted">Looking for candidate pairs…</p>}
+          {queue?.scanTruncated && <p className="text-label leading-4 text-warning">The index has more names than one scan reads, so some pairs were not considered.</p>}
           {queue && (queue.guards.skippedNameGroups > 0 || queue.guards.skippedIdentifiers > 0) && (
-            <p className="text-label leading-4 text-amber-200">Skipped {queue.guards.skippedNameGroups} very common names and {queue.guards.skippedIdentifiers} widely shared identifiers; pairing them would bury real leads.</p>
+            <p className="text-label leading-4 text-warning">Skipped {queue.guards.skippedNameGroups} very common names and {queue.guards.skippedIdentifiers} widely shared identifiers; pairing them would bury real leads.</p>
           )}
           {current ? (
             <CandidateCard key={current.pairId} candidate={current} author={author} busy={busy} onDecide={(candidate, verdict, reason) => void record(candidate, verdict, reason, null)} />
           ) : (
-            queue && <p role="status" className="text-label leading-4 text-slate-300">No candidate pairs are waiting.</p>
+            queue && <p role="status" className="text-label leading-4 text-fg-secondary">No candidate pairs are waiting.</p>
           )}
-          <div className="flex flex-wrap items-center gap-2 text-label leading-4 text-slate-400">
+          <div className="flex flex-wrap items-center gap-2 text-label leading-4 text-muted">
             {queue && <span>{queue.remaining} waiting</span>}
             {lastDecision && <button type="button" className="analysis-button" disabled={busy} onClick={() => void undo()}>Undo last judgment</button>}
             {queue?.nextCursor && queue.candidates.length <= 1 && <button type="button" className="analysis-button" disabled={busy} onClick={() => loadQueue(queue.nextCursor)}>Load more</button>}
           </div>
         </div>
       )}
-      {view === 'ledger' && (ledger ? <LedgerView page={ledger} onHistory={setHistoryOf} historyOf={historyOf} /> : <p role="status" className="text-label leading-4 text-slate-400">Reading the ledger…</p>)}
+      {view === 'ledger' && (ledger ? <LedgerView page={ledger} onHistory={setHistoryOf} historyOf={historyOf} /> : <p role="status" className="text-label leading-4 text-muted">Reading the ledger…</p>)}
       {view === 'share' && <SharePanel onChanged={() => { loadLedger(historyOf); loadQueue(null); }} />}
     </section>
   );

@@ -29,23 +29,23 @@ function PreviewReview({
   return (
     <div className="space-y-1.5" aria-label="Annotation import preview">
       <p>
-        From <span className="text-slate-200">{preview.exporter ?? 'an exporter who set no name'}</span> (the name is their claim), exported {preview.exportedAt.slice(0, 10)} with version {preview.appVersion}.
+        From <span className="text-fg">{preview.exporter ?? 'an exporter who set no name'}</span> (the name is their claim), exported {preview.exportedAt.slice(0, 10)} with version {preview.appVersion}.
       </p>
       <SignerTrustNotice signerKeyId={preview.signerKeyId} contributors={contributors} />
-      {!sameDocument && <p role="alert" className="text-rose-300">This packet is for {preview.portalKey} / document {preview.documentId}, not this document. Open that document to import it.</p>}
-      {textDiffers && <p className="text-amber-200">The sender's document text differs from yours, so some of these marks may re-anchor or be orphaned here.</p>}
-      {!textDiffers && textUnknown && <p className="text-amber-200">A text digest is missing on one side, so it cannot be shown that both of you read the same text.</p>}
+      {!sameDocument && <p role="alert" className="text-danger">This packet is for {preview.portalKey} / document {preview.documentId}, not this document. Open that document to import it.</p>}
+      {textDiffers && <p className="text-warning">The sender's document text differs from yours, so some of these marks may re-anchor or be orphaned here.</p>}
+      {!textDiffers && textUnknown && <p className="text-warning">A text digest is missing on one side, so it cannot be shown that both of you read the same text.</p>}
       <p role="status">{preview.toAdd.length} to add, {preview.alreadyPresent} already here, {preview.conflicts.length} with the same id but different content (yours are kept).</p>
       <ul className="space-y-1">
         {preview.toAdd.map((item) => (
-          <li key={item.id} className="rounded border border-slate-800 p-1.5">
+          <li key={item.id} className="rounded border border-line p-1.5">
             {KIND_LABELS[item.kind]}{item.tag ? `: ${item.tag}` : ''} · {STATUS_LABELS[item.status].toLowerCase()} · {item.author ?? 'author not recorded'}
-            {item.quote && <blockquote className="border-l border-slate-600 pl-2 text-slate-400">{item.quote}</blockquote>}
+            {item.quote && <blockquote className="border-l border-line-strong pl-2 text-muted">{item.quote}</blockquote>}
           </li>
         ))}
       </ul>
       {preview.conflicts.map((conflict) => (
-        <p key={conflict.local.id} className="text-amber-200">Not imported: {conflict.incoming.id.slice(0, 8)} differs from your copy.</p>
+        <p key={conflict.local.id} className="text-warning">Not imported: {conflict.incoming.id.slice(0, 8)} differs from your copy.</p>
       ))}
       <button type="button" className={button} disabled={busy || !sameDocument || preview.toAdd.length === 0} onClick={onApply}>Add these annotations</button>
     </div>
@@ -116,10 +116,10 @@ export default function AnnotationExchange({
   });
 
   return (
-    <details className="rounded border border-slate-800 p-2">
-      <summary className="cursor-pointer font-semibold text-slate-200">Share and import annotations</summary>
+    <details className="rounded border border-line p-2">
+      <summary className="cursor-pointer font-semibold text-fg">Share and import annotations</summary>
       <div className="mt-2 space-y-2">
-        <p className="text-slate-400">Export signs your annotations of this document with this installation's key. A colleague previews the packet, sees whether they trust the key, and adds what is new. The signature shows the file is unchanged since signing, not who holds the key.</p>
+        <p className="text-muted">Export signs your annotations of this document with this installation's key. A colleague previews the packet, sees whether they trust the key, and adds what is new. The signature shows the file is unchanged since signing, not who holds the key.</p>
         <button type="button" className={button} disabled={busy || !hasOwnMarks} onClick={() => void exportPacket()}>Export signed packet</button>
         <label className="block">
           Open a packet file
@@ -131,8 +131,8 @@ export default function AnnotationExchange({
         </label>
         <button type="button" className={button} disabled={busy || payload.trim() === ''} onClick={() => void previewImport()}>Preview packet</button>
         {preview && <PreviewReview preview={preview} portalKey={portalKey} documentId={documentId} busy={busy} onApply={() => void apply()} />}
-        {error && <p role="alert" className="text-rose-300">{error}</p>}
-        {status && <p role="status" className="text-emerald-300">{status}</p>}
+        {error && <p role="alert" className="text-danger">{error}</p>}
+        {status && <p role="status" className="text-success">{status}</p>}
       </div>
     </details>
   );

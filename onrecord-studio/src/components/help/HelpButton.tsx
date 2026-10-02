@@ -12,7 +12,7 @@ export default function HelpButton() {
       title={`Help: ${topic.title}`}
       aria-label={`Open help for ${topic.title}`}
       onClick={() => openHelp(topic.id)}
-      className="focus-ring grid h-9 w-9 place-items-center rounded-xl border border-slate-800 bg-slate-900/50 text-[14px] font-semibold text-slate-300 transition hover:text-slate-100"
+      className="focus-ring grid h-9 w-9 place-items-center rounded-xl border border-control bg-surface/70 text-[14px] font-semibold text-fg-secondary transition hover:text-fg"
     >
       <span aria-hidden="true">?</span>
     </button>

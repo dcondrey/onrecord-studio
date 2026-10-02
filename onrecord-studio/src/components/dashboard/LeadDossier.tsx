@@ -56,22 +56,22 @@ export default function LeadDossier() {
   };
 
   return (
-    <section aria-label="Lead dossier" className="mt-4 rounded-xl border border-slate-800 bg-slate-950/40 p-4 text-label text-slate-300">
+    <section aria-label="Lead dossier" className="mt-4 rounded-xl border border-line bg-canvas/40 p-4 text-label text-fg-secondary">
       <div className="flex items-start justify-between gap-3">
-        <h3 className="text-label font-semibold text-slate-200">Lead dossier</h3>
-        <button type="button" onClick={close} className="focus-ring rounded-md border border-slate-800 px-2 py-1 text-caption text-slate-400 hover:text-slate-200">Close</button>
+        <h3 className="text-label font-semibold text-fg">Lead dossier</h3>
+        <button type="button" onClick={close} className="focus-ring rounded-md border border-control px-2 py-1 text-caption text-muted hover:text-fg">Close</button>
       </div>
-      {state.status === 'pending' && <p role="status" className="mt-2 text-slate-400">Assembling the dossier…</p>}
-      {state.status === 'failed' && <p role="alert" className="mt-2 text-rose-300">The dossier could not be assembled: {state.message}</p>}
+      {state.status === 'pending' && <p role="status" className="mt-2 text-muted">Assembling the dossier…</p>}
+      {state.status === 'failed' && <p role="alert" className="mt-2 text-danger">The dossier could not be assembled: {state.message}</p>}
       {state.status === 'ready' && (
         <div className="mt-2 space-y-4">
           <div>
-            <p className="font-semibold text-slate-200">{state.dossier.finding.headline}</p>
-            <p className="mt-1 text-slate-400">{state.dossier.finding.explanation}</p>
+            <p className="font-semibold text-fg">{state.dossier.finding.headline}</p>
+            <p className="mt-1 text-muted">{state.dossier.finding.explanation}</p>
           </div>
           <Section title={`Evidence chain (${state.dossier.evidence.length}${state.dossier.evidenceTruncated ? ', more not shown' : ''})`}>
             {state.dossier.evidence.length === 0 ? (
-              <p className="text-slate-400">This finding cites no document span.</p>
+              <p className="text-muted">This finding cites no document span.</p>
             ) : (
               <ul className="space-y-1.5">
                 {state.dossier.evidence.map((link, index) => <li key={`${link.portalKey}:${link.documentId}:${index}`}>{evidenceLine(link)}</li>)}
@@ -83,12 +83,12 @@ export default function LeadDossier() {
           </Section>
           <Section title={`Related findings (${state.dossier.related.length}${state.dossier.relatedTruncated ? ', more not shown' : ''})`}>
             {state.dossier.related.length === 0 ? (
-              <p className="text-slate-400">No other undismissed finding touches this request or these documents.</p>
+              <p className="text-muted">No other undismissed finding touches this request or these documents.</p>
             ) : (
               <ul className="space-y-1">
                 {state.dossier.related.map((related) => (
                   <li key={related.id}>
-                    <span className="text-slate-400">{related.basis === 'SAME_REQUEST' ? 'same request' : 'same document'}</span> · {related.headline}
+                    <span className="text-muted">{related.basis === 'SAME_REQUEST' ? 'same request' : 'same document'}</span> · {related.headline}
                   </li>
                 ))}
               </ul>
@@ -96,14 +96,14 @@ export default function LeadDossier() {
           </Section>
           <Section title="What would disconfirm this">
             <p>{state.dossier.falsification.statement}</p>
-            <p className="mt-1 text-slate-400">Records to seek:</p>
-            <ul className="list-disc pl-4 text-slate-400">
+            <p className="mt-1 text-muted">Records to seek:</p>
+            <ul className="list-disc pl-4 text-muted">
               {state.dossier.falsification.recordsToSeek.map((record) => <li key={record}>{record}</li>)}
             </ul>
           </Section>
           <Section title={`Gaps (${state.dossier.gaps.length}${state.dossier.gapsTruncated ? ', more not shown' : ''})`}>
             {state.dossier.gaps.length === 0 ? (
-              <p className="text-slate-400">Every figure found in the cited documents could be checked against the imported tables, or none was found.</p>
+              <p className="text-muted">Every figure found in the cited documents could be checked against the imported tables, or none was found.</p>
             ) : (
               <ul className="space-y-2">
                 {state.dossier.gaps.map((gap, index) => (
@@ -116,8 +116,8 @@ export default function LeadDossier() {
             )}
           </Section>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => addToBriefing(state.dossier)} className="focus-ring rounded-md border border-indigo-400/25 bg-indigo-500/10 px-2 py-1 text-caption font-semibold text-indigo-200">Add to briefing</button>
-            <button type="button" onClick={() => exportMarkdown(state.dossier)} className="focus-ring rounded-md border border-slate-800 px-2 py-1 text-caption font-medium text-slate-400 hover:text-slate-200">Export as Markdown</button>
+            <button type="button" onClick={() => addToBriefing(state.dossier)} className="focus-ring rounded-md border border-highlight/30 bg-highlight/10 px-2 py-1 text-caption font-semibold text-highlight">Add to briefing</button>
+            <button type="button" onClick={() => exportMarkdown(state.dossier)} className="focus-ring rounded-md border border-control px-2 py-1 text-caption font-medium text-muted hover:text-fg">Export as Markdown</button>
           </div>
         </div>
       )}
@@ -128,7 +128,7 @@ export default function LeadDossier() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h4 className="text-caption font-semibold uppercase tracking-wider text-cyan-300/80">{title}</h4>
+      <h4 className="text-caption font-semibold uppercase tracking-wider text-accent">{title}</h4>
       <div className="mt-1">{children}</div>
     </div>
   );
@@ -169,16 +169,16 @@ function GapRequest({ gap }: { gap: DossierGap }) {
         <button
           type="button"
           onClick={() => void copyRequest()}
-          className="focus-ring rounded-md border border-slate-800 px-2 py-0.5 text-caption font-medium text-slate-400 hover:text-slate-200"
+          className="focus-ring rounded-md border border-control px-2 py-0.5 text-caption font-medium text-muted hover:text-fg"
         >
           Copy request text
         </button>
-        {copy.kind === 'copied' && <span role="status" className="text-caption text-emerald-300">Request text copied.</span>}
+        {copy.kind === 'copied' && <span role="status" className="text-caption text-success">Request text copied.</span>}
       </div>
       {copy.kind === 'fallback' && (
         <>
-          <p role="status" className="mt-1 text-caption text-amber-200">Copying was blocked by the system. Select the text below to copy it.</p>
-          <pre className="mt-1 whitespace-pre-wrap rounded-md border border-slate-800 bg-slate-950/60 p-2 text-caption text-slate-300">{copy.text}</pre>
+          <p role="status" className="mt-1 text-caption text-warning">Copying was blocked by the system. Select the text below to copy it.</p>
+          <pre className="mt-1 whitespace-pre-wrap rounded-md border border-line bg-canvas/70 p-2 text-caption text-fg-secondary">{copy.text}</pre>
         </>
       )}
     </div>

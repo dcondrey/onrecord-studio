@@ -105,11 +105,11 @@ export default function InvestigationDesk() {
   return (
     <section aria-label="San Diego investigations" className="space-y-4">
       <div className="onboarding-panel rounded-2xl border p-5 sm:p-6">
-        <div className="app-eyebrow text-cyan-300">Investigate San Diego</div>
-        <h3 className="mt-2 text-xl font-semibold text-slate-100">
+        <div className="app-eyebrow text-accent">Investigate San Diego</div>
+        <h3 className="mt-2 text-xl font-semibold text-fg">
           Follow the money. Check the services.
         </h3>
-        <p className="mt-2 text-sm text-slate-400">
+        <p className="mt-2 text-sm text-muted">
           Choose a question, collect the underlying records, and document what
           the evidence supports.
         </p>
@@ -126,8 +126,8 @@ export default function InvestigationDesk() {
               className={cn(
                 "focus-ring rounded-lg border px-3 py-2 text-sm",
                 topic.id === item.id
-                  ? "border-cyan-400/40 bg-cyan-500/10 text-cyan-200"
-                  : "border-slate-700 text-slate-300",
+                  ? "border-accent/30 bg-accent/10 text-accent"
+                  : "border-control text-fg-secondary",
               )}
               onClick={() => {
                 setWorkspace((current) => ({ ...current, topicId: item.id }));
@@ -141,18 +141,18 @@ export default function InvestigationDesk() {
       </div>
       <div className="app-panel space-y-5 p-5 sm:p-6">
         <div>
-          <h3 className="text-lg font-semibold text-slate-100">
+          <h3 className="text-lg font-semibold text-fg">
             {topic.question}
           </h3>
-          <p className="mt-2 text-sm leading-relaxed text-slate-300">
+          <p className="mt-2 text-sm leading-relaxed text-fg-secondary">
             {topic.method}
           </p>
-          <p className="mt-2 text-label leading-relaxed text-slate-400">
+          <p className="mt-2 text-label leading-relaxed text-muted">
             {topic.limitation}
           </p>
         </div>
         <div>
-          <h4 className="text-sm font-semibold text-slate-200">
+          <h4 className="text-sm font-semibold text-fg">
             1. Obtain the starting records
           </h4>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -168,10 +168,10 @@ export default function InvestigationDesk() {
           </div>
         </div>
         <div>
-          <h4 className="text-sm font-semibold text-slate-200">
+          <h4 className="text-sm font-semibold text-fg">
             2. Review and compare
           </h4>
-          <p className="mt-1 text-label leading-4 text-slate-400">
+          <p className="mt-1 text-label leading-4 text-muted">
             Searches cover records already in your library. In Analysis, import
             a collected table, then compare department allocations or budgets
             with actuals.
@@ -203,20 +203,20 @@ export default function InvestigationDesk() {
             </button>
           </div>
         </div>
-        <details className="rounded-xl border border-slate-700 p-4">
-          <summary className="cursor-pointer text-sm font-semibold text-slate-200">
+        <details className="rounded-xl border border-line-strong p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-fg">
             3. Request the missing records
           </summary>
-          <p className="mt-3 text-label leading-4 text-slate-400">
+          <p className="mt-3 text-label leading-4 text-muted">
             Suggested custodians: {topic.custodians}
           </p>
-          <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-300">
+          <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-fg-secondary">
             {topic.records.map((record) => (
               <li key={record}>{record}</li>
             ))}
           </ul>
           <div className="mt-4 flex flex-wrap items-end gap-3">
-            <label className="text-label leading-4 text-slate-300">
+            <label className="text-label leading-4 text-fg-secondary">
               Records from
               <input
                 type="date"
@@ -227,7 +227,7 @@ export default function InvestigationDesk() {
                 }
               />
             </label>
-            <label className="text-label leading-4 text-slate-300">
+            <label className="text-label leading-4 text-fg-secondary">
               Records through
               <input
                 type="date"
@@ -262,13 +262,13 @@ export default function InvestigationDesk() {
             </button>
           </div>
           {error && (
-            <p role="alert" className="mt-2 text-sm text-rose-300">
+            <p role="alert" className="mt-2 text-sm text-danger">
               {error}
             </p>
           )}
           {draft.requestText && (
             <>
-              <label className="mt-4 block text-label leading-4 text-slate-300">
+              <label className="mt-4 block text-label leading-4 text-fg-secondary">
                 Editable request draft
                 <textarea
                   className="analysis-input mt-2 min-h-72 w-full"
@@ -278,7 +278,7 @@ export default function InvestigationDesk() {
                   }
                 />
               </label>
-              <p className="mt-2 text-label leading-4 text-slate-400">
+              <p className="mt-2 text-label leading-4 text-muted">
                 Review the dates, custodians, and scope in this text before
                 submitting. Date controls do not replace an existing draft.
                 Clear the text to generate a new one.
@@ -299,7 +299,7 @@ export default function InvestigationDesk() {
               href={SAN_DIEGO_RECORDS_URL}
               target="_blank"
               rel="noreferrer"
-              className="focus-ring text-cyan-300"
+              className="focus-ring text-accent"
             >
               Open City request portal
             </a>
@@ -307,7 +307,7 @@ export default function InvestigationDesk() {
               href="https://sandiegohousingcommission.nextrequest.com"
               target="_blank"
               rel="noreferrer"
-              className="focus-ring text-cyan-300"
+              className="focus-ring text-accent"
             >
               Open Housing Commission portal
             </a>
@@ -319,12 +319,12 @@ export default function InvestigationDesk() {
               Import response files
             </button>
           </div>
-          <p className="mt-2 text-label leading-4 text-slate-400">
+          <p className="mt-2 text-label leading-4 text-muted">
             Drafts stay on this device. Submit them yourself in the appropriate
             agency portal; no request has been sent.
           </p>
         </details>
-        <label className="block text-sm font-semibold text-slate-200">
+        <label className="block text-sm font-semibold text-fg">
           Investigation notes
           <textarea
             value={draft.notes}
@@ -341,13 +341,13 @@ export default function InvestigationDesk() {
           >
             Download investigation notes
           </button>
-          <span className="text-label leading-4 text-slate-400">
+          <span className="text-label leading-4 text-muted">
             Notes and request drafts are saved separately for each topic on this
             device.
           </span>
         </div>
         {storageError && (
-          <p role="alert" className="text-sm text-rose-300">
+          <p role="alert" className="text-sm text-danger">
             {storageError}
           </p>
         )}
@@ -414,10 +414,10 @@ function InvestigationSource({
     store.setWorkspaceView("evidence");
   };
   return (
-    <article className="rounded-xl border border-slate-700/70 p-4">
-      <h5 className="text-sm font-semibold text-slate-200">{source.label}</h5>
-      <p className="mt-1 text-label leading-relaxed text-slate-300">{purpose}</p>
-      <p className="mt-2 text-label leading-relaxed text-slate-400">
+    <article className="rounded-xl border border-line-strong p-4">
+      <h5 className="text-sm font-semibold text-fg">{source.label}</h5>
+      <p className="mt-1 text-label leading-relaxed text-fg-secondary">{purpose}</p>
+      <p className="mt-2 text-label leading-relaxed text-muted">
         {source.coverage}
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -436,7 +436,7 @@ function InvestigationSource({
           </button>
         )}
         <a
-          className="focus-ring rounded px-2 py-1 text-label leading-4 text-cyan-300"
+          className="focus-ring rounded px-2 py-1 text-label leading-4 text-accent"
           href={source.url}
           target="_blank"
           rel="noreferrer"
@@ -450,17 +450,17 @@ function InvestigationSource({
         )}
       </div>
       {!isTauri() && source.access !== "export" && (
-        <p className="mt-2 text-label leading-4 text-slate-400">
+        <p className="mt-2 text-label leading-4 text-muted">
           Open the desktop app to collect records.
         </p>
       )}
       {saved?.lastError && (
-        <p role="alert" className="mt-2 text-label leading-4 text-amber-200">
+        <p role="alert" className="mt-2 text-label leading-4 text-warning">
           Latest source error: {saved.lastError}
         </p>
       )}
       {error && (
-        <p role="alert" className="mt-2 text-label leading-4 text-rose-300">
+        <p role="alert" className="mt-2 text-label leading-4 text-danger">
           {error} Open the source to download files, then use Import response
           files.
         </p>

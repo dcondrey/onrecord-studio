@@ -44,8 +44,8 @@ export default function RegistrySnapshots() {
 
   return (
     <details className="mt-4 text-label">
-      <summary className="cursor-pointer text-slate-300">Public registry snapshots</summary>
-      <div className="mt-3 space-y-3 text-slate-400">
+      <summary className="cursor-pointer text-fg-secondary">Public registry snapshots</summary>
+      <div className="mt-3 space-y-3 text-muted">
         <p>
           Import a registry list you downloaded yourself so a licence number read from a document can be shown with the name it is registered to. Nothing is fetched; the file&apos;s digest is kept with every match.{' '}
           <button type="button" className="underline" onClick={() => openHelp('registry-anchoring')}>What a match means</button>
@@ -53,9 +53,9 @@ export default function RegistrySnapshots() {
         {REGISTRIES.map((registry) => {
           const snapshot = snapshots?.find((row) => row.registry === registry) ?? null;
           return (
-            <div key={registry} className="rounded border border-slate-800 p-2">
+            <div key={registry} className="rounded border border-line p-2">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="font-semibold text-slate-300">{REGISTRY_TITLES[registry]}</span>
+                <span className="font-semibold text-fg-secondary">{REGISTRY_TITLES[registry]}</span>
                 <button type="button" className="analysis-button" disabled={busy !== null} onClick={() => void importSnapshot(registry)}>
                   {busy === registry ? 'Importing…' : snapshot ? 'Replace snapshot' : 'Import CSV'}
                 </button>
@@ -70,7 +70,7 @@ export default function RegistrySnapshots() {
             </div>
           );
         })}
-        {error && <p role="alert" className="text-amber-200">{error}</p>}
+        {error && <p role="alert" className="text-warning">{error}</p>}
       </div>
     </details>
   );

@@ -40,8 +40,8 @@ const REASON_LABELS: Record<StatutoryExtensionReason, string> = {
   DECLARED_EMERGENCY_OPERATIONAL_IMPACT: 'Declared emergency affected operations',
 };
 
-const field = 'focus-ring w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-slate-100';
-const button = 'focus-ring rounded border border-slate-600 px-2 py-1 font-semibold text-slate-200 hover:border-cyan-400/60 disabled:opacity-50';
+const field = 'focus-ring w-full rounded border border-line-strong bg-canvas px-2 py-1 text-fg';
+const button = 'focus-ring rounded border border-line-strong px-2 py-1 font-semibold text-fg hover:border-accent/60 disabled:opacity-50';
 
 function KindSelect({ value, onChange, label }: { value: TimelineEventKind; onChange: (kind: TimelineEventKind) => void; label: string }) {
   return (
@@ -151,7 +151,7 @@ function ClaimForm({ portals, onSubmit, isBusy }: {
       {jurisdiction === 'OTHER' && (
         <input aria-label="Jurisdiction name" maxLength={TRACKER_LIMITS.jurisdictionCharacters} className={field} value={otherJurisdiction} onChange={(event) => setOtherJurisdiction(event.target.value)} />
       )}
-      <p className="text-label text-slate-400">
+      <p className="text-label text-muted">
         Nothing here is sent anywhere, and no portal login is used or stored. Only the dates you enter or confirm from emails count.
       </p>
       <button type="submit" disabled={isBusy || reference.trim() === ''} className={button}>Track this request</button>
@@ -174,10 +174,10 @@ function SuggestionCard({ claim, suggestion, isBusy, onConfirm, onReject }: {
   const needsReason = kind === 'EXTENSION_NOTICE';
   const ready = occurredAt !== null && (!needsReason || reason !== '');
   return (
-    <li className="rounded border border-dashed border-slate-500 p-2" aria-label={`Suggested ${KIND_LABELS[suggestion.kind]} for ${claim.reference}`}>
-      <p className="text-label font-semibold text-slate-200">Suggested, not counted until you confirm</p>
-      <blockquote className="mt-1 border-l-2 border-slate-500 pl-1.5 italic">{suggestion.evidence.matchedSentence}</blockquote>
-      <p className="text-label text-slate-400">
+    <li className="rounded border border-dashed border-line-strong p-2" aria-label={`Suggested ${KIND_LABELS[suggestion.kind]} for ${claim.reference}`}>
+      <p className="text-label font-semibold text-fg">Suggested, not counted until you confirm</p>
+      <blockquote className="mt-1 border-l-2 border-line-strong pl-1.5 italic">{suggestion.evidence.matchedSentence}</blockquote>
+      <p className="text-label text-muted">
         From an email{suggestion.evidence.subjectExcerpt ? ` titled "${suggestion.evidence.subjectExcerpt}"` : ''}.
       </p>
       <div className="mt-1 grid gap-1.5">
@@ -247,9 +247,9 @@ function Detail({ claim, deadline, tracker }: { claim: ClaimedRequest; deadline:
 
   return (
     <div className="flex flex-col gap-3" aria-label={`Request ${claim.reference}`}>
-      <section aria-label="Deadline" className="rounded border border-slate-700 p-2">
+      <section aria-label="Deadline" className="rounded border border-line-strong p-2">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-label font-semibold text-slate-100">{claim.reference}</h3>
+          <h3 className="text-label font-semibold text-fg">{claim.reference}</h3>
           {deadline && <DeadlineChip deadline={deadline} />}
         </div>
         {claim.title && <p>{claim.title}</p>}
@@ -257,30 +257,30 @@ function Detail({ claim, deadline, tracker }: { claim: ClaimedRequest; deadline:
           <>
             <p className="mt-1" data-testid="basis-statement">{deadline.basisStatement}</p>
             {deadline.notes.map((note) => (
-              <p key={note} className="text-label text-slate-400">{note}</p>
+              <p key={note} className="text-label text-muted">{note}</p>
             ))}
           </>
         ) : (
-          <p className="mt-1 text-slate-400">Loading the deadline.</p>
+          <p className="mt-1 text-muted">Loading the deadline.</p>
         )}
         {claim.sourceUrl && (
-          <p className="mt-1 break-all text-label text-slate-400">Link you saved: {claim.sourceUrl}</p>
+          <p className="mt-1 break-all text-label text-muted">Link you saved: {claim.sourceUrl}</p>
         )}
       </section>
 
       <section aria-label="Timeline">
-        <h3 className="text-label font-semibold text-slate-100">Timeline</h3>
+        <h3 className="text-label font-semibold text-fg">Timeline</h3>
         {events.length === 0 ? (
-          <p className="text-slate-400">No dates recorded yet.</p>
+          <p className="text-muted">No dates recorded yet.</p>
         ) : (
           <ol className="flex flex-col gap-1">
             {events.map((event) => (
-              <li key={event.id} className="flex items-start justify-between gap-2 rounded border border-slate-800 p-1.5">
+              <li key={event.id} className="flex items-start justify-between gap-2 rounded border border-line p-1.5">
                 <span>
                   <strong>{KIND_LABELS[event.kind]}</strong> on {event.occurredAt.slice(0, 10)} ·{' '}
                   {event.basis === 'EMAIL_CONFIRMED' ? 'confirmed from an email' : 'entered by you'}
                   {event.extensionReason && ` · ${REASON_LABELS[event.extensionReason]}`}
-                  {event.evidence && <blockquote className="border-l-2 border-slate-600 pl-1.5 italic text-slate-300">{event.evidence.matchedSentence}</blockquote>}
+                  {event.evidence && <blockquote className="border-l-2 border-line-strong pl-1.5 italic text-fg-secondary">{event.evidence.matchedSentence}</blockquote>}
                 </span>
                 <button type="button" disabled={tracker.isBusy} className={button} aria-label={`Remove ${KIND_LABELS[event.kind]} on ${event.occurredAt.slice(0, 10)}`} onClick={() => void tracker.removeEvent(claim.id, event.id)}>
                   Remove
@@ -292,7 +292,7 @@ function Detail({ claim, deadline, tracker }: { claim: ClaimedRequest; deadline:
         {claim.events.length > 0 && (
           <div className="mt-1.5 flex items-center gap-2">
             <button type="button" className={button} onClick={() => void copyChronology()}>Copy chronology</button>
-            {copyStatus && <span role="status" className="text-emerald-300">{copyStatus}</span>}
+            {copyStatus && <span role="status" className="text-success">{copyStatus}</span>}
           </div>
         )}
         <form
@@ -323,9 +323,9 @@ function Detail({ claim, deadline, tracker }: { claim: ClaimedRequest; deadline:
       </section>
 
       <section aria-label="Suggested events">
-        <h3 className="text-label font-semibold text-slate-100">Suggested from emails</h3>
+        <h3 className="text-label font-semibold text-fg">Suggested from emails</h3>
         {claim.suggestions.length === 0 ? (
-          <p className="text-slate-400">Nothing waiting for confirmation.</p>
+          <p className="text-muted">Nothing waiting for confirmation.</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {claim.suggestions.map((suggestion) => (
@@ -352,18 +352,18 @@ function Detail({ claim, deadline, tracker }: { claim: ClaimedRequest; deadline:
       </section>
 
       <section aria-label="Import emails">
-        <h3 className="text-label font-semibold text-slate-100">Notification emails</h3>
-        <p className="text-label text-slate-400">
+        <h3 className="text-label font-semibold text-fg">Notification emails</h3>
+        <p className="text-label text-muted">
           Choose .eml or .msg files the portal emailed you. They are read on this device only; attachments and remote content are never opened.
         </p>
         <button type="button" className={button} disabled={tracker.isBusy} onClick={() => void choose()}>Choose email files</button>
-        {pickError && <p role="alert" className="text-rose-300">{pickError}</p>}
+        {pickError && <p role="alert" className="text-danger">{pickError}</p>}
         {outcome && (
           <ul className="mt-1 flex flex-col gap-1" aria-label="Import results">
             {outcome.files.map((file, index) => (
               <li key={`${file.fileName}-${index}`}>
                 {file.fileName}: {file.outcome === 'IMPORTED' ? `${file.suggestionsAdded} suggested` : file.outcome.split('_').join(' ').toLowerCase()}
-                {file.detail && <span className="text-slate-400"> · {file.detail}</span>}
+                {file.detail && <span className="text-muted"> · {file.detail}</span>}
               </li>
             ))}
           </ul>
@@ -371,7 +371,7 @@ function Detail({ claim, deadline, tracker }: { claim: ClaimedRequest; deadline:
       </section>
 
       {confirmingRemoval ? (
-        <div role="alert" className="rounded border border-rose-500/30 p-2">
+        <div role="alert" className="rounded border border-danger/30 p-2">
           <p>Stop tracking {claim.reference}? Its recorded dates and imported suggestions are deleted from this computer. The agency's own records are not affected.</p>
           <div className="mt-1.5 flex gap-2">
             <button type="button" className={button} disabled={tracker.isBusy} onClick={() => void tracker.remove(claim.id)}>
@@ -412,12 +412,12 @@ export default function MyRequestsPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <div role="dialog" aria-modal="true" aria-label="My requests" className="fixed inset-0 z-50 flex justify-end bg-black/60" onKeyDown={dialogFocus.onKeyDown}>
-      <div ref={dialogFocus.ref} tabIndex={-1} className="app-panel h-full w-full max-w-xl overflow-y-auto p-4 text-label text-slate-300 outline-none">
+      <div ref={dialogFocus.ref} tabIndex={-1} className="app-panel h-full w-full max-w-xl overflow-y-auto p-4 text-label text-fg-secondary outline-none">
         <div className="flex items-center justify-between">
-          <h2 className="text-label font-semibold text-slate-100">My requests</h2>
+          <h2 className="text-label font-semibold text-fg">My requests</h2>
           <button type="button" onClick={onClose} className={button}>Close</button>
         </div>
-        {tracker.error && <p role="alert" className="mt-2 text-rose-300">{tracker.error}</p>}
+        {tracker.error && <p role="alert" className="mt-2 text-danger">{tracker.error}</p>}
 
         {selected ? (
           <div className="mt-3">
@@ -429,16 +429,16 @@ export default function MyRequestsPanel({ onClose }: { onClose: () => void }) {
         ) : (
           <div className="mt-3 flex flex-col gap-4">
             {tracker.claims.length === 0 ? (
-              <p className="text-slate-400">You are not tracking any request yet.</p>
+              <p className="text-muted">You are not tracking any request yet.</p>
             ) : (
               <ul className="flex flex-col gap-1.5" aria-label="Tracked requests">
                 {tracker.claims.map((claim) => (
                   <li key={claim.id}>
-                    <button type="button" className="focus-ring w-full rounded border border-slate-700 p-2 text-left hover:border-cyan-400/60" onClick={() => setSelectedId(claim.id)}>
-                      <span className="block font-semibold text-slate-100">{claim.reference}{claim.title ? `: ${claim.title}` : ''}</span>
+                    <button type="button" className="focus-ring w-full rounded border border-control p-2 text-left hover:border-accent/60" onClick={() => setSelectedId(claim.id)}>
+                      <span className="block font-semibold text-fg">{claim.reference}{claim.title ? `: ${claim.title}` : ''}</span>
                       {tracker.deadlines[claim.id] && <DeadlineChip deadline={tracker.deadlines[claim.id]} />}
                       {claim.suggestions.length > 0 && (
-                        <span className="ml-2 text-label text-slate-300">{claim.suggestions.length} suggested event{claim.suggestions.length === 1 ? '' : 's'} to review</span>
+                        <span className="ml-2 text-label text-fg-secondary">{claim.suggestions.length} suggested event{claim.suggestions.length === 1 ? '' : 's'} to review</span>
                       )}
                     </button>
                   </li>

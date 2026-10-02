@@ -55,16 +55,16 @@ export default function SeatsPanel({ onClose }: { onClose: () => void }) {
     <ModalDialog label="Seats" onClose={onClose}>
       <h2 className="text-lg font-semibold">Seats</h2>
       {status && !status.subscriptionActive ? (
-        <p className="mt-3 text-sm text-slate-300">
+        <p className="mt-3 text-sm text-fg-secondary">
           Seats are managed by the purchaser of an active subscription. If a colleague bought the seats, ask them to assign yours; if your subscription lapsed, renew it under Manage subscription.
         </p>
       ) : null}
       {status?.subscriptionActive ? (
         <>
-          <p className="mt-3 text-sm text-slate-300">
+          <p className="mt-3 text-sm text-fg-secondary">
             {status.quantity} {status.quantity === 1 ? 'seat' : 'seats'} purchased: yours, plus {status.usedSeats} assigned and {remaining} free.
           </p>
-          <p className="mt-1 text-label leading-5 text-slate-400">
+          <p className="mt-1 text-label leading-5 text-muted">
             No email is sent. Tell your colleague to sign in to OnRecord Studio with the address you enter; the seat is theirs at their first license check, once their sign-in provider has confirmed the address. Revoking locks their workspace at their next check. Their local evidence is never deleted.
           </p>
           <form
@@ -83,32 +83,32 @@ export default function SeatsPanel({ onClose }: { onClose: () => void }) {
               disabled={busy || remaining === 0}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="name@example.org"
-              className="focus-ring h-9 min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-sm text-slate-100 placeholder:text-slate-400"
+              className="focus-ring h-9 min-w-0 flex-1 rounded-lg border border-control bg-canvas/70 px-3 text-sm text-fg placeholder:text-muted"
             />
             <button
               type="submit"
               disabled={busy || remaining === 0 || email.trim() === ''}
-              className="focus-ring rounded-lg border border-slate-500 px-3 py-1.5 text-label leading-4 font-semibold hover:bg-slate-800 disabled:opacity-50"
+              className="focus-ring rounded-lg border border-control px-3 py-1.5 text-label leading-4 font-semibold hover:bg-raised disabled:opacity-50"
             >
               Assign seat
             </button>
           </form>
           {remaining === 0 ? (
-            <p className="mt-2 text-label leading-4 text-slate-400">Every purchased seat is assigned. Revoke one, or add seats under Manage subscription.</p>
+            <p className="mt-2 text-label leading-4 text-muted">Every purchased seat is assigned. Revoke one, or add seats under Manage subscription.</p>
           ) : null}
-          <ul className="mt-4 divide-y divide-slate-800 text-sm">
-            {active.length === 0 ? <li className="py-2 text-slate-400">No seats assigned yet.</li> : null}
+          <ul className="mt-4 divide-y divide-line text-sm">
+            {active.length === 0 ? <li className="py-2 text-muted">No seats assigned yet.</li> : null}
             {active.map((seat) => (
               <li key={seat.email} className="flex items-center justify-between gap-3 py-2">
                 <div className="min-w-0">
-                  <div className="truncate text-slate-100">{seat.email}</div>
-                  <div className="text-label leading-4 text-slate-400">{seatState(seat)}</div>
+                  <div className="truncate text-fg">{seat.email}</div>
+                  <div className="text-label leading-4 text-muted">{seatState(seat)}</div>
                 </div>
                 <button
                   type="button"
                   disabled={busy}
                   onClick={() => void run('revoke_seat', { email: seat.email })}
-                  className="focus-ring shrink-0 rounded-lg border border-rose-600 px-2.5 py-1 text-label leading-4 font-semibold text-rose-200 hover:bg-rose-950 disabled:opacity-50"
+                  className="focus-ring shrink-0 rounded-lg border border-danger px-2.5 py-1 text-label leading-4 font-semibold text-danger hover:bg-danger disabled:opacity-50"
                 >
                   Revoke
                 </button>
@@ -116,7 +116,7 @@ export default function SeatsPanel({ onClose }: { onClose: () => void }) {
             ))}
           </ul>
           {revoked.length > 0 ? (
-            <details className="mt-3 text-label leading-4 text-slate-400">
+            <details className="mt-3 text-label leading-4 text-muted">
               <summary className="cursor-pointer">{revoked.length} revoked</summary>
               <ul className="mt-1 space-y-1">
                 {revoked.map((seat) => <li key={seat.email}>{seat.email}: {seatState(seat)}. Assign it again to restore access.</li>)}
@@ -125,10 +125,10 @@ export default function SeatsPanel({ onClose }: { onClose: () => void }) {
           ) : null}
         </>
       ) : null}
-      {!status && !error ? <p className="mt-3 text-sm text-slate-400">Loading seats...</p> : null}
-      {error ? <p role="alert" className="mt-3 text-sm text-amber-200">{error}</p> : null}
+      {!status && !error ? <p className="mt-3 text-sm text-muted">Loading seats...</p> : null}
+      {error ? <p role="alert" className="mt-3 text-sm text-warning">{error}</p> : null}
       <div className="mt-4 flex justify-end">
-        <button type="button" onClick={onClose} className="focus-ring rounded-lg border border-slate-500 px-3 py-1.5 text-label leading-4 font-semibold hover:bg-slate-800">Close</button>
+        <button type="button" onClick={onClose} className="focus-ring rounded-lg border border-control px-3 py-1.5 text-label leading-4 font-semibold hover:bg-raised">Close</button>
       </div>
     </ModalDialog>
   );

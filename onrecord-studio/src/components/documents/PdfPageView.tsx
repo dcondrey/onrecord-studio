@@ -65,15 +65,15 @@ function textInsideBox(layer: HTMLElement, box: ClientBox): string {
 
 function digestBanner(header: OriginalHeader) {
   if (header.matchesRecorded === true) {
-    return { tone: 'text-emerald-200 border-emerald-400/30', text: `Verified original: this file's SHA-256 (${header.sha256.slice(0, 16)}…) matches the digest recorded when it was saved.` };
+    return { tone: 'text-success border-success/30', text: `Verified original: this file's SHA-256 (${header.sha256.slice(0, 16)}…) matches the digest recorded when it was saved.` };
   }
   if (header.matchesRecorded === false) {
     return {
-      tone: 'text-rose-200 border-rose-400/50',
+      tone: 'text-danger border-danger/60',
       text: `Not the verified original: this file's SHA-256 is ${header.sha256}, but ${header.recordedSha256 ?? 'the recorded digest'} was recorded when it was saved. Treat what is shown as a different file.`,
     };
   }
-  return { tone: 'text-amber-200 border-amber-400/30', text: `No digest was recorded for this document, so this file (SHA-256 ${header.sha256.slice(0, 16)}…) cannot be checked against one.` };
+  return { tone: 'text-warning border-warning/30', text: `No digest was recorded for this document, so this file (SHA-256 ${header.sha256.slice(0, 16)}…) cannot be checked against one.` };
 }
 
 /**
@@ -377,13 +377,13 @@ export default function PdfPageView({ portalKey, documentId, fileName }: { porta
   const shown = rendered?.pageNumber === pageNumber;
 
   return (
-    <section aria-label={`Page view of ${fileName}`} className="flex min-h-0 min-w-0 flex-1 flex-col border-b border-slate-800 text-label text-slate-300">
+    <section aria-label={`Page view of ${fileName}`} className="flex min-h-0 min-w-0 flex-1 flex-col border-b border-line text-label text-fg-secondary">
       {banner && <p role="status" className={`border-b px-3 py-1.5 ${banner.tone}`}>{banner.text}</p>}
-      {load.status === 'loading' && <p role="status" className="p-3 text-slate-400">Opening the original file…</p>}
-      {load.status === 'error' && <p role="alert" className="p-3 text-rose-300">The page view could not open this file: {load.message}</p>}
+      {load.status === 'loading' && <p role="status" className="p-3 text-muted">Opening the original file…</p>}
+      {load.status === 'error' && <p role="alert" className="p-3 text-danger">The page view could not open this file: {load.message}</p>}
       {load.status === 'ready' && (
         <>
-          <div className="flex flex-wrap items-center gap-2 border-b border-slate-900 px-3 py-2">
+          <div className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2">
             <button type="button" className={button} disabled={pageNumber <= 1} onClick={() => goTo(pageNumber - 1)}>Previous page</button>
             <label className="flex items-center gap-1">
               <span>Page</span>
@@ -395,18 +395,18 @@ export default function PdfPageView({ portalKey, documentId, fileName }: { porta
                 onChange={(event) => setPageInput(event.target.value)}
                 onBlur={() => goTo(Number(pageInput) || pageNumber)}
                 onKeyDown={(event) => { if (event.key === 'Enter') goTo(Number(pageInput) || pageNumber); }}
-                className="focus-ring w-14 rounded border border-slate-700 bg-slate-950 px-1 py-0.5 text-slate-100"
+                className="focus-ring w-14 rounded border border-control bg-canvas px-1 py-0.5 text-fg"
               />
               <span aria-hidden="true">of {pageCount}</span>
             </label>
             <button type="button" className={button} disabled={pageNumber >= pageCount} onClick={() => goTo(pageNumber + 1)}>Next page</button>
             <span className="sr-only" role="status" aria-live="polite">Page {pageNumber} of {pageCount}</span>
-            <span className="mx-1 text-slate-400" aria-hidden="true">|</span>
+            <span className="mx-1 text-muted" aria-hidden="true">|</span>
             <button type="button" className={button} aria-label="Zoom out" disabled={zoom <= ZOOM_STEPS[0]} onClick={() => zoomBy(-1)}>-</button>
             <span className="min-w-10 text-center font-mono" aria-label={`Zoom ${Math.round(zoom * 100)} percent`}>{Math.round(zoom * 100)}%</span>
             <button type="button" className={button} aria-label="Zoom in" disabled={zoom >= ZOOM_STEPS[ZOOM_STEPS.length - 1]} onClick={() => zoomBy(1)}>+</button>
             <button type="button" className={button} onClick={fitWidth}>Fit width</button>
-            <span className="mx-1 text-slate-400" aria-hidden="true">|</span>
+            <span className="mx-1 text-muted" aria-hidden="true">|</span>
             <fieldset className="flex items-center gap-2">
               <legend className="sr-only">Pointer mode</legend>
               <label className="flex items-center gap-1"><input type="radio" name={`mode-${key}`} checked={mode === 'text'} onChange={() => setMode('text')} />Select text</label>
@@ -415,7 +415,7 @@ export default function PdfPageView({ portalKey, documentId, fileName }: { porta
             <button type="button" className={button} onClick={markSelectedText}>Mark selected text</button>
             <button type="button" className={button} onClick={startDraft}>Mark region with keyboard</button>
           </div>
-          <p className="px-3 py-1 text-slate-400">
+          <p className="px-3 py-1 text-muted">
             The page is drawn from the original file. Its selectable text is the PDF's own text layer, which can differ from the extracted text stored for search. A rectangle locates an area of this page of the original file.
           </p>
           <div
@@ -424,7 +424,7 @@ export default function PdfPageView({ portalKey, documentId, fileName }: { porta
             role="group"
             aria-label={`Page ${pageNumber} of ${pageCount}. Page Down at the end of a page goes to the next page. Plus and minus change the zoom.`}
             onKeyDown={keyOnViewer}
-            className="focus-ring min-h-0 flex-1 overflow-auto bg-slate-900 p-3"
+            className="focus-ring min-h-0 flex-1 overflow-auto bg-surface p-3"
           >
             <div
               ref={pageRef}
@@ -439,7 +439,7 @@ export default function PdfPageView({ portalKey, documentId, fileName }: { porta
                 if (!region) return null;
                 const state = bridge.states[item.id];
                 const changed = state === 'ORIGINAL_CHANGED';
-                const color = item.kind === 'ISSUE' ? 'border-cyan-500 text-cyan-900 bg-cyan-100' : item.kind === 'HIGHLIGHT' ? 'border-yellow-500 text-yellow-900 bg-yellow-100' : 'border-slate-500 text-slate-900 bg-slate-200';
+                const color = item.kind === 'ISSUE' ? 'border-accent text-accent bg-accent' : item.kind === 'HIGHLIGHT' ? 'border-yellow-500 text-yellow-900 bg-yellow-100' : 'border-line-strong text-muted bg-muted';
                 const dash = item.status === 'CONFIRMED' ? 'border-solid' : item.status === 'DISPUTED' ? 'border-dotted' : 'border-dashed';
                 const label = `${KIND_LABELS[item.kind]}${item.tag ? `: ${item.tag}` : ''}, ${STATUS_LABELS[item.status].toLowerCase()}${changed ? ', original changed' : ''}`;
                 return (
@@ -447,14 +447,14 @@ export default function PdfPageView({ portalKey, documentId, fileName }: { porta
                     key={item.id}
                     data-region-id={item.id}
                     style={{ left: `${region.x * 100}%`, top: `${region.y * 100}%`, width: `${region.width * 100}%`, height: `${region.height * 100}%` }}
-                    className={`pointer-events-none absolute ${changed ? 'border-4 border-double border-amber-600' : `border-2 ${dash} ${color.split(' ')[0]}`} ${bridge.selectedId === item.id ? 'outline outline-2 outline-offset-2 outline-indigo-600' : ''}`}
+                    className={`pointer-events-none absolute ${changed ? 'border-4 border-double border-warning' : `border-2 ${dash} ${color.split(' ')[0]}`} ${bridge.selectedId === item.id ? 'outline outline-2 outline-offset-2 outline-highlight' : ''}`}
                   >
                     <button
                       type="button"
                       aria-label={`${label}. Show in the annotations list.`}
                       aria-pressed={bridge.selectedId === item.id}
                       onClick={() => pageViewBridge.update(key, { selectedId: item.id })}
-                      className={`focus-ring pointer-events-auto absolute left-0 top-0 max-w-full -translate-y-full truncate rounded-t px-1 text-caption font-semibold ${changed ? 'bg-amber-200 text-amber-950' : color.split(' ').slice(1).join(' ')}`}
+                      className={`focus-ring pointer-events-auto absolute left-0 top-0 max-w-full -translate-y-full truncate rounded-t px-1 text-caption font-semibold ${changed ? 'bg-warning text-warning' : color.split(' ').slice(1).join(' ')}`}
                     >
                       {label}
                     </button>
@@ -464,16 +464,16 @@ export default function PdfPageView({ portalKey, documentId, fileName }: { porta
               {shown && bridge.pending && bridge.pending.rectangle.pageIndex === pageNumber - 1 && (
                 <div
                   data-testid="pending-region"
-                  className="pointer-events-none absolute border-2 border-dotted border-indigo-600 bg-indigo-400/15"
+                  className="pointer-events-none absolute border-2 border-dotted border-highlight bg-highlight/20"
                   style={{ left: `${bridge.pending.rectangle.x * 100}%`, top: `${bridge.pending.rectangle.y * 100}%`, width: `${bridge.pending.rectangle.width * 100}%`, height: `${bridge.pending.rectangle.height * 100}%` }}
                 >
-                  <span className="absolute left-0 top-0 -translate-y-full whitespace-nowrap rounded-t bg-indigo-200 px-1 text-caption font-semibold text-indigo-950">Unsaved region</span>
+                  <span className="absolute left-0 top-0 -translate-y-full whitespace-nowrap rounded-t bg-highlight px-1 text-caption font-semibold text-highlight">Unsaved region</span>
                 </div>
               )}
               {drag && rubber && (
                 <div
                   aria-hidden="true"
-                  className="pointer-events-none absolute border-2 border-dashed border-indigo-600 bg-indigo-400/20"
+                  className="pointer-events-none absolute border-2 border-dashed border-highlight bg-highlight/20"
                   style={{ left: `${rubber.x * 100}%`, top: `${rubber.y * 100}%`, width: `${rubber.width * 100}%`, height: `${rubber.height * 100}%` }}
                 />
               )}
@@ -484,7 +484,7 @@ export default function PdfPageView({ portalKey, documentId, fileName }: { porta
                   role="group"
                   aria-label={`Region being marked on page ${pageNumber}: left ${percent(draft.x)}, top ${percent(draft.y)}, width ${percent(draft.width)}, height ${percent(draft.height)}. Arrow keys move it, Shift with arrow keys resizes it, Enter keeps it, Escape cancels.`}
                   onKeyDown={keyOnDraft}
-                  className="focus-ring absolute border-2 border-dashed border-indigo-600 bg-indigo-400/20"
+                  className="focus-ring absolute border-2 border-dashed border-highlight bg-highlight/20"
                   style={{ left: `${draft.x * 100}%`, top: `${draft.y * 100}%`, width: `${draft.width * 100}%`, height: `${draft.height * 100}%` }}
                 />
               )}
@@ -516,10 +516,10 @@ export default function PdfPageView({ portalKey, documentId, fileName }: { porta
               )}
             </div>
           </div>
-          {renderError && <p role="alert" className="px-3 py-1 text-rose-300">This page could not be drawn: {renderError}</p>}
-          {notice && <p role="status" className="px-3 py-1 text-emerald-300">{notice}</p>}
+          {renderError && <p role="alert" className="px-3 py-1 text-danger">This page could not be drawn: {renderError}</p>}
+          {notice && <p role="status" className="px-3 py-1 text-success">{notice}</p>}
           {missing.length > 0 && (
-            <p role="status" className="px-3 py-1 text-rose-200">
+            <p role="status" className="px-3 py-1 text-danger">
               {missing.length} saved region{missing.length === 1 ? ' refers' : 's refer'} to a page this file does not have (it has {pageCount}). They are listed as orphaned in the annotations panel and are not shown on any page.
             </p>
           )}

@@ -11,12 +11,12 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <button
         className={cn(
-          "inline-flex items-center justify-center rounded-lg text-label leading-4 font-semibold font-sans tracking-tight transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]",
+          "inline-flex items-center justify-center rounded-lg text-label leading-4 font-semibold font-sans tracking-tight transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-highlight disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]",
           {
-            "bg-indigo-600 border border-indigo-500 text-white hover:bg-indigo-500 shadow-sm shadow-indigo-600/10": variant === 'default',
-            "bg-red-600/10 border border-red-500/20 text-red-400 hover:bg-red-600/20": variant === 'destructive',
-            "border border-slate-800 bg-slate-900/40 text-slate-300 hover:bg-slate-800/60 hover:text-slate-100": variant === 'outline',
-            "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200": variant === 'ghost',
+            "bg-highlight border border-highlight text-white hover:bg-highlight shadow-sm shadow-highlight/30": variant === 'default',
+            "bg-danger/10 border border-danger/30 text-danger hover:bg-danger/20": variant === 'destructive',
+            "border border-control bg-surface/40 text-fg-secondary hover:bg-raised/70 hover:text-fg": variant === 'outline',
+            "text-muted hover:bg-raised/70 hover:text-fg": variant === 'ghost',
           },
           {
             "px-2.5 py-1.5 text-label": size === 'sm',

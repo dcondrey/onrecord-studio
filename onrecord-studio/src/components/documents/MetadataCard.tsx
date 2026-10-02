@@ -43,25 +43,25 @@ export default function MetadataCard({ documentId, portalKey, sha256, contentTyp
   };
 
   return (
-    <section className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/20 p-4 font-mono text-label" aria-label="Document integrity metadata">
-      <div className="text-caption font-bold uppercase tracking-wider text-slate-400">Evidence integrity</div>
+    <section className="space-y-2 rounded-xl border border-line bg-surface/40 p-4 font-mono text-label" aria-label="Document integrity metadata">
+      <div className="text-caption font-bold uppercase tracking-wider text-muted">Evidence integrity</div>
       <MetadataRow label="MIME type" value={contentType ?? 'Not reported'} />
       <MetadataRow label="Visibility" value={visibility} />
       <MetadataRow label="Download" value={downloadStatus} />
       <MetadataRow label="File size" value={formatFileSize(fileSize)} />
       <MetadataRow label="Latest verification" value={verificationLabel(latestVerification, verificationError)} />
-      <div className="space-y-1 border-t border-slate-800/60 pt-2">
+      <div className="space-y-1 border-t border-line pt-2">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-slate-400">Recorded SHA-256</span>
+          <span className="text-muted">Recorded SHA-256</span>
           <div className="flex items-center gap-1">
-            <select aria-label="Digest format" value={digestFormat} onChange={(event) => setDigestFormat(event.target.value as DigestFormat)} className="rounded border border-slate-800 bg-slate-950 px-1.5 py-1 text-caption text-slate-400"><option value="hex">Hex</option><option value="colon">Colon hex</option><option value="base64">Base64</option></select>
-            <button type="button" disabled={!digestIsValid} onClick={() => void copyDigest()} className="rounded border border-slate-800 px-1.5 py-1 text-caption text-slate-400 disabled:opacity-40">Copy</button>
+            <select aria-label="Digest format" value={digestFormat} onChange={(event) => setDigestFormat(event.target.value as DigestFormat)} className="rounded border border-control bg-canvas px-1.5 py-1 text-caption text-muted"><option value="hex">Hex</option><option value="colon">Colon hex</option><option value="base64">Base64</option></select>
+            <button type="button" disabled={!digestIsValid} onClick={() => void copyDigest()} className="rounded border border-control px-1.5 py-1 text-caption text-muted disabled:opacity-40">Copy</button>
           </div>
         </div>
-        <span className={`block select-text break-all rounded border p-2 text-caption ${digestIsValid ? 'border-emerald-400/20 bg-emerald-500/[0.06] text-emerald-300' : 'border-amber-400/20 bg-amber-500/[0.06] text-amber-300'}`}>
+        <span className={`block select-text break-all rounded border p-2 text-caption ${digestIsValid ? 'border-success/30 bg-success/5 text-success' : 'border-warning/30 bg-warning/5 text-warning'}`}>
           {shownDigest ?? 'No source-file digest has been recorded'}
         </span>
-        {copyStatus && <span role="status" className="block text-right text-caption text-slate-400">{copyStatus}</span>}
+        {copyStatus && <span role="status" className="block text-right text-caption text-muted">{copyStatus}</span>}
       </div>
     </section>
   );
@@ -87,7 +87,7 @@ function verificationLabel(record: ProvenanceVerificationRecord | null, error: s
 }
 
 function MetadataRow({ label, value }: { label: string; value: string }) {
-  return <div className="flex items-center justify-between gap-4 border-b border-slate-800/40 py-1"><span className="text-slate-400">{label}</span><span className="truncate text-right font-medium text-slate-300">{value}</span></div>;
+  return <div className="flex items-center justify-between gap-4 border-b border-line py-1"><span className="text-muted">{label}</span><span className="truncate text-right font-medium text-fg-secondary">{value}</span></div>;
 }
 
 function formatFileSize(value: number | null) {

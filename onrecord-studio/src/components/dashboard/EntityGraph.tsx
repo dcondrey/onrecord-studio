@@ -307,13 +307,13 @@ export default function EntityGraph() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="app-eyebrow">Entity graph</div>
-          <div className="mt-1 text-label text-slate-400">
+          <div className="mt-1 text-label text-muted">
             Dotted arcs with a hollow marker are co-occurrence: proximity this app derived, not a
             relationship the documents stated. Labelled arcs with a solid diamond are relations read
             from the text. Distance reads shared documents.
           </div>
         </div>
-        <div className="rounded border border-slate-800 bg-slate-900/60 px-2 py-1 font-mono text-caption text-slate-400">
+        <div className="rounded border border-line bg-surface/70 px-2 py-1 font-mono text-caption text-muted">
           {seeds.length} entities indexed
         </div>
       </div>
@@ -327,23 +327,23 @@ export default function EntityGraph() {
             data-own-organization={isOwn(seed.entityId) ? 'true' : undefined}
             className={cn(
               'focus-ring rounded border px-2 py-1 font-mono text-caption transition-colors',
-              isOwn(seed.entityId) && 'ring-1 ring-cyan-400/60',
+              isOwn(seed.entityId) && 'ring-1 ring-accent/50',
               dimOthers && !isOwn(seed.entityId) && 'opacity-40',
               seed.entityId === selectedId
-                ? 'border-slate-500 bg-slate-800 text-slate-100'
-                : 'border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-600',
+                ? 'border-control bg-raised text-fg'
+                : 'border-control bg-surface/70 text-muted hover:border-control',
             )}
           >
             {truncateLabel(seed.displayValue)}
-            <span className="ml-1.5 text-slate-400">{seed.documentCount}</span>
+            <span className="ml-1.5 text-muted">{seed.documentCount}</span>
           </button>
         ))}
       </div>
 
-      <details className="mt-2 text-caption text-slate-400">
-        <summary className="focus-ring cursor-pointer font-semibold text-slate-300">Entities that connect the most others</summary>
+      <details className="mt-2 text-caption text-muted">
+        <summary className="focus-ring cursor-pointer font-semibold text-fg-secondary">Entities that connect the most others</summary>
         {brokersFailed ? (
-          <p role="alert" className="mt-1 text-rose-300">The ranking could not be read. This does not mean no entity bridges others.</p>
+          <p role="alert" className="mt-1 text-danger">The ranking could not be read. This does not mean no entity bridges others.</p>
         ) : brokers === null ? (
           <p role="status" className="mt-1">Reading the ranking…</p>
         ) : brokers.length === 0 ? (
@@ -354,8 +354,8 @@ export default function EntityGraph() {
             <ol aria-label="Most connecting entities" className="mt-1 flex flex-col gap-1">
               {brokers.map((broker) => (
                 <li key={broker.entity.entityId}>
-                  <button type="button" onClick={() => setSelectedId(broker.entity.entityId)} className="focus-ring rounded border border-slate-800 px-2 py-1 text-left text-slate-300 hover:border-slate-600">
-                    {truncateLabel(broker.entity.displayValue)} <span className="text-slate-400">· {broker.distinctNeighbors} connections · score {broker.brokerageScore.toLocaleString()}</span>
+                  <button type="button" onClick={() => setSelectedId(broker.entity.entityId)} className="focus-ring rounded border border-control px-2 py-1 text-left text-fg-secondary hover:border-control">
+                    {truncateLabel(broker.entity.displayValue)} <span className="text-muted">· {broker.distinctNeighbors} connections · score {broker.brokerageScore.toLocaleString()}</span>
                   </button>
                 </li>
               ))}
@@ -367,8 +367,8 @@ export default function EntityGraph() {
       {seeds.length === 0 ? (
         <div className="mt-6 grid flex-1 place-items-center text-center">
           <div className="max-w-xs">
-            <div className="text-label font-semibold text-slate-300">No entities indexed yet</div>
-            <div className="mt-1 text-caption leading-relaxed text-slate-400">
+            <div className="text-label font-semibold text-fg-secondary">No entities indexed yet</div>
+            <div className="mt-1 text-caption leading-relaxed text-muted">
               The graph draws entities the corpus index extracted from ingested documents. Nothing
               has been indexed, so there is nothing here to read.
             </div>
@@ -376,14 +376,14 @@ export default function EntityGraph() {
         </div>
       ) : missing ? (
         <div className="mt-6 grid flex-1 place-items-center text-center">
-          <div className="max-w-xs text-caption leading-relaxed text-slate-400">
+          <div className="max-w-xs text-caption leading-relaxed text-muted">
             That entity is no longer in the index. A corpus rebuild discards every entity
             identifier, so this is a stale selection rather than an isolated node.
           </div>
         </div>
       ) : !centre ? (
         <div className="mt-6 grid flex-1 place-items-center text-center" aria-busy="true">
-          <div className="max-w-xs text-caption leading-relaxed text-slate-400">
+          <div className="max-w-xs text-caption leading-relaxed text-muted">
             Reading the neighbourhood from the corpus index. Nothing is known about this entity's
             relationships until it answers.
           </div>
@@ -391,27 +391,27 @@ export default function EntityGraph() {
       ) : (
         <>
           {reviewed && reviewedIds.length > 0 && (
-            <div role="group" aria-label="Entities combined by review" className="mt-3 rounded border border-emerald-500/25 p-2 text-caption text-slate-300">
-              <p className="font-semibold text-emerald-300">
+            <div role="group" aria-label="Entities combined by review" className="mt-3 rounded border border-success/30 p-2 text-caption text-fg-secondary">
+              <p className="font-semibold text-success">
                 Combined by your review: {reviewed.members.map((member) => member.displayValue).join(' · ')}
               </p>
-              <ul className="mt-1 space-y-0.5 text-slate-400">
+              <ul className="mt-1 space-y-0.5 text-muted">
                 {reviewed.reasons.map((reason) => (
                   <li key={reason.entryId}>
                     {reason.author} judged "{reason.leftDisplayValue}" and "{reason.rightDisplayValue}" the same on {reason.decidedAt.slice(0, 10)}{reason.reason ? `: ${reason.reason}` : '.'}
                   </li>
                 ))}
               </ul>
-              <p className="mt-1 text-slate-400">
+              <p className="mt-1 text-muted">
                 Resolution <code>{reviewed.resolutionId.slice(0, 12)}</code>. Change a judgment in Resolution review; it is recorded there, not undone here. Shared-document counts keep the larger of the combined entities.
               </p>
               {reviewed.contradictions.length > 0 && (
-                <p role="alert" className="mt-1 text-amber-300">Some judgments contradict each other, so those entities are not combined until the conflict is resolved in Resolution review.</p>
+                <p role="alert" className="mt-1 text-warning">Some judgments contradict each other, so those entities are not combined until the conflict is resolved in Resolution review.</p>
               )}
             </div>
           )}
           {lookalikes.length > 0 && (
-            <div role="group" aria-label="Possible duplicate entities" className="mt-3 rounded border border-slate-800 p-2 text-caption text-slate-400">
+            <div role="group" aria-label="Possible duplicate entities" className="mt-3 rounded border border-line p-2 text-caption text-muted">
               <p>
                 These look like other spellings of {truncateLabel(centre.displayValue)}. A similar name is a lead, not proof they are the same. Combine them to see their relationships together; this changes only this view.
               </p>
@@ -420,20 +420,20 @@ export default function EntityGraph() {
                   const state = aliasState[alias.entityId];
                   return (
                     <li key={alias.entityId} className="flex flex-wrap items-center gap-2">
-                      <span className="text-slate-300">{alias.displayValue}</span>
+                      <span className="text-fg-secondary">{alias.displayValue}</span>
                       {state === undefined && (
-                        <button type="button" className="focus-ring rounded border border-slate-700 px-2 py-0.5 font-semibold text-slate-300 hover:border-cyan-400/50" onClick={() => combine(alias)}>Combine in this view</button>
+                        <button type="button" className="focus-ring rounded border border-control px-2 py-0.5 font-semibold text-fg-secondary hover:border-accent/60" onClick={() => combine(alias)}>Combine in this view</button>
                       )}
                       {state === 'loading' && <span role="status">Reading its relationships…</span>}
                       {state === 'failed' && (
                         <>
-                          <span role="alert" className="text-rose-300">Its relationships could not be read, so nothing was combined.</span>
+                          <span role="alert" className="text-danger">Its relationships could not be read, so nothing was combined.</span>
                           <button type="button" className="focus-ring underline" onClick={() => combine(alias)}>Retry</button>
                         </>
                       )}
                       {typeof state === 'object' && (
                         <>
-                          <span role="status" className="text-emerald-300">Combined for this session. Shared-document counts keep the larger of the two, not their sum.</span>
+                          <span role="status" className="text-success">Combined for this session. Shared-document counts keep the larger of the two, not their sum.</span>
                           <button type="button" className="focus-ring underline" onClick={() => split(alias.entityId)}>Split</button>
                         </>
                       )}
@@ -443,7 +443,7 @@ export default function EntityGraph() {
               </ul>
             </div>
           )}
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-caption text-slate-400">
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-caption text-muted">
             <div role="group" aria-label="Show relationships by how they are known" className="flex gap-1">
               {ALL_BASES.map((basis) => (
                 <button
@@ -458,7 +458,7 @@ export default function EntityGraph() {
                       return next;
                     })
                   }
-                  className={cn('focus-ring rounded border px-2 py-1 font-semibold', shownBases.has(basis) ? 'border-cyan-400/50 text-cyan-200' : 'border-slate-800 text-slate-400')}
+                  className={cn('focus-ring rounded border px-2 py-1 font-semibold', shownBases.has(basis) ? 'border-accent/60 text-accent' : 'border-control text-muted')}
                 >
                   {BASIS_FILTER_LABELS[basis]}
                 </button>
@@ -466,7 +466,7 @@ export default function EntityGraph() {
             </div>
             <label className="flex items-center gap-1">
               As of
-              <input type="date" value={asOf} onChange={(event) => setAsOf(event.target.value)} className="focus-ring rounded border border-slate-800 bg-slate-950 px-1 py-0.5 text-slate-200" />
+              <input type="date" value={asOf} onChange={(event) => setAsOf(event.target.value)} className="focus-ring rounded border border-control bg-canvas px-1 py-0.5 text-fg" />
             </label>
             {asOf && (
               <>
@@ -482,7 +482,7 @@ export default function EntityGraph() {
               <select
                 value={kindFilter ?? ''}
                 onChange={(event) => setKindFilter((event.target.value || null) as CorpusEntityKind | null)}
-                className="focus-ring rounded border border-slate-800 bg-slate-950 px-1 py-0.5 text-slate-200"
+                className="focus-ring rounded border border-control bg-canvas px-1 py-0.5 text-fg"
               >
                 <option value="">All kinds</option>
                 {(Object.keys(kindLabels) as CorpusEntityKind[]).map((kind) => (
@@ -526,7 +526,7 @@ export default function EntityGraph() {
                     strokeDasharray={visual.dash}
                     strokeOpacity={visual.opacity}
                   />
-                  <g className="text-slate-200">
+                  <g className="text-fg">
                     <ShapeGlyph
                       shape={visual.markerShape}
                       cx={mx}
@@ -538,7 +538,7 @@ export default function EntityGraph() {
                     />
                   </g>
                   {visual.family === 'typed' && (
-                    <text x={mx + 6} y={my - 4} className="fill-slate-200 text-caption font-semibold" {...HALO}>
+                    <text x={mx + 6} y={my - 4} className="fill-fg text-caption font-semibold" {...HALO}>
                       {visual.label}
                     </text>
                   )}
@@ -579,7 +579,7 @@ export default function EntityGraph() {
                   strokeDasharray={edge.neighbor.validationGrade === 'PATTERN_ONLY' ? '3 3' : undefined}
                   strokeWidth={1.4}
                 />
-                <g className="text-slate-100">
+                <g className="text-fg">
                   <ShapeGlyph
                     shape={gradeGlyphShape(edge.neighbor.validationGrade)}
                     cx={x + nodeRadius(edge.neighbor) * 0.75}
@@ -594,7 +594,7 @@ export default function EntityGraph() {
                   x={anchor === 'end' ? x - nodeRadius(edge.neighbor) - 5 : x + nodeRadius(edge.neighbor) + 5}
                   y={y + 3}
                   textAnchor={anchor}
-                  className="fill-slate-300 text-caption"
+                  className="fill-fg-secondary text-caption"
                   {...HALO}
                 >
                   {truncateLabel(edge.neighbor.displayValue)}
@@ -610,12 +610,12 @@ export default function EntityGraph() {
               strokeWidth={isOwn(centre.entityId) ? 4 : 2}
               data-own-organization={isOwn(centre.entityId) ? 'true' : undefined}
             />
-            <text x={CENTRE} y={CENTRE + 4} textAnchor="middle" className="fill-slate-100 text-label font-semibold" {...HALO}>
+            <text x={CENTRE} y={CENTRE + 4} textAnchor="middle" className="fill-fg text-label font-semibold" {...HALO}>
               {truncateLabel(centre.displayValue)}
             </text>
           </svg>
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-caption text-slate-400" aria-busy={list.status === 'loading'}>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-caption text-muted" aria-busy={list.status === 'loading'}>
             {list.status === 'loading' ? (
               <span role="status">Updating the neighbours for this filter…</span>
             ) : (
@@ -630,14 +630,14 @@ export default function EntityGraph() {
                 <button
                   key={kind}
                   type="button"
-                  className="focus-ring rounded border border-slate-700 px-2 py-0.5 font-semibold text-slate-300 hover:border-cyan-400/50"
+                  className="focus-ring rounded border border-control px-2 py-0.5 font-semibold text-fg-secondary hover:border-accent/60"
                   onClick={() => setKindFilter(kind)}
                 >
                   {undrawn.toLocaleString('en-US')} more of {kindLabels[kind]}
                 </button>
               ))}
             {kindFilter !== null && (
-              <button type="button" className="focus-ring rounded border border-slate-700 px-2 py-0.5 font-semibold text-slate-300 hover:border-cyan-400/50" onClick={() => setKindFilter(null)}>
+              <button type="button" className="focus-ring rounded border border-control px-2 py-0.5 font-semibold text-fg-secondary hover:border-accent/60" onClick={() => setKindFilter(null)}>
                 Showing {kindLabels[kindFilter]} only. Show all kinds
               </button>
             )}
@@ -645,9 +645,9 @@ export default function EntityGraph() {
 
           <ul className="mt-2 flex flex-col gap-1.5" aria-label="Relationships and their evidence basis">
             {placed.map(({ edge }) => (
-              <li key={`basis-${edge.neighbor.entityId}`} className="rounded-lg border border-slate-800 p-2">
+              <li key={`basis-${edge.neighbor.entityId}`} className="rounded-lg border border-line p-2">
                 <div className="flex flex-wrap items-center gap-2 text-label">
-                  <span className="font-semibold text-slate-100">{edge.neighbor.displayValue}</span>
+                  <span className="font-semibold text-fg">{edge.neighbor.displayValue}</span>
                   <EdgeBasisChip kind={edge.kind} basis={edge.basis} />
                   <ValidationGradeChip grade={edge.neighbor.validationGrade} />
                   <ConfidenceMeter confidence={{ kind: 'MEASURED', basisPoints: edge.confidenceBasisPoints }} />
@@ -675,14 +675,14 @@ export default function EntityGraph() {
                 onLoadAll={loadAll}
               />
               {loadedAliases.length > 0 && (
-                <p className="mt-1 text-caption text-slate-400">
+                <p className="mt-1 text-caption text-muted">
                   The table lists {centre.displayValue}'s own neighbours. Combined spellings add their strongest neighbours to the drawing only.
                 </p>
               )}
             </>
           )}
 
-          <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-slate-800 pt-2 text-caption text-slate-400">
+          <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-line pt-2 text-caption text-muted">
             <span>
               {kindLabels[centre.kind]} · {centre.documentCount} documents
             </span>
@@ -699,13 +699,13 @@ export default function EntityGraph() {
             </span>
           </div>
           {centre.kind === 'CONTRACTOR_LICENSE' && (
-            <div className="mt-2 border-t border-slate-800 pt-2">
+            <div className="mt-2 border-t border-line pt-2">
               <RegistryAnchorNote identifierKind={centre.kind} value={centre.displayValue} />
             </div>
           )}
 
           <form
-            className="mt-2 flex flex-wrap items-center gap-2 border-t border-slate-800 pt-2 text-caption"
+            className="mt-2 flex flex-wrap items-center gap-2 border-t border-line pt-2 text-caption"
             onSubmit={(event) => {
               event.preventDefault();
               const toEntityId = pathTargetId.trim();
@@ -730,7 +730,7 @@ export default function EntityGraph() {
                 });
             }}
           >
-            <label className="font-mono text-slate-400" htmlFor="entity-path-target">
+            <label className="font-mono text-muted" htmlFor="entity-path-target">
               Find path to entity id:
             </label>
             <input
@@ -738,35 +738,35 @@ export default function EntityGraph() {
               type="text"
               value={pathTargetId}
               onChange={(event) => setPathTargetId(event.target.value)}
-              className="focus-ring min-w-[220px] flex-1 rounded border border-slate-800 bg-slate-900/60 px-2 py-1 font-mono text-caption text-slate-100"
+              className="focus-ring min-w-[220px] flex-1 rounded border border-control bg-surface/70 px-2 py-1 font-mono text-caption text-fg"
               placeholder="paste the neighbour id from another view"
             />
             <button
               type="submit"
-              className="focus-ring rounded border border-slate-700 bg-slate-800/80 px-2 py-1 font-mono text-caption text-slate-200 hover:border-slate-500"
+              className="focus-ring rounded border border-control bg-raised/70 px-2 py-1 font-mono text-caption text-fg hover:border-control"
             >
               Trace
             </button>
             {pathView?.kind === 'pending' && (
-              <span className="text-slate-400" aria-busy="true">
+              <span className="text-muted" aria-busy="true">
                 Tracing from {centre.displayValue} to {pathView.request.toEntityId}.
               </span>
             )}
-            {pathView?.kind === 'failed' && <span className="text-rose-400">{pathView.message}</span>}
+            {pathView?.kind === 'failed' && <span className="text-danger">{pathView.message}</span>}
             {pathView?.kind === 'notConnected' && (
-              <span className="text-slate-400">
+              <span className="text-muted">
                 No path within {pathView.maxHops} hops from {centre.displayValue} to {pathView.request.toEntityId}:
                 the two entities are not connected in this corpus.
               </span>
             )}
             {pathView?.kind === 'unknownEntity' && (
-              <span className="text-amber-200">
+              <span className="text-warning">
                 {pathView.entityId} is not in the entity index, so no path from {centre.displayValue} could be
                 traced.
               </span>
             )}
             {pathView?.kind === 'found' && (
-              <span className="w-full font-mono text-slate-300">
+              <span className="w-full font-mono text-fg-secondary">
                 {pathView.path.hops} hops{' '}
                 {pathView.path.weakestConfidenceBasisPoints != null
                   ? `· weakest edge ${(pathView.path.weakestConfidenceBasisPoints / 100).toFixed(1)}%`

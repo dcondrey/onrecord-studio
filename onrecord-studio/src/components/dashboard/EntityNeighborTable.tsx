@@ -67,17 +67,17 @@ export default function EntityNeighborTable({ centre, list, kindLabel, onSelect,
   const drifted = nextCursor === null && total !== null && edges.length !== total;
 
   return (
-    <section aria-label={`All neighbours of ${centre.displayValue}`} className="mt-3 rounded-lg border border-slate-800">
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 px-2 py-1.5 text-caption text-slate-400">
-        <span role="status" className="font-mono text-slate-300">{status}</span>
+    <section aria-label={`All neighbours of ${centre.displayValue}`} className="mt-3 rounded-lg border border-line">
+      <div className="flex flex-wrap items-center gap-2 border-b border-line px-2 py-1.5 text-caption text-muted">
+        <span role="status" className="font-mono text-fg-secondary">{status}</span>
         {hidden > 0 && <span>{hidden.toLocaleString('en-US')} more are hidden by the filters, not absent.</span>}
-        {drifted && <span className="text-amber-200">The index changed while loading, so the list and the count differ.</span>}
-        <button type="button" className="focus-ring ml-auto rounded border border-slate-700 px-2 py-0.5 font-semibold text-slate-300 hover:border-cyan-400/50" onClick={() => void copy()}>
+        {drifted && <span className="text-warning">The index changed while loading, so the list and the count differ.</span>}
+        <button type="button" className="focus-ring ml-auto rounded border border-control px-2 py-0.5 font-semibold text-fg-secondary hover:border-accent/60" onClick={() => void copy()}>
           Copy CSV
         </button>
-        {copied && <span role="status" className="w-full text-slate-300">{copied}</span>}
+        {copied && <span role="status" className="w-full text-fg-secondary">{copied}</span>}
       </div>
-      <div className={`grid ${COLUMNS} gap-2 border-b border-slate-800 px-2 py-1 text-caption font-semibold uppercase tracking-wider text-slate-400`} aria-hidden="true">
+      <div className={`grid ${COLUMNS} gap-2 border-b border-line px-2 py-1 text-caption font-semibold uppercase tracking-wider text-muted`} aria-hidden="true">
         <span>Neighbour</span><span>Kind</span><span>Grade</span><span>Relationship</span><span className="text-right">Shared</span>
       </div>
       <VirtualList
@@ -91,34 +91,34 @@ export default function EntityNeighborTable({ centre, list, kindLabel, onSelect,
           if (nextCursor !== null && !list.loadingMore && list.moreError === null && !list.guardStopped) onLoadMore();
         }}
         renderRow={(edge, { tabIndex }) => (
-          <div className={`grid h-full ${COLUMNS} items-center gap-2 border-b border-slate-800/60 px-2 text-label`}>
+          <div className={`grid h-full ${COLUMNS} items-center gap-2 border-b border-line px-2 text-label`}>
             <button
               type="button"
               tabIndex={tabIndex}
               onClick={() => onSelect(edge.neighbor.entityId)}
               title={edge.neighbor.displayValue}
               aria-label={`${edge.neighbor.displayValue}, ${kindLabel(edge.neighbor.kind)}. Select to centre the graph on it.`}
-              className="focus-ring truncate rounded text-left font-semibold text-slate-100 hover:underline"
+              className="focus-ring truncate rounded text-left font-semibold text-fg hover:underline"
             >
               {edge.neighbor.displayValue}
             </button>
-            <span className="truncate text-slate-400">{kindLabel(edge.neighbor.kind)}</span>
+            <span className="truncate text-muted">{kindLabel(edge.neighbor.kind)}</span>
             <ValidationGradeChip grade={edge.neighbor.validationGrade} />
             <EdgeBasisChip kind={edge.kind} basis={edge.basis} />
-            <span className="text-right font-mono text-slate-300">{edge.sharedDocumentCount.toLocaleString('en-US')}</span>
+            <span className="text-right font-mono text-fg-secondary">{edge.sharedDocumentCount.toLocaleString('en-US')}</span>
           </div>
         )}
         footer={
-          <div className="flex flex-wrap items-center gap-2 px-2 py-2 text-caption text-slate-400">
+          <div className="flex flex-wrap items-center gap-2 px-2 py-2 text-caption text-muted">
             {list.moreError !== null && (
-              <span role="alert" className="text-rose-300">The next page could not be read: {list.moreError}</span>
+              <span role="alert" className="text-danger">The next page could not be read: {list.moreError}</span>
             )}
             {nextCursor !== null ? (
               <>
-                <button type="button" disabled={list.loadingMore} className="focus-ring rounded border border-slate-700 px-2 py-0.5 font-semibold text-slate-200 hover:border-cyan-400/50 disabled:opacity-60" onClick={onLoadMore}>
+                <button type="button" disabled={list.loadingMore} className="focus-ring rounded border border-control px-2 py-0.5 font-semibold text-fg hover:border-accent/60 disabled:opacity-60" onClick={onLoadMore}>
                   {list.loadingMore ? 'Loading…' : list.moreError !== null ? 'Retry' : `Load ${NEIGHBOR_PAGE_SIZE} more`}
                 </button>
-                <button type="button" disabled={list.loadingMore} className="focus-ring rounded border border-slate-700 px-2 py-0.5 font-semibold text-slate-200 hover:border-cyan-400/50 disabled:opacity-60" onClick={onLoadAll}>
+                <button type="button" disabled={list.loadingMore} className="focus-ring rounded border border-control px-2 py-0.5 font-semibold text-fg hover:border-accent/60 disabled:opacity-60" onClick={onLoadAll}>
                   Load all
                 </button>
               </>

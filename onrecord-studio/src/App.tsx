@@ -74,7 +74,6 @@ function LicensedWorkspace() {
   const resolvedTheme = resolveTheme(theme, systemTheme === 'dark');
   const resolvedMotion = resolveMotion(motion, systemAccessibility.prefersReducedMotion);
   const resolvedContrast = resolveContrast(contrast, systemAccessibility.prefersMoreContrast);
-  const platform = getPlatform();
 
   useEffect(() => {
     const appearance = window.matchMedia('(prefers-color-scheme: dark)');
@@ -403,7 +402,7 @@ function LicensedWorkspace() {
   }, [addBytesTransferred, appendSyncLog, incrementMetric, refreshAnalytics, refreshRuntimes, requestEvidenceRefresh, requestFindingsRefresh, setPendingSourceRepair, setPortalSyncState, setPostIngestBriefOpen, triggerFailureAlert, triggerSuccessAlert, upsertPortal]);
 
   return (
-    <div data-theme={resolvedTheme} data-platform={platform} className="app-theme flex h-screen w-screen overflow-hidden antialiased">
+    <div data-theme={resolvedTheme} className="app-theme flex h-screen w-screen overflow-hidden antialiased">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Header />
@@ -426,12 +425,4 @@ function LicensedWorkspace() {
  */
 function assertNever(value: never): string {
   return String((value as { type?: unknown }).type ?? 'unknown');
-}
-
-function getPlatform() {
-  const platform = navigator.platform.toLocaleLowerCase();
-  const userAgent = navigator.userAgent.toLocaleLowerCase();
-  if (platform.includes('mac') || userAgent.includes('mac os')) return 'macos';
-  if (platform.includes('win') || userAgent.includes('windows')) return 'windows';
-  return 'other';
 }

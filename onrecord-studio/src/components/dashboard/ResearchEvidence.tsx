@@ -13,7 +13,7 @@ export function Citations({
       {citations.map((citation, index) => (
         <blockquote
           key={index}
-          className="border-l-2 border-cyan-400/30 pl-3 text-label leading-relaxed text-slate-300"
+          className="border-l-2 border-accent/30 pl-3 text-label leading-relaxed text-fg-secondary"
         >
           <CitationContent
             citation={citation}
@@ -45,7 +45,7 @@ function QueryTable({ text }: { text: string }) {
               {columns.map((column, i) => (
                 <th
                   key={i}
-                  className="whitespace-nowrap border-b border-slate-600 px-2 py-2 font-semibold text-slate-200"
+                  className="whitespace-nowrap border-b border-line-strong px-2 py-2 font-semibold text-fg"
                 >
                   {column.replace(/_/g, " ")}
                 </th>
@@ -58,10 +58,10 @@ function QueryTable({ text }: { text: string }) {
                 {row.map((value, j) => (
                   <td
                     key={j}
-                    className="whitespace-nowrap border-b border-slate-800 px-2 py-2 font-mono"
+                    className="whitespace-nowrap border-b border-line px-2 py-2 font-mono"
                   >
                     {value === null ? (
-                      <span className="text-amber-200">Not established</span>
+                      <span className="text-warning">Not established</span>
                     ) : typeof value === "object" ? (
                       JSON.stringify(value)
                     ) : (
@@ -125,13 +125,13 @@ export function EvidenceLinks({
         if (!evidence) return null;
         const links = [...(evidence.sourceReferences ?? []).map((source) => ({ url: source.url, label: `Original source · ${source.snapshot}` })), ...(evidence.sourceUrl ? [{ url: evidence.sourceUrl, label: "Open original source" }] : [])].filter((source, index, all) => /^https?:\/\//.test(source.url) && all.findIndex((item) => item.url === source.url) === index);
         return (
-          <div key={id} className="min-w-0 w-full text-label leading-4 text-slate-400">
-          <div className="mb-2 flex flex-wrap gap-3">{links.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer" className="text-cyan-300 underline underline-offset-2">{source.label}</a>)}</div>
-          <details className="min-w-0 text-label leading-4 text-slate-400">
-            <summary className="cursor-pointer text-cyan-300">
+          <div key={id} className="min-w-0 w-full text-label leading-4 text-muted">
+          <div className="mb-2 flex flex-wrap gap-3">{links.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2">{source.label}</a>)}</div>
+          <details className="min-w-0 text-label leading-4 text-muted">
+            <summary className="cursor-pointer text-accent">
               {evidence.label}
             </summary>
-            <div className="mt-2 space-y-2 rounded-lg border border-slate-700 p-3">
+            <div className="mt-2 space-y-2 rounded-lg border border-line-strong p-3">
               <p>{evidence.limitations}</p>
               {evidence.sql ? (
                 <QueryTable text={evidence.text} />
@@ -156,7 +156,7 @@ export function EvidenceLinks({
                         href={source.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-cyan-300"
+                        className="text-accent"
                       >
                         Open source for snapshot {source.snapshot}
                       </a>
@@ -170,7 +170,7 @@ export function EvidenceLinks({
                     href={evidence.sourceUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-cyan-300"
+                    className="text-accent"
                   >
                     Open original source
                   </a>

@@ -74,10 +74,10 @@ export default function AnnotationSearch({ onOpen }: { onOpen: (link: EvidenceLi
   };
 
   return (
-    <details className="mx-4 my-2 rounded border border-slate-800 p-3 text-label text-slate-300 lg:mx-6">
-      <summary className="cursor-pointer text-label font-semibold text-slate-200">Search annotations across documents</summary>
+    <details className="mx-4 my-2 rounded border border-line p-3 text-label text-fg-secondary lg:mx-6">
+      <summary className="cursor-pointer text-label font-semibold text-fg">Search annotations across documents</summary>
       <div className="mt-2 space-y-2">
-        <p className="text-slate-400">Lists the notes, highlights, and issue codes saved on this computer, across all documents. Each is checked against its document's current text. Positions refer to extracted text, not PDF pages.</p>
+        <p className="text-muted">Lists the notes, highlights, and issue codes saved on this computer, across all documents. Each is checked against its document's current text. Positions refer to extracted text, not PDF pages.</p>
         <form className="grid gap-1.5 sm:grid-cols-4" onSubmit={(event) => { event.preventDefault(); search(); }}>
           <label>Code<input className={field} value={draft.code ?? ''} onChange={(event) => setDraft({ ...draft, code: blankToNull(event.target.value) })} /></label>
           <label>Author<input className={field} value={draft.author ?? ''} onChange={(event) => setDraft({ ...draft, author: blankToNull(event.target.value) })} /></label>
@@ -92,25 +92,25 @@ export default function AnnotationSearch({ onOpen }: { onOpen: (link: EvidenceLi
             <input type="checkbox" checked={draft.orphanedOnly} onChange={(event) => setDraft({ ...draft, orphanedOnly: event.target.checked })} />
             Orphaned only (passage no longer found)
           </label>
-          <div className="sm:col-span-2"><button type="submit" className={button}>Search</button>{loading && <span role="status" className="ml-2 text-slate-400">Searching…</span>}</div>
+          <div className="sm:col-span-2"><button type="submit" className={button}>Search</button>{loading && <span role="status" className="ml-2 text-muted">Searching…</span>}</div>
         </form>
-        {error && <p role="alert" className="text-rose-300">{error}</p>}
-        {applied && rows.length === 0 && !loading && !error && <p className="text-slate-400">No annotations match.</p>}
+        {error && <p role="alert" className="text-danger">{error}</p>}
+        {applied && rows.length === 0 && !loading && !error && <p className="text-muted">No annotations match.</p>}
         {rows.length > 0 && (
           <ul aria-label="Annotation results" className="space-y-1.5">
             {rows.map((row) => {
               const state = row.anchor?.state ?? null;
               return (
-                <li key={row.id} className="rounded border border-slate-800 p-2">
-                  <div className="flex flex-wrap items-center gap-2 text-slate-400">
-                    <span className="font-semibold text-slate-200">{row.fileName ?? `Document ${row.documentId}`}</span>
+                <li key={row.id} className="rounded border border-line p-2">
+                  <div className="flex flex-wrap items-center gap-2 text-muted">
+                    <span className="font-semibold text-fg">{row.fileName ?? `Document ${row.documentId}`}</span>
                     <span>{row.portalKey} / {row.documentId}</span>
                     <span>{KIND_LABELS[row.kind]}</span>
-                    {row.tag && <span className="rounded border border-cyan-400/30 px-1.5 text-cyan-200">{row.tag}</span>}
+                    {row.tag && <span className="rounded border border-accent/30 px-1.5 text-accent">{row.tag}</span>}
                     <span>{row.author ?? 'author not recorded'} · {STATUS_LABELS[row.status].toLowerCase()}</span>
-                    {state === 'ANCHORED' && <span className="text-emerald-200">Anchored</span>}
-                    {state === 'RE_ANCHORED' && <span className="text-amber-200">Re-anchored</span>}
-                    {state === 'ORPHANED' && <span className="text-rose-200">Orphaned</span>}
+                    {state === 'ANCHORED' && <span className="text-success">Anchored</span>}
+                    {state === 'RE_ANCHORED' && <span className="text-warning">Re-anchored</span>}
+                    {state === 'ORPHANED' && <span className="text-danger">Orphaned</span>}
                     {state === null && row.quote !== '' && <span>not checked: text unavailable</span>}
                     {row.requestId !== null ? (
                       <button type="button" className="underline" onClick={() => open(row)}>
@@ -118,8 +118,8 @@ export default function AnnotationSearch({ onOpen }: { onOpen: (link: EvidenceLi
                       </button>
                     ) : <span>document not available</span>}
                   </div>
-                  {row.quote && <blockquote className="mt-1 border-l border-slate-600 pl-2 text-slate-300">{row.quote}</blockquote>}
-                  {state === 'ORPHANED' && <p className="mt-1 text-rose-200">{row.anchor?.reason} The quote above is as it was saved.</p>}
+                  {row.quote && <blockquote className="mt-1 border-l border-line-strong pl-2 text-fg-secondary">{row.quote}</blockquote>}
+                  {state === 'ORPHANED' && <p className="mt-1 text-danger">{row.anchor?.reason} The quote above is as it was saved.</p>}
                   {row.note && <p className="mt-1 whitespace-pre-wrap">{row.note}</p>}
                 </li>
               );
@@ -127,7 +127,7 @@ export default function AnnotationSearch({ onOpen }: { onOpen: (link: EvidenceLi
           </ul>
         )}
         {nextCursor && <button type="button" className={button} disabled={loading} onClick={more}>{loading ? 'Loading…' : 'Show more'}</button>}
-        {applied && !nextCursor && rows.length > 0 && !loading && <p className="text-slate-400">That is every match: {rows.length.toLocaleString('en-US')}.</p>}
+        {applied && !nextCursor && rows.length > 0 && !loading && <p className="text-muted">That is every match: {rows.length.toLocaleString('en-US')}.</p>}
       </div>
     </details>
   );

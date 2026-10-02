@@ -316,15 +316,15 @@ export default function CommandPalette() {
     >
       <section className="command-dialog app-panel h-fit w-full max-w-[620px] overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="command-palette-title">
         <h2 id="command-palette-title" className="sr-only">Command palette</h2>
-        <div className="command-search flex items-center gap-3 border-b border-slate-800/70 px-4">
-          <Icon name="search" className="h-[18px] w-[18px] shrink-0 text-slate-400" />
+        <div className="command-search flex items-center gap-3 border-b border-line px-4">
+          <Icon name="search" className="h-[18px] w-[18px] shrink-0 text-muted" />
           <input
             ref={inputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search commands, or ask a question"
             aria-label="Search commands, views, and settings, or ask a question"
-            className="h-14 min-w-0 flex-1 border-0 bg-transparent text-[14px] text-slate-100 outline-none placeholder:text-slate-400"
+            className="h-14 min-w-0 flex-1 border-0 bg-transparent text-[14px] text-fg outline-none placeholder:text-muted"
             role="combobox"
             aria-expanded="true"
             aria-controls="command-results"
@@ -340,9 +340,9 @@ export default function CommandPalette() {
         <div aria-live="polite">
           {answering && (
             <div id="command-results" className="max-h-[min(480px,62vh)] overflow-y-auto">
-              {asking && <p className="px-6 py-8 text-center text-label text-slate-300" role="status">Searching findings, the entity graph and document text…</p>}
+              {asking && <p className="px-6 py-8 text-center text-label text-fg-secondary" role="status">Searching findings, the entity graph and document text…</p>}
               {askError !== null && (
-                <p className="px-6 py-8 text-center text-label text-slate-300" role="alert">The question could not be answered: {askError}</p>
+                <p className="px-6 py-8 text-center text-label text-fg-secondary" role="alert">The question could not be answered: {askError}</p>
               )}
               {answer !== null && <IntentAnswerView answer={answer} onChooseOption={chooseOption} />}
             </div>
@@ -352,9 +352,9 @@ export default function CommandPalette() {
         <div id="command-results" className="max-h-[min(480px,62vh)] overflow-y-auto p-2" role="listbox">
           {filteredActions.length === 0 ? (
             <div className="px-4 py-10 text-center">
-              <Icon name="search" className="mx-auto h-5 w-5 text-slate-400" />
-              <p className="mt-3 text-label font-medium text-slate-300">No matching commands</p>
-              <p className="mt-1 text-label text-slate-400">Try a workspace name, “source,” or “appearance.”</p>
+              <Icon name="search" className="mx-auto h-5 w-5 text-muted" />
+              <p className="mt-3 text-label font-medium text-fg-secondary">No matching commands</p>
+              <p className="mt-1 text-label text-muted">Try a workspace name, “source,” or “appearance.”</p>
             </div>
           ) : filteredActions.map((action, index) => {
             const showGroup = index === 0 || filteredActions[index - 1].group !== action.group;
@@ -373,7 +373,7 @@ export default function CommandPalette() {
                   }}
                   className={cn(
                     'command-row focus-ring flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition',
-                    selectedIndex === index ? 'command-row-selected text-slate-100' : 'text-slate-400',
+                    selectedIndex === index ? 'command-row-selected text-fg' : 'text-muted',
                   )}
                 >
                   <span className="command-icon grid h-8 w-8 shrink-0 place-items-center rounded-lg border">
@@ -381,7 +381,7 @@ export default function CommandPalette() {
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-label font-medium">{action.label}</span>
-                    <span className="mt-0.5 block truncate text-label text-slate-400">{action.detail}</span>
+                    <span className="mt-0.5 block truncate text-label text-muted">{action.detail}</span>
                   </span>
                   {action.shortcut && <Keycap>{action.shortcut}</Keycap>}
                 </button>
@@ -390,7 +390,7 @@ export default function CommandPalette() {
           })}
         </div>
         )}
-        <footer className="flex items-center justify-between border-t border-slate-800/70 px-4 py-2.5 text-label text-slate-400">
+        <footer className="flex items-center justify-between border-t border-line px-4 py-2.5 text-label text-muted">
           <span>{answering ? 'Esc returns to commands' : 'OnRecord commands'}</span>
           <span className="flex items-center gap-2"><Keycap>↑↓</Keycap> Navigate <Keycap>↵</Keycap> Open or ask</span>
         </footer>
@@ -405,7 +405,7 @@ function isQuestionLike(normalized: string) {
 }
 
 function Keycap({ children }: { children: string }) {
-  return <kbd className="keycap shrink-0 rounded-md border px-1.5 py-0.5 font-sans text-label font-medium text-slate-400">{children}</kbd>;
+  return <kbd className="keycap shrink-0 rounded-md border px-1.5 py-0.5 font-sans text-label font-medium text-muted">{children}</kbd>;
 }
 
 function focusSourceComposer() {

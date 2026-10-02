@@ -85,14 +85,14 @@ export default function EvidencePacketExport({ portalKey = null, findingIds }: E
 
   return (
     <section className="app-panel p-4" aria-label="Evidence packet">
-      <h3 className="font-semibold text-slate-200">Evidence packet</h3>
-      <p className="mt-2 text-label leading-4 text-slate-400">
+      <h3 className="font-semibold text-fg">Evidence packet</h3>
+      <p className="mt-2 text-label leading-4 text-muted">
         Exports a Markdown file and a JSON file a reporter can cite. Each claim states its basis, its
         sources with digests and quoted excerpts, how the detector reached it, and what it does not
         show. Gaps are listed apart from claims. Your annotations are left out unless you tick the box below. The content hash lets anyone regenerate and compare;
         the packet is not signed.
       </p>
-      <label className="mt-3 flex items-start gap-2 text-sm text-slate-200">
+      <label className="mt-3 flex items-start gap-2 text-sm text-fg">
         <input
           type="checkbox"
           className="mt-1"
@@ -102,7 +102,7 @@ export default function EvidencePacketExport({ portalKey = null, findingIds }: E
         <span>Include my annotations on cited documents</span>
       </label>
       {includeAnnotations && (
-        <div className="mt-2 rounded border border-amber-700/60 bg-amber-950/30 p-3 text-label leading-4 text-amber-100">
+        <div className="mt-2 rounded border border-warning/60 bg-warning/40 p-3 text-label leading-4 text-warning">
           <p>
             Adds a separate section, labelled as the reviewer&apos;s reading and not part of the record. For
             each annotation on a document the claims cite it writes the code, author, status, anchor state,
@@ -111,7 +111,7 @@ export default function EvidencePacketExport({ portalKey = null, findingIds }: E
             Annotations on documents that are not public are not written. Orphaned annotations are kept and
             labelled.
           </p>
-          {previewError && <p role="alert" className="mt-2 text-rose-300">{previewError}</p>}
+          {previewError && <p role="alert" className="mt-2 text-danger">{previewError}</p>}
           {!previewError && !preview && <p className="mt-2">Counting annotations…</p>}
           {preview && (
             <p role="status" className="mt-2 font-semibold">
@@ -123,16 +123,16 @@ export default function EvidencePacketExport({ portalKey = null, findingIds }: E
       )}
       <button
         type="button"
-        className="focus-ring mt-3 rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-100 disabled:opacity-50"
+        className="focus-ring mt-3 rounded border border-control px-3 py-1.5 text-sm text-fg disabled:opacity-50"
         disabled={busy || (includeAnnotations && !preview)}
         onClick={() => void exportPacket()}
       >
         {busy ? 'Exporting…' : 'Export evidence packet'}
       </button>
-      {error && <p role="alert" className="mt-3 text-sm text-rose-300">{error}</p>}
+      {error && <p role="alert" className="mt-3 text-sm text-danger">{error}</p>}
       {result && (
-        <div role="status" className="mt-3 rounded border border-slate-700 bg-slate-950/60 p-3 text-label leading-4 text-slate-300">
-          <p className="font-semibold text-slate-200">
+        <div role="status" className="mt-3 rounded border border-line-strong bg-canvas/70 p-3 text-label leading-4 text-fg-secondary">
+          <p className="font-semibold text-fg">
             Wrote {result.claimCount} claim(s); {result.gapCount} gap(s) listed separately; {result.withheldCount} item(s) withheld.
           </p>
           <p className="mt-1 break-all">{result.markdownPath}</p>

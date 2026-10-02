@@ -30,17 +30,17 @@ export default function EvidenceGaps() {
     return gate.invalidate;
   }, [refreshRequests, gate]);
 
-  if (error) return <p className="text-caption text-amber-300">Evidence gaps unavailable: {error}</p>;
+  if (error) return <p className="text-caption text-warning">Evidence gaps unavailable: {error}</p>;
   if (gaps.length === 0) return null;
   return (
-    <div aria-label="Evidence gaps" className="flex flex-col gap-2 border-t border-slate-800 pt-3">
+    <div aria-label="Evidence gaps" className="flex flex-col gap-2 border-t border-line pt-3">
       <div className="app-eyebrow">Routes that cannot be tested yet</div>
       <ul className="flex flex-col gap-2">
         {gaps.map((gap) => (
-          <li key={gap.key} className="rounded border border-slate-800 p-2 text-label text-slate-300">
-            <div className="font-semibold text-slate-200">{gap.route}</div>
-            <div className="mt-1 text-slate-400">{gap.blocked}</div>
-            <div className="mt-1 text-caption text-slate-400">
+          <li key={gap.key} className="rounded border border-line p-2 text-label text-fg-secondary">
+            <div className="font-semibold text-fg">{gap.route}</div>
+            <div className="mt-1 text-muted">{gap.blocked}</div>
+            <div className="mt-1 text-caption text-muted">
               {STATUS_TEXT[gap.status]}
               {gap.status !== 'acquiring' && <> — {gap.request}</>}
             </div>

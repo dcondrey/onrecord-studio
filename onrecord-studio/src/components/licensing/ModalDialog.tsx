@@ -24,13 +24,13 @@ export default function ModalDialog({
       <div
         ref={ref}
         tabIndex={-1}
-        className="max-h-full w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-6 text-slate-100 shadow-2xl outline-none"
+        className="max-h-full w-full max-w-lg overflow-y-auto rounded-2xl border border-line-strong bg-surface p-6 text-fg shadow-2xl outline-none"
       >
         {children}
         <button
           type="button"
           onClick={onClose}
-          className="focus-ring mt-4 rounded-lg border border-slate-500 px-3 py-1.5 text-label leading-4 font-semibold text-slate-100 hover:bg-slate-800"
+          className="focus-ring mt-4 rounded-lg border border-control px-3 py-1.5 text-label leading-4 font-semibold text-fg hover:bg-raised"
         >
           Close
         </button>

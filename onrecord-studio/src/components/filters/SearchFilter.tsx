@@ -179,7 +179,7 @@ export default function SearchFilter() {
       <div className="app-panel flex flex-wrap items-center gap-2 p-2">
         <div className="relative min-w-[240px] flex-1">
           <label htmlFor="evidence-search" className="sr-only">Search requests and extracted documents</label>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden="true">
             <circle cx="11" cy="11" r="7" /><path strokeLinecap="round" d="m20 20-4-4" />
           </svg>
           <input
@@ -188,9 +188,9 @@ export default function SearchFilter() {
             value={inputValue}
             onChange={(event) => updateTerm(event.target.value)}
             placeholder="Search request metadata and extracted text"
-            className="focus-ring h-10 w-full rounded-xl border border-transparent bg-slate-950/65 pl-9 pr-10 text-label text-slate-100 transition placeholder:text-slate-400 focus:border-indigo-400/50"
+            className="focus-ring h-10 w-full rounded-xl border border-transparent bg-canvas/70 pl-9 pr-10 text-label text-fg transition placeholder:text-muted focus:border-highlight/60"
           />
-          {isSearching && <span className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin rounded-full border-2 border-slate-700 border-t-indigo-400" aria-label="Searching" />}
+          {isSearching && <span className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin rounded-full border-2 border-line-strong border-t-indigo-400" aria-label="Searching" />}
         </div>
         <AgencySelector />
         <label>
@@ -198,7 +198,7 @@ export default function SearchFilter() {
           <select
             value={selectedStatus ?? ''}
             onChange={(event) => setSearchFilters(inputValue, selectedAgencyId, event.target.value || null, selectedPolicyDeviation)}
-            className="focus-ring h-10 rounded-xl border border-slate-800 bg-slate-950/65 px-3 text-label text-slate-300 transition focus:border-indigo-400/50"
+            className="focus-ring h-10 rounded-xl border border-control bg-canvas/70 px-3 text-label text-fg-secondary transition focus:border-highlight/60"
           >
             <option value="">All statuses</option>
             <option value="open">Open</option>
@@ -207,13 +207,13 @@ export default function SearchFilter() {
           </select>
         </label>
         {hasFilters && (
-          <button type="button" onClick={clear} className="focus-ring h-10 rounded-xl border border-slate-800 px-3 text-label font-medium text-slate-400 transition hover:border-slate-700 hover:text-slate-200">
+          <button type="button" onClick={clear} className="focus-ring h-10 rounded-xl border border-control px-3 text-label font-medium text-muted transition hover:border-control hover:text-fg">
             Clear
           </button>
         )}
-        <div className="ml-auto hidden shrink-0 border-l border-slate-800 px-2 text-right sm:block">
-          <div className="font-mono text-label font-semibold text-slate-300">{isSearching ? '—' : formatMatchCount(resultCount)}</div>
-          <div className="text-caption uppercase tracking-wider text-slate-400">matches</div>
+        <div className="ml-auto hidden shrink-0 border-l border-line px-2 text-right sm:block">
+          <div className="font-mono text-label font-semibold text-fg-secondary">{isSearching ? '—' : formatMatchCount(resultCount)}</div>
+          <div className="text-caption uppercase tracking-wider text-muted">matches</div>
         </div>
       </div>
       <div className="mt-1.5 flex min-h-4 flex-wrap items-center gap-2 px-2 text-caption">
@@ -221,56 +221,56 @@ export default function SearchFilter() {
           type="button"
           aria-pressed={interpretPlainLanguage}
           onClick={() => setInterpretPlainLanguage((enabled) => !enabled)}
-          className={interpretPlainLanguage ? 'whitespace-nowrap rounded-full border border-indigo-400/30 bg-indigo-500/10 px-2 py-0.5 font-semibold text-indigo-200' : 'whitespace-nowrap rounded-full border border-slate-800 px-2 py-0.5 font-semibold text-slate-400 hover:text-slate-300'}
+          className={interpretPlainLanguage ? 'whitespace-nowrap rounded-full border border-highlight/30 bg-highlight/10 px-2 py-0.5 font-semibold text-highlight' : 'whitespace-nowrap rounded-full border border-control px-2 py-0.5 font-semibold text-muted hover:text-fg-secondary'}
         >
           Plain-language interpretation {interpretPlainLanguage ? 'on' : 'off'}
         </button>
         {parsedQuery.filters.map((filter, index) => {
           const deferred = deferredFilterKeys.has(filterKey(filter));
           return (
-          <span key={`${filter.field}-${filter.value}-${index}`} title={deferred ? 'Recognized qualifier, but not applied to this search' : `Applied qualifier: ${filter.raw ?? serializeQualifierQuery({ version: 1, source: 'qualifier', text: '', filters: [filter], issues: [] })}`} className={deferred ? 'rounded-full border border-amber-500/25 bg-amber-500/[0.08] px-2 py-0.5 font-semibold text-amber-300' : 'rounded-full border border-cyan-500/20 bg-cyan-500/[0.06] px-2 py-0.5 font-semibold text-cyan-300'}>
+          <span key={`${filter.field}-${filter.value}-${index}`} title={deferred ? 'Recognized qualifier, but not applied to this search' : `Applied qualifier: ${filter.raw ?? serializeQualifierQuery({ version: 1, source: 'qualifier', text: '', filters: [filter], issues: [] })}`} className={deferred ? 'rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 font-semibold text-warning' : 'rounded-full border border-accent/30 bg-accent/5 px-2 py-0.5 font-semibold text-accent'}>
             {filter.negated ? '-' : ''}{filter.field}:{filter.value}
           </span>
           );
         })}
         {compiledQuery.deferredFilters.length > 0 && (
-          <span className="text-amber-300" role="status">
+          <span className="text-warning" role="status">
             {compiledQuery.deferredFilters.length} qualifier{compiledQuery.deferredFilters.length === 1 ? '' : 's'} not applied
           </span>
         )}
         {parsedQuery.issues.some((issue) => issue.severity === 'warning' || issue.severity === 'error') && (
-          <span className="text-amber-300" title="Some query tokens need review">Query syntax needs review</span>
+          <span className="text-warning" title="Some query tokens need review">Query syntax needs review</span>
         )}
         {selectedPolicyDeviation && (
-          <button type="button" onClick={() => setSearchFilters(inputValue, selectedAgencyId, selectedStatus, null)} className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 font-semibold text-amber-300">
+          <button type="button" onClick={() => setSearchFilters(inputValue, selectedAgencyId, selectedStatus, null)} className="rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 font-semibold text-warning">
             {formatPolicy(selectedPolicyDeviation)} ×
           </button>
         )}
-        <button type="button" onClick={() => void copyRecord()} disabled={isSearching} className="whitespace-nowrap rounded-full border border-slate-800 px-2 py-0.5 font-semibold text-slate-400 hover:text-slate-300">
+        <button type="button" onClick={() => void copyRecord()} disabled={isSearching} className="whitespace-nowrap rounded-full border border-control px-2 py-0.5 font-semibold text-muted hover:text-fg-secondary">
           Copy search record
         </button>
         {canWatch && (
-          <button type="button" onClick={() => void watchTerm()} title="Watches this text across all sources. The agency, status and policy filters are not part of a watch." className="rounded-full border border-slate-800 px-2 py-0.5 font-semibold text-slate-400 hover:text-slate-300">
+          <button type="button" onClick={() => void watchTerm()} title="Watches this text across all sources. The agency, status and policy filters are not part of a watch." className="rounded-full border border-control px-2 py-0.5 font-semibold text-muted hover:text-fg-secondary">
             Watch this text for changes
           </button>
         )}
         {canStand && (
-          <button type="button" onClick={() => void saveStanding()} disabled={isSearching} title="Saves this exact query, filters included. It re-runs whenever the corpus changes and records the corpus state each run saw." className="rounded-full border border-slate-800 px-2 py-0.5 font-semibold text-slate-400 hover:text-slate-300">
+          <button type="button" onClick={() => void saveStanding()} disabled={isSearching} title="Saves this exact query, filters included. It re-runs whenever the corpus changes and records the corpus state each run saw." className="rounded-full border border-control px-2 py-0.5 font-semibold text-muted hover:text-fg-secondary">
             Save as standing query
           </button>
         )}
         {watchStatus && (
-          <span role={watchStatus.ok ? 'status' : 'alert'} className={watchStatus.ok ? 'text-emerald-300' : 'text-rose-300'}>
+          <span role={watchStatus.ok ? 'status' : 'alert'} className={watchStatus.ok ? 'text-success' : 'text-danger'}>
             {watchStatus.text}
             {watchStatus.ok && <button type="button" onClick={() => setWorkspaceView('overview')} className="ml-1 underline">Open watchlist</button>}
           </span>
         )}
         {error && (
-          <span role="alert" className="truncate text-rose-300">
+          <span role="alert" className="truncate text-danger">
             Search unavailable; {retainedCount > 0 ? `showing ${formatMatchCount(retainedCount)} results from the last successful query` : 'no result set is available'}: {error}
           </span>
         )}
-        {!error && parsedQuery.filters.length === 0 && <span className="text-slate-400">Search remains available while ingestion is active.</span>}
+        {!error && parsedQuery.filters.length === 0 && <span className="text-muted">Search remains available while ingestion is active.</span>}
       </div>
     </section>
   );

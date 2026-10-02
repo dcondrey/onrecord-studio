@@ -46,19 +46,19 @@ export default function StatutoryDeadlineAppeal({
 
   return (
     <div
-      className="rounded-lg border border-slate-800/70 bg-slate-950/40 p-3"
+      className="rounded-lg border border-line bg-canvas/40 p-3"
       aria-label="Statutory deadline appeal"
     >
       <button
         type="button"
         onClick={run}
         disabled={busy}
-        className="focus-ring rounded-md border border-slate-700 bg-slate-900/60 px-3 py-1 text-label font-semibold text-slate-200 transition hover:border-amber-400/40 disabled:opacity-60"
+        className="focus-ring rounded-md border border-control bg-surface/70 px-3 py-1 text-label font-semibold text-fg transition hover:border-warning/30 disabled:opacity-60"
       >
         {busy ? 'Drafting…' : 'Draft statutory deadline appeal'}
       </button>
       {error && (
-        <div role="alert" className="mt-2 rounded-md border border-rose-500/20 bg-rose-500/[0.04] px-2 py-1.5 text-caption text-rose-200">
+        <div role="alert" className="mt-2 rounded-md border border-danger/30 bg-danger/5 px-2 py-1.5 text-caption text-danger">
           {error}
         </div>
       )}

@@ -12,7 +12,7 @@ export default function MyRequestsButton() {
         title="Requests you filed and their deadlines"
         aria-label="Open my requests"
         onClick={() => setOpen(true)}
-        className="focus-ring grid h-9 w-9 place-items-center rounded-xl border border-slate-800 bg-slate-900/50 text-slate-400 transition hover:text-slate-300"
+        className="focus-ring grid h-9 w-9 place-items-center rounded-xl border border-control bg-surface/70 text-muted transition hover:text-fg-secondary"
       >
         <Icon name="clipboard" className="h-3.5 w-3.5" />
       </button>

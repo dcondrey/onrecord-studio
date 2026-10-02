@@ -15,11 +15,11 @@ export default function DeleteAccountResult({
   return (
     <div
       role={complete ? 'status' : 'alert'}
-      className="mt-4 rounded-lg border border-slate-600 bg-slate-950/80 px-4 py-3 text-label leading-5 text-slate-200"
+      className="mt-4 rounded-lg border border-line-strong bg-canvas/70 px-4 py-3 text-label leading-5 text-fg"
     >
       {report ? (
         <>
-          <p className="font-semibold text-slate-100">
+          <p className="font-semibold text-fg">
             {complete ? 'Account deletion finished.' : 'Account deletion did not fully finish.'}
           </p>
           {!complete && report.remoteDeleted ? (
@@ -63,7 +63,7 @@ export default function DeleteAccountResult({
       <button
         type="button"
         onClick={onDismiss}
-        className="focus-ring mt-3 rounded-lg border border-slate-500 px-3 py-1 font-semibold text-slate-100 hover:bg-slate-800"
+        className="focus-ring mt-3 rounded-lg border border-control px-3 py-1 font-semibold text-fg hover:bg-raised"
       >
         Dismiss
       </button>

@@ -77,16 +77,16 @@ export default function ChangeFeed() {
   return (
     <section
       aria-label="What changed since you last looked"
-      className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-800/70 bg-slate-950/30 px-3 py-2 text-label text-slate-400"
+      className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-canvas/40 px-3 py-2 text-label text-muted"
     >
       <button
         type="button"
         onClick={focusInboxNew}
-        className="focus-ring inline-flex items-center gap-1.5 rounded-md border border-transparent px-2 py-1 font-semibold text-slate-200 transition hover:border-cyan-400/25 hover:text-cyan-200"
+        className="focus-ring inline-flex items-center gap-1.5 rounded-md border border-transparent px-2 py-1 font-semibold text-fg transition hover:border-accent/30 hover:text-accent"
       >
         <span
           aria-hidden="true"
-          className="inline-block h-1.5 w-1.5 rounded-full bg-cyan-300"
+          className="inline-block h-1.5 w-1.5 rounded-full bg-accent"
         />
         {newFindingsCount === 0
           ? 'No new findings since you last opened.'
@@ -96,11 +96,11 @@ export default function ChangeFeed() {
         <button
           type="button"
           onClick={focusInboxStatutory}
-          className="focus-ring inline-flex items-center gap-1.5 rounded-md border border-transparent px-2 py-1 font-semibold text-amber-300 transition hover:border-amber-400/25 hover:text-amber-200"
+          className="focus-ring inline-flex items-center gap-1.5 rounded-md border border-transparent px-2 py-1 font-semibold text-warning transition hover:border-warning/30 hover:text-warning"
         >
           <span
             aria-hidden="true"
-            className="inline-block h-1.5 w-1.5 rounded-full bg-amber-300"
+            className="inline-block h-1.5 w-1.5 rounded-full bg-warning"
           />
           {statutoryCount} statutory deadline {statutoryCount === 1 ? 'violation' : 'violations'} counted.
         </button>

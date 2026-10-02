@@ -62,8 +62,8 @@ export default function VerifiableReportExport({ portalKey = null, findingIds }:
 
   return (
     <section className="app-panel p-4" aria-label="Verifiable report">
-      <h3 className="font-semibold text-slate-200">Verifiable report</h3>
-      <p className="mt-2 text-label leading-4 text-slate-400">
+      <h3 className="font-semibold text-fg">Verifiable report</h3>
+      <p className="mt-2 text-label leading-4 text-muted">
         Exports one HTML file that checks its own signature in the reader&apos;s browser. Quoted text is
         masked for personal information, hypotheses about redacted identities are left out, and the
         file lists what was withheld. The signature shows the file is unchanged; it does not identify
@@ -71,22 +71,22 @@ export default function VerifiableReportExport({ portalKey = null, findingIds }:
       </p>
       <button
         type="button"
-        className="focus-ring mt-3 rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-100 disabled:opacity-50"
+        className="focus-ring mt-3 rounded border border-control px-3 py-1.5 text-sm text-fg disabled:opacity-50"
         disabled={busy}
         onClick={() => void exportReport()}
       >
         {busy ? 'Exporting…' : 'Export verifiable report'}
       </button>
-      {error && <p role="alert" className="mt-3 text-sm text-rose-300">{error}</p>}
+      {error && <p role="alert" className="mt-3 text-sm text-danger">{error}</p>}
       {result && (
-        <div role="status" className="mt-3 rounded border border-slate-700 bg-slate-950/60 p-3 text-label leading-4 text-slate-300">
-          <p className="font-semibold text-slate-200">
+        <div role="status" className="mt-3 rounded border border-line-strong bg-canvas/70 p-3 text-label leading-4 text-fg-secondary">
+          <p className="font-semibold text-fg">
             Wrote {result.claimCount} claim(s); {result.withheldCount} item(s) withheld.
           </p>
           <p className="mt-1 break-all">{result.outputPath}</p>
           <p className="mt-1 break-all">File SHA-256 {result.fileSha256}</p>
           <p className="mt-1 break-all">Signer key {result.signerKeyId} ({result.identityAssurance})</p>
-          <p className="mt-1 text-slate-400">
+          <p className="mt-1 text-muted">
             Verify from a terminal with: node scripts/verify-report.mjs &lt;file&gt;
           </p>
         </div>

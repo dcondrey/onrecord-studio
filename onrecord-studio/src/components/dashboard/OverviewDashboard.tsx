@@ -56,11 +56,11 @@ export default function OverviewDashboard() {
       <div className="mx-auto w-full max-w-[1800px] space-y-4 p-4 sm:p-5 lg:p-6">
         <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
-            <div className="app-eyebrow flex items-center gap-2 text-cyan-300/60">
+            <div className="app-eyebrow flex items-center gap-2 text-accent">
               <Icon name="sparkles" className="h-3.5 w-3.5" /> San Diego public records
             </div>
-            <h2 className="mt-2 text-[26px] font-semibold tracking-[-0.035em] text-slate-100 sm:text-[30px]">{workbench ? 'Develop the case' : 'Your investigation briefing'}</h2>
-            <p className="mt-1.5 max-w-3xl text-label leading-relaxed text-slate-400">
+            <h2 className="mt-2 text-[26px] font-semibold tracking-[-0.035em] text-fg sm:text-[30px]">{workbench ? 'Develop the case' : 'Your investigation briefing'}</h2>
+            <p className="mt-1.5 max-w-3xl text-label leading-relaxed text-muted">
               Investigate homelessness spending, encampment abatements, public bathrooms, and City budget priorities.
             </p>
           </div>
@@ -68,11 +68,11 @@ export default function OverviewDashboard() {
             {showAnalytics && (analyticsError ? (
               // `analyticsUpdatedAt` only advances on success, so the unchanged badge would keep
               // claiming "Live" over a figure that stopped updating.
-              <span className="overview-freshness hidden items-center gap-2 whitespace-nowrap rounded-full border border-amber-500/30 px-3 py-1.5 text-caption text-amber-200/90 sm:flex" title={`Analytics refresh failed: ${analyticsError}`}><span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> {analyticsUpdatedAt ? `Stale · last updated ${formatRelativeTime(analyticsUpdatedAt)}` : 'Analytics unavailable'}</span>
+              <span className="overview-freshness hidden items-center gap-2 whitespace-nowrap rounded-full border border-warning/30 px-3 py-1.5 text-caption text-warning sm:flex" title={`Analytics refresh failed: ${analyticsError}`}><span className="h-1.5 w-1.5 rounded-full bg-warning" /> {analyticsUpdatedAt ? `Stale · last updated ${formatRelativeTime(analyticsUpdatedAt)}` : 'Analytics unavailable'}</span>
             ) : analyticsUpdatedAt ? (
-              <span className="overview-freshness hidden items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-caption text-slate-400 sm:flex" title={`Analytics updated ${formatRelativeTime(analyticsUpdatedAt)}`}><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Live · {formatRelativeTime(analyticsUpdatedAt)}</span>
+              <span className="overview-freshness hidden items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-caption text-muted sm:flex" title={`Analytics updated ${formatRelativeTime(analyticsUpdatedAt)}`}><span className="h-1.5 w-1.5 rounded-full bg-success" /> Live · {formatRelativeTime(analyticsUpdatedAt)}</span>
             ) : null)}
-            <button type="button" onClick={() => setWorkspaceView('evidence')} className="secondary-action focus-ring flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border px-3.5 py-2.5 text-label font-semibold text-slate-300 transition hover:text-cyan-200">
+            <button type="button" onClick={() => setWorkspaceView('evidence')} className="secondary-action focus-ring flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border px-3.5 py-2.5 text-label font-semibold text-fg-secondary transition hover:text-accent">
               Review evidence <Icon name="arrow" className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -99,14 +99,14 @@ export default function OverviewDashboard() {
           <FindingsInbox />
           <CrossCorpusExplorer />
           <ResearchWorkspace onReview={(reportId) => setWorkbench({ reportId, review: true })} />
-          <section className="app-panel flex flex-wrap items-center justify-between gap-3 p-4"><div><h3 className="text-sm font-semibold text-slate-200">Develop a lead into a durable case</h3><p className="mt-1 text-label leading-4 text-slate-400">Track requests, productions and commitments; reconcile spending; challenge the evidence.</p></div><button type="button" className="analysis-button" onClick={() => setWorkbench({ reportId: '', review: false })}>Open casework and research tools</button></section>
+          <section className="app-panel flex flex-wrap items-center justify-between gap-3 p-4"><div><h3 className="text-sm font-semibold text-fg">Develop a lead into a durable case</h3><p className="mt-1 text-label leading-4 text-muted">Track requests, productions and commitments; reconcile spending; challenge the evidence.</p></div><button type="button" className="analysis-button" onClick={() => setWorkbench({ reportId: '', review: false })}>Open casework and research tools</button></section>
         </>}
         <ToolDrawer label="Topics: encampments, belongings, police spending, public restrooms"><TopicPacks /></ToolDrawer>
         <ToolDrawer label="Plan an investigation or draft a request manually"><InvestigationDesk /></ToolDrawer>
         <ToolDrawer label="Collection, coverage and storage"><AutomaticDiscovery /><div className="mt-4"><DataMaintenance /></div><ResearchSnapshotExport /><RegistrySnapshots /></ToolDrawer>
         <ToolDrawer label="Browse sources and add records"><SanDiegoWorkspace /></ToolDrawer>
 
-        {portals.length > 0 && <button type="button" onClick={() => setShowAnalytics((visible) => !visible)} aria-expanded={showAnalytics} className="secondary-action focus-ring rounded-xl border px-4 py-2 text-label leading-4 text-slate-300">{showAnalytics ? 'Hide response analytics' : 'Show response analytics'}</button>}
+        {portals.length > 0 && <button type="button" onClick={() => setShowAnalytics((visible) => !visible)} aria-expanded={showAnalytics} className="secondary-action focus-ring rounded-xl border px-4 py-2 text-label leading-4 text-fg-secondary">{showAnalytics ? 'Hide response analytics' : 'Show response analytics'}</button>}
         {showAnalytics && <>
         <PeriodComparison activePortalKey={activePortalKey} />
 
@@ -130,7 +130,7 @@ export default function OverviewDashboard() {
 
 function ToolDrawer({ label, children }: { label: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
-  return <details className="app-panel p-4" onToggle={(event) => setOpen(event.currentTarget.open)}><summary className="cursor-pointer text-sm font-semibold text-slate-300">{label}</summary>{open && <div className="mt-4">{children}</div>}</details>;
+  return <details className="app-panel p-4" onToggle={(event) => setOpen(event.currentTarget.open)}><summary className="cursor-pointer text-sm font-semibold text-fg-secondary">{label}</summary>{open && <div className="mt-4">{children}</div>}</details>;
 }
 
 function PeriodComparison({ activePortalKey }: { activePortalKey: string | null }) {
@@ -165,7 +165,7 @@ function PeriodComparison({ activePortalKey }: { activePortalKey: string | null 
 
   const currentSummary = summarizePeriod(current);
   const priorSummary = summarizePeriod(prior);
-  return <section className="app-panel flex flex-col gap-3 p-4 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between" aria-label="Response behavior period comparison"><div className="min-w-0"><div className="app-eyebrow">Period comparison</div><p className="mt-1 text-caption text-slate-400">Current interval versus the immediately preceding interval, based on request creation time.</p></div><label className="secondary-action w-fit rounded-lg border px-2.5 py-1.5 text-caption text-slate-400">Interval <select value={days} onChange={(event) => setDays(Number(event.target.value))} className="bg-transparent font-mono text-slate-200"><option value={7}>7 days</option><option value={30}>30 days</option><option value={90}>90 days</option><option value={365}>365 days</option></select></label>{error ? <div role="alert" className="text-caption text-rose-300">Comparison unavailable: {error}</div> : <div className="grid min-w-0 flex-1 basis-full gap-2 [grid-template-columns:repeat(auto-fit,minmax(7rem,1fr))] lg:basis-auto"><ComparisonMetric label="Requests" current={currentSummary.requests} prior={priorSummary.requests} loading={isLoading} /><ComparisonMetric label="Closure rate" current={currentSummary.closureRate} prior={priorSummary.closureRate} percent loading={isLoading} /><ComparisonMetric label="Deadline rate" current={currentSummary.violationRate} prior={priorSummary.violationRate} percent inverse loading={isLoading} /><ComparisonMetric label="Avg. closure days" current={currentSummary.averageClosureDays} prior={priorSummary.averageClosureDays} inverse loading={isLoading} /></div>}</section>;
+  return <section className="app-panel flex flex-col gap-3 p-4 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between" aria-label="Response behavior period comparison"><div className="min-w-0"><div className="app-eyebrow">Period comparison</div><p className="mt-1 text-caption text-muted">Current interval versus the immediately preceding interval, based on request creation time.</p></div><label className="secondary-action w-fit rounded-lg border px-2.5 py-1.5 text-caption text-muted">Interval <select value={days} onChange={(event) => setDays(Number(event.target.value))} className="bg-transparent font-mono text-fg"><option value={7}>7 days</option><option value={30}>30 days</option><option value={90}>90 days</option><option value={365}>365 days</option></select></label>{error ? <div role="alert" className="text-caption text-danger">Comparison unavailable: {error}</div> : <div className="grid min-w-0 flex-1 basis-full gap-2 [grid-template-columns:repeat(auto-fit,minmax(7rem,1fr))] lg:basis-auto"><ComparisonMetric label="Requests" current={currentSummary.requests} prior={priorSummary.requests} loading={isLoading} /><ComparisonMetric label="Closure rate" current={currentSummary.closureRate} prior={priorSummary.closureRate} percent loading={isLoading} /><ComparisonMetric label="Deadline rate" current={currentSummary.violationRate} prior={priorSummary.violationRate} percent inverse loading={isLoading} /><ComparisonMetric label="Avg. closure days" current={currentSummary.averageClosureDays} prior={priorSummary.averageClosureDays} inverse loading={isLoading} /></div>}</section>;
 }
 
 function summarizePeriod(profiles: AgencyPerformanceProfile[]) {
@@ -181,17 +181,17 @@ function ComparisonMetric({ label, current, prior, percent = false, inverse = fa
   const delta = current === null || prior === null || prior === 0 ? null : (current - prior) / Math.abs(prior);
   const favorable = delta === null ? null : inverse ? delta <= 0 : delta >= 0;
   const format = (value: number) => percent ? `${(value * 100).toFixed(1)}%` : Number.isInteger(value) ? value.toLocaleString() : value.toFixed(1);
-  return <div className="min-w-0 rounded-lg border border-slate-800 bg-slate-950/35 px-3 py-2"><div className="truncate text-caption text-slate-400" title={label}>{label}</div><div className="mt-1 break-words font-mono text-sm leading-tight text-slate-200">{loading ? '—' : current === null ? 'Not measured' : format(current)}</div><div className={favorable === null ? 'text-caption leading-tight text-slate-400' : favorable ? 'text-caption leading-tight text-emerald-300' : 'text-caption leading-tight text-amber-300'}>{loading ? 'Loading…' : delta === null ? 'No comparable prior baseline' : `${delta >= 0 ? '+' : ''}${(delta * 100).toFixed(1)}% vs prior`}</div></div>;
+  return <div className="min-w-0 rounded-lg border border-line bg-canvas/40 px-3 py-2"><div className="truncate text-caption text-muted" title={label}>{label}</div><div className="mt-1 break-words font-mono text-sm leading-tight text-fg">{loading ? '—' : current === null ? 'Not measured' : format(current)}</div><div className={favorable === null ? 'text-caption leading-tight text-muted' : favorable ? 'text-caption leading-tight text-success' : 'text-caption leading-tight text-warning'}>{loading ? 'Loading…' : delta === null ? 'No comparable prior baseline' : `${delta >= 0 ? '+' : ''}${(delta * 100).toFixed(1)}% vs prior`}</div></div>;
 }
 
 function WorkspaceSourcesLoading() {
   return (
     <section className="onboarding-panel rounded-2xl border p-5 sm:p-6" role="status">
       <div className="flex items-center gap-3">
-        <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-700 border-t-cyan-300" aria-hidden="true" />
+        <span className="h-4 w-4 animate-spin rounded-full border-2 border-line-strong border-t-cyan-300" aria-hidden="true" />
         <div>
-          <h3 className="text-sm font-semibold text-slate-300">Loading saved sources</h3>
-          <p className="mt-1 text-label text-slate-400">Checking the local workspace before showing source-specific findings.</p>
+          <h3 className="text-sm font-semibold text-fg-secondary">Loading saved sources</h3>
+          <p className="mt-1 text-label text-muted">Checking the local workspace before showing source-specific findings.</p>
         </div>
       </div>
     </section>
@@ -200,15 +200,15 @@ function WorkspaceSourcesLoading() {
 
 function WorkspaceSourcesUnavailable({ detail }: { detail: string | null }) {
   return (
-    <section className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.04] p-5 sm:p-6" role="alert">
+    <section className="rounded-2xl border border-danger/30 bg-danger/5 p-5 sm:p-6" role="alert">
       <div className="flex items-start gap-3">
-        <Icon name="database" className="mt-0.5 h-4 w-4 text-rose-300" />
+        <Icon name="database" className="mt-0.5 h-4 w-4 text-danger" />
         <div>
-          <h3 className="text-sm font-semibold text-rose-100">Saved sources unavailable</h3>
-          <p className="mt-1 text-label leading-relaxed text-slate-400">
+          <h3 className="text-sm font-semibold text-danger">Saved sources unavailable</h3>
+          <p className="mt-1 text-label leading-relaxed text-muted">
             OnRecord could not load the local source catalog, so this is not a first-run workspace. Existing sources may still be present; review the activity log and retry after the storage error is resolved.
           </p>
-          {detail && <p className="mt-2 font-mono text-caption text-rose-300/70">{detail}</p>}
+          {detail && <p className="mt-2 font-mono text-caption text-danger">{detail}</p>}
         </div>
       </div>
     </section>
@@ -242,41 +242,41 @@ function SignalSummary({ criticalDepartments, monitoredDepartments }: { critical
 
   return (
     <aside className="app-panel flex min-h-[390px] flex-col overflow-hidden">
-      <div className="border-b border-slate-800/70 px-5 py-4">
+      <div className="border-b border-line px-5 py-4">
         <div className="app-eyebrow">Signal brief</div>
-        <h2 className="mt-1 text-label font-semibold text-slate-200">What needs attention</h2>
+        <h2 className="mt-1 text-label font-semibold text-fg">What needs attention</h2>
       </div>
-      <div className="grid grid-cols-2 gap-px border-b border-slate-800/70 bg-slate-800/70">
-        <div className="bg-slate-900/70 p-4">
-          <div className="font-mono text-2xl font-semibold text-rose-300">{analyticsError && profiles.length === 0 ? '—' : criticalDepartments}</div>
-          <div className="mt-1 text-caption uppercase tracking-wider text-slate-400">Critical outliers</div>
+      <div className="grid grid-cols-2 gap-px border-b border-line bg-raised/70">
+        <div className="bg-surface/70 p-4">
+          <div className="font-mono text-2xl font-semibold text-danger">{analyticsError && profiles.length === 0 ? '—' : criticalDepartments}</div>
+          <div className="mt-1 text-caption uppercase tracking-wider text-muted">Critical outliers</div>
         </div>
-        <div className="bg-slate-900/70 p-4">
-          <div className="font-mono text-2xl font-semibold text-cyan-300">{analyticsError && profiles.length === 0 ? '—' : monitoredDepartments}</div>
-          <div className="mt-1 text-caption uppercase tracking-wider text-slate-400">Departments mapped</div>
+        <div className="bg-surface/70 p-4">
+          <div className="font-mono text-2xl font-semibold text-accent">{analyticsError && profiles.length === 0 ? '—' : monitoredDepartments}</div>
+          <div className="mt-1 text-caption uppercase tracking-wider text-muted">Departments mapped</div>
         </div>
       </div>
       <div className="min-h-0 flex-1 p-4">
         {priority.length === 0 && analyticsError ? (
           <AnalyticsUnavailable heading="Signal brief unavailable" />
         ) : priority.length === 0 ? (
-          <div className="grid h-full min-h-40 place-items-center rounded-xl border border-dashed border-slate-800 bg-slate-950/25 p-4 text-center">
+          <div className="grid h-full min-h-40 place-items-center rounded-xl border border-dashed border-line bg-canvas/40 p-4 text-center">
             <div>
-              <Icon name="shield" className="mx-auto h-5 w-5 text-slate-400" />
-              <p className="mt-2 text-label font-medium text-slate-400">No risk signals to summarize yet</p>
-              <p className="mt-1 text-caption leading-relaxed text-slate-400">The brief updates as agency profiles are calculated.</p>
+              <Icon name="shield" className="mx-auto h-5 w-5 text-muted" />
+              <p className="mt-2 text-label font-medium text-muted">No risk signals to summarize yet</p>
+              <p className="mt-1 text-caption leading-relaxed text-muted">The brief updates as agency profiles are calculated.</p>
             </div>
           </div>
         ) : (
           <div className="space-y-2">
             {priority.map((profile) => (
-              <button key={`${profile.portalSubdomain}-${profile.agencyId}`} type="button" onClick={() => inspect(profile.portalSubdomain, profile.agencyId)} className="focus-ring group flex w-full items-center gap-3 rounded-xl border border-slate-800/70 bg-slate-950/30 px-3 py-3 text-left transition hover:border-amber-400/20 hover:bg-amber-400/[0.04]">
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-amber-400/[0.08] font-mono text-label font-semibold text-amber-300">{profile.statutoryViolationCount}</span>
+              <button key={`${profile.portalSubdomain}-${profile.agencyId}`} type="button" onClick={() => inspect(profile.portalSubdomain, profile.agencyId)} className="focus-ring group flex w-full items-center gap-3 rounded-xl border border-control bg-canvas/40 px-3 py-3 text-left transition hover:border-warning/30 hover:bg-warning/5">
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-warning/10 font-mono text-label font-semibold text-warning">{profile.statutoryViolationCount}</span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-label font-medium text-slate-300">{profile.agencyName}</span>
-                  <span className="mt-0.5 block text-caption text-slate-400">{profile.suspiciousFastClosureCount} rapid closures · z {profile.performanceZScore === null ? 'not computed' : profile.performanceZScore.toFixed(1)}</span>
+                  <span className="block truncate text-label font-medium text-fg-secondary">{profile.agencyName}</span>
+                  <span className="mt-0.5 block text-caption text-muted">{profile.suspiciousFastClosureCount} rapid closures · z {profile.performanceZScore === null ? 'not computed' : profile.performanceZScore.toFixed(1)}</span>
                 </span>
-                <Icon name="chevron" className="h-3 w-3 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-amber-300" />
+                <Icon name="chevron" className="h-3 w-3 text-muted transition group-hover:translate-x-0.5 group-hover:text-warning" />
               </button>
             ))}
           </div>

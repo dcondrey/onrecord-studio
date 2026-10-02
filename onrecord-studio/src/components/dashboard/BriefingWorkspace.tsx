@@ -156,18 +156,18 @@ export default function BriefingWorkspace() {
       <div className="mx-auto w-full max-w-[1700px] space-y-4 p-4 sm:p-5 lg:p-6">
         <section className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <div className="app-eyebrow flex items-center gap-2 text-amber-300/70"><Icon name="clipboard" className="h-3.5 w-3.5" /> Presentation briefing</div>
-            <h2 className="mt-2 text-[26px] font-semibold tracking-[-0.035em] text-slate-100 sm:text-[30px]">Turn evidence into a defensible public comment.</h2>
-            <p className="mt-1.5 max-w-3xl text-label leading-relaxed text-slate-400">Start with the agenda, save traceable records or masked excerpts, record the limitation beside each claim, and end with one action the Commission can verify.</p>
+            <div className="app-eyebrow flex items-center gap-2 text-warning"><Icon name="clipboard" className="h-3.5 w-3.5" /> Presentation briefing</div>
+            <h2 className="mt-2 text-[26px] font-semibold tracking-[-0.035em] text-fg sm:text-[30px]">Turn evidence into a defensible public comment.</h2>
+            <p className="mt-1.5 max-w-3xl text-label leading-relaxed text-muted">Start with the agenda, save traceable records or masked excerpts, record the limitation beside each claim, and end with one action the Commission can verify.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="secondary-action rounded-xl border px-3 py-2 text-caption text-slate-400">{readiness.completed}/{readiness.total} presentation checks complete</span>
-            <button type="button" onClick={useAccountabilityStarter} className="focus-ring rounded-xl border border-indigo-400/25 bg-indigo-500/10 px-3 py-2 text-caption font-semibold text-indigo-200">Use accountability briefing template</button>
+            <span className="secondary-action rounded-xl border px-3 py-2 text-caption text-muted">{readiness.completed}/{readiness.total} presentation checks complete</span>
+            <button type="button" onClick={useAccountabilityStarter} className="focus-ring rounded-xl border border-highlight/30 bg-highlight/10 px-3 py-2 text-caption font-semibold text-highlight">Use accountability briefing template</button>
             <button type="button" onClick={exportOutline} className="primary-action focus-ring rounded-xl px-3 py-2 text-caption font-semibold text-white">Export outline</button>
           </div>
         </section>
 
-        {exported && <div role="status" className="rounded-xl border border-emerald-400/20 bg-emerald-500/[0.06] px-4 py-2 text-caption text-emerald-300">Markdown outline exported. It includes local evidence locators, source URLs, preserved-file hashes when available, and explicit operator-assessment labels.</div>}
+        {exported && <div role="status" className="rounded-xl border border-success/30 bg-success/5 px-4 py-2 text-caption text-success">Markdown outline exported. It includes local evidence locators, source URLs, preserved-file hashes when available, and explicit operator-assessment labels.</div>}
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(340px,0.7fr)]">
           <div className="space-y-4">
@@ -202,15 +202,15 @@ export default function BriefingWorkspace() {
               <SectionHeader step="02" title="Interrogate the record" detail="Use these research prompts when relevant to your topic. Confirm the date, agenda items, location, and speaking time in the posted meeting record." />
               <div className="grid gap-3 p-4 lg:grid-cols-3">
                 {RESEARCH_LANES.map((lane) => (
-                  <article key={lane.title} className="rounded-xl border border-slate-800 bg-slate-950/35 p-3.5">
-                    <div className="text-caption font-semibold uppercase tracking-wider text-amber-300/80">{lane.agendaItem}</div>
-                    <h3 className="mt-1.5 text-label font-semibold text-slate-200">{lane.title}</h3>
-                    <p className="mt-1.5 text-caption leading-relaxed text-slate-400">{lane.purpose}</p>
-                    <ul className="mt-3 space-y-2 text-caption leading-relaxed text-slate-400">
-                      {lane.questions.map((question) => <li key={question} className="flex gap-2"><span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-cyan-300/70" /> <span>{question}</span></li>)}
+                  <article key={lane.title} className="rounded-xl border border-line bg-canvas/40 p-3.5">
+                    <div className="text-caption font-semibold uppercase tracking-wider text-warning">{lane.agendaItem}</div>
+                    <h3 className="mt-1.5 text-label font-semibold text-fg">{lane.title}</h3>
+                    <p className="mt-1.5 text-caption leading-relaxed text-muted">{lane.purpose}</p>
+                    <ul className="mt-3 space-y-2 text-caption leading-relaxed text-muted">
+                      {lane.questions.map((question) => <li key={question} className="flex gap-2"><span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-accent" /> <span>{question}</span></li>)}
                     </ul>
                     <div className="mt-3 flex flex-wrap gap-1.5">
-                      {lane.searches.map((search) => <button key={search} type="button" onClick={() => runSearch(search)} className="focus-ring rounded-full border border-cyan-400/20 bg-cyan-500/[0.06] px-2 py-1 text-caption font-semibold text-cyan-300">Search “{search}”</button>)}
+                      {lane.searches.map((search) => <button key={search} type="button" onClick={() => runSearch(search)} className="focus-ring rounded-full border border-accent/30 bg-accent/5 px-2 py-1 text-caption font-semibold text-accent">Search “{search}”</button>)}
                     </div>
                   </article>
                 ))}
@@ -220,35 +220,35 @@ export default function BriefingWorkspace() {
             <section className="app-panel overflow-hidden">
               <SectionHeader step="03" title="Build the evidence board" detail="Save leads from Evidence, open the underlying document, then promote only what you reviewed." />
               {project.evidence.length === 0 ? (
-                <div className="m-4 grid min-h-48 place-items-center rounded-xl border border-dashed border-slate-800 bg-slate-950/20 p-6 text-center">
+                <div className="m-4 grid min-h-48 place-items-center rounded-xl border border-dashed border-line bg-canvas/40 p-6 text-center">
                   <div className="max-w-md">
-                    <Icon name="evidence" className="mx-auto h-6 w-6 text-slate-400" />
-                    <h3 className="mt-3 text-label font-semibold text-slate-300">
+                    <Icon name="evidence" className="mx-auto h-6 w-6 text-muted" />
+                    <h3 className="mt-3 text-label font-semibold text-fg-secondary">
                       {autoDraftError
                         ? 'Auto-draft unavailable — start manually.'
                         : isAutoDrafting
                           ? 'Drafting from detector findings…'
                           : 'No findings drafted — start manually.'}
                     </h3>
-                    <p className="mt-1.5 text-caption leading-relaxed text-slate-400">
+                    <p className="mt-1.5 text-caption leading-relaxed text-muted">
                       {autoDraftError
                         ? `We couldn't populate a starting draft (${autoDraftError}). Run a focused search, select a request, and choose "Save lead to briefing" — or open Evidence and add manually.`
                         : isAutoDrafting
                           ? 'The workspace populates with the most notable findings from your data. You review and promote what belongs in the briefing.'
                           : 'The workspace found no detector findings to draft, or the drafted items were removed. Run a focused search, select a request, and choose "Save lead to briefing" — or open Evidence and add manually.'}
                     </p>
-                    <button type="button" onClick={() => setWorkspaceView('evidence')} className="focus-ring mt-3 rounded-lg border border-indigo-400/25 bg-indigo-500/10 px-3 py-2 text-caption font-semibold text-indigo-200">Open Evidence</button>
+                    <button type="button" onClick={() => setWorkspaceView('evidence')} className="focus-ring mt-3 rounded-lg border border-highlight/30 bg-highlight/10 px-3 py-2 text-caption font-semibold text-highlight">Open Evidence</button>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-3 p-4">
                   {hasAutoDraftedItems && (
-                    <div role="status" className="rounded-lg border border-cyan-400/20 bg-cyan-500/[0.05] px-3 py-2 text-caption text-cyan-200">
+                    <div role="status" className="rounded-lg border border-accent/30 bg-accent/5 px-3 py-2 text-caption text-accent">
                       Auto-drafted from your top findings. Edit, remove, or promote each item before you present.
                     </div>
                   )}
                   {project.evidenceTruncated && (
-                    <div role="status" className="rounded-lg border border-amber-400/20 bg-amber-500/[0.05] px-3 py-2 text-caption text-amber-200">
+                    <div role="status" className="rounded-lg border border-warning/30 bg-warning/5 px-3 py-2 text-caption text-warning">
                       This briefing exceeded the 200-item evidence cap; the oldest items were dropped to make room for new ones.
                     </div>
                   )}
@@ -274,16 +274,16 @@ export default function BriefingWorkspace() {
                 {STARTER_SOURCES.map((source) => {
                   const connected = portals.some(({ registration }) => sameHost(registration.canonicalUrl, source.url));
                   return (
-                    <article key={source.url} className="rounded-xl border border-slate-800/80 bg-slate-950/35 p-3">
+                    <article key={source.url} className="rounded-xl border border-line bg-canvas/40 p-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="text-caption font-semibold uppercase tracking-wider text-slate-400">{source.tier}</div>
-                          <h3 className="mt-1 text-label font-semibold leading-snug text-slate-300">{source.label}</h3>
+                          <div className="text-caption font-semibold uppercase tracking-wider text-muted">{source.tier}</div>
+                          <h3 className="mt-1 text-label font-semibold leading-snug text-fg-secondary">{source.label}</h3>
                         </div>
-                        <span className={cn('shrink-0 rounded-full border px-2 py-1 text-caption font-semibold uppercase tracking-wide', connected ? 'border-emerald-400/20 bg-emerald-500/[0.06] text-emerald-300' : 'border-slate-700 text-slate-400')}>{connected ? 'Host added' : 'Not staged'}</span>
+                        <span className={cn('shrink-0 rounded-full border px-2 py-1 text-caption font-semibold uppercase tracking-wide', connected ? 'border-success/30 bg-success/5 text-success' : 'border-line-strong text-muted')}>{connected ? 'Host added' : 'Not staged'}</span>
                       </div>
-                      <p className="mt-2 text-caption leading-relaxed text-slate-400">{source.purpose}</p>
-                      <button type="button" onClick={() => stageSource(source.url)} className="focus-ring mt-2 flex w-full items-center justify-between rounded-lg border border-slate-800 px-2.5 py-2 text-caption font-semibold text-slate-400 transition hover:border-cyan-400/25 hover:text-cyan-300"><span>Stage in source bar</span><Icon name="arrow" className="h-3 w-3" /></button>
+                      <p className="mt-2 text-caption leading-relaxed text-muted">{source.purpose}</p>
+                      <button type="button" onClick={() => stageSource(source.url)} className="focus-ring mt-2 flex w-full items-center justify-between rounded-lg border border-control px-2.5 py-2 text-caption font-semibold text-muted transition hover:border-accent/30 hover:text-accent"><span>Stage in source bar</span><Icon name="arrow" className="h-3 w-3" /></button>
                     </article>
                   );
                 })}
@@ -292,7 +292,7 @@ export default function BriefingWorkspace() {
 
             <section className="app-panel overflow-hidden">
               <SectionHeader step="B" title={`${Math.max(1, Math.round(project.durationMinutes))}-minute run of show`} detail={`Aim for about ${Math.max(1, Math.round(project.durationMinutes)) * 130} spoken words; clarity beats coverage.`} />
-              <ol className="space-y-2 p-4 text-caption text-slate-400">
+              <ol className="space-y-2 p-4 text-caption text-muted">
                 <RunStep share={15} label="Opening" detail="Name the agenda item and the concrete consequence." />
                 <RunStep share={50} label="Two strongest facts" detail="State the source before the inference; avoid a pile of examples." />
                 <RunStep share={15} label="Limitation or counterpoint" detail="Say what the evidence does not establish and answer the strongest objection." />
@@ -303,7 +303,7 @@ export default function BriefingWorkspace() {
 
             <section className="app-panel overflow-hidden">
               <SectionHeader step="C" title="Promotion standard" detail="The app auto-drafts a starting briefing; you still decide what gets promoted to Ready." />
-              <ul className="space-y-2 p-4 text-caption leading-relaxed text-slate-400">
+              <ul className="space-y-2 p-4 text-caption leading-relaxed text-muted">
                 <Check done={project.evidence.length > 0}>At least one traceable request or excerpt is saved.</Check>
                 <Check done={project.evidence.some((item) => item.kind === 'DOCUMENT_EXCERPT')}>At least one claim reaches the underlying document, not only request metadata.</Check>
                 <Check done={project.evidence.some((item) => item.readiness === 'READY')}>A reviewed item is explicitly marked presentation ready.</Check>
@@ -326,25 +326,25 @@ function EvidenceCard({ item, number, onChange, onReview, onRemove }: {
   onRemove: () => void;
 }) {
   return (
-    <article className="rounded-xl border border-slate-800 bg-slate-950/35 p-3.5">
+    <article className="rounded-xl border border-line bg-canvas/40 p-3.5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="text-caption font-semibold uppercase tracking-wider text-cyan-300/80">Point {number} · {item.kind === 'DOCUMENT_EXCERPT' ? 'Document excerpt' : 'Request lead'}</div>
-          <h3 className="mt-1 truncate text-label font-semibold text-slate-300">{item.label}</h3>
-          <div className="mt-1 font-mono text-caption text-slate-400">{item.portalKey} / request {item.requestId}{item.documentId === null ? '' : ` / document ${item.documentId}`}{item.documentId !== null && item.characterOffset !== null ? ` / character ${item.characterOffset}` : ''}</div>
+          <div className="text-caption font-semibold uppercase tracking-wider text-accent">Point {number} · {item.kind === 'DOCUMENT_EXCERPT' ? 'Document excerpt' : 'Request lead'}</div>
+          <h3 className="mt-1 truncate text-label font-semibold text-fg-secondary">{item.label}</h3>
+          <div className="mt-1 font-mono text-caption text-muted">{item.portalKey} / request {item.requestId}{item.documentId === null ? '' : ` / document ${item.documentId}`}{item.documentId !== null && item.characterOffset !== null ? ` / character ${item.characterOffset}` : ''}</div>
         </div>
         <div className="flex items-center gap-2">
-          <select value={item.readiness} onChange={(event) => onChange({ readiness: event.target.value as BriefingEvidenceReadiness })} aria-label={`Evidence status for ${item.label}`} className="focus-ring h-8 rounded-lg border border-slate-800 bg-slate-950 px-2 text-caption font-semibold text-slate-300">
+          <select value={item.readiness} onChange={(event) => onChange({ readiness: event.target.value as BriefingEvidenceReadiness })} aria-label={`Evidence status for ${item.label}`} className="focus-ring h-8 rounded-lg border border-control bg-canvas px-2 text-caption font-semibold text-fg-secondary">
             <option value="LEAD">Saved lead</option>
             <option value="REVIEWED">Source reviewed</option>
             <option value="READY">Presentation ready</option>
           </select>
-          <button type="button" onClick={onReview} className="focus-ring rounded-lg border border-slate-800 px-2.5 py-2 text-caption font-semibold text-slate-400 hover:text-indigo-300">Review</button>
-          <button type="button" onClick={onRemove} aria-label={`Remove ${item.label} from briefing`} className="focus-ring grid h-8 w-8 place-items-center rounded-lg border border-slate-800 text-slate-400 hover:border-rose-400/25 hover:text-rose-300"><Icon name="trash" className="h-3 w-3" /></button>
+          <button type="button" onClick={onReview} className="focus-ring rounded-lg border border-control px-2.5 py-2 text-caption font-semibold text-muted hover:text-highlight">Review</button>
+          <button type="button" onClick={onRemove} aria-label={`Remove ${item.label} from briefing`} className="focus-ring grid h-8 w-8 place-items-center rounded-lg border border-control text-muted hover:border-danger/30 hover:text-danger"><Icon name="trash" className="h-3 w-3" /></button>
         </div>
       </div>
-      {item.excerpt && <blockquote className="mt-3 max-h-28 overflow-y-auto rounded-lg border border-slate-800/80 bg-slate-950/70 p-3 text-caption leading-relaxed text-slate-400">{item.excerpt}</blockquote>}
-      {item.rawFileSha256 && <div className="mt-2 break-all font-mono text-caption text-slate-400">Preserved SHA-256 {item.rawFileSha256}</div>}
+      {item.excerpt && <blockquote className="mt-3 max-h-28 overflow-y-auto rounded-lg border border-line bg-canvas/70 p-3 text-caption leading-relaxed text-muted">{item.excerpt}</blockquote>}
+      {item.rawFileSha256 && <div className="mt-2 break-all font-mono text-caption text-muted">Preserved SHA-256 {item.rawFileSha256}</div>}
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         <Field label="Claim this supports">
           <textarea value={item.claim} maxLength={4_000} rows={3} placeholder="State only what this record establishes." onChange={(event) => onChange({ claim: event.target.value })} className="briefing-input resize-y py-2" />
@@ -358,19 +358,19 @@ function EvidenceCard({ item, number, onChange, onReview, onRemove }: {
 }
 
 function SectionHeader({ step, title, detail }: { step: string; title: string; detail: string }) {
-  return <div className="flex items-start gap-3 border-b border-slate-800/70 px-4 py-3.5"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-indigo-500/10 font-mono text-caption font-semibold text-indigo-300">{step}</span><div><h2 className="text-label font-semibold text-slate-200">{title}</h2><p className="mt-1 text-caption leading-relaxed text-slate-400">{detail}</p></div></div>;
+  return <div className="flex items-start gap-3 border-b border-line px-4 py-3.5"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-highlight/10 font-mono text-caption font-semibold text-highlight">{step}</span><div><h2 className="text-label font-semibold text-fg">{title}</h2><p className="mt-1 text-caption leading-relaxed text-muted">{detail}</p></div></div>;
 }
 
 function Field({ label, wide = false, children }: { label: string; wide?: boolean; children: React.ReactNode }) {
-  return <label className={cn('block text-caption font-semibold uppercase tracking-wider text-slate-400', wide && 'md:col-span-2')}>{label}<span className="mt-1.5 block">{children}</span></label>;
+  return <label className={cn('block text-caption font-semibold uppercase tracking-wider text-muted', wide && 'md:col-span-2')}>{label}<span className="mt-1.5 block">{children}</span></label>;
 }
 
 function RunStep({ share, label, detail }: { share: number; label: string; detail: string }) {
-  return <li className="grid grid-cols-[38px_minmax(0,1fr)] gap-2"><span className="font-mono font-semibold text-amber-300">{share}%</span><span><strong className="font-semibold text-slate-300">{label}.</strong> {detail}</span></li>;
+  return <li className="grid grid-cols-[38px_minmax(0,1fr)] gap-2"><span className="font-mono font-semibold text-warning">{share}%</span><span><strong className="font-semibold text-fg-secondary">{label}.</strong> {detail}</span></li>;
 }
 
 function Check({ done, children }: { done: boolean; children: React.ReactNode }) {
-  return <li className="flex gap-2"><span className={cn('mt-0.5 grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full border text-caption', done ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 text-slate-400')}>{done ? '✓' : ''}</span><span>{children}</span></li>;
+  return <li className="flex gap-2"><span className={cn('mt-0.5 grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full border text-caption', done ? 'border-success/30 bg-success/10 text-success' : 'border-line-strong text-muted')}>{done ? '✓' : ''}</span><span>{children}</span></li>;
 }
 
 function sameHost(left: string, right: string) {

@@ -275,13 +275,13 @@ export default function LegalCompliancePanel({
   };
 
   return (
-    <section className="mt-3 overflow-hidden rounded-lg border border-slate-800 bg-slate-950/55">
-      <div className="flex items-start justify-between gap-3 border-b border-slate-800 px-3 py-2.5">
+    <section className="mt-3 overflow-hidden rounded-lg border border-line bg-canvas/70">
+      <div className="flex items-start justify-between gap-3 border-b border-line px-3 py-2.5">
         <div>
-          <div className="text-caption font-bold uppercase tracking-[0.16em] text-slate-400">
+          <div className="text-caption font-bold uppercase tracking-[0.16em] text-muted">
             Legal compliance
           </div>
-          <p className="mt-1 text-caption leading-relaxed text-slate-400">
+          <p className="mt-1 text-caption leading-relaxed text-muted">
             Deterministic deadline checks and versioned policy evidence rules
           </p>
         </div>
@@ -289,7 +289,7 @@ export default function LegalCompliancePanel({
           <button
             type="button"
             onClick={onOpenLibrary}
-            className="rounded-md border border-slate-700 px-2 py-1 text-caption font-semibold text-slate-400 transition hover:border-slate-500 hover:text-slate-200"
+            className="rounded-md border border-control px-2 py-1 text-caption font-semibold text-muted transition hover:border-control hover:text-fg"
           >
             Authority library
           </button>
@@ -297,33 +297,33 @@ export default function LegalCompliancePanel({
             type="button"
             onClick={() => void evaluate()}
             disabled={isEvaluating}
-            className="rounded-md border border-indigo-400/25 bg-indigo-500/10 px-2 py-1 text-caption font-semibold text-indigo-200 transition hover:bg-indigo-500/15 disabled:cursor-wait disabled:opacity-60"
+            className="rounded-md border border-highlight/30 bg-highlight/10 px-2 py-1 text-caption font-semibold text-highlight transition hover:bg-highlight/20 disabled:cursor-wait disabled:opacity-60"
           >
             {isEvaluating ? 'Evaluating…' : 'Evaluate case'}
           </button>
         </div>
       </div>
 
-      <div className="border-b border-slate-800 px-3 py-2.5">
+      <div className="border-b border-line px-3 py-2.5">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-caption font-bold uppercase tracking-[0.16em] text-slate-400">
+            <div className="text-caption font-bold uppercase tracking-[0.16em] text-muted">
               Statutory extension
             </div>
             {extensionState === 'loading' ? (
-              <p className="mt-1 text-caption text-slate-400">Reading recorded extension…</p>
+              <p className="mt-1 text-caption text-muted">Reading recorded extension…</p>
             ) : extensionState === 'unavailable' ? (
-              <p className="mt-1 text-caption leading-relaxed text-rose-200">
+              <p className="mt-1 text-caption leading-relaxed text-danger">
                 The recorded extension could not be read, so this panel cannot say whether one
                 exists. Recording is disabled rather than risk replacing evidence unseen.
               </p>
             ) : extension ? (
-              <p className="mt-1 text-caption leading-relaxed text-slate-400">
+              <p className="mt-1 text-caption leading-relaxed text-muted">
                 {humanize(extension.reason)}, noticed {extension.noticeAt}, determination expected{' '}
                 {extension.expectedDeterminationAt}. Source: {extension.noticeSource}
               </p>
             ) : (
-              <p className="mt-1 text-caption leading-relaxed text-slate-400">
+              <p className="mt-1 text-caption leading-relaxed text-muted">
                 No extension recorded. The deadline is evaluated against the initial statutory
                 period until one is.
               </p>
@@ -336,7 +336,7 @@ export default function LegalCompliancePanel({
                 setExtensionError(null);
                 setIsExtensionFormOpen((open) => !open);
               }}
-              className="shrink-0 rounded-md border border-slate-700 px-2 py-1 text-caption font-semibold text-slate-400 transition hover:border-slate-500 hover:text-slate-200"
+              className="shrink-0 rounded-md border border-control px-2 py-1 text-caption font-semibold text-muted transition hover:border-control hover:text-fg"
             >
               {isExtensionFormOpen ? 'Cancel' : extension ? 'Replace notice' : 'Record notice'}
             </button>
@@ -344,14 +344,14 @@ export default function LegalCompliancePanel({
         </div>
 
         {isExtensionFormOpen && (
-          <div className="mt-2 rounded-md border border-slate-800 bg-slate-900/60 p-2">
+          <div className="mt-2 rounded-md border border-line bg-surface/70 p-2">
             {extension && (
-              <p className="mb-2 text-caption leading-relaxed text-amber-200/80">
+              <p className="mb-2 text-caption leading-relaxed text-warning">
                 A request carries one extension. Saving replaces the notice shown above.
               </p>
             )}
             <div className="grid gap-2 sm:grid-cols-2">
-              <label className="block text-caption font-semibold uppercase tracking-wider text-slate-400">
+              <label className="block text-caption font-semibold uppercase tracking-wider text-muted">
                 Notice given
                 <input
                   type="datetime-local"
@@ -360,10 +360,10 @@ export default function LegalCompliancePanel({
                   onChange={(event) =>
                     setExtensionDraft((draft) => ({ ...draft, noticeAt: event.target.value }))
                   }
-                  className="mt-1.5 w-full rounded border border-slate-800 bg-slate-950 px-2 py-1.5 text-caption normal-case tracking-normal text-slate-300 outline-none focus:border-indigo-400/35"
+                  className="mt-1.5 w-full rounded border border-control bg-canvas px-2 py-1.5 text-caption normal-case tracking-normal text-fg-secondary outline-none focus:border-highlight/30"
                 />
               </label>
-              <label className="block text-caption font-semibold uppercase tracking-wider text-slate-400">
+              <label className="block text-caption font-semibold uppercase tracking-wider text-muted">
                 Determination expected
                 <input
                   type="datetime-local"
@@ -375,10 +375,10 @@ export default function LegalCompliancePanel({
                       expectedDeterminationAt: event.target.value,
                     }))
                   }
-                  className="mt-1.5 w-full rounded border border-slate-800 bg-slate-950 px-2 py-1.5 text-caption normal-case tracking-normal text-slate-300 outline-none focus:border-indigo-400/35"
+                  className="mt-1.5 w-full rounded border border-control bg-canvas px-2 py-1.5 text-caption normal-case tracking-normal text-fg-secondary outline-none focus:border-highlight/30"
                 />
               </label>
-              <label className="block text-caption font-semibold uppercase tracking-wider text-slate-400">
+              <label className="block text-caption font-semibold uppercase tracking-wider text-muted">
                 Reason claimed
                 <select
                   value={extensionDraft.reason}
@@ -388,7 +388,7 @@ export default function LegalCompliancePanel({
                       reason: event.target.value as StatutoryExtensionReason,
                     }))
                   }
-                  className="mt-1.5 w-full rounded border border-slate-800 bg-slate-950 px-2 py-1.5 text-caption normal-case tracking-normal text-slate-300 outline-none focus:border-indigo-400/35"
+                  className="mt-1.5 w-full rounded border border-control bg-canvas px-2 py-1.5 text-caption normal-case tracking-normal text-fg-secondary outline-none focus:border-highlight/30"
                 >
                   {EXTENSION_REASONS.map((reason) => (
                     <option key={reason} value={reason}>
@@ -397,7 +397,7 @@ export default function LegalCompliancePanel({
                   ))}
                 </select>
               </label>
-              <label className="block text-caption font-semibold uppercase tracking-wider text-slate-400">
+              <label className="block text-caption font-semibold uppercase tracking-wider text-muted">
                 Notice source
                 <input
                   type="text"
@@ -407,11 +407,11 @@ export default function LegalCompliancePanel({
                   }
                   maxLength={4096}
                   placeholder="Letter, email, or portal message"
-                  className="mt-1.5 w-full rounded border border-slate-800 bg-slate-950 px-2 py-1.5 text-caption normal-case tracking-normal text-slate-300 outline-none focus:border-indigo-400/35"
+                  className="mt-1.5 w-full rounded border border-control bg-canvas px-2 py-1.5 text-caption normal-case tracking-normal text-fg-secondary outline-none focus:border-highlight/30"
                 />
               </label>
             </div>
-            <p className="mt-2 text-caption leading-relaxed text-slate-400">
+            <p className="mt-2 text-caption leading-relaxed text-muted">
               Recording a notice states what the agency claimed. Whether it moves the deadline is
               the evaluator&apos;s verdict on those dates, not a consequence of recording it.
             </p>
@@ -420,7 +420,7 @@ export default function LegalCompliancePanel({
                 type="button"
                 onClick={() => setIsExtensionFormOpen(false)}
                 disabled={isSavingExtension}
-                className="rounded px-2 py-1 text-caption font-semibold text-slate-400 hover:text-slate-300"
+                className="rounded px-2 py-1 text-caption font-semibold text-muted hover:text-fg-secondary"
               >
                 Cancel
               </button>
@@ -428,7 +428,7 @@ export default function LegalCompliancePanel({
                 type="button"
                 onClick={() => void submitExtension()}
                 disabled={isSavingExtension}
-                className="rounded border border-indigo-400/25 bg-indigo-500/10 px-2 py-1 text-caption font-semibold text-indigo-200 disabled:cursor-wait disabled:opacity-60"
+                className="rounded border border-highlight/30 bg-highlight/10 px-2 py-1 text-caption font-semibold text-highlight disabled:cursor-wait disabled:opacity-60"
               >
                 {isSavingExtension ? 'Saving…' : 'Save and re-evaluate'}
               </button>
@@ -439,7 +439,7 @@ export default function LegalCompliancePanel({
         {extensionError && (
           <div
             role="alert"
-            className="mt-2 rounded border border-rose-500/20 bg-rose-500/[0.05] px-2 py-1.5 text-caption leading-relaxed text-rose-300"
+            className="mt-2 rounded border border-danger/30 bg-danger/5 px-2 py-1.5 text-caption leading-relaxed text-danger"
           >
             {extensionError}
           </div>
@@ -447,49 +447,49 @@ export default function LegalCompliancePanel({
       </div>
 
       {isLoading ? (
-        <div className="px-3 py-4 text-caption text-slate-400">Loading legal findings…</div>
+        <div className="px-3 py-4 text-caption text-muted">Loading legal findings…</div>
       ) : error && activeFindings.length === 0 ? (
         <div className="px-3 py-4">
-          <div className="text-label font-medium text-rose-200">Legal findings unavailable</div>
-          <p className="mt-1 text-caption leading-relaxed text-slate-400">
+          <div className="text-label font-medium text-danger">Legal findings unavailable</div>
+          <p className="mt-1 text-caption leading-relaxed text-muted">
             The findings query did not complete, so this panel cannot report whether active findings exist.
           </p>
         </div>
       ) : activeFindings.length === 0 ? (
         <div className="px-3 py-4">
-          <div className="text-label font-medium text-slate-400">No active findings recorded</div>
-          <p className="mt-1 text-caption leading-relaxed text-slate-400">
+          <div className="text-label font-medium text-muted">No active findings recorded</div>
+          <p className="mt-1 text-caption leading-relaxed text-muted">
             Run an evaluation after public documents are indexed. Incomplete evidence sets are
             deferred rather than classified.
           </p>
         </div>
       ) : (
-        <div className="divide-y divide-slate-800/80">
+        <div className="divide-y divide-line">
           {activeFindings.map((finding) => (
             <article
               key={finding.violationId}
               className="px-3 py-3"
             >
               <div className="flex items-center justify-between gap-3">
-                <span className="truncate text-caption font-semibold text-amber-200">
+                <span className="truncate text-caption font-semibold text-warning">
                   {humanize(finding.classification)}
                 </span>
                 <span
                   className={cn(
                     'rounded-full border px-1.5 py-0.5 text-caption font-bold tracking-wider',
                     finding.reviewStatus === 'CONFIRMED'
-                      ? 'border-rose-400/30 bg-rose-500/10 text-rose-200'
-                      : 'border-amber-400/25 bg-amber-500/10 text-amber-200',
+                      ? 'border-danger/30 bg-danger/10 text-danger'
+                      : 'border-warning/30 bg-warning/10 text-warning',
                   )}
                 >
                   {finding.reviewStatus}
                 </span>
               </div>
-              <div className="mt-1 text-caption text-slate-400">{finding.statuteCitation}</div>
-              <p className="mt-2 text-caption leading-relaxed text-slate-400">
+              <div className="mt-1 text-caption text-muted">{finding.statuteCitation}</div>
+              <p className="mt-2 text-caption leading-relaxed text-muted">
                 {finding.evidenceSummary}
               </p>
-              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-caption text-slate-400">
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-caption text-muted">
                 <span>{(finding.confidenceBasisPoints / 100).toFixed(2)}% rule confidence</span>
                 {finding.varianceDays !== null && <span>{finding.varianceDays} days overdue</span>}
                 {finding.supportingDocumentIds.length > 0 && (
@@ -501,7 +501,7 @@ export default function LegalCompliancePanel({
                   {finding.missingEvidencePhrases.slice(0, 4).map((phrase) => (
                     <span
                       key={phrase}
-                      className="rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 text-caption text-slate-400"
+                      className="rounded border border-line bg-surface px-1.5 py-0.5 text-caption text-muted"
                     >
                       Missing: {phrase}
                     </span>
@@ -509,36 +509,36 @@ export default function LegalCompliancePanel({
                 </div>
               )}
               <div className="mt-3 flex items-center gap-1.5">
-                <button type="button" onClick={() => setSelectedFindingId(finding.violationId)} className="rounded border border-indigo-400/25 bg-indigo-500/[0.06] px-2 py-1 text-caption font-semibold text-indigo-200 transition hover:bg-indigo-500/10">
+                <button type="button" onClick={() => setSelectedFindingId(finding.violationId)} className="rounded border border-highlight/30 bg-highlight/5 px-2 py-1 text-caption font-semibold text-highlight transition hover:bg-highlight/10">
                   Compare authority & evidence
                 </button>
-                <button type="button" onClick={() => filterByFinding(finding)} className="rounded border border-slate-700 px-2 py-1 text-caption font-semibold text-slate-400 transition hover:border-slate-500 hover:text-slate-300">
+                <button type="button" onClick={() => filterByFinding(finding)} className="rounded border border-control px-2 py-1 text-caption font-semibold text-muted transition hover:border-control hover:text-fg-secondary">
                   Filter workbench
                 </button>
                 {finding.reviewStatus === 'OPEN' ? (
                   <>
-                    <button type="button" onClick={() => beginReview(finding, 'CONFIRMED')} className="rounded border border-emerald-500/25 bg-emerald-500/[0.06] px-2 py-1 text-caption font-semibold text-emerald-300 transition hover:bg-emerald-500/10">
+                    <button type="button" onClick={() => beginReview(finding, 'CONFIRMED')} className="rounded border border-success/30 bg-success/5 px-2 py-1 text-caption font-semibold text-success transition hover:bg-success/10">
                       Confirm finding
                     </button>
-                    <button type="button" onClick={() => beginReview(finding, 'DISMISSED')} className="rounded border border-slate-700 px-2 py-1 text-caption font-semibold text-slate-400 transition hover:border-rose-400/30 hover:text-rose-300">
+                    <button type="button" onClick={() => beginReview(finding, 'DISMISSED')} className="rounded border border-control px-2 py-1 text-caption font-semibold text-muted transition hover:border-danger/30 hover:text-danger">
                       Dismiss
                     </button>
                   </>
                 ) : (
-                  <button type="button" onClick={() => beginReview(finding, 'OPEN')} className="rounded border border-slate-700 px-2 py-1 text-caption font-semibold text-slate-400 transition hover:border-slate-500 hover:text-slate-300">
+                  <button type="button" onClick={() => beginReview(finding, 'OPEN')} className="rounded border border-control px-2 py-1 text-caption font-semibold text-muted transition hover:border-control hover:text-fg-secondary">
                     Reopen review
                   </button>
                 )}
               </div>
               {pendingReview?.violationId === finding.violationId && (
-                <div className="mt-2 rounded-md border border-slate-800 bg-slate-900/60 p-2">
-                  <label className="block text-caption font-semibold uppercase tracking-wider text-slate-400">
+                <div className="mt-2 rounded-md border border-line bg-surface/70 p-2">
+                  <label className="block text-caption font-semibold uppercase tracking-wider text-muted">
                     Reviewer note
-                    <textarea value={reviewerNotes} onChange={(event) => setReviewerNotes(event.target.value)} maxLength={8192} rows={2} className="mt-1.5 w-full resize-y rounded border border-slate-800 bg-slate-950 px-2 py-1.5 text-caption normal-case tracking-normal text-slate-300 outline-none focus:border-indigo-400/35" />
+                    <textarea value={reviewerNotes} onChange={(event) => setReviewerNotes(event.target.value)} maxLength={8192} rows={2} className="mt-1.5 w-full resize-y rounded border border-control bg-canvas px-2 py-1.5 text-caption normal-case tracking-normal text-fg-secondary outline-none focus:border-highlight/30" />
                   </label>
                   <div className="mt-2 flex justify-end gap-1.5">
-                    <button type="button" onClick={() => setPendingReview(null)} disabled={isReviewing} className="rounded px-2 py-1 text-caption font-semibold text-slate-400 hover:text-slate-300">Cancel</button>
-                    <button type="button" onClick={() => void submitReview()} disabled={isReviewing} className="rounded border border-indigo-400/25 bg-indigo-500/10 px-2 py-1 text-caption font-semibold text-indigo-200 disabled:cursor-wait disabled:opacity-60">
+                    <button type="button" onClick={() => setPendingReview(null)} disabled={isReviewing} className="rounded px-2 py-1 text-caption font-semibold text-muted hover:text-fg-secondary">Cancel</button>
+                    <button type="button" onClick={() => void submitReview()} disabled={isReviewing} className="rounded border border-highlight/30 bg-highlight/10 px-2 py-1 text-caption font-semibold text-highlight disabled:cursor-wait disabled:opacity-60">
                       {isReviewing ? 'Saving…' : `Save as ${humanize(pendingReview.status)}`}
                     </button>
                   </div>
@@ -549,15 +549,15 @@ export default function LegalCompliancePanel({
         </div>
       )}
 
-      {selectedFinding && <div className="grid gap-px border-t border-slate-800 bg-slate-800 md:grid-cols-2"><section className="bg-slate-950 p-3" aria-label="Authority citation"><div className="text-caption font-bold uppercase tracking-wider text-indigo-300/70">Authority citation</div><div className="mt-2 text-label font-semibold text-slate-200">{selectedFinding.statuteCitation}</div><p className="mt-1 text-caption text-slate-400">{selectedFinding.authorityTitle}</p><dl className="mt-2 space-y-1 font-mono text-caption text-slate-400"><div><dt className="inline">Version </dt><dd className="inline text-slate-400">{selectedFinding.matchedVersionId}</dd></div>{selectedFinding.mandateTitle && <div><dt className="inline">Rule </dt><dd className="inline text-slate-400">{selectedFinding.mandateTitle}</dd></div>}</dl>{selectedAuthority?.canonicalSourceUri && <a href={selectedAuthority.canonicalSourceUri} target="_blank" rel="noreferrer" className="mt-2 block break-all text-caption text-cyan-300 underline">Open official source</a>}</section><section className="bg-slate-950 p-3" aria-label="Finding evidence excerpt"><div className="flex items-center justify-between"><div className="text-caption font-bold uppercase tracking-wider text-amber-300/70">Case evidence</div><button type="button" onClick={() => setSelectedFindingId(null)} className="text-caption text-slate-400 hover:text-slate-300">Close</button></div><p className="mt-2 whitespace-pre-wrap text-caption leading-relaxed text-slate-300">{selectedFinding.evidenceSummary}</p><div className="mt-2 font-mono text-caption text-slate-400">Supporting documents: {selectedFinding.supportingDocumentIds.length ? selectedFinding.supportingDocumentIds.join(', ') : 'none recorded'}</div>{selectedFinding.missingEvidencePhrases.length > 0 && <div className="mt-2 text-caption text-amber-200/70">Missing required evidence: {selectedFinding.missingEvidencePhrases.join('; ')}</div>}</section></div>}
+      {selectedFinding && <div className="grid gap-px border-t border-line bg-raised md:grid-cols-2"><section className="bg-canvas p-3" aria-label="Authority citation"><div className="text-caption font-bold uppercase tracking-wider text-highlight">Authority citation</div><div className="mt-2 text-label font-semibold text-fg">{selectedFinding.statuteCitation}</div><p className="mt-1 text-caption text-muted">{selectedFinding.authorityTitle}</p><dl className="mt-2 space-y-1 font-mono text-caption text-muted"><div><dt className="inline">Version </dt><dd className="inline text-muted">{selectedFinding.matchedVersionId}</dd></div>{selectedFinding.mandateTitle && <div><dt className="inline">Rule </dt><dd className="inline text-muted">{selectedFinding.mandateTitle}</dd></div>}</dl>{selectedAuthority?.canonicalSourceUri && <a href={selectedAuthority.canonicalSourceUri} target="_blank" rel="noreferrer" className="mt-2 block break-all text-caption text-accent underline">Open official source</a>}</section><section className="bg-canvas p-3" aria-label="Finding evidence excerpt"><div className="flex items-center justify-between"><div className="text-caption font-bold uppercase tracking-wider text-warning">Case evidence</div><button type="button" onClick={() => setSelectedFindingId(null)} className="text-caption text-muted hover:text-fg-secondary">Close</button></div><p className="mt-2 whitespace-pre-wrap text-caption leading-relaxed text-fg-secondary">{selectedFinding.evidenceSummary}</p><div className="mt-2 font-mono text-caption text-muted">Supporting documents: {selectedFinding.supportingDocumentIds.length ? selectedFinding.supportingDocumentIds.join(', ') : 'none recorded'}</div>{selectedFinding.missingEvidencePhrases.length > 0 && <div className="mt-2 text-caption text-warning">Missing required evidence: {selectedFinding.missingEvidencePhrases.join('; ')}</div>}</section></div>}
 
       {evaluation && (
         <div
           className={cn(
             'border-t px-3 py-2 text-caption leading-relaxed',
             evaluation.evaluationComplete
-              ? 'border-emerald-500/20 bg-emerald-500/[0.05] text-emerald-300/80'
-              : 'border-amber-500/20 bg-amber-500/[0.05] text-amber-200/80',
+              ? 'border-success/30 bg-success/5 text-success'
+              : 'border-warning/30 bg-warning/5 text-warning',
           )}
         >
           {evaluation.evaluationComplete
@@ -566,7 +566,7 @@ export default function LegalCompliancePanel({
         </div>
       )}
       {error && (
-        <div role="alert" className="border-t border-rose-500/20 bg-rose-500/[0.05] px-3 py-2 text-caption leading-relaxed text-rose-300">
+        <div role="alert" className="border-t border-danger/30 bg-danger/5 px-3 py-2 text-caption leading-relaxed text-danger">
           {error}
         </div>
       )}

@@ -35,10 +35,10 @@ function citationLocation(citation: IntentCitation): string {
 function Citation({ citation }: { citation: IntentCitation }) {
   return (
     <li className="mt-1.5">
-      <div className="text-label font-medium text-slate-300">{citationLocation(citation)}</div>
-      {citation.label && <div className="text-label text-slate-400">{citation.label}</div>}
+      <div className="text-label font-medium text-fg-secondary">{citationLocation(citation)}</div>
+      {citation.label && <div className="text-label text-muted">{citation.label}</div>}
       {citation.quote && (
-        <blockquote className="mt-0.5 border-l-2 border-slate-600 pl-2 text-label italic text-slate-300">
+        <blockquote className="mt-0.5 border-l-2 border-line-strong pl-2 text-label italic text-fg-secondary">
           {citation.quote}
         </blockquote>
       )}
@@ -49,42 +49,42 @@ function Citation({ citation }: { citation: IntentCitation }) {
 function Row({ row }: { row: IntentRow }) {
   const measured = BASIS_IS_MEASURED.has(row.basis);
   return (
-    <article className="rounded-xl border border-slate-800/70 px-3 py-2.5" data-basis={row.basis}>
+    <article className="rounded-xl border border-line px-3 py-2.5" data-basis={row.basis}>
       <div className="flex flex-wrap items-center gap-1.5">
         <span
           title={row.basisStatement}
           className={cn(
             'rounded-full border px-1.5 py-0.5 text-label font-semibold',
-            measured ? 'border-slate-400 text-slate-200' : 'border-dashed border-slate-500 text-slate-400',
+            measured ? 'border-line-strong text-fg' : 'border-dashed border-line-strong text-muted',
           )}
         >
           {BASIS_LABEL[row.basis]}
         </span>
         {row.relationshipKind && (
-          <span className="rounded-full border border-slate-700 px-1.5 py-0.5 text-label font-semibold text-slate-300">
+          <span className="rounded-full border border-line-strong px-1.5 py-0.5 text-label font-semibold text-fg-secondary">
             {row.relationshipKind}
           </span>
         )}
-        <span className="text-label text-slate-400">
+        <span className="text-label text-muted">
           {row.confidenceBasisPoints === null
             ? 'Confidence not assessed'
             : `Confidence ${(row.confidenceBasisPoints / 100).toFixed(0)}%`}
         </span>
       </div>
-      <p className="mt-1.5 text-label font-medium text-slate-100">{row.headline}</p>
-      {row.detail && <p className="mt-0.5 text-label text-slate-400">{row.detail}</p>}
-      <p className="mt-1 text-label text-slate-400">{row.basisStatement}</p>
+      <p className="mt-1.5 text-label font-medium text-fg">{row.headline}</p>
+      {row.detail && <p className="mt-0.5 text-label text-muted">{row.detail}</p>}
+      <p className="mt-1 text-label text-muted">{row.basisStatement}</p>
       {row.citations.length > 0 ? (
         <ul className="mt-1" aria-label="Citations">
           {row.citations.map((citation, index) => (
             <Citation key={`${citation.portalKey}-${citation.documentId}-${citation.characterStart}-${index}`} citation={citation} />
           ))}
           {row.omittedCitationCount > 0 && (
-            <li className="mt-1.5 text-label text-slate-400">{row.omittedCitationCount} more citation(s) not shown.</li>
+            <li className="mt-1.5 text-label text-muted">{row.omittedCitationCount} more citation(s) not shown.</li>
           )}
         </ul>
       ) : (
-        <p className="mt-1 text-label text-slate-400">
+        <p className="mt-1 text-label text-muted">
           Citation unavailable: {row.citationsUnavailableReason ?? 'no reason was recorded.'}
         </p>
       )}
@@ -102,23 +102,23 @@ export default function IntentAnswerView({ answer, onChooseOption }: IntentAnswe
     <div className="space-y-2.5 p-2">
       <div className="px-2 pt-1">
         <div className="flex items-center gap-2">
-          <span className="rounded-full border border-slate-600 px-1.5 py-0.5 text-label font-semibold text-slate-300">
+          <span className="rounded-full border border-line-strong px-1.5 py-0.5 text-label font-semibold text-fg-secondary">
             {STATUS_LABEL[answer.status]}
           </span>
-          <span className="truncate text-label text-slate-400">{answer.utterance}</span>
+          <span className="truncate text-label text-muted">{answer.utterance}</span>
         </div>
-        <p className="mt-1.5 text-label text-slate-100">{answer.summary}</p>
+        <p className="mt-1.5 text-label text-fg">{answer.summary}</p>
       </div>
       {answer.rows.map((row) => (
         <Row key={row.id} row={row} />
       ))}
       {answer.truncated && (
-        <p className="px-2 text-label text-slate-400">More rows matched than the limit of {answer.rowLimit}; only the first are shown.</p>
+        <p className="px-2 text-label text-muted">More rows matched than the limit of {answer.rowLimit}; only the first are shown.</p>
       )}
       {answer.notes.length > 0 && (
         <ul className="space-y-1 px-2" aria-label="Limits of this answer">
           {answer.notes.map((note) => (
-            <li key={note} className="text-label text-slate-400">{note}</li>
+            <li key={note} className="text-label text-muted">{note}</li>
           ))}
         </ul>
       )}
@@ -131,9 +131,9 @@ export default function IntentAnswerView({ answer, onChooseOption }: IntentAnswe
                 onClick={() => onChooseOption(option)}
                 className="command-row focus-ring w-full rounded-xl px-3 py-2 text-left"
               >
-                <span className="block text-label font-medium text-slate-200">{option.label}</span>
-                <span className="block text-label text-slate-400">{option.description}</span>
-                <span className="mt-0.5 block text-label text-slate-300">Try: {option.example}</span>
+                <span className="block text-label font-medium text-fg">{option.label}</span>
+                <span className="block text-label text-muted">{option.description}</span>
+                <span className="mt-0.5 block text-label text-fg-secondary">Try: {option.example}</span>
               </button>
             </li>
           ))}

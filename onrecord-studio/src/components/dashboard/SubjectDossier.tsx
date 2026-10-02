@@ -162,16 +162,16 @@ export default function SubjectDossier() {
   return (
     <section
       aria-label="Subject dossier"
-      className="app-panel space-y-3 overflow-hidden rounded-xl border border-cyan-400/20 bg-slate-950/40 p-4"
+      className="app-panel space-y-3 overflow-hidden rounded-xl border border-accent/30 bg-canvas/40 p-4"
     >
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="app-eyebrow text-cyan-300/70">Subject dossier</div>
-          <h2 className="mt-1 truncate text-[15px] font-semibold text-slate-100">
+          <div className="app-eyebrow text-accent">Subject dossier</div>
+          <h2 className="mt-1 truncate text-[15px] font-semibold text-fg">
             {subjectLabel ?? 'Resolving subject…'}
           </h2>
           {target.kind === 'name' && resolution.status === 'RESOLVED' && (
-            <p className="mt-0.5 text-caption text-slate-400">
+            <p className="mt-0.5 text-caption text-muted">
               Resolved from &ldquo;{target.value}&rdquo;.
             </p>
           )}
@@ -179,34 +179,34 @@ export default function SubjectDossier() {
         <button
           type="button"
           onClick={clear}
-          className="focus-ring shrink-0 rounded-lg border border-slate-800 px-3 py-1.5 text-label font-semibold text-slate-300 transition hover:border-slate-600 hover:text-slate-100"
+          className="focus-ring shrink-0 rounded-lg border border-control px-3 py-1.5 text-label font-semibold text-fg-secondary transition hover:border-control hover:text-fg"
         >
           Close dossier
         </button>
       </header>
 
       {resolution.status === 'RESOLVING' && (
-        <p role="status" className="text-label text-slate-400">
+        <p role="status" className="text-label text-muted">
           Resolving subject in the entity index…
         </p>
       )}
 
       {resolution.status === 'ERROR' && (
-        <p role="alert" className="text-label text-rose-300">
+        <p role="alert" className="text-label text-danger">
           Subject resolution failed: {resolution.message}
         </p>
       )}
 
       {resolution.status === 'NONE' && (
-        <p className="text-label text-slate-400">
+        <p className="text-label text-muted">
           No corpus entity matches &ldquo;{target.value}&rdquo;
           in the 500 most-cited entities. Add data or refine the name to try again.
         </p>
       )}
 
       {resolution.status === 'AMBIGUOUS' && (
-        <div className="rounded-xl border border-amber-400/20 bg-amber-500/[0.06] p-3">
-          <p className="text-label font-semibold text-amber-200">
+        <div className="rounded-xl border border-warning/30 bg-warning/5 p-3">
+          <p className="text-label font-semibold text-warning">
             &ldquo;{target.value}&rdquo; matches {resolution.matches.length} entities. Pick one.
           </p>
           <ul className="mt-2 flex flex-wrap gap-1.5" role="list">
@@ -215,10 +215,10 @@ export default function SubjectDossier() {
                 <button
                   type="button"
                   onClick={() => open({ kind: 'entity', value: entity.entityId })}
-                  className="focus-ring rounded-full border border-amber-400/30 bg-amber-500/[0.08] px-2 py-1 text-caption font-semibold text-amber-100"
+                  className="focus-ring rounded-full border border-warning/30 bg-warning/10 px-2 py-1 text-caption font-semibold text-warning"
                 >
                   {entity.displayValue}
-                  <span className="ml-1 text-amber-300/80">
+                  <span className="ml-1 text-warning">
                     · {entity.kind.toLocaleLowerCase()} · {entity.documentCount} docs
                   </span>
                 </button>
@@ -246,12 +246,12 @@ export default function SubjectDossier() {
                   />
                 ))}
                 {items.length > 5 && (
-                  <li className="text-caption text-slate-400">
+                  <li className="text-caption text-muted">
                     + {items.length - 5} more finding{items.length - 5 === 1 ? '' : 's'} mention this
                     subject. Open the findings inbox to see them all.
                   </li>
                 )}
-                <li className="text-caption italic text-slate-400">
+                <li className="text-caption italic text-muted">
                   Matches are text-based on the subject&rsquo;s display value; a namesake is possible.
                 </li>
               </ul>
@@ -262,16 +262,16 @@ export default function SubjectDossier() {
             state={neighborhood}
             emptyText="No corpus edges recorded for this subject yet."
             render={(value) => {
-              if (!value) return <p className="text-caption text-slate-400">Entity has no recorded neighborhood.</p>;
+              if (!value) return <p className="text-caption text-muted">Entity has no recorded neighborhood.</p>;
               const edges = value.edges.slice(0, 8);
               return (
                 <div className="space-y-2">
-                  <p className="text-caption text-slate-400">
-                    Center: <span className="font-mono text-slate-300">{value.center.displayValue}</span> · seen
+                  <p className="text-caption text-muted">
+                    Center: <span className="font-mono text-fg-secondary">{value.center.displayValue}</span> · seen
                     in {value.center.documentCount} documents.
                   </p>
                   {edges.length === 0 ? (
-                    <p className="text-caption text-slate-400">No co-occurrence edges.</p>
+                    <p className="text-caption text-muted">No co-occurrence edges.</p>
                   ) : (
                     <ul className="flex flex-wrap gap-1.5">
                       {edges.map((edge) => (
@@ -281,17 +281,17 @@ export default function SubjectDossier() {
                             onClick={() =>
                               open({ kind: 'entity', value: edge.neighbor.entityId })
                             }
-                            className="focus-ring rounded-full border border-slate-700 bg-slate-950/50 px-2 py-1 text-caption font-medium text-slate-300 transition hover:border-cyan-400/25 hover:text-cyan-200"
+                            className="focus-ring rounded-full border border-control bg-canvas/70 px-2 py-1 text-caption font-medium text-fg-secondary transition hover:border-accent/30 hover:text-accent"
                           >
                             {edge.neighbor.displayValue}
-                            <span className="ml-1 text-slate-400">· {edge.sharedDocumentCount} docs</span>
+                            <span className="ml-1 text-muted">· {edge.sharedDocumentCount} docs</span>
                           </button>
                         </li>
                       ))}
                     </ul>
                   )}
                   {(value.edges.length > 8 || (neighborTotal !== null && neighborTotal > 8)) && (
-                    <p className="text-caption text-slate-400">
+                    <p className="text-caption text-muted">
                       Showing 8{neighborTotal !== null ? ` of ${neighborTotal.toLocaleString()}` : ''}. Open the entity graph to see every one.
                     </p>
                   )}
@@ -329,21 +329,21 @@ function DossierSection<T>({
   render: (value: T) => React.ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-slate-800/70 bg-slate-950/30 p-3">
-      <h3 className="text-label font-semibold uppercase tracking-wider text-slate-300">{title}</h3>
+    <section className="rounded-xl border border-line bg-canvas/40 p-3">
+      <h3 className="text-label font-semibold uppercase tracking-wider text-fg-secondary">{title}</h3>
       <div className="mt-2">
         {state.status === 'LOADING' && (
-          <p role="status" className="text-caption text-slate-400">
+          <p role="status" className="text-caption text-muted">
             Loading…
           </p>
         )}
         {state.status === 'ERROR' && (
-          <p role="alert" className="text-caption text-rose-300">
+          <p role="alert" className="text-caption text-danger">
             {state.message}
           </p>
         )}
         {state.status === 'READY' && (Array.isArray(state.value) && state.value.length === 0
-          ? <p className="text-caption text-slate-400">{emptyText}</p>
+          ? <p className="text-caption text-muted">{emptyText}</p>
           : render(state.value))}
       </div>
     </section>
@@ -357,7 +357,7 @@ function DossierFindingRow({ finding, onOpen }: { finding: Finding; onOpen: () =
       <button
         type="button"
         onClick={onOpen}
-        className="focus-ring flex w-full items-start gap-2 rounded-lg border border-slate-800/70 bg-slate-950/40 p-2 text-left transition hover:border-cyan-400/25 hover:bg-cyan-400/[0.03]"
+        className="focus-ring flex w-full items-start gap-2 rounded-lg border border-control bg-canvas/40 p-2 text-left transition hover:border-accent/30 hover:bg-accent/5"
         aria-label={`Open finding: ${finding.headline}`}
       >
         <span aria-hidden="true" className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded ${tone}`}>
@@ -366,8 +366,8 @@ function DossierFindingRow({ finding, onOpen }: { finding: Finding; onOpen: () =
           </svg>
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-label font-semibold text-slate-100">{finding.headline}</span>
-          <span className="mt-0.5 block text-caption text-slate-400">{finding.explanation}</span>
+          <span className="block text-label font-semibold text-fg">{finding.headline}</span>
+          <span className="mt-0.5 block text-caption text-muted">{finding.explanation}</span>
         </span>
       </button>
     </li>
@@ -391,12 +391,12 @@ function mentionsSubject(finding: Finding, query: string): boolean {
 function severityGlyph(severity: FindingSeverity): [GlyphShape, string] {
   switch (severity) {
     case 'CRITICAL':
-      return ['diamond', 'text-rose-300'];
+      return ['diamond', 'text-danger'];
     case 'SERIOUS':
-      return ['triangle', 'text-amber-300'];
+      return ['triangle', 'text-warning'];
     case 'NOTABLE':
-      return ['circle', 'text-cyan-300'];
+      return ['circle', 'text-accent'];
     case 'INFO':
-      return ['ring', 'text-slate-400'];
+      return ['ring', 'text-muted'];
   }
 }

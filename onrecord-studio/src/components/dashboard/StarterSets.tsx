@@ -35,14 +35,14 @@ export default function StarterSets() {
     return registryGate.invalidate;
   }, [registryGate]);
 
-  if (error) return <div role="alert" className="text-label leading-4 text-rose-300">Starter sets unavailable: {error}</div>;
-  if (!report) return <div role="status" className="text-label leading-4 text-slate-400">Loading starter sets…</div>;
+  if (error) return <div role="alert" className="text-label leading-4 text-danger">Starter sets unavailable: {error}</div>;
+  if (!report) return <div role="status" className="text-label leading-4 text-muted">Loading starter sets…</div>;
 
   return (
     <section aria-label="Starter sets" className="space-y-3">
       <div>
-        <h3 className="text-sm font-semibold text-slate-200">Starter sets</h3>
-        <p className="mt-1 max-w-3xl text-label leading-relaxed text-slate-400">
+        <h3 className="text-sm font-semibold text-fg">Starter sets</h3>
+        <p className="mt-1 max-w-3xl text-label leading-relaxed text-muted">
           Bundles of public San Diego sources and records portals. Nothing is fetched until you confirm a set. A source
           that does not load is listed as unavailable with the reason, not as an empty source.
         </p>
@@ -52,16 +52,16 @@ export default function StarterSets() {
           const pending = entriesToAdd(set, portals);
           return (
             <article key={set.id} aria-label={set.title} className="app-panel flex flex-col p-4">
-              <h4 className="text-sm font-semibold text-slate-200">{set.title}</h4>
-              <p className="mt-1 text-label leading-relaxed text-slate-400">{set.summary}</p>
-              <ul className="mt-3 space-y-2 text-label leading-4 text-slate-300">
+              <h4 className="text-sm font-semibold text-fg">{set.title}</h4>
+              <p className="mt-1 text-label leading-relaxed text-muted">{set.summary}</p>
+              <ul className="mt-3 space-y-2 text-label leading-4 text-fg-secondary">
                 {set.entries.map((entry) => (
                   <EntryRow key={entry.id} entry={entry} saved={entryIsSaved(entry, portals)} status={statuses[entry.id]} />
                 ))}
               </ul>
               <div className="mt-4">
                 {confirmingId === set.id ? (
-                  <div role="group" aria-label={`Confirm ${set.title}`} className="space-y-2 rounded-lg border border-cyan-500/30 p-3 text-label leading-4 text-slate-300">
+                  <div role="group" aria-label={`Confirm ${set.title}`} className="space-y-2 rounded-lg border border-accent/30 p-3 text-label leading-4 text-fg-secondary">
                     <p>
                       This contacts {[...new Set(pending.map(entryHost))].join(', ')} and downloads their public pages
                       and linked files, one source at a time.
@@ -70,21 +70,21 @@ export default function StarterSets() {
                       <button type="button" onClick={() => { setConfirmingId(null); void useStarterRunStore.getState().run(set, pending); }} className="primary-action focus-ring rounded-lg px-3 py-2 text-label leading-4 font-semibold text-white">
                         Fetch {pending.length} source{pending.length === 1 ? '' : 's'}
                       </button>
-                      <button type="button" onClick={() => setConfirmingId(null)} className="secondary-action focus-ring rounded-lg border px-3 py-2 text-label leading-4 text-slate-300">Cancel</button>
+                      <button type="button" onClick={() => setConfirmingId(null)} className="secondary-action focus-ring rounded-lg border px-3 py-2 text-label leading-4 text-fg-secondary">Cancel</button>
                     </div>
                   </div>
                 ) : runningId === set.id ? (
-                  <button type="button" onClick={() => useStarterRunStore.getState().cancel()} className="secondary-action focus-ring rounded-lg border px-3 py-2 text-label leading-4 text-slate-300">
+                  <button type="button" onClick={() => useStarterRunStore.getState().cancel()} className="secondary-action focus-ring rounded-lg border px-3 py-2 text-label leading-4 text-fg-secondary">
                     Adding… stop after the current source
                   </button>
                 ) : pending.length === 0 ? (
-                  <span className="text-label leading-4 text-slate-400">Every source in this set is already in your library.</span>
+                  <span className="text-label leading-4 text-muted">Every source in this set is already in your library.</span>
                 ) : (
                   <button
                     type="button"
                     disabled={runningId !== null}
                     onClick={() => setConfirmingId(set.id)}
-                    className="secondary-action focus-ring rounded-lg border px-3 py-2 text-label leading-4 font-semibold text-slate-200 disabled:opacity-50"
+                    className="secondary-action focus-ring rounded-lg border px-3 py-2 text-label leading-4 font-semibold text-fg disabled:opacity-50"
                   >
                     {`Add ${pending.length} source${pending.length === 1 ? '' : 's'}…`}
                   </button>
@@ -94,7 +94,7 @@ export default function StarterSets() {
           );
         })}
       </div>
-      <p className="text-label text-slate-400">Registry version {report.registryVersion}. Verification dates record one check, not a promise the page is still there.</p>
+      <p className="text-label text-muted">Registry version {report.registryVersion}. Verification dates record one check, not a promise the page is still there.</p>
     </section>
   );
 }
@@ -103,15 +103,15 @@ function EntryRow({ entry, saved, status }: { entry: StarterEntry; saved: boolea
   return (
     <li>
       <div className="flex flex-wrap items-baseline gap-x-2">
-        <a href={entry.url} target="_blank" rel="noreferrer" className="font-semibold text-cyan-300">{entry.title}</a>
-        <span className="text-slate-400">{entry.kind === 'RECORD_REQUEST_TARGET' ? 'Records request portal' : 'Source'}</span>
-        {status === 'adding' ? <span className="text-slate-400">Adding…</span>
-          : status?.state === 'started' && saved ? <span className="text-emerald-300">Started</span>
-          : status?.state === 'unavailable' ? <span role="alert" className="text-amber-300">Unavailable: {status.reason}</span>
-          : saved ? <span className="text-slate-400">In your library</span> : null}
+        <a href={entry.url} target="_blank" rel="noreferrer" className="font-semibold text-accent">{entry.title}</a>
+        <span className="text-muted">{entry.kind === 'RECORD_REQUEST_TARGET' ? 'Records request portal' : 'Source'}</span>
+        {status === 'adding' ? <span className="text-muted">Adding…</span>
+          : status?.state === 'started' && saved ? <span className="text-success">Started</span>
+          : status?.state === 'unavailable' ? <span role="alert" className="text-warning">Unavailable: {status.reason}</span>
+          : saved ? <span className="text-muted">In your library</span> : null}
       </div>
-      <div className="text-slate-400">{entry.what} {entry.publisher}. Verified {entry.verifiedAsOf}.</div>
-      <div className="text-slate-400">{entry.termsNote ?? 'No reuse terms were found; check the publisher before redistributing.'}</div>
+      <div className="text-muted">{entry.what} {entry.publisher}. Verified {entry.verifiedAsOf}.</div>
+      <div className="text-muted">{entry.termsNote ?? 'No reuse terms were found; check the publisher before redistributing.'}</div>
     </li>
   );
 }

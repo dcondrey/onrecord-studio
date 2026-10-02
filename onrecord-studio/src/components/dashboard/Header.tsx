@@ -30,7 +30,7 @@ export default function Header() {
             type="button"
             aria-label="Open navigation"
             onClick={() => setSidebarOpen(true)}
-            className="focus-ring -ml-1 rounded-xl border border-slate-800 bg-slate-900/50 p-2.5 text-slate-400 hover:text-slate-100 md:hidden"
+            className="focus-ring -ml-1 rounded-xl border border-control bg-surface/70 p-2.5 text-muted hover:text-fg md:hidden"
           >
             <Icon name="menu" />
           </button>
@@ -50,12 +50,12 @@ export default function Header() {
           />
         </div>
         {isConnectorOpen && (
-          <div className="border-t border-slate-800/70 px-4 py-3 lg:hidden">
+          <div className="border-t border-line px-4 py-3 lg:hidden">
             <SourceConnectorForm connector={connector} inputId="portal-url-mobile" />
           </div>
         )}
         {error && (
-          <div role="alert" className="border-t border-rose-500/10 bg-rose-500/[0.05] px-5 py-2 text-right text-caption text-rose-300">
+          <div role="alert" className="border-t border-danger/30 bg-danger/5 px-5 py-2 text-right text-caption text-danger">
             {error}
           </div>
         )}

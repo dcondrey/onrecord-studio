@@ -42,7 +42,7 @@ export function SourceConnectorForm({ connector, inputId }: { connector: SourceC
           if (error) setError(null);
         }}
         disabled={isDiscovering}
-        className="h-8 w-44 border-0 bg-transparent px-2 text-label text-slate-400 shadow-none"
+        className="h-8 w-44 border-0 bg-transparent px-2 text-label text-muted shadow-none"
       >
         <optgroup label="San Diego sources">
           {BUILT_IN_SOURCE_OPTIONS.map((source) => <option key={source.id} value={source.id}>{source.label}</option>)}
@@ -50,7 +50,7 @@ export function SourceConnectorForm({ connector, inputId }: { connector: SourceC
       </Select>
       <label htmlFor={inputId} className="sr-only">Public data source URL</label>
       <div className="relative min-w-0 flex-1 self-stretch">
-        <Icon name="globe" className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <Icon name="globe" className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
         <input
           id={inputId}
           list={`${inputId}-saved-sources`}
@@ -63,7 +63,7 @@ export function SourceConnectorForm({ connector, inputId }: { connector: SourceC
           }}
           placeholder={selectedSource.placeholder}
           autoComplete="url"
-          className="h-full w-full rounded-lg border-0 bg-transparent pl-8 pr-2 text-label text-slate-100 outline-none placeholder:text-slate-400"
+          className="h-full w-full rounded-lg border-0 bg-transparent pl-8 pr-2 text-label text-fg outline-none placeholder:text-muted"
         />
         <datalist id={`${inputId}-saved-sources`}>
           {portals.map(({ registration }) => (
@@ -81,7 +81,7 @@ export function SourceConnectorForm({ connector, inputId }: { connector: SourceC
         disabled={isDiscovering}
         aria-label="Add files"
         title="Add files"
-        className="source-tool-button focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-400 transition hover:text-indigo-200 disabled:opacity-50"
+        className="source-tool-button focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition hover:text-highlight disabled:opacity-50"
       >
         <Icon name="filePlus" className="h-4 w-4" />
       </button>
@@ -92,11 +92,11 @@ export function SourceConnectorForm({ connector, inputId }: { connector: SourceC
         disabled={isDiscovering}
         aria-label="Crawl settings"
         title={crawlSettingsAreCustom ? 'Crawl settings (customized)' : 'Crawl settings'}
-        className="source-tool-button focus-ring relative grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-400 transition hover:text-indigo-200 disabled:opacity-50"
+        className="source-tool-button focus-ring relative grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition hover:text-highlight disabled:opacity-50"
       >
         <Icon name="sliders" className="h-4 w-4" />
         {crawlSettingsAreCustom && (
-          <span aria-hidden="true" className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-cyan-300" />
+          <span aria-hidden="true" className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-accent" />
         )}
       </button>
       <button
@@ -105,7 +105,7 @@ export function SourceConnectorForm({ connector, inputId }: { connector: SourceC
         disabled={isDiscovering}
         aria-label="Paste content"
         title="Paste content"
-        className="source-tool-button focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-400 transition hover:text-indigo-200 disabled:opacity-50"
+        className="source-tool-button focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition hover:text-highlight disabled:opacity-50"
       >
         <Icon name="clipboard" className="h-4 w-4" />
       </button>
@@ -115,7 +115,7 @@ export function SourceConnectorForm({ connector, inputId }: { connector: SourceC
         className={cn(
           'focus-ring flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border px-3 text-label font-semibold transition',
           isDiscovering || syncCapacityReached || (activeIsSyncing && !portalUrlDraft.trim())
-            ? 'cursor-not-allowed border-slate-800 bg-slate-900 text-slate-400'
+            ? 'cursor-not-allowed border-control bg-surface text-muted'
             : 'primary-action border-transparent text-white hover:brightness-105',
         )}
       >
@@ -123,12 +123,12 @@ export function SourceConnectorForm({ connector, inputId }: { connector: SourceC
         <span>{isDiscovering ? 'Discovering' : activeIsSyncing && !portalUrlDraft.trim() ? 'Syncing' : 'Add'}</span>
       </button>
       {activeIsSyncing && (
-        <button type="button" onClick={() => void pauseSync()} title="Pause synchronization" aria-label="Pause synchronization" className="source-tool-button focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-400 transition hover:text-amber-300">
+        <button type="button" onClick={() => void pauseSync()} title="Pause synchronization" aria-label="Pause synchronization" className="source-tool-button focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition hover:text-warning">
           <Icon name="pause" className="h-3.5 w-3.5" />
         </button>
       )}
       {activeIsPaused && !activeIsSyncing && (
-        <button type="button" onClick={() => void resumeSync()} title="Resume synchronization" aria-label="Resume synchronization" className="source-tool-button focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-lg text-amber-300 transition hover:text-emerald-300">
+        <button type="button" onClick={() => void resumeSync()} title="Resume synchronization" aria-label="Resume synchronization" className="source-tool-button focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-lg text-warning transition hover:text-success">
           <Icon name="play" className="h-3.5 w-3.5" />
         </button>
       )}
@@ -137,12 +137,12 @@ export function SourceConnectorForm({ connector, inputId }: { connector: SourceC
           "also delete the documents" checkbox would put the difference between keeping and
           erasing evidence one stray click away. */}
       {activePortal && (
-        <button type="button" onClick={() => setPendingRemoval(activePortal)} title="Remove source and keep its documents" aria-label="Remove source" className="source-tool-button focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-400 transition hover:text-amber-300">
+        <button type="button" onClick={() => setPendingRemoval(activePortal)} title="Remove source and keep its documents" aria-label="Remove source" className="source-tool-button focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition hover:text-warning">
           <Icon name="eject" className="h-3.5 w-3.5" />
         </button>
       )}
       {activePortal && (
-        <button type="button" onClick={() => setPendingPurge(activePortal)} title="Delete source and every document ingested from it" aria-label="Delete source and its documents" className="source-tool-button focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-400 transition hover:text-rose-300">
+        <button type="button" onClick={() => setPendingPurge(activePortal)} title="Delete source and every document ingested from it" aria-label="Delete source and its documents" className="source-tool-button focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition hover:text-danger">
           <Icon name="trash" className="h-3.5 w-3.5" />
         </button>
       )}

@@ -86,11 +86,11 @@ export default function FacilityCoveragePanel({ schema }: { schema: AnalyticalSc
 
   return (
     <div className="space-y-4" aria-label="Facility coverage">
-      <p className="text-label text-slate-400">Descriptive counts from an imported facility list, per area you define. Only rows with recorded, interpretable daily hours contribute to open-hours arithmetic; blank hours stay {NOT_RECORDED}. This view does not raise findings.</p>
-      {error && <p role="alert" className="text-label leading-4 text-rose-300">{error}</p>}
-      {workspace?.warnings.map((warning) => <p key={warning} className="text-label leading-4 text-amber-200">{warning}</p>)}
+      <p className="text-label text-muted">Descriptive counts from an imported facility list, per area you define. Only rows with recorded, interpretable daily hours contribute to open-hours arithmetic; blank hours stay {NOT_RECORDED}. This view does not raise findings.</p>
+      {error && <p role="alert" className="text-label leading-4 text-danger">{error}</p>}
+      {workspace?.warnings.map((warning) => <p key={warning} className="text-label leading-4 text-warning">{warning}</p>)}
       <div className="flex flex-wrap items-end gap-2">
-        <label className="text-label leading-4 text-slate-300">Facility list
+        <label className="text-label leading-4 text-fg-secondary">Facility list
           <select aria-label="Facility list snapshot" className="analysis-input ml-2" disabled={saving} value={draft?.mapping.snapshotId ?? ''} onChange={(event) => {
             const snapshotId = event.target.value;
             const saved = workspace?.reports.find((report) => report.mapping.snapshotId === snapshotId)?.mapping;
@@ -102,10 +102,10 @@ export default function FacilityCoveragePanel({ schema }: { schema: AnalyticalSc
         </label>
       </div>
       {draft && (
-        <div className="space-y-3 rounded border border-slate-800 p-3">
+        <div className="space-y-3 rounded border border-line p-3">
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             {columnRoles.map(([role, label]) => (
-              <label key={role} className="text-label text-slate-300">{label}
+              <label key={role} className="text-label text-fg-secondary">{label}
                 <select aria-label={`Facility ${label.replace(' *', '').toLowerCase()} column`} className="analysis-input block w-full" disabled={saving} value={draft.mapping[role] ?? ''} onChange={(event) => setDraft({ ...draft, mapping: { ...draft.mapping, [role]: role === 'nameColumn' ? event.target.value : event.target.value || null } })}>
                   <option value="">{role === 'nameColumn' ? 'Choose column' : NOT_RECORDED}</option>
                   {draftColumns.map((column) => <option key={column}>{column}</option>)}
@@ -114,16 +114,16 @@ export default function FacilityCoveragePanel({ schema }: { schema: AnalyticalSc
             ))}
           </div>
           {draft.mapping.categoryColumn && (
-            <label className="block text-label text-slate-300">Category values that mean a public restroom (one per line, exact match ignoring case)
+            <label className="block text-label text-fg-secondary">Category values that mean a public restroom (one per line, exact match ignoring case)
               <textarea aria-label="Restroom category values" className="analysis-input block w-full" rows={2} disabled={saving} value={draft.categories} onChange={(event) => setDraft({ ...draft, categories: event.target.value })} />
             </label>
           )}
           <div className="space-y-2">
             <div className="analysis-label">Areas</div>
             {draft.areas.map((area, index) => (
-              <div key={index} className="flex flex-wrap items-end gap-2 rounded border border-slate-800 p-2">
-                <label className="text-label text-slate-300">Name<input aria-label={`Area ${index + 1} name`} className="analysis-input block" maxLength={200} disabled={saving} value={area.name} onChange={(event) => setArea(index, { name: event.target.value })} /></label>
-                <label className="text-label text-slate-300">Boundary
+              <div key={index} className="flex flex-wrap items-end gap-2 rounded border border-line p-2">
+                <label className="text-label text-fg-secondary">Name<input aria-label={`Area ${index + 1} name`} className="analysis-input block" maxLength={200} disabled={saving} value={area.name} onChange={(event) => setArea(index, { name: event.target.value })} /></label>
+                <label className="text-label text-fg-secondary">Boundary
                   <select aria-label={`Area ${index + 1} boundary type`} className="analysis-input block" disabled={saving} value={area.kind} onChange={(event) => setArea(index, { kind: event.target.value as AreaDraft['kind'] })}>
                     <option value="bbox">Latitude/longitude box</option>
                     <option value="ids">Listed facility ids</option>
@@ -131,40 +131,40 @@ export default function FacilityCoveragePanel({ schema }: { schema: AnalyticalSc
                 </label>
                 {area.kind === 'bbox'
                   ? (['Min latitude', 'Min longitude', 'Max latitude', 'Max longitude'] as const).map((label, bound) => (
-                    <label key={label} className="text-label text-slate-300">{label}<input aria-label={`Area ${index + 1} ${label.toLowerCase()}`} inputMode="decimal" className="analysis-input block w-28" disabled={saving} value={area.bbox[bound]} onChange={(event) => { const bbox = [...area.bbox] as AreaDraft['bbox']; bbox[bound] = event.target.value; setArea(index, { bbox }); }} /></label>
+                    <label key={label} className="text-label text-fg-secondary">{label}<input aria-label={`Area ${index + 1} ${label.toLowerCase()}`} inputMode="decimal" className="analysis-input block w-28" disabled={saving} value={area.bbox[bound]} onChange={(event) => { const bbox = [...area.bbox] as AreaDraft['bbox']; bbox[bound] = event.target.value; setArea(index, { bbox }); }} /></label>
                   ))
-                  : <label className="text-label text-slate-300">Facility ids (one per line)<textarea aria-label={`Area ${index + 1} facility ids`} className="analysis-input block" rows={3} disabled={saving} value={area.ids} onChange={(event) => setArea(index, { ids: event.target.value })} /></label>}
-                <button type="button" className="text-label text-slate-400 underline" disabled={saving || draft.areas.length === 1} onClick={() => setDraft({ ...draft, areas: draft.areas.filter((_, i) => i !== index) })}>Remove area</button>
+                  : <label className="text-label text-fg-secondary">Facility ids (one per line)<textarea aria-label={`Area ${index + 1} facility ids`} className="analysis-input block" rows={3} disabled={saving} value={area.ids} onChange={(event) => setArea(index, { ids: event.target.value })} /></label>}
+                <button type="button" className="text-label text-muted underline" disabled={saving || draft.areas.length === 1} onClick={() => setDraft({ ...draft, areas: draft.areas.filter((_, i) => i !== index) })}>Remove area</button>
               </div>
             ))}
-            <button type="button" className="text-label text-cyan-300 underline" disabled={saving} onClick={() => setDraft({ ...draft, areas: [...draft.areas, emptyArea()] })}>Add area</button>
+            <button type="button" className="text-label text-accent underline" disabled={saving} onClick={() => setDraft({ ...draft, areas: [...draft.areas, emptyArea()] })}>Add area</button>
           </div>
           <div className="flex gap-3">
             <button type="button" className="analysis-button" disabled={saving || !draft.mapping.nameColumn} onClick={() => void save()}>{saving ? 'Validating columns and areas…' : 'Save facility mapping'}</button>
-            <button type="button" className="text-label leading-4 text-slate-300" disabled={saving} onClick={() => setDraft(null)}>Cancel</button>
+            <button type="button" className="text-label leading-4 text-fg-secondary" disabled={saving} onClick={() => setDraft(null)}>Cancel</button>
           </div>
         </div>
       )}
       {workspace?.reports.map((report) => <CoverageReport key={report.mapping.snapshotId} report={report} />)}
-      {workspace && workspace.reports.length === 0 && <p className="text-label text-slate-400">No facility list is mapped. Import the agency's facility list above, then choose it here and define the areas to summarize.</p>}
+      {workspace && workspace.reports.length === 0 && <p className="text-label text-muted">No facility list is mapped. Import the agency's facility list above, then choose it here and define the areas to summarize.</p>}
     </div>
   );
 }
 
 function CoverageReport({ report }: { report: FacilityCoverageReport }) {
   return (
-    <section aria-label={`Facility coverage for ${report.datasetName}`} className="space-y-2 rounded border border-slate-800 p-3">
-      <h3 className="text-label leading-4 font-semibold text-slate-100">{report.datasetName}</h3>
-      <p className="font-mono text-caption text-slate-400">{report.tableName} · SHA-256 {report.sourceSha256.slice(0, 16)}… · {report.totalRows} rows, {report.publicRestroomRows} counted as public restrooms{report.locationNotRecorded !== null && ` · ${report.locationNotRecorded} without coordinates`}</p>
+    <section aria-label={`Facility coverage for ${report.datasetName}`} className="space-y-2 rounded border border-line p-3">
+      <h3 className="text-label leading-4 font-semibold text-fg">{report.datasetName}</h3>
+      <p className="font-mono text-caption text-muted">{report.tableName} · SHA-256 {report.sourceSha256.slice(0, 16)}… · {report.totalRows} rows, {report.publicRestroomRows} counted as public restrooms{report.locationNotRecorded !== null && ` · ${report.locationNotRecorded} without coordinates`}</p>
       <div className="overflow-x-auto">
         <table className="w-full text-left text-label">
           <thead>
-            <tr>{['Area', 'Public restrooms', 'With recorded hours', 'Hours unreadable', 'Hours not recorded', 'Recorded open coverage (of 24 h)', 'Time with none of the recorded open'].map((heading) => <th key={heading} className="p-1.5 text-slate-300">{heading}</th>)}</tr>
+            <tr>{['Area', 'Public restrooms', 'With recorded hours', 'Hours unreadable', 'Hours not recorded', 'Recorded open coverage (of 24 h)', 'Time with none of the recorded open'].map((heading) => <th key={heading} className="p-1.5 text-fg-secondary">{heading}</th>)}</tr>
           </thead>
           <tbody>
             {report.areas.map((area) => (
-              <tr key={area.areaName} className="border-t border-slate-800 text-slate-200">
-                <td className="p-1.5">{area.areaName}<div className="text-caption text-slate-400">{area.boundary}</div>{area.unmatchedFacilityIds.length > 0 && <div className="text-caption text-amber-200">Not found: {area.unmatchedFacilityIds.join(', ')}</div>}</td>
+              <tr key={area.areaName} className="border-t border-line text-fg">
+                <td className="p-1.5">{area.areaName}<div className="text-caption text-muted">{area.boundary}</div>{area.unmatchedFacilityIds.length > 0 && <div className="text-caption text-warning">Not found: {area.unmatchedFacilityIds.join(', ')}</div>}</td>
                 <td className="p-1.5">{area.publicRestrooms}</td>
                 <td className="p-1.5">{area.withRecordedHours}</td>
                 <td className="p-1.5">{area.hoursUninterpretable}</td>
@@ -176,19 +176,19 @@ function CoverageReport({ report }: { report: FacilityCoverageReport }) {
           </tbody>
         </table>
       </div>
-      <details className="text-label text-slate-300">
-        <summary className="cursor-pointer text-cyan-300">Facilities per area</summary>
+      <details className="text-label text-fg-secondary">
+        <summary className="cursor-pointer text-accent">Facilities per area</summary>
         {report.areas.map((area) => (
           <div key={area.areaName} className="mt-2">
             <div className="font-semibold">{area.areaName}</div>
             {area.facilities.map((facility) => (
-              <p key={facility.tableRow} className="text-label text-slate-400">Row {facility.tableRow}: {facility.name ?? 'name not recorded'}{facility.address ? ` · ${facility.address}` : ''} · hours: {facility.hoursText ?? NOT_RECORDED}{facility.hoursStatus === 'UNINTERPRETABLE' && ' (not interpretable as daily hours)'}</p>
+              <p key={facility.tableRow} className="text-label text-muted">Row {facility.tableRow}: {facility.name ?? 'name not recorded'}{facility.address ? ` · ${facility.address}` : ''} · hours: {facility.hoursText ?? NOT_RECORDED}{facility.hoursStatus === 'UNINTERPRETABLE' && ' (not interpretable as daily hours)'}</p>
             ))}
-            {area.facilitiesOmitted > 0 && <p className="text-label text-slate-400">{area.facilitiesOmitted} more not listed.</p>}
+            {area.facilitiesOmitted > 0 && <p className="text-label text-muted">{area.facilitiesOmitted} more not listed.</p>}
           </div>
         ))}
       </details>
-      <ul className="list-disc pl-4 text-label text-slate-400">{report.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}</ul>
+      <ul className="list-disc pl-4 text-label text-muted">{report.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}</ul>
     </section>
   );
 }

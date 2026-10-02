@@ -238,34 +238,34 @@ export default function PatternExplorer() {
       <div className="mx-auto flex min-h-full w-full max-w-[1800px] flex-col gap-4 p-4 lg:p-6">
         <header className="onboarding-panel flex flex-col gap-4 rounded-2xl border p-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="app-eyebrow flex items-center gap-2 text-cyan-300/70">
+            <div className="app-eyebrow flex items-center gap-2 text-accent">
               <Icon name="sparkles" className="h-3.5 w-3.5" /> Corpus intelligence
             </div>
-            <h2 className="mt-2 text-[26px] font-semibold tracking-[-0.035em] text-slate-100 sm:text-[30px]">
+            <h2 className="mt-2 text-[26px] font-semibold tracking-[-0.035em] text-fg sm:text-[30px]">
               Connections backed by source evidence.
             </h2>
-            <p className="mt-1 max-w-3xl text-label leading-relaxed text-slate-400">
+            <p className="mt-1 max-w-3xl text-label leading-relaxed text-muted">
               Deterministic fingerprints, normalized authorities, recurring language, and dates are
               matched across extracted files. Every signal links back to a document and source offset.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-caption text-slate-400">
+            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-caption text-muted">
               Minimum evidence
               <select
                 value={minimumEvidenceCount}
                 onChange={(event) => setMinimumEvidenceCount(Number(event.target.value))}
-                className="bg-transparent font-mono text-slate-200 outline-none"
+                className="bg-transparent font-mono text-fg outline-none"
               >
                 {[2, 3, 5, 10].map((value) => <option key={value} value={value}>{value}</option>)}
               </select>
             </label>
-            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-caption text-slate-400">
+            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-caption text-muted">
               Confidence
               <select
                 value={minimumConfidence}
                 onChange={(event) => setMinimumConfidence(Number(event.target.value))}
-                className="bg-transparent font-mono text-slate-200 outline-none"
+                className="bg-transparent font-mono text-fg outline-none"
               >
                 <option value={0}>Any</option>
                 <option value={7000}>70%+</option>
@@ -274,22 +274,22 @@ export default function PatternExplorer() {
                 <option value={9500}>95%+</option>
               </select>
             </label>
-            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-caption text-slate-400">
+            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-caption text-muted">
               Indexed after
-              <input type="datetime-local" value={indexedFrom} max={indexedTo || undefined} onChange={(event) => setIndexedFrom(event.target.value)} className="bg-transparent font-mono text-slate-200 outline-none" />
+              <input type="datetime-local" value={indexedFrom} max={indexedTo || undefined} onChange={(event) => setIndexedFrom(event.target.value)} className="bg-transparent font-mono text-fg outline-none" />
             </label>
-            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-caption text-slate-400">
+            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-caption text-muted">
               Indexed before
-              <input type="datetime-local" value={indexedTo} min={indexedFrom || undefined} onChange={(event) => setIndexedTo(event.target.value)} className="bg-transparent font-mono text-slate-200 outline-none" />
+              <input type="datetime-local" value={indexedTo} min={indexedFrom || undefined} onChange={(event) => setIndexedTo(event.target.value)} className="bg-transparent font-mono text-fg outline-none" />
             </label>
-            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-caption text-slate-400">
+            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-caption text-muted">
               Required terms
               <input
                 value={requiredTerms}
                 onChange={(event) => setRequiredTerms(event.target.value)}
                 placeholder="deadline, response"
                 aria-label="Required pattern terms"
-                className="w-36 bg-transparent font-mono text-slate-200 outline-none"
+                className="w-36 bg-transparent font-mono text-fg outline-none"
               />
             </label>
             <button
@@ -304,11 +304,11 @@ export default function PatternExplorer() {
           </div>
         </header>
 
-        <section className="app-panel rounded-2xl border border-slate-800 p-4">
+        <section className="app-panel rounded-2xl border border-line p-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="app-eyebrow">Reusable investigation recipe</div>
-              <p className="mt-1 text-caption text-slate-400">
+              <p className="mt-1 text-caption text-muted">
                 Preview the exact controls above before saving. Recipes stay on this device and never alter source evidence.
               </p>
             </div>
@@ -319,13 +319,13 @@ export default function PatternExplorer() {
                 onChange={(event) => setRecipeName(event.target.value)}
                 placeholder="Recipe name"
                 aria-label="Recipe name"
-                className="focus-ring h-9 rounded-lg border border-slate-800 bg-slate-950/60 px-3 text-caption text-slate-200"
+                className="focus-ring h-9 rounded-lg border border-control bg-canvas/70 px-3 text-caption text-fg"
               />
               <button
                 type="button"
                 onClick={saveRecipe}
                 disabled={!recipeName.trim() || !recipeIsPreviewed}
-                className="focus-ring h-9 rounded-lg border border-cyan-400/20 bg-cyan-400/[0.07] px-3 text-caption font-semibold text-cyan-200 disabled:opacity-35"
+                className="focus-ring h-9 rounded-lg border border-accent/30 bg-accent/10 px-3 text-caption font-semibold text-accent disabled:opacity-35"
               >
                 Save previewed recipe
               </button>
@@ -334,11 +334,11 @@ export default function PatternExplorer() {
           {savedRecipes.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-2" aria-label="Saved pattern recipes">
               {savedRecipes.map((recipe) => (
-                <div key={recipe.id} className="flex items-center overflow-hidden rounded-lg border border-slate-800 bg-slate-950/40">
-                  <button type="button" onClick={() => loadRecipe(recipe)} className="focus-ring px-3 py-2 text-caption text-slate-300 hover:text-cyan-200">
+                <div key={recipe.id} className="flex items-center overflow-hidden rounded-lg border border-line bg-canvas/40">
+                  <button type="button" onClick={() => loadRecipe(recipe)} className="focus-ring px-3 py-2 text-caption text-fg-secondary hover:text-accent">
                     {recipe.name}
                   </button>
-                  <button type="button" onClick={() => deleteRecipe(recipe.id)} aria-label={`Delete ${recipe.name}`} className="focus-ring border-l border-slate-800 px-2 py-2 text-slate-400 hover:text-rose-300">
+                  <button type="button" onClick={() => deleteRecipe(recipe.id)} aria-label={`Delete ${recipe.name}`} className="focus-ring border-l border-control px-2 py-2 text-muted hover:text-danger">
                     <Icon name="x" className="h-3 w-3" />
                   </button>
                 </div>
@@ -372,14 +372,14 @@ export default function PatternExplorer() {
         </div>
 
         {error && (
-          <div role="alert" className="rounded-xl border border-rose-400/20 bg-rose-500/[0.07] px-4 py-3 text-label text-rose-200">
+          <div role="alert" className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-label text-danger">
             {error}
           </div>
         )}
 
         <div className="grid min-h-[500px] flex-1 grid-cols-1 gap-4 xl:grid-cols-[minmax(360px,0.8fr)_minmax(0,1.2fr)]">
           <section className="app-panel min-h-0 overflow-hidden">
-            <div className="border-b border-slate-800 px-4 py-3 text-label font-semibold text-slate-300">
+            <div className="border-b border-line px-4 py-3 text-label font-semibold text-fg-secondary">
               {filteredPatterns.length.toLocaleString()} explainable signals
             </div>
             <div className="max-h-[650px] overflow-y-auto">
@@ -402,20 +402,20 @@ export default function PatternExplorer() {
                     setExcerptLoadingKey(null);
                   }}
                   className={cn(
-                    'focus-ring block w-full border-b border-slate-800/70 px-4 py-3 text-left transition hover:bg-slate-900/70',
-                    selectedPattern?.patternId === pattern.patternId && 'bg-cyan-400/[0.06] ring-1 ring-inset ring-cyan-400/15',
+                    'focus-ring block w-full border-b border-control px-4 py-3 text-left transition hover:bg-surface/70',
+                    selectedPattern?.patternId === pattern.patternId && 'bg-accent/5 ring-1 ring-inset ring-accent/30',
                   )}
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <span className="rounded-md border border-slate-700 bg-slate-950 px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wider text-slate-400">
+                    <span className="rounded-md border border-line-strong bg-canvas px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wider text-muted">
                       {patternLabels[pattern.kind]}
                     </span>
-                    <span className="font-mono text-caption text-cyan-300/70">
+                    <span className="font-mono text-caption text-accent">
                       {(pattern.confidenceBasisPoints / 100).toFixed(0)}% · {pattern.evidence.length} files
                     </span>
                   </div>
-                  <h3 className="mt-2 text-label font-semibold leading-snug text-slate-200">{pattern.title}</h3>
-                  <p className="mt-1 line-clamp-2 text-caption leading-relaxed text-slate-400">{pattern.explanation}</p>
+                  <h3 className="mt-2 text-label font-semibold leading-snug text-fg">{pattern.title}</h3>
+                  <p className="mt-1 line-clamp-2 text-caption leading-relaxed text-muted">{pattern.explanation}</p>
                 </button>
               ))}
             </div>
@@ -424,16 +424,16 @@ export default function PatternExplorer() {
           <section className="app-panel min-h-0 overflow-hidden">
             {selectedPattern ? (
               <div className="flex h-full min-h-0 flex-col">
-                <div className="border-b border-slate-800 p-4">
+                <div className="border-b border-line p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="app-eyebrow text-indigo-300/70">{patternLabels[selectedPattern.kind]}</span>
-                    <span className="font-mono text-caption text-slate-400">{selectedPattern.algorithmVersion}</span>
+                    <span className="app-eyebrow text-highlight">{patternLabels[selectedPattern.kind]}</span>
+                    <span className="font-mono text-caption text-muted">{selectedPattern.algorithmVersion}</span>
                   </div>
-                  <h2 className="mt-2 text-base font-semibold text-slate-100">{selectedPattern.title}</h2>
-                  <p className="mt-1 text-label leading-relaxed text-slate-400">{selectedPattern.explanation}</p>
+                  <h2 className="mt-2 text-base font-semibold text-fg">{selectedPattern.title}</h2>
+                  <p className="mt-1 text-label leading-relaxed text-muted">{selectedPattern.explanation}</p>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto p-4">
-                  <div className="mb-2 text-caption font-bold uppercase tracking-[0.16em] text-slate-400">Source evidence</div>
+                  <div className="mb-2 text-caption font-bold uppercase tracking-[0.16em] text-muted">Source evidence</div>
                   <div className="space-y-2">
                     {selectedPattern.evidence.map((evidence) => {
                       const key = `${evidence.portalKey}:${evidence.documentId}:${evidence.characterStart ?? 'document'}`;
@@ -442,18 +442,18 @@ export default function PatternExplorer() {
                           key={`${key}:${evidence.characterStart ?? 'document'}`}
                           type="button"
                           onClick={() => void openEvidence(evidence)}
-                          className="focus-ring w-full rounded-xl border border-slate-800 bg-slate-950/45 p-3 text-left transition hover:border-indigo-400/25 hover:bg-indigo-500/[0.04]"
+                          className="focus-ring w-full rounded-xl border border-control bg-canvas/40 p-3 text-left transition hover:border-highlight/30 hover:bg-highlight/5"
                         >
                           <div className="flex items-center justify-between gap-3">
-                            <span className="font-mono text-caption text-slate-300">
+                            <span className="font-mono text-caption text-fg-secondary">
                               {evidence.portalKey} / request {evidence.requestId} / document {evidence.documentId}
                             </span>
-                            <span className="text-caption font-semibold text-indigo-300">
+                            <span className="text-caption font-semibold text-highlight">
                               {excerptLoadingKey === key ? 'Loading…' : 'Open excerpt'}
                             </span>
                           </div>
-                          <p className="mt-1.5 text-caption text-slate-400">{evidence.evidenceLabel}</p>
-                          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-mono text-caption text-slate-400">
+                          <p className="mt-1.5 text-caption text-muted">{evidence.evidenceLabel}</p>
+                          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-mono text-caption text-muted">
                             {evidence.characterStart !== null && <span>chars {evidence.characterStart}–{evidence.characterEnd}</span>}
                             <span title={evidence.contentSha256}>sha256 {evidence.contentSha256.slice(0, 16)}…</span>
                           </div>
@@ -462,22 +462,22 @@ export default function PatternExplorer() {
                     })}
                   </div>
                   {excerpt && (
-                    <div className="mt-4 rounded-xl border border-cyan-400/20 bg-slate-950/75 p-4">
+                    <div className="mt-4 rounded-xl border border-accent/30 bg-canvas/70 p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <div className="text-caption font-semibold text-cyan-200">Masked source excerpt</div>
-                          <div className="mt-0.5 font-mono text-caption text-slate-400">
+                          <div className="text-caption font-semibold text-accent">Masked source excerpt</div>
+                          <div className="mt-0.5 font-mono text-caption text-muted">
                             {excerpt.chunk.portalKey} / document {excerpt.chunk.documentId} · offset {excerpt.chunk.characterOffset}
                           </div>
                         </div>
-                        <button type="button" onClick={() => setExcerpt(null)} aria-label="Close excerpt" className="text-slate-400 hover:text-slate-300">
+                        <button type="button" onClick={() => setExcerpt(null)} aria-label="Close excerpt" className="text-muted hover:text-fg-secondary">
                           <Icon name="x" className="h-3.5 w-3.5" />
                         </button>
                       </div>
-                      <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono text-caption leading-relaxed text-slate-400">
+                      <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono text-caption leading-relaxed text-muted">
                         {excerpt.chunk.maskedText}
                       </pre>
-                      <div className="mt-2 text-caption text-slate-400">
+                      <div className="mt-2 text-caption text-muted">
                         {excerpt.chunk.maskedFindingCount} sensitive value{excerpt.chunk.maskedFindingCount === 1 ? '' : 's'} masked locally.
                       </div>
                     </div>
@@ -504,7 +504,7 @@ function IndexMetric({ label, value, suffix = '' }: { label: string; value?: num
   return (
     <div className="instrument-cell px-4 py-3">
       <div className="app-eyebrow">{label}</div>
-      <div className="numeric-value mt-1 text-sm font-semibold text-slate-200">
+      <div className="numeric-value mt-1 text-sm font-semibold text-fg">
         {value === undefined ? '—' : `${value.toLocaleString()}${suffix}`}
       </div>
     </div>
@@ -520,8 +520,8 @@ function FilterButton({ selected, onClick, children }: { selected: boolean; onCl
       className={cn(
         'focus-ring flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-caption font-medium transition',
         selected
-          ? 'border-cyan-400/25 bg-cyan-400/[0.08] text-cyan-200'
-          : 'border-slate-800 bg-slate-950/35 text-slate-400 hover:text-slate-300',
+          ? 'border-accent/30 bg-accent/10 text-accent'
+          : 'border-control bg-canvas/40 text-muted hover:text-fg-secondary',
       )}
     >
       {children}
@@ -533,8 +533,8 @@ function EmptyState({ title }: { title: string }) {
   return (
     <div className="data-grid grid min-h-48 place-items-center p-8 text-center">
       <div className="chart-ready-card rounded-xl border px-5 py-4 backdrop-blur-xl">
-        <Icon name="sparkles" className="mx-auto h-5 w-5 text-cyan-300/70" />
-        <p className="mt-3 text-label font-medium text-slate-400">{title}</p>
+        <Icon name="sparkles" className="mx-auto h-5 w-5 text-accent" />
+        <p className="mt-3 text-label font-medium text-muted">{title}</p>
       </div>
     </div>
   );

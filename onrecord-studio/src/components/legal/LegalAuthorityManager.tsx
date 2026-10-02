@@ -231,51 +231,51 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
 
   return (
     <DialogBackdrop labelledBy="legal-library-title" onClose={onClose} className="app-backdrop fixed inset-0 z-[70] grid place-items-center p-6 backdrop-blur-sm">
-      <div className="grid h-[min(860px,92vh)] w-[min(1380px,96vw)] grid-cols-[360px_minmax(0,1fr)] overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl shadow-black/60">
-        <aside className="flex min-h-0 flex-col border-r border-slate-800 bg-slate-900/35">
-          <div className="border-b border-slate-800 px-5 py-4">
-            <div className="text-caption font-bold uppercase tracking-[0.2em] text-indigo-300/70">
+      <div className="grid h-[min(860px,92vh)] w-[min(1380px,96vw)] grid-cols-[360px_minmax(0,1fr)] overflow-hidden rounded-2xl border border-line-strong bg-canvas shadow-2xl shadow-black/60">
+        <aside className="flex min-h-0 flex-col border-r border-line bg-surface/40">
+          <div className="border-b border-line px-5 py-4">
+            <div className="text-caption font-bold uppercase tracking-[0.2em] text-highlight">
               Versioned authority index
             </div>
-            <h2 id="legal-library-title" className="mt-1 text-base font-semibold text-slate-100">
+            <h2 id="legal-library-title" className="mt-1 text-base font-semibold text-fg">
               Legal authority library
             </h2>
-            <p className="mt-1 text-label leading-relaxed text-slate-400">
+            <p className="mt-1 text-label leading-relaxed text-muted">
               Local statutes, ordinances, and operational policies with traceable source versions.
             </p>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-3">
             {isLoading ? (
-              <div className="p-3 text-label text-slate-400">Loading indexed authorities…</div>
+              <div className="p-3 text-label text-muted">Loading indexed authorities…</div>
             ) : authorities.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-slate-800 p-4 text-label leading-relaxed text-slate-400">
+              <div className="rounded-lg border border-dashed border-line p-4 text-label leading-relaxed text-muted">
                 No authorities are indexed yet.
               </div>
             ) : (
               <div className="space-y-2">
                 {authorities.map((authority) => (
-                  <button type="button" key={authority.statuteId} onClick={() => setSelectedStatuteId(authority.statuteId)} className={cn('focus-ring block w-full rounded-lg border bg-slate-950/60 p-3 text-left', selectedStatuteId === authority.statuteId ? 'border-indigo-400/30' : 'border-slate-800')}>
+                  <button type="button" key={authority.statuteId} onClick={() => setSelectedStatuteId(authority.statuteId)} className={cn('focus-ring block w-full rounded-lg border bg-canvas/70 p-3 text-left', selectedStatuteId === authority.statuteId ? 'border-highlight/30' : 'border-control')}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <div className="truncate text-label font-semibold text-slate-200">
+                        <div className="truncate text-label font-semibold text-fg">
                           {authority.statuteCitation}
                         </div>
-                        <div className="mt-1 truncate text-caption text-slate-400">
+                        <div className="mt-1 truncate text-caption text-muted">
                           {authority.jurisdiction}
                         </div>
                       </div>
-                      <span className="rounded border border-slate-700 px-1.5 py-0.5 text-caption text-slate-400">
+                      <span className="rounded border border-line-strong px-1.5 py-0.5 text-caption text-muted">
                         {authority.authorityKind.split('_').join(' ')}
                       </span>
                     </div>
-                    <p className="mt-2 line-clamp-2 text-caption leading-relaxed text-slate-400">
+                    <p className="mt-2 line-clamp-2 text-caption leading-relaxed text-muted">
                       {authority.title}
                     </p>
-                    <div className="mt-2 flex gap-3 font-mono text-caption text-slate-400">
+                    <div className="mt-2 flex gap-3 font-mono text-caption text-muted">
                       <span>{authority.provisionCount} provisions</span>
                       <span>{authority.mandateCount} evidence rules</span>
                     </div>
-                    <div className="mt-2 truncate font-mono text-caption text-slate-400">
+                    <div className="mt-2 truncate font-mono text-caption text-muted">
                       SHA-256 {authority.contentSha256}
                     </div>
                   </button>
@@ -286,10 +286,10 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
         </aside>
 
         <section className="flex min-h-0 flex-col">
-          <div className="flex items-center justify-between border-b border-slate-800 px-5 py-3">
+          <div className="flex items-center justify-between border-b border-line px-5 py-3">
             <div>
-              <h3 className="text-label leading-4 font-semibold text-slate-200">Index an authority</h3>
-              <p className="mt-0.5 text-caption text-slate-400">
+              <h3 className="text-label leading-4 font-semibold text-fg">Index an authority</h3>
+              <p className="mt-0.5 text-caption text-muted">
                 Markdown headings and legal section labels become independently searchable provisions.
               </p>
             </div>
@@ -297,7 +297,7 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
               type="button"
               autoFocus
               onClick={onClose}
-              className="rounded-md border border-slate-700 px-2.5 py-1.5 text-caption font-semibold text-slate-400 transition hover:border-slate-500 hover:text-slate-200"
+              className="rounded-md border border-control px-2.5 py-1.5 text-caption font-semibold text-muted transition hover:border-control hover:text-fg"
             >
               Close
             </button>
@@ -312,7 +312,7 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
               <TextField label="Citation" value={editor.statuteCitation} onChange={(value) => updateEditor('statuteCitation', value)} required />
               <TextField label="Title" value={editor.title} onChange={(value) => updateEditor('title', value)} required />
               <label className="block">
-                <span className="text-caption font-semibold uppercase tracking-wider text-slate-400">Authority type</span>
+                <span className="text-caption font-semibold uppercase tracking-wider text-muted">Authority type</span>
                 <select value={editor.authorityKind} onChange={(event) => updateEditor('authorityKind', event.target.value as LegalAuthorityKind)} className={controlClass}>
                   <option value="STATE_STATUTE">State statute</option>
                   <option value="MUNICIPAL_ORDINANCE">Municipal ordinance</option>
@@ -330,19 +330,19 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
               </div>
             </div>
 
-            <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900/25 p-4">
+            <div className="mt-4 rounded-xl border border-line bg-surface/40 p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-caption font-semibold text-slate-300">Legislative or policy text</div>
-                  <div className="mt-0.5 text-caption text-slate-400">UTF-8 Markdown or plain text, up to 8 MiB</div>
+                  <div className="text-caption font-semibold text-fg-secondary">Legislative or policy text</div>
+                  <div className="mt-0.5 text-caption text-muted">UTF-8 Markdown or plain text, up to 8 MiB</div>
                 </div>
-                <label className="cursor-pointer rounded-md border border-indigo-400/25 bg-indigo-500/10 px-2.5 py-1.5 text-caption font-semibold text-indigo-200 transition hover:bg-indigo-500/15">
+                <label className="cursor-pointer rounded-md border border-highlight/30 bg-highlight/10 px-2.5 py-1.5 text-caption font-semibold text-highlight transition hover:bg-highlight/20">
                   Choose source file
                   <input ref={fileInput} type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" onChange={(event) => void loadFile(event)} className="sr-only" />
                 </label>
               </div>
               {sourceFileName && (
-                <div className="mt-2 font-mono text-caption text-emerald-300/80">
+                <div className="mt-2 font-mono text-caption text-success">
                   {sourceFileName} · {editor.rawText.length.toLocaleString()} characters loaded
                 </div>
               )}
@@ -359,25 +359,25 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
             <div className="mt-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-caption font-semibold text-slate-300">Policy evidence rules</div>
-                  <p className="mt-0.5 text-caption text-slate-400">Optional. Phrase sequences are tokenized, stemmed, and matched on word boundaries.</p>
+                  <div className="text-caption font-semibold text-fg-secondary">Policy evidence rules</div>
+                  <p className="mt-0.5 text-caption text-muted">Optional. Phrase sequences are tokenized, stemmed, and matched on word boundaries.</p>
                 </div>
-                <button type="button" onClick={() => setMandates((current) => [...current, emptyMandate()])} className="rounded-md border border-slate-700 px-2.5 py-1.5 text-caption font-semibold text-slate-400 transition hover:border-slate-500 hover:text-slate-200">
+                <button type="button" onClick={() => setMandates((current) => [...current, emptyMandate()])} className="rounded-md border border-control px-2.5 py-1.5 text-caption font-semibold text-muted transition hover:border-control hover:text-fg">
                   Add evidence rule
                 </button>
               </div>
               <div className="mt-3 space-y-3">
                 {mandates.map((mandate, index) => (
-                  <div key={mandate.key} className="rounded-xl border border-slate-800 bg-slate-900/25 p-4">
+                  <div key={mandate.key} className="rounded-xl border border-line bg-surface/40 p-4">
                     <div className="flex items-center justify-between">
-                      <span className="text-caption font-bold uppercase tracking-[0.16em] text-slate-400">Evidence rule {index + 1}</span>
-                      <button type="button" onClick={() => setMandates((current) => current.filter((_, position) => position !== index))} className="text-caption font-semibold text-rose-300/70 hover:text-rose-200">Remove</button>
+                      <span className="text-caption font-bold uppercase tracking-[0.16em] text-muted">Evidence rule {index + 1}</span>
+                      <button type="button" onClick={() => setMandates((current) => current.filter((_, position) => position !== index))} className="text-caption font-semibold text-danger hover:text-danger">Remove</button>
                     </div>
                     <div className="mt-3 grid grid-cols-[1fr_1.5fr_140px] gap-3">
                       <TextField label="Rule ID" value={mandate.mandateId} onChange={(value) => updateMandate(index, 'mandateId', value)} required />
                       <TextField label="Rule title" value={mandate.title} onChange={(value) => updateMandate(index, 'title', value)} required />
                       <label className="block">
-                        <span className="text-caption font-semibold uppercase tracking-wider text-slate-400">Severity</span>
+                        <span className="text-caption font-semibold uppercase tracking-wider text-muted">Severity</span>
                         <select value={mandate.severity} onChange={(event) => updateMandate(index, 'severity', event.target.value as LegalMandateSeverity)} className={controlClass}>
                           <option value="ADVISORY">Advisory</option>
                           <option value="MODERATE">Moderate</option>
@@ -387,7 +387,7 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
                       </label>
                     </div>
                     <label className="mt-3 block">
-                      <span className="text-caption font-semibold uppercase tracking-wider text-slate-400">Rule rationale</span>
+                      <span className="text-caption font-semibold uppercase tracking-wider text-muted">Rule rationale</span>
                       <textarea value={mandate.description} onChange={(event) => updateMandate(index, 'description', event.target.value)} required rows={2} className={`${controlClass} resize-y`} />
                     </label>
                     <div className="mt-3 grid grid-cols-2 gap-3">
@@ -400,15 +400,15 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
             </div>
 
             {(error || success) && (
-              <div role={error ? 'alert' : 'status'} className={cn('mt-4 rounded-lg border px-3 py-2 text-caption leading-relaxed', error ? 'border-rose-500/25 bg-rose-500/[0.06] text-rose-300' : 'border-emerald-500/25 bg-emerald-500/[0.06] text-emerald-300')}>
+              <div role={error ? 'alert' : 'status'} className={cn('mt-4 rounded-lg border px-3 py-2 text-caption leading-relaxed', error ? 'border-danger/30 bg-danger/5 text-danger' : 'border-success/30 bg-success/5 text-success')}>
                 {error ?? success}
               </div>
             )}
-            <div className="mt-5 flex items-center justify-between border-t border-slate-800 pt-4">
-              <p className="max-w-lg text-caption leading-relaxed text-slate-400">
+            <div className="mt-5 flex items-center justify-between border-t border-line pt-4">
+              <p className="max-w-lg text-caption leading-relaxed text-muted">
                 Imports are content-addressed. Reimporting changed text creates a new immutable version while retaining prior findings and review history.
               </p>
-              <button type="submit" disabled={isImporting} className="rounded-lg border border-indigo-400/30 bg-indigo-500/15 px-4 py-2 text-caption font-semibold text-indigo-100 transition hover:bg-indigo-500/20 disabled:cursor-wait disabled:opacity-60">
+              <button type="submit" disabled={isImporting} className="rounded-lg border border-highlight/30 bg-highlight/20 px-4 py-2 text-caption font-semibold text-highlight transition hover:bg-highlight/20 disabled:cursor-wait disabled:opacity-60">
                 {isImporting ? 'Parsing and indexing…' : 'Index authority'}
               </button>
             </div>
@@ -421,7 +421,7 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
 
 function AuthorityVersionWorkspace({ versions, leftVersionId, rightVersionId, leftVersion, rightVersion, error, onLeftChange, onRightChange }: { versions: LegalAuthorityVersionSummary[]; leftVersionId: string | null; rightVersionId: string | null; leftVersion: LegalAuthorityVersionDetail | null; rightVersion: LegalAuthorityVersionDetail | null; error: string | null; onLeftChange: (value: string) => void; onRightChange: (value: string) => void }) {
   const changes = leftVersion && rightVersion ? compareAuthorityText(leftVersion.fullText, rightVersion.fullText) : null;
-  return <section className="border-b border-slate-800 bg-slate-900/20 px-5 py-3" aria-label="Authority version comparison"><div className="flex items-center justify-between gap-3"><div><div className="text-caption font-semibold text-slate-300">Effective-date timeline and immutable text comparison</div><div className="mt-0.5 text-caption text-slate-400">{versions.length} content-addressed version{versions.length === 1 ? '' : 's'}, newest first</div></div>{changes && <span className="font-mono text-caption text-indigo-300">{changes.changed.toLocaleString()} changed · {changes.added.toLocaleString()} added · {changes.removed.toLocaleString()} removed lines</span>}</div>{error ? <p role="alert" className="mt-2 text-caption text-rose-300">{error}</p> : versions.length === 0 ? <p className="mt-2 text-caption text-slate-400">No immutable versions are indexed for this authority.</p> : <><div className="mt-2 flex gap-1 overflow-x-auto pb-1">{versions.map((version) => <span key={version.versionId} className="shrink-0 rounded border border-slate-800 bg-slate-950 px-2 py-1 font-mono text-caption text-slate-400" title={version.contentSha256}>{version.effectiveFrom ?? 'start unknown'} → {version.effectiveTo ?? 'open ended'} · {formatVersionDate(version.importedAt)}</span>)}</div><div className="mt-2 grid grid-cols-2 gap-2">{([['Earlier / baseline', leftVersionId, onLeftChange, leftVersion], ['Later / comparison', rightVersionId, onRightChange, rightVersion]] as const).map(([label, selected, change, detail]) => <label key={label} className="block text-caption text-slate-400">{label}<select value={selected ?? ''} onChange={(event) => change(event.target.value)} className="ml-2 rounded border border-slate-800 bg-slate-950 px-2 py-1 font-mono text-caption text-slate-300">{versions.map((version) => <option key={version.versionId} value={version.versionId}>{formatVersionDate(version.importedAt)} · {version.contentSha256.slice(0, 10)}</option>)}</select><textarea readOnly value={detail?.fullText ?? 'Loading version text…'} aria-label={`${label} authority text`} className="mt-1.5 h-28 w-full resize-y rounded border border-slate-800 bg-slate-950 p-2 font-mono text-caption leading-relaxed text-slate-400" /></label>)}</div></>}</section>;
+  return <section className="border-b border-line bg-surface/40 px-5 py-3" aria-label="Authority version comparison"><div className="flex items-center justify-between gap-3"><div><div className="text-caption font-semibold text-fg-secondary">Effective-date timeline and immutable text comparison</div><div className="mt-0.5 text-caption text-muted">{versions.length} content-addressed version{versions.length === 1 ? '' : 's'}, newest first</div></div>{changes && <span className="font-mono text-caption text-highlight">{changes.changed.toLocaleString()} changed · {changes.added.toLocaleString()} added · {changes.removed.toLocaleString()} removed lines</span>}</div>{error ? <p role="alert" className="mt-2 text-caption text-danger">{error}</p> : versions.length === 0 ? <p className="mt-2 text-caption text-muted">No immutable versions are indexed for this authority.</p> : <><div className="mt-2 flex gap-1 overflow-x-auto pb-1">{versions.map((version) => <span key={version.versionId} className="shrink-0 rounded border border-line bg-canvas px-2 py-1 font-mono text-caption text-muted" title={version.contentSha256}>{version.effectiveFrom ?? 'start unknown'} → {version.effectiveTo ?? 'open ended'} · {formatVersionDate(version.importedAt)}</span>)}</div><div className="mt-2 grid grid-cols-2 gap-2">{([['Earlier / baseline', leftVersionId, onLeftChange, leftVersion], ['Later / comparison', rightVersionId, onRightChange, rightVersion]] as const).map(([label, selected, change, detail]) => <label key={label} className="block text-caption text-muted">{label}<select value={selected ?? ''} onChange={(event) => change(event.target.value)} className="ml-2 rounded border border-control bg-canvas px-2 py-1 font-mono text-caption text-fg-secondary">{versions.map((version) => <option key={version.versionId} value={version.versionId}>{formatVersionDate(version.importedAt)} · {version.contentSha256.slice(0, 10)}</option>)}</select><textarea readOnly value={detail?.fullText ?? 'Loading version text…'} aria-label={`${label} authority text`} className="mt-1.5 h-28 w-full resize-y rounded border border-control bg-canvas p-2 font-mono text-caption leading-relaxed text-muted" /></label>)}</div></>}</section>;
 }
 
 function compareAuthorityText(left: string, right: string) {
@@ -502,12 +502,12 @@ interface TextFieldProps {
   max?: string;
 }
 
-const controlClass = 'mt-1.5 w-full rounded-md border border-slate-800 bg-slate-950/80 px-2.5 py-2 text-label text-slate-300 outline-none transition focus:border-indigo-400/45 focus:ring-1 focus:ring-indigo-400/20';
+const controlClass = 'mt-1.5 w-full rounded-md border border-line bg-canvas/70 px-2.5 py-2 text-label text-fg-secondary outline-none transition focus:border-highlight/60 focus:ring-1 focus:ring-highlight/30';
 
 function TextField({ label, value, onChange, required, type = 'text', min, max }: TextFieldProps) {
   return (
     <label className="block">
-      <span className="text-caption font-semibold uppercase tracking-wider text-slate-400">{label}</span>
+      <span className="text-caption font-semibold uppercase tracking-wider text-muted">{label}</span>
       <input type={type} value={value} onChange={(event) => onChange(event.target.value)} required={required} min={min} max={max} className={controlClass} />
     </label>
   );
@@ -516,9 +516,9 @@ function TextField({ label, value, onChange, required, type = 'text', min, max }
 function PhraseField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
     <label className="block">
-      <span className="text-caption font-semibold uppercase tracking-wider text-slate-400">{label}</span>
+      <span className="text-caption font-semibold uppercase tracking-wider text-muted">{label}</span>
       <textarea value={value} onChange={(event) => onChange(event.target.value)} required rows={4} className={`${controlClass} resize-y font-mono leading-relaxed`} />
-      <span className="mt-1 block text-caption text-slate-400">One exact phrase sequence per line</span>
+      <span className="mt-1 block text-caption text-muted">One exact phrase sequence per line</span>
     </label>
   );
 }
