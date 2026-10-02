@@ -116,6 +116,7 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::facilities::get_facility_coverage,
         commands::facilities::save_facility_coverage_mapping,
         commands::casework::get_casework_state,
+        commands::casework::get_case_scope,
         commands::casework::create_casework_case,
         commands::casework::save_casework_case,
         commands::casework::export_casework_packet,

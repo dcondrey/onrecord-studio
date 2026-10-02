@@ -25,6 +25,14 @@ pub async fn get_casework_state(
 ) -> Result<CaseworkState, AppError> {
     repository.casework_state().await
 }
+/// The documents, requests and findings one case covers, for scoping views to it.
+#[tauri::command]
+pub async fn get_case_scope(
+    case_id: String,
+    repository: State<'_, DuckDbRepository>,
+) -> Result<crate::storage::case_scope::CaseScope, AppError> {
+    repository.case_scope(case_id).await
+}
 #[tauri::command]
 pub async fn create_casework_case(
     report_id: String,

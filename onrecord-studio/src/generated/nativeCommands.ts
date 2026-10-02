@@ -66,6 +66,7 @@ export interface NativeCommandMap {
   get_facility_coverage: { args: NoArgs; result: Types.FacilityCoverageWorkspace };
   save_facility_coverage_mapping: { args: { mapping: Types.FacilityCoverageMapping }; result: Types.FacilityCoverageWorkspace };
   get_casework_state: { args: NoArgs; result: Types.CaseworkState };
+  get_case_scope: { args: { caseId: string }; result: Types.CaseScope };
   create_casework_case: { args: { reportId: string }; result: Types.CaseworkCase };
   save_casework_case: { args: { case: Types.CaseworkCase; expectedRevision: number; author: string }; result: Types.CaseworkCase };
   export_casework_packet: { args: { caseId: string; contributor: string }; result: string };

@@ -80,3 +80,12 @@ export interface CaseExportLedgerEntry {
   outcomeDetail: string | null; outcomeRecordedAt: string | null; previousLinkValid: boolean;
 }
 export interface CompromisedImportWarning { revision: number; signerKeyId: string; revokedAt: string; reason: string }
+
+/** What one case covers: its source documents, the requests holding them, and the undismissed findings citing or concerning them. */
+export interface CaseScope {
+  caseId: string;
+  documents: { portalKey: string; documentId: number }[];
+  /** A source whose document is no longer stored adds no request. */
+  requests: { portalKey: string; requestId: number }[];
+  findingIds: string[];
+}
