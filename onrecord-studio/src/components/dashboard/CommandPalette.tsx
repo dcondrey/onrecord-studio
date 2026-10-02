@@ -8,6 +8,8 @@ import { cn } from '../../utils/cn';
 import Icon, { type IconName } from '../ui/icons';
 import { openHelp } from '../help/helpEvents';
 import { openSourceConnector } from './sourceEvents';
+import { OBJECT_ICONS } from '../objects/ObjectLink';
+import { useObjectSearch, type ObjectGroup } from './useObjectSearch';
 import { contrastCommandRegistry, motionCommandRegistry, scoreCommand, themeCommandRegistry, workspaceCommandRegistry } from '../../commands/registry';
 
 export const OPEN_COMMAND_PALETTE_EVENT = 'onrecord:open-command-palette';
@@ -18,7 +20,7 @@ interface CommandAction {
   id: string;
   label: string;
   detail: string;
-  group: 'Ask' | 'Navigate' | 'Create' | 'Help' | 'Appearance' | 'Accessibility';
+  group: 'Ask' | 'Navigate' | 'Create' | 'Help' | 'Appearance' | 'Accessibility' | ObjectGroup;
   icon: IconName;
   keywords: string;
   shortcut?: string;
@@ -218,6 +220,18 @@ export default function CommandPalette() {
     })),
   ], [modifier, openSubjectDossier, setContrast, setEvidenceMode, setMotion, setTheme, setWorkspaceView, toggleSidebarCollapsed]);
 
+  const objectResults = useObjectSearch(isOpen ? query : '');
+  const inspect = useAppStore((state) => state.inspect);
+  const objectActions = useMemo<CommandAction[]>(() => objectResults.map((result) => ({
+    id: `object-${result.key}`,
+    label: result.label,
+    detail: result.detail,
+    group: result.group,
+    icon: OBJECT_ICONS[result.target.kind],
+    keywords: '',
+    perform: () => inspect(result.target, 'view'),
+  })), [inspect, objectResults]);
+
   const filteredActions = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
     if (!normalized) return actions;
@@ -226,7 +240,7 @@ export default function CommandPalette() {
       .filter((entry): entry is { action: CommandAction; score: number } => entry.score !== null)
       .sort((left, right) => right.score - left.score || left.action.label.localeCompare(right.action.label))
       .map(({ action }) => action);
-    if (!isQuestionLike(normalized)) return matches;
+    if (!isQuestionLike(normalized)) return [...matches, ...objectActions];
     const ask: CommandAction = {
       id: 'ask-intent',
       label: `Ask: ${query.trim()}`,
@@ -238,9 +252,9 @@ export default function CommandPalette() {
       perform: () => runIntent(query.trim()),
     };
     // A sentence is a question first; a word or two that also names a view stays a view jump.
-    return normalized.split(/\s+/).length >= 3 || normalized.endsWith('?') ? [ask, ...matches] : [...matches, ask];
+    return normalized.split(/\s+/).length >= 3 || normalized.endsWith('?') ? [ask, ...matches, ...objectActions] : [...matches, ...objectActions, ask];
     // runIntent closes over the gate and setters only, all stable.
-  }, [actions, query]);
+  }, [actions, objectActions, query]);
 
   useEffect(() => {
     const openFromEvent = () => openPalette();
@@ -349,8 +363,8 @@ export default function CommandPalette() {
             ref={inputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search commands, or ask a question"
-            aria-label="Search commands, views, and settings, or ask a question"
+            placeholder="Search findings, records, agencies and commands, or ask a question"
+            aria-label="Search findings, records, agencies, entities, passages and commands, or ask a question"
             className="h-14 min-w-0 flex-1 border-0 bg-transparent text-[14px] text-fg outline-none placeholder:text-muted"
             role="combobox"
             aria-expanded="true"
@@ -381,7 +395,7 @@ export default function CommandPalette() {
             <div className="px-4 py-10 text-center">
               <Icon name="search" className="mx-auto h-5 w-5 text-muted" />
               <p className="mt-3 text-label font-medium text-fg-secondary">No matching commands</p>
-              <p className="mt-1 text-label text-muted">Try a workspace name, “source,” or “appearance.”</p>
+              <p className="mt-1 text-label text-muted">Try an agency, a finding, a phrase from a document, or a view name.</p>
             </div>
           ) : filteredActions.map((action, index) => {
             const showGroup = index === 0 || filteredActions[index - 1].group !== action.group;
