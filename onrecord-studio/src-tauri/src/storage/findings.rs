@@ -378,6 +378,20 @@ impl DuckDbRepository {
         .await
     }
 
+    /// Clears a dismissal, for undo. Idempotent. A restored finding is stale-cleared like any
+    /// other if its detector no longer emits it.
+    pub async fn restore_finding(&self, id: String) -> Result<(), AppError> {
+        self.query_connection("Restore finding", move |conn| {
+            conn.execute(
+                "UPDATE findings SET dismissed_at = NULL WHERE id = ?1 AND dismissed_at IS NOT NULL",
+                params![id],
+            )
+            .map_err(storage)?;
+            Ok(())
+        })
+        .await
+    }
+
     /// Removes non-dismissed findings a given detector emitted that haven't been re-emitted since
     /// `cutoff`. Dismissed findings are preserved as a user-facing audit trail.
     pub async fn clear_stale_findings(
@@ -522,6 +536,22 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(included.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn restoring_a_dismissal_returns_the_finding_and_keeps_its_discovery_time() {
+        let repo = fresh_repo().await;
+        let one = sample_finding(1, "one", FindingSeverity::Notable);
+        let id = one.id.clone();
+        repo.record_findings(vec![one]).await.unwrap();
+        let before = repo.list_findings(FindingsFilter::default(), 50).await.unwrap();
+        repo.dismiss_finding(id.clone()).await.unwrap();
+        repo.restore_finding(id.clone()).await.unwrap();
+        repo.restore_finding(id).await.unwrap();
+        let after = repo.list_findings(FindingsFilter::default(), 50).await.unwrap();
+        assert_eq!(after.len(), 1);
+        assert!(after[0].dismissed_at.is_none());
+        assert_eq!(after[0].discovered_at, before[0].discovered_at);
     }
 
     #[tokio::test]

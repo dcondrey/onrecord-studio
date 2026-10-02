@@ -22,7 +22,7 @@ const SEVERITIES: FindingSeverity[] = ['CRITICAL', 'SERIOUS', 'NOTABLE', 'INFO']
 type FindingSort = 'ranked' | 'newest';
 
 interface ActionError {
-  action: 'refresh' | 'dismiss';
+  action: 'refresh' | 'dismiss' | 'restore';
   message: string;
 }
 
@@ -35,10 +35,14 @@ interface ActionError {
  * is what a user sees on first launch, and every finding here is one someone should look at
  * without being asked to.
  */
+const UNDO_WINDOW_MS = 10_000;
+
 export default function FindingsInbox() {
   const [findings, setFindings] = useState<Finding[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<ActionError | null>(null);
+  // The most recent dismissal can be undone for a short while; restoring puts the row back where it was.
+  const [lastDismissed, setLastDismissed] = useState<{ finding: Finding; index: number } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [limit, setLimit] = useState(PAGE_SIZE);
@@ -84,7 +88,7 @@ export default function FindingsInbox() {
           ),
         );
         for (const id of settledBeforeLoad) settledDismissals.current.delete(id);
-        // The user is looking at the inbox. Bump the watermark so ChangeFeed knows the difference
+        // The user is looking at the inbox. Bump the watermark so the sidebar badge knows the difference
         // between findings that arrived while they weren't looking and findings they've already
         // been shown. Only on a successful load — a failed fetch is not "seen."
         markFindingsSeen();
@@ -132,6 +136,7 @@ export default function FindingsInbox() {
       try {
         await invokeCommand('dismiss_finding', { id });
         settledDismissals.current.add(id);
+        setLastDismissed({ finding: removed, index });
       } catch (reason) {
         // Roll back by re-inserting this one row into whatever list is current. Restoring the
         // snapshot captured at click time would resurrect siblings dismissed since, and would
@@ -148,6 +153,30 @@ export default function FindingsInbox() {
     },
     [findings],
   );
+
+  useEffect(() => {
+    if (!lastDismissed) return;
+    const timer = window.setTimeout(() => setLastDismissed(null), UNDO_WINDOW_MS);
+    return () => window.clearTimeout(timer);
+  }, [lastDismissed]);
+
+  const undoDismissal = useCallback(async () => {
+    if (!lastDismissed) return;
+    const { finding, index } = lastDismissed;
+    setLastDismissed(null);
+    setActionError(null);
+    try {
+      await invokeCommand('restore_finding', { id: finding.id });
+      settledDismissals.current.delete(finding.id);
+      setFindings((rows) => {
+        if (rows.some((row) => row.id === finding.id)) return rows;
+        const at = Math.min(index, rows.length);
+        return [...rows.slice(0, at), { ...finding, dismissedAt: null }, ...rows.slice(at)];
+      });
+    } catch (reason) {
+      setActionError({ action: 'restore', message: formatNativeError(reason) });
+    }
+  }, [lastDismissed]);
 
   const inspect = useInspectFinding();
 
@@ -309,11 +338,21 @@ export default function FindingsInbox() {
           Findings unavailable: {loadError}
         </div>
       )}
+      {lastDismissed && (
+        <div role="status" className="motion-pop flex items-center justify-between gap-3 rounded-lg border border-line-strong bg-raised px-3 py-2 text-label text-fg-secondary">
+          <span className="min-w-0 truncate">Dismissed: {lastDismissed.finding.headline}</span>
+          <button type="button" onClick={() => void undoDismissal()} className="motion-press focus-ring shrink-0 rounded-md px-2 py-0.5 font-semibold text-accent hover:bg-accent/10">
+            Undo
+          </button>
+        </div>
+      )}
       {actionError && (
         <div role="alert" className="rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-caption text-danger">
           {actionError.action === 'refresh'
             ? 'Analysis did not run; the list below is from the previous sweep: '
-            : 'The finding could not be dismissed and has been restored: '}
+            : actionError.action === 'restore'
+              ? 'The finding is still dismissed; restoring it failed: '
+              : 'The finding could not be dismissed and has been restored: '}
           {actionError.message}
         </div>
       )}

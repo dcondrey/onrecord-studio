@@ -71,6 +71,15 @@ pub async fn dismiss_finding(
     repository.dismiss_finding(id).await
 }
 
+/// Undoes a dismissal.
+#[tauri::command]
+pub async fn restore_finding(
+    id: String,
+    repository: State<'_, DuckDbRepository>,
+) -> Result<(), AppError> {
+    repository.restore_finding(id).await
+}
+
 #[cfg(test)]
 mod tests {
     // The Tauri command wrappers are thin adapters over `detectors::refresh_all_findings` and the

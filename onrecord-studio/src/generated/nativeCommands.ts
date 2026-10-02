@@ -136,6 +136,7 @@ export interface NativeCommandMap {
   list_findings: { args: { filter?: Types.FindingsFilter | null; limit?: number | null }; result: Types.Finding[] };
   count_findings: { args: { filter?: Types.FindingsFilter | null }; result: number };
   dismiss_finding: { args: { id: string }; result: null };
+  restore_finding: { args: { id: string }; result: null };
   list_topic_packs: { args: NoArgs; result: Types.TopicPacksReport };
   list_starter_sets: { args: NoArgs; result: Types.StarterSetsReport };
   run_intent_query: { args: { utterance: string; limit?: number | null }; result: Types.IntentAnswer };
