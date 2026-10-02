@@ -238,7 +238,8 @@ fn contract_cases(
         .iter()
         .map(|r| agency_key(r, "vendor_id"))
         .collect();
-    let mut orphans: BTreeMap<(String, String), Vec<&FinancialRecord>> = BTreeMap::new();
+    // Keyed by currency too: a total is a figure in one currency, never a sum across them.
+    let mut orphans: BTreeMap<(String, String, String), Vec<&FinancialRecord>> = BTreeMap::new();
     for payment in &settled {
         let vendor = agency_key(payment, "vendor_id");
         if vendor.1.is_empty()
@@ -248,13 +249,17 @@ fn contract_cases(
         {
             continue;
         }
-        orphans.entry(vendor).or_default().push(payment);
+        let currency = get(payment, "currency").to_string();
+        orphans
+            .entry((vendor.0, vendor.1, currency))
+            .or_default()
+            .push(payment);
     }
-    for ((agency, vendor), rows) in orphans {
+    for ((agency, vendor, currency), rows) in orphans {
         let Some(total) = sum(&rows, "amount").filter(|total| *total > 0) else {
             continue;
         };
-        let currency = get(rows[0], "currency");
+        let currency = currency.as_str();
         let mut cited = capped(&rows);
         cited.extend(contracts.iter().copied().take(1));
         out.cases.push(SpendingCase {
@@ -345,8 +350,16 @@ fn contract_cases(
         }
         let mut offending: Vec<&FinancialRecord> =
             before.iter().chain(&after).map(|(r, _)| *r).collect();
-        let outside = sum(&offending, "amount");
         let currency = get(contract, "currency");
+        if offending.iter().any(|r| get(r, "currency") != currency) {
+            out.gap(
+                "Payments in the contract's currency",
+                "Payment rows recorded in the same currency as the contract they are charged to.",
+                "Payments in another currency cannot be totalled against a contract stated in one currency.",
+            );
+            continue;
+        }
+        let outside = sum(&offending, "amount");
         let mut cited = vec![contract];
         if extensions_known {
             cited.extend(own_amendments.iter().map(|a| **a));
@@ -590,6 +603,14 @@ fn restriction_cases(
             .count();
         let programs: BTreeSet<&str> = offending.iter().map(|a| get(a, "program")).collect();
         let currency = get(offending[0], "currency");
+        if offending.iter().any(|a| get(a, "currency") != currency) {
+            out.gap(
+                "Restricted-fund spending in one currency",
+                "Actual expenditure rows for the restricted fund recorded in a single currency.",
+                "Spending recorded in several currencies cannot be summed into one total.",
+            );
+            continue;
+        }
         let mut cited: Vec<&FinancialRecord> = rules.clone();
         cited.extend(capped(&offending));
         out.cases.push(SpendingCase {
@@ -1196,6 +1217,50 @@ mod tests {
             .gaps
             .iter()
             .any(|g| g.title == "Contract start and end dates"));
+    }
+
+    /// A total is a figure in one currency. Payments to one vendor in two currencies are two
+    /// totals, and payments outside a contract's term in another currency are not summed against it.
+    #[test]
+    fn spending_totals_never_add_amounts_across_currencies() {
+        let stray = |id: &str, currency: &str| {
+            let mut row = payment(id, "2025-03-01", "500");
+            row.values.insert("vendor_id".into(), Some("V9".into()));
+            row.values.insert("contract_id".into(), Some("C9".into()));
+            row.values.insert("currency".into(), Some(currency.into()));
+            row
+        };
+        let orphans = ledger_cases(
+            &[contract(), stray("p8", "USD"), stray("p9", "CAD")],
+            &none(),
+        );
+        let mut totals = orphans
+            .cases
+            .iter()
+            .map(|case| {
+                let calculation = &case.finding.calculations[0];
+                (calculation.unit.clone(), calculation.result.clone())
+            })
+            .collect::<Vec<_>>();
+        totals.sort();
+        let single = ledger_cases(&[contract(), stray("p8", "USD")], &none());
+        let one_payment = single.cases[0].finding.calculations[0].result.clone();
+        assert_eq!(
+            totals,
+            [
+                ("CAD".to_string(), one_payment.clone()),
+                ("USD".to_string(), one_payment)
+            ]
+        );
+
+        let mut late = payment("p1", "2025-07-01", "10");
+        late.values.insert("currency".into(), Some("CAD".into()));
+        let mixed = ledger_cases(&[contract(), amendment("2025-06-30"), late], &none());
+        assert!(kinds(&mixed).is_empty());
+        assert!(mixed
+            .gaps
+            .iter()
+            .any(|gap| gap.title == "Payments in the contract's currency"));
     }
 
     #[test]
