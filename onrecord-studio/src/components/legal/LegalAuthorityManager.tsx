@@ -303,7 +303,7 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
             </button>
           </div>
 
-          {selectedStatuteId && <AuthorityVersionWorkspace versions={versions} leftVersionId={leftVersionId} rightVersionId={rightVersionId} leftVersion={leftVersion} rightVersion={rightVersion} error={versionError} onLeftChange={setLeftVersionId} onRightChange={setRightVersionId} />}
+          {selectedStatuteId && <AuthorityVersionWorkspace versions={versions} leftVersionId={leftVersionId} rightVersionId={rightVersionId} leftVersion={leftVersion?.version.versionId === leftVersionId ? leftVersion : null} rightVersion={rightVersion?.version.versionId === rightVersionId ? rightVersion : null} error={versionError} onLeftChange={setLeftVersionId} onRightChange={setRightVersionId} />}
 
           <form onSubmit={(event) => void submit(event)} className="min-h-0 flex-1 overflow-y-auto p-5">
             <div className="grid grid-cols-2 gap-3">
