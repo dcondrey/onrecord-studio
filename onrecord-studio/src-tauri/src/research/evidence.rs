@@ -355,17 +355,32 @@ fn item_number(label: &str) -> Option<String> {
 }
 
 fn label_in_quote(label: &str, quote: &str) -> bool {
-    let label = normalized(label).to_lowercase();
-    if label.is_empty() {
+    let normalized_label = normalized(label).to_lowercase();
+    if normalized_label.is_empty() {
         return false;
     }
     // A bare item number cannot be satisfied by an amount, year, or another item number.
-    if label.chars().all(|c| c.is_ascii_digit()) {
+    if normalized_label.chars().all(|c| c.is_ascii_digit()) {
         return item_markers(quote)
             .iter()
-            .any(|(number, _)| number == &label);
+            .any(|(number, _)| number == &normalized_label);
     }
-    normalized(quote).to_lowercase().contains(&label)
+    // Match the whole label at a word boundary, not merely as a substring, so "Item 4" does not
+    // match inside "Item 40" (or "Subitem 4").
+    let normalized_quote = normalized(quote).to_lowercase();
+    normalized_quote
+        .match_indices(normalized_label.as_str())
+        .any(|(i, _)| {
+            let before_ok = normalized_quote[..i]
+                .chars()
+                .next_back()
+                .is_none_or(|c| !c.is_alphanumeric());
+            let after_ok = normalized_quote[i + normalized_label.len()..]
+                .chars()
+                .next()
+                .is_none_or(|c| !c.is_alphanumeric());
+            before_ok && after_ok
+        })
 }
 
 fn date_in_quote(date: chrono::NaiveDate, quote: &str) -> bool {
@@ -579,6 +594,22 @@ mod tests {
         assert!(validate_synthesis(&synthesis, &[evidence()]).is_ok());
         synthesis.questions[0].evidence_ids = vec!["invented".into()];
         assert!(validate_synthesis(&synthesis, &[evidence()]).is_err());
+    }
+
+    #[test]
+    fn label_in_quote_rejects_item_number_prefix_collision() {
+        assert!(!label_in_quote(
+            "Item 4",
+            "Council approved Item 40 unanimously."
+        ));
+        assert!(label_in_quote(
+            "Item 4",
+            "Council approved Item 4 unanimously."
+        ));
+        assert!(!label_in_quote(
+            "Item 4: Shelter",
+            "Item 4: Library funding was approved."
+        ));
     }
 
     #[test]

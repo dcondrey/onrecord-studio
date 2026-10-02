@@ -1,11 +1,14 @@
 //! Meeting calendar and cited agenda suggestions, built only from ingested documents.
 //!
-//! A meeting's body and date come from its own documents' headings; a document whose heading
-//! carries no single consistent date is listed as "date not recorded", never placed on a day
-//! borrowed from its file name, its body text or a sibling document. Agenda, minutes and video
-//! documents are linked only by a shared recorded identity: the publisher's meeting identifier, or
-//! the same body and the same heading date. Suggestions are deterministic phrase matches over
-//! complete agenda items; each carries the agenda passage it rests on and a basis label.
+//! A meeting's body and date come from its own documents' headings when present. A heading whose
+//! dates conflict (more than one date, or a weekday that doesn't match its date) is listed as
+//! "date not recorded"; a heading with no date at all falls back to the document's file name or
+//! description, and absent any of those it too is "date not recorded" — never placed on a day
+//! borrowed from its body text or a sibling document.
+//! Agenda, minutes and video documents are linked only by a shared recorded identity: the
+//! publisher's meeting identifier, or the same body and the same recorded date (heading or
+//! fallback). Suggestions are deterministic phrase matches over complete agenda items; each
+//! carries the agenda passage it rests on and a basis label.
 use super::agenda::{heading_date, HeadingDate, ITEMS};
 use crate::{
     analysis::{
@@ -1407,7 +1410,7 @@ pub async fn calendar(
     order(&mut parsed.meetings);
     limitations.extend(parsed.limitations);
     limitations.push(format!(
-        "Covers at most {SOURCE_LIMIT} public agenda, minutes and video documents, {TEXT_CHARACTERS} characters each. A body is recognized only from its heading or file name ({}); a date only from a weekday-and-full-date heading. Items are recognized only by explicit \"Item N:\" headings. Suggestions are phrase matches, not assessments of the item.",
+        "Covers at most {SOURCE_LIMIT} public agenda, minutes and video documents, {TEXT_CHARACTERS} characters each. A body is recognized only from its heading or file name ({}); a date comes from a weekday-and-full-date heading, or, when the heading carries no date, is inferred from the file name or description. Items are recognized only by explicit \"Item N:\" headings. Suggestions are phrase matches, not assessments of the item.",
         BODIES.iter().map(|(label, _)| *label).collect::<Vec<_>>().join(", ")
     ));
     Ok(MeetingCalendar {
@@ -1773,9 +1776,9 @@ mod tests {
         );
         for label in ["Item 602", "Item 605"] {
             let item = parsed.items.iter().find(|i| i.label == label).unwrap();
-            eprintln!(
-                "{label}: {} extracted claims",
-                extract_claims(&sources[0].text[item.range.clone()]).len()
+            assert!(
+                !extract_claims(&sources[0].text[item.range.clone()]).is_empty(),
+                "{label} should yield at least one extracted dollar-figure claim"
             );
         }
     }

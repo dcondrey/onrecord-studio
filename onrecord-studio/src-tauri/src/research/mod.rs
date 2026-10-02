@@ -1047,10 +1047,11 @@ async fn analyze_new_evidence(
     let policy = repository.research_policy().await?;
     crate::analysis::gaps::resolve(repository, &found, policy.enabled && policy.auto_collect)
         .await?;
+    // Advance the marker before surfacing the error, so a persistent gap-collection failure is reported once per tick instead of retried forever at this position.
+    *analyzed = Some(marker);
     if let Some(error) = errors.into_iter().next() {
         return Err(AppError::Storage(error));
     }
-    *analyzed = Some(marker);
     Ok(())
 }
 

@@ -386,7 +386,7 @@ pub fn planner_schema() -> Value {
     let mut schema = object(json!({
         "questions": array(object(json!({"question":string(),"why":string(),"evidenceIds":strings()}))),
         "searches":strings(),
-        "reads":array(object(json!({"evidenceId":string(),"characterOffset":{"type":"integer"}}))),
+        "reads":array(object(json!({"evidenceId":string(),"characterOffset":{"type":"integer","minimum":0}}))),
         "queries":array(object(json!({"question":string(),"sql":string(),"assumptions":string()})))
     }));
     for (field, maximum) in [("searches", 4), ("reads", 3), ("queries", 3)] {
