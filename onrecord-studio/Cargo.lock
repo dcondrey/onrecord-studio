@@ -1263,6 +1263,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "compressed-rtf"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51b7f2aaf6791c6517669240b82ef12c1283b39772f0cad3bc5c73f19f6e7f16"
+dependencies = [
+ "byteorder",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "compression-codecs"
 version = "0.4.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4541,6 +4551,7 @@ dependencies = [
  "calamine",
  "cfb",
  "chrono",
+ "compressed-rtf",
  "csv",
  "duckdb",
  "ed25519-dalek",
@@ -4550,6 +4561,7 @@ dependencies = [
  "lopdf",
  "msg_parser",
  "onrecord-studio-lib",
+ "outlook-pst",
  "png 0.18.1",
  "rand 0.8.8",
  "regex",
@@ -4646,6 +4658,17 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "outlook-pst"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "299eace9d895cc31490927d7de779f8e8f3deb5fb6bd1e68eb192aa1da19bd47"
+dependencies = [
+ "byteorder",
+ "thiserror 2.0.20",
+ "tracing",
 ]
 
 [[package]]

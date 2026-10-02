@@ -1,0 +1,16 @@
+Outlook PST test fixtures, vendored unmodified.
+
+tika-various-body-types.pst
+  From: Apache Tika, testPST_variousBodyTypes.pst
+  https://raw.githubusercontent.com/apache/tika/dc571dddba324485fdb6dc1d665163e56267d0fc/tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-microsoft-module/src/test/resources/test-documents/testPST_variousBodyTypes.pst
+  License: Apache-2.0
+  SHA-256: 24c5e6bbb8bf26a817c977283e40e7b69d2661fec0845abbe177f97efcb05fb0
+  Contents: Unicode PST; Inbox/tmp holds four messages with plain, HTML and RTF bodies.
+
+libpst-dist-list.pst
+  From: java-libpst, src/test/resources/dist-list.pst
+  https://raw.githubusercontent.com/rjohnsondev/java-libpst/a0f443d4b4e26909af68f893388e21aae65e676f/src/test/resources/dist-list.pst
+  License: Apache-2.0 (dual-licensed Apache-2.0 / LGPL; used under Apache-2.0)
+  SHA-256: c86841da106036b5abe5a2141dc7644cbb2bf8b504873515eb35a2efeb8c28ac
+  Contents: Unicode PST; a Calendar appointment with two attached messages, and a Contacts
+  distribution list that outlook-pst 1.2.0 cannot read.

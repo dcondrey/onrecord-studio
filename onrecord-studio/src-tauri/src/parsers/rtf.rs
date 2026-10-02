@@ -59,13 +59,18 @@ pub fn extract_rtf_text<P: AsRef<Path>>(file_path: P) -> Result<String, AppError
                 path.display()
             ))
         })?;
+    extract_rtf_bytes(&bytes, path)
+}
+
+/// RTF already in memory, such as a decompressed Outlook body. `label` names it in errors.
+pub(crate) fn extract_rtf_bytes(bytes: &[u8], label: &Path) -> Result<String, AppError> {
     if bytes.len() as u64 > MAX_RTF_BYTES || !bytes.starts_with(b"{\\rtf") {
         return Err(AppError::DataParsing(format!(
             "RTF_FORMAT_INVALID: '{}' is not a supported RTF document",
-            path.display()
+            label.display()
         )));
     }
-    parse_rtf(&bytes, path)
+    parse_rtf(bytes, label)
 }
 
 /// Attributed RTF source audit kept separate from the stable flattened-text extraction path.

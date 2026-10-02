@@ -20,6 +20,7 @@ pub mod pdf;
 pub mod pdf_auxiliary;
 pub mod pdf_metadata_signals;
 pub mod pixelation;
+pub mod pst;
 pub mod raster_audit;
 pub mod recovery;
 pub mod rtf;
@@ -50,6 +51,7 @@ pub use msg::{extract_msg_layers, ExtractedEmailPayload, MsgExtractionContext};
 pub use ocr::{execute_local_ocr_scan, probe_ocr_capability, OcrCapability};
 pub use office::extract_office_package;
 pub use pdf::{character_layer_density, extract_text_layers, MINIMUM_CHARACTER_LAYER_DENSITY};
+pub use pst::{extract_pst_container_with_manifest, inspect_pst_header};
 pub use recovery::{
     carve_historical_pdf_versions, RecoveredMetadataArtifact, RecoveredTextSegment,
     RecoveredVersionProfile,
