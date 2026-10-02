@@ -9,7 +9,7 @@
 //! what a document states.
 
 use crate::analysis::phrase_match::{find_phrases, has_phrase, words, Phrases, Word};
-use chrono::NaiveDate;
+use chrono::{Datelike, NaiveDate};
 
 /// Longer spans are text with lost punctuation, where no sentence boundary can be cited.
 const MAX_SENTENCE_CHARACTERS: usize = 700;
@@ -426,7 +426,6 @@ const NOT_A_DEPARTURE: Phrases = &[
     &["found", "no"],
     // Consequence clauses and hedges in policy text and in cautious findings.
     &["will"],
-    &["may"],
     &["might"],
     &["discipline"],
     &["disciplined"],
@@ -609,14 +608,14 @@ pub fn departures(text: &str) -> Vec<Departure> {
         .flat_map(|sentence| {
             let tokens = words(&sentence.text);
             let cues = find_phrases(&tokens, DEPARTURE);
-            if cues.is_empty() || has_phrase(&tokens, NOT_A_DEPARTURE) {
+            if cues.is_empty() || has_phrase(&tokens, NOT_A_DEPARTURE) || has_modal_may(&tokens) {
                 return Vec::new();
             }
             let Some(count) = stated_count(&tokens, &cues) else {
                 return Vec::new();
             };
             let parameter = parameter_in(&tokens);
-            let dates = dates_in(&tokens);
+            let dates = conduct_dates(&tokens);
             topics_in(&tokens)
                 .into_iter()
                 .map(|topic| Departure {
@@ -636,6 +635,79 @@ pub fn states_it_is_superseded(text: &str) -> bool {
     let tokens = words(text);
     has_phrase(&tokens, SUPERSEDED)
         || has_phrase(&tokens[..tokens.len().min(HEAD_WORDS)], SUPERSEDED_IN_HEAD)
+}
+
+/// `may` as a hedge ("officers may not have activated"), not the month. A month is followed by a
+/// day or year, or follows a preposition ("in May"); without this the hedge cue silently drops
+/// every departure dated in May.
+fn has_modal_may(tokens: &[Word]) -> bool {
+    const MONTH_PREPOSITIONS: [&str; 9] = [
+        "in", "on", "of", "since", "during", "until", "through", "by", "from",
+    ];
+    tokens.iter().enumerate().any(|(index, word)| {
+        word.text == "may"
+            && !tokens
+                .get(index + 1)
+                .is_some_and(|next| next.text.chars().all(|c| c.is_ascii_digit()))
+            && !index
+                .checked_sub(1)
+                .and_then(|previous| tokens.get(previous))
+                .is_some_and(|previous| MONTH_PREPOSITIONS.contains(&previous.text.as_str()))
+    })
+}
+
+/// A number written with a decimal point arrives as two tokens split at the `.`; neither half is
+/// the number the text states.
+fn part_of_decimal(tokens: &[Word], index: usize) -> bool {
+    let is_digits =
+        |word: &Word| !word.text.is_empty() && word.text.chars().all(|c| c.is_ascii_digit());
+    let splits_after = |position: usize| {
+        tokens
+            .get(position)
+            .is_some_and(|word| is_digits(word) && word.followed_by == Some('.'))
+            && tokens.get(position + 1).is_some_and(is_digits)
+    };
+    splits_after(index) || index.checked_sub(1).is_some_and(splits_after)
+}
+
+/// Dates a departure sentence states, or none when the sentence also names an earlier bare year:
+/// "a March 2026 audit found ... in 2022" dates the audit, not the conduct, and treating the
+/// audit's date as the conduct's would test the conduct against a rule not yet in force.
+fn conduct_dates(tokens: &[Word]) -> Vec<NaiveDate> {
+    let dates = dates_in(tokens);
+    let Some(earliest) = dates.first().map(|date| date.year()) else {
+        return dates;
+    };
+    if tokens
+        .iter()
+        .filter_map(year)
+        .any(|stated| stated < earliest)
+    {
+        return Vec::new();
+    }
+    dates
+}
+
+/// A compliance verb in its affirmative past form ("activated", "complied") with no negation just
+/// before it. A count in such a sentence may be the compliant cases, not the failures.
+fn states_compliance(tokens: &[Word]) -> bool {
+    const COMPLIANCE: [&str; 6] = [
+        "complied",
+        "activated",
+        "followed",
+        "adhered",
+        "completed",
+        "met",
+    ];
+    const NEGATION: [&str; 4] = ["not", "never", "failed", "without"];
+    tokens.iter().enumerate().any(|(index, word)| {
+        COMPLIANCE.contains(&word.text.as_str())
+            && !tokens[index.saturating_sub(2)..index]
+                .iter()
+                .any(|previous| {
+                    NEGATION.contains(&previous.text.as_str()) || previous.text.ends_with("n't")
+                })
+    })
 }
 
 fn number_at(tokens: &[Word], index: usize) -> Option<(u64, usize)> {
@@ -696,7 +768,10 @@ fn stated_count(tokens: &[Word], cues: &[usize]) -> Option<StatedCount> {
             let near_a_cue = cues
                 .iter()
                 .any(|cue| cue.abs_diff(*position) <= COUNT_CUE_WINDOW);
-            Some(if near_a_cue {
+            // "45 of 50 activated and 5 failed to" states the compliant count; reading it as the
+            // failures would invert the finding, so a sentence that also affirms compliance keeps
+            // no count.
+            Some(if near_a_cue && !states_compliance(tokens) {
                 StatedCount::Stated {
                     noncompliant: *noncompliant,
                     total: *total,
@@ -711,6 +786,9 @@ fn stated_count(tokens: &[Word], cues: &[usize]) -> Option<StatedCount> {
 
 fn parameter_in(tokens: &[Word]) -> Option<Parameter> {
     (0..tokens.len()).find_map(|index| {
+        if part_of_decimal(tokens, index) {
+            return None;
+        }
         let (value, used) = number_at(tokens, index)?;
         let last = &tokens[index + used - 1];
         let unit = if last.followed_by == Some('%') {
@@ -950,6 +1028,33 @@ mod tests {
              review explains at length, officers failed to activate body-worn cameras.",
         );
         assert_eq!(distant[0].count, StatedCount::Unstated);
+    }
+
+    /// Each of these was misread: a compliant count taken as the failures, a decimal read as its
+    /// fractional part, the month May taken as a hedge, and an audit's date taken as the conduct's.
+    #[test]
+    fn counts_decimals_months_and_audit_dates_are_not_misread() {
+        let compliant_count = departures(
+            "Officers activated body-worn cameras in 45 of 50 incidents and failed to activate in \
+             the remaining 5.",
+        );
+        assert_eq!(compliant_count[0].count, StatedCount::Unstated);
+
+        let decimal = departures("Officers failed to activate body-worn cameras within 1.5 hours.");
+        assert_eq!(decimal[0].parameter, None);
+
+        let in_may = departures("On May 5, 2026, officers did not activate body-worn cameras.");
+        assert_eq!(
+            in_may[0].dates,
+            vec![NaiveDate::from_ymd_opt(2026, 5, 5).unwrap()]
+        );
+        assert!(departures("Officers may not have activated body-worn cameras.").is_empty());
+
+        let audit_dated = departures(
+            "A March 2026 audit found officers failed to activate body-worn cameras in 12 of 40 \
+             stops in 2022.",
+        );
+        assert!(audit_dated[0].dates.is_empty());
     }
 
     #[test]
