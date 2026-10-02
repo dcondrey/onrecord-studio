@@ -46,6 +46,8 @@ Maintainability/Complexity, Comment/Code Clarity.
   longer shows the previous key's data (affected layers, useCaseScope, AttentionFeed, CaseSwitcher)
 - `26ca930` useObjectSearch.ts: a failed findings/entities snapshot read is retried, not cached
   for the palette session as an empty corpus
+- `5af0487` LegalAuthorityManager.tsx: version comparison shows a held detail only when it is the
+  selected version, so a selector change no longer displays the previous version's text
 
 In flight as of this writing (check `git log` for landed state): research/model.rs reserved-call
 budget-accounting review.
