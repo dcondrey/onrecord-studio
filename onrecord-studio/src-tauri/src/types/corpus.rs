@@ -366,9 +366,21 @@ pub struct EntityPath {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "outcome", rename_all = "camelCase")]
 pub enum EntityPathOutcome {
-    Found { path: EntityPath },
-    NotConnected { max_hops: usize },
-    UnknownEntity { entity_id: String },
+    Found {
+        path: EntityPath,
+    },
+    NotConnected {
+        max_hops: usize,
+    },
+    /// The search stopped at its exploration cap before exhausting the hop budget, so no
+    /// statement about connectedness can be made either way.
+    SearchCapped {
+        max_hops: usize,
+        explored_entities: usize,
+    },
+    UnknownEntity {
+        entity_id: String,
+    },
 }
 
 /// An entity ranked by how much information flows through it in the current graph.

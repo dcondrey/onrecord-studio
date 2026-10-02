@@ -213,10 +213,15 @@ fn start_corpus_reconciliation<R: Runtime>(
         let mut skipped_documents = 0_u64;
         let mut failed_documents = 0_u64;
         let mut first_error = None;
+        let mut current_documents = std::collections::HashSet::new();
+        let mut scanned_every_document = false;
         loop {
             let source = match repository.next_corpus_source_document(cursor).await {
                 Ok(Some(source)) => source,
-                Ok(None) => break,
+                Ok(None) => {
+                    scanned_every_document = true;
+                    break;
+                }
                 Err(error) => {
                     failed_documents = failed_documents.saturating_add(1);
                     first_error.get_or_insert_with(|| error.to_string());
@@ -224,6 +229,7 @@ fn start_corpus_reconciliation<R: Runtime>(
                 }
             };
             cursor = Some((source.portal_key.clone(), source.document_id));
+            current_documents.insert((source.portal_key.clone(), source.document_id));
             let is_current = corpus_index
                 .is_document_current(
                     source.portal_key.clone(),
@@ -267,6 +273,14 @@ fn start_corpus_reconciliation<R: Runtime>(
                 }
             }
             tokio::task::yield_now().await;
+        }
+        // Only a scan that reached the end knows the whole current set; pruning against a partial
+        // one would delete documents it simply had not reached.
+        if scanned_every_document {
+            if let Err(error) = corpus_index.retain_documents(current_documents).await {
+                failed_documents = failed_documents.saturating_add(1);
+                first_error.get_or_insert_with(|| error.to_string());
+            }
         }
         let _ = app_handle.emit(
             "ingestion-telemetry",

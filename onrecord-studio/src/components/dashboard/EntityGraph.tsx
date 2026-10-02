@@ -156,6 +156,7 @@ type PathAnswer =
   | { request: PathRequest; kind: 'pending' }
   | { request: PathRequest; kind: 'found'; path: EntityPath }
   | { request: PathRequest; kind: 'notConnected'; maxHops: number }
+  | { request: PathRequest; kind: 'searchCapped'; maxHops: number; exploredEntities: number }
   | { request: PathRequest; kind: 'unknownEntity'; entityId: string }
   | { request: PathRequest; kind: 'failed'; message: string };
 
@@ -739,7 +740,14 @@ export default function EntityGraph() {
                       ? { request, kind: 'found', path: result.path }
                       : result.outcome === 'notConnected'
                         ? { request, kind: 'notConnected', maxHops: result.maxHops }
-                        : { request, kind: 'unknownEntity', entityId: result.entityId },
+                        : result.outcome === 'searchCapped'
+                          ? {
+                              request,
+                              kind: 'searchCapped',
+                              maxHops: result.maxHops,
+                              exploredEntities: result.exploredEntities,
+                            }
+                          : { request, kind: 'unknownEntity', entityId: result.entityId },
                   );
                 })
                 .catch((reason: unknown) => {
@@ -775,6 +783,13 @@ export default function EntityGraph() {
               <span className="text-muted">
                 No path within {pathView.maxHops} hops from {centre.displayValue} to {pathView.request.toEntityId}:
                 the search found none within that bound, not proof the two entities have no connection in this corpus.
+              </span>
+            )}
+            {pathView?.kind === 'searchCapped' && (
+              <span className="text-warning">
+                The search stopped after exploring {pathView.exploredEntities} entities without reaching{' '}
+                {pathView.request.toEntityId} within {pathView.maxHops} hops, so whether {centre.displayValue} connects
+                to it is unknown.
               </span>
             )}
             {pathView?.kind === 'unknownEntity' && (

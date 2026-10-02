@@ -140,6 +140,8 @@ export interface EntityPath {
 export type EntityPathOutcome =
   | { outcome: 'found'; path: EntityPath }
   | { outcome: 'notConnected'; maxHops: number }
+  /** The search hit its exploration cap first: neither connected nor unconnected is known. */
+  | { outcome: 'searchCapped'; maxHops: number; exploredEntities: number }
   | { outcome: 'unknownEntity'; entityId: string };
 
 export interface EntityBroker {

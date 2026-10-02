@@ -456,6 +456,53 @@ impl CorpusIndex {
         .await
     }
 
+    /// Removes every indexed document not in `current`, the complete set the core offers for
+    /// indexing, and returns how many were removed.
+    ///
+    /// The core commits a purge before the corpus does, and an analysis already under way when a
+    /// purge lands can write its document back afterwards; a document can also stop qualifying
+    /// without being purged. Each leaves the projection describing a document the core no longer
+    /// has, and only a comparison against the full set can find those.
+    pub async fn retain_documents(
+        &self,
+        current: std::collections::HashSet<(String, u64)>,
+    ) -> Result<u64, AppError> {
+        self.write("Corpus stale document prune", move |connection| {
+            let indexed = {
+                let mut statement = connection
+                    .prepare("SELECT portal_key, document_id FROM corpus_documents")
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to list indexed documents: {error}"))
+                    })?;
+                statement
+                    .query_map([], |row| {
+                        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+                    })
+                    .and_then(|rows| rows.collect::<duckdb::Result<Vec<_>>>())
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to list indexed documents: {error}"))
+                    })?
+            };
+            let mut removed = 0_u64;
+            for (portal_key, document_id) in indexed {
+                let document_id = u64::try_from(document_id).map_err(|_| {
+                    AppError::Storage("An indexed document has a negative identifier".to_string())
+                })?;
+                let key = (portal_key, document_id);
+                if current.contains(&key) {
+                    continue;
+                }
+                removed = removed.saturating_add(purge_indexed_documents(
+                    connection,
+                    &key.0,
+                    Some(key.1),
+                )?);
+            }
+            Ok(removed)
+        })
+        .await
+    }
+
     pub async fn is_document_current(
         &self,
         portal_key: String,
@@ -733,8 +780,10 @@ impl CorpusIndex {
             let mut frontier: Vec<String> = vec![from_entity_id.clone()];
             let mut explored: BTreeSet<String> = BTreeSet::from([from_entity_id.clone()]);
             let mut found = false;
+            let mut capped = false;
             for _ in 0..max_hops {
                 if explored.len() >= MAX_NODES_EXPLORED {
+                    capped = true;
                     break;
                 }
                 let mut next_frontier: Vec<String> = Vec::new();
@@ -762,6 +811,12 @@ impl CorpusIndex {
                     break;
                 }
                 frontier = next_frontier;
+            }
+            if !found && capped {
+                return Ok(EntityPathOutcome::SearchCapped {
+                    max_hops,
+                    explored_entities: explored.len(),
+                });
             }
             if !found {
                 return not_connected();
@@ -1075,7 +1130,7 @@ fn absolute_database_path(path: &Path) -> Result<PathBuf, AppError> {
 }
 
 fn open_writer_connection(path: &Path) -> Result<Connection, AppError> {
-    replace_outdated_corpus_index(path)?;
+    let outdated = replace_outdated_corpus_index(path)?;
     let connection = super::open_duckdb(Some(path)).map_err(|error| {
         AppError::Storage(format!(
             "Failed to open corpus index '{}': {error}",
@@ -1106,14 +1161,19 @@ fn open_writer_connection(path: &Path) -> Result<Connection, AppError> {
                 "Failed to stamp the corpus schema version: {error}"
             ))
         })?;
+    if let Some(outdated) = outdated {
+        carry_registry_forward(&connection, &outdated);
+    }
     Ok(connection)
 }
 
-/// Replaces an index written under a different schema version, before anything opens it.
+/// Replaces an index written under a different schema version, before anything opens it, and
+/// returns where the outdated file was moved.
 ///
 /// The corpus is a derived projection of the canonical core, rebuilt by the reconciliation loop in
 /// `setup`, so discarding it costs indexing time and no evidence. That is why the whole file goes
-/// rather than being migrated.
+/// rather than being migrated. The one exception is the imported registry snapshot, which is not
+/// derivable from the core; [`carry_registry_forward`] copies it out of the moved file.
 ///
 /// The file, not the tables. A database created by an older DuckDB carries that storage version
 /// with it -- one such file reports `storage_compatibility_version = v0.10.2` -- and under it a
@@ -1123,13 +1183,36 @@ fn open_writer_connection(path: &Path) -> Result<Connection, AppError> {
 /// the widening is a property of the file, so the recreated parent is `BIGINT` again. The error
 /// reaches the setup hook, which panics, and the application aborts at launch with no way back
 /// short of deleting this file by hand -- which is exactly what this does.
-fn replace_outdated_corpus_index(path: &Path) -> Result<(), AppError> {
+fn replace_outdated_corpus_index(path: &Path) -> Result<Option<PathBuf>, AppError> {
     if !path.exists() {
-        return Ok(());
+        return Ok(None);
     }
     if corpus_index_matches_current_schema(path) {
-        return Ok(());
+        return Ok(None);
     }
+    let mut outdated = path.as_os_str().to_os_string();
+    outdated.push(".outdated");
+    let outdated = PathBuf::from(outdated);
+    remove_index_files(&outdated)?;
+    for (from, to) in [
+        (path.to_path_buf(), outdated.clone()),
+        (wal_path(path), wal_path(&outdated)),
+    ] {
+        match std::fs::rename(&from, &to) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(AppError::Storage(format!(
+                    "Failed to move aside the outdated corpus index '{}': {error}",
+                    from.display()
+                )))
+            }
+        }
+    }
+    Ok(Some(outdated))
+}
+
+fn remove_index_files(path: &Path) -> Result<(), AppError> {
     for stale in [path.to_path_buf(), wal_path(path)] {
         match std::fs::remove_file(&stale) {
             Ok(()) => {}
@@ -1143,6 +1226,53 @@ fn replace_outdated_corpus_index(path: &Path) -> Result<(), AppError> {
         }
     }
     Ok(())
+}
+
+/// Copies an imported registry snapshot out of an outdated index into the new one, then discards
+/// the outdated file.
+///
+/// Best effort by design, and never at the cost of launching: a file that cannot be attached holds
+/// nothing recoverable and is discarded, while a registry that attached but failed to copy leaves
+/// the outdated file on disk rather than destroying the only copy of an operator's import.
+fn carry_registry_forward(connection: &Connection, outdated: &Path) {
+    let attach = format!(
+        "ATTACH '{}' AS outdated_corpus (READ_ONLY)",
+        outdated.display().to_string().replace('\'', "''")
+    );
+    if connection.execute_batch(&attach).is_err() {
+        let _ = remove_index_files(outdated);
+        return;
+    }
+    let copied = (|| -> duckdb::Result<()> {
+        let has_registry: bool = connection.query_row(
+            "SELECT COUNT(*) = 2 FROM duckdb_tables()
+             WHERE database_name = 'outdated_corpus'
+               AND table_name IN ('corpus_registry_snapshots', 'corpus_registry_records')",
+            [],
+            |row| row.get(0),
+        )?;
+        if has_registry {
+            connection.execute_batch(
+                "BEGIN TRANSACTION;
+                 INSERT INTO corpus_registry_snapshots
+                    SELECT registry, identifier_kind, source_path, file_sha256, imported_at,
+                           record_count, skipped_row_count
+                    FROM outdated_corpus.corpus_registry_snapshots;
+                 INSERT INTO corpus_registry_records
+                    SELECT registry, normalized_identifier, registrant_name, status, detail
+                    FROM outdated_corpus.corpus_registry_records;
+                 COMMIT;",
+            )?;
+        }
+        Ok(())
+    })();
+    if copied.is_err() {
+        let _ = connection.execute_batch("ROLLBACK");
+    }
+    let _ = connection.execute_batch("DETACH outdated_corpus");
+    if copied.is_ok() {
+        let _ = remove_index_files(outdated);
+    }
 }
 
 /// DuckDB writes its write-ahead log beside the database as `<file>.wal`. Leaving it behind next
@@ -2620,12 +2750,14 @@ fn persist_analyzed_document(
     insert_terms(&transaction, &document)?;
     insert_entities(&transaction, &document)?;
     insert_relationships(&transaction, &document)?;
-    refresh_entity_document_counts(&transaction, &document, previous_entity_ids)?;
+    let unreferenced =
+        refresh_entity_document_counts(&transaction, &document, previous_entity_ids)?;
     insert_entity_truncations(&transaction, &document)?;
     insert_lsh_bands(&transaction, &document)?;
     transaction
         .commit()
-        .map_err(|error| AppError::Storage(format!("Failed to commit corpus index: {error}")))
+        .map_err(|error| AppError::Storage(format!("Failed to commit corpus index: {error}")))?;
+    remove_unreferenced_entities(connection, unreferenced)
 }
 
 /// Deletes the projection rows for one document, or for every document of a source when
@@ -2701,7 +2833,6 @@ fn purge_indexed_documents(
         collected
     };
 
-    let mut removed = 0u64;
     for table in [
         "corpus_entity_relationships",
         "corpus_entity_mentions",
@@ -2709,9 +2840,8 @@ fn purge_indexed_documents(
         "corpus_lsh_bands",
         "corpus_term_postings",
         "corpus_segments",
-        "corpus_documents",
     ] {
-        let deleted = match document_id {
+        match document_id {
             Some(document_id) => transaction.execute(
                 &format!("DELETE FROM {table} WHERE portal_key = ?1 AND document_id = ?2"),
                 params![portal_key, document_id],
@@ -2722,23 +2852,37 @@ fn purge_indexed_documents(
             ),
         }
         .map_err(|error| AppError::Storage(format!("Failed to purge {table}: {error}")))?;
-        if table == "corpus_documents" {
-            removed = deleted as u64;
-        }
     }
 
-    recount_entities(&transaction, affected)?;
+    let unreferenced = recount_entities(&transaction, affected)?;
     transaction
         .commit()
         .map_err(|error| AppError::Storage(format!("Failed to commit corpus purge: {error}")))?;
-    Ok(removed)
+
+    // The document rows go in a second transaction: DuckDB keeps a deleted child's foreign-key
+    // index entry until its delete commits, so removing the parent in the same transaction that
+    // emptied its children is refused as still referenced. A failure here leaves childless
+    // document rows that a repeated purge or the next reconciliation removes.
+    let removed = match document_id {
+        Some(document_id) => connection.execute(
+            "DELETE FROM corpus_documents WHERE portal_key = ?1 AND document_id = ?2",
+            params![portal_key, document_id],
+        ),
+        None => connection.execute(
+            "DELETE FROM corpus_documents WHERE portal_key = ?1",
+            params![portal_key],
+        ),
+    }
+    .map_err(|error| AppError::Storage(format!("Failed to purge corpus_documents: {error}")))?;
+    remove_unreferenced_entities(connection, unreferenced)?;
+    Ok(removed as u64)
 }
 
 fn refresh_entity_document_counts(
     transaction: &Transaction<'_>,
     document: &AnalyzedDocument,
     previous_entity_ids: Vec<String>,
-) -> Result<(), AppError> {
+) -> Result<Vec<String>, AppError> {
     let mut affected = previous_entity_ids.into_iter().collect::<BTreeSet<_>>();
     affected.extend(document.entities.iter().map(|entity| {
         stable_id(&format!(
@@ -2758,7 +2902,8 @@ fn refresh_entity_document_counts(
 fn recount_entities(
     transaction: &Transaction<'_>,
     affected: BTreeSet<String>,
-) -> Result<(), AppError> {
+) -> Result<Vec<String>, AppError> {
+    let mut unreferenced = Vec::new();
     for entity_id in affected {
         let document_count = transaction
             .query_row(
@@ -2796,27 +2941,40 @@ fn recount_entities(
                 })?;
         }
         if document_count == 0 {
-            // The count row is gone; drop the entity itself so a purged source leaves no
-            // vocabulary behind. Guarded on relationships as well as mentions because
-            // `corpus_entity_relationships` also references `corpus_entities`, and DuckDB has no
-            // cascading delete to fall back on.
-            transaction
-                .execute(
-                    "DELETE FROM corpus_entities
-                     WHERE entity_id = ?1
-                       AND NOT EXISTS (
-                         SELECT 1 FROM corpus_entity_mentions WHERE entity_id = ?1
-                       )
-                       AND NOT EXISTS (
-                         SELECT 1 FROM corpus_entity_relationships
-                         WHERE left_entity_id = ?1 OR right_entity_id = ?1
-                       )",
-                    params![entity_id],
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to remove an unreferenced entity: {error}"))
-                })?;
+            unreferenced.push(entity_id);
         }
+    }
+    Ok(unreferenced)
+}
+
+/// Drops entities left with no mentions, so a purged source leaves no vocabulary behind.
+///
+/// Runs after the transaction that removed their mentions has committed: DuckDB keeps a deleted
+/// child's foreign-key index entry until that delete commits, so dropping the entity in the same
+/// transaction is refused as still referenced. Guarded on relationships as well as mentions
+/// because `corpus_entity_relationships` also references `corpus_entities` and DuckDB has no
+/// cascading delete. A failure leaves an entity with no mentions, which no query reports.
+fn remove_unreferenced_entities(
+    connection: &Connection,
+    candidates: Vec<String>,
+) -> Result<(), AppError> {
+    for entity_id in candidates {
+        connection
+            .execute(
+                "DELETE FROM corpus_entities
+                 WHERE entity_id = ?1
+                   AND NOT EXISTS (
+                     SELECT 1 FROM corpus_entity_mentions WHERE entity_id = ?1
+                   )
+                   AND NOT EXISTS (
+                     SELECT 1 FROM corpus_entity_relationships
+                     WHERE left_entity_id = ?1 OR right_entity_id = ?1
+                   )",
+                params![entity_id],
+            )
+            .map_err(|error| {
+                AppError::Storage(format!("Failed to remove an unreferenced entity: {error}"))
+            })?;
     }
     Ok(())
 }
@@ -3194,7 +3352,8 @@ fn load_shared_entity_patterns(
     {
         let mut statement = connection
             .prepare(
-                "SELECT entities.entity_id, entities.entity_kind, entities.display_value
+                "SELECT entities.entity_id, entities.entity_kind, entities.display_value,
+                        counts.document_count
                  FROM corpus_entities AS entities
                  INNER JOIN corpus_entity_document_counts AS counts
                    ON counts.entity_id = entities.entity_id
@@ -3224,6 +3383,7 @@ fn load_shared_entity_patterns(
                         row.get::<_, String>(0)?,
                         row.get::<_, String>(1)?,
                         row.get::<_, String>(2)?,
+                        row.get::<_, i64>(3)?,
                     ))
                 },
             )
@@ -3237,7 +3397,8 @@ fn load_shared_entity_patterns(
     } else {
         let mut statement = connection
             .prepare(
-            "SELECT entities.entity_id, entities.entity_kind, entities.display_value
+            "SELECT entities.entity_id, entities.entity_kind, entities.display_value,
+                    COUNT(DISTINCT mentions.portal_key || ':' || mentions.document_id)
              FROM corpus_entities AS entities
              INNER JOIN corpus_entity_mentions AS mentions ON mentions.entity_id = entities.entity_id
              INNER JOIN corpus_documents AS documents
@@ -3271,6 +3432,7 @@ fn load_shared_entity_patterns(
                         row.get::<_, String>(0)?,
                         row.get::<_, String>(1)?,
                         row.get::<_, String>(2)?,
+                        row.get::<_, i64>(3)?,
                     ))
                 },
             )
@@ -3282,7 +3444,7 @@ fn load_shared_entity_patterns(
                 AppError::Storage(format!("Failed to decode shared entity: {error}"))
             })?
     };
-    for (entity_id, entity_kind, display_value) in entities {
+    for (entity_id, entity_kind, display_value, document_count) in entities {
         let evidence = load_entity_evidence(connection, &entity_id, query)?;
         let kind = if entity_kind == "STATUTE" {
             CorpusPatternKind::SharedStatute
@@ -3296,8 +3458,8 @@ fn load_shared_entity_patterns(
             kind,
             title: format!("Shared {entity_kind}: {display_value}"),
             explanation: format!(
-                "The normalized {entity_kind} appears in {} independently indexed documents.",
-                evidence.len()
+                "The normalized {entity_kind} appears in {document_count} independently indexed \
+                 documents."
             ),
             confidence_basis_points: if matches!(kind, CorpusPatternKind::SharedEntity) {
                 8_000
@@ -3469,9 +3631,11 @@ fn load_near_duplicate_patterns(
     patterns: &mut Vec<CorpusPattern>,
 ) -> Result<(), AppError> {
     let remaining = query.result_limit.saturating_sub(patterns.len());
+    // Pairs sharing more LSH bands are nearer in SimHash, so ranking by shared bands before the
+    // limit keeps the closest pairs rather than an arbitrary sample the distance filter then thins.
     let mut statement = connection
         .prepare(
-            "SELECT DISTINCT
+            "SELECT
                 left_doc.portal_key, left_doc.request_id, left_doc.document_id,
                 left_doc.extracted_text_sha256, left_doc.simhash_hex,
                 right_doc.portal_key, right_doc.request_id, right_doc.document_id,
@@ -3495,6 +3659,8 @@ fn load_near_duplicate_patterns(
                       right_doc.portal_key, right_doc.request_id, right_doc.document_id,
                       right_doc.extracted_text_sha256, right_doc.simhash_hex
              HAVING COUNT(*) >= 2
+             ORDER BY COUNT(*) DESC, left_doc.portal_key, left_doc.document_id,
+                      right_doc.portal_key, right_doc.document_id
              LIMIT ?2",
         )
         .map_err(|error| AppError::Storage(format!("Failed to prepare near-duplicate query: {error}")))?;
@@ -3692,6 +3858,10 @@ fn load_entity_evidence(
              GROUP BY mentions.portal_key, documents.request_id, mentions.document_id,
                       mentions.segment_index, mentions.character_start, mentions.character_end,
                       documents.extracted_text_sha256, entities.display_value
+             QUALIFY ROW_NUMBER() OVER (
+                 PARTITION BY mentions.portal_key, mentions.document_id
+                 ORDER BY mentions.segment_index, mentions.character_start
+             ) = 1
              ORDER BY mentions.portal_key, mentions.document_id
              LIMIT ?3",
         )
@@ -4494,6 +4664,97 @@ mod tests {
         assert_eq!(stored, 1);
     }
 
+    /// Reconciliation hands the index the full set the core offers; anything indexed outside it
+    /// describes a document the core no longer has and must go, with nothing else touched.
+    #[tokio::test]
+    async fn retaining_the_current_set_prunes_only_documents_the_core_no_longer_has() {
+        let directory = tempdir().expect("temp dir must be created");
+        let index = CorpusIndex::open(directory.path().join("corpus.db")).expect("index must open");
+        const TEXT: &str = "Section 6254 applies to this record.";
+        for document_id in [1, 2, 3] {
+            index
+                .index_document(input(document_id, TEXT))
+                .await
+                .unwrap();
+        }
+        let current = [1_u64, 3]
+            .into_iter()
+            .map(|document_id| ("records".to_string(), document_id))
+            .collect();
+        assert_eq!(index.retain_documents(current).await.unwrap(), 1);
+        for (document_id, expected) in [(1, true), (2, false), (3, true)] {
+            let indexed = index
+                .is_document_current(
+                    "records".to_string(),
+                    document_id,
+                    input(document_id, TEXT).extracted_text_sha256,
+                )
+                .await
+                .unwrap();
+            assert_eq!(indexed, expected, "document {document_id}");
+        }
+        // A whole-source purge takes the same path; the index once refused it outright, because
+        // its document rows were deleted in the transaction that emptied their children.
+        assert_eq!(index.purge_portal("records".to_string()).await.unwrap(), 2);
+        assert_eq!(index.status().await.unwrap().indexed_document_count, 0);
+    }
+
+    /// The registry snapshot is an operator import, not a projection of the core, so replacing an
+    /// outdated index must carry it into the new one and leave no outdated file behind.
+    #[tokio::test]
+    async fn an_outdated_index_keeps_its_imported_registry_snapshot() {
+        let directory = tempdir().expect("temp dir must be created");
+        let path = directory.path().join("corpus.db");
+        {
+            let previous = Connection::open(&path).expect("the version 11 fixture must open");
+            previous
+                .execute_batch(
+                    "CREATE TABLE corpus_schema_version (
+                        singleton BOOLEAN PRIMARY KEY,
+                        version BIGINT NOT NULL
+                     );
+                     INSERT INTO corpus_schema_version (singleton, version) VALUES (TRUE, 11);
+                     CREATE TABLE corpus_registry_snapshots (
+                        registry TEXT PRIMARY KEY,
+                        identifier_kind TEXT NOT NULL,
+                        source_path TEXT NOT NULL,
+                        file_sha256 TEXT NOT NULL,
+                        imported_at TEXT NOT NULL,
+                        record_count BIGINT NOT NULL,
+                        skipped_row_count BIGINT NOT NULL
+                     );
+                     CREATE TABLE corpus_registry_records (
+                        registry TEXT NOT NULL,
+                        normalized_identifier TEXT NOT NULL,
+                        registrant_name TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        detail TEXT NOT NULL,
+                        PRIMARY KEY (registry, normalized_identifier)
+                     );
+                     INSERT INTO corpus_registry_snapshots VALUES ('CSLB_LICENSE_MASTER',
+                        'CONTRACTOR_LICENSE', '/imports/master.csv', repeat('a', 64),
+                        '2026-09-01T00:00:00Z', 1, 0);
+                     INSERT INTO corpus_registry_records VALUES ('CSLB_LICENSE_MASTER', '123456',
+                        'Acme Builders', 'ACTIVE', 'B');",
+                )
+                .expect("the version 11 schema must apply");
+        }
+
+        let index = CorpusIndex::open(&path).expect("a version 11 index must be rebuilt");
+        drop(index);
+        let connection = Connection::open(&path).expect("the rebuilt index must open");
+        let carried: (i64, String) = connection
+            .query_row(
+                "SELECT (SELECT COUNT(*) FROM corpus_registry_snapshots),
+                        (SELECT registrant_name FROM corpus_registry_records)",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("the carried registry must be readable");
+        assert_eq!(carried, (1, "Acme Builders".to_string()));
+        assert!(!directory.path().join("corpus.db.outdated").exists());
+    }
+
     /// Two holes in one series, each bounded by the indexed documents on either side.
     #[tokio::test]
     async fn series_number_gaps_report_the_numbers_no_indexed_document_carries() {
@@ -5182,6 +5443,41 @@ mod tests {
             .await
             .expect("a 53-bit document identifier must be indexable");
         assert_eq!(index.status().await.unwrap().indexed_document_count, 1);
+    }
+
+    /// A shared-entity pattern is a claim about documents, so a document that repeats the entity
+    /// must count once and cite once; counting mentions let one document pose as several.
+    #[tokio::test]
+    async fn a_shared_entity_counts_and_cites_each_document_once() {
+        let directory = tempdir().unwrap();
+        let index = CorpusIndex::open(directory.path().join("corpus.db")).unwrap();
+        index
+            .index_document(input(
+                1,
+                "Section 6254 applies. Section 6254 again. Section 6254 once more.",
+            ))
+            .await
+            .unwrap();
+        index
+            .index_document(input(2, "Section 6254 applies here too."))
+            .await
+            .unwrap();
+
+        let patterns = index
+            .query_patterns(CorpusPatternQuery::default())
+            .await
+            .unwrap();
+        let statute = patterns
+            .iter()
+            .find(|pattern| pattern.kind == CorpusPatternKind::SharedStatute)
+            .expect("the shared statute must be reported");
+        let cited = statute
+            .evidence
+            .iter()
+            .map(|evidence| evidence.document_id)
+            .collect::<Vec<_>>();
+        assert_eq!(cited, vec![1, 2]);
+        assert!(statute.explanation.contains("appears in 2 independently"));
     }
 
     #[tokio::test]
