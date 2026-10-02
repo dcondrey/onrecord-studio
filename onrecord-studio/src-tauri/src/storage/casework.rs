@@ -1713,6 +1713,7 @@ pub(crate) fn purge_casework_references(
             "casework_imports",
             "casework_origins",
             "casework_events",
+            "casework_operations",
             "casework_sources",
         ] {
             conn.execute(
@@ -2876,8 +2877,23 @@ mod tests {
         conn.execute("UPDATE documents SET visibility='private' WHERE id=1", [])
             .unwrap();
         assert!(remote.preview_casework_import(original).await.is_err());
+        let operations = |conn: &Connection| -> i64 {
+            conn.query_row(
+                "SELECT COUNT(*) FROM casework_operations WHERE case_id=?1",
+                params![imported.id],
+                |row| row.get(0),
+            )
+            .unwrap()
+        };
+        assert!(
+            operations(&conn) > 0,
+            "the import must have logged operations"
+        );
         purge_casework_references(&conn, "city", Some(1)).unwrap();
         assert!(read_case(&conn,&imported.id).unwrap().is_none(),"portable cases with an exact local source identity participate in purge without becoming verified quotations");
+        // The log's summaries quote the case's text, so a purge that left them would keep the
+        // withdrawn content on disk and collide with a re-import of the same case.
+        assert_eq!(operations(&conn), 0);
     }
     #[tokio::test]
     async fn portable_history_is_scoped_to_the_case_and_never_silently_truncated() {
