@@ -3,6 +3,25 @@
 Notable, user-visible changes. The in-app Help topic *What's next* lists planned enhancements;
 `docs/ROADMAP.md` holds the engineering record.
 
+## 1.0.0-beta.2 (2026-10-02)
+
+### Added
+
+- Outlook PST mailboxes are ingested as bounded containers.
+- OCR uses Apple Vision and PDFKit on macOS.
+- Check source re-fetches up to 100 collected documents of an active source and records whether
+  each is unchanged, changed, gone or unreachable; watches can report a changed source copy.
+
+### Fixed
+
+- Quoted search phrases require the words consecutively instead of matching them anywhere.
+- Sign-in, upgrade and account-deletion error messages were red on red; they are now readable.
+
+### Changed
+
+- New databases are created in a newer storage format that compresses long text. Existing
+  databases keep their format.
+
 ## 1.0.0-beta.1 (2026-10-01)
 
 First beta. macOS 13 or later, Apple silicon and Intel, as a notarized direct download with
