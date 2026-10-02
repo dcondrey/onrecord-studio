@@ -182,7 +182,7 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
             </div>
             <div className="flex items-center justify-end gap-2 border-t border-line px-4 py-3">
               <button type="button" onClick={() => setPendingPurge(null)} className="rounded-lg px-3 py-2 text-caption font-semibold text-muted hover:text-fg-secondary">Cancel</button>
-              <button type="button" disabled={purgePreview === null || isPurging} onClick={() => void purgeSource()} className="focus-ring rounded-lg border border-danger/30 bg-danger/20 px-4 py-2 text-caption font-semibold text-danger disabled:cursor-not-allowed disabled:border-control disabled:bg-surface disabled:text-muted">{isPurging ? 'Deleting…' : 'Delete source and documents'}</button>
+              <button type="button" disabled={purgePreview === null || isPurging} onClick={() => void purgeSource()} className="focus-ring rounded-lg border border-danger/30 bg-danger/20 px-4 py-2 text-caption font-semibold text-danger disabled:border-control disabled:bg-surface disabled:text-muted">{isPurging ? 'Deleting…' : 'Delete source and documents'}</button>
             </div>
           </div>
         </DialogBackdrop>
@@ -324,7 +324,7 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
                 </div>
               )}
               <details className="rounded-xl border border-line bg-canvas/40" open={repairPreview.selectorPreviewApplied || undefined}>
-                <summary className="focus-ring cursor-pointer list-none rounded-xl px-3 py-2.5 text-caption font-semibold text-muted">CSS selector mapping <span className="ml-2 font-normal text-muted">Preview exact matches before saving</span></summary>
+                <summary className="focus-ring list-none rounded-xl px-3 py-2.5 text-caption font-semibold text-muted">CSS selector mapping <span className="ml-2 font-normal text-muted">Preview exact matches before saving</span></summary>
                 <div className="space-y-3 border-t border-line p-3"><div className="grid gap-3 sm:grid-cols-2"><label className="text-caption font-semibold text-muted">Link selector<input value={repairLinkSelector} onChange={(event) => setRepairLinkSelector(event.target.value)} placeholder="main a[href]" className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-control bg-canvas/70 px-3 font-mono text-label text-fg" /></label><label className="text-caption font-semibold text-muted">Forced-download selector<input value={repairDownloadSelector} onChange={(event) => setRepairDownloadSelector(event.target.value)} placeholder="a.download[href]" className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-control bg-canvas/70 px-3 font-mono text-label text-fg" /></label></div><div className="flex items-center justify-between"><p className="text-caption text-muted">Selectors are parsed natively; invalid CSS is rejected and no recipe is persisted by previewing.</p><button type="button" onClick={() => void previewRepairSelectors()} disabled={isPreviewingSelectors || (!repairLinkSelector.trim() && !repairDownloadSelector.trim())} className="rounded-lg border border-highlight/30 bg-highlight/10 px-3 py-2 text-caption font-semibold text-highlight disabled:opacity-40">{isPreviewingSelectors ? 'Matching…' : 'Preview selector matches'}</button></div>{repairPreview.selectorPreviewApplied && <p role="status" className="text-caption text-success">Selector preview returned {repairPreview.candidateLinks.length.toLocaleString()} matched resource links. Choose one above or refine the selectors.</p>}</div>
               </details>
               <label className="block text-caption font-semibold text-muted">
@@ -332,7 +332,7 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
                 <input type="url" required value={repairSeedUrl} onChange={(event) => setRepairSeedUrl(event.target.value)} placeholder="https://…" className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-control bg-canvas/70 px-3 text-label text-fg" />
               </label>
               <details className="rounded-xl border border-line bg-canvas/40">
-                <summary className="focus-ring flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-caption font-semibold text-muted">
+                <summary className="focus-ring flex list-none items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-caption font-semibold text-muted">
                   <span>
                     Scope imported documents
                     <span className="ml-2 font-normal text-muted">Optional filename, content, agency, size, and date rules</span>

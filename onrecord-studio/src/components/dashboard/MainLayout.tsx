@@ -454,7 +454,7 @@ export default function MainLayout() {
                                   : `Delete ${document.fileName} and everything derived from it`}
                                 aria-label={`Delete document ${document.fileName}`}
                                 onClick={() => setPendingDocumentPurge(document)}
-                                className="focus-ring grid w-8 shrink-0 place-items-center rounded-lg border border-control bg-canvas/70 text-muted transition hover:border-danger/30 hover:text-danger disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-control disabled:hover:text-muted"
+                                className="focus-ring grid w-8 shrink-0 place-items-center rounded-lg border border-control bg-canvas/70 text-muted transition hover:border-danger/30 hover:text-danger disabled:opacity-40 disabled:hover:border-control disabled:hover:text-muted"
                               >
                                 <Icon name="trash" className="h-3 w-3" />
                               </button>
@@ -521,7 +521,7 @@ export default function MainLayout() {
             </div>
             <div className="flex items-center justify-end gap-2 border-t border-line px-4 py-3">
               <button type="button" onClick={() => setPendingDocumentPurge(null)} className="rounded-lg px-3 py-2 text-caption font-semibold text-muted hover:text-fg-secondary">Cancel</button>
-              <button type="button" disabled={isPurgingDocument} onClick={() => void purgeDocument()} className="focus-ring rounded-lg border border-danger/30 bg-danger/20 px-4 py-2 text-caption font-semibold text-danger disabled:cursor-not-allowed disabled:opacity-60">{isPurgingDocument ? 'Deleting…' : 'Delete this document'}</button>
+              <button type="button" disabled={isPurgingDocument} onClick={() => void purgeDocument()} className="focus-ring rounded-lg border border-danger/30 bg-danger/20 px-4 py-2 text-caption font-semibold text-danger disabled:opacity-60">{isPurgingDocument ? 'Deleting…' : 'Delete this document'}</button>
             </div>
           </div>
         </DialogBackdrop>

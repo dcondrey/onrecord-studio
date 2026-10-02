@@ -44,7 +44,7 @@ export default function RegistrySnapshots() {
 
   return (
     <details className="mt-4 text-label">
-      <summary className="cursor-pointer text-fg-secondary">Public registry snapshots</summary>
+      <summary className="text-fg-secondary">Public registry snapshots</summary>
       <div className="mt-3 space-y-3 text-muted">
         <p>
           Import a registry list you downloaded yourself so a licence number read from a document can be shown with the name it is registered to. Nothing is fetched; the file&apos;s digest is kept with every match.{' '}

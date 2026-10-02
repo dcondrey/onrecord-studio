@@ -24,7 +24,7 @@ export default function ResearchSnapshotExport() {
   const rows = result ? Object.values(result.manifest.tableRows).reduce((sum, count) => sum + count, 0) : 0;
   return (
     <details className="mt-4 text-label">
-      <summary className="cursor-pointer text-fg-secondary">Research snapshot for outside tools</summary>
+      <summary className="text-fg-secondary">Research snapshot for outside tools</summary>
       <div className="mt-3 space-y-3 text-muted">
         <p>
           Writes a read-only DuckDB file of requests, documents, deadline evaluations and findings (digests, never document text) that Python, R or the DuckDB CLI can query while the app stays open, with a signed manifest naming the exact corpus state it came from.{' '}

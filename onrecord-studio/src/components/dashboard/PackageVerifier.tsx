@@ -31,7 +31,7 @@ export default function PackageVerifier() {
 
   return (
     <details className="app-panel p-4" aria-label="Verify a signed package">
-      <summary className="cursor-pointer font-semibold text-fg">Verify a signed chain-of-custody or evidence package</summary>
+      <summary className="font-semibold text-fg">Verify a signed chain-of-custody or evidence package</summary>
       <p className="mt-2 text-label leading-4 text-muted">
         Checks a package's signature and integrity without leaving the application. This confirms the
         file has not changed since whoever exported it signed it locally; it does not authenticate

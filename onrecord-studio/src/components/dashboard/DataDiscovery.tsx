@@ -107,9 +107,9 @@ export default function DataDiscovery({ schema, onInspect }: { schema: Analytica
       {stale && <p role="status" className="text-warning">Controls changed. Results below still describe the previous analysis; run discovery to update them.</p>}
       <p className="break-all text-muted">Results: {report.plan.dataset.displayName} · {report.plan.dataset.sourceUri ?? 'Local export'}<br />Snapshot {report.plan.dataset.snapshotId} · SHA-256 {report.plan.dataset.sourceSha256}<br />{report.createdAt} · {report.results.length}/{report.plan.queries.length} checks returned</p>
       <ul className="list-disc space-y-1 pl-4">{discoveryFindings(report).map((finding) => <li key={finding}>{finding}</li>)}</ul>
-      <details><summary className="cursor-pointer text-warning">Coverage and interpretation</summary><ul className="mt-2 list-disc space-y-1 pl-4 text-muted">{report.plan.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></details>
+      <details><summary className="text-warning">Coverage and interpretation</summary><ul className="mt-2 list-disc space-y-1 pl-4 text-muted">{report.plan.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></details>
       {report.results.map(({ query, result, error: queryError }) => <details key={query.id} open={query.id === 'groups' || query.id === 'changes'} className="rounded border border-line p-2">
-        <summary className="cursor-pointer font-semibold">{query.title}{result ? ` · ${result.rowCount}${result.truncated ? '+' : ''} results` : ' · failed'}</summary>
+        <summary className="font-semibold">{query.title}{result ? ` · ${result.rowCount}${result.truncated ? '+' : ''} results` : ' · failed'}</summary>
         <p className="my-2 leading-relaxed text-muted">{query.method}</p>
         <button type="button" className="analysis-button" onClick={() => onInspect(query.sql)}>Open query in SQL</button>
         {queryError && <p role="alert" className="mt-2 text-danger">{queryError}</p>}

@@ -186,7 +186,7 @@ function LeadDraftToggle({ findingId }: { findingId: string }) {
           event.preventDefault();
           setOpen((current) => !current);
         }}
-        className="focus-ring cursor-pointer select-none text-muted hover:text-fg"
+        className="focus-ring select-none text-muted hover:text-fg"
       >
         Draft a records request or appeal
       </summary>

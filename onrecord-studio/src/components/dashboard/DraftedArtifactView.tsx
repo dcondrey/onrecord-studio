@@ -138,7 +138,7 @@ export default function DraftedArtifactView({
       )}
       {draft.citations.length > 0 && (
         <details className="text-caption text-muted">
-          <summary className="cursor-pointer">
+          <summary className="">
             Citations ({draft.citations.length})
           </summary>
           <ul className="ml-4 mt-1 list-disc space-y-1">
@@ -156,7 +156,7 @@ export default function DraftedArtifactView({
       )}
       {draft.citedAuthorities.length > 0 && (
         <details className="text-caption text-muted">
-          <summary className="cursor-pointer">
+          <summary className="">
             Cited authorities ({draft.citedAuthorities.length})
           </summary>
           <ul className="ml-4 mt-1 list-disc space-y-0.5">

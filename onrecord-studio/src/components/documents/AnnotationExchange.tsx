@@ -117,7 +117,7 @@ export default function AnnotationExchange({
 
   return (
     <details className="rounded border border-line p-2">
-      <summary className="cursor-pointer font-semibold text-fg">Share and import annotations</summary>
+      <summary className="font-semibold text-fg">Share and import annotations</summary>
       <div className="mt-2 space-y-2">
         <p className="text-muted">Export signs your annotations of this document with this installation's key. A colleague previews the packet, sees whether they trust the key, and adds what is new. The signature shows the file is unchanged since signing, not who holds the key.</p>
         <button type="button" className={button} disabled={busy || !hasOwnMarks} onClick={() => void exportPacket()}>Export signed packet</button>

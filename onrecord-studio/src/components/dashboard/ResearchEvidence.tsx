@@ -128,7 +128,7 @@ export function EvidenceLinks({
           <div key={id} className="min-w-0 w-full text-label leading-4 text-muted">
           <div className="mb-2 flex flex-wrap gap-3">{links.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2">{source.label}</a>)}</div>
           <details className="min-w-0 text-label leading-4 text-muted">
-            <summary className="cursor-pointer text-accent">
+            <summary className="text-accent">
               {evidence.label}
             </summary>
             <div className="mt-2 space-y-2 rounded-lg border border-line-strong p-3">

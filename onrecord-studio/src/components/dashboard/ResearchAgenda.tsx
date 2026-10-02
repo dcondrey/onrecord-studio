@@ -55,7 +55,7 @@ export default function ResearchAgenda({
             {action.section === "meetings" && (() => {
               const report = reports.find((item) => item.id === action.reportId);
               const meeting = report?.synthesis.meetings[action.itemIndex];
-              return report && meeting && <details className="mt-3 text-label leading-4"><summary className="cursor-pointer text-accent">Read the dated agenda evidence</summary><div className="mt-2"><Citations citations={meeting.citations} report={report} /></div></details>;
+              return report && meeting && <details className="mt-3 text-label leading-4"><summary className="text-accent">Read the dated agenda evidence</summary><div className="mt-2"><Citations citations={meeting.citations} report={report} /></div></details>;
             })()}
             <button
               type="button"

@@ -18,7 +18,7 @@ export default function AnnotationAgreement({ annotations }: { annotations: read
   const left = report.left.orphaned + report.left.unattributed;
   return (
     <details className="rounded border border-line p-2">
-      <summary className="cursor-pointer font-semibold text-fg">Agreement between reviewers ({report.pairs.length})</summary>
+      <summary className="font-semibold text-fg">Agreement between reviewers ({report.pairs.length})</summary>
       <div className="mt-2 space-y-1.5">
         <p className="text-muted">Compares marks by different authors whose passages overlap. A colleague's marks appear here after you import their packet. Agreement means the same code; it says nothing about whether the code is right.</p>
         {report.pairs.length === 0 && <p className="text-muted">No overlapping marks by different authors.</p>}

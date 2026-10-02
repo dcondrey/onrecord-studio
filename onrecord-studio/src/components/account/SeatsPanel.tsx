@@ -117,7 +117,7 @@ export default function SeatsPanel({ onClose }: { onClose: () => void }) {
           </ul>
           {revoked.length > 0 ? (
             <details className="mt-3 text-label leading-4 text-muted">
-              <summary className="cursor-pointer">{revoked.length} revoked</summary>
+              <summary className="">{revoked.length} revoked</summary>
               <ul className="mt-1 space-y-1">
                 {revoked.map((seat) => <li key={seat.email}>{seat.email}: {seatState(seat)}. Assign it again to restore access.</li>)}
               </ul>

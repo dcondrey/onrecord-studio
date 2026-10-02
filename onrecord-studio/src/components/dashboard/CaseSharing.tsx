@@ -140,7 +140,7 @@ export default function CaseSharing({
 
   return (
     <details className="mt-3">
-      <summary className="cursor-pointer font-semibold text-fg">Collaborators and shared folder</summary>
+      <summary className="font-semibold text-fg">Collaborators and shared folder</summary>
       <p className="mt-2 text-label leading-4 text-muted">Collaborate without a server: put signed case packets in any folder you share (iCloud, Dropbox, a network drive, a USB stick) and review what others put there. Nothing is sent over the network by this app.</p>
 
       <section aria-label="Your contributor key" className="mt-3">

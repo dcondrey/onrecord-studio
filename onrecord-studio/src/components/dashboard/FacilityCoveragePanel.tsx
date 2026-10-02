@@ -177,7 +177,7 @@ function CoverageReport({ report }: { report: FacilityCoverageReport }) {
         </table>
       </div>
       <details className="text-label text-fg-secondary">
-        <summary className="cursor-pointer text-accent">Facilities per area</summary>
+        <summary className="text-accent">Facilities per area</summary>
         {report.areas.map((area) => (
           <div key={area.areaName} className="mt-2">
             <div className="font-semibold">{area.areaName}</div>

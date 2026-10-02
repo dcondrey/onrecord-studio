@@ -198,7 +198,7 @@ export default function AnomalyRadar() {
                   fillOpacity={focused?.key === arc.key ? 1 : arc.profile ? 0.88 : 0.72}
                   stroke="var(--chart-background)"
                   strokeWidth="1.5"
-                  className="cursor-pointer outline-none transition-opacity hover:opacity-100 focus:opacity-100"
+                  className="outline-none transition-opacity hover:opacity-100 focus:opacity-100"
                   role="button"
                   tabIndex={0}
                   aria-label={`Filter ${arc.label}${arc.severity === 'typical' ? '' : `, ${arc.severity}`}`}

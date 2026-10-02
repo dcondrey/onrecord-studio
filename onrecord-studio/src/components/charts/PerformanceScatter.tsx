@@ -167,7 +167,7 @@ export default function PerformanceScatter() {
                     role="button"
                     tabIndex={0}
                     aria-label={`${profile.agencyName}, ${severity}, ${profile.averageClosureDays.toFixed(1)} average days, z-score ${profile.performanceZScore.toFixed(2)}`}
-                    className="cursor-pointer outline-none"
+                    className="outline-none"
                     onMouseEnter={() => setFocused(profile)}
                     onMouseLeave={() => setFocused(null)}
                     onFocus={() => setFocused(profile)}

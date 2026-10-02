@@ -31,7 +31,7 @@ export default function DataMaintenance() {
     finally { release(); setSaving(false); }
   };
   return <details className="border-t border-line pt-3 text-label leading-4" aria-label="Data upkeep and storage">
-    <summary className="cursor-pointer text-fg-secondary">Data upkeep &amp; storage{status ? ` · ${status.policy.enabled ? 'Automatic' : 'Paused'} · ${size(status.retainedFileBytes)} managed files` : ''}</summary>
+    <summary className="text-fg-secondary">Data upkeep &amp; storage{status ? ` · ${status.policy.enabled ? 'Automatic' : 'Paused'} · ${size(status.retainedFileBytes)} managed files` : ''}</summary>
     <div className="mt-3 space-y-3 text-muted">
       <p>While the app is open, import acquired tables, retry recoverable failures, and recheck active sources within their saved scope. Paused and removed sources stay paused.</p>
       {draft && <fieldset disabled={saving} className="space-y-3">

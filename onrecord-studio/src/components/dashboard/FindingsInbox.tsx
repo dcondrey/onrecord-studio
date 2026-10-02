@@ -222,7 +222,7 @@ export default function FindingsInbox() {
 
       {isTauri() && (
         <details className="text-label text-fg-secondary">
-          <summary className="focus-ring cursor-pointer font-semibold">Export a verifiable report of these findings</summary>
+          <summary className="focus-ring font-semibold">Export a verifiable report of these findings</summary>
           <div className="mt-2">
             <VerifiableReportExport />
             <div className="mt-2">
@@ -234,7 +234,7 @@ export default function FindingsInbox() {
 
       {isTauri() && (
         <details className="text-label text-fg-secondary">
-          <summary className="focus-ring cursor-pointer font-semibold">Share these findings as a read-only file</summary>
+          <summary className="focus-ring font-semibold">Share these findings as a read-only file</summary>
           <div className="mt-2">
             <ShareableBundleExport findings={lensedFindings} />
           </div>

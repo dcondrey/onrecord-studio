@@ -536,7 +536,7 @@ function scanRedactionMarkers(text: string): { start: number; end: number }[] {
 function ProvenanceGraphPanel({ graph }: { graph: import('../../types').ProvenanceClaimGraph }) {
   return (
     <details className="border-b border-line bg-surface/40 px-4 py-2">
-      <summary className="cursor-pointer text-caption font-semibold text-fg-secondary">
+      <summary className="text-caption font-semibold text-fg-secondary">
         C2PA claim graph · {graph.claims.length} claim{graph.claims.length === 1 ? '' : 's'} · {graph.ingredients.length} ingredient relationship{graph.ingredients.length === 1 ? '' : 's'}
       </summary>
       <div className="mt-2 grid gap-3 border-t border-line pt-2 lg:grid-cols-2">
@@ -682,7 +682,7 @@ function RevisionRecoveryPanel({ profile, error }: { profile: RecoveredVersionPr
       {profile.warnings.length > 0 && <ul className="mt-2 space-y-1 text-caption text-warning">{profile.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
       {profile.revisionDiagnostics.map((diagnostic) => (
         <details key={`diagnostic-${diagnostic.revisionNumber}-${diagnostic.snapshotEndOffset}`} className="mt-2 rounded-lg border border-line bg-canvas/70 px-3 py-2">
-          <summary className="cursor-pointer text-caption font-medium text-fg-secondary">Revision {diagnostic.revisionNumber} structure · {diagnostic.objectCount.toLocaleString()} objects · {diagnostic.pageCount.toLocaleString()} pages · {diagnostic.pageExtractionFailureCount.toLocaleString()} page errors</summary>
+          <summary className="text-caption font-medium text-fg-secondary">Revision {diagnostic.revisionNumber} structure · {diagnostic.objectCount.toLocaleString()} objects · {diagnostic.pageCount.toLocaleString()} pages · {diagnostic.pageExtractionFailureCount.toLocaleString()} page errors</summary>
           <dl className="mt-2 grid grid-cols-2 gap-2 border-t border-line pt-2 text-caption text-muted">
             <div><dt>Xref</dt><dd className="font-mono text-fg-secondary">{diagnostic.crossReferenceType ?? 'unparsed'} at {diagnostic.xrefStartOffset?.toLocaleString() ?? 'unknown'}</dd></div>
             <div><dt>Previous xref</dt><dd className="font-mono text-fg-secondary">{diagnostic.declaredPreviousXrefOffset?.toLocaleString() ?? 'none declared'}</dd></div>
@@ -696,13 +696,13 @@ function RevisionRecoveryPanel({ profile, error }: { profile: RecoveredVersionPr
       ))}
       {profile.recoveredTextSegments.map((segment) => (
         <details key={`${segment.revisionNumber}-${segment.recoveredTextSha256}`} className="mt-2 rounded-lg border border-line bg-canvas/70 px-3 py-2">
-          <summary className="cursor-pointer text-caption font-medium text-fg-secondary">Revision {segment.revisionNumber} · {segment.recoveredCharacterCount.toLocaleString()} recovered characters · {segment.maskedFindingCount} sensitive values masked</summary>
+          <summary className="text-caption font-medium text-fg-secondary">Revision {segment.revisionNumber} · {segment.recoveredCharacterCount.toLocaleString()} recovered characters · {segment.maskedFindingCount} sensitive values masked</summary>
           <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap border-t border-line pt-2 font-mono text-caption leading-relaxed text-muted">{segment.maskedText}</pre>
         </details>
       ))}
       {profile.postEofMetadataArtifacts.length > 0 && (
         <details className="mt-2 rounded-lg border border-line bg-canvas/70 px-3 py-2">
-          <summary className="cursor-pointer text-caption font-medium text-fg-secondary">{profile.postEofMetadataArtifacts.length} post-EOF metadata artifact{profile.postEofMetadataArtifacts.length === 1 ? '' : 's'}</summary>
+          <summary className="text-caption font-medium text-fg-secondary">{profile.postEofMetadataArtifacts.length} post-EOF metadata artifact{profile.postEofMetadataArtifacts.length === 1 ? '' : 's'}</summary>
           <ul className="mt-2 space-y-1 border-t border-line pt-2 font-mono text-caption text-muted">{profile.postEofMetadataArtifacts.map((artifact) => <li key={`${artifact.byteOffset}-${artifact.valueSha256}`}>{artifact.category.split('_').join(' ')} at byte {artifact.byteOffset.toLocaleString()}: {artifact.maskedValue}</li>)}</ul>
         </details>
       )}

@@ -115,7 +115,7 @@ export function SourceConnectorForm({ connector, inputId }: { connector: SourceC
         className={cn(
           'focus-ring flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border px-3 text-label font-semibold transition',
           isDiscovering || syncCapacityReached || (activeIsSyncing && !portalUrlDraft.trim())
-            ? 'cursor-not-allowed border-control bg-surface text-muted'
+            ? 'border-control bg-surface text-muted'
             : 'primary-action border-transparent text-white hover:brightness-105',
         )}
       >

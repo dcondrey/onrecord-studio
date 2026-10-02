@@ -204,7 +204,7 @@ export default function InvestigationDesk() {
           </div>
         </div>
         <details className="rounded-xl border border-line-strong p-4">
-          <summary className="cursor-pointer text-sm font-semibold text-fg">
+          <summary className="text-sm font-semibold text-fg">
             3. Request the missing records
           </summary>
           <p className="mt-3 text-label leading-4 text-muted">

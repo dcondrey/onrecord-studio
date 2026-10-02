@@ -213,7 +213,7 @@ export default function MeetingsView() {
       })}
       {calendar && calendar.limitations.length > 0 && (
         <details className="mt-5 text-label text-muted">
-          <summary className="cursor-pointer">Limitations</summary>
+          <summary className="">Limitations</summary>
           <ul className="mt-1 list-disc pl-4">
             {calendar.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}
           </ul>

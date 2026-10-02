@@ -65,7 +65,7 @@ export default function UnredactorPanel({ documentId, portalKey }: { documentId:
           <div className="text-label font-bold uppercase tracking-[0.18em] text-muted">PDF overlay integrity</div>
           <div className="mt-0.5 text-caption text-muted">Conservative vector, text-layer, and metadata inspection; permanently removed content cannot be recovered</div>
         </div>
-        <button type="button" onClick={() => void scan()} disabled={isScanning} className="rounded-lg border border-highlight/30 bg-highlight/10 px-3 py-2 text-label font-semibold text-highlight transition hover:bg-highlight/20 disabled:cursor-not-allowed disabled:opacity-50">
+        <button type="button" onClick={() => void scan()} disabled={isScanning} className="rounded-lg border border-highlight/30 bg-highlight/10 px-3 py-2 text-label font-semibold text-highlight transition hover:bg-highlight/20 disabled:opacity-50">
           {isScanning ? `Inspecting… ${elapsedSeconds}s` : 'Run integrity scan'}
         </button>
       </div>
@@ -147,7 +147,7 @@ function PageFindings({ findings, notes, onNoteChange }: { findings: RedactionPa
             </div>
             {finding.intersections.length > 0 && (
               <details className="mt-1.5 border-t border-line pt-1.5">
-                <summary className="cursor-pointer text-muted">Intersection coordinates</summary>
+                <summary className="text-muted">Intersection coordinates</summary>
                 <ul className="mt-1 space-y-1 font-mono text-caption text-muted">
                   {finding.intersections.map((intersection, index) => (
                     <li key={`${intersection.kind}-${index}`} className="space-y-1.5 rounded border border-line p-2">

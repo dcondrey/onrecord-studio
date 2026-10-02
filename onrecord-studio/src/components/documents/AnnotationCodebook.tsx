@@ -88,7 +88,7 @@ export default function AnnotationCodebook({
 
   return (
     <details className="rounded border border-line p-2">
-      <summary className="cursor-pointer font-semibold text-fg">Codebook ({entries.length})</summary>
+      <summary className="font-semibold text-fg">Codebook ({entries.length})</summary>
       <div className="mt-2 space-y-2">
         <p className="text-muted">Issue codes you choose from when marking a passage. A mark with a label that is not here is flagged as uncoded. Share the codebook as a plain JSON file.</p>
         {entries.length === 0 && <p className="text-muted">No codes yet.</p>}

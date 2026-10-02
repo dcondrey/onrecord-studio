@@ -75,7 +75,7 @@ export default function AnnotationSearch({ onOpen }: { onOpen: (link: EvidenceLi
 
   return (
     <details className="mx-4 my-2 rounded border border-line p-3 text-label text-fg-secondary lg:mx-6">
-      <summary className="cursor-pointer text-label font-semibold text-fg">Search annotations across documents</summary>
+      <summary className="text-label font-semibold text-fg">Search annotations across documents</summary>
       <div className="mt-2 space-y-2">
         <p className="text-muted">Lists the notes, highlights, and issue codes saved on this computer, across all documents. Each is checked against its document's current text. Positions refer to extracted text, not PDF pages.</p>
         <form className="grid gap-1.5 sm:grid-cols-4" onSubmit={(event) => { event.preventDefault(); search(); }}>

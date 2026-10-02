@@ -336,7 +336,7 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
                   <div className="text-caption font-semibold text-fg-secondary">Legislative or policy text</div>
                   <div className="mt-0.5 text-caption text-muted">UTF-8 Markdown or plain text, up to 8 MiB</div>
                 </div>
-                <label className="cursor-pointer rounded-md border border-highlight/30 bg-highlight/10 px-2.5 py-1.5 text-caption font-semibold text-highlight transition hover:bg-highlight/20">
+                <label className="rounded-md border border-highlight/30 bg-highlight/10 px-2.5 py-1.5 text-caption font-semibold text-highlight transition hover:bg-highlight/20">
                   Choose source file
                   <input ref={fileInput} type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" onChange={(event) => void loadFile(event)} className="sr-only" />
                 </label>

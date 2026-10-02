@@ -341,7 +341,7 @@ export default function EntityGraph() {
       </div>
 
       <details className="mt-2 text-caption text-muted">
-        <summary className="focus-ring cursor-pointer font-semibold text-fg-secondary">Entities that connect the most others</summary>
+        <summary className="focus-ring font-semibold text-fg-secondary">Entities that connect the most others</summary>
         {brokersFailed ? (
           <p role="alert" className="mt-1 text-danger">The ranking could not be read. This does not mean no entity bridges others.</p>
         ) : brokers === null ? (
@@ -559,7 +559,7 @@ export default function EntityGraph() {
                 role="button"
                 aria-label={`${edge.neighbor.displayValue}: ${kindLabels[edge.neighbor.kind]}, ${gradeLabel(edge.neighbor.validationGrade)}, ${edgeVisual(edge.kind, edge.basis).label}. Select to centre the graph on it.`}
                 className={cn(
-                  'cursor-pointer focus:outline-none focus-visible:[&>circle:first-of-type]:stroke-white',
+                  'focus:outline-none focus-visible:[&>circle:first-of-type]:stroke-white',
                   dimOthers && !isOwn(edge.neighbor.entityId) && 'opacity-40',
                 )}
                 data-own-organization={isOwn(edge.neighbor.entityId) ? 'true' : undefined}

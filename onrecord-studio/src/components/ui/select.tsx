@@ -17,7 +17,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
         <div className="relative">
           <select
             className={cn(
-              "w-full bg-canvas text-fg-secondary text-label leading-4 border border-control rounded-lg pl-3 pr-8 py-2 appearance-none focus:outline-none focus:border-highlight font-medium shadow-sm transition-all cursor-pointer",
+              "w-full bg-canvas text-fg-secondary text-label leading-4 border border-control rounded-lg pl-3 pr-8 py-2 appearance-none focus:outline-none focus:border-highlight font-medium shadow-sm transition-all",
               className
             )}
             ref={ref}
