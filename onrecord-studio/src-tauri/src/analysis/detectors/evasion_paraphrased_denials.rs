@@ -16,6 +16,7 @@
 //! signal the directive asks for without a fastembed dependency (the vector index isn't exposed
 //! to the detector contract; a future contract change could add it).
 
+use super::text_shared::jaccard;
 use crate::{
     analysis::finding::{
         finding_id, Finding, FindingCitation, FindingConfidence, FindingKind, FindingSeverity,
@@ -230,19 +231,6 @@ fn hash64(bytes: &[u8]) -> u64 {
     let mut hasher = DefaultHasher::new();
     bytes.hash(&mut hasher);
     hasher.finish()
-}
-
-fn jaccard(a: &HashSet<u64>, b: &HashSet<u64>) -> f64 {
-    if a.is_empty() || b.is_empty() {
-        return 0.0;
-    }
-    let intersection = a.intersection(b).count() as f64;
-    let union = a.union(b).count() as f64;
-    if union == 0.0 {
-        0.0
-    } else {
-        intersection / union
-    }
 }
 
 /// Per-agency cluster of paraphrased denials: high bow-Jaccard AND low shingle-Jaccard between

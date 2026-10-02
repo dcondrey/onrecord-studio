@@ -27,6 +27,7 @@
 //!   against another, a pattern signal.
 
 use super::public_documents::{load_public_documents, PublicDocument};
+use super::text_shared::{load_agencies, split_units, Agency, AgencyIndex};
 use crate::{
     analysis::{
         assertion_index::{extract_assertions, AssertionPredicate, AssertionValue},
@@ -194,37 +195,7 @@ struct NoticeRecord {
 /// Byte spans of lines and sentences. A period after a run of three letters or fewer ("Mar.",
 /// "St.", "No.") does not end a sentence, so an abbreviated month stays with its date.
 fn units(text: &str) -> Vec<Span> {
-    let bytes = text.as_bytes();
-    let mut spans = Vec::new();
-    let mut start = 0;
-    for (index, character) in text.char_indices() {
-        let ends = match character {
-            '\n' | ';' | '!' | '?' => true,
-            '.' => {
-                let next_is_break = bytes
-                    .get(index + 1)
-                    .is_none_or(|next| next.is_ascii_whitespace());
-                let letters = bytes[..index]
-                    .iter()
-                    .rev()
-                    .take_while(|byte| byte.is_ascii_alphabetic())
-                    .count();
-                next_is_break && !(1..=3).contains(&letters)
-            }
-            _ => false,
-        };
-        if ends {
-            let end = index + character.len_utf8();
-            if !text[start..end].trim().is_empty() {
-                spans.push((start, end));
-            }
-            start = end;
-        }
-    }
-    if !text[start..].trim().is_empty() {
-        spans.push((start, text.len()));
-    }
-    spans
+    split_units(text, true, 1)
 }
 
 fn dates_in(text: &str, (start, end): Span) -> Vec<(Span, NaiveDate)> {
@@ -410,15 +381,6 @@ fn posted_date(value: &str) -> Option<NaiveDate> {
         .ok()
         .map(|time| time.with_timezone(&Utc).date_naive())
 }
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct Agency {
-    id: i64,
-    name: String,
-}
-
-/// `(portal, request id)` to the agency the request was made to.
-type AgencyIndex = HashMap<(String, i64), Agency>;
 
 struct StatuteRow {
     statute_id: String,
@@ -859,7 +821,8 @@ pub async fn run(repository: &DuckDbRepository) -> Result<Vec<Finding>, AppError
     if documents.is_empty() {
         return Ok(Vec::new());
     }
-    let agencies = load_agencies(repository).await?;
+    let agencies =
+        load_agencies(repository, "Encampment notice agency sweep", MAX_REQUESTS).await?;
     let statutes = notice_statutes(load_statutes(repository).await?);
     let jurisdictions = load_jurisdictions(repository).await?;
     Ok(findings(&sources(
@@ -868,40 +831,6 @@ pub async fn run(repository: &DuckDbRepository) -> Result<Vec<Finding>, AppError
         statutes,
         jurisdictions,
     )))
-}
-
-async fn load_agencies(repository: &DuckDbRepository) -> Result<AgencyIndex, AppError> {
-    repository
-        .query_connection("Encampment notice agency sweep", move |conn| {
-            let mut statement = conn
-                .prepare(
-                    "SELECT r.portal_subdomain, r.id, a.id, a.name
-                     FROM requests r
-                     INNER JOIN agencies a
-                        ON a.id = r.agency_id AND a.portal_subdomain = r.portal_subdomain
-                     ORDER BY r.created_at DESC
-                     LIMIT ?1",
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to prepare agency sweep: {error}"))
-                })?;
-            let rows = statement
-                .query_map(params![MAX_REQUESTS], |row| {
-                    Ok((
-                        (row.get::<_, String>(0)?, row.get::<_, i64>(1)?),
-                        Agency {
-                            id: row.get(2)?,
-                            name: row.get(3)?,
-                        },
-                    ))
-                })
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to run agency sweep: {error}"))
-                })?;
-            rows.collect::<Result<AgencyIndex, _>>()
-                .map_err(|error| AppError::Storage(format!("Failed to decode agency row: {error}")))
-        })
-        .await
 }
 
 async fn load_statutes(repository: &DuckDbRepository) -> Result<Vec<StatuteRow>, AppError> {
@@ -993,7 +922,9 @@ mod tests {
         let rows = load_statutes(&repo).await.expect("statutes");
         assert!(rows.iter().any(|row| row.statute_id == "CPRA_7922.535"));
         assert!(notice_statutes(rows).is_empty());
-        load_agencies(&repo).await.expect("agencies");
+        load_agencies(&repo, "Encampment notice agency sweep", MAX_REQUESTS)
+            .await
+            .expect("agencies");
         load_jurisdictions(&repo).await.expect("portals");
     }
 

@@ -13,6 +13,7 @@
 //! not a record of practice.
 
 use super::public_documents::{load_public_documents, PublicDocument};
+use super::text_shared::split_units;
 use crate::{
     analysis::{
         document_class::{classify, DocumentClass},
@@ -273,30 +274,7 @@ fn parse_fiscal_suffix(word: &str) -> Option<i32> {
 
 /// Byte ranges of sentences; a period ends one only before whitespace or end of text.
 fn sentences(text: &str) -> Vec<(usize, usize)> {
-    let mut ranges = Vec::new();
-    let mut start = 0usize;
-    let bytes = text.as_bytes();
-    let mut index = 0usize;
-    while index < bytes.len() {
-        let ends = match bytes[index] {
-            b'\n' | b';' | b'!' | b'?' => true,
-            b'.' => bytes
-                .get(index + 1)
-                .is_none_or(|next| next.is_ascii_whitespace()),
-            _ => false,
-        };
-        index += 1;
-        if ends {
-            if text[start..index].trim().len() >= 12 {
-                ranges.push((start, index));
-            }
-            start = index;
-        }
-    }
-    if text[start..].trim().len() >= 12 {
-        ranges.push((start, text.len()));
-    }
-    ranges
+    split_units(text, false, 12)
 }
 
 /// The band a stated figure is held to, in days. A whole-number statement carries at least half

@@ -42,6 +42,7 @@ pub mod redaction_inconsistency;
 pub mod regenerated_response;
 pub mod response_time_claim;
 pub mod spending_cases;
+mod text_shared;
 
 /// Summary returned by [`refresh_all_findings`].
 #[derive(Debug, Clone, Copy, Default)]

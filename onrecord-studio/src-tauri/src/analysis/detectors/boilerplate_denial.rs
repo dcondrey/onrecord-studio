@@ -18,6 +18,7 @@
 //! **What this is not**: a legal finding. `FindingKind::BoilerplateDenial` is a pattern signal.
 //! `is_legal_claim = false`.
 
+use super::text_shared::jaccard;
 use crate::{
     analysis::finding::{
         finding_id, Finding, FindingCitation, FindingConfidence, FindingKind, FindingSeverity,
@@ -260,18 +261,6 @@ fn shingle(normalized: &str, n: usize) -> HashSet<u64> {
         set.insert(hasher);
     }
     set
-}
-
-fn jaccard(a: &HashSet<u64>, b: &HashSet<u64>) -> f64 {
-    if a.is_empty() || b.is_empty() {
-        return 0.0;
-    }
-    let intersection = a.intersection(b).count();
-    let union = a.len() + b.len() - intersection;
-    if union == 0 {
-        return 0.0;
-    }
-    intersection as f64 / union as f64
 }
 
 /// Greedy single-link clustering. For each unseen candidate, expand to any other candidate whose

@@ -31,6 +31,7 @@
 //!   lowers it.
 
 use super::public_documents::{load_public_documents, PublicDocument};
+use super::text_shared::{load_agencies, Agency, AgencyIndex};
 use crate::{
     analysis::{
         assertion_index::{extract_assertions, AssertionPredicate, AssertionValue},
@@ -50,8 +51,7 @@ use crate::{
     storage::DuckDbRepository,
 };
 use chrono::{DateTime, NaiveDate, Utc};
-use duckdb::params;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 pub const SLUG: &str = "practice_departure";
 
@@ -66,15 +66,6 @@ const POSTED_DATE_PENALTY: u16 = 1_500;
 /// A large stated failure share over a real sample is serious; a small sample is not.
 const SERIOUS_MIN_CASES: u128 = 10;
 const SERIOUS_NONCOMPLIANT_PERCENT: u128 = 50;
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub(super) struct Agency {
-    pub id: i64,
-    pub name: String,
-}
-
-/// `(portal, request id)` to the agency the request was made to.
-pub(super) type AgencyIndex = HashMap<(String, i64), Agency>;
 
 struct Policy<'a> {
     document: &'a PublicDocument,
@@ -163,7 +154,8 @@ fn posted_date(value: &str) -> Option<NaiveDate> {
 /// caller must not read that as compliance.
 pub async fn gaps(repository: &DuckDbRepository) -> Result<Vec<EvidenceGap>, AppError> {
     let documents = load_public_documents(repository, MAX_DOCUMENTS).await?;
-    let agencies = load_agencies(repository).await?;
+    let agencies =
+        load_agencies(repository, "Practice departure agency sweep", MAX_REQUESTS).await?;
     Ok(untestable_policies(&sources(&documents, &agencies)))
 }
 
@@ -211,42 +203,9 @@ fn topic_labels(requirements: &[Requirement]) -> String {
 
 pub async fn run(repository: &DuckDbRepository) -> Result<Vec<Finding>, AppError> {
     let documents = load_public_documents(repository, MAX_DOCUMENTS).await?;
-    let agencies = load_agencies(repository).await?;
+    let agencies =
+        load_agencies(repository, "Practice departure agency sweep", MAX_REQUESTS).await?;
     Ok(findings(&sources(&documents, &agencies)))
-}
-
-async fn load_agencies(repository: &DuckDbRepository) -> Result<AgencyIndex, AppError> {
-    repository
-        .query_connection("Practice departure agency sweep", move |conn| {
-            let mut statement = conn
-                .prepare(
-                    "SELECT r.portal_subdomain, r.id, a.id, a.name
-                     FROM requests r
-                     INNER JOIN agencies a
-                        ON a.id = r.agency_id AND a.portal_subdomain = r.portal_subdomain
-                     ORDER BY r.created_at DESC
-                     LIMIT ?1",
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to prepare agency sweep: {error}"))
-                })?;
-            let rows = statement
-                .query_map(params![MAX_REQUESTS], |row| {
-                    Ok((
-                        (row.get::<_, String>(0)?, row.get::<_, i64>(1)?),
-                        Agency {
-                            id: row.get(2)?,
-                            name: row.get(3)?,
-                        },
-                    ))
-                })
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to run agency sweep: {error}"))
-                })?;
-            rows.collect::<Result<AgencyIndex, _>>()
-                .map_err(|error| AppError::Storage(format!("Failed to decode agency row: {error}")))
-        })
-        .await
 }
 
 fn findings(sources: &Sources) -> Vec<Finding> {
