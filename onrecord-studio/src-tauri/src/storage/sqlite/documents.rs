@@ -5,9 +5,9 @@ use super::{
     connection::execute_transaction,
     integrity::{
         compute_extracted_text_sha256, derive_integrity_flags, has_heavy_redaction_density,
-        normalize_sha256, replace_managed_integrity_flags, request_has_suspicious_density,
-        synchronize_density_audit, update_automatic_audit_status, upsert_automatic_case_audit,
-        validate_entropy_metadata, validate_extracted_text_sha256,
+        normalize_sha256, replace_managed_integrity_flags, request_has_heavily_redacted_document,
+        request_has_suspicious_density, synchronize_density_audit, update_automatic_audit_status,
+        upsert_automatic_case_audit, validate_entropy_metadata, validate_extracted_text_sha256,
     },
     policy::synchronize_policy_evidence_gaps,
     search::synchronize_fts_row,
@@ -869,52 +869,13 @@ impl DuckDbRepository {
                         )),
                     })?;
 
-                let request_has_heavy_redaction = if text_content_has_heavy_redaction {
-                    true
-                } else {
-                    let mut statement = tx
-                        .prepare(
-                            "SELECT documents_fts.extracted_text
-                     FROM documents
-                     INNER JOIN documents_fts
-                        ON documents_fts.document_id = documents.id
-                       AND documents_fts.portal_subdomain = documents.portal_subdomain
-                     WHERE documents.request_id = ?1
-                       AND documents.portal_subdomain = ?2
-                       AND documents.id <> ?3",
-                        )
-                        .map_err(|e| {
-                            AppError::Internal(format!(
-                                "Failed to prepare request redaction scan: {}",
-                                e
-                            ))
-                        })?;
-                    let indexed_text_rows = statement
-                        .query_map(
-                            params![analytical_state.request_id, subdomain, document_id],
-                            |row| row.get::<_, String>(0),
-                        )
-                        .map_err(|e| {
-                            AppError::Internal(format!(
-                                "Failed to execute request redaction scan: {}",
-                                e
-                            ))
-                        })?;
-                    let mut heavy_redaction_found = false;
-                    for indexed_text in indexed_text_rows {
-                        let indexed_text = indexed_text.map_err(|e| {
-                            AppError::Internal(format!(
-                                "Failed to decode indexed text during redaction scan: {}",
-                                e
-                            ))
-                        })?;
-                        if has_heavy_redaction_density(&indexed_text)? {
-                            heavy_redaction_found = true;
-                            break;
-                        }
-                    }
-                    heavy_redaction_found
-                };
+                let request_has_heavy_redaction = text_content_has_heavy_redaction
+                    || request_has_heavily_redacted_document(
+                        tx,
+                        analytical_state.request_id,
+                        &subdomain,
+                        Some(document_id),
+                    )?;
                 let audit_id = format!("auto-{}-{}", subdomain, analytical_state.request_id);
 
                 let updated_documents = tx

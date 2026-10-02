@@ -303,6 +303,9 @@ fn map_legacy_legal_authority_row(row: &Row<'_>) -> duckdb::Result<LegacyLegalAu
     })
 }
 
+/// Audits relations kept logical because DuckDB cannot support the required parent updates with
+/// physical foreign keys. Canonical evidence is never auto-deleted or guessed into a parent; the
+/// operator receives exact relation/count pairs and can restore from the retained source data.
 pub(super) fn verify_logical_relations(conn: &Connection) -> Result<(), AppError> {
     const CHECKS: [(&str, &str); 10] = [
         (

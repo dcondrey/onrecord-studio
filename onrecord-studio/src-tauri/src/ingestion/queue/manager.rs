@@ -626,7 +626,10 @@ impl QueueManager {
     /// `verify_logical_relations`.
     ///
     /// The returned evidence paths are unlinked by the caller. The repository owns rows, not files.
-    pub async fn purge_source(&self, source_key: &str) -> Result<SourcePurge, AppError> {
+    pub async fn purge_source(
+        &self,
+        source_key: &str,
+    ) -> Result<CommittedPurge<SourcePurge>, AppError> {
         let _provisioning_guard = self.provisioning_lock.lock().await;
         if self
             .repository
@@ -650,7 +653,7 @@ impl QueueManager {
         &self,
         source_key: &str,
         document_id: u64,
-    ) -> Result<DocumentPurge, AppError> {
+    ) -> Result<CommittedPurge<DocumentPurge>, AppError> {
         let _provisioning_guard = self.provisioning_lock.lock().await;
         self.repository
             .purge_document(source_key, document_id)

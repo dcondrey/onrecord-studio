@@ -38,7 +38,7 @@ use crate::parsers::{
 };
 use crate::storage::corpus::{CorpusDocumentInput, CorpusIndex};
 use crate::storage::sqlite::{
-    DocumentDownloadFinalization, DocumentExtractionFinalization, DuckDbRepository,
+    CommittedPurge, DocumentDownloadFinalization, DocumentExtractionFinalization, DuckDbRepository,
     PortalSyncRunFinalization,
 };
 use crate::types::{

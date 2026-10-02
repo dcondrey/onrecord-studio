@@ -303,6 +303,18 @@ pub struct ClaimedIngestionTask {
     pub attempts: u64,
 }
 
+/// A purge whose deletes have committed.
+///
+/// Emptied parent rows (analytical snapshots, the `portals` row) can only be retired in a second
+/// transaction, which can fail after the first has committed. `retirement_error` carries that
+/// failure instead of discarding `purge`: the evidence paths in it are referenced by nothing any
+/// more, so the caller still has to unlink them and purge the corpus before reporting the error.
+#[derive(Debug)]
+pub struct CommittedPurge<T> {
+    pub purge: T,
+    pub retirement_error: Option<AppError>,
+}
+
 /// A document's recorded evidence file, already resolved and gated by the command layer.
 ///
 /// Resolution is split out of the repository on purpose: deciding whether a path is inside the

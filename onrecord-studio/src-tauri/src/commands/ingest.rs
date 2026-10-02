@@ -245,13 +245,17 @@ pub async fn purge_source(
 ) -> Result<SourcePurge, AppError> {
     let _maintenance = super::maintenance::MAINTENANCE_LOCK.lock().await;
     let source_key = validate_portal_key(&source_key)?;
-    let mut purge = manager.purge_source(source_key).await?;
+    let committed = manager.purge_source(source_key).await?;
+    let mut purge = committed.purge;
     // Unlinked before the corpus purge can fail: once the core has committed, nothing references
     // these files, so a later error must not strand them where no retry can find them.
     let kept = remove_evidence_files(&purge.local_paths).await;
     purge.local_paths.retain(|path| !kept.contains(path));
     index.purge_portal(source_key.to_string()).await?;
-    Ok(purge)
+    match committed.retirement_error {
+        Some(error) => Err(error),
+        None => Ok(purge),
+    }
 }
 
 /// Destroys one ingested document and everything derived from it. See [`purge_source`].
@@ -264,7 +268,8 @@ pub async fn purge_document(
 ) -> Result<DocumentPurge, AppError> {
     let _maintenance = super::maintenance::MAINTENANCE_LOCK.lock().await;
     let source_key = validate_portal_key(&source_key)?;
-    let mut purge = manager.purge_document(source_key, document_id).await?;
+    let committed = manager.purge_document(source_key, document_id).await?;
+    let mut purge = committed.purge;
     if let Some(path) = purge.local_path.clone() {
         if !remove_evidence_files(std::slice::from_ref(&path))
             .await
@@ -280,7 +285,10 @@ pub async fn purge_document(
     index
         .purge_document(source_key.to_string(), document_id)
         .await?;
-    Ok(purge)
+    match committed.retirement_error {
+        Some(error) => Err(error),
+        None => Ok(purge),
+    }
 }
 
 /// Unlinks purged evidence files, reporting nothing.

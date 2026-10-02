@@ -1,7 +1,10 @@
 //! Removing documents and sources without leaving orphaned rows or objects.
 
 use super::*;
-use super::{analytical::quote_ident, connection::execute_transaction};
+use super::{
+    analytical::quote_ident, connection::execute_transaction,
+    integrity::resynchronize_request_density_flags,
+};
 
 impl DuckDbRepository {
     /// Discards a document row that guidance refused after extraction, before any extracted text
@@ -74,7 +77,7 @@ impl DuckDbRepository {
         &self,
         subdomain: &str,
         document_id: u64,
-    ) -> Result<DocumentPurge, AppError> {
+    ) -> Result<CommittedPurge<DocumentPurge>, AppError> {
         let stored_id = i64::try_from(document_id).map_err(|error| {
             AppError::DataParsing(format!(
                 "Document identifier cannot be represented by the core database: {error}"
@@ -92,7 +95,7 @@ impl DuckDbRepository {
             transaction.commit().map_err(|error| {
                 AppError::Storage(format!("Failed to commit a document purge: {error}"))
             })?;
-            retire_fk_parent_rows(
+            let retirement_error = retire_fk_parent_rows(
                 conn,
                 "analytical_snapshots",
                 "snapshot_id",
@@ -100,23 +103,16 @@ impl DuckDbRepository {
                 "Purged an analytical snapshot's rows but could not remove its snapshot record, \
              so it is still listed with nothing under it. Running the purge again is safe \
              and finishes it",
-            )?;
-            Ok(purge)
+            )
+            .err();
+            Ok(CommittedPurge {
+                purge,
+                retirement_error,
+            })
         })
         .await
     }
 
-    /// Hard-deletes a source and everything ingested under it, including the `portals` row.
-    ///
-    /// [`crate::ingestion::queue::QueueManager::remove_source`] withdraws a source while keeping
-    /// its documents, and says so. This destroys them. Both are legitimate and they are not the
-    /// same operation, so they stay separate commands with separate confirmations rather than one
-    /// with a flag.
-    ///
-    /// Deleting the `portals` row is the point of the difference: a withdrawn source is invisible
-    /// but immortal, since `list_portal_registrations` filters `REMOVED` out and nothing ever
-    /// re-activates it, so the same URL can never be added again cleanly. A purged source is gone,
-    /// and adding it back is an ordinary first ingestion.
     /// Counts what [`Self::purge_source`] would destroy, without destroying it.
     ///
     /// Every predicate here is copied from the corresponding delete in `purge_source`, and
@@ -164,7 +160,21 @@ impl DuckDbRepository {
         .await
     }
 
-    pub async fn purge_source(&self, source_key: &str) -> Result<SourcePurge, AppError> {
+    /// Hard-deletes a source and everything ingested under it, including the `portals` row.
+    ///
+    /// [`crate::ingestion::queue::QueueManager::remove_source`] withdraws a source while keeping
+    /// its documents, and says so. This destroys them. Both are legitimate and they are not the
+    /// same operation, so they stay separate commands with separate confirmations rather than one
+    /// with a flag.
+    ///
+    /// Deleting the `portals` row is the point of the difference: a withdrawn source is invisible
+    /// but immortal, since `list_portal_registrations` filters `REMOVED` out and nothing ever
+    /// re-activates it, so the same URL can never be added again cleanly. A purged source is gone,
+    /// and adding it back is an ordinary first ingestion.
+    pub async fn purge_source(
+        &self,
+        source_key: &str,
+    ) -> Result<CommittedPurge<SourcePurge>, AppError> {
         let source_key = source_key.to_string();
         self.query_connection("Purge source", move |conn| {
         let source_key = source_key.as_str();
@@ -260,6 +270,7 @@ impl DuckDbRepository {
                 "statutory_violations",
                 "DELETE FROM statutory_violations WHERE portal_subdomain = ?1",
             ),
+            ("findings", "DELETE FROM findings WHERE subject_portal_key = ?1"),
             (
                 "report_exports",
                 "DELETE FROM report_exports WHERE portal_subdomain = ?1",
@@ -342,7 +353,7 @@ impl DuckDbRepository {
         transaction.commit().map_err(|error| {
             AppError::Storage(format!("Failed to commit a source purge: {error}"))
         })?;
-        retire_fk_parent_rows(
+        let snapshots_retired = retire_fk_parent_rows(
             conn,
             "analytical_snapshots",
             "snapshot_id",
@@ -350,8 +361,8 @@ impl DuckDbRepository {
             "Purged an analytical snapshot's rows but could not remove its snapshot record, \
              so it is still listed with nothing under it. Running the purge again is safe \
              and finishes it",
-        )?;
-        retire_fk_parent_rows(
+        );
+        let portal_retired = retire_fk_parent_rows(
             conn,
             "portals",
             "subdomain",
@@ -361,22 +372,22 @@ impl DuckDbRepository {
                  so the source is still listed with nothing under it. Running the purge again \
                  is safe and finishes it"
             ),
-        )?;
+        );
 
-        Ok(SourcePurge {
-            source_key: source_key.to_string(),
-            documents_removed,
-            requests_removed,
-            local_paths,
+        Ok(CommittedPurge {
+            purge: SourcePurge {
+                source_key: source_key.to_string(),
+                documents_removed,
+                requests_removed,
+                local_paths,
+            },
+            retirement_error: snapshots_retired.and(portal_retired).err(),
         })
         })
         .await
     }
 }
 
-/// Audits relations kept logical because DuckDB cannot support the required parent updates with
-/// physical foreign keys. Canonical evidence is never auto-deleted or guessed into a parent; the
-/// operator receives exact relation/count pairs and can restore from the retained source data.
 /// Deletes rows from `table` (matched on `column`) in a transaction of its own, after the
 /// caller has already committed the transaction that emptied their children.
 ///
@@ -474,6 +485,16 @@ fn purge_document_rows(
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| AppError::Storage(e.to_string()))?
     };
+    let request_id = transaction
+        .query_row(
+            "SELECT request_id FROM documents WHERE id = ?1 AND portal_subdomain = ?2",
+            params![stored_id, subdomain],
+            |row| row.get::<_, i64>(0),
+        )
+        .optional()
+        .map_err(|error| {
+            AppError::Storage(format!("Failed to read the document's request: {error}"))
+        })?;
     let retired_snapshots = crate::storage::maintenance::purge_automatic_origins(
         transaction,
         subdomain,
@@ -518,6 +539,10 @@ fn purge_document_rows(
             "documents",
             "DELETE FROM documents WHERE id = ?1 AND portal_subdomain = ?2",
         ),
+        (
+            "findings",
+            "DELETE FROM findings WHERE subject_document_id = ?1 AND subject_portal_key = ?2",
+        ),
     ] {
         let affected = transaction
             .execute(statement, params![stored_id, subdomain])
@@ -532,6 +557,10 @@ fn purge_document_rows(
             }
             _ => {}
         }
+    }
+
+    if let Some(request_id) = request_id {
+        resynchronize_request_density_flags(transaction, request_id, subdomain)?;
     }
 
     Ok((

@@ -44,7 +44,8 @@ async fn purging_a_document_leaves_no_orphan_for_the_startup_audit() {
     let purge = repository
         .purge_document(PORTAL_SUBDOMAIN, DOCUMENT_ID as u64)
         .await
-        .expect("a finalized document must be purgeable");
+        .expect("a finalized document must be purgeable")
+        .purge;
     assert_eq!(
         purge.local_path.as_deref(),
         Some("/var/data/test-portal/release.pdf"),
@@ -103,12 +104,14 @@ async fn purging_a_document_keeps_an_object_another_document_references() {
     let first = repository
         .purge_document(PORTAL_SUBDOMAIN, DOCUMENT_ID as u64)
         .await
-        .unwrap();
+        .unwrap()
+        .purge;
     assert_eq!(first.local_path, None);
     let last = repository
         .purge_document(PORTAL_SUBDOMAIN, DOCUMENT_ID as u64 + 1)
         .await
-        .unwrap();
+        .unwrap()
+        .purge;
     assert_eq!(last.local_path.as_deref(), Some(SHARED_PATH));
 }
 
@@ -140,7 +143,8 @@ async fn purging_a_source_removes_the_portal_row_and_leaves_no_orphan() {
     let purge = repository
         .purge_source(PORTAL_SUBDOMAIN)
         .await
-        .expect("a registered source must be purgeable");
+        .expect("a registered source must be purgeable")
+        .purge;
     assert_eq!(purge.documents_removed, 1);
     assert_eq!(purge.requests_removed, 1);
     assert_eq!(
@@ -242,7 +246,8 @@ async fn a_source_purge_preview_counts_what_the_purge_removes() {
     let purge = repository
         .purge_source(PORTAL_SUBDOMAIN)
         .await
-        .expect("a registered source must be purgeable");
+        .expect("a registered source must be purgeable")
+        .purge;
 
     assert_eq!(
         preview.document_count, purge.documents_removed,
@@ -322,4 +327,101 @@ async fn guidance_discard_removes_only_unfinalized_documents() {
         )
         .expect("document and FTS counts must decode");
     assert_eq!(counts, (1, 1));
+}
+
+/// What a purge removes must stop being asserted anywhere else: a detector finding about the
+/// purged document, and a request-level density flag only that document carried. A finding about
+/// a surviving document stays until its whole source is purged.
+#[tokio::test]
+async fn purging_withdraws_the_findings_and_density_flags_that_rested_on_what_was_removed() {
+    let repository = repository_with_document().await;
+    let audit_id = format!("auto-{PORTAL_SUBDOMAIN}-{REQUEST_ID}");
+    {
+        let connection = repository.conn.lock().await;
+        connection
+            .execute(
+                "INSERT INTO documents (
+                    id, request_id, portal_subdomain, file_name, visibility, created_at, updated_at
+                 ) VALUES (?1, ?2, ?3, 'kept.pdf', 'public',
+                    '2026-08-24T12:01:00Z', '2026-08-24T12:01:00Z')",
+                params![DOCUMENT_ID + 1, REQUEST_ID, PORTAL_SUBDOMAIN],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "UPDATE documents SET suspicious_data_density = 1
+                 WHERE id = ?1 AND portal_subdomain = ?2",
+                params![DOCUMENT_ID, PORTAL_SUBDOMAIN],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO case_audits (
+                    audit_id, target_request_id, target_subdomain, auditor_notes,
+                    verified_at, verification_status
+                 ) VALUES (?1, ?2, ?3, 'density', '2026-08-24T12:05:00Z', 'DataAnomalyFlagged')",
+                params![audit_id, REQUEST_ID, PORTAL_SUBDOMAIN],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO document_integrity_flags (audit_id, flag_type)
+                 VALUES (?1, 'SUSPICIOUS_DATA_DENSITY')",
+                params![audit_id],
+            )
+            .unwrap();
+        for (finding_id, document_id) in [
+            ("about-purged", DOCUMENT_ID),
+            ("about-kept", DOCUMENT_ID + 1),
+        ] {
+            connection
+                .execute(
+                    "INSERT INTO findings (
+                        id, kind, severity, subject_portal_key, subject_document_id, headline,
+                        explanation, discovered_at, last_seen_at, source_detector
+                     ) VALUES (?1, 'test', 'NOTABLE', ?2, ?3, 'headline', 'explanation',
+                        '2026-08-24T12:06:00Z', '2026-08-24T12:06:00Z', 'test')",
+                    params![finding_id, PORTAL_SUBDOMAIN, document_id],
+                )
+                .unwrap();
+        }
+    }
+    let state = |repository: DuckDbRepository, audit_id: String| async move {
+        let connection = repository.conn.lock().await;
+        let findings = connection
+            .prepare("SELECT id FROM findings ORDER BY id")
+            .unwrap()
+            .query_map([], |row| row.get::<_, String>(0))
+            .unwrap()
+            .collect::<duckdb::Result<Vec<_>>>()
+            .unwrap();
+        let (flags, status): (i64, Option<String>) = connection
+            .query_row(
+                "SELECT (SELECT COUNT(*) FROM document_integrity_flags WHERE audit_id = ?1),
+                        (SELECT verification_status FROM case_audits WHERE audit_id = ?1)",
+                params![audit_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        (findings, flags, status)
+    };
+
+    repository
+        .purge_document(PORTAL_SUBDOMAIN, DOCUMENT_ID as u64)
+        .await
+        .expect("the document purge must succeed");
+    assert_eq!(
+        state(repository.clone(), audit_id.clone()).await,
+        (
+            vec!["about-kept".to_string()],
+            0,
+            Some("Compliant".to_string())
+        )
+    );
+
+    repository
+        .purge_source(PORTAL_SUBDOMAIN)
+        .await
+        .expect("the source purge must succeed");
+    assert_eq!(state(repository, audit_id).await, (Vec::new(), 0, None));
 }

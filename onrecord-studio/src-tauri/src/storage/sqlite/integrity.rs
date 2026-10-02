@@ -243,6 +243,83 @@ pub(super) fn request_has_suspicious_density(
     })
 }
 
+/// Whether any indexed document of the request, other than `excluding`, is heavily redacted.
+pub(super) fn request_has_heavily_redacted_document(
+    tx: &Transaction<'_>,
+    request_id: i64,
+    subdomain: &str,
+    excluding: Option<i64>,
+) -> Result<bool, AppError> {
+    let mut statement = tx
+        .prepare(
+            "SELECT documents_fts.extracted_text
+             FROM documents
+             INNER JOIN documents_fts
+                ON documents_fts.document_id = documents.id
+               AND documents_fts.portal_subdomain = documents.portal_subdomain
+             WHERE documents.request_id = ?1
+               AND documents.portal_subdomain = ?2
+               AND documents.id IS DISTINCT FROM ?3",
+        )
+        .map_err(|e| {
+            AppError::Internal(format!("Failed to prepare request redaction scan: {e}"))
+        })?;
+    let indexed_text_rows = statement
+        .query_map(params![request_id, subdomain, excluding], |row| {
+            row.get::<_, String>(0)
+        })
+        .map_err(|e| {
+            AppError::Internal(format!("Failed to execute request redaction scan: {e}"))
+        })?;
+    for indexed_text in indexed_text_rows {
+        let indexed_text = indexed_text.map_err(|e| {
+            AppError::Internal(format!(
+                "Failed to decode indexed text during redaction scan: {e}"
+            ))
+        })?;
+        if has_heavy_redaction_density(&indexed_text)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// Re-derives the request-level density flags after a document leaves the request, so the
+/// automatic audit stops asserting an anomaly that only the removed document carried.
+pub(super) fn resynchronize_request_density_flags(
+    tx: &Transaction<'_>,
+    request_id: i64,
+    subdomain: &str,
+) -> Result<(), AppError> {
+    let audit_id = format!("auto-{subdomain}-{request_id}");
+    let audit_exists = tx
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM case_audits WHERE audit_id = ?1)",
+            params![audit_id],
+            |row| row.get::<_, bool>(0),
+        )
+        .map_err(|error| {
+            AppError::Internal(format!("Failed to inspect the request audit: {error}"))
+        })?;
+    if !audit_exists {
+        return Ok(());
+    }
+    let mut flags = Vec::with_capacity(2);
+    if request_has_heavily_redacted_document(tx, request_id, subdomain, None)? {
+        flags.push(FLAG_HEAVY_REDACTION_DENSITY);
+    }
+    if request_has_suspicious_density(tx, request_id, subdomain)? {
+        flags.push(FLAG_SUSPICIOUS_DATA_DENSITY);
+    }
+    replace_managed_integrity_flags(
+        tx,
+        &audit_id,
+        &[FLAG_HEAVY_REDACTION_DENSITY, FLAG_SUSPICIOUS_DATA_DENSITY],
+        &flags,
+    )?;
+    update_automatic_audit_status(tx, &audit_id)
+}
+
 pub(super) fn upsert_automatic_case_audit<T: ToSql>(
     tx: &Transaction<'_>,
     audit_id: &str,
