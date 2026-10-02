@@ -21,4 +21,18 @@ describe('useGatedLoad', () => {
     await act(async () => { slow.resolve('about a'); });
     expect(result.current).toEqual({ status: 'ready', data: 'about b' });
   });
+
+  it("never renders the previous key's answer under a new key", async () => {
+    const answers: Record<string, string> = { a: 'about a', b: 'about b' };
+    const seen: Array<{ key: string; status: string; data?: string }> = [];
+    const { rerender } = renderHook(({ key }) => {
+      const state = useGatedLoad(key, () => Promise.resolve(answers[key]));
+      seen.push({ key, status: state.status, data: state.status === 'ready' ? state.data : undefined });
+      return state;
+    }, { initialProps: { key: 'a' } });
+    await waitFor(() => expect(seen.at(-1)).toEqual({ key: 'a', status: 'ready', data: 'about a' }));
+    rerender({ key: 'b' });
+    await waitFor(() => expect(seen.at(-1)).toEqual({ key: 'b', status: 'ready', data: 'about b' }));
+    expect(seen.filter((render) => render.data !== undefined && render.data !== answers[render.key])).toEqual([]);
+  });
 });
