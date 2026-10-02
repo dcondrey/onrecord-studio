@@ -48,9 +48,16 @@ Maintainability/Complexity, Comment/Code Clarity.
   for the palette session as an empty corpus
 - `5af0487` LegalAuthorityManager.tsx: version comparison shows a held detail only when it is the
   selected version, so a selector change no longer displays the previous version's text
+- `68e81fd` research/model.rs: daily-call slot reserved after every local-only failure; still
+  before dispatch_current's recheck (an await there could send to a just-deselected provider), so a
+  policy change during the reservation await still costs a slot
+- `7173585` searchResults.ts: copied search record labels its corpus digest as read at copy time
+  (per-search reads would add an unmeasured full-corpus scan and still race; not every corpus
+  write bumps `evidenceRefreshRequests`, so it can't gate this)
+- `149bdf0` sanDiegoWorkflow.test.tsx: valid meeting-calendar mock (`[]` crashed AttentionFeed)
 
-In flight as of this writing (check `git log` for landed state): research/model.rs reserved-call
-budget-accounting review.
+Known flake, pre-existing (reproduced with pre-`7b05600` code): two `sanDiegoWorkflow.test.tsx`
+full-`<App />` tests time out under full-suite load; they pass when run alone.
 
 ## Deliberately deferred — do not attempt without explicit sign-off from the user
 
