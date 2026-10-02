@@ -677,6 +677,23 @@ mod tests {
 
     const THUMB: &str = "thumb-1";
 
+    // The Keychain bridge refuses any key outside its allow-list, and a refused clock key leaves
+    // every license check denied. Tests run against a mock account, so check the Swift list here.
+    #[test]
+    fn every_stored_key_is_allowed_by_the_native_keychain_bridge() {
+        let swift = include_str!("../../native/AppAccount.swift");
+        let allowed = swift
+            .lines()
+            .find(|line| line.contains("static let allowedKeys"))
+            .expect("the bridge declares its allowed keys");
+        for key in [TOKEN_KEY, CLOCK_KEY, CLOCK_NOW_KEY] {
+            assert!(
+                allowed.contains(&format!("\"{key}\"")),
+                "{key} is not in the bridge allow-list: {allowed}"
+            );
+        }
+    }
+
     type ReplyFn = Box<dyn FnMut(&EntitlementRequest) -> Result<String, FetchError> + Send>;
 
     /// Serves whatever the test scripted, signing claims with the request's own challenge.

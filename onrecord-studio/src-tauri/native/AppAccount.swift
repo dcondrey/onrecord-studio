@@ -305,7 +305,7 @@ enum SessionStore {
 // MARK: - Generic secure storage
 
 enum SecureItems {
-    static let allowedKeys: Set<String> = ["entitlement_token", "max_seen_time"]
+    static let allowedKeys: Set<String> = ["entitlement_token", "max_seen_time", "max_seen_now"]
     static let maxValueBytes = 16 * 1024
 
     static func isAllowed(key: String) -> Bool { allowedKeys.contains(key) }
