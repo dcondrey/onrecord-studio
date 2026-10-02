@@ -41,9 +41,12 @@ Maintainability/Complexity, Comment/Code Clarity.
 
 - `17d509f` DocumentAnnotations.tsx: split one shared gate across 4 unrelated actions
   (saveReviewer/remove/changeStatus/copy) into 4 independent gates
+- `ef25790` ResearchWorkspace.tsx: reformatted dense single-line JSX blocks (formatting only)
+- `7b05600` useGatedLoad.ts: held answer is keyed to its key, so the render after a key change no
+  longer shows the previous key's data (affected layers, useCaseScope, AttentionFeed, CaseSwitcher)
 
 In flight as of this writing (check `git log` for landed state): research/model.rs reserved-call
-budget-accounting review, ResearchWorkspace.tsx JSX reformat.
+budget-accounting review.
 
 ## Deliberately deferred — do not attempt without explicit sign-off from the user
 
