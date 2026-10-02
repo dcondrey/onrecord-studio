@@ -302,7 +302,11 @@ impl ApiClient {
             // host itself, so behind one the pin covers only the validation lookup.
             .dns_resolver(Arc::clone(&dns))
             .connect_timeout(Duration::from_secs(config.connect_timeout_seconds))
-            .timeout(Duration::from_secs(config.request_timeout_seconds))
+            // An idle limit, not a total one: a total deadline would also bound the body, so a
+            // large document on a slow link could never finish and each retry would re-download
+            // it from byte 0. The total per request is set from its size cap; see
+            // `transfer_deadline`.
+            .read_timeout(Duration::from_secs(config.request_timeout_seconds))
             .pool_idle_timeout(Duration::from_secs(90))
             .pool_max_idle_per_host(8)
             // Redirects stay disabled here so every hop passes through `validate_remote_url`
@@ -1203,6 +1207,19 @@ impl ApiClient {
         })
     }
 
+    /// Total time a request may take: the configured request timeout plus the time to transfer
+    /// `maximum_bytes` at a floor throughput. Keeps a trickling server from holding a worker
+    /// indefinitely while still letting the largest permitted document arrive over a slow link.
+    fn transfer_deadline(&self, maximum_bytes: usize) -> Duration {
+        const MINIMUM_THROUGHPUT_BYTES_PER_SECOND: u64 = 64 * 1024;
+        let transfer_seconds = (maximum_bytes as u64).div_ceil(MINIMUM_THROUGHPUT_BYTES_PER_SECOND);
+        Duration::from_secs(
+            self.config
+                .request_timeout_seconds
+                .saturating_add(transfer_seconds),
+        )
+    }
+
     async fn send_response_following_safe_redirects(
         &self,
         initial_url: Url,
@@ -1235,7 +1252,10 @@ impl ApiClient {
             // Every hop is governed independently: a redirect can cross hosts, and the host that
             // answers is the one whose robots.txt, pacing, budget, and stop state apply.
             let host_permit = self.reserve_host_slot(&request_url).await?;
-            let request = self.client.get(request_url.clone());
+            let request = self
+                .client
+                .get(request_url.clone())
+                .timeout(self.transfer_deadline(maximum_bytes));
             let response = request.send().await.map_err(|error| {
                 RetryDisposition::Retry(
                     AppError::Network(format!("GET '{}' failed: {error}", request_url)),

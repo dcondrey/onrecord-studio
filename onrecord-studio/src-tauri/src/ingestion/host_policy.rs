@@ -391,8 +391,13 @@ impl HostGovernor {
         }
     }
 
+    /// `records.gov.` and `records.gov` are one host, so they share one stop state, budget, and
+    /// pacing history; a redirect to the trailing-dot spelling must not start fresh.
     pub fn host_key(url: &Url) -> String {
-        url.host_str().unwrap_or_default().to_ascii_lowercase()
+        url.host_str()
+            .unwrap_or_default()
+            .trim_end_matches('.')
+            .to_ascii_lowercase()
     }
 
     fn with_host<T>(&self, host: &str, action: impl FnOnce(&mut HostState) -> T) -> T {
@@ -619,6 +624,14 @@ mod tests {
 
     fn url(value: &str) -> Url {
         Url::parse(value).unwrap()
+    }
+
+    #[test]
+    fn a_trailing_dot_names_the_same_governed_host() {
+        assert_eq!(
+            HostGovernor::host_key(&url("https://Records.gov./x")),
+            HostGovernor::host_key(&url("https://records.gov/y"))
+        );
     }
 
     #[test]
