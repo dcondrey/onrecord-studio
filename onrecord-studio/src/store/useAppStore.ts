@@ -86,6 +86,31 @@ export function inspectorTargetKey(target: InspectorTarget): string {
   }
 }
 
+/** How far back "new" reaches. Filters on when something was first found, never on what the corpus held then. */
+export type SincePreset = 'lastOpened' | 'day' | 'week' | 'month' | 'all';
+
+const LAST_OPENED_STORAGE_KEY = 'onrecord-last-opened-at';
+
+/** The previous launch's timestamp, recorded once per launch before this launch overwrites it. */
+function readPreviousOpen(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const previous = window.localStorage.getItem(LAST_OPENED_STORAGE_KEY);
+    window.localStorage.setItem(LAST_OPENED_STORAGE_KEY, new Date().toISOString());
+    return previous && !Number.isNaN(Date.parse(previous)) ? previous : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The instant a preset starts at, or `null` for no lower bound (including a first launch). */
+export function sinceInstant(preset: SincePreset, previousOpenAt: string | null, now = Date.now()): string | null {
+  const days = { day: 1, week: 7, month: 30 } as const;
+  if (preset === 'all') return null;
+  if (preset === 'lastOpened') return previousOpenAt;
+  return new Date(now - days[preset] * 86_400_000).toISOString();
+}
+
 export interface EvidenceLinkRequest {
   portalKey: string;
   requestId: number;
@@ -185,6 +210,9 @@ interface AppState {
    */
   lastFindingsSeenAt: string | null;
   /** Stacked detail layers; the last is visible. Opening from a view starts a new stack, from a layer pushes. */
+  sincePreset: SincePreset;
+  previousOpenAt: string | null;
+  setSincePreset: (preset: SincePreset) => void;
   inspectorStack: InspectorTarget[];
   inspect: (target: InspectorTarget, from?: 'view' | 'layer') => void;
   inspectorBack: () => void;
@@ -330,6 +358,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   dossierFindingId: null,
   postIngestBriefOpen: false,
   lastFindingsSeenAt: null,
+  sincePreset: 'lastOpened',
+  previousOpenAt: readPreviousOpen(),
+  setSincePreset: (sincePreset) => set({ sincePreset }),
   inspectorStack: [],
   inspect: (target, from = 'view') => set((state) => {
     const key = inspectorTargetKey(target);
