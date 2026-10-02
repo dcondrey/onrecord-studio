@@ -8,6 +8,7 @@ import { HeaderControls } from './HeaderControls';
 import { SourceConnectorForm } from './SourceConnectorForm';
 import { SourceConnectorDialogs } from './SourceConnectorDialogs';
 import { OPEN_SOURCE_CONNECTOR_EVENT } from './sourceEvents';
+import NavigationControls from './NavigationControls';
 
 export default function Header() {
   const workspaceView = useAppStore((state) => state.workspaceView);
@@ -22,7 +23,7 @@ export default function Header() {
     const open = () => {
       setSidebarOpen(false);
       const desktop = document.getElementById('portal-url-desktop');
-      if (desktop && desktop.offsetParent !== null) {
+      if (desktop?.getClientRects().length) {
         desktop.focus();
         return;
       }
@@ -52,6 +53,7 @@ export default function Header() {
             <Icon name="menu" />
           </button>
 
+          <NavigationControls />
           <HeaderIdentity workspaceView={workspaceView} activePortal={activePortal} />
 
           <div className="hidden min-w-[300px] max-w-[720px] flex-1 lg:flex">

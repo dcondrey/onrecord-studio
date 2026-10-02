@@ -1,3 +1,4 @@
+import { openSourceConnector } from '../components/dashboard/sourceEvents';
 import type { CrawlPolicy, SourceGuidance } from '../types';
 import { REGIONAL_SOURCES } from './regionalSources';
 import { HOUSING_SOURCES } from './housingSources';
@@ -122,13 +123,7 @@ export function sanDiegoGuidance(source: SanDiegoSource): SourceGuidance {
 }
 
 export function focusSourceComposer() {
-  const desktop = document.getElementById('portal-url-desktop');
-  if (desktop?.getClientRects().length) {
-    desktop.focus();
-    return;
-  }
-  document.querySelector<HTMLButtonElement>('button[aria-label="Connect a data source"]')?.click();
-  window.setTimeout(() => document.getElementById('portal-url-mobile')?.focus(), 0);
+  openSourceConnector();
 }
 
 export function openFileImport() {
@@ -137,6 +132,6 @@ export function openFileImport() {
     desktop.click();
     return;
   }
-  document.querySelector<HTMLButtonElement>('button[aria-label="Connect a data source"]')?.click();
+  openSourceConnector();
   window.setTimeout(() => document.getElementById('portal-url-mobile-import-files')?.click(), 0);
 }

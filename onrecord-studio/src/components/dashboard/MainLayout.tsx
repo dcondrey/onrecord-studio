@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import SearchFilter from '../filters/SearchFilter';
 import { useAppStore } from '../../store/useAppStore';
+import { useScrollRestore } from '../../hooks/useScrollRestore';
 import { cn } from '../../utils/cn';
 import DocumentViewer from '../documents/DocumentViewer';
 import AnnotationSearch from '../documents/AnnotationSearch';
@@ -41,6 +42,7 @@ export default function MainLayout() {
   // Request selection lives in the shared workspace store and survives view switches. The open
   // document chunk is session-local and is deliberately cleared when the selected request changes.
   const workspaceView = useAppStore((state) => state.workspaceView);
+  useScrollRestore();
   const evidenceMode = useAppStore((state) => state.evidenceMode);
   const setEvidenceMode = useAppStore((state) => state.setEvidenceMode);
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);

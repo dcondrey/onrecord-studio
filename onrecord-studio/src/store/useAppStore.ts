@@ -47,6 +47,25 @@ export interface SourceRepairNotice {
   reason: string;
 }
 
+/**
+ * Where the user was: the view plus the store-held selection and filters that view reads, and the
+ * scroll offset of its content. Component-local state is not captured and re-initialises on return.
+ */
+export interface NavigationEntry {
+  view: WorkspaceView;
+  evidenceMode: EvidenceMode;
+  activePortalKey: string | null;
+  searchTerm: string;
+  selectedAgencyId: number | null;
+  selectedStatus: string | null;
+  selectedPolicyDeviation: string | null;
+  selectedRequestId: number | null;
+  selectedRequestPortalKey: string | null;
+  scrollTop: number;
+}
+
+export const NAVIGATION_HISTORY_LIMIT = 50;
+
 export interface PatternEvidenceSelection {
   patternId: string;
   portalKey: string | null;
@@ -138,7 +157,14 @@ interface AppState {
    * session — treat every finding as new.
    */
   lastFindingsSeenAt: string | null;
+  navigationBack: NavigationEntry[];
+  navigationForward: NavigationEntry[];
+  /** Set by back/forward: the scroll offset the restored view should return to once it renders. */
+  pendingScrollRestore: number | null;
   setWorkspaceView: (view: WorkspaceView) => void;
+  navigateBack: () => void;
+  navigateForward: () => void;
+  consumeScrollRestore: () => number | null;
   setTheme: (theme: AppTheme) => void;
   setMotion: (motion: AppMotion) => void;
   setContrast: (contrast: AppContrast) => void;
@@ -216,7 +242,7 @@ const emptyMetrics = (): IngestionMetrics => ({
 /** Names each query's result list, so a page that outlives its query can be recognised and dropped. */
 let searchGeneration = 0;
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
   workspaceView: 'overview',
   evidenceMode: 'records',
   theme: readThemePreference(),
@@ -268,7 +294,42 @@ export const useAppStore = create<AppState>((set) => ({
   dossierFindingId: null,
   postIngestBriefOpen: false,
   lastFindingsSeenAt: null,
-  setWorkspaceView: (workspaceView) => set({ workspaceView, isSidebarOpen: false }),
+  navigationBack: [],
+  navigationForward: [],
+  pendingScrollRestore: null,
+  setWorkspaceView: (workspaceView) => set((state) => {
+    if (state.workspaceView === workspaceView) return { isSidebarOpen: false };
+    return {
+      workspaceView,
+      isSidebarOpen: false,
+      navigationBack: [...state.navigationBack, navigationEntry(state)].slice(-NAVIGATION_HISTORY_LIMIT),
+      navigationForward: [],
+      pendingScrollRestore: null,
+    };
+  }),
+  navigateBack: () => set((state) => {
+    const target = state.navigationBack.at(-1);
+    if (!target) return state;
+    return {
+      ...restoreEntry(target),
+      navigationBack: state.navigationBack.slice(0, -1),
+      navigationForward: [navigationEntry(state), ...state.navigationForward].slice(0, NAVIGATION_HISTORY_LIMIT),
+    };
+  }),
+  navigateForward: () => set((state) => {
+    const [target, ...rest] = state.navigationForward;
+    if (!target) return state;
+    return {
+      ...restoreEntry(target),
+      navigationBack: [...state.navigationBack, navigationEntry(state)].slice(-NAVIGATION_HISTORY_LIMIT),
+      navigationForward: rest,
+    };
+  }),
+  consumeScrollRestore: () => {
+    const offset = get().pendingScrollRestore;
+    if (offset !== null) set({ pendingScrollRestore: null });
+    return offset;
+  },
   setEvidenceMode: (evidenceMode) => set({ evidenceMode }),
   setTheme: (theme) => set({ theme }),
   setMotion: (motion) => set({ motion }),
@@ -527,6 +588,48 @@ export const useAppStore = create<AppState>((set) => ({
   setPostIngestBriefOpen: (postIngestBriefOpen) => set({ postIngestBriefOpen }),
   markFindingsSeen: () => set({ lastFindingsSeenAt: new Date().toISOString() }),
 }));
+
+function navigationEntry(state: AppState): NavigationEntry {
+  return {
+    view: state.workspaceView,
+    evidenceMode: state.evidenceMode,
+    activePortalKey: state.activePortalKey,
+    searchTerm: state.searchTerm,
+    selectedAgencyId: state.selectedAgencyId,
+    selectedStatus: state.selectedStatus,
+    selectedPolicyDeviation: state.selectedPolicyDeviation,
+    selectedRequestId: state.selectedRequestId,
+    selectedRequestPortalKey: state.selectedRequestPortalKey,
+    scrollTop: currentViewScrollTop(),
+  };
+}
+
+/** Restores the entry's fields. The selected request's legal findings belong to a newer selection, so they are cleared. */
+function restoreEntry(entry: NavigationEntry): Partial<AppState> {
+  const { view, scrollTop, ...fields } = entry;
+  return { ...fields, workspaceView: view, isSidebarOpen: false, activeLegalFindings: [], pendingScrollRestore: scrollTop };
+}
+
+/** The scroll offset of the first scrolling region inside the workspace's `main`. */
+export function findViewScroller(): HTMLElement | null {
+  if (typeof document === 'undefined') return null;
+  const root = document.querySelector('main');
+  if (!root) return null;
+  const queue: Element[] = [root];
+  while (queue.length) {
+    const element = queue.shift()!;
+    if (element instanceof HTMLElement) {
+      const overflow = getComputedStyle(element).overflowY;
+      if ((overflow === 'auto' || overflow === 'scroll') && element.scrollHeight > element.clientHeight) return element;
+    }
+    queue.push(...Array.from(element.children));
+  }
+  return null;
+}
+
+function currentViewScrollTop() {
+  return findViewScroller()?.scrollTop ?? 0;
+}
 
 function readAudioAlertsPreference() {
   return typeof window !== 'undefined'

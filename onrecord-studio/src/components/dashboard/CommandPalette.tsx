@@ -7,6 +7,7 @@ import IntentAnswerView from './IntentAnswerView';
 import { cn } from '../../utils/cn';
 import Icon, { type IconName } from '../ui/icons';
 import { openHelp } from '../help/helpEvents';
+import { openSourceConnector } from './sourceEvents';
 import { contrastCommandRegistry, motionCommandRegistry, scoreCommand, themeCommandRegistry, workspaceCommandRegistry } from '../../commands/registry';
 
 export const OPEN_COMMAND_PALETTE_EVENT = 'onrecord:open-command-palette';
@@ -117,6 +118,26 @@ export default function CommandPalette() {
       },
     },
     {
+      id: 'navigate-back',
+      label: 'Go back',
+      detail: 'Return to the previous view with its filters and scroll position',
+      group: 'Navigate',
+      icon: 'back',
+      keywords: 'back previous history return',
+      shortcut: `${modifier}[`,
+      perform: () => useAppStore.getState().navigateBack(),
+    },
+    {
+      id: 'navigate-forward',
+      label: 'Go forward',
+      detail: 'Redo the last back step',
+      group: 'Navigate',
+      icon: 'forward',
+      keywords: 'forward next history',
+      shortcut: `${modifier}]`,
+      perform: () => useAppStore.getState().navigateForward(),
+    },
+    {
       id: 'toggle-sidebar',
       label: 'Toggle navigation sidebar',
       detail: 'Show or hide workspace navigation labels',
@@ -133,7 +154,7 @@ export default function CommandPalette() {
       icon: 'filePlus',
       keywords: 'new connect import url file paste source',
       shortcut: `${modifier}N`,
-      perform: focusSourceComposer,
+      perform: openSourceConnector,
     },
     {
       id: 'open-help',
@@ -262,6 +283,12 @@ export default function CommandPalette() {
         setWorkspaceView(shortcut.view);
         return;
       }
+      if (!isOpen && modified && !event.shiftKey && (event.key === '[' || event.key === ']')) {
+        event.preventDefault();
+        if (event.key === '[') useAppStore.getState().navigateBack();
+        else useAppStore.getState().navigateForward();
+        return;
+      }
       if (!isOpen && modified && event.shiftKey && (event.key === '?' || event.key === '/')) {
         event.preventDefault();
         openHelp();
@@ -269,7 +296,7 @@ export default function CommandPalette() {
       }
       if (!isOpen && modified && key === 'n') {
         event.preventDefault();
-        focusSourceComposer();
+        openSourceConnector();
         return;
       }
       if (!isOpen) return;
@@ -406,16 +433,6 @@ function isQuestionLike(normalized: string) {
 
 function Keycap({ children }: { children: string }) {
   return <kbd className="keycap shrink-0 rounded-md border px-1.5 py-0.5 font-sans text-label font-medium text-muted">{children}</kbd>;
-}
-
-function focusSourceComposer() {
-  const desktopInput = document.getElementById('portal-url-desktop');
-  if (desktopInput?.getClientRects().length) {
-    desktopInput.focus();
-    return;
-  }
-  document.querySelector<HTMLButtonElement>('button[aria-label="Connect a data source"]')?.click();
-  window.setTimeout(() => document.getElementById('portal-url-mobile')?.focus(), 0);
 }
 
 function isApplePlatform() {
