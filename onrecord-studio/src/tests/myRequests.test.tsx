@@ -84,6 +84,38 @@ describe('useMyRequests', () => {
     expect(result.current.claims.map((c) => c.id)).toEqual(['newer']);
     expect(Object.keys(result.current.deadlines)).toEqual(['newer']);
   });
+
+  it('keeps isBusy true while a second mutation is in flight, even after the first one settles', async () => {
+    const firstOp = deferred<void>();
+    const secondOp = deferred<void>();
+    invoke.mockImplementation((command: string, args: { claimId?: string }) => {
+      if (command === 'list_claimed_requests') return Promise.resolve([]);
+      if (command === 'remove_claimed_request') return firstOp.promise;
+      if (command === 'update_claimed_request') return secondOp.promise;
+      if (command === 'get_request_deadline') return Promise.resolve(deadline(args.claimId!));
+      return Promise.reject(new Error(command));
+    });
+    const { result } = renderHook(() => useMyRequests(true));
+    await waitFor(() => expect(result.current.isBusy).toBe(false));
+
+    act(() => {
+      void result.current.remove('a');
+    });
+    await waitFor(() => expect(result.current.isBusy).toBe(true));
+    act(() => {
+      void result.current.update({ claimId: 'a' } as never);
+    });
+
+    await act(async () => {
+      firstOp.resolve();
+    });
+    expect(result.current.isBusy).toBe(true);
+
+    await act(async () => {
+      secondOp.resolve();
+    });
+    await waitFor(() => expect(result.current.isBusy).toBe(false));
+  });
 });
 
 describe('MyRequestsPanel', () => {

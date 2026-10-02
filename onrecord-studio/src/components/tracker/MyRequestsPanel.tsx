@@ -129,7 +129,7 @@ function ClaimForm({ portals, onSubmit, isBusy }: {
       </label>
       <label>
         Link to the request (optional, https only)
-        <input type="url" className={field} value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} />
+        <input type="url" maxLength={TRACKER_LIMITS.sourceUrlCharacters} className={field} value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} />
       </label>
       <label>
         Portal (optional)
@@ -394,6 +394,7 @@ export default function MyRequestsPanel({ onClose }: { onClose: () => void }) {
   const tracker = useMyRequests(true);
   const portalGate = useLatestRequestGate();
   const [portals, setPortals] = useState<{ key: string; name: string }[]>([]);
+  const [portalError, setPortalError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -403,8 +404,9 @@ export default function MyRequestsPanel({ onClose }: { onClose: () => void }) {
         if (!portalGate.isCurrent(token)) return;
         setPortals(saved.map((source) => ({ key: source.registration.portalKey, name: source.registration.displayName })));
       })
-      .catch(() => {
-        // The portal link is optional; without the list the form simply offers none.
+      .catch((reason) => {
+        if (!portalGate.isCurrent(token)) return;
+        setPortalError(String(reason instanceof Error ? reason.message : reason));
       });
   }, [portalGate]);
 
@@ -418,6 +420,7 @@ export default function MyRequestsPanel({ onClose }: { onClose: () => void }) {
           <button type="button" onClick={onClose} className={button}>Close</button>
         </div>
         {tracker.error && <p role="alert" className="mt-2 text-danger">{tracker.error}</p>}
+        {portalError && <p role="alert" className="mt-2 text-danger">Couldn't load saved portals: {portalError}</p>}
 
         {selected ? (
           <div className="mt-3">

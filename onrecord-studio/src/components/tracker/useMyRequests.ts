@@ -25,6 +25,7 @@ export interface ImportOutcome {
 export function useMyRequests(enabled: boolean) {
   const refreshGate = useLatestRequestGate();
   const importGate = useLatestRequestGate();
+  const mutateGate = useLatestRequestGate();
   const [claims, setClaims] = useState<ClaimedRequest[]>([]);
   const [deadlines, setDeadlines] = useState<Record<string, RequestDeadline>>({});
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +55,7 @@ export function useMyRequests(enabled: boolean) {
 
   const mutate = useCallback(
     async <T,>(operation: () => Promise<T>): Promise<T | null> => {
+      const token = mutateGate.begin();
       setIsBusy(true);
       setError(null);
       try {
@@ -61,13 +63,14 @@ export function useMyRequests(enabled: boolean) {
         await refresh();
         return result;
       } catch (reason) {
+        if (!mutateGate.isCurrent(token)) return null;
         setError(String(reason instanceof Error ? reason.message : reason));
         return null;
       } finally {
-        setIsBusy(false);
+        if (mutateGate.isCurrent(token)) setIsBusy(false);
       }
     },
-    [refresh],
+    [mutateGate, refresh],
   );
 
   const importEmails = useCallback(
