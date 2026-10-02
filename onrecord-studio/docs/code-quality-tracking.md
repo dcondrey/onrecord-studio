@@ -61,8 +61,9 @@ Maintainability/Complexity, Comment/Code Clarity.
 - `7f6ed0a` commands/semantic.rs: hybrid_search lexical dedup via HashSet (was quadratic over up
   to 5,000 rows per palette query; not benchmarked)
 
-Known flake, pre-existing (reproduced with pre-`7b05600` code): two `sanDiegoWorkflow.test.tsx`
-full-`<App />` tests time out under full-suite load; they pass when run alone.
+Two `sanDiegoWorkflow.test.tsx` full-`<App />` tests time out under full-suite CPU load (pre-existing,
+reproduced with pre-`7b05600` code). Run the gate's vitest step as `npx vitest run --maxWorkers=2`;
+with it all 597 tests pass (2026-10-02, `55fa447`).
 
 ## Deliberately deferred — do not attempt without explicit sign-off from the user
 
