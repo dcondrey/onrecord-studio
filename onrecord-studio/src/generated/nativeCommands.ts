@@ -50,6 +50,14 @@ export interface NativeCommandMap {
   run_data_maintenance: { args: NoArgs; result: Types.DataMaintenanceStatus };
   export_research_snapshot: { args: NoArgs; result: Types.ResearchSnapshotResult };
   get_corpus_state_digest: { args: NoArgs; result: Types.CorpusStateIdentity };
+  import_registry_snapshot: { args: { registry: Types.RegistryKind; localPath: string }; result: Types.RegistrySnapshotSummary };
+  list_registry_snapshots: { args: NoArgs; result: Types.RegistrySnapshotSummary[] };
+  lookup_registry_anchor: { args: { identifierKind: Types.CorpusEntityKind; value: string }; result: Types.RegistryAnchor };
+  save_standing_query: { args: { input: Types.StandingQueryInput }; result: Types.StandingQuery };
+  list_standing_queries: { args: NoArgs; result: Types.StandingQuerySummary[] };
+  delete_standing_query: { args: { queryId: string }; result: null };
+  run_standing_queries: { args: { queryId?: string | null; force?: boolean | null }; result: Types.StandingQueryOutcome[] };
+  list_series_number_gaps: { args: { limit?: number | null }; result: Types.SeriesGapReport };
   reconstruct_document_context: { args: { documentId: number; portalKey: string; options?: Types.ReconstructionOptions | null }; result: Types.ReconstructionReport };
   get_financial_workspace: { args: NoArgs; result: Types.FinancialWorkspace };
   save_financial_mapping: { args: { mapping: Types.FinancialMapping }; result: Types.FinancialWorkspace };

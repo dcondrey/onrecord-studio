@@ -51,3 +51,5 @@ export * from "./snapshot";
 export * from "./collaboration";
 export * from "./paging";
 export * from "./resolution";
+export * from "./registry";
+export * from "./standingSearch";

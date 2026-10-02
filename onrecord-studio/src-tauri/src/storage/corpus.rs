@@ -1,5 +1,6 @@
 //! Rebuildable, provenance-linked corpus index for cross-document pattern discovery.
 
+use crate::analysis::series_gaps::{series_gaps, SeriesObservation};
 use crate::analysis::typed_edges;
 use crate::error::AppError;
 use crate::integrity::digest_hex;
@@ -7,7 +8,8 @@ use crate::types::{
     CorpusEntityEdge, CorpusEntityKind, CorpusEntityNeighborhood, CorpusEntityNode,
     CorpusEvidenceReference, CorpusIndexStatus, CorpusPattern, CorpusPatternKind,
     CorpusPatternQuery, EntityBroker, EntityPath, EntityPathOutcome, EntityPathStep,
-    EntityResolutionBasis, EntityValidationGrade, RelationshipBasis, RelationshipKind,
+    EntityResolutionBasis, EntityValidationGrade, RegistryAnchor, RegistryKind,
+    RegistrySnapshotSummary, RelationshipBasis, RelationshipKind, SeriesGapReport,
 };
 use duckdb::{params, Connection, OptionalExt, Transaction};
 use sha2::{Digest, Sha256};
@@ -51,12 +53,19 @@ const CORPUS_ALGORITHM_VERSION: &str = "deterministic-corpus-v3";
 /// holds only `CO_OCCURRENCE` edges and would read as "no typed relationships exist".
 /// 10: `EIN`, `CONTRACTOR_LICENSE` and `PARCEL_NUMBER` join the entity kinds, so the `entity_kind`
 /// CHECK changes; an index stamped 9 would refuse every write that carries one.
-const CORPUS_SCHEMA_VERSION: i64 = 10;
+/// 11: `corpus_registry_snapshots` and `corpus_registry_records` hold an operator-imported registry
+/// list (the CSLB License Master) keyed by normalized identifier, so an extracted licence number
+/// can be anchored to the name it is registered to. An index stamped 10 has neither table.
+/// 12: `SERIES_NUMBER` joins the entity kinds, so the `entity_kind` CHECK changes; an index stamped
+/// 11 would refuse every write that carries one.
+const CORPUS_SCHEMA_VERSION: i64 = 12;
 
 #[path = "corpus_identifiers.rs"]
 mod identifiers;
 #[path = "corpus_neighbors.rs"]
 pub mod neighbors;
+#[path = "corpus_registry.rs"]
+mod registry;
 
 /// Collapses a pair's edges to one kind. A typed edge is a stronger claim than proximity and
 /// `MIN` alone sorts `CO_OCCURRENCE` before `SIGNED_BY`, `PROMISES` and others, hiding them behind
@@ -85,7 +94,7 @@ const MAXIMUM_ENTITIES_PER_KIND: usize = 4_000;
 /// their truncation rows exist by construction the moment an extractor for them lands; no extractor
 /// populates those two yet, so their rows read as "not truncated" against a zero-extraction pass,
 /// which is honest.
-const ENTITY_KINDS: [CorpusEntityKind; 15] = [
+const ENTITY_KINDS: [CorpusEntityKind; 16] = [
     CorpusEntityKind::Statute,
     CorpusEntityKind::Date,
     CorpusEntityKind::EmailDomain,
@@ -101,6 +110,7 @@ const ENTITY_KINDS: [CorpusEntityKind; 15] = [
     CorpusEntityKind::Ein,
     CorpusEntityKind::ContractorLicense,
     CorpusEntityKind::ParcelNumber,
+    CorpusEntityKind::SeriesNumber,
 ];
 const MAXIMUM_TOKEN_CHARACTERS: usize = 96;
 const MAXIMUM_RELATIONSHIPS_PER_DOCUMENT: usize = 20_000;
@@ -303,6 +313,14 @@ const CONTRACTOR_LICENSE_EXTRACTOR: ExtractorStamp = ExtractorStamp {
 /// `NNN-NNN-NN(-NN)` after an explicit APN or assessor's-parcel label.
 const PARCEL_NUMBER_EXTRACTOR: ExtractorStamp = ExtractorStamp {
     id: "identifier.parcel-number",
+    version: 1,
+    grade: EntityValidationGrade::FormatValidated,
+};
+
+/// A 2 to 24 character number ending in a digit after a series label and its `no`/`number`/`#`
+/// marker, with dates and phone numbers refused.
+const SERIES_NUMBER_EXTRACTOR: ExtractorStamp = ExtractorStamp {
+    id: "identifier.series-number",
     version: 1,
     grade: EntityValidationGrade::FormatValidated,
 };
@@ -875,6 +893,92 @@ impl CorpusIndex {
             Ok(rows)
         })
         .await
+    }
+
+    /// Parses and hashes an operator-supplied registry file off the writer, then replaces the
+    /// registry's snapshot in one transaction. Parsing holds the whole keyed list in memory; the
+    /// bound is [`registry`]'s record cap, well above the CSLB list.
+    pub async fn import_registry_snapshot(
+        &self,
+        registry: RegistryKind,
+        path: PathBuf,
+    ) -> Result<RegistrySnapshotSummary, AppError> {
+        let source_path = path.to_string_lossy().into_owned();
+        let parsed = tokio::task::spawn_blocking(move || registry::parse_snapshot(registry, &path))
+            .await
+            .map_err(|error| AppError::Internal(format!("Registry parser failed: {error}")))??;
+        let summary = RegistrySnapshotSummary {
+            registry,
+            identifier_kind: registry.identifier_kind(),
+            source_path,
+            file_sha256: parsed.file_sha256,
+            imported_at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            record_count: parsed.records.len() as u64,
+            skipped_row_count: parsed.skipped_rows,
+        };
+        let records = parsed.records;
+        self.write("Registry snapshot import", move |connection| {
+            registry::replace_snapshot(connection, &summary, records).map(|()| summary)
+        })
+        .await
+    }
+
+    pub async fn registry_snapshots(&self) -> Result<Vec<RegistrySnapshotSummary>, AppError> {
+        self.read("Registry snapshot listing", registry::list_snapshots)
+            .await
+    }
+
+    /// What the imported registry says about one extracted identifier value. See
+    /// [`RegistryAnchor`] for why its four answers must not be collapsed.
+    pub async fn registry_anchor(
+        &self,
+        identifier_kind: CorpusEntityKind,
+        value: String,
+    ) -> Result<RegistryAnchor, AppError> {
+        self.read("Registry anchor lookup", move |connection| {
+            registry::lookup(connection, identifier_kind, &value)
+        })
+        .await
+    }
+
+    /// Numbers missing between indexed members of each labelled series. A gap says the corpus
+    /// holds no document carrying that number, nothing about whether the agency has one.
+    pub async fn series_number_gaps(&self, limit: usize) -> Result<SeriesGapReport, AppError> {
+        let observations = self
+            .read("Series number listing", |connection| {
+                let mut statement = connection
+                    .prepare(
+                        "SELECT entity.entity_id, entity.normalized_value, entity.display_value,
+                                counts.document_count
+                         FROM corpus_entities entity
+                         JOIN corpus_entity_document_counts counts
+                            ON counts.entity_id = entity.entity_id
+                         WHERE entity.entity_kind = ?1
+                         ORDER BY entity.normalized_value",
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to prepare the series listing: {error}"))
+                    })?;
+                let observations = statement
+                    .query_map([CorpusEntityKind::SeriesNumber.as_str()], |row| {
+                        Ok(SeriesObservation {
+                            entity_id: row.get(0)?,
+                            normalized_value: row.get(1)?,
+                            display_value: row.get(2)?,
+                            document_count: row.get::<_, i64>(3)?.max(0) as u64,
+                        })
+                    })
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to query the series listing: {error}"))
+                    })?
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to read the series listing: {error}"))
+                    })?;
+                Ok(observations)
+            })
+            .await?;
+        Ok(series_gaps(observations, limit))
     }
 
     pub async fn status(&self) -> Result<CorpusIndexStatus, AppError> {
@@ -2098,6 +2202,11 @@ fn extract_identifiers(
             CorpusEntityKind::ParcelNumber,
             identifiers::find_parcel_numbers(text, limit),
             PARCEL_NUMBER_EXTRACTOR,
+        ),
+        (
+            CorpusEntityKind::SeriesNumber,
+            identifiers::find_series_numbers(text, limit),
+            SERIES_NUMBER_EXTRACTOR,
         ),
     ];
     for (kind, matches, extractor) in passes {
@@ -3947,7 +4056,7 @@ CREATE TABLE IF NOT EXISTS corpus_entities (
         entity_kind IN (
             'STATUTE', 'DATE', 'EMAIL_DOMAIN', 'EMAIL_ADDRESS', 'URL_HOST', 'ACRONYM',
             'ORGANIZATION', 'MONEY', 'PERSON', 'ROLE', 'POSITION', 'DOCUMENT_CLASS',
-            'EIN', 'CONTRACTOR_LICENSE', 'PARCEL_NUMBER'
+            'EIN', 'CONTRACTOR_LICENSE', 'PARCEL_NUMBER', 'SERIES_NUMBER'
         )
     ),
     normalized_value TEXT NOT NULL,
@@ -4068,6 +4177,27 @@ CREATE TABLE IF NOT EXISTS corpus_lsh_bands (
 
 CREATE INDEX IF NOT EXISTS idx_corpus_lsh_lookup
 ON corpus_lsh_bands(band_index, band_value, portal_key, document_id);
+
+-- One imported registry list per registry. Its file digest and import instant travel with every
+-- match drawn from it: a match is a statement about a named file, never about "the registry".
+CREATE TABLE IF NOT EXISTS corpus_registry_snapshots (
+    registry TEXT PRIMARY KEY CHECK (registry IN ('CSLB_LICENSE_MASTER')),
+    identifier_kind TEXT NOT NULL,
+    source_path TEXT NOT NULL,
+    file_sha256 TEXT NOT NULL CHECK (length(file_sha256) = 64),
+    imported_at TEXT NOT NULL,
+    record_count BIGINT NOT NULL CHECK (record_count >= 0),
+    skipped_row_count BIGINT NOT NULL CHECK (skipped_row_count >= 0)
+);
+
+CREATE TABLE IF NOT EXISTS corpus_registry_records (
+    registry TEXT NOT NULL,
+    normalized_identifier TEXT NOT NULL,
+    registrant_name TEXT NOT NULL,
+    status TEXT NOT NULL,
+    detail TEXT NOT NULL,
+    PRIMARY KEY (registry, normalized_identifier)
+);
 "#;
 
 #[cfg(test)]
@@ -4277,6 +4407,145 @@ mod tests {
             )
             .unwrap();
         assert_eq!(remaining, 0);
+    }
+
+    /// An index stamped 10 has no registry tables. It must be discarded and rebuilt so the first
+    /// registry import does not fail on a missing table.
+    #[tokio::test]
+    async fn a_version_10_corpus_index_is_rebuilt_and_then_accepts_a_registry_import() {
+        let directory = tempdir().expect("temp dir must be created");
+        let path = directory.path().join("corpus.db");
+        {
+            let previous = Connection::open(&path).expect("the version 10 fixture must open");
+            previous
+                .execute_batch(
+                    "CREATE TABLE corpus_schema_version (
+                        singleton BOOLEAN PRIMARY KEY,
+                        version BIGINT NOT NULL
+                     );
+                     INSERT INTO corpus_schema_version (singleton, version) VALUES (TRUE, 10);
+                     CREATE TABLE corpus_entities (
+                        entity_id TEXT PRIMARY KEY,
+                        entity_kind TEXT NOT NULL,
+                        normalized_value TEXT NOT NULL,
+                        display_value TEXT NOT NULL,
+                        resolution_basis TEXT NOT NULL
+                     );
+                     INSERT INTO corpus_entities
+                     VALUES ('stale', 'CONTRACTOR_LICENSE', '1', '1', 'EXACT_NORMALIZED_MATCH');",
+                )
+                .expect("the version 10 schema must apply");
+        }
+
+        let index = CorpusIndex::open(&path).expect("a version 10 index must be rebuilt");
+        let csv = directory.path().join("master.csv");
+        std::fs::write(&csv, "LicenseNo,BusinessName\n1,ONE\n").unwrap();
+        let summary = index
+            .import_registry_snapshot(RegistryKind::CslbLicenseMaster, csv)
+            .await
+            .expect("the rebuilt index must accept a registry import");
+        assert_eq!(summary.record_count, 1);
+        let connection = Connection::open(&path).expect("the rebuilt index must open");
+        let stale: i64 = connection
+            .query_row("SELECT COUNT(*) FROM corpus_entities", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(stale, 0);
+    }
+
+    /// An index stamped 11 predates `SERIES_NUMBER` in the `entity_kind` CHECK. It must be
+    /// discarded and rebuilt, or indexing any document citing a resolution number would fail.
+    #[tokio::test]
+    async fn a_version_11_corpus_index_is_rebuilt_and_then_stores_a_series_number() {
+        let directory = tempdir().expect("temp dir must be created");
+        let path = directory.path().join("corpus.db");
+        {
+            let previous = Connection::open(&path).expect("the version 11 fixture must open");
+            previous
+                .execute_batch(
+                    "CREATE TABLE corpus_schema_version (
+                        singleton BOOLEAN PRIMARY KEY,
+                        version BIGINT NOT NULL
+                     );
+                     INSERT INTO corpus_schema_version (singleton, version) VALUES (TRUE, 11);
+                     CREATE TABLE corpus_entities (
+                        entity_id TEXT PRIMARY KEY,
+                        entity_kind TEXT NOT NULL CHECK (entity_kind IN ('PARCEL_NUMBER')),
+                        normalized_value TEXT NOT NULL,
+                        display_value TEXT NOT NULL,
+                        resolution_basis TEXT NOT NULL
+                     );",
+                )
+                .expect("the version 11 schema must apply");
+        }
+
+        let index = CorpusIndex::open(&path).expect("a version 11 index must be rebuilt");
+        index
+            .index_document(input(1, "Adopted as Resolution No. 2024-011."))
+            .await
+            .expect("the rebuilt index must store a series number");
+        let connection = Connection::open(&path).expect("the rebuilt index must open");
+        let stored: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM corpus_entities WHERE entity_kind = 'SERIES_NUMBER'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(stored, 1);
+    }
+
+    /// Two holes in one series, each bounded by the indexed documents on either side.
+    #[tokio::test]
+    async fn series_number_gaps_report_the_numbers_no_indexed_document_carries() {
+        let directory = tempdir().expect("temp dir must be created");
+        let index = CorpusIndex::open(directory.path().join("corpus.db")).expect("index must open");
+        for (document_id, number) in [(1, "011"), (2, "013"), (3, "016")] {
+            index
+                .index_document(input(
+                    document_id,
+                    &format!("The council adopted Resolution No. 2024-{number} unanimously."),
+                ))
+                .await
+                .expect("the document must index");
+        }
+
+        let report = index.series_number_gaps(10).await.expect("gaps must read");
+        let gaps: Vec<(&str, &str, u64, u64, &str, &str)> = report
+            .gaps
+            .iter()
+            .map(|gap| {
+                (
+                    gap.label.as_str(),
+                    gap.prefix.as_str(),
+                    gap.from_number,
+                    gap.to_number,
+                    gap.before.display_value.as_str(),
+                    gap.after.display_value.as_str(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            gaps,
+            vec![
+                (
+                    "resolution",
+                    "2024-",
+                    12,
+                    12,
+                    "Resolution 2024-011",
+                    "Resolution 2024-013"
+                ),
+                (
+                    "resolution",
+                    "2024-",
+                    14,
+                    15,
+                    "Resolution 2024-013",
+                    "Resolution 2024-016"
+                ),
+            ]
+        );
+        assert_eq!(report.series_count, 1);
     }
 
     /// The version-mismatch path specifically, which the fixture above does not exercise: that one

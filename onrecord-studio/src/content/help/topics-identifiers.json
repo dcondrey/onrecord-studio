@@ -53,7 +53,51 @@
     "findingKinds": [],
     "commandGroups": [],
     "related": [
-      "entity-resolution"
+      "entity-resolution",
+      "registry-anchoring"
+    ]
+  },
+  {
+    "id": "registry-anchoring",
+    "title": "Registry snapshots and what a match means",
+    "group": "Findings",
+    "summary": "Import a public registry list you downloaded yourself, and read a licence number beside the name it is registered to.",
+    "keywords": [
+      "registry",
+      "cslb",
+      "license master",
+      "contractor license",
+      "snapshot",
+      "registered to",
+      "anchor"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "The app never fetches registry data. Download the free CSLB License Master list from the CSLB data portal, then import the CSV under Collection, coverage and storage. The file's SHA-256 digest, import date and record count are kept with the snapshot and shown with every match, so the same lookup against the same file gives the same answer."
+        ]
+      },
+      {
+        "heading": "The four answers",
+        "items": [
+          "Not checked: no snapshot has been imported, or the identifier kind has no registry. Only contractor licence numbers have one today.",
+          "Not listed: the number is absent from the imported file. The License Master holds licences currently renewed or expired but renewable, so absence does not mean the licence was never issued.",
+          "Registered to: the number appears in the file with that business name and status.",
+          "A match anchors the number, not a party. It never says that a person or organization named in the documents is the registrant; read the documents."
+        ]
+      },
+      {
+        "heading": "Which columns are read",
+        "paragraphs": [
+          "The licence number, business name and primary status columns are matched by header name; classifications, city and expiration date are kept as detail when present. Rows without a usable number, and later rows repeating a number, are counted as skipped and shown with the snapshot."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": ["registry"],
+    "related": [
+      "shared-identifiers"
     ]
   }
 ]

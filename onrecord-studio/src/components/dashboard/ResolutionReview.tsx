@@ -14,6 +14,7 @@ import {
   type ResolutionSuggestionBasis,
 } from '../../types';
 import { describeSharedIdentifier } from '../../utils/identifierEvidence';
+import { RegistryAnchorNote } from '../ui/RegistryAnchorNote';
 import { SignerTrustNotice } from './CaseSharing';
 import { useContributors } from './useContributors';
 
@@ -104,6 +105,9 @@ function CandidateCard({
           ? describeSharedIdentifier(evidence.sharedIdentifier)
           : 'The names match once punctuation, word order and company suffixes are ignored. A similar name is a lead, not proof.'}
       </p>
+      {evidence.basis === 'STRONG_IDENTIFIER' && evidence.sharedIdentifier?.kind === 'CONTRACTOR_LICENSE' && (
+        <RegistryAnchorNote identifierKind="CONTRACTOR_LICENSE" value={evidence.sharedIdentifier.displayValue} />
+      )}
       <div className="grid gap-3 sm:grid-cols-2">
         <Side title="Entity A" side={evidence.left} />
         <Side title="Entity B" side={evidence.right} />

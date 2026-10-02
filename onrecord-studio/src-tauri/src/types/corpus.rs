@@ -28,6 +28,9 @@ pub enum CorpusEntityKind {
     ContractorLicense,
     /// California assessor's parcel number. Names a property, never a person or organization.
     ParcelNumber,
+    /// A number in a labelled document series ("Resolution No. 2024-012"), keyed `label:VALUE`.
+    /// Identifies a document, never a person or organization.
+    SeriesNumber,
 }
 
 impl CorpusEntityKind {
@@ -48,6 +51,7 @@ impl CorpusEntityKind {
             Self::Ein => "EIN",
             Self::ContractorLicense => "CONTRACTOR_LICENSE",
             Self::ParcelNumber => "PARCEL_NUMBER",
+            Self::SeriesNumber => "SERIES_NUMBER",
         }
     }
 }

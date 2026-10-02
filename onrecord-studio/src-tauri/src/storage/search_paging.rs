@@ -77,13 +77,31 @@ fn decode_cursor(value: &str) -> Result<Cursor, AppError> {
     })
 }
 
-struct Filters {
+pub(crate) struct Filters {
     portal_key: Option<String>,
     agency_id: Option<i64>,
     status: Option<String>,
     policy_deviation: Option<String>,
     fts_query: Option<String>,
-    sql: String,
+    pub(crate) sql: String,
+}
+
+impl Filters {
+    /// The five positional parameters `sql` binds, in order.
+    pub(crate) fn params(&self) -> [&dyn duckdb::ToSql; 5] {
+        [
+            &self.portal_key,
+            &self.agency_id,
+            &self.status,
+            &self.policy_deviation,
+            &self.fts_query,
+        ]
+    }
+
+    /// True when the predicate reads the token projection, which is incomplete while indexing.
+    pub(crate) fn reads_tokens(&self) -> bool {
+        self.fts_query.is_some()
+    }
 }
 
 fn trimmed(value: Option<&str>) -> Option<String> {
@@ -93,7 +111,7 @@ fn trimmed(value: Option<&str>) -> Option<String> {
         .map(str::to_string)
 }
 
-fn build_filters(
+pub(crate) fn build_filters(
     search_term: &str,
     portal_key: Option<&str>,
     agency_id: Option<u64>,
@@ -114,7 +132,7 @@ fn build_filters(
     })
 }
 
-fn count_matches(conn: &duckdb::Connection, filters: &Filters) -> Result<u64, AppError> {
+pub(crate) fn count_matches(conn: &duckdb::Connection, filters: &Filters) -> Result<u64, AppError> {
     let total: i64 = conn
         .query_row(
             &format!("SELECT COUNT(*) FROM requests WHERE {}", filters.sql),

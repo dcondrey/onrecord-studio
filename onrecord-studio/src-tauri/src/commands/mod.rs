@@ -13,11 +13,13 @@ pub mod original_file;
 pub mod paging;
 pub mod query;
 pub mod reconstruction;
+pub mod registry;
 pub mod research;
 pub mod resolution;
 pub mod runtime;
 pub mod semantic;
 pub mod snapshot;
+pub mod standing_search;
 pub(crate) mod validation;
 
 pub use analysis_workbench::{

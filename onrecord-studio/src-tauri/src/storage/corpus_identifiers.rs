@@ -53,8 +53,12 @@ fn ceil_boundary(text: &str, mut index: usize) -> usize {
 
 /// True when PII masking would remove any part of `start..end`, or cannot run.
 fn masked_by_pii(text: &str, start: usize, end: usize) -> bool {
+    masked_by_pii_reaching(text, start, end, 8)
+}
+
+fn masked_by_pii_reaching(text: &str, start: usize, end: usize, trailing: usize) -> bool {
     let window_start = floor_boundary(text, start.saturating_sub(PII_CONTEXT_BYTES));
-    let window_end = ceil_boundary(text, (end + 8).min(text.len()));
+    let window_end = ceil_boundary(text, (end + trailing).min(text.len()));
     mask_pii(&text[window_start..window_end]).map_or(true, |result| {
         result.findings.iter().any(|finding| {
             window_start + finding.byte_start < end && window_start + finding.byte_end > start
@@ -283,6 +287,126 @@ pub(super) fn find_parcel_numbers(text: &str, limit: usize) -> Vec<IdentifierMat
     found
 }
 
+/// Labels that introduce a numbered document series. "Contract" never matches "contractor": a
+/// label is a whole word.
+const SERIES_LABELS: &[&str] = &[
+    "resolution",
+    "ordinance",
+    "contract",
+    "agreement",
+    "permit",
+    "purchase order",
+    "invoice",
+    "bid",
+    "rfp",
+    "work order",
+    "claim",
+    "citation",
+    "incident",
+    "docket",
+];
+const SERIES_VALUE_BYTES: std::ops::RangeInclusive<usize> = 2..=24;
+/// A series value can be just the area code of "(619) 555-0198", so the PII detectors must see
+/// the whole phone number after it to recognize it.
+const SERIES_PII_TRAILING_BYTES: usize = 16;
+
+/// Where the required `no` / `number` / `#` marker after a series label ends. Without one,
+/// "the resolution 2024" is prose, not a citation of a numbered document.
+fn series_marker_end(lower: &str, mut index: usize) -> Option<usize> {
+    let bytes = lower.as_bytes();
+    while bytes
+        .get(index)
+        .is_some_and(|byte| matches!(byte, b' ' | b'\t' | b':'))
+    {
+        index += 1;
+    }
+    if bytes.get(index) == Some(&b'#') {
+        return Some(index + 1);
+    }
+    ["number", "no"].into_iter().find_map(|marker| {
+        let end = index + marker.len();
+        (lower[index..].starts_with(marker)
+            && bytes
+                .get(end)
+                .is_none_or(|next| !next.is_ascii_alphanumeric()))
+        .then_some(end)
+    })
+}
+
+/// `d/d/d` or `dddd-dd-dd`: a date written where a number was expected.
+fn is_date_shaped(value: &str) -> bool {
+    let slash_parts: Vec<&str> = value.split('/').collect();
+    let all_digits =
+        |part: &&str| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit());
+    (slash_parts.len() == 3 && slash_parts.iter().all(all_digits))
+        || (value.len() == 10
+            && digits_at(value.as_bytes(), 0, 4)
+            && value.as_bytes()[4] == b'-'
+            && digits_at(value.as_bytes(), 5, 2)
+            && value.as_bytes()[7] == b'-'
+            && digits_at(value.as_bytes(), 8, 2))
+}
+
+/// A labelled series number ("Resolution No. 2024-012"), normalized to `label:VALUE` so the gap
+/// scan can group a series by label and prefix. The value must end in a digit and hold at least
+/// two; a longer run is refused whole rather than truncated, and phone numbers are refused by the
+/// PII check.
+pub(super) fn find_series_numbers(text: &str, limit: usize) -> Vec<IdentifierMatch> {
+    const FILLERS: &[&str] = &["no", "number"];
+    let lower = text.to_ascii_lowercase();
+    let bytes = lower.as_bytes();
+    let mut labels: Vec<(usize, &str)> = SERIES_LABELS
+        .iter()
+        .flat_map(|label| {
+            label_ends(&lower, &[*label])
+                .into_iter()
+                .map(move |end| (end, *label))
+        })
+        .collect();
+    labels.sort_unstable();
+    let mut found: Vec<IdentifierMatch> = Vec::new();
+    for (label_end, label) in labels {
+        if found.len() >= limit {
+            break;
+        }
+        let Some(marker_end) = series_marker_end(&lower, label_end) else {
+            continue;
+        };
+        let start = skip_label_tail(&lower, marker_end, FILLERS);
+        let run_end = bytes[start..]
+            .iter()
+            .position(|byte| !(byte.is_ascii_alphanumeric() || b"-/.".contains(byte)))
+            .map_or(bytes.len(), |length| start + length);
+        let Some(end) = bytes[start..run_end]
+            .iter()
+            .rposition(u8::is_ascii_digit)
+            .map(|last| start + last + 1)
+        else {
+            continue;
+        };
+        let value = &text[start..end];
+        if !bytes[start].is_ascii_alphanumeric()
+            || !SERIES_VALUE_BYTES.contains(&value.len())
+            || value.bytes().filter(u8::is_ascii_digit).count() < 2
+            || is_date_shaped(value)
+            || !boundary_after(bytes, end)
+            || found.iter().any(|existing| existing.byte_start == start)
+            || masked_by_pii_reaching(text, start, end, SERIES_PII_TRAILING_BYTES)
+        {
+            continue;
+        }
+        let label_start = label_end - label.len();
+        found.push(IdentifierMatch {
+            normalized: format!("{label}:{}", value.to_ascii_uppercase()),
+            display: format!("{} {value}", &text[label_start..label_end]),
+            byte_start: start,
+            byte_end: end,
+        });
+    }
+    found.sort_by_key(|found| found.byte_start);
+    found
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -395,5 +519,51 @@ mod tests {
         assert_eq!(&text[parcel.byte_start..parcel.byte_end], "123-456-78");
         let license = &find_contractor_licenses(text, 10)[0];
         assert_eq!(&text[license.byte_start..license.byte_end], "123456");
+    }
+    #[test]
+    fn a_series_number_needs_a_label_a_marker_and_a_numeric_non_date_value() {
+        let cases: [(&str, Vec<&str>); 23] = [
+            ("Resolution No. 2024-012", vec!["resolution:2024-012"]),
+            ("per RESOLUTION NO. 2024-012.", vec!["resolution:2024-012"]),
+            ("Ordinance Number: 1234", vec!["ordinance:1234"]),
+            (
+                "Purchase Order #po-24/0071",
+                vec!["purchase order:PO-24/0071"],
+            ),
+            (
+                "Permit No.BP-2024-0012, issued",
+                vec!["permit:BP-2024-0012"],
+            ),
+            ("Work Order # 88", vec!["work order:88"]),
+            (
+                "RFP No. 23-045 and Bid No. 23-046",
+                vec!["rfp:23-045", "bid:23-046"],
+            ),
+            ("Docket No. 24-CV-1234", vec!["docket:24-CV-1234"]),
+            ("Contract Agreement No. 7.12", vec!["agreement:7.12"]),
+            ("Resolution 2024-012", vec![]),
+            ("the resolution, number twelve", vec![]),
+            ("Contractor No. 1234", vec![]),
+            ("Claims No. 1234", vec![]),
+            ("Permit No. 5", vec![]),
+            ("Bid No. A", vec![]),
+            ("Invoice No. 2024-012A", vec![]),
+            ("Invoice No. 1234567890123456789012345", vec![]),
+            ("Resolution No. 12/15/2024", vec![]),
+            ("Incident # 2024-03-15", vec![]),
+            ("Citation No. 619-555-0198", vec![]),
+            ("Citation No. (619) 555-0198", vec![]),
+            ("Resolution No.\n2024-012", vec![]),
+            ("Claim No. -12", vec![]),
+        ];
+        for (text, expected) in cases {
+            assert_eq!(values(find_series_numbers(text, 100)), expected, "{text}");
+        }
+        let found = &find_series_numbers("é Purchase Order No. 2024-9.", 10)[0];
+        assert_eq!(found.display, "Purchase Order 2024-9");
+        assert_eq!(
+            &"é Purchase Order No. 2024-9."[found.byte_start..found.byte_end],
+            "2024-9"
+        );
     }
 }
