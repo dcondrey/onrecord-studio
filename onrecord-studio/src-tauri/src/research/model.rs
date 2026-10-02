@@ -143,9 +143,6 @@ async fn complete_inner(
         "ollama" => ("http://127.0.0.1:11434/v1/chat/completions", None),
         _ => return Err(AppError::DataParsing("Unsupported research provider".into())),
     };
-    repository
-        .research_reserve_call(policy.daily_call_limit.min(current.daily_call_limit))
-        .await?;
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(420))
         .connect_timeout(Duration::from_secs(15))
@@ -194,6 +191,12 @@ async fn complete_inner(
     if let Some(key) = key {
         request = request.bearer_auth(key);
     }
+    // Reserved after every local-only failure, but before `dispatch_current`'s recheck: an await
+    // between that recheck and `send` could deliver evidence to a provider deselected meanwhile.
+    // A policy change during this await therefore costs a slot without a call.
+    repository
+        .research_reserve_call(policy.daily_call_limit.min(current.daily_call_limit))
+        .await?;
     dispatch_current(repository, policy, web_discovery, || async move {
     let mut response = request.send().await.map_err(|e| {
         AppError::DataParsing(if e.is_timeout() {
