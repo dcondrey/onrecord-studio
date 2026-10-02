@@ -549,7 +549,63 @@ export default function LegalCompliancePanel({
         </div>
       )}
 
-      {selectedFinding && <div className="grid gap-px border-t border-line bg-raised md:grid-cols-2"><section className="bg-canvas p-3" aria-label="Authority citation"><div className="text-caption font-bold uppercase tracking-wider text-highlight">Authority citation</div><div className="mt-2 text-label font-semibold text-fg">{selectedFinding.statuteCitation}</div><p className="mt-1 text-caption text-muted">{selectedFinding.authorityTitle}</p><dl className="mt-2 space-y-1 font-mono text-caption text-muted"><div><dt className="inline">Version </dt><dd className="inline text-muted">{selectedFinding.matchedVersionId}</dd></div>{selectedFinding.mandateTitle && <div><dt className="inline">Rule </dt><dd className="inline text-muted">{selectedFinding.mandateTitle}</dd></div>}</dl>{selectedAuthority?.canonicalSourceUri && <a href={selectedAuthority.canonicalSourceUri} target="_blank" rel="noreferrer" className="mt-2 block break-all text-caption text-accent underline">Open official source</a>}</section><section className="bg-canvas p-3" aria-label="Finding evidence excerpt"><div className="flex items-center justify-between"><div className="text-caption font-bold uppercase tracking-wider text-warning">Case evidence</div><button type="button" onClick={() => setSelectedFindingId(null)} className="text-caption text-muted hover:text-fg-secondary">Close</button></div><p className="mt-2 whitespace-pre-wrap text-caption leading-relaxed text-fg-secondary">{selectedFinding.evidenceSummary}</p><div className="mt-2 font-mono text-caption text-muted">Supporting documents: {selectedFinding.supportingDocumentIds.length ? selectedFinding.supportingDocumentIds.join(', ') : 'none recorded'}</div>{selectedFinding.missingEvidencePhrases.length > 0 && <div className="mt-2 text-caption text-warning">Missing required evidence: {selectedFinding.missingEvidencePhrases.join('; ')}</div>}</section></div>}
+      {selectedFinding && (
+        <div className="grid gap-px border-t border-line bg-raised md:grid-cols-2">
+          <section className="bg-canvas p-3" aria-label="Authority citation">
+            <div className="text-caption font-bold uppercase tracking-wider text-highlight">Authority citation</div>
+            <div className="mt-2 text-label font-semibold text-fg">{selectedFinding.statuteCitation}</div>
+            <p className="mt-1 text-caption text-muted">{selectedFinding.authorityTitle}</p>
+            <dl className="mt-2 space-y-1 font-mono text-caption text-muted">
+              <div>
+                <dt className="inline">Version </dt>
+                <dd className="inline text-muted">{selectedFinding.matchedVersionId}</dd>
+              </div>
+              {selectedFinding.mandateTitle && (
+                <div>
+                  <dt className="inline">Rule </dt>
+                  <dd className="inline text-muted">{selectedFinding.mandateTitle}</dd>
+                </div>
+              )}
+            </dl>
+            {selectedAuthority?.canonicalSourceUri && (
+              <a
+                href={selectedAuthority.canonicalSourceUri}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 block break-all text-caption text-accent underline"
+              >
+                Open official source
+              </a>
+            )}
+          </section>
+          <section className="bg-canvas p-3" aria-label="Finding evidence excerpt">
+            <div className="flex items-center justify-between">
+              <div className="text-caption font-bold uppercase tracking-wider text-warning">Case evidence</div>
+              <button
+                type="button"
+                onClick={() => setSelectedFindingId(null)}
+                className="text-caption text-muted hover:text-fg-secondary"
+              >
+                Close
+              </button>
+            </div>
+            <p className="mt-2 whitespace-pre-wrap text-caption leading-relaxed text-fg-secondary">
+              {selectedFinding.evidenceSummary}
+            </p>
+            <div className="mt-2 font-mono text-caption text-muted">
+              Supporting documents:{' '}
+              {selectedFinding.supportingDocumentIds.length
+                ? selectedFinding.supportingDocumentIds.join(', ')
+                : 'none recorded'}
+            </div>
+            {selectedFinding.missingEvidencePhrases.length > 0 && (
+              <div className="mt-2 text-caption text-warning">
+                Missing required evidence: {selectedFinding.missingEvidencePhrases.join('; ')}
+              </div>
+            )}
+          </section>
+        </div>
+      )}
 
       {evaluation && (
         <div

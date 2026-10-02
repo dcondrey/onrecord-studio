@@ -421,7 +421,77 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
 
 function AuthorityVersionWorkspace({ versions, leftVersionId, rightVersionId, leftVersion, rightVersion, error, onLeftChange, onRightChange }: { versions: LegalAuthorityVersionSummary[]; leftVersionId: string | null; rightVersionId: string | null; leftVersion: LegalAuthorityVersionDetail | null; rightVersion: LegalAuthorityVersionDetail | null; error: string | null; onLeftChange: (value: string) => void; onRightChange: (value: string) => void }) {
   const changes = leftVersion && rightVersion ? compareAuthorityText(leftVersion.fullText, rightVersion.fullText) : null;
-  return <section className="border-b border-line bg-surface/40 px-5 py-3" aria-label="Authority version comparison"><div className="flex items-center justify-between gap-3"><div><div className="text-caption font-semibold text-fg-secondary">Effective-date timeline and immutable text comparison</div><div className="mt-0.5 text-caption text-muted">{versions.length} content-addressed version{versions.length === 1 ? '' : 's'}, newest first</div></div>{changes && <span className="font-mono text-caption text-highlight">{changes.changed.toLocaleString()} changed · {changes.added.toLocaleString()} added · {changes.removed.toLocaleString()} removed lines</span>}</div>{error ? <p role="alert" className="mt-2 text-caption text-danger">{error}</p> : versions.length === 0 ? <p className="mt-2 text-caption text-muted">No immutable versions are indexed for this authority.</p> : <><div className="mt-2 flex gap-1 overflow-x-auto pb-1">{versions.map((version) => <span key={version.versionId} className="shrink-0 rounded border border-line bg-canvas px-2 py-1 font-mono text-caption text-muted" title={version.contentSha256}>{version.effectiveFrom ?? 'start unknown'} → {version.effectiveTo ?? 'open ended'} · {formatVersionDate(version.importedAt)}</span>)}</div><div className="mt-2 grid grid-cols-2 gap-2">{([['Earlier / baseline', leftVersionId, onLeftChange, leftVersion], ['Later / comparison', rightVersionId, onRightChange, rightVersion]] as const).map(([label, selected, change, detail]) => <label key={label} className="block text-caption text-muted">{label}<select value={selected ?? ''} onChange={(event) => change(event.target.value)} className="ml-2 rounded border border-control bg-canvas px-2 py-1 font-mono text-caption text-fg-secondary">{versions.map((version) => <option key={version.versionId} value={version.versionId}>{formatVersionDate(version.importedAt)} · {version.contentSha256.slice(0, 10)}</option>)}</select><textarea readOnly value={detail?.fullText ?? 'Loading version text…'} aria-label={`${label} authority text`} className="mt-1.5 h-28 w-full resize-y rounded border border-control bg-canvas p-2 font-mono text-caption leading-relaxed text-muted" /></label>)}</div></>}</section>;
+  return (
+    <section className="border-b border-line bg-surface/40 px-5 py-3" aria-label="Authority version comparison">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-caption font-semibold text-fg-secondary">
+            Effective-date timeline and immutable text comparison
+          </div>
+          <div className="mt-0.5 text-caption text-muted">
+            {versions.length} content-addressed version{versions.length === 1 ? '' : 's'}, newest first
+          </div>
+        </div>
+        {changes && (
+          <span className="font-mono text-caption text-highlight">
+            {changes.changed.toLocaleString()} changed · {changes.added.toLocaleString()} added ·{' '}
+            {changes.removed.toLocaleString()} removed lines
+          </span>
+        )}
+      </div>
+      {error ? (
+        <p role="alert" className="mt-2 text-caption text-danger">
+          {error}
+        </p>
+      ) : versions.length === 0 ? (
+        <p className="mt-2 text-caption text-muted">No immutable versions are indexed for this authority.</p>
+      ) : (
+        <>
+          <div className="mt-2 flex gap-1 overflow-x-auto pb-1">
+            {versions.map((version) => (
+              <span
+                key={version.versionId}
+                className="shrink-0 rounded border border-line bg-canvas px-2 py-1 font-mono text-caption text-muted"
+                title={version.contentSha256}
+              >
+                {version.effectiveFrom ?? 'start unknown'} → {version.effectiveTo ?? 'open ended'} ·{' '}
+                {formatVersionDate(version.importedAt)}
+              </span>
+            ))}
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {(
+              [
+                ['Earlier / baseline', leftVersionId, onLeftChange, leftVersion],
+                ['Later / comparison', rightVersionId, onRightChange, rightVersion],
+              ] as const
+            ).map(([label, selected, change, detail]) => (
+              <label key={label} className="block text-caption text-muted">
+                {label}
+                <select
+                  value={selected ?? ''}
+                  onChange={(event) => change(event.target.value)}
+                  className="ml-2 rounded border border-control bg-canvas px-2 py-1 font-mono text-caption text-fg-secondary"
+                >
+                  {versions.map((version) => (
+                    <option key={version.versionId} value={version.versionId}>
+                      {formatVersionDate(version.importedAt)} · {version.contentSha256.slice(0, 10)}
+                    </option>
+                  ))}
+                </select>
+                <textarea
+                  readOnly
+                  value={detail?.fullText ?? 'Loading version text…'}
+                  aria-label={`${label} authority text`}
+                  className="mt-1.5 h-28 w-full resize-y rounded border border-control bg-canvas p-2 font-mono text-caption leading-relaxed text-muted"
+                />
+              </label>
+            ))}
+          </div>
+        </>
+      )}
+    </section>
+  );
 }
 
 function compareAuthorityText(left: string, right: string) {

@@ -170,7 +170,247 @@ export default function CaseworkPanel({ onSelectCase }: { onSelectCase?: (caseId
       {chain && <div className="rounded border border-line-strong p-3 text-label leading-4 text-fg-secondary"><p className="font-semibold text-fg">This case's local export ledger ({chain.length} export{chain.length === 1 ? "" : "s"})</p><p className="mt-1 text-muted">{chain.length === 0 ? "No exports to verify yet." : chain.every((entry) => entry.previousLinkValid) ? "Ledger: PASS — each recorded export names the prior recorded export's hash. This reads this installation's export records, not the exported files; check the files with the bundled verifier script." : "Ledger: FAIL — a link below does not match. Treat the sequence as tampered or reordered."}</p><ol className="mt-2 space-y-1">{chain.map((entry) => <li key={entry.sequence} className={entry.previousLinkValid ? undefined : "text-danger"}>#{entry.sequence} · {entry.previousLinkValid ? "link ok" : "link INVALID"} · {entry.outcome.toLowerCase()} · {entry.reservedAt} · {entry.previousManifestSha256 ? `chained to ${entry.previousManifestSha256.slice(0, 12)}…` : "first in chain"}</li>)}</ol>{chain.length === 0 && <p className="mt-1 text-muted">No exports recorded for this case yet.</p>}</div>}
       <details><summary className="text-label leading-4 text-muted">Contribution trail</summary><ol className="mt-2 space-y-2 text-label leading-4 text-muted">{state?.events.filter((event) => event.caseId === draft.id).map((event) => <li key={event.revision}>r{event.revision} · {event.at} · {event.author}: {event.summary}</li>)}</ol><p className="mt-2 text-label leading-4 text-muted">Refresh cases to load the latest saved contribution events.</p></details>
     </div>}
-    <details><summary className="font-semibold text-fg">Review a shared case packet</summary><p className="mt-2 text-label leading-4 text-muted">Paste the exported JSON. Preview checks source references and the revision base. Conflicting local work is preserved.</p><label className="mt-3 block text-label leading-4 text-fg-secondary">Open a shared case file<input type="file" accept=".json,application/json" className="mt-2 block w-full text-label leading-4" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; gate.invalidate(); setPreview(null); setBusy(false); if (file.size > 8 * 1024 * 1024) { setError("Case files must be at most 8 MB (signed packets carry the case data twice: once as verifiable bytes, once readable)."); return; } void perform(() => file.text(), (value) => { setPayload(value); setMessage("Case file loaded. Preview the changes before applying it."); }); }} /></label><label className="mt-3 block text-label leading-4 text-fg-secondary">Incoming case JSON<textarea aria-label="Incoming case JSON" rows={6} maxLength={8 * 1024 * 1024} value={payload} className="analysis-input mt-1 w-full font-mono" onChange={(event) => { gate.invalidate(); setBusy(false); setPayload(event.target.value); setPreview(null); setError(""); }} /></label><button type="button" className="analysis-button mt-2" disabled={busy || !payload.trim()} onClick={() => void perform(() => invokeCommand("preview_casework_import", { payload }), setPreview)}>Preview shared case</button>{preview && <div className="mt-3 space-y-3"><p role="status" className="font-semibold text-accent">Import review: {preview.mode.replace(/_/g, " ").toLowerCase()}</p><p className="text-sm text-fg-secondary">{preview.case.title} · claimed contributor: {preview.contributor}{preview.signerKeyId && <> · signed by local key <code>{preview.signerKeyId.slice(0, 12)}</code></>}</p>{preview.signerKeyId && <SignerTrustNotice signerKeyId={preview.signerKeyId} contributors={contributors} />}<ul className="list-disc pl-4 text-label leading-4 text-warning">{preview.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul><section aria-label="Changes in shared case" className="space-y-3"><h4 className="text-sm font-semibold text-fg">Changes this packet would make</h4>{differences.length === 0 ? <p className="text-label leading-4 text-muted">No changes to tracked case fields.</p> : differences.map((change, index) => <article key={index} className="rounded border border-line-strong p-3"><p className="text-label leading-4 text-accent">{change.section} · {change.kind}</p><h5 className="mt-1 text-sm font-semibold text-fg">{change.label}</h5><div className="mt-2 grid gap-3 sm:grid-cols-2"><div><p className="text-label leading-4 font-semibold text-muted">Local</p><pre className="mt-1 max-h-60 overflow-auto whitespace-pre-wrap font-sans text-label leading-4 text-fg-secondary">{change.local}</pre></div><div><p className="text-label leading-4 font-semibold text-muted">Incoming</p><pre className="mt-1 max-h-60 overflow-auto whitespace-pre-wrap font-sans text-label leading-4 text-fg-secondary">{change.incoming}</pre></div></div></article>)}</section>{preview.mode === "CONFLICT" && preview.commuting.length > 0 && <section aria-label="Operations that commute with local work" className="rounded border border-success/30 p-3"><h5 className="text-sm font-semibold text-fg">{preview.commuting.length} incoming change{preview.commuting.length === 1 ? "" : "s"} touch nothing you changed since the shared base</h5><p className="mt-1 text-label leading-4 text-muted">Each adds or updates an item no local revision has touched since revision {preview.localRevision ?? 0} diverged, as recorded in both operation logs. Applying them saves one new revision; the {preview.contested.length} contested change{preview.contested.length === 1 ? "" : "s"} below stay for item-by-item merge. Authors are labels the other desk supplied, not verified identities.</p><ul className="mt-2 list-disc pl-4 text-label leading-4 text-fg-secondary">{preview.commuting.map((operation) => <li key={operation.hash}>{operation.kind.toLowerCase()} {operation.section}: {operation.summary} <span className="text-muted">· r{operation.revision} · claimed author {operation.author}</span></li>)}</ul><button type="button" className="analysis-button mt-2" disabled={busy} onClick={() => void perform(() => invokeCommand("apply_commuting_case_operations", { payload, expectedRevision: preview.localRevision, packetSha256: preview.packetSha256, author }), (value) => { accept(value, "import"); setPreview(null); setMessage(`${preview.commuting.length} commuting change${preview.commuting.length === 1 ? "" : "s"} applied as revision ${value.revision}. Preview the packet again to merge what remains.`); })}>Apply {preview.commuting.length} commuting change{preview.commuting.length === 1 ? "" : "s"}</button></section>}{draft && draft.id === preview.case.id && <CaseMerge local={draft} incoming={preview.case} onApply={(merged, count) => { setDraft(merged); setMessage(`${count} item${count === 1 ? "" : "s"} applied to your open draft. Review them, then save a new revision.`); }} />}<details><summary className="text-label leading-4 text-muted">Advanced: inspect raw case data</summary><div className="mt-2 grid gap-3 sm:grid-cols-2"><label className="text-label leading-4 text-fg-secondary">Incoming case<textarea readOnly className="analysis-input mt-1 w-full font-mono" rows={12} value={JSON.stringify(preview.case, null, 2)} /></label><label className="text-label leading-4 text-fg-secondary">Local case<textarea readOnly className="analysis-input mt-1 w-full font-mono" rows={12} value={JSON.stringify(state?.cases.find((c) => c.id === preview.case.id) ?? null, null, 2)} /></label></div></details>{preview.mode === "CONFLICT" ? <p className="text-sm text-warning">This packet cannot overwrite local work. Open the local case, compare the versions and merge selected changes into a new local revision.</p> : <button type="button" className="analysis-button" disabled={busy || !author.trim()} onClick={() => void perform(() => invokeCommand("import_casework_packet", { payload, expectedRevision: preview.localRevision, packetSha256: preview.packetSha256, author }), (value) => { accept(value, "import"); setPreview(null); setPayload(""); })}>Apply reviewed case packet</button>}</div>}</details>
+    <details>
+      <summary className="font-semibold text-fg">Review a shared case packet</summary>
+      <p className="mt-2 text-label leading-4 text-muted">
+        Paste the exported JSON. Preview checks source references and the revision base. Conflicting
+        local work is preserved.
+      </p>
+      <label className="mt-3 block text-label leading-4 text-fg-secondary">
+        Open a shared case file
+        <input
+          type="file"
+          accept=".json,application/json"
+          className="mt-2 block w-full text-label leading-4"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (!file) return;
+            gate.invalidate();
+            setPreview(null);
+            setBusy(false);
+            if (file.size > 8 * 1024 * 1024) {
+              setError(
+                "Case files must be at most 8 MB (signed packets carry the case data twice: once as verifiable bytes, once readable).",
+              );
+              return;
+            }
+            void perform(
+              () => file.text(),
+              (value) => {
+                setPayload(value);
+                setMessage("Case file loaded. Preview the changes before applying it.");
+              },
+            );
+          }}
+        />
+      </label>
+      <label className="mt-3 block text-label leading-4 text-fg-secondary">
+        Incoming case JSON
+        <textarea
+          aria-label="Incoming case JSON"
+          rows={6}
+          maxLength={8 * 1024 * 1024}
+          value={payload}
+          className="analysis-input mt-1 w-full font-mono"
+          onChange={(event) => {
+            gate.invalidate();
+            setBusy(false);
+            setPayload(event.target.value);
+            setPreview(null);
+            setError("");
+          }}
+        />
+      </label>
+      <button
+        type="button"
+        className="analysis-button mt-2"
+        disabled={busy || !payload.trim()}
+        onClick={() =>
+          void perform(() => invokeCommand("preview_casework_import", { payload }), setPreview)
+        }
+      >
+        Preview shared case
+      </button>
+      {preview && (
+        <div className="mt-3 space-y-3">
+          <p role="status" className="font-semibold text-accent">
+            Import review: {preview.mode.replace(/_/g, " ").toLowerCase()}
+          </p>
+          <p className="text-sm text-fg-secondary">
+            {preview.case.title} · claimed contributor: {preview.contributor}
+            {preview.signerKeyId && (
+              <>
+                {" "}
+                · signed by local key <code>{preview.signerKeyId.slice(0, 12)}</code>
+              </>
+            )}
+          </p>
+          {preview.signerKeyId && (
+            <SignerTrustNotice signerKeyId={preview.signerKeyId} contributors={contributors} />
+          )}
+          <ul className="list-disc pl-4 text-label leading-4 text-warning">
+            {preview.warnings.map((warning, index) => (
+              <li key={index}>{warning}</li>
+            ))}
+          </ul>
+          <section aria-label="Changes in shared case" className="space-y-3">
+            <h4 className="text-sm font-semibold text-fg">Changes this packet would make</h4>
+            {differences.length === 0 ? (
+              <p className="text-label leading-4 text-muted">No changes to tracked case fields.</p>
+            ) : (
+              differences.map((change, index) => (
+                <article key={index} className="rounded border border-line-strong p-3">
+                  <p className="text-label leading-4 text-accent">
+                    {change.section} · {change.kind}
+                  </p>
+                  <h5 className="mt-1 text-sm font-semibold text-fg">{change.label}</h5>
+                  <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <p className="text-label leading-4 font-semibold text-muted">Local</p>
+                      <pre className="mt-1 max-h-60 overflow-auto whitespace-pre-wrap font-sans text-label leading-4 text-fg-secondary">
+                        {change.local}
+                      </pre>
+                    </div>
+                    <div>
+                      <p className="text-label leading-4 font-semibold text-muted">Incoming</p>
+                      <pre className="mt-1 max-h-60 overflow-auto whitespace-pre-wrap font-sans text-label leading-4 text-fg-secondary">
+                        {change.incoming}
+                      </pre>
+                    </div>
+                  </div>
+                </article>
+              ))
+            )}
+          </section>
+          {preview.mode === "CONFLICT" && preview.commuting.length > 0 && (
+            <section
+              aria-label="Operations that commute with local work"
+              className="rounded border border-success/30 p-3"
+            >
+              <h5 className="text-sm font-semibold text-fg">
+                {preview.commuting.length} incoming change
+                {preview.commuting.length === 1 ? "" : "s"} touch nothing you changed since the
+                shared base
+              </h5>
+              <p className="mt-1 text-label leading-4 text-muted">
+                Each adds or updates an item no local revision has touched since revision{" "}
+                {preview.localRevision ?? 0} diverged, as recorded in both operation logs. Applying
+                them saves one new revision; the {preview.contested.length} contested change
+                {preview.contested.length === 1 ? "" : "s"} below stay for item-by-item merge.
+                Authors are labels the other desk supplied, not verified identities.
+              </p>
+              <ul className="mt-2 list-disc pl-4 text-label leading-4 text-fg-secondary">
+                {preview.commuting.map((operation) => (
+                  <li key={operation.hash}>
+                    {operation.kind.toLowerCase()} {operation.section}: {operation.summary}{" "}
+                    <span className="text-muted">
+                      · r{operation.revision} · claimed author {operation.author}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                className="analysis-button mt-2"
+                disabled={busy}
+                onClick={() =>
+                  void perform(
+                    () =>
+                      invokeCommand("apply_commuting_case_operations", {
+                        payload,
+                        expectedRevision: preview.localRevision,
+                        packetSha256: preview.packetSha256,
+                        author,
+                      }),
+                    (value) => {
+                      accept(value, "import");
+                      setPreview(null);
+                      setMessage(
+                        `${preview.commuting.length} commuting change${preview.commuting.length === 1 ? "" : "s"} applied as revision ${value.revision}. Preview the packet again to merge what remains.`,
+                      );
+                    },
+                  )
+                }
+              >
+                Apply {preview.commuting.length} commuting change
+                {preview.commuting.length === 1 ? "" : "s"}
+              </button>
+            </section>
+          )}
+          {draft && draft.id === preview.case.id && (
+            <CaseMerge
+              local={draft}
+              incoming={preview.case}
+              onApply={(merged, count) => {
+                setDraft(merged);
+                setMessage(
+                  `${count} item${count === 1 ? "" : "s"} applied to your open draft. Review them, then save a new revision.`,
+                );
+              }}
+            />
+          )}
+          <details>
+            <summary className="text-label leading-4 text-muted">
+              Advanced: inspect raw case data
+            </summary>
+            <div className="mt-2 grid gap-3 sm:grid-cols-2">
+              <label className="text-label leading-4 text-fg-secondary">
+                Incoming case
+                <textarea
+                  readOnly
+                  className="analysis-input mt-1 w-full font-mono"
+                  rows={12}
+                  value={JSON.stringify(preview.case, null, 2)}
+                />
+              </label>
+              <label className="text-label leading-4 text-fg-secondary">
+                Local case
+                <textarea
+                  readOnly
+                  className="analysis-input mt-1 w-full font-mono"
+                  rows={12}
+                  value={JSON.stringify(
+                    state?.cases.find((c) => c.id === preview.case.id) ?? null,
+                    null,
+                    2,
+                  )}
+                />
+              </label>
+            </div>
+          </details>
+          {preview.mode === "CONFLICT" ? (
+            <p className="text-sm text-warning">
+              This packet cannot overwrite local work. Open the local case, compare the versions and
+              merge selected changes into a new local revision.
+            </p>
+          ) : (
+            <button
+              type="button"
+              className="analysis-button"
+              disabled={busy || !author.trim()}
+              onClick={() =>
+                void perform(
+                  () =>
+                    invokeCommand("import_casework_packet", {
+                      payload,
+                      expectedRevision: preview.localRevision,
+                      packetSha256: preview.packetSha256,
+                      author,
+                    }),
+                  (value) => {
+                    accept(value, "import");
+                    setPreview(null);
+                    setPayload("");
+                  },
+                )
+              }
+            >
+              Apply reviewed case packet
+            </button>
+          )}
+        </div>
+      )}
+    </details>
     <CaseSharing activeCase={draft ? { id: draft.id, title: draft.title, revision: draft.revision } : null} author={author} contributors={contributors} onLoadPacket={(value) => { gate.invalidate(); setBusy(false); setPayload(value); setPreview(null); setError(""); }} />
     <details><summary className="font-semibold text-fg">Export signing key</summary><p className="mt-2 text-label leading-4 text-muted">Every signed export and casework packet from this installation uses one local key. Rotating it starts signing with a new key and records the old one's id in a local, signed revocation list. A routine rotation leaves everything the old key already signed trusted; marking it compromised does not.</p>
       <div className="mt-3 grid gap-3 sm:grid-cols-2"><Field label="Reason for rotation" value={rotationReason} onChange={setRotationReason} /><label className="flex items-end gap-2 text-label leading-4 text-fg-secondary pb-1"><input type="checkbox" checked={rotationCompromised} onChange={(e) => setRotationCompromised(e.target.checked)} /> This key is compromised, not just being retired</label></div>
