@@ -893,7 +893,8 @@ the audit report it came from.
 
 Triaged 2026-10-02 from an external model review (DeepSeek, docs-only, so each claim was checked
 against code first). Built: phrase search, storage-version compression, source re-check with a
-watch dimension. Open on the re-check: an opt-in schedule (never on launch), and retaining the
+watch dimension, Apple Vision and PDFKit OCR on macOS (no external tools, so it can run in the
+sandbox; unverified in a signed App Store build). Open on the re-check: an opt-in schedule (never on launch), and retaining the
 re-fetched bytes behind a referencing row that purge releases. Deferred, with the evidence:
 
 - Ingest-time C2PA reading: none of the 91 stored files in the real installation carries a C2PA

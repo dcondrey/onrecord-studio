@@ -34,7 +34,7 @@ reach the build once that branch is merged.
 | 3 | The AI research help told users to put an API key in `~/.env`. In the sandbox that resolves to the app container, and shell variables are not inherited. | A reviewer following Help would find the feature dead (2.1). | Fixed on branch: the App Store text names the container path. The app itself is unchanged. |
 | 4 | The version is `1.0.0-beta.1` in three files. | App Store versions must be numeric, and a "beta" build is rejected under 2.2. | OWNER: drop the suffix for the App Store build only (see section 11). |
 | 5 | Source-citation links use `<a target="_blank">` (19 places), and the opener permission allows only Stripe, writerslogic.com and GitHub. | If the webview ignores these clicks, links like "View publisher's original file" are dead buttons (2.1). | **Unverified.** Click one in the signed App Store build. If nothing opens, route anchor clicks through `openExternalUrl` and widen the opener scope to `https://*`. |
-| 6 | OCR runs Homebrew `tesseract` and `pdftoppm` as child processes. | It is unknown whether the sandbox allows that. It is not a blocker either way: OCR is optional and the app says when it is unavailable. | **Unverified.** Check the sidebar's "Local OCR" line in the sandboxed build, and don't mention OCR in the listing. |
+| 6 | OCR ran Homebrew `tesseract` and `pdftoppm` as child processes, which the sandbox is unlikely to allow. | Scanned documents would get no text in the paid build. | Fixed on branch (commit `7ac0a67`): on macOS, OCR runs in-process with Apple Vision, and PDF pages are rendered with PDFKit. Both are system frameworks, so no child process and no install are involved. **Unverified in the sandbox:** check that the sidebar's "Local OCR" line reads Image + PDF in the signed App Store build. |
 | 7 | There is no `PrivacyInfo.xcprivacy` privacy manifest. | Apple enforces privacy manifests for iOS-family uploads. Enforcement for macOS uploads is not confirmed. | Watch for an ITMS-91053 email after upload. If one arrives, add a manifest declaring the required-reason APIs it names. |
 | 8 | The main view, sidebar subtitle and the starter queue are written for San Diego ("San Diego research workspace", "Investigate homelessness spending…"). | A worldwide listing that opens on another city's topics confuses buyers. It is not a rule violation. | OWNER decision: keep it as a San Diego edition, or make the region generic. Either way, the screenshots must match. |
 
@@ -278,7 +278,7 @@ To try it (about 3 minutes, needs network access for step 1):
 
 Network use: only the addresses the user adds, an optional one-time model download for semantic search (Analysis > Initialize model, from huggingface.co), and an optional AI research feature that is off by default and uses the user's own OpenAI or OpenRouter key. There is no analytics or advertising.
 
-Optional OCR for scanned documents uses Tesseract if the user has installed it separately; the app works fully without it and states when OCR is unavailable.
+Scanned documents are read on this Mac with Apple's Vision framework (PDF pages rendered with PDFKit). Nothing is installed and nothing is sent anywhere.
 ```
 
 ## 9. Age Rating
