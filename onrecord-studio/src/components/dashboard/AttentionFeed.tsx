@@ -64,7 +64,9 @@ export default function AttentionFeed() {
     changes.status === 'failed' && 'watch changes',
   ].filter(Boolean) as string[];
   const shown = items.slice(0, FEED_LIMIT);
-  const newFindings = findings.status === 'ready' ? findings.data.length : null;
+  const newFindings = findings.status === 'ready'
+    ? (caseScope.status === 'ready' ? findings.data.filter((finding) => caseScope.value.findingIds.has(finding.id)).length : findings.data.length)
+    : null;
 
   return (
     <section aria-labelledby="attention-heading" className="app-panel overflow-hidden">
