@@ -60,7 +60,7 @@ export default function ActivityDashboard() {
           <ActivityMetric label="Requests processed" value={metrics.requestsProcessed} detail="Current runtime snapshots" color="text-accent" accent="bg-accent" />
           <ActivityMetric label="Tasks completed" value={metrics.completedTasks} detail={`${metrics.queuedTasks.toLocaleString()} waiting in queues`} color="text-success" accent="bg-success" />
           <ActivityMetric label="Documents saved" value={metrics.documentsDownloaded} detail={formatBytes(metrics.bytesTransferred)} color="text-highlight" accent="bg-highlight" />
-          <ActivityMetric label="Task exceptions" value={metrics.failedTasks + metrics.anomaliesFound} detail={`${metrics.taskFailureRatePercentage.toFixed(1)}% of finished tasks failed`} color="text-danger" accent="bg-danger" />
+          <ActivityMetric label="Task exceptions" value={metrics.failedTasks + metrics.anomaliesFound} detail={metrics.taskFailureRatePercentage === null ? 'No tasks have finished yet' : `${metrics.taskFailureRatePercentage.toFixed(1)}% of finished tasks failed`} color="text-danger" accent="bg-danger" />
         </section>
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">

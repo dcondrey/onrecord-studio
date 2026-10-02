@@ -2,6 +2,17 @@ import type { SVGProps } from 'react';
 
 export type IconName =
   | 'activity'
+  | 'back'
+  | 'bars'
+  | 'briefcase'
+  | 'building'
+  | 'calendar'
+  | 'clock'
+  | 'flag'
+  | 'forward'
+  | 'link'
+  | 'presentation'
+  | 'tag'
   | 'arrow'
   | 'chevron'
   | 'collapse'
@@ -34,6 +45,17 @@ interface IconProps extends SVGProps<SVGSVGElement> {
 export default function Icon({ name, className = 'h-4 w-4', ...props }: IconProps) {
   const paths: Record<IconName, JSX.Element> = {
     activity: <><path d="M3 12h3l2.2-6 4.1 12 2.2-6H21" /><path d="M4 4v16h16" opacity=".25" /></>,
+    back: <path d="m15 18-6-6 6-6" />,
+    bars: <><path d="M4 20h16" /><rect x="5" y="11" width="3" height="6" rx=".5" /><rect x="10.5" y="5" width="3" height="12" rx=".5" /><rect x="16" y="8" width="3" height="9" rx=".5" /></>,
+    briefcase: <><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M3 13h18" /></>,
+    building: <><path d="M4 21V5l8-2v18M12 8l8 2v11M3 21h18" /><path d="M7 8h2M7 12h2M7 16h2M15 13h2M15 17h2" /></>,
+    calendar: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /><path d="M8 14h3v3H8z" /></>,
+    clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
+    flag: <><path d="M5 21V4" /><path d="M5 4h11l-2 4 2 4H5" /></>,
+    forward: <path d="m9 18 6-6-6-6" />,
+    link: <><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></>,
+    presentation: <><rect x="3" y="4" width="18" height="12" rx="1.5" /><path d="M12 16v4M8 20h8M7 12l3-3 2 2 4-4" /></>,
+    tag: <><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z" /><circle cx="7.5" cy="7.5" r="1.5" /></>,
     arrow: <><path d="M5 12h14" /><path d="m14 7 5 5-5 5" /></>,
     chevron: <path d="m9 18 6-6-6-6" />,
     clipboard: <><rect x="6" y="4" width="12" height="17" rx="2" /><path d="M9 4.5V3h6v1.5M9 9h6M9 13h6M9 17h4" /></>,

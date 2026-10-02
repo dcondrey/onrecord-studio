@@ -59,11 +59,12 @@ export function HeaderControls({
       </div>
       <button
         type="button"
-        aria-label="Connect a data source"
+        aria-expanded={isConnectorOpen}
         onClick={onToggleConnector}
-        className={cn('focus-ring rounded-xl border p-2.5 transition lg:hidden', isConnectorOpen ? 'border-accent/30 bg-accent/10 text-accent' : 'border-control bg-surface/70 text-muted hover:text-fg')}
+        className={cn('focus-ring flex items-center gap-1.5 rounded-xl border px-2.5 py-2 text-label font-semibold transition lg:hidden', isConnectorOpen ? 'border-accent/30 bg-accent/10 text-accent' : 'primary-action border-transparent text-white')}
       >
-        <Icon name="database" />
+        <Icon name="filePlus" />
+        <span>Add source</span>
       </button>
     </div>
   );

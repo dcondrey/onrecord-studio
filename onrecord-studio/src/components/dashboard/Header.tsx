@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import Icon from '../ui/icons';
 import { useSourceConnector } from '../../hooks/useSourceConnector';
@@ -6,6 +7,7 @@ import { HeaderIdentity } from './HeaderIdentity';
 import { HeaderControls } from './HeaderControls';
 import { SourceConnectorForm } from './SourceConnectorForm';
 import { SourceConnectorDialogs } from './SourceConnectorDialogs';
+import { OPEN_SOURCE_CONNECTOR_EVENT } from './sourceEvents';
 
 export default function Header() {
   const workspaceView = useAppStore((state) => state.workspaceView);
@@ -15,6 +17,21 @@ export default function Header() {
 
   const connector = useSourceConnector();
   const { isConnectorOpen, setConnectorOpen, cancelSourceOperation, error, activePortal, syncingPortalKeys } = connector;
+
+  useEffect(() => {
+    const open = () => {
+      setSidebarOpen(false);
+      const desktop = document.getElementById('portal-url-desktop');
+      if (desktop && desktop.offsetParent !== null) {
+        desktop.focus();
+        return;
+      }
+      setConnectorOpen(true);
+      requestAnimationFrame(() => document.getElementById('portal-url-mobile')?.focus());
+    };
+    window.addEventListener(OPEN_SOURCE_CONNECTOR_EVENT, open);
+    return () => window.removeEventListener(OPEN_SOURCE_CONNECTOR_EVENT, open);
+  }, [setConnectorOpen, setSidebarOpen]);
 
   const toggleConnector = () => {
     if (isConnectorOpen) cancelSourceOperation();

@@ -646,8 +646,14 @@ function EmptyResults({ error, sourceCount }: { error: string | null; sourceCoun
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const closed = status.toLowerCase() === 'closed';
-  return <span className={cn('rounded-full border px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wider', closed ? 'border-line-strong bg-raised/70 text-muted' : 'border-success/30 bg-success/10 text-success')}>{status}</span>;
+  // Portal status text is free-form; only the closed and past-due wordings get their own tone.
+  const normalized = status.toLowerCase();
+  const tone = normalized === 'closed'
+    ? 'border-line-strong bg-raised/70 text-muted'
+    : ['overdue', 'past due', 'late'].some((wording) => normalized.includes(wording))
+      ? 'border-warning/30 bg-warning/10 text-warning'
+      : 'border-accent/30 bg-accent/10 text-accent';
+  return <span className={cn('rounded-full border px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wider', tone)}>{status}</span>;
 }
 
 function PolicyBadge({ flag }: { flag: string }) {

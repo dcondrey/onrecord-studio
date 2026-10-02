@@ -4,10 +4,13 @@ import { cn } from '../../utils/cn';
 import { PRODUCT_BYLINE, PRODUCT_NAME } from '../../config/brand';
 import Icon from '../ui/icons';
 import { OPEN_COMMAND_PALETTE_EVENT } from './CommandPalette';
+import { openSourceConnector } from './sourceEvents';
+import { useWorkspaceBadges } from '../../hooks/useWorkspaceBadges';
 import { workspaceCommandRegistry } from '../../commands/registry';
 import StatusDot from '../ui/statusDot';
 
 export default function Sidebar() {
+  const badges = useWorkspaceBadges();
   const portals = useAppStore((state) => state.portals);
   const workspaceInitializationStatus = useAppStore((state) => state.workspaceInitializationStatus);
   const ocrCapability = useAppStore((state) => state.ocrCapability);
@@ -95,6 +98,19 @@ export default function Sidebar() {
                   </span>
                   {!isCollapsed && (
                     <span className="min-w-0 flex-1 truncate text-label font-medium">{item.navigationLabel}</span>
+                  )}
+                  {badges[item.view] && (
+                    <span
+                      title={badges[item.view]!.label}
+                      className={cn(
+                        'motion-pop numeric-value rounded-full px-1.5 py-px text-caption font-semibold',
+                        badges[item.view]!.tone === 'warning' ? 'bg-warning/20 text-warning' : 'bg-accent/20 text-accent',
+                        isCollapsed && 'absolute right-1 top-0.5 px-1',
+                      )}
+                    >
+                      <span aria-hidden="true">{badges[item.view]!.text}</span>
+                      <span className="sr-only">{badges[item.view]!.label}</span>
+                    </span>
                   )}
                   {!isCollapsed && <span className="text-label text-muted">{isApplePlatform() ? '⌘' : 'Ctrl'}{item.shortcutIndex}</span>}
                 </button>
@@ -228,8 +244,13 @@ export default function Sidebar() {
                   ? 'Checking the local source catalog.'
                   : workspaceInitializationStatus === 'error'
                     ? 'The source catalog did not load. Existing sources may still be present; check the activity log.'
-                    : 'Add a URL, file, or pasted source in the toolbar to build your first audit workspace.'}
+                    : 'Add a records portal, website, or file to start.'}
               </p>
+              {workspaceInitializationStatus === 'ready' && (
+                <button type="button" onClick={openSourceConnector} className="focus-ring mt-3 w-full rounded-lg border primary-action border-transparent px-2.5 py-1.5 text-label font-semibold text-white">
+                  Add a source
+                </button>
+              )}
             </div>
           )}
         </nav>

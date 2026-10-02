@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import type { AgencyPerformanceProfile } from '../../types/analysis';
+import PageHeader from '../ui/PageHeader';
+import EmptyState from '../ui/EmptyState';
+import { openSourceConnector } from './sourceEvents';
 
 /**
  * Mirrors `STATUTORY_DEADLINE_Z_SCORE` in `src-tauri/src/analysis/anomaly.rs`, which is not
@@ -85,6 +88,8 @@ export function sortProfiles(
 export default function AgencyComparison() {
   const agencyProfiles = useAppStore((s) => s.agencyProfiles);
   const requestAnalyticsRefresh = useAppStore((s) => s.requestAnalyticsRefresh);
+  const setWorkspaceView = useAppStore((s) => s.setWorkspaceView);
+  const savedSourceCount = useAppStore((s) => s.portals.length);
   const [column, setColumn] = useState<ComparisonColumn>(DEFAULT_COLUMN);
   const [direction, setDirection] = useState<'asc' | 'desc'>('desc');
   const [portalFilter, setPortalFilter] = useState<string>('');
@@ -111,33 +116,40 @@ export default function AgencyComparison() {
   return (
     <main className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto w-full max-w-[1400px] space-y-4 p-4 lg:p-6">
-        <header className="space-y-1">
-          <h2 className="text-sm font-semibold text-fg">Compare agencies</h2>
-          <p className="text-label leading-relaxed text-muted">
-            Every agency with an analytics profile, across portals, ranked on one measured column at a
-            time. A rank is a position on a latency or a count, not a compliance judgment: only the
+        <PageHeader
+          icon="bars"
+          eyebrow="Agency comparison"
+          title="Compare agencies"
+          summary="Every agency with an analytics profile, ranked on one measured column at a time."
+          method={<>
+            A rank is a position on a latency or a count, not a compliance judgment: only the
             statutory violation column is a counted violation, and the slower-than-peers marker is a
             statistical comparison with every other agency that no statute speaks to. An agency with
             fewer than {SMALL_SAMPLE_CLOSURES} measured closures is marked small sample because one
             closure moves its average; an agency that has closed nothing measurable shows {NO_MEASURABLE_CLOSURE}{' '}
             rather than a number.
-          </p>
-        </header>
+          </>}
+        />
 
         {agencyProfiles.length === 0 ? (
-          <div className="rounded-xl border border-line bg-canvas/40 p-4">
-            <p role="status" className="text-label text-muted">
-              Analytics has not produced agency profiles yet. Profiles are computed after a source
-              finishes syncing; refresh analytics to recompute from what has already been ingested.
-            </p>
-            <button
-              type="button"
-              onClick={requestAnalyticsRefresh}
-              className="focus-ring mt-3 rounded-lg border border-control px-3 py-1.5 text-label font-semibold text-fg-secondary hover:border-accent/30"
-            >
-              Refresh analytics
-            </button>
-          </div>
+          savedSourceCount === 0 ? (
+            <EmptyState
+              icon="building"
+              title="No agencies to compare yet"
+              body="Profiles are computed from the requests a source has synced. Add a records portal to start."
+              actions={<button type="button" onClick={openSourceConnector} className="motion-press focus-ring rounded-lg border primary-action border-transparent px-3 py-1.5 text-label font-semibold text-white">Add a source</button>}
+            />
+          ) : (
+            <EmptyState
+              icon="building"
+              title="Agency profiles have not been computed"
+              body="Profiles are computed after a source finishes syncing. Recompute them from what has already been ingested."
+              actions={<>
+                <button type="button" onClick={requestAnalyticsRefresh} className="motion-press focus-ring rounded-lg border primary-action border-transparent px-3 py-1.5 text-label font-semibold text-white">Refresh analytics</button>
+                <button type="button" onClick={() => setWorkspaceView('activity')} className="motion-press focus-ring rounded-lg border border-control px-3 py-1.5 text-label font-semibold text-fg-secondary">See sync activity</button>
+              </>}
+            />
+          )
         ) : (
           <>
             <div className="flex flex-wrap items-center gap-3 text-label text-muted">

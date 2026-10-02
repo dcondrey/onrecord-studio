@@ -21,9 +21,10 @@ export function useMetrics() {
       ...metrics,
       ...runtime,
       activeSearchMatchesCount,
+      // A rate over no finished tasks is not 0%: nothing has been measured yet.
       taskFailureRatePercentage: finishedTasks > 0
         ? Number(((runtime.failedTasks / finishedTasks) * 100).toFixed(1))
-        : 0,
+        : null,
     };
   }, [activeSearchMatchesCount, metrics, runtimes]);
 }
