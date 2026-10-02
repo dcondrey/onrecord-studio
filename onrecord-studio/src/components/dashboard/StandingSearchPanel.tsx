@@ -5,6 +5,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { openHelp } from '../help/helpEvents';
 import type { SeriesGapReport, StandingQueryFilters, StandingQueryOutcome, StandingQuerySummary } from '../../types/standingSearch';
 import { describeCountBasis, describeGap, describeRun, formatFacetCount } from '../../utils/standingSearch';
+import MethodNote from '../ui/MethodNote';
 
 const FACET_LABELS: Record<string, string> = { status: 'Status', agency: 'Department', portal: 'Source', year: 'Year filed' };
 
@@ -139,9 +140,13 @@ export default function StandingSearchPanel() {
 
       <div className="mt-4 border-t border-line pt-3">
         <div className="app-eyebrow">Missing series numbers</div>
-        <p className="mt-1 text-label text-muted">
-          Numbers absent from the corpus between two documents of one labelled series (resolutions, ordinances, contracts, permits). A gap is a lead for a request, not evidence that the agency withheld anything.
-        </p>
+        <div className="mt-1 text-label text-muted">
+          Gaps in numbered series of resolutions, ordinances, contracts and permits.{' '}
+          <MethodNote>
+            A gap is a number absent from the corpus between two documents of one labelled series. It is a lead for a request,
+            not evidence that the agency withheld anything.
+          </MethodNote>
+        </div>
         {gaps === null ? null : gaps.gaps.length === 0 ? (
           <p className="mt-2 text-label text-muted">
             {gaps.seriesCount === 0 ? 'No labelled series with three or more numbers has been read from the corpus.' : `No short gaps in ${gaps.seriesCount} series.`}

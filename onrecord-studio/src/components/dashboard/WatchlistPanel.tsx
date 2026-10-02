@@ -3,6 +3,7 @@ import { invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
 import type { DimensionResult, WatchChange, WatchDimension, WatchKind, WatchSummary } from '../../types';
+import MethodNote from '../ui/MethodNote';
 
 const KIND_LABELS: Record<WatchKind, string> = {
   AGENCY: 'Agency',
@@ -165,10 +166,13 @@ export default function WatchlistPanel() {
           {busy ? 'Checking…' : 'Check now'}
         </button>
       </div>
-      <p className="text-muted">
-        A check reads the records already stored here; it fetches nothing. The first check of a watch records a baseline and reports no changes.
-        A dimension with no data in a run says so and is never shown as unchanged.
-      </p>
+      <div className="text-muted">
+        Checks the records already stored here; nothing is fetched.{' '}
+        <MethodNote>
+          The first check of a watch records a baseline and reports no changes. A dimension with no data in a run says so and is
+          never shown as unchanged.
+        </MethodNote>
+      </div>
       {error && (
         <p role="alert" className="text-danger">
           Watchlist: {error}

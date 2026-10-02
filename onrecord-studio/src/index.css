@@ -204,7 +204,7 @@ a[href] {
   }
 
   .analysis-button {
-    @apply focus-ring rounded border border-line-strong bg-surface px-2.5 py-1.5 text-label font-semibold text-fg transition hover:border-accent/60 hover:bg-raised disabled:opacity-40;
+    @apply focus-ring rounded border border-line-strong bg-surface px-2.5 py-1.5 text-label font-semibold text-fg transition hover:border-accent/60 hover:bg-raised disabled:border-line disabled:text-muted disabled:opacity-70;
   }
 
   .analysis-label {

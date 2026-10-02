@@ -5,6 +5,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { useStarterRunStore, type StarterEntryStatus } from '../../store/useStarterRunStore';
 import type { StarterEntry, StarterSetsReport } from '../../types';
 import { entriesToAdd, entryHost, entryIsSaved } from '../../utils/starterSets';
+import MethodNote from '../ui/MethodNote';
 
 /**
  * One-click bundles of public San Diego sources. Choosing a set fetches nothing: it opens a
@@ -42,10 +43,13 @@ export default function StarterSets() {
     <section aria-label="Starter sets" className="space-y-3">
       <div>
         <h3 className="text-sm font-semibold text-fg">Starter sets</h3>
-        <p className="mt-1 max-w-3xl text-label leading-relaxed text-muted">
-          Bundles of public San Diego sources and records portals. Nothing is fetched until you confirm a set. A source
-          that does not load is listed as unavailable with the reason, not as an empty source.
-        </p>
+        <div className="mt-1 max-w-3xl text-label leading-relaxed text-muted">
+          Bundles of public San Diego sources and records portals. Nothing is fetched until you confirm a set.{' '}
+          <MethodNote>
+            A source that does not load is listed as unavailable with the reason, not as an empty source. Registry version{' '}
+            {report.registryVersion}. Verification dates record one check, not a promise the page is still there.
+          </MethodNote>
+        </div>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         {report.sets.map((set) => {
@@ -94,7 +98,6 @@ export default function StarterSets() {
           );
         })}
       </div>
-      <p className="text-label text-muted">Registry version {report.registryVersion}. Verification dates record one check, not a promise the page is still there.</p>
     </section>
   );
 }
