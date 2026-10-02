@@ -955,22 +955,32 @@ fn json_cell_to_csv(value: &serde_json::Value) -> String {
     }
 }
 
-/// Neutralizes spreadsheet formula/DDE injection: a cell value beginning with `=`, `+`, `-`, or
-/// `@` is interpreted as a formula by Excel/Sheets/LibreOffice, not as literal text, when the CSV
-/// is opened by a human reviewer. This application treats exported cell content as externally
-/// supplied evidence (portal-sourced request titles/descriptions, imported analytical data), not
-/// as internally generated text, so a crafted record could otherwise execute a formula or DDE
-/// command in the reviewer's spreadsheet application. A leading apostrophe forces text
+/// Neutralizes spreadsheet formula/DDE injection: a cell value beginning with `=`, `+`, `-`, `@`,
+/// tab, or carriage return is interpreted as a formula by Excel/Sheets/LibreOffice, not as literal
+/// text, when the CSV is opened by a human reviewer. This application treats exported cell content
+/// as externally supplied evidence (portal-sourced request titles/descriptions, imported analytical
+/// data), not as internally generated text, so a crafted record could otherwise execute a formula
+/// or DDE command in the reviewer's spreadsheet application. A leading apostrophe forces text
 /// interpretation in every mainstream spreadsheet application and is invisible in the rendered
-/// cell. Restricted to strings only — a number never carries untrusted text, and quoting a
-/// negative number's leading `-` would corrupt it into a non-numeric text cell for this
-/// application's own financial exports.
+/// cell.
+///
+/// A plain signed decimal is exempt. It cannot carry a formula, and DECIMAL, HUGEINT, and BIGINT
+/// beyond 2^53 reach this function as strings (see `duckdb_value_to_json`), so quoting a negative
+/// one's leading `-` would corrupt a financial figure into a text cell.
 fn sanitize_csv_string_cell(value: &str) -> String {
-    if value.starts_with(['=', '+', '-', '@']) {
+    if value.starts_with(['=', '+', '-', '@', '\t', '\r']) && !is_plain_decimal(value) {
         format!("'{value}")
     } else {
         value.to_string()
     }
+}
+
+fn is_plain_decimal(value: &str) -> bool {
+    let unsigned = value.strip_prefix(['-', '+']).unwrap_or(value);
+    let (whole, fraction) = unsigned.split_once('.').unwrap_or((unsigned, ""));
+    !whole.is_empty()
+        && whole.bytes().all(|byte| byte.is_ascii_digit())
+        && fraction.bytes().all(|byte| byte.is_ascii_digit())
 }
 
 #[cfg(test)]

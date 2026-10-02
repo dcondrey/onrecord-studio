@@ -60,3 +60,34 @@ async fn export_restricted_sql_csv_neutralizes_a_formula_leading_cell() {
         "a formula-leading cell must be prefixed with an apostrophe so it reads as text, got: {written}"
     );
 }
+
+/// The guard must catch every formula trigger without corrupting numbers that arrive as strings:
+/// DECIMAL is rendered as text before the CSV writer sees it, so a negative amount reaches the
+/// guard looking like a `-`-led string.
+#[tokio::test]
+async fn export_restricted_sql_csv_keeps_negative_decimals_numeric_and_quotes_tab_led_cells() {
+    let repository = DuckDbRepository::new(Path::new(":memory:")).expect("DuckDB core must open");
+    repository
+        .run_migrations(MIGRATION)
+        .await
+        .expect("test migration must succeed");
+    let directory = tempfile::tempdir().expect("temp dir must be created");
+    let output = directory.path().join("export.csv");
+
+    repository
+        .export_restricted_sql_csv(
+            "SELECT CAST(-1234.50 AS DECIMAL(10, 2)) AS amount, \
+             chr(9) || '=HYPERLINK(1)' AS tabbed, '-1-1' AS expression",
+            output.to_str().unwrap(),
+            10,
+        )
+        .await
+        .expect("export must succeed");
+
+    let written = std::fs::read_to_string(&output).expect("export file must be readable");
+    let row = written
+        .lines()
+        .nth(1)
+        .expect("export must carry a data row");
+    assert_eq!(row, "-1234.50,'\t=HYPERLINK(1),'-1-1");
+}
