@@ -252,6 +252,15 @@ Drifted/Stale, is the workbench doc's explicit pre-implementation spec with zero
 today. Beyond the spans dependency, package exchange needs a key and identity story; the
 current signing key is explicitly unattested (see item 1).
 
+Built (2026-10-01), operation log. `src-tauri/src/storage/casework_operations.rs` records every
+saved case revision as hash-chained add/change/remove/set operations in `casework_operations`,
+and `CaseworkPacket` carries the log. On a conflicting import the preview partitions the incoming
+log: an add or change of an item that no local operation since the last exchange touched
+commutes and `apply_commuting_case_operations` applies those as one revision; removals, field
+sets and contended items stay with the item picker. The log binds to the packet's Ed25519
+signature, so an operation's author is still a supplied label, and the UI says so; attested
+identity remains the open dependency.
+
 ## 11. Publishing: self-verifying bundles
 
 Emit a static, self-contained viewer around the signed package: documents, manifests, and a

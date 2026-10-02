@@ -200,6 +200,28 @@ pub async fn import_casework_packet(
         .await
 }
 
+/// Applies only the incoming operations that commute with local work; see the repository method.
+#[tauri::command]
+pub async fn apply_commuting_case_operations(
+    payload: String,
+    expected_revision: Option<u64>,
+    packet_sha256: String,
+    author: String,
+    repository: State<'_, DuckDbRepository>,
+    report_directory: State<'_, PathBuf>,
+) -> Result<CaseworkCase, AppError> {
+    let (inner, signer_key_id) = verify_and_unwrap_packet(&payload, &report_directory).await?;
+    repository
+        .apply_commuting_case_operations(
+            inner,
+            expected_revision,
+            packet_sha256,
+            author,
+            Some(signer_key_id),
+        )
+        .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -208,6 +230,7 @@ mod tests {
     fn packet() -> CaseworkPacket {
         CaseworkPacket {
             schema_version: 1,
+            operations: Vec::new(),
             base_revision: 0,
             base_sha256: "a".repeat(64),
             exported_at: "2026-09-28T00:00:00Z".into(),

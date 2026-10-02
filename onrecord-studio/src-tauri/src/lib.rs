@@ -113,6 +113,7 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::casework::export_casework_packet,
         commands::casework::preview_casework_import,
         commands::casework::import_casework_packet,
+        commands::casework::apply_commuting_case_operations,
         commands::casework::compromised_case_imports,
         commands::monitoring::get_monitoring_status,
         commands::monitoring::refresh_monitoring_now,

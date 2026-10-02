@@ -158,6 +158,10 @@ pub struct CaseworkState {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CaseworkPacket {
     pub schema_version: u32,
+    /// The case's operation log from its first revision, hash-chained; see
+    /// `storage::casework_operations`. Absent in packets written before the log existed.
+    #[serde(default)]
+    pub operations: Vec<CaseOperation>,
     pub base_revision: u64,
     pub base_sha256: String,
     pub exported_at: String,
@@ -289,6 +293,24 @@ pub struct CompromisedImportWarning {
     pub revoked_at: String,
     pub reason: String,
 }
+/// One entry of a case's operation log. `author` is the label the saving desk supplied, not an
+/// authenticated identity; the packet signature binds the entry to a key.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CaseOperation {
+    pub revision: u64,
+    pub sequence: u64,
+    pub author: String,
+    pub at: String,
+    /// `ADD`, `CHANGE`, `REMOVE` of a section item, or `SET` of a case field.
+    pub kind: String,
+    pub section: String,
+    pub target: String,
+    pub summary: String,
+    pub content_sha256: Option<String>,
+    pub previous_hash: Option<String>,
+    pub hash: String,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CaseworkImportPreview {
@@ -302,4 +324,8 @@ pub struct CaseworkImportPreview {
     /// embedded public key. `None` means the packet was not (or could not be) verified as signed;
     /// the repository itself never sets this, since signing lives at the IPC boundary.
     pub signer_key_id: Option<String>,
+    /// On a conflict: incoming operations since the shared base that touch nothing local work
+    /// touched since then, so they can be applied as they are; and those that contend.
+    pub commuting: Vec<CaseOperation>,
+    pub contested: Vec<CaseOperation>,
 }

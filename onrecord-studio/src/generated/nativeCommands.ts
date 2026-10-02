@@ -63,6 +63,7 @@ export interface NativeCommandMap {
   export_casework_packet: { args: { caseId: string; contributor: string }; result: string };
   preview_casework_import: { args: { payload: string }; result: Types.CaseworkImportPreview };
   import_casework_packet: { args: { payload: string; expectedRevision?: number | null; packetSha256: string; author: string }; result: Types.CaseworkCase };
+  apply_commuting_case_operations: { args: { payload: string; expectedRevision?: number | null; packetSha256: string; author: string }; result: Types.CaseworkCase };
   compromised_case_imports: { args: { caseId: string }; result: Types.CompromisedImportWarning[] };
   get_monitoring_status: { args: { topic: string; caseId?: string | null }; result: Types.MonitoringStatus };
   refresh_monitoring_now: { args: { topic: string; caseId?: string | null }; result: Types.MonitoringStatus };

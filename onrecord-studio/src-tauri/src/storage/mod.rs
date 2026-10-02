@@ -50,6 +50,7 @@ pub mod facilities;
 
 pub mod bundle;
 pub mod casework;
+pub mod casework_operations;
 
 pub mod monitoring;
 

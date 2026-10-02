@@ -61,9 +61,17 @@ export interface CaseworkLead {
   factors: CaseworkRankFactor[]; citations: CaseworkCitation[]; caseId: string | null;
 }
 export interface CaseworkState { availableEvidence: CaseworkCitation[]; cases: CaseworkCase[]; events: CaseworkEvent[]; leads: CaseworkLead[] }
+/** One entry of a case's hash-chained operation log. `author` is a supplied label, not an identity. */
+export interface CaseOperation {
+  revision: number; sequence: number; author: string; at: string;
+  kind: 'ADD' | 'CHANGE' | 'REMOVE' | 'SET'; section: string; target: string; summary: string;
+  contentSha256: string | null; previousHash: string | null; hash: string;
+}
 export interface CaseworkImportPreview {
   mode: string; localRevision: number | null; packetSha256: string; warnings: string[];
   case: CaseworkCase; contributor: string; signerKeyId: string | null;
+  /** On a conflict: incoming operations that touch nothing local work touched since the shared base, and those that contend. */
+  commuting: CaseOperation[]; contested: CaseOperation[];
 }
 export interface WithheldCitationRequest { citationId: string; reason: string }
 export interface CaseExportLedgerEntry {

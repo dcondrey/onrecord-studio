@@ -1,3 +1,6 @@
+use super::casework_operations::{
+    apply_operations, chain, chain_is_intact, operations_between, partition_operations,
+};
 use super::sqlite::DuckDbRepository;
 use crate::{
     analysis::request_compiler::{compile_cpra_request, plan_filing, RequestScope},
@@ -29,6 +32,7 @@ CREATE TABLE IF NOT EXISTS casework_sources(case_id TEXT NOT NULL,portal_key TEX
 CREATE TABLE IF NOT EXISTS casework_origins(case_id TEXT PRIMARY KEY,base_revision BIGINT NOT NULL,base_sha256 TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS casework_imports(case_id TEXT NOT NULL,revision BIGINT NOT NULL,packet_sha256 TEXT NOT NULL,payload_zstd BLOB NOT NULL,PRIMARY KEY(case_id,revision));
 CREATE TABLE IF NOT EXISTS casework_export_ledger(case_id TEXT NOT NULL,sequence BIGINT NOT NULL,manifest_sha256 TEXT NOT NULL,previous_manifest_sha256 TEXT,signer_key_id TEXT NOT NULL,reserved_at TEXT NOT NULL,PRIMARY KEY(case_id,sequence),UNIQUE(manifest_sha256));
+CREATE TABLE IF NOT EXISTS casework_operations(case_id TEXT NOT NULL,revision BIGINT NOT NULL,sequence BIGINT NOT NULL,author TEXT NOT NULL,recorded_at TEXT NOT NULL,kind TEXT NOT NULL,section TEXT NOT NULL,target TEXT NOT NULL,summary TEXT NOT NULL,content_sha256 TEXT,previous_hash TEXT,hash TEXT NOT NULL,PRIMARY KEY(case_id,revision,sequence));
 CREATE TABLE IF NOT EXISTS casework_export_outcomes(case_id TEXT NOT NULL,sequence BIGINT NOT NULL,outcome TEXT NOT NULL,detail TEXT,recorded_at TEXT NOT NULL);
 ";
 fn storage(e: impl std::fmt::Display) -> AppError {
@@ -814,15 +818,90 @@ fn follow_up(r: &CaseworkRequest) -> String {
     let omissions = request_omissions(r);
     format!("To: {}\nSubject: Follow-up on {}{}\n\nPlease provide the remaining responsive records or clarify their disposition for the following unresolved items:\n{}\n\nThese records would help determine: {}\nPlease identify any withheld or unavailable portions and provide reasonably segregable responsive material.\n\nDraft for review; no message has been sent.",r.custodian,r.title,if r.external_reference.is_empty(){String::new()}else{format!(" ({})",r.external_reference)},if omissions.is_empty(){"- Confirm that the production covers the requested records, fields and period.".into()}else{omissions.iter().map(|m|format!("- {m}")).collect::<Vec<_>>().join("\n")},r.resolves)
 }
+fn operations_since(
+    conn: &Connection,
+    case_id: &str,
+    after_revision: u64,
+) -> Result<Vec<CaseOperation>, AppError> {
+    let mut statement = conn
+        .prepare("SELECT revision,sequence,author,recorded_at,kind,section,target,summary,content_sha256,previous_hash,hash FROM casework_operations WHERE case_id=?1 AND revision>?2 ORDER BY revision,sequence")
+        .map_err(storage)?;
+    let rows = statement
+        .query_map(params![case_id, after_revision], |r| {
+            Ok(CaseOperation {
+                revision: r.get(0)?,
+                sequence: r.get(1)?,
+                author: r.get(2)?,
+                at: r.get(3)?,
+                kind: r.get(4)?,
+                section: r.get(5)?,
+                target: r.get(6)?,
+                summary: r.get(7)?,
+                content_sha256: r.get(8)?,
+                previous_hash: r.get(9)?,
+                hash: r.get(10)?,
+            })
+        })
+        .map_err(storage)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(storage)?;
+    Ok(rows)
+}
+/// Appends this revision's operations to the case's log, chained after the last recorded one.
+fn record_operations(
+    conn: &Connection,
+    prior: Option<&CaseworkCase>,
+    case: &CaseworkCase,
+    author: &str,
+) -> Result<(), AppError> {
+    let previous: Option<String> = conn
+        .query_row(
+            "SELECT hash FROM casework_operations WHERE case_id=?1 ORDER BY revision DESC,sequence DESC LIMIT 1",
+            params![case.id],
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(storage)?;
+    let chained = chain(
+        operations_between(prior, case),
+        case.revision,
+        author,
+        &case.updated_at,
+        previous,
+    );
+    for operation in chained {
+        conn.execute(
+            "INSERT INTO casework_operations VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)",
+            params![
+                case.id,
+                operation.revision,
+                operation.sequence,
+                operation.author,
+                operation.at,
+                operation.kind,
+                operation.section,
+                operation.target,
+                operation.summary,
+                operation.content_sha256,
+                operation.previous_hash,
+                operation.hash
+            ],
+        )
+        .map_err(storage)?;
+    }
+    Ok(())
+}
 fn write_case(
     conn: &Connection,
     case: &mut CaseworkCase,
     author: &str,
     summary: &str,
 ) -> Result<(), AppError> {
+    let prior = read_case(conn, &case.id)?;
     case.revision += 1;
     case.updated_at = now();
     let blob = encode(case)?;
+    record_operations(conn, prior.as_ref(), case, author)?;
     conn.execute("INSERT INTO casework_cases VALUES (?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(id) DO UPDATE SET disposition=excluded.disposition,revision=excluded.revision,payload_zstd=excluded.payload_zstd,updated_at=excluded.updated_at",params![case.id,case.report_id,case.topic,case.disposition,case.revision,blob,case.updated_at]).map_err(storage)?;
     // `payload_zstd` used to carry a full compressed snapshot of the case on every revision,
     // forever — nothing in this application ever reads it back (grepped and confirmed); only
@@ -958,7 +1037,8 @@ fn packet_preview(
     }
     let mut packet: CaseworkPacket =
         serde_json::from_str(payload).map_err(|e| invalid(format!("Invalid case packet: {e}")))?;
-    if packet.schema_version != 1 || packet.history.len() > 1000 {
+    if packet.schema_version != 1 || packet.history.len() > 1000 || packet.operations.len() > 20_000
+    {
         return Err(invalid("Unsupported case packet version or history size."));
     }
     author_valid(&packet.contributor)?;
@@ -984,6 +1064,43 @@ fn packet_preview(
     } else {
         "NEW"
     };
+    let (commuting, contested) = match &local {
+        Some(local)
+            if mode == "CONFLICT"
+                && local.report_id == packet.case.report_id
+                && local.topic == packet.case.topic =>
+        {
+            if !packet.operations.is_empty() && !chain_is_intact(&packet.operations) {
+                warnings.push("The packet's operation log does not chain: it was edited after it was written, so nothing in it is treated as commuting.".into());
+            }
+            // The last exchange of this case, in local numbering: the packet's base when this
+            // desk is the origin of that base, else the revision our last import wrote.
+            let last_import: Option<u64> = conn
+                .query_row(
+                    "SELECT MAX(revision) FROM casework_imports WHERE case_id=?1",
+                    params![local.id],
+                    |r| r.get(0),
+                )
+                .optional()
+                .map_err(storage)?
+                .flatten();
+            let is_origin: bool = conn
+                .query_row(
+                    "SELECT NOT EXISTS(SELECT 1 FROM casework_origins WHERE case_id=?1)",
+                    params![local.id],
+                    |r| r.get(0),
+                )
+                .map_err(storage)?;
+            let sync = match (is_origin, last_import) {
+                (true, Some(imported)) => packet.base_revision.max(imported),
+                (true, None) => packet.base_revision,
+                (false, imported) => imported.unwrap_or(0),
+            };
+            let local_since = operations_since(conn, &local.id, sync)?;
+            partition_operations(&packet.operations, &packet.case, local, &local_since)
+        }
+        _ => (Vec::new(), Vec::new()),
+    };
     let preview = CaseworkImportPreview {
         mode: mode.into(),
         local_revision: local.as_ref().map(|c| c.revision),
@@ -992,6 +1109,8 @@ fn packet_preview(
         case: packet.case.clone(),
         contributor: packet.contributor.clone(),
         signer_key_id: None,
+        commuting,
+        contested,
     };
     Ok((packet, preview))
 }
@@ -1109,8 +1228,10 @@ if case.report_id!=prior.report_id||case.topic!=prior.topic{return Err(invalid("
                 sha256_hex(&serde_json::to_vec(&case).map_err(storage)?),
             ));
             let history = portable_history(conn, &case_id)?;
+            let operations = operations_since(conn, &case_id, 0)?;
             let packet = CaseworkPacket {
                 schema_version: 1,
+                operations,
                 base_revision,
                 base_sha256,
                 exported_at: now(),
@@ -1385,6 +1506,48 @@ if case.report_id!=prior.report_id||case.topic!=prior.topic{return Err(invalid("
         self.query_connection("Apply reviewed case import",move|conn|{let(packet,preview)=packet_preview(conn,&payload)?;if preview.packet_sha256!=packet_sha256||preview.local_revision!=expected_revision{return Err(invalid("The packet or local case changed after preview. Preview it again."));}
 if preview.mode=="CONFLICT"{return Err(invalid("This import conflicts with local work. It was not applied; compare the versions and merge selected changes into the local case."));}
 if preview.mode=="IDENTICAL"{return read_case(conn,&packet.case.id)?.ok_or_else(||invalid("Case disappeared."));}let mut case=packet.case.clone();case.revision=preview.local_revision.unwrap_or(0);let tx=conn.transaction().map_err(storage)?;let provenance=match &signer_key_id{Some(key_id)=>format!("Imported packet {} from claimed contributor {} (Ed25519-signed by local key {key_id}); {} supplied history entries are unverified.",preview.packet_sha256,packet.contributor,packet.history.len()),None=>format!("Imported packet {} from claimed contributor {}; {} supplied history entries are unverified.",preview.packet_sha256,packet.contributor,packet.history.len())};write_case(&tx,&mut case,&author,&provenance)?;tx.execute("INSERT INTO casework_origins VALUES (?1,?2,?3) ON CONFLICT DO NOTHING",params![case.id,packet.base_revision,packet.base_sha256]).map_err(storage)?;tx.execute("INSERT INTO casework_imports VALUES (?1,?2,?3,?4,?5)",params![case.id,case.revision,preview.packet_sha256,encode(&packet)?,signer_key_id]).map_err(storage)?;tx.commit().map_err(storage)?;Ok(case)}).await
+    }
+    /// Applies the incoming operations that commute with local work since the shared base, as
+    /// one new local revision, and leaves every contested difference for the item picker. The
+    /// commuting set is recomputed here from the packet and the local log, never taken from the
+    /// caller, and the packet and local revision must be the ones the preview showed.
+    pub async fn apply_commuting_case_operations(
+        &self,
+        payload: String,
+        expected_revision: Option<u64>,
+        packet_sha256: String,
+        author: String,
+        signer_key_id: Option<String>,
+    ) -> Result<CaseworkCase, AppError> {
+        author_valid(&author)?;
+        self.query_connection("Apply commuting case operations", move |conn| {
+            let (packet, preview) = packet_preview(conn, &payload)?;
+            if preview.packet_sha256 != packet_sha256 || preview.local_revision != expected_revision {
+                return Err(invalid("The packet or local case changed after preview. Preview it again."));
+            }
+            if preview.mode != "CONFLICT" {
+                return Err(invalid("Only a conflicting import has commuting operations to apply; apply a fast-forward packet as a whole."));
+            }
+            if preview.commuting.is_empty() {
+                return Err(invalid("No incoming operation commutes with local work since the shared base; merge selected items instead."));
+            }
+            let mut case = read_case(conn, &packet.case.id)?.ok_or_else(|| invalid("Case disappeared."))?;
+            apply_operations(&mut case, &packet.case, &preview.commuting);
+            validate(conn, &mut case, false)?;
+            let signer = signer_key_id.as_deref().map_or(String::new(), |key| format!(", Ed25519-signed by local key {key}"));
+            let provenance = format!(
+                "Applied {} commuting operation(s) from packet {} (claimed contributor {}{signer}); {} contested operation(s) left for item-level merge.",
+                preview.commuting.len(),
+                preview.packet_sha256,
+                packet.contributor,
+                preview.contested.len()
+            );
+            let tx = conn.transaction().map_err(storage)?;
+            write_case(&tx, &mut case, &author, &provenance)?;
+            tx.commit().map_err(storage)?;
+            Ok(case)
+        })
+        .await
     }
     pub async fn casework_research_context(
         &self,
@@ -2385,6 +2548,97 @@ mod tests {
                 .state,
             "COMPLETE"
         );
+    }
+    /// Round trip through the log: the partner adds a question and we edit the notes; the
+    /// partner's addition commutes and is applied as one revision, our notes survive, and the
+    /// partner's edit of an item we also changed is left contested.
+    #[tokio::test]
+    async fn commuting_operations_from_a_diverged_packet_apply_without_touching_local_work() {
+        let db = setup(true).await;
+        let case = db.create_casework_case("report-1".into()).await.unwrap();
+        let question_id = case.questions[0].id.clone();
+        let payload = db
+            .export_casework_packet(case.id.clone(), "Origin".into())
+            .await
+            .unwrap();
+        let mut packet: CaseworkPacket = serde_json::from_str(&payload).unwrap();
+        assert!(
+            !packet.operations.is_empty(),
+            "a packet carries the log from the first revision"
+        );
+
+        let remote = setup(false).await;
+        let preview = remote
+            .preview_casework_import(payload.clone())
+            .await
+            .unwrap();
+        let mut theirs = remote
+            .import_casework_packet(
+                payload,
+                preview.local_revision,
+                preview.packet_sha256,
+                "Partner".into(),
+                None,
+            )
+            .await
+            .unwrap();
+        theirs.questions.push(CaseworkQuestion {
+            id: "partner-q".into(),
+            question: "Did the contractor hold a licence?".into(),
+            next_test: "Check the CSLB register.".into(),
+            disposition: "OPEN".into(),
+            ..CaseworkQuestion::default()
+        });
+        theirs.questions[0].question = "Partner's rewording".into();
+        let revision = theirs.revision;
+        remote
+            .save_casework_case(theirs, revision, "Partner".into())
+            .await
+            .unwrap();
+        let returned = remote
+            .export_casework_packet(case.id.clone(), "Partner".into())
+            .await
+            .unwrap();
+
+        let mut mine = case.clone();
+        mine.notes = "Local notes".into();
+        mine.questions[0].question = "My rewording".into();
+        db.save_casework_case(mine, 1, "Me".into()).await.unwrap();
+
+        let preview = db.preview_casework_import(returned.clone()).await.unwrap();
+        assert_eq!(preview.mode, "CONFLICT");
+        assert_eq!(
+            preview
+                .commuting
+                .iter()
+                .map(|o| o.target.as_str())
+                .collect::<Vec<_>>(),
+            vec!["partner-q"]
+        );
+        assert!(preview.contested.iter().any(|o| o.target == question_id));
+
+        let merged = db
+            .apply_commuting_case_operations(
+                returned,
+                preview.local_revision,
+                preview.packet_sha256,
+                "Me".into(),
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(merged.notes, "Local notes");
+        assert_eq!(merged.questions[0].question, "My rewording");
+        assert!(merged.questions.iter().any(|q| q.id == "partner-q"));
+        packet.case = merged;
+        let log = db
+            .export_casework_packet(case.id.clone(), "Me".into())
+            .await
+            .unwrap();
+        let packet: CaseworkPacket = serde_json::from_str(&log).unwrap();
+        assert!(super::super::casework_operations::chain_is_intact(
+            &packet.operations
+        ));
     }
     #[tokio::test]
     async fn portable_cases_require_preview_detect_conflicts_and_preserve_unverified_sources() {
