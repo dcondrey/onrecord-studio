@@ -65,6 +65,7 @@ const kindLabels: Record<CorpusEntityKind, string> = {
   EIN: 'Employer ID',
   CONTRACTOR_LICENSE: 'Contractor license',
   PARCEL_NUMBER: 'Parcel',
+  SERIES_NUMBER: 'Series number',
 };
 
 const kindColors: Record<CorpusEntityKind, string> = {
@@ -83,6 +84,7 @@ const kindColors: Record<CorpusEntityKind, string> = {
   EIN: 'var(--viz-emerald)',
   CONTRACTOR_LICENSE: 'var(--viz-purple)',
   PARCEL_NUMBER: 'var(--viz-red)',
+  SERIES_NUMBER: 'var(--viz-amber)',
 };
 
 const kindDescriptions: Record<RelationshipKind, string> = {
