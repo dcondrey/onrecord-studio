@@ -1,3 +1,4 @@
+use crate::commands::query::refuse_while_indexing;
 use crate::commands::validation::{optional_portal_key, optional_text, validate_text};
 use crate::error::AppError;
 use crate::ingestion::regional::source_jurisdiction;
@@ -59,6 +60,8 @@ pub async fn hybrid_search(
     index: State<'_, VectorIndex>,
 ) -> Result<Vec<HybridSearchResult>, AppError> {
     validate_text(&query, "Hybrid search query", 4_096)?;
+    // Both lexical legs read the token projection, so a pending index would under-report.
+    refuse_while_indexing(&repository, query.trim())?;
     let mut filter = filter.unwrap_or(HybridSearchFilter {
         portal_key: None,
         agency_name: None,
