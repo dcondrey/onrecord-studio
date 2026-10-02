@@ -434,8 +434,11 @@ pub struct ResolutionPackage {
     pub entries: Vec<LedgerEntry>,
 }
 
+const LEDGER_LOCK_FILE_NAME: &str = ".onrecord-resolution-ledger-v1.lock";
+
 pub struct LedgerStore {
     path: PathBuf,
+    lock_path: PathBuf,
     gate: Mutex<()>,
 }
 
@@ -443,21 +446,27 @@ impl LedgerStore {
     pub fn new(directory: &Path) -> Self {
         Self {
             path: directory.join(LEDGER_FILE_NAME),
+            lock_path: directory.join(LEDGER_LOCK_FILE_NAME),
             gate: Mutex::new(()),
         }
     }
 
     pub fn load(&self) -> Result<LedgerDocument, AppError> {
         let _guard = self.lock()?;
+        let _cross_process = self.acquire_cross_process_lock()?;
         self.read()
     }
 
     /// Read, change, verify and write under one lock; an error from `change` writes nothing.
+    /// The in-process `gate` and the `flock`-backed `lock_path` are both held across the whole
+    /// read-modify-write: the former serializes callers within this process, the latter against
+    /// every other process that might also open this ledger directory.
     pub fn update<T>(
         &self,
         change: impl FnOnce(&mut LedgerDocument) -> Result<T, AppError>,
     ) -> Result<T, AppError> {
         let _guard = self.lock()?;
+        let _cross_process = self.acquire_cross_process_lock()?;
         let mut document = self.read()?;
         let outcome = change(&mut document)?;
         verify_document(&document)?;
@@ -472,6 +481,38 @@ impl LedgerStore {
         self.gate
             .lock()
             .map_err(|_| AppError::Internal("The resolution ledger lock was poisoned".to_string()))
+    }
+
+    /// Acquires an OS-level advisory lock (`flock` on Unix, `LockFileEx` on Windows) on a
+    /// dedicated lock file, mirroring `integrity::acquire_cross_process_revocation_lock`. A
+    /// separate lock file, not the ledger file itself, because the ledger is replaced via
+    /// `rename` on every write and a lock tied to an inode that write replaces would stop
+    /// protecting anything after the first write. The returned `File` must be kept alive for the
+    /// whole critical section; its `Drop` releases the OS lock when the descriptor closes.
+    fn acquire_cross_process_lock(&self) -> Result<std::fs::File, AppError> {
+        if let Some(parent) = self.lock_path.parent() {
+            fs::create_dir_all(parent).map_err(|error| {
+                AppError::Storage(format!(
+                    "Failed to create the resolution ledger directory: {error}"
+                ))
+            })?;
+        }
+        let file = fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(&self.lock_path)
+            .map_err(|error| {
+                AppError::Storage(format!(
+                    "Failed to open the resolution ledger lock file: {error}"
+                ))
+            })?;
+        file.lock().map_err(|error| {
+            AppError::Storage(format!(
+                "Failed to acquire the cross-process resolution ledger lock: {error}"
+            ))
+        })?;
+        Ok(file)
     }
 
     /// A missing file is an empty ledger. Anything unreadable, over-size, of another version or

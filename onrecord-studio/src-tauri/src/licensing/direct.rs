@@ -420,8 +420,11 @@ impl DirectGate {
         if let Err(error) = clock.reset_after_online(now, verified.issued_at) {
             return denied(LicenseState::Unavailable, error.to_string(), Some(session));
         }
-        self.cache().token = Some(token.to_string());
-        let persisted = self.account.secure_set(TOKEN_KEY, token);
+        let persisted = {
+            let mut cache = self.cache();
+            cache.token = Some(token.to_string());
+            self.account.secure_set(TOKEN_KEY, token)
+        };
         let mut status = granted(now, &verified, Some(session));
         if persisted.is_err() {
             status

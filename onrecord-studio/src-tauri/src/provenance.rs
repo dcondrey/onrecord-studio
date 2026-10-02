@@ -177,10 +177,13 @@ pub fn read_asset_provenance(path: &Path) -> Result<AssetProvenance, AppError> {
         // "manifest present but invalid" would flag every ordinary released document as carrying a
         // broken provenance claim, so absence is the default and the reason is surfaced as a
         // finding. A manifest is only ever reported as invalid when the SDK actually parsed one.
-        Err(error) => Ok(AssetProvenance {
-            findings: vec![format!("C2PA provenance could not be read: {error}")],
-            ..AssetProvenance::default()
-        }),
+        Err(error) => {
+            eprintln!("C2PA manifest could not be read: {error}");
+            Ok(AssetProvenance {
+                findings: vec!["C2PA manifest could not be read.".to_string()],
+                ..AssetProvenance::default()
+            })
+        }
     }
 }
 
