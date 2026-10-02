@@ -9,9 +9,9 @@
 //! once per installation, before the window is shown.
 //!
 //! The conversion never writes to the legacy file. It builds the DuckDB core beside it, copies
-//! every table the two schemas share inside a single transaction, verifies row counts, and only
-//! then swaps the new file into place. The legacy file is retained as a backup on every path,
-//! including failure.
+//! every table the two schemas share inside a single transaction, verifies every legacy row is
+//! present in the converted table, and only then swaps the new file into place. The legacy file
+//! is retained as a backup on every path, including failure.
 
 use std::fs;
 use std::io::Read;
@@ -144,7 +144,16 @@ pub fn migrate_legacy_sqlite_core(
     let report = match result {
         Ok(report) => report,
         Err(error) => {
-            remove_if_present(&in_progress_path)?;
+            // The conversion failure is the cause the caller needs; a cleanup failure here is a
+            // secondary concern (a stale `.in-progress` file costs nothing but disk, since the
+            // original core was never touched) and must not replace it via `?`.
+            if let Err(cleanup_error) = remove_if_present(&in_progress_path) {
+                eprintln!(
+                    "Failed to remove the partially built core '{}' after a migration failure: \
+                     {cleanup_error}",
+                    in_progress_path.display()
+                );
+            }
             return Err(error);
         }
     };
@@ -182,7 +191,7 @@ pub fn migrate_legacy_sqlite_core(
 }
 
 /// Creates the DuckDB schema at `target`, copies the shared tables from the legacy SQLite database,
-/// and verifies every copied row count before returning.
+/// and verifies every legacy row is present in the converted table before returning.
 fn build_converted_core(
     legacy_path: &Path,
     target: &Path,
@@ -547,18 +556,20 @@ fn push_statement(statement: &mut String, schema: &mut String, seeds: &mut Strin
     statement.clear();
 }
 
+/// Loads the already-installed `sqlite_scanner` extension so the legacy core can be `ATTACH`ed.
+///
+/// Deliberately does not fall back to `INSTALL sqlite`: that downloads unsigned native code from
+/// extensions.duckdb.org, which App Review rejects and signed-build library validation refuses to
+/// load (see `storage::open_duckdb`). The extension is not compiled in either (the `sqlite`
+/// feature is not enabled in `Cargo.toml`), so a missing extension here is a real, reportable
+/// failure rather than something this function can silently work around.
 fn load_sqlite_extension(connection: &Connection) -> Result<(), AppError> {
-    if connection.execute_batch("LOAD sqlite;").is_ok() {
-        return Ok(());
-    }
-    connection
-        .execute_batch("INSTALL sqlite; LOAD sqlite;")
-        .map_err(|error| {
-            AppError::Storage(format!(
-                "Failed to load the DuckDB SQLite reader required to upgrade the existing \
-                 database: {error}"
-            ))
-        })
+    connection.execute_batch("LOAD sqlite;").map_err(|error| {
+        AppError::Storage(format!(
+            "The DuckDB SQLite reader required to upgrade the existing database is not \
+             available in this build and cannot be downloaded at runtime: {error}"
+        ))
+    })
 }
 
 fn remove_if_present(path: &Path) -> Result<(), AppError> {
