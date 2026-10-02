@@ -90,6 +90,8 @@ pub use monitoring::*;
 
 pub mod registry;
 pub use registry::*;
+pub mod standing_search;
+pub use standing_search::*;
 
 pub mod snapshot;
 
