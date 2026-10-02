@@ -44,6 +44,8 @@ Maintainability/Complexity, Comment/Code Clarity.
 - `ef25790` ResearchWorkspace.tsx: reformatted dense single-line JSX blocks (formatting only)
 - `7b05600` useGatedLoad.ts: held answer is keyed to its key, so the render after a key change no
   longer shows the previous key's data (affected layers, useCaseScope, AttentionFeed, CaseSwitcher)
+- `26ca930` useObjectSearch.ts: a failed findings/entities snapshot read is retried, not cached
+  for the palette session as an empty corpus
 
 In flight as of this writing (check `git log` for landed state): research/model.rs reserved-call
 budget-accounting review.
