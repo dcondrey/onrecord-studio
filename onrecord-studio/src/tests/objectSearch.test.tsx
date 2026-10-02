@@ -19,12 +19,22 @@ vi.hoisted(() => {
 
 
 const pending = new Map<string, (rows: unknown[]) => void>();
+const ipc = { holdRecords: true, findingsFailures: 0 };
+const finding = { id: 'f1', headline: 'Budget memo withheld', severity: 'HIGH', kind: 'WITHHOLDING', dismissedAt: null };
 
 vi.mock('../ipc', () => ({
   formatNativeError: String,
   invokeCommand: (command: string, args: { searchTerm?: string; query?: string }) => {
     if (command === 'query_audit_records_page') {
+      if (!ipc.holdRecords) return Promise.resolve({ records: [], nextCursor: null, total: 0 });
       return new Promise((resolve) => pending.set(args.searchTerm!, (rows) => resolve({ records: rows, nextCursor: null, total: rows.length })));
+    }
+    if (command === 'list_findings') {
+      if (ipc.findingsFailures > 0) {
+        ipc.findingsFailures -= 1;
+        return Promise.reject(new Error('busy'));
+      }
+      return Promise.resolve([finding]);
     }
     return Promise.resolve([]);
   },
@@ -37,6 +47,8 @@ const record = (title: string) => ({ requestId: 1, portalKey: 'p', agencyId: nul
 afterEach(() => {
   cleanup();
   pending.clear();
+  ipc.holdRecords = true;
+  ipc.findingsFailures = 0;
 });
 
 describe('useObjectSearch', () => {
@@ -49,5 +61,16 @@ describe('useObjectSearch', () => {
     await waitFor(() => expect(result.current.map((row) => row.label)).toEqual(['Shelter beds']));
     await act(async () => pending.get('shel')!([record('Stale result')]));
     expect(result.current.map((row) => row.label)).toEqual(['Shelter beds']);
+  });
+
+  it('retries a failed snapshot read instead of holding it as an empty corpus', async () => {
+    ipc.holdRecords = false;
+    ipc.findingsFailures = 1;
+    const { result, rerender } = renderHook(({ query }) => useObjectSearch(query), { initialProps: { query: 'budget' } });
+    await waitFor(() => expect(ipc.findingsFailures).toBe(0));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(result.current).toEqual([]);
+    rerender({ query: 'budget memo' });
+    await waitFor(() => expect(result.current.map((row) => row.label)).toEqual(['Budget memo withheld']));
   });
 });

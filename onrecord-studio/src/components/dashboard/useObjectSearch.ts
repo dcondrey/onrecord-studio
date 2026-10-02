@@ -44,9 +44,14 @@ export function useObjectSearch(query: string): ObjectResult[] {
       const local = snapshot.current
         ? Promise.resolve(snapshot.current)
         : Promise.all([
-          invokeCommand('list_findings', { filter: null, limit: 500 }).catch(() => [] as Finding[]),
-          invokeCommand('list_top_corpus_entities', { limit: 500 }).catch(() => [] as CorpusEntityNode[]),
-        ]).then(([findings, entities]) => (snapshot.current = { findings, entities }));
+          invokeCommand('list_findings', { filter: null, limit: 500 }).catch(() => null),
+          invokeCommand('list_top_corpus_entities', { limit: 500 }).catch(() => null),
+        ]).then(([findings, entities]) => {
+          const read = { findings: findings ?? [], entities: entities ?? [] };
+          // A failed read is retried on the next query rather than held as an empty corpus.
+          if (findings && entities) snapshot.current = read;
+          return read;
+        });
       const records = invokeCommand('query_audit_records_page', { searchTerm: trimmed, pageSize: PER_GROUP }).then((page) => page.records).catch(() => []);
       const passages = invokeCommand('hybrid_search', { query: trimmed, limit: PER_GROUP }).catch(() => []);
 
