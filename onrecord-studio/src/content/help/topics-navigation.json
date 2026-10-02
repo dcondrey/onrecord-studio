@@ -18,7 +18,11 @@
       "case",
       "active case",
       "link",
-      "navigation"
+      "navigation",
+      "undo",
+      "dismiss",
+      "restore",
+      "scope"
     ],
     "sections": [
       {
@@ -50,7 +54,14 @@
       {
         "heading": "The case you are working",
         "paragraphs": [
-          "The case button in the toolbar keeps one case in view. Choose a case to work it; open it to see its requests and cited sources in the inspector, or open its casework. A remembered case that no longer exists is shown as not found rather than silently cleared."
+          "The case button in the toolbar keeps one case in view. Choose a case to work it; open it to see its requests and cited sources in the inspector, or open its casework. A remembered case that no longer exists is shown as not found rather than silently cleared.",
+          "While a case is active, the San Diego and Story desk views show only findings that cite or concern the case's source documents or the requests that hold them, and the Evidence view lists those requests. A bar says so; Show everything turns it off. If the case's scope does not load, nothing is hidden and the bar says why."
+        ]
+      },
+      {
+        "heading": "Undo a dismissal",
+        "paragraphs": [
+          "Dismissing a finding shows Undo for ten seconds. Undo returns the finding to the list with its original discovery date. A restored finding is removed on the next sweep like any other if its detector no longer reports it."
         ]
       }
     ],
