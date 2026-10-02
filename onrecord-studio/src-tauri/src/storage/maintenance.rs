@@ -242,18 +242,52 @@ impl DuckDbRepository {
         let effective = effective_at.to_string();
         self.query_connection("Compact referenced document", move |conn| {
             if recover_retention(conn, &root)? { return Ok(true); }
-            let candidate = conn.query_row("SELECT d.portal_subdomain, d.id, d.local_path, d.download_url, d.raw_file_sha256, d.file_size
-                FROM documents d JOIN portals p ON p.subdomain = d.portal_subdomain
-                WHERE d.local_path IS NOT NULL AND LOWER(TRIM(d.visibility)) = 'public'
-                AND d.download_status = 'completed' AND d.extraction_status = 'SEARCHABLE'
-                AND d.retention_eligible_at >= ?1 AND LENGTH(d.raw_file_sha256) = 64
-                AND p.lifecycle_state = 'ACTIVE' AND p.source_kind NOT IN ('LOCAL_FILE', 'PASTED_CONTENT')
-                AND EXISTS (SELECT 1 FROM documents_fts f WHERE f.document_id = d.id AND f.portal_subdomain = d.portal_subdomain AND LENGTH(f.extracted_text) > 0 AND sha256(f.extracted_text) = LOWER(d.extracted_text_projection_sha256))
-                AND (SELECT COUNT(*) FROM documents other WHERE other.local_path = d.local_path) = 1
-                AND (regexp_matches(lower(d.file_name), '\\.(pdf|html|htm|txt|md|rtf|docx|pptx|odt|odp)$') OR (regexp_matches(lower(d.file_name), '\\.(csv|tsv|json|jsonl|ndjson|geojson)$') AND EXISTS (
-                    SELECT 1 FROM analytical_snapshots s WHERE s.source_sha256 = d.raw_file_sha256 AND s.source_uri = d.download_url AND s.rejected_rows = 0 AND s.imported_rows > 0 AND COALESCE(json_extract_string(s.validation_summary_json, '$.sourceDeclaresPartial'), 'true') = 'false')))
-                AND NOT EXISTS (SELECT 1 FROM data_maintenance_jobs j WHERE j.job_key = 'compact:' || d.portal_subdomain || ':' || CAST(d.id AS VARCHAR) || ':' || d.raw_file_sha256 AND j.next_attempt_at > ?2)
-                ORDER BY d.file_size DESC LIMIT 1", params![effective, now()], |row| Ok((row.get::<_, String>(0)?, row.get::<_, u64>(1)?, row.get::<_, String>(2)?, row.get::<_, Option<String>>(3)?, row.get::<_, String>(4)?, row.get::<_, i64>(5)?))).optional().map_err(storage)?;
+            // The SHA-256 of `documents_fts.extracted_text` is verified against the stored
+            // `extracted_text_projection_sha256` because this is the last check before
+            // irreversibly releasing the original bytes; a stale/diverged projection must not be
+            // trusted. That verification needs the live text, so it can't be skipped or replaced
+            // by comparing two already-stored digests. What's avoidable is hashing *every*
+            // eligible document on every pass just to rank by file_size: candidates are fetched
+            // here ordered by file_size (the cheap columns only), and the hash is checked one
+            // candidate at a time, stopping at the first match -- identical final selection to
+            // the old single query (still the largest eligible, hash-verified document), but the
+            // common case (digest already matches) now hashes one document instead of all of them.
+            const BATCH: i64 = 25;
+            let mut offset: i64 = 0;
+            let candidate = loop {
+                let batch: Vec<(String, u64, String, Option<String>, String, i64)> = {
+                    let mut statement = conn.prepare("SELECT d.portal_subdomain, d.id, d.local_path, d.download_url, d.raw_file_sha256, d.file_size
+                        FROM documents d JOIN portals p ON p.subdomain = d.portal_subdomain
+                        WHERE d.local_path IS NOT NULL AND LOWER(TRIM(d.visibility)) = 'public'
+                        AND d.download_status = 'completed' AND d.extraction_status = 'SEARCHABLE'
+                        AND d.retention_eligible_at >= ?1 AND LENGTH(d.raw_file_sha256) = 64
+                        AND p.lifecycle_state = 'ACTIVE' AND p.source_kind NOT IN ('LOCAL_FILE', 'PASTED_CONTENT')
+                        AND (SELECT COUNT(*) FROM documents other WHERE other.local_path = d.local_path) = 1
+                        AND (regexp_matches(lower(d.file_name), '\\.(pdf|html|htm|txt|md|rtf|docx|pptx|odt|odp)$') OR (regexp_matches(lower(d.file_name), '\\.(csv|tsv|json|jsonl|ndjson|geojson)$') AND EXISTS (
+                            SELECT 1 FROM analytical_snapshots s WHERE s.source_sha256 = d.raw_file_sha256 AND s.source_uri = d.download_url AND s.rejected_rows = 0 AND s.imported_rows > 0 AND COALESCE(json_extract_string(s.validation_summary_json, '$.sourceDeclaresPartial'), 'true') = 'false')))
+                        AND NOT EXISTS (SELECT 1 FROM data_maintenance_jobs j WHERE j.job_key = 'compact:' || d.portal_subdomain || ':' || CAST(d.id AS VARCHAR) || ':' || d.raw_file_sha256 AND j.next_attempt_at > ?2)
+                        ORDER BY d.file_size DESC LIMIT ?3 OFFSET ?4").map_err(storage)?;
+                    statement.query_map(params![effective, now(), BATCH, offset], |row| Ok((row.get::<_, String>(0)?, row.get::<_, u64>(1)?, row.get::<_, String>(2)?, row.get::<_, Option<String>>(3)?, row.get::<_, String>(4)?, row.get::<_, i64>(5)?)))
+                        .map_err(storage)?.collect::<Result<Vec<_>, _>>().map_err(storage)?
+                };
+                let exhausted = (batch.len() as i64) < BATCH;
+                let mut matched = None;
+                for row in batch {
+                    let hash_matches: bool = conn.query_row(
+                        "SELECT EXISTS (SELECT 1 FROM documents_fts f WHERE f.document_id = ?1 AND f.portal_subdomain = ?2 AND LENGTH(f.extracted_text) > 0 AND sha256(f.extracted_text) = LOWER(?3))",
+                        params![row.1, row.0, row.4],
+                        |r| r.get(0),
+                    ).map_err(storage)?;
+                    if hash_matches {
+                        matched = Some(row);
+                        break;
+                    }
+                }
+                if matched.is_some() || exhausted {
+                    break matched;
+                }
+                offset += BATCH;
+            };
             let Some((portal, document_id, path, url, hash, bytes)) = candidate else { return Ok(false); };
             let url = url.and_then(|value| reqwest::Url::parse(&value).ok());
             let Some(url) = url.filter(stable_public_reference) else {

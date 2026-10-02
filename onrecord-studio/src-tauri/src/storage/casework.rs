@@ -8,7 +8,7 @@ use crate::{
     integrity::{sha256_hex, sign_package, verify_package, SignedPackage},
     types::{casework::*, research::*},
 };
-use duckdb::{params, Connection, OptionalExt};
+use duckdb::{params, params_from_iter, Connection, OptionalExt, ToSql};
 use ed25519_dalek::SigningKey;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -394,12 +394,141 @@ fn require_supported(ids: &[String], evidence: &[CaseworkCitation]) -> Result<()
     }
     Ok(())
 }
+/// Batched counterpart of `read_report` for the distinct report ids a citation slice touches;
+/// reports repeated across citations/leads (the common case) are decoded once instead of once
+/// per citation.
+fn read_reports(
+    conn: &Connection,
+    ids: &BTreeSet<String>,
+) -> Result<BTreeMap<String, ResearchReport>, AppError> {
+    if ids.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+    let sql = format!(
+        "SELECT id, report_zstd FROM research_reports WHERE id IN ({})",
+        vec!["?"; ids.len()].join(",")
+    );
+    let rows = conn
+        .prepare(&sql)
+        .map_err(storage)?
+        .query_map(params_from_iter(ids.iter()), |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, Vec<u8>>(1)?))
+        })
+        .map_err(storage)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(storage)?;
+    rows.into_iter()
+        .map(|(id, blob)| Ok((id, decode(&blob)?)))
+        .collect()
+}
+/// Batched public/active status for a set of (portal, document id) pairs, replacing one
+/// `query_row` per citation with a single `IN`-list lookup. A pair absent from the result never
+/// matched a row (same as the per-citation query's `None`).
+fn batch_public_status(
+    conn: &Connection,
+    pairs: &BTreeSet<(String, u64)>,
+) -> Result<BTreeMap<(String, u64), bool>, AppError> {
+    if pairs.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+    let sql = format!(
+        "SELECT d.portal_subdomain, d.id, lower(trim(d.visibility))='public' AND p.lifecycle_state<>'REMOVED'
+         FROM documents d JOIN portals p ON p.subdomain=d.portal_subdomain
+         WHERE (d.portal_subdomain, d.id) IN ({})",
+        vec!["(?,?)"; pairs.len()].join(",")
+    );
+    let values: Vec<Box<dyn ToSql>> = pairs
+        .iter()
+        .flat_map(|(portal, id)| -> [Box<dyn ToSql>; 2] {
+            [Box::new(portal.clone()), Box::new(*id)]
+        })
+        .collect();
+    conn.prepare(&sql)
+        .map_err(storage)?
+        .query_map(params_from_iter(values), |r| {
+            Ok((
+                (r.get::<_, String>(0)?, r.get::<_, u64>(1)?),
+                r.get::<_, bool>(2)?,
+            ))
+        })
+        .map_err(storage)?
+        .collect::<Result<BTreeMap<_, _>, _>>()
+        .map_err(storage)
+}
+/// Batched `research_report_sources` availability/staleness check, keyed by report id. A report
+/// id absent from the result had no source rows at all, matching the per-citation aggregate
+/// query's `(false, false)` for that case (the aggregate has no `GROUP BY`, so it always returns a
+/// row even over zero matching source rows).
+fn batch_report_sources(
+    conn: &Connection,
+    report_ids: &BTreeSet<String>,
+) -> Result<BTreeMap<String, (bool, bool)>, AppError> {
+    if report_ids.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+    let sql = format!(
+        "SELECT s.report_id,
+                COALESCE(bool_or(d.id IS NULL OR p.subdomain IS NULL OR lower(trim(d.visibility))<>'public' OR p.lifecycle_state='REMOVED'),false),
+                COALESCE(bool_or(COALESCE(d.raw_file_sha256,'')<>s.source_sha256),false)
+         FROM research_report_sources s
+         LEFT JOIN documents d ON d.id=s.document_id AND d.portal_subdomain=s.portal_key
+         LEFT JOIN portals p ON p.subdomain=s.portal_key
+         WHERE s.report_id IN ({})
+         GROUP BY s.report_id",
+        vec!["?"; report_ids.len()].join(",")
+    );
+    conn.prepare(&sql)
+        .map_err(storage)?
+        .query_map(params_from_iter(report_ids.iter()), |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                (r.get::<_, bool>(1)?, r.get::<_, bool>(2)?),
+            ))
+        })
+        .map_err(storage)?
+        .collect::<Result<BTreeMap<_, _>, _>>()
+        .map_err(storage)
+}
 /// Recompute source status on every read and mutation; persisted verification is not trusted.
+///
+/// The per-citation document/portal and report-source checks below used to run as individual
+/// `query_row` calls (up to ~4 per citation), which `casework_state` then multiplied by up to 40
+/// leads plus 160 available-evidence items. The checks themselves are unchanged; only their data
+/// is now prefetched in a few batched queries keyed by the same (portal, document id) pairs and
+/// report ids the loop would otherwise look up one at a time.
 fn refresh_evidence(
     conn: &Connection,
     evidence: &mut [CaseworkCitation],
     portable: bool,
 ) -> Result<Vec<String>, AppError> {
+    let mut report_ids = BTreeSet::new();
+    let mut public_pairs = BTreeSet::new();
+    for citation in evidence.iter() {
+        report_ids.insert(citation.report_id.clone());
+        if let (Some(portal), Some(id)) = (&citation.portal_key, citation.document_id) {
+            public_pairs.insert((portal.clone(), id));
+        }
+    }
+    let reports_by_id = read_reports(conn, &report_ids)?;
+    // The post-canonicalization check (below) looks up the *report's* evidence document/portal,
+    // which may differ from the citation's own (unverified) fields checked above; both sets of
+    // pairs are resolved by the one batched query.
+    for citation in evidence.iter() {
+        if let Some(report) = reports_by_id.get(&citation.report_id) {
+            if let Some(source) = report
+                .evidence
+                .iter()
+                .find(|e| e.id == citation.evidence_id)
+            {
+                if let (Some(portal), Some(id)) = (&source.portal_key, source.document_id) {
+                    public_pairs.insert((portal.clone(), id));
+                }
+            }
+        }
+    }
+    let public_status = batch_public_status(conn, &public_pairs)?;
+    let source_status = batch_report_sources(conn, &report_ids)?;
+
     let mut warnings = Vec::new();
     let mut ids = BTreeSet::new();
     for citation in evidence {
@@ -413,14 +542,14 @@ fn refresh_evidence(
             ));
         }
         if let (Some(portal), Some(id)) = (&citation.portal_key, citation.document_id) {
-            let public:Option<bool>=conn.query_row("SELECT lower(trim(d.visibility))='public' AND p.lifecycle_state<>'REMOVED' FROM documents d JOIN portals p ON p.subdomain=d.portal_subdomain WHERE d.id=?1 AND d.portal_subdomain=?2",params![id,portal],|r|r.get(0)).optional().map_err(storage)?;
+            let public = public_status.get(&(portal.clone(), id)).copied();
             if public == Some(false) {
                 return Err(invalid(
                     "A case citation refers to a private or removed local record.",
                 ));
             }
         }
-        if let Some(report) = read_report(conn, &citation.report_id)? {
+        if let Some(report) = reports_by_id.get(&citation.report_id) {
             let source = report
                 .evidence
                 .iter()
@@ -431,7 +560,7 @@ fn refresh_evidence(
                     "A case citation must quote retained report evidence exactly.",
                 ));
             }
-            let mut canonical = canonical_citation(&report, source, &citation.quote);
+            let mut canonical = canonical_citation(report, source, &citation.quote);
             canonical.id = citation.id.clone();
             *citation = canonical;
         } else if portable || citation.verification == "UNVERIFIED_PORTABLE" {
@@ -446,10 +575,10 @@ fn refresh_evidence(
             ));
         }
         if citation.verification == "SAVED_REPORT" {
-            let (unavailable, historical): (bool, bool) = conn.query_row(
-                "SELECT COALESCE(bool_or(d.id IS NULL OR p.subdomain IS NULL OR lower(trim(d.visibility))<>'public' OR p.lifecycle_state='REMOVED'),false), COALESCE(bool_or(COALESCE(d.raw_file_sha256,'')<>s.source_sha256),false) FROM research_report_sources s LEFT JOIN documents d ON d.id=s.document_id AND d.portal_subdomain=s.portal_key LEFT JOIN portals p ON p.subdomain=s.portal_key WHERE s.report_id=?1",
-                params![citation.report_id], |r| Ok((r.get(0)?,r.get(1)?)),
-            ).map_err(storage)?;
+            let (unavailable, historical) = source_status
+                .get(&citation.report_id)
+                .copied()
+                .unwrap_or((false, false));
             if unavailable {
                 return Err(invalid(
                     "A case report source is unavailable, private or removed.",
@@ -460,7 +589,10 @@ fn refresh_evidence(
                 warnings.push(format!("{}: the public source has a newer version. This retained quotation belongs to the saved historical report; review it before a new conclusion.", citation.label));
             }
             if let (Some(portal), Some(id)) = (&citation.portal_key, citation.document_id) {
-                let public:bool=conn.query_row("SELECT EXISTS(SELECT 1 FROM documents d JOIN portals p ON p.subdomain=d.portal_subdomain WHERE d.id=?1 AND d.portal_subdomain=?2 AND lower(trim(d.visibility))='public' AND p.lifecycle_state<>'REMOVED')",params![id,portal],|r|r.get(0)).map_err(storage)?;
+                let public = public_status
+                    .get(&(portal.clone(), id))
+                    .copied()
+                    .unwrap_or(false);
                 if !public {
                     return Err(invalid(
                         "A saved report citation no longer points to an available public record.",
