@@ -74,6 +74,9 @@ export default function AnalysisWorkbench() {
   // be silently overwritten by an in-flight request's result once it resolves for a query the
   // editor no longer shows.
   const sqlGate = useLatestRequestGate();
+  // Guards `hybridResults` the same way: without it, an older search whose IPC round-trip resolves
+  // after a newer one would overwrite the newer query's results.
+  const hybridSearchGate = useLatestRequestGate();
 
   const templates = schema?.templates ?? [];
   const groupedColumns = useMemo(() => {
@@ -304,11 +307,19 @@ export default function AnalysisWorkbench() {
                 <option>Independent dashboards</option>
                 <option>Unclassified source</option>
               </select>
-              <button className="analysis-button" type="button" onClick={() => void run('Searching', () => invokeCommand('hybrid_search', {
-                query: hybridQuery,
-                filter: { jurisdiction: jurisdiction || null },
-                limit: 20,
-              }), setHybridResults)}>
+              <button className="analysis-button" type="button" onClick={() => {
+                const request = hybridSearchGate.begin();
+                void run(
+                  'Searching',
+                  () => invokeCommand('hybrid_search', {
+                    query: hybridQuery,
+                    filter: { jurisdiction: jurisdiction || null },
+                    limit: 20,
+                  }),
+                  (results) => { if (hybridSearchGate.isCurrent(request)) setHybridResults(results); },
+                  () => hybridSearchGate.isCurrent(request),
+                );
+              }}>
                 Search
               </button>
             </div>

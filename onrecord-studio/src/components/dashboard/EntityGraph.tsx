@@ -231,16 +231,34 @@ export default function EntityGraph() {
   const lookalikes = list.status === 'ready'
     ? lookalikeNeighbours(list.centre, list.edges).filter((alias) => !reviewedIds.includes(alias.entityId))
     : [];
+  // Keyed by alias so a re-combine (retry after failure, split-then-recombine) can supersede an
+  // earlier fetch for that same alias without a shared gate blocking other aliases combined
+  // concurrently. `requestFilterKey` additionally catches a result landing after the active filter
+  // changed: `combined` is reset to null on a filter change (below), but that reset and this
+  // network round trip are not otherwise ordered against each other.
+  const aliasRequestTokens = useRef<Record<string, number>>({});
+  const filterKeyRef = useRef(filterKey);
+  filterKeyRef.current = filterKey;
   const combine = (alias: CorpusEntityNode) => {
     const centreId = selectedId;
     if (!centreId) return;
+    const requestFilterKey = filterKey;
+    const token = (aliasRequestTokens.current[alias.entityId] ?? 0) + 1;
+    aliasRequestTokens.current[alias.entityId] = token;
+    const isCurrent = () => aliasRequestTokens.current[alias.entityId] === token && filterKeyRef.current === requestFilterKey;
     setCombined((previous) => ({
       centreId,
       aliases: { ...(previous?.centreId === centreId ? previous.aliases : {}), [alias.entityId]: 'loading' },
     }));
     invokeCommand('page_corpus_entity_neighbors', { entityId: alias.entityId, pageSize: DRAWING_BUDGET, filter })
-      .then((page) => settleAlias(centreId, alias.entityId, page ? { center: page.center, edges: page.edges, truncated: false } : 'failed'))
-      .catch(() => settleAlias(centreId, alias.entityId, 'failed'));
+      .then((page) => {
+        if (!isCurrent()) return;
+        settleAlias(centreId, alias.entityId, page ? { center: page.center, edges: page.edges, truncated: false } : 'failed');
+      })
+      .catch(() => {
+        if (!isCurrent()) return;
+        settleAlias(centreId, alias.entityId, 'failed');
+      });
   };
   const settleAlias = (centreId: string, aliasId: string, value: CorpusEntityNeighborhood | 'failed') =>
     setCombined((previous) =>
@@ -756,7 +774,7 @@ export default function EntityGraph() {
             {pathView?.kind === 'notConnected' && (
               <span className="text-muted">
                 No path within {pathView.maxHops} hops from {centre.displayValue} to {pathView.request.toEntityId}:
-                the two entities are not connected in this corpus.
+                the search found none within that bound, not proof the two entities have no connection in this corpus.
               </span>
             )}
             {pathView?.kind === 'unknownEntity' && (

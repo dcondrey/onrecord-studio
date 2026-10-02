@@ -88,7 +88,11 @@ export default function PatternExplorer() {
             minimumConfidenceBasisPoints: minimumConfidence,
             indexedFrom: toRfc3339(indexedFrom),
             indexedTo: toRfc3339(indexedTo),
-            patternKinds: kindFilter === 'ALL' ? [] : [kindFilter],
+            // Always fetch every kind, unfiltered: the per-kind filter-button counts below are
+            // computed from `patterns`, and the UI narrows to `kindFilter` client-side via
+            // `filteredPatterns`. Filtering this query by `kindFilter` would make every other
+            // kind's count read 0 once a kind filter was active.
+            patternKinds: [],
             requiredTerms: parsePatternRecipeTerms(requiredTerms),
             resultLimit: 250,
           },
@@ -112,7 +116,7 @@ export default function PatternExplorer() {
     } finally {
       if (refreshGate.isCurrent(request)) setIsLoading(false);
     }
-  }, [activePortalKey, currentRecipeControls, indexedFrom, indexedTo, kindFilter, minimumConfidence, minimumEvidenceCount, refreshGate, requiredTerms]);
+  }, [activePortalKey, currentRecipeControls, indexedFrom, indexedTo, minimumConfidence, minimumEvidenceCount, refreshGate, requiredTerms]);
 
   useEffect(() => {
     void refresh();

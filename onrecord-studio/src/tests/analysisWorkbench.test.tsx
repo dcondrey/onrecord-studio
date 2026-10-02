@@ -328,3 +328,71 @@ describe('AnalysisWorkbench SQL result gating', () => {
     expect(screen.queryByText('Loading supporting records')).toBeNull();
   });
 });
+
+describe('AnalysisWorkbench hybrid search result gating', () => {
+  it('keeps the latest search results even when an earlier search resolves after it', async () => {
+    const hybridResolvers = new Map<string, (results: unknown[]) => void>();
+    bridge.invoke.mockImplementation(async (name: string, args?: { query?: string }) => {
+      switch (name) {
+        case 'get_analytical_schema':
+          return { datasets: [], columns: [], templates: [] };
+        case 'list_analytical_import_candidates':
+          return [];
+        case 'query_corpus_patterns':
+          return [];
+        case 'get_data_maintenance_status':
+          return upkeep;
+        case 'hybrid_search':
+          return new Promise((resolve) => hybridResolvers.set(String(args?.query ?? ''), resolve));
+        default:
+          return null;
+      }
+    });
+
+    const hit = (stableId: string, fileName: string) => ({
+      stableId,
+      portalKey: 'portal-1',
+      documentId: 'doc-1',
+      agencyName: 'Agency',
+      jurisdiction: 'California',
+      retrievalStatus: 'RETRIEVED',
+      semanticScore: null,
+      fileName,
+      title: null,
+      excerpt: 'excerpt',
+      characterStart: 0,
+      characterEnd: 10,
+    });
+
+    render(<Harness />);
+    await waitFor(() => expect(capturedController).not.toBeNull());
+
+    const queryInput = screen.getByLabelText('Document evidence query');
+    fireEvent.change(queryInput, { target: { value: 'first query' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+    await waitFor(() => expect(hybridResolvers.has('first query')).toBe(true));
+
+    fireEvent.change(queryInput, { target: { value: 'second query' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+    await waitFor(() => expect(hybridResolvers.has('second query')).toBe(true));
+
+    // The newer search resolves first.
+    await act(async () => {
+      hybridResolvers.get('second query')!([hit('fresh', 'FRESH_FILE')]);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await screen.findByText('FRESH_FILE');
+
+    // The older search resolves afterward. Without its own gate, this would silently overwrite
+    // the results for the query the user actually asked for last.
+    await act(async () => {
+      hybridResolvers.get('first query')!([hit('stale', 'STALE_FILE')]);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText('STALE_FILE')).toBeNull();
+    expect(screen.getByText('FRESH_FILE')).toBeTruthy();
+  });
+});
