@@ -732,7 +732,7 @@ cargo build of a tree a concurrent session is mid-edit in. Notes for whoever bui
 **Ruled 2026-08-29: the native `QueryAst` waits for the search rebuild.** Building it now would
 create a third query grammar that the rebuild then deletes. Two already exist: the qualifier AST
 lives entirely in TypeScript (`src/query/types.ts:30`; zero occurrences of `QueryAst` in
-`src-tauri`) and compiles down to the six flat scalars `query_audit_records` validates
+`src-tauri`) and compiles down to the six flat scalars `query_audit_records_page` validates
 (`commands/query.rs:12-24`), which is why portal, status, flag, and agency *are* enforced natively
 while dates, types, negation, groups, and ranges are not. Separately, `query_corpus_patterns`
 already accepts a typed structured payload with date ranges and kind sets, enforced in Rust

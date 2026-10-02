@@ -145,7 +145,6 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::research::set_research_action_state,
         commands::analysis_workbench::run_analytical_sql,
         commands::analysis_workbench::export_analytical_sql_csv,
-        commands::query::query_audit_records,
         commands::paging::query_audit_records_page,
         commands::paging::count_audit_records,
         commands::paging::page_corpus_entity_neighbors,

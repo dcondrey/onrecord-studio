@@ -1,7 +1,7 @@
 import type { LegacyQueryFilters, QueryAgencyOption, QueryAst, QueryFilter } from './types';
 
 /**
- * Compatibility adapter for `query_audit_records`.
+ * Compatibility adapter for the flat filters of `query_audit_records_page`.
  *
  * Status, flag, portal, and a uniquely resolvable agency map onto the native command. Negated,
  * duplicated, or ambiguous filters are returned explicitly instead of being silently dropped.

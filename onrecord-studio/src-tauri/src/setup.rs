@@ -166,7 +166,7 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
 /// Drains the search token arrears counted during migration. This deliberately does not block
 /// startup: on a large corpus it is minutes of single-threaded DuckDB work, and running it inside
 /// the setup hook kept the event loop from ever presenting the window. Until it finishes,
-/// `query_audit_records` refuses rather than returning a partial answer.
+/// evidence search refuses rather than returning a partial answer.
 fn start_cpra_rule_recompute(repository: DuckDbRepository) {
     tauri::async_runtime::spawn(async move {
         match repository.recompute_cpra_findings_for_rule_change().await {

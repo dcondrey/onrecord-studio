@@ -231,7 +231,7 @@
     ],
     "findingKinds": [],
     "commandGroups": [
-      "query"
+      "paging"
     ],
     "related": [
       "document-viewer",

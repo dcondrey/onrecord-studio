@@ -27,7 +27,7 @@ Saved searches should store the AST plus the original input for display.
 
 ## Compatibility boundary
 
-`src/query/compile.ts` adapts the AST to the bounded flat `query_audit_records` IPC command.
+`src/query/compile.ts` adapts the AST to the bounded flat `query_audit_records_page` IPC command.
 Deferred filters are returned explicitly and rendered in amber with a count. Unknown qualifier
 fields produce a warning and are excluded from the free-text predicate.
 

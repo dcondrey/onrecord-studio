@@ -49,7 +49,6 @@ pub use investigation::{
     list_request_documents, list_request_legal_findings, register_statutory_extension,
     review_legal_finding, verify_document_provenance, verify_document_redaction_integrity,
 };
-pub use query::query_audit_records;
 pub use runtime::get_ocr_capability;
 pub use semantic::{
     cancel_embedding_index, get_embedding_index_status, get_embedding_model_status, hybrid_search,

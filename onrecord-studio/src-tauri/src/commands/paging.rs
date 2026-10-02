@@ -1,7 +1,7 @@
 //! Exact counts and cursor pages for evidence search and entity neighbourhoods.
 //!
-//! These replace the capped reads `query_audit_records` and `get_corpus_entity_neighborhood`
-//! for the views: a result set is a total plus pages of any size, never a list that stopped at
+//! These replace the capped reads the views once used for evidence search and
+//! `get_corpus_entity_neighborhood`: a result set is a total plus pages of any size, never a list that stopped at
 //! a ceiling.
 
 use crate::commands::query::refuse_while_indexing;
@@ -41,7 +41,7 @@ fn validated(
 }
 
 /// Exact number of requests matching the search. Refuses while the search index is still being
-/// built, for the same reason `query_audit_records` does: a partial index gives a false total.
+/// built, because a partial index gives a false total.
 #[tauri::command]
 pub async fn count_audit_records(
     search_term: String,
