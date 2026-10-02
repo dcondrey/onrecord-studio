@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
@@ -10,6 +10,7 @@ import PageHeader from '../ui/PageHeader';
 import EmptyState from '../ui/EmptyState';
 import ObjectLink from '../objects/ObjectLink';
 import { openSourceConnector } from './sourceEvents';
+import SinceControl, { useSinceInstant } from './SinceControl';
 import { cn } from '../../utils/cn';
 import ArtifactDrafts from './ArtifactDrafts';
 
@@ -36,6 +37,12 @@ export default function StoryDesk() {
   const requestFindingsRefresh = useAppStore((s) => s.requestFindingsRefresh);
   const savedSourceCount = useAppStore((s) => s.portals.length);
   const [mode, setMode] = useState<'ranked' | 'all'>('ranked');
+  const since = useSinceInstant();
+  const setSincePreset = useAppStore((s) => s.setSincePreset);
+  const visibleLeads = useMemo(
+    () => state.status === 'READY' ? state.leads.filter((lead) => !since || lead.firstSeenAt > since) : [],
+    [since, state],
+  );
 
   const load = useCallback(() => {
     const token = gate.begin();
@@ -119,6 +126,7 @@ export default function StoryDesk() {
                 </button>
               ))}
             </div>
+            {mode === 'ranked' && <SinceControl />}
             {mode === 'ranked' && (
               <button type="button" onClick={load} className="motion-press focus-ring rounded-lg border border-control px-3 py-1.5 text-label font-semibold text-fg-secondary hover:border-accent/30">
                 Refresh
@@ -133,6 +141,12 @@ export default function StoryDesk() {
         {state.status === 'FAILED' && (
           <p role="alert" className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-label text-danger">
             Leads could not be loaded: {state.message}
+          </p>
+        )}
+        {state.status === 'READY' && state.leads.length > 0 && visibleLeads.length < state.leads.length && (
+          <p role="status" className="text-label text-muted">
+            Showing {visibleLeads.length.toLocaleString()} of {state.leads.length.toLocaleString()} leads first seen in this window.{' '}
+            <button type="button" onClick={() => setSincePreset('all')} className="focus-ring rounded text-accent hover:underline">Show all</button>
           </p>
         )}
         {state.status === 'READY' && state.leads.length === 0 && (
@@ -155,9 +169,9 @@ export default function StoryDesk() {
             />
           )
         )}
-        {state.status === 'READY' && state.leads.length > 0 && (
+        {state.status === 'READY' && visibleLeads.length > 0 && (
           <ol className="motion-stagger space-y-3" aria-label="Ranked story leads">
-            {state.leads.map((lead, index) => (
+            {visibleLeads.map((lead, index) => (
               <li key={lead.findingId} className="motion-lift rounded-xl border border-line bg-canvas/40 p-4 hover:border-line-strong">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
