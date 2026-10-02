@@ -67,9 +67,9 @@ pub mod financial;
 pub mod facilities;
 
 pub mod bundle;
+pub mod case_scope;
 pub mod casework;
 pub mod casework_operations;
-pub mod case_scope;
 
 pub mod monitoring;
 

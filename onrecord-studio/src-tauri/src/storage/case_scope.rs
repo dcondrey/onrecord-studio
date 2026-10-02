@@ -126,8 +126,17 @@ mod tests {
     };
     use chrono::Utc;
 
-    fn finding(headline: &str, subject: FindingSubject, citations: Vec<FindingCitation>) -> Finding {
-        let id = finding_id(FindingKind::HeldBackResponse, "held_back_response", &subject, &[headline]);
+    fn finding(
+        headline: &str,
+        subject: FindingSubject,
+        citations: Vec<FindingCitation>,
+    ) -> Finding {
+        let id = finding_id(
+            FindingKind::HeldBackResponse,
+            "held_back_response",
+            &subject,
+            &[headline],
+        );
         let now = Utc::now();
         Finding {
             id,
@@ -159,7 +168,9 @@ mod tests {
     #[tokio::test]
     async fn scope_covers_findings_that_cite_or_concern_case_documents_and_their_requests_only() {
         let repo = DuckDbRepository::new(":memory:").expect("open in-memory core");
-        repo.run_migrations(include_str!("../../migrations/0001_initial_schema.sql")).await.unwrap();
+        repo.run_migrations(include_str!("../../migrations/0001_initial_schema.sql"))
+            .await
+            .unwrap();
         repo.initialize_casework().await.unwrap();
         repo.query_connection("Seed case scope fixture", |conn| {
             conn.execute_batch(
@@ -176,26 +187,74 @@ mod tests {
         .await
         .unwrap();
 
-        let cites = finding("cites", FindingSubject::default(), vec![citation("city", 1)]);
-        let request = finding("request", FindingSubject { portal_key: Some("city".into()), request_id: Some(42), ..Default::default() }, vec![]);
-        let other_portal = finding("other portal", FindingSubject::default(), vec![citation("county", 1)]);
-        let elsewhere = finding("elsewhere", FindingSubject { portal_key: Some("city".into()), document_id: Some(3), ..Default::default() }, vec![citation("city", 3)]);
-        let dismissed = finding("dismissed", FindingSubject::default(), vec![citation("city", 1)]);
+        let cites = finding(
+            "cites",
+            FindingSubject::default(),
+            vec![citation("city", 1)],
+        );
+        let request = finding(
+            "request",
+            FindingSubject {
+                portal_key: Some("city".into()),
+                request_id: Some(42),
+                ..Default::default()
+            },
+            vec![],
+        );
+        let other_portal = finding(
+            "other portal",
+            FindingSubject::default(),
+            vec![citation("county", 1)],
+        );
+        let elsewhere = finding(
+            "elsewhere",
+            FindingSubject {
+                portal_key: Some("city".into()),
+                document_id: Some(3),
+                ..Default::default()
+            },
+            vec![citation("city", 3)],
+        );
+        let dismissed = finding(
+            "dismissed",
+            FindingSubject::default(),
+            vec![citation("city", 1)],
+        );
         let dismissed_id = dismissed.id.clone();
         let mut expected = vec![cites.id.clone(), request.id.clone()];
         expected.sort();
-        repo.record_findings(vec![cites, request, other_portal, elsewhere, dismissed]).await.unwrap();
+        repo.record_findings(vec![cites, request, other_portal, elsewhere, dismissed])
+            .await
+            .unwrap();
         repo.dismiss_finding(dismissed_id).await.unwrap();
 
         let scope = repo.case_scope("case-a".into()).await.unwrap();
-        assert_eq!(scope.documents, vec![
-            CaseDocumentKey { portal_key: "city".into(), document_id: 1 },
-            CaseDocumentKey { portal_key: "city".into(), document_id: 99 },
-        ]);
-        assert_eq!(scope.requests, vec![CaseRequestKey { portal_key: "city".into(), request_id: 42 }], "a missing document adds no request");
+        assert_eq!(
+            scope.documents,
+            vec![
+                CaseDocumentKey {
+                    portal_key: "city".into(),
+                    document_id: 1
+                },
+                CaseDocumentKey {
+                    portal_key: "city".into(),
+                    document_id: 99
+                },
+            ]
+        );
+        assert_eq!(
+            scope.requests,
+            vec![CaseRequestKey {
+                portal_key: "city".into(),
+                request_id: 42
+            }],
+            "a missing document adds no request"
+        );
         assert_eq!(scope.finding_ids, expected);
 
         let empty = repo.case_scope("no-such-case".into()).await.unwrap();
-        assert!(empty.documents.is_empty() && empty.requests.is_empty() && empty.finding_ids.is_empty());
+        assert!(
+            empty.documents.is_empty() && empty.requests.is_empty() && empty.finding_ids.is_empty()
+        );
     }
 }

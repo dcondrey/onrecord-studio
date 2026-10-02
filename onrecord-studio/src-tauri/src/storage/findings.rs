@@ -544,11 +544,17 @@ mod tests {
         let one = sample_finding(1, "one", FindingSeverity::Notable);
         let id = one.id.clone();
         repo.record_findings(vec![one]).await.unwrap();
-        let before = repo.list_findings(FindingsFilter::default(), 50).await.unwrap();
+        let before = repo
+            .list_findings(FindingsFilter::default(), 50)
+            .await
+            .unwrap();
         repo.dismiss_finding(id.clone()).await.unwrap();
         repo.restore_finding(id.clone()).await.unwrap();
         repo.restore_finding(id).await.unwrap();
-        let after = repo.list_findings(FindingsFilter::default(), 50).await.unwrap();
+        let after = repo
+            .list_findings(FindingsFilter::default(), 50)
+            .await
+            .unwrap();
         assert_eq!(after.len(), 1);
         assert!(after[0].dismissed_at.is_none());
         assert_eq!(after[0].discovered_at, before[0].discovered_at);
