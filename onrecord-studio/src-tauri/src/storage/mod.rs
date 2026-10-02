@@ -38,6 +38,23 @@ pub(crate) mod tabular;
 pub mod vector;
 
 pub use duckdb::DuckDbWorkspace;
+
+/// Opens a DuckDB connection (a file, or in memory when `path` is `None`) that never installs or
+/// loads an extension at runtime. The bundled library defaults both to on, which downloads unsigned
+/// native code from extensions.duckdb.org the first time a query needs one: App Review rejects
+/// downloaded executable code, and library validation in a signed build refuses to load it. Every
+/// extension the app needs is compiled in through Cargo features instead.
+pub(crate) fn open_duckdb(
+    path: Option<&std::path::Path>,
+) -> ::duckdb::Result<::duckdb::Connection> {
+    let config = ::duckdb::Config::default()
+        .with("autoload_known_extensions", "false")?
+        .with("autoinstall_known_extensions", "false")?;
+    match path {
+        Some(path) => ::duckdb::Connection::open_with_flags(path, config),
+        None => ::duckdb::Connection::open_in_memory_with_flags(config),
+    }
+}
 pub use pii::{mask_json_pii, mask_pii, PiiFinding, PiiKind, PiiMaskResult};
 pub use sqlite::{DocumentExtractionFinalization, DuckDbRepository};
 pub use vector::VectorIndex;
@@ -57,3 +74,35 @@ pub mod monitoring;
 pub mod watchlists;
 
 pub mod findings;
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn json_functions_work_without_installing_an_extension() {
+        let connection = super::open_duckdb(None).expect("in-memory DuckDB must open");
+        let (value, autoinstall): (String, bool) = connection
+            .query_row(
+                "SELECT json_extract_string('{\"a\":\"b\"}', '$.a'), current_setting('autoinstall_known_extensions')",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("json_extract_string must be compiled in");
+        assert_eq!(value, "b");
+        assert!(!autoinstall);
+    }
+
+    #[test]
+    fn timestamps_render_in_utc_without_a_session_time_zone() {
+        // Stored timestamps carry a literal `Z`; that is only honest while no ICU extension can
+        // give the session a local zone.
+        let connection = super::open_duckdb(None).expect("in-memory DuckDB must open");
+        let rendered: String = connection
+            .query_row(
+                "SELECT strftime(TIMESTAMPTZ '2026-01-01 12:00:00-08:00', '%Y-%m-%dT%H:%M')",
+                [],
+                |row| row.get(0),
+            )
+            .expect("strftime over TIMESTAMPTZ must work without ICU");
+        assert_eq!(rendered, "2026-01-01T20:00");
+    }
+}

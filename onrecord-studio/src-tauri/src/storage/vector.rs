@@ -84,7 +84,7 @@ impl VectorIndex {
                 cache_dir.display()
             ))
         })?;
-        let connection = Connection::open(path).map_err(|error| {
+        let connection = super::open_duckdb(Some(path)).map_err(|error| {
             AppError::Storage(format!(
                 "Failed to open vector index '{}': {error}",
                 path.display()
@@ -94,8 +94,7 @@ impl VectorIndex {
             .execute_batch(
                 "SET preserve_insertion_order = false;
                  SET threads = 1;
-                 SET enable_progress_bar = false;
-                 SET TimeZone = 'UTC';",
+                 SET enable_progress_bar = false;",
             )
             .map_err(|error| {
                 AppError::Storage(format!("Failed to configure vector index: {error}"))

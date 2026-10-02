@@ -218,7 +218,7 @@ impl DuckDbWorkspace {
             if state.attached_sqlite_path.as_ref() == Some(&canonical_path) {
                 return validate_layout(&state.connection, state.source.table_prefix());
             }
-            let replacement = Connection::open_in_memory().map_err(|error| {
+            let replacement = super::open_duckdb(None).map_err(|error| {
                 AppError::Analysis(format!("Failed to initialize SQLite snapshot: {error}"))
             })?;
             import_sqlite_snapshot(&replacement, &canonical_path, &CORRELATION_SQLITE_TABLES)?;

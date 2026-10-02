@@ -887,9 +887,9 @@ impl DuckDbRepository {
                 .join(supplied_path)
         };
         let conn = if database_path == Path::new(":memory:") {
-            Connection::open_in_memory()
+            super::open_duckdb(None)
         } else {
-            Connection::open(&database_path)
+            super::open_duckdb(Some(&database_path))
         }
         .map_err(|error| {
             AppError::Internal(format!(
@@ -897,14 +897,13 @@ impl DuckDbRepository {
                 database_path.display()
             ))
         })?;
+        // Every timestamp this repository writes is formatted with a literal `Z`. That is true
+        // because `open_duckdb` never loads the ICU extension: without it a `TIMESTAMPTZ` has no
+        // session zone and `strftime` renders it in UTC on every machine.
         conn.execute_batch(
-            // Every timestamp this repository writes is formatted with a literal `Z`. `strftime`
-            // renders a `TIMESTAMPTZ` in the session zone, so without this the stored string
-            // claims UTC while carrying local wall-clock time.
             "SET preserve_insertion_order = false;
              SET threads = 1;
-             SET enable_progress_bar = false;
-             SET TimeZone = 'UTC';",
+             SET enable_progress_bar = false;",
         )
         .map_err(|error| AppError::Internal(format!("Failed to configure DuckDB: {error}")))?;
 
@@ -1924,7 +1923,7 @@ impl DuckDbRepository {
                 .execute(
                     "UPDATE ingestion_task_frontier
                      SET status = 'LEASED', attempts = attempts + 1,
-                         lease_expires_at = strftime(now() + INTERVAL 10 MINUTE, '%Y-%m-%dT%H:%M:%S.%fZ'),
+                         lease_expires_at = strftime(now()::TIMESTAMP + INTERVAL 10 MINUTE, '%Y-%m-%dT%H:%M:%S.%fZ'),
                          updated_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
                      WHERE frontier_id = ?1 AND status = 'PENDING'",
                     params![frontier_id],
@@ -1960,7 +1959,7 @@ impl DuckDbRepository {
                 .execute(
                     "UPDATE ingestion_task_frontier
                  SET status = 'LEASED',
-                     lease_expires_at = strftime(now() + CAST(?2 AS INTERVAL), '%Y-%m-%dT%H:%M:%S.%fZ'),
+                     lease_expires_at = strftime(now()::TIMESTAMP + CAST(?2 AS INTERVAL), '%Y-%m-%dT%H:%M:%S.%fZ'),
                      updated_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
                  WHERE frontier_id = ?1 AND status = 'LEASED'",
                     params![frontier_id, delay_modifier],

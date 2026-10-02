@@ -188,7 +188,7 @@ fn build_converted_core(
     target: &Path,
     migration_sql: &str,
 ) -> Result<LegacyMigrationReport, AppError> {
-    let connection = Connection::open(target).map_err(|error| {
+    let connection = super::open_duckdb(Some(target)).map_err(|error| {
         AppError::Storage(format!(
             "Failed to create the converted database '{}': {error}",
             target.display()

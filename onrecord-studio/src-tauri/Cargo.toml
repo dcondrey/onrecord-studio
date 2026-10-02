@@ -46,7 +46,7 @@ scraper = "0.27"
 base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
 rusqlite = { version = "0.31", default-features = false, features = ["bundled", "limits"] }
-duckdb = { version = "1.10505.0", features = ["bundled"] }
+duckdb = { version = "1.10505.0", features = ["bundled", "json"] }
 lopdf = "0.44"
 png = "0.18"
 calamine = { version = "0.36", features = ["dates"] }

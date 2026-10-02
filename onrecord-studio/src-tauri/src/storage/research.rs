@@ -135,15 +135,15 @@ impl DuckDbRepository {
             let revision = format!("{digest}:{table_digest}:{case_revision}:{monitoring_revision}:{financial_revision}:{review_revision}");
             let tx = conn.transaction().map_err(err)?;
             tx.execute("INSERT INTO research_scheduler VALUES (TRUE, ?1, now()) ON CONFLICT(singleton) DO UPDATE SET revision=excluded.revision WHERE research_scheduler.revision <> excluded.revision", params![revision]).map_err(err)?;
-            let settled: bool = tx.query_row("SELECT observed_at <= now()-INTERVAL '60 seconds' FROM research_scheduler WHERE singleton", [], |r| r.get(0)).map_err(err)?;
+            let settled: bool = tx.query_row("SELECT observed_at <= now()::TIMESTAMP-INTERVAL '60 seconds' FROM research_scheduler WHERE singleton", [], |r| r.get(0)).map_err(err)?;
             if !settled {
                 tx.execute("UPDATE research_settings SET phase='Allowing initial records to arrive; collection continues' WHERE singleton",[]).map_err(err)?;
                 tx.commit().map_err(err)?; return Ok(None);
             }
-            let topic: Option<String> = tx.query_row("WITH topics(topic,ordinal) AS (VALUES ('homelessness',0),('police',1),('abatement',2),('bathrooms',3),('waste',4)) SELECT t.topic FROM topics t LEFT JOIN research_attempts a ON a.topic=t.topic WHERE a.topic IS NULL OR (a.retry_at <= now() AND (a.revision <> ?1 OR a.attempted_at <= now()-CAST(?2 AS INTEGER)*INTERVAL '1 hour')) ORDER BY a.attempted_at ASC NULLS FIRST,t.ordinal LIMIT 1", params![revision,policy.interval_hours], |r| r.get(0)).optional().map_err(err)?;
+            let topic: Option<String> = tx.query_row("WITH topics(topic,ordinal) AS (VALUES ('homelessness',0),('police',1),('abatement',2),('bathrooms',3),('waste',4)) SELECT t.topic FROM topics t LEFT JOIN research_attempts a ON a.topic=t.topic WHERE a.topic IS NULL OR (a.retry_at <= now() AND (a.revision <> ?1 OR a.attempted_at <= now()::TIMESTAMP-CAST(?2 AS INTEGER)*INTERVAL '1 hour')) ORDER BY a.attempted_at ASC NULLS FIRST,t.ordinal LIMIT 1", params![revision,policy.interval_hours], |r| r.get(0)).optional().map_err(err)?;
             if let Some(topic) = &topic {
                 // A crash also respects this reservation; a successful pass shortens its cooldown.
-                tx.execute("INSERT INTO research_attempts VALUES (?1,?2,now(),now()+INTERVAL '1 hour') ON CONFLICT(topic) DO UPDATE SET revision=excluded.revision,attempted_at=excluded.attempted_at,retry_at=excluded.retry_at", params![topic,revision]).map_err(err)?;
+                tx.execute("INSERT INTO research_attempts VALUES (?1,?2,now(),now()::TIMESTAMP+INTERVAL '1 hour') ON CONFLICT(topic) DO UPDATE SET revision=excluded.revision,attempted_at=excluded.attempted_at,retry_at=excluded.retry_at", params![topic,revision]).map_err(err)?;
             }
             tx.commit().map_err(err)?;
             Ok(topic)
@@ -154,7 +154,7 @@ impl DuckDbRepository {
         let topic = topic.to_string();
         self.query_connection("Complete scheduled investigation", move |conn| {
             conn.execute(
-                "UPDATE research_attempts SET retry_at=now()+INTERVAL '10 minutes' WHERE topic=?1",
+                "UPDATE research_attempts SET retry_at=now()::TIMESTAMP+INTERVAL '10 minutes' WHERE topic=?1",
                 params![topic],
             )
             .map_err(err)?;
@@ -514,7 +514,7 @@ mod tests {
             "Allow a bounded initial acquisition window after even one useful artifact"
         );
         conn.execute(
-            "UPDATE research_scheduler SET observed_at=now()-INTERVAL '2 minutes'",
+            "UPDATE research_scheduler SET observed_at=now()::TIMESTAMP-INTERVAL '2 minutes'",
             [],
         )
         .unwrap();
@@ -537,7 +537,7 @@ mod tests {
         )
         .unwrap();
         assert!(db.next_research_topic(&policy).await.unwrap().is_none());
-        conn.execute_batch("UPDATE research_scheduler SET observed_at=now()-INTERVAL '2 minutes'; UPDATE research_attempts SET retry_at=now()-INTERVAL '1 second';").unwrap();
+        conn.execute_batch("UPDATE research_scheduler SET observed_at=now()::TIMESTAMP-INTERVAL '2 minutes'; UPDATE research_attempts SET retry_at=now()::TIMESTAMP-INTERVAL '1 second';").unwrap();
         assert_eq!(
             db.next_research_topic(&policy).await.unwrap().as_deref(),
             Some("homelessness")

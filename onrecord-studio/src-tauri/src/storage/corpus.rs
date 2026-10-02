@@ -972,7 +972,7 @@ fn absolute_database_path(path: &Path) -> Result<PathBuf, AppError> {
 
 fn open_writer_connection(path: &Path) -> Result<Connection, AppError> {
     replace_outdated_corpus_index(path)?;
-    let connection = Connection::open(path).map_err(|error| {
+    let connection = super::open_duckdb(Some(path)).map_err(|error| {
         AppError::Storage(format!(
             "Failed to open corpus index '{}': {error}",
             path.display()
@@ -980,14 +980,12 @@ fn open_writer_connection(path: &Path) -> Result<Connection, AppError> {
     })?;
     connection
         .execute_batch(
-            // Same reason as `DuckDbRepository::new`: `indexed_at` is written with a literal `Z`
-            // and compared lexically against caller-supplied bounds. Without this the corpus index
-            // would carry local wall-clock time while the core database carries real UTC, and the
-            // two would disagree by the local offset.
+            // `indexed_at` is written with a literal `Z` and compared lexically against
+            // caller-supplied bounds; it is real UTC for the reason given in
+            // `DuckDbRepository::new` (no ICU, so no session zone).
             "SET preserve_insertion_order = false;
              SET threads = 1;
-             SET enable_progress_bar = false;
-             SET TimeZone = 'UTC';",
+             SET enable_progress_bar = false;",
         )
         .map_err(|error| AppError::Storage(format!("Failed to configure corpus index: {error}")))?;
     connection
@@ -1057,7 +1055,7 @@ fn wal_path(path: &Path) -> PathBuf {
 /// different version, or a file that will not open or read at all. All of them describe an index
 /// this build cannot use, and it is cheaper to rebuild one than to be wrong about it.
 fn corpus_index_matches_current_schema(path: &Path) -> bool {
-    let Ok(connection) = Connection::open(path) else {
+    let Ok(connection) = super::open_duckdb(Some(path)) else {
         return false;
     };
     let marker_exists: Result<bool, _> = connection.query_row(

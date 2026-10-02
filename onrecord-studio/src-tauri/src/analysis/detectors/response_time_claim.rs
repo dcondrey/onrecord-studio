@@ -696,7 +696,7 @@ mod tests {
             sql.push_str(&format!(
                 "INSERT INTO requests (id, portal_subdomain, title, status, created_at, updated_at, closed_at, agency_id)
                    VALUES ({id}, 'sd', 'R{id}', 'closed', '2024-03-01T00:00:00Z', '2024-03-02T00:00:00Z',
-                           '2024-03-01T00:00:00Z'::TIMESTAMPTZ + INTERVAL ({days}) DAY, 3);"
+                           '2024-03-01T00:00:00'::TIMESTAMP + INTERVAL ({days}) DAY, 3);"
             ));
         }
         sql.push_str(&format!(
