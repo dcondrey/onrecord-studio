@@ -137,15 +137,23 @@ fn workspace(conn: &duckdb::Connection, id: &str) -> Result<ReviewWorkspace, App
     let mut relationships:Vec<PublicRelationship>=list_payloads(conn,"SELECT payload FROM public_relationships WHERE report_id=?1 QUALIFY row_number() OVER(PARTITION BY id ORDER BY revision DESC)=1",id)?;
     let mut all:Vec<PublicRelationship>=list_payloads(conn,"SELECT payload FROM public_relationships WHERE ?1 <> '' QUALIFY row_number() OVER(PARTITION BY id ORDER BY revision DESC)=1",id)?;
     // An old review is historical, never a promise that a subsequently removed source is current.
+    let mut sources = std::collections::HashMap::new();
     for r in &mut all {
-        let source = saved_report(conn, &r.report_id)?;
-        if r.citations.iter().any(|c| {
-            source
-                .evidence
-                .iter()
-                .find(|e| e.id == c.evidence_id)
-                .is_none_or(|e| !current_evidence(conn, e).unwrap_or(false))
-        }) {
+        if !sources.contains_key(&r.report_id) {
+            sources.insert(r.report_id.clone(), saved_report(conn, &r.report_id)?);
+        }
+        let source = &sources[&r.report_id];
+        let mut stale = false;
+        for c in &r.citations {
+            match source.evidence.iter().find(|e| e.id == c.evidence_id) {
+                Some(e) if current_evidence(conn, e)? => {}
+                _ => {
+                    stale = true;
+                    break;
+                }
+            }
+        }
+        if stale {
             r.status = "CANDIDATE".into();
             if let Some(visible) = relationships.iter_mut().find(|item| item.id == r.id) {
                 visible.status = "CANDIDATE".into();
