@@ -172,6 +172,13 @@ impl DuckDbRepository {
                  missing"
                     .to_string(),
             );
+        } else if recorded_projection.is_none() && context.recorded_text_projection_sha256.is_some()
+        {
+            verification_errors.push(
+                "The digest recorded for the extracted-text projection is not a well-formed \
+                 SHA-256 value, so text quoted from this document cannot be verified"
+                    .to_string(),
+            );
         } else if recorded_projection.is_none() && current_text_projection_sha256.is_some() {
             verification_errors.push(
                 "No digest was recorded for the extracted-text projection, so text quoted from \
