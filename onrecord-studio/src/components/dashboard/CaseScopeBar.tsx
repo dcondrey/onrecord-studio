@@ -29,8 +29,8 @@ export default function CaseScopeBar({ state, noun, listOnly = false }: { state:
       {state.status === 'failed' && <span className="text-danger">The case's scope did not load, so nothing is hidden: {state.message}</span>}
       {state.status === 'ready' && (
         <span>
-          {listOnly ? 'The ' : `Only ${noun} in `}
-          <button type="button" onClick={() => inspect({ kind: 'case', caseId: state.value.caseId })} className="focus-ring rounded font-semibold underline decoration-highlight/40 underline-offset-2">the active case</button>
+          {listOnly ? '' : `Only ${noun} in `}
+          <button type="button" onClick={() => inspect({ kind: 'case', caseId: state.value.caseId })} className="focus-ring rounded font-semibold underline decoration-highlight/40 underline-offset-2">{listOnly ? 'The active case' : 'the active case'}</button>
           {listOnly ? ` covers these ${noun}` : ''}{' '}({state.value.scope.documents.length} source document{state.value.scope.documents.length === 1 ? '' : 's'}).
         </span>
       )}
