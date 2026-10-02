@@ -357,4 +357,52 @@ async fn redaction_context_matches_exclude_only_the_redacted_document_and_rank_b
         .map(|(portal, id, _, matched, total)| (portal.as_str(), *id, *matched, *total))
         .collect::<Vec<_>>();
     assert_eq!(hits, vec![(OTHER_PORTAL, DOCUMENT_ID, 2, 2)]);
+
+    // A copy of the redacted document is not independent corroboration.
+    {
+        let connection = repository.conn.lock().await;
+        connection
+            .execute(
+                "INSERT INTO documents (
+                    id, request_id, portal_subdomain, file_name, visibility,
+                    created_at, updated_at, extracted_text_sha256
+                 ) VALUES (?1, ?2, ?3, 'copy.pdf', 'public',
+                    '2026-08-24T12:01:00Z', '2026-08-24T12:01:00Z', ?4)",
+                params![DOCUMENT_ID + 2, REQUEST_ID, OTHER_PORTAL, RAW_FILE_SHA256],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO documents_fts (document_id, portal_subdomain, file_name, extracted_text)
+                 VALUES (?1, ?2, 'copy.pdf', 'alpha beta in the redacted release')",
+                params![DOCUMENT_ID + 2, OTHER_PORTAL],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "UPDATE documents SET extracted_text_sha256 = ?3
+                 WHERE id = ?1 AND portal_subdomain = ?2",
+                params![DOCUMENT_ID, PORTAL_SUBDOMAIN, RAW_FILE_SHA256],
+            )
+            .unwrap();
+    }
+    let all = repository
+        .find_redaction_context_matches(
+            PORTAL_SUBDOMAIN,
+            DOCUMENT_ID,
+            vec!["alpha".to_string(), "beta".to_string()],
+            10,
+        )
+        .await
+        .expect("the lookup must succeed")
+        .into_iter()
+        .map(|(portal, id, _, _, _)| (portal, id))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        all,
+        vec![
+            (OTHER_PORTAL.to_string(), DOCUMENT_ID),
+            (OTHER_PORTAL.to_string(), DOCUMENT_ID + 1),
+        ]
+    );
 }

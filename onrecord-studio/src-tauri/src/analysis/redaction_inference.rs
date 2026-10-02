@@ -305,7 +305,12 @@ fn match_foia_exemption(rest: &str) -> Option<usize> {
 /// snapped to a word boundary on each side. Returns `None` if the resulting window is too short
 /// to reason about.
 fn extract_context(text: &str, span: RedactionSpan) -> Option<String> {
-    if span.start >= text.len() || span.end > text.len() || span.start >= span.end {
+    if span.start >= text.len()
+        || span.end > text.len()
+        || span.start >= span.end
+        || !text.is_char_boundary(span.start)
+        || !text.is_char_boundary(span.end)
+    {
         return None;
     }
     let half = CONTEXT_CHARS / 2;
@@ -333,6 +338,22 @@ fn snap_end(text: &str, mut pos: usize) -> usize {
         pos += 1;
     }
     pos
+}
+
+/// Byte offsets of a span given in document characters (Unicode scalar values), the unit the
+/// viewer reports. `None` when the span does not lie within the text.
+pub fn character_span_to_bytes(text: &str, start: usize, end: usize) -> Option<RedactionSpan> {
+    let byte_at = |characters: usize| {
+        text.char_indices()
+            .map(|(byte, _)| byte)
+            .chain(std::iter::once(text.len()))
+            .nth(characters)
+    };
+    let span = RedactionSpan {
+        start: byte_at(start)?,
+        end: byte_at(end)?,
+    };
+    (span.start < span.end).then_some(span)
 }
 
 fn bracketed_snippet(text: &str, span: RedactionSpan, context: &str) -> String {
@@ -522,6 +543,15 @@ async fn run_semantic_lookup(
     Ok(sites)
 }
 
+/// One candidate value's corroboration: the evidence rows, the `(portal, document)` pairs they
+/// came from, and the summed match score.
+#[derive(Default)]
+struct ValueBucket {
+    evidence: Vec<Evidence>,
+    documents: HashSet<(String, i64)>,
+    total_score: f64,
+}
+
 fn rank_candidates(
     sites: Vec<CandidateSite>,
     hint: CandidateKind,
@@ -535,33 +565,40 @@ fn rank_candidates(
     // Extract candidate values of the hinted kind from each site's excerpt, then aggregate by
     // value across all sites — a value that appears in more independent sites earns higher
     // likelihood.
-    let mut buckets: HashMap<String, (Vec<Evidence>, HashSet<i64>, f64)> = HashMap::new();
+    let mut buckets: HashMap<String, ValueBucket> = HashMap::new();
     for site in sites {
         let candidates = extract_values_of_kind(&site.excerpt, hint);
         let match_score =
             ((site.raw_score.clamp(0.0, 1.0) * f64::from(ceiling)) as u16).min(ceiling);
         for value in candidates {
-            let entry = buckets
-                .entry(value)
-                .or_insert_with(|| (Vec::new(), HashSet::new(), 0.0));
-            if entry.1.insert(site.document_id) {
-                entry.0.push(Evidence {
+            let entry = buckets.entry(value).or_default();
+            if entry
+                .documents
+                .insert((site.portal_key.clone(), site.document_id))
+            {
+                entry.evidence.push(Evidence {
                     portal_key: site.portal_key.clone(),
                     document_id: site.document_id,
                     quote: truncate_quote(&site.excerpt),
                     match_score,
                 });
-                entry.2 += site.raw_score.max(0.0);
+                entry.total_score += site.raw_score.max(0.0);
             }
         }
     }
     let mut candidates: Vec<Candidate> = buckets
         .into_iter()
-        .filter(|(_, (_, docs, _))| {
+        .filter(|(_, bucket)| {
             // Person needs corroboration; other kinds accept single-doc.
-            !matches!(hint, CandidateKind::Person) || docs.len() >= PERSON_MIN_CORROBORATING_DOCS
+            !matches!(hint, CandidateKind::Person)
+                || bucket.documents.len() >= PERSON_MIN_CORROBORATING_DOCS
         })
-        .map(|(value, (evidence, docs, total_score))| {
+        .map(|(value, bucket)| {
+            let ValueBucket {
+                evidence,
+                documents: docs,
+                total_score,
+            } = bucket;
             let corroboration_multiplier = corroboration_multiplier(docs.len());
             let base = (total_score / f64::from(u32::try_from(docs.len().max(1)).unwrap_or(1)))
                 .clamp(0.0, 1.0);
@@ -957,6 +994,21 @@ mod tests {
         // When no sites are returned, ranking yields no candidates, and empty() is the safe shape.
         let candidates = rank_candidates(Vec::new(), CandidateKind::Person, false);
         assert!(candidates.is_empty());
+    }
+
+    /// The viewer reports spans in document characters; the engine slices bytes. A name with a
+    /// multi-byte letter before the marker must not shift or split the span.
+    #[test]
+    fn a_character_span_maps_to_the_same_text_in_bytes() {
+        let text = "Müller signed [REDACTED] today";
+        let start = text.chars().position(|c| c == '[').unwrap();
+        let end = start + "[REDACTED]".chars().count();
+        let span = character_span_to_bytes(text, start, end).unwrap();
+        assert_eq!(&text[span.start..span.end], "[REDACTED]");
+        assert_eq!(
+            character_span_to_bytes(text, start, text.chars().count() + 1),
+            None
+        );
     }
 
     #[test]

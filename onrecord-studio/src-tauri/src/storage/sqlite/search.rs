@@ -111,7 +111,11 @@ impl DuckDbRepository {
     /// Find documents in the corpus whose extracted text mentions terms overlapping with a
     /// redaction's context, excluding the redacted document itself. A document is identified by
     /// its portal and id together, so another portal's document with the same id stays a
-    /// candidate. Hits are ranked by matched-term count before the limit applies. Returns per-hit
+    /// candidate. A copy of the redacted document (same extracted-text digest) is excluded and
+    /// identical copies elsewhere count once, since neither is independent corroboration. The
+    /// excerpt is taken around the first term's match, so values mined from it come from the
+    /// matching passage rather than the document's opening. Hits are ranked by matched-term count
+    /// before the limit applies. Returns per-hit
     /// `(portal_key, document_id, excerpt, matched_term_count, total_term_count)`.
     ///
     /// The excerpt is a bounded prefix so the caller isn't handed a whole document and can render
@@ -138,7 +142,9 @@ impl DuckDbRepository {
             // order of specificity, so the first is usually the highest-signal.
             let mut sql = String::from(
                 "SELECT documents.portal_subdomain, documents.id, \
-                        SUBSTR(documents_fts.extracted_text, 1, 400) AS excerpt",
+                        SUBSTR(documents_fts.extracted_text, \
+                               GREATEST(1, STRPOS(LOWER(documents_fts.extracted_text), ?4) - 200), \
+                               400) AS excerpt",
             );
             let mut term_hits = Vec::with_capacity(terms.len());
             for (i, _) in terms.iter().enumerate() {
@@ -158,7 +164,14 @@ impl DuckDbRepository {
                  WHERE NOT (documents.id = ?1 AND documents.portal_subdomain = ?3) \
                    AND LOWER(TRIM(documents.visibility)) = 'public' \
                    AND LENGTH(documents_fts.extracted_text) > 0 \
-                   AND LOWER(documents_fts.extracted_text) LIKE '%' || ?4 || '%' ",
+                   AND LOWER(documents_fts.extracted_text) LIKE '%' || ?4 || '%' \
+                   AND NOT COALESCE(documents.extracted_text_sha256 = ( \
+                       SELECT source.extracted_text_sha256 FROM documents AS source \
+                       WHERE source.id = ?1 AND source.portal_subdomain = ?3), FALSE) \
+                 QUALIFY ROW_NUMBER() OVER ( \
+                     PARTITION BY COALESCE(documents.extracted_text_sha256, \
+                                           documents.portal_subdomain || ':' || documents.id) \
+                     ORDER BY documents.portal_subdomain, documents.id) = 1 ",
             );
             sql.push_str(&format!(
                 "ORDER BY {} DESC, documents.portal_subdomain, documents.id LIMIT ?2",

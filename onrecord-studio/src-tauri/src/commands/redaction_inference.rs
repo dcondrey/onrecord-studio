@@ -6,13 +6,17 @@
 //! for a specific span the user is looking at.
 
 use crate::{
-    analysis::redaction_inference::{infer_redaction_candidates, InferenceReport, RedactionSpan},
+    analysis::redaction_inference::{
+        character_span_to_bytes, infer_redaction_candidates, InferenceReport,
+    },
     error::AppError,
     storage::sqlite::DuckDbRepository,
     storage::vector::VectorIndex,
 };
 use tauri::State;
 
+/// `span_start`/`span_end` are document character offsets (Unicode scalar values), the unit the
+/// viewer reports; the engine indexes the stored text by byte, so they are converted here.
 #[tauri::command]
 pub async fn infer_redaction(
     document_id: i64,
@@ -27,10 +31,14 @@ pub async fn infer_redaction(
             "Redaction span must have span_end > span_start".to_string(),
         ));
     }
-    let span = RedactionSpan {
-        start: span_start,
-        end: span_end,
-    };
+    let stored_id = u64::try_from(document_id)
+        .map_err(|_| AppError::DataParsing("Document identifier was negative".to_string()))?;
+    let text = repository
+        .load_corpus_source_text(&portal_key, stored_id)
+        .await?;
+    let span = character_span_to_bytes(&text, span_start, span_end).ok_or_else(|| {
+        AppError::DataParsing("Redaction span lies outside the document text".to_string())
+    })?;
     infer_redaction_candidates(
         &repository,
         Some(&vector_index),

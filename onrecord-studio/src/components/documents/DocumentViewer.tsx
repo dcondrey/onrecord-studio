@@ -424,8 +424,8 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
             <RedactionInferencePanel
               documentId={documentId}
               portalKey={portalKey}
-              spanStart={inferenceSpan.start}
-              spanEnd={inferenceSpan.end}
+              spanStart={characterOffset + Array.from(textContent.slice(0, inferenceSpan.start)).length}
+              spanEnd={characterOffset + Array.from(textContent.slice(0, inferenceSpan.end)).length}
               onClose={() => setInferenceSpan(null)}
             />
           )}

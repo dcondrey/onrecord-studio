@@ -175,7 +175,9 @@ fn build_finding(
     } else {
         FindingSeverity::Notable
     };
-    let confidence = FindingConfidence::measured(top.likelihood_basis_points);
+    // The likelihood is a term-overlap heuristic, not a measured probability that the value fills
+    // the redaction, so it ranks candidates but is never presented as the finding's confidence.
+    let confidence = FindingConfidence::Unassessed;
     let subject = FindingSubject {
         portal_key: Some(target.portal_key.clone()),
         request_id: target.request_id,
