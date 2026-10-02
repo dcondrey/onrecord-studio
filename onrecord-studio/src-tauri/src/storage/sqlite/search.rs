@@ -109,7 +109,9 @@ impl DuckDbRepository {
     }
 
     /// Find documents in the corpus whose extracted text mentions terms overlapping with a
-    /// redaction's context, excluding the redacted document itself. Returns per-hit
+    /// redaction's context, excluding the redacted document itself. A document is identified by
+    /// its portal and id together, so another portal's document with the same id stays a
+    /// candidate. Hits are ranked by matched-term count before the limit applies. Returns per-hit
     /// `(portal_key, document_id, excerpt, matched_term_count, total_term_count)`.
     ///
     /// The excerpt is a bounded prefix so the caller isn't handed a whole document and can render
@@ -118,6 +120,7 @@ impl DuckDbRepository {
     /// when the fastembed model isn't initialized.
     pub async fn find_redaction_context_matches(
         &self,
+        exclude_portal_key: &str,
         exclude_document_id: i64,
         terms: Vec<String>,
         limit: usize,
@@ -127,6 +130,7 @@ impl DuckDbRepository {
         }
         let term_count = u32::try_from(terms.len()).unwrap_or(u32::MAX);
         let limit_i64 = i64::try_from(limit.max(1)).unwrap_or(i64::MAX);
+        let exclude_portal_key = exclude_portal_key.to_string();
         self.query_connection("Find redaction context matches", move |connection| {
             // Build a WHERE clause requiring the extracted text to LIKE-match at least the first
             // term (a strong filter), and rank hits by how many additional terms match. Only the
@@ -136,34 +140,40 @@ impl DuckDbRepository {
                 "SELECT documents.portal_subdomain, documents.id, \
                         SUBSTR(documents_fts.extracted_text, 1, 400) AS excerpt",
             );
+            let mut term_hits = Vec::with_capacity(terms.len());
             for (i, _) in terms.iter().enumerate() {
                 use std::fmt::Write;
-                let _ = write!(
-                    sql,
-                    ", CASE WHEN LOWER(documents_fts.extracted_text) LIKE '%' || ?{} || '%' THEN 1 ELSE 0 END",
-                    i + 3
+                let hit = format!(
+                    "CASE WHEN LOWER(documents_fts.extracted_text) LIKE '%' || ?{} || '%' THEN 1 ELSE 0 END",
+                    i + 4
                 );
+                let _ = write!(sql, ", {hit}");
+                term_hits.push(hit);
             }
             sql.push_str(
                 " FROM documents \
                  INNER JOIN documents_fts \
                     ON documents_fts.document_id = documents.id \
                    AND documents_fts.portal_subdomain = documents.portal_subdomain \
-                 WHERE documents.id <> ?1 \
+                 WHERE NOT (documents.id = ?1 AND documents.portal_subdomain = ?3) \
                    AND LOWER(TRIM(documents.visibility)) = 'public' \
                    AND LENGTH(documents_fts.extracted_text) > 0 \
-                   AND LOWER(documents_fts.extracted_text) LIKE '%' || ?3 || '%' \
-                 LIMIT ?2",
+                   AND LOWER(documents_fts.extracted_text) LIKE '%' || ?4 || '%' ",
             );
+            sql.push_str(&format!(
+                "ORDER BY {} DESC, documents.portal_subdomain, documents.id LIMIT ?2",
+                term_hits.join(" + ")
+            ));
             let mut statement = connection.prepare(&sql).map_err(|error| {
                 AppError::Storage(format!(
                     "Failed to prepare redaction-context-match query: {error}"
                 ))
             })?;
-            // Bind exclude id, limit, then each term.
-            let mut params_vec: Vec<duckdb::types::Value> = Vec::with_capacity(2 + terms.len());
+            // Bind exclude id, limit, exclude portal, then each term.
+            let mut params_vec: Vec<duckdb::types::Value> = Vec::with_capacity(3 + terms.len());
             params_vec.push(exclude_document_id.into());
             params_vec.push(limit_i64.into());
+            params_vec.push(exclude_portal_key.into());
             for term in &terms {
                 params_vec.push(term.clone().into());
             }

@@ -158,13 +158,13 @@ pub async fn infer_redaction_candidates(
         match run_semantic_lookup(index, portal_key, document_id, &query).await {
             Ok(results) if !results.is_empty() => (results, true),
             _ => (
-                run_lexical_lookup(repository, document_id, &query).await?,
+                run_lexical_lookup(repository, portal_key, document_id, &query).await?,
                 false,
             ),
         }
     } else {
         (
-            run_lexical_lookup(repository, document_id, &query).await?,
+            run_lexical_lookup(repository, portal_key, document_id, &query).await?,
             false,
         )
     };
@@ -447,6 +447,7 @@ pub struct CandidateSite {
 
 async fn run_lexical_lookup(
     repository: &DuckDbRepository,
+    exclude_portal_key: &str,
     exclude_document_id: i64,
     query: &str,
 ) -> Result<Vec<CandidateSite>, AppError> {
@@ -465,7 +466,7 @@ async fn run_lexical_lookup(
         return Ok(Vec::new());
     }
     let raw = repository
-        .find_redaction_context_matches(exclude_document_id, terms, 50)
+        .find_redaction_context_matches(exclude_portal_key, exclude_document_id, terms, 50)
         .await?;
     Ok(raw
         .into_iter()

@@ -288,3 +288,73 @@ async fn evidence_search_prepares_and_returns_matching_requests() {
         .expect("a filtered evidence search must prepare too");
     assert!(filtered.len() <= results.len());
 }
+
+/// A document is identified by its portal and id together. Excluding the redacted document by id
+/// alone dropped every other portal's document that happened to share the number, and ranking
+/// after the `LIMIT` let a weaker hit displace the strongest one.
+#[tokio::test]
+async fn redaction_context_matches_exclude_only_the_redacted_document_and_rank_before_limiting() {
+    const OTHER_PORTAL: &str = "other-portal";
+    let repository = repository_with_document().await;
+    {
+        let connection = repository.conn.lock().await;
+        connection
+            .execute(
+                "INSERT INTO portals (subdomain, display_name, base_url) VALUES (?1, ?2, ?3)",
+                params![OTHER_PORTAL, "Other Portal", "https://other.example.test"],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO requests (id, portal_subdomain, status, created_at, updated_at)
+                 VALUES (?1, ?2, 'open', '2026-08-24T12:00:00Z', '2026-08-24T12:00:00Z')",
+                params![REQUEST_ID, OTHER_PORTAL],
+            )
+            .unwrap();
+        for (portal, document_id, text) in [
+            (
+                PORTAL_SUBDOMAIN,
+                DOCUMENT_ID,
+                "alpha beta in the redacted release",
+            ),
+            (OTHER_PORTAL, DOCUMENT_ID + 1, "alpha alone"),
+            (OTHER_PORTAL, DOCUMENT_ID, "alpha beta elsewhere"),
+        ] {
+            if portal == OTHER_PORTAL {
+                connection
+                    .execute(
+                        "INSERT INTO documents (
+                            id, request_id, portal_subdomain, file_name, visibility,
+                            created_at, updated_at
+                         ) VALUES (?1, ?2, ?3, 'other.pdf', 'public',
+                            '2026-08-24T12:01:00Z', '2026-08-24T12:01:00Z')",
+                        params![document_id, REQUEST_ID, portal],
+                    )
+                    .unwrap();
+            }
+            connection
+                .execute(
+                    "INSERT INTO documents_fts (
+                        document_id, portal_subdomain, file_name, extracted_text
+                     ) VALUES (?1, ?2, 'release.pdf', ?3)",
+                    params![document_id, portal, text],
+                )
+                .unwrap();
+        }
+    }
+
+    let matches = repository
+        .find_redaction_context_matches(
+            PORTAL_SUBDOMAIN,
+            DOCUMENT_ID,
+            vec!["alpha".to_string(), "beta".to_string()],
+            1,
+        )
+        .await
+        .expect("the lookup must succeed");
+    let hits = matches
+        .iter()
+        .map(|(portal, id, _, matched, total)| (portal.as_str(), *id, *matched, *total))
+        .collect::<Vec<_>>();
+    assert_eq!(hits, vec![(OTHER_PORTAL, DOCUMENT_ID, 2, 2)]);
+}
