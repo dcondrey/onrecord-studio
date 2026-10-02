@@ -39,9 +39,11 @@ Maintainability/Complexity, Comment/Code Clarity.
 - `e3472a2` reformatted three dense, undiffable single-line JSX blocks (CaseworkPanel,
   LegalAuthorityManager, LegalCompliancePanel) — formatting only, no logic change
 
+- `17d509f` DocumentAnnotations.tsx: split one shared gate across 4 unrelated actions
+  (saveReviewer/remove/changeStatus/copy) into 4 independent gates
+
 In flight as of this writing (check `git log` for landed state): research/model.rs reserved-call
-budget-accounting review, DocumentAnnotations.tsx per-action gate split, ResearchWorkspace.tsx JSX
-reformat.
+budget-accounting review, ResearchWorkspace.tsx JSX reformat.
 
 ## Deliberately deferred — do not attempt without explicit sign-off from the user
 
