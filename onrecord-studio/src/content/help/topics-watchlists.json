@@ -22,7 +22,8 @@
     "sections": [
       {
         "paragraphs": [
-          "Add a watch on the Overview, under the change strip. Choose what it follows: an agency by name, a person or entity by the name in document text, a topic, a search of up to 8 words, or one source. A check runs by itself after each refresh, and Check now runs it on demand. A check reads the records already stored here and fetches nothing."
+          "Add a watch on the Overview, under the change strip. Choose what it follows: an agency by name, a person or entity by the name in document text, a topic, a search of up to 8 words, or one source. A check runs by itself after each refresh, and Check now runs it on demand. A check reads the records already stored here and fetches nothing.",
+          "Source copies compares each document's latest source check with the baseline and reports a document the source now answers as gone, serves with different bytes, or serves as collected again. A check that got no answer leaves the earlier result standing, and a document checked for the first time joins the baseline without a change."
         ]
       },
       {

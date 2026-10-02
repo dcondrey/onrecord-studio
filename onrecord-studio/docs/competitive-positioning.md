@@ -202,16 +202,15 @@ hashes, producing a provable "this record was altered/removed on date D" finding
 DocumentCloud's scraper alerts on new documents; nobody records disappearance, and agencies
 removing documents is a real, litigable phenomenon.
 
-Ground truth. The durable frontier and the per-portal rate limiter are live, and downloads are
-SHA-256'd as they stream (`stream_response_to_path`, `src-tauri/src/ingestion/client.rs:1222`)
-into a content-addressed blob store (`commit_staged_object`,
-`src-tauri/src/ingestion/queue.rs:5593-5633`), so both byte versions of a changed document would
-naturally coexist on disk. What is missing is the observation record: the hash lands only in the
-single overwritable `documents.raw_file_sha256` column via the UPDATE in `mark_document_downloaded`
-(`src-tauri/src/storage/sqlite.rs:2815-2866`) with no fetch instant recorded anywhere, so a
-re-crawl destroys the prior fetch's hash and the altered/removed finding has no storage to land
-in. The dependency is an append-only per-fetch log, roughly (url, instant, sha256, outcome),
-plus a scheduler; ingestion today is operator-started.
+Ground truth (2026-10-02). Every fetch is an append-only row in `document_acquisitions` (URL,
+redirect chain, status, headers, SHA-256, size, the digest the document held, local receipt time).
+Check source re-fetches up to 100 collected documents of an active source per run, least recently
+checked first, through the governed client, and records each outcome in `document_source_checks`:
+same bytes, different bytes, gone (HTTP 404/410 only), or unreachable (says nothing about the
+record). The collected row is never repointed, and the re-fetched bytes are hashed and discarded.
+A watch's Source copies dimension reports a document whose latest informative check changed
+outcome since the baseline. Still missing: a schedule (checks are operator-started), and keeping
+the re-fetched bytes, which needs a referencing row so purge can release them.
 
 ## 8. Standing search: reproducible against a corpus version
 

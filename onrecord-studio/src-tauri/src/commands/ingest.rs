@@ -11,8 +11,9 @@ use crate::storage::sqlite::{DuckDbRepository, SourceConnectorRecipe};
 use crate::storage::vector::VectorIndex;
 use crate::types::{
     CrawlPolicy, DocumentPurge, MetadataPageWindow, PastedContentInput, PortalRuntimeSnapshot,
-    RateLimitPolicy, SavedSource, SourceDiscoveryPreview, SourceGuidance, SourceIngestionStart,
-    SourceKind, SourceLifecycleState, SourcePurge, SourcePurgePreview, SourceRemoval,
+    RateLimitPolicy, SavedSource, SourceCheck, SourceDiscoveryPreview, SourceGuidance,
+    SourceIngestionStart, SourceKind, SourceLifecycleState, SourcePurge, SourcePurgePreview,
+    SourceRecheckSummary, SourceRemoval,
 };
 use std::path::Path;
 use std::sync::Arc;
@@ -147,6 +148,34 @@ pub async fn pause_source_sync(
 ) -> Result<bool, AppError> {
     let source_key = validate_portal_key(&source_key)?;
     manager.pause_source(source_key).await
+}
+
+/// Fetches up to `max_documents` collected documents of an active source again and records what
+/// each fetch observed. Nothing in the collected record changes.
+#[tauri::command]
+pub async fn recheck_source(
+    source_key: String,
+    max_documents: u32,
+    manager: State<'_, Arc<QueueManager>>,
+) -> Result<SourceRecheckSummary, AppError> {
+    let source_key = validate_portal_key(&source_key)?;
+    manager
+        .recheck_source(source_key, max_documents as usize)
+        .await
+}
+
+/// Source checks newest first, for a source or one of its documents.
+#[tauri::command]
+pub async fn list_source_checks(
+    source_key: String,
+    document_id: Option<u64>,
+    limit: u32,
+    repository: State<'_, DuckDbRepository>,
+) -> Result<Vec<SourceCheck>, AppError> {
+    let source_key = validate_portal_key(&source_key)?;
+    repository
+        .list_source_checks(source_key, document_id, limit as usize)
+        .await
 }
 
 /// Restarts a paused source along the same path startup recovery uses, so a resume inherits the

@@ -1,6 +1,6 @@
 export type WatchKind = 'AGENCY' | 'ENTITY' | 'TOPIC_PACK' | 'QUERY' | 'SOURCE';
 
-export type WatchDimension = 'DOCUMENTS' | 'FINDINGS' | 'FIGURES' | 'WITHHELD' | 'SOURCE_HEALTH';
+export type WatchDimension = 'DOCUMENTS' | 'FINDINGS' | 'FIGURES' | 'WITHHELD' | 'SOURCE_HEALTH' | 'SOURCE_CHECKS';
 
 /** `NOT_MEASURED` (nothing was observed this run) is never the same as `UNCHANGED` (observed and equal). */
 export type DimensionOutcome = 'BASELINE_RECORDED' | 'UNCHANGED' | 'CHANGED' | 'NOT_MEASURED';

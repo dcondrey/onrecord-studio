@@ -11,6 +11,7 @@ mod policy;
 mod provenance;
 mod purge;
 mod search;
+mod source_checks;
 mod sources;
 #[cfg(test)]
 mod tests;
@@ -56,6 +57,7 @@ use crate::types::{
 
 pub(crate) use analytical::{analytical_query_provenance, ANALYTICAL_PARSER_VERSION};
 pub(crate) use search::request_search_filters;
+pub use source_checks::{SourceCheckObservation, SourceRecheckTarget};
 
 /// Everything a saved source remembers about how to synchronize it.
 ///

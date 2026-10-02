@@ -307,10 +307,17 @@ fn map_legacy_legal_authority_row(row: &Row<'_>) -> duckdb::Result<LegacyLegalAu
 /// physical foreign keys. Canonical evidence is never auto-deleted or guessed into a parent; the
 /// operator receives exact relation/count pairs and can restore from the retained source data.
 pub(super) fn verify_logical_relations(conn: &Connection) -> Result<(), AppError> {
-    const CHECKS: [(&str, &str); 10] = [
+    const CHECKS: [(&str, &str); 11] = [
         (
             "document_acquisitions -> documents",
             "SELECT COUNT(*) FROM document_acquisitions child
+             LEFT JOIN documents parent ON parent.id = child.document_id
+                AND parent.portal_subdomain = child.portal_subdomain
+             WHERE parent.id IS NULL",
+        ),
+        (
+            "document_source_checks -> documents",
+            "SELECT COUNT(*) FROM document_source_checks child
              LEFT JOIN documents parent ON parent.id = child.document_id
                 AND parent.portal_subdomain = child.portal_subdomain
              WHERE parent.id IS NULL",

@@ -68,6 +68,17 @@ pub struct SourceHealth {
     pub run_as_of: String,
 }
 
+/// The latest informative re-fetch of one collected document. UNREACHABLE checks are never stored
+/// here: they say nothing about the record, so the previous state stands.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceCheckState {
+    /// `SAME_BYTES`, `DIFFERENT_BYTES` or `GONE`.
+    pub outcome: String,
+    pub checked_at: String,
+    pub portal_key: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct WatchSnapshot {
@@ -76,6 +87,7 @@ pub struct WatchSnapshot {
     pub figures: Slot<BTreeMap<String, FigureSource>>,
     pub withheld: Slot<BTreeMap<String, Labeled>>,
     pub source_health: Slot<BTreeMap<String, SourceHealth>>,
+    pub source_checks: Slot<BTreeMap<String, SourceCheckState>>,
 }
 
 impl WatchSnapshot {
@@ -86,6 +98,7 @@ impl WatchSnapshot {
             figures: Slot::not_measured(reason),
             withheld: Slot::not_measured(reason),
             source_health: Slot::not_measured(reason),
+            source_checks: Slot::not_measured(reason),
         }
     }
 }
@@ -257,6 +270,11 @@ pub fn diff(
     dimensions.push(r);
     changes.extend(c);
 
+    let (r, c, source_checks) =
+        source_check_dimension(&ctx, &baseline.source_checks, &current.source_checks);
+    dimensions.push(r);
+    changes.extend(c);
+
     let observed: Vec<_> = dimensions
         .iter()
         .filter(|d| d.outcome != DimensionOutcome::NotMeasured)
@@ -281,8 +299,147 @@ pub fn diff(
             figures,
             withheld,
             source_health,
+            source_checks,
         },
         status,
+    }
+}
+
+/// A change is a document whose latest informative check moved between outcomes since the
+/// baseline. A document first checked after the baseline joins it without a change, as a source
+/// first seen does in [`source_dimension`]: there is nothing earlier to have changed from.
+fn source_check_dimension(
+    ctx: &Ctx<'_>,
+    base: &Slot<BTreeMap<String, SourceCheckState>>,
+    cur: &Slot<BTreeMap<String, SourceCheckState>>,
+) -> (
+    DimensionResult,
+    Vec<WatchChange>,
+    Slot<BTreeMap<String, SourceCheckState>>,
+) {
+    let dimension = WatchDimension::SourceChecks;
+    let (new_value, new_as_of) = match cur {
+        Slot::NotMeasured { reason } => {
+            return (
+                result(
+                    dimension,
+                    DimensionOutcome::NotMeasured,
+                    0,
+                    measured_as_of(base),
+                    None,
+                    Some(reason),
+                ),
+                vec![],
+                base.clone(),
+            )
+        }
+        Slot::Measured { value, as_of } => (value, as_of),
+    };
+    let Slot::Measured {
+        value: old_value,
+        as_of: old_as_of,
+    } = base
+    else {
+        return (
+            result(
+                dimension,
+                DimensionOutcome::BaselineRecorded,
+                0,
+                None,
+                Some(new_as_of),
+                None,
+            ),
+            vec![],
+            cur.clone(),
+        );
+    };
+    let mut merged = old_value.clone();
+    let mut changes = Vec::new();
+    let mut compared = 0_usize;
+    let mut first_seen = 0_usize;
+    for (document, now) in new_value {
+        match old_value.get(document) {
+            Some(before) if newer(&now.checked_at, &before.checked_at) => {
+                compared += 1;
+                if before.outcome != now.outcome {
+                    if let Some((kind, basis)) = source_check_change(&now.outcome) {
+                        changes.push(ctx.change(
+                            dimension,
+                            kind,
+                            document,
+                            Some(&before.outcome),
+                            Some(&now.outcome),
+                            Some(&before.checked_at),
+                            &now.checked_at,
+                            basis,
+                            Some(&now.portal_key),
+                        ));
+                    }
+                }
+            }
+            Some(_) => continue,
+            None => first_seen += 1,
+        }
+        merged.insert(document.clone(), now.clone());
+    }
+    let next = Slot::measured(merged, new_as_of);
+    if compared == 0 {
+        let (outcome, reason, value) = if first_seen == 0 {
+            (
+                DimensionOutcome::NotMeasured,
+                Some("No source check has reached a document in scope since the baseline."),
+                base.clone(),
+            )
+        } else {
+            (DimensionOutcome::BaselineRecorded, None, next)
+        };
+        return (
+            result(
+                dimension,
+                outcome,
+                0,
+                Some(old_as_of),
+                Some(new_as_of),
+                reason,
+            ),
+            vec![],
+            value,
+        );
+    }
+    let outcome = if changes.is_empty() {
+        DimensionOutcome::Unchanged
+    } else {
+        DimensionOutcome::Changed
+    };
+    (
+        result(
+            dimension,
+            outcome,
+            changes.len(),
+            Some(old_as_of),
+            Some(new_as_of),
+            None,
+        ),
+        changes,
+        next,
+    )
+}
+
+fn source_check_change(outcome: &str) -> Option<(&'static str, &'static str)> {
+    match outcome {
+        "GONE" => Some((
+            "SOURCE_DOCUMENT_GONE",
+            "Fetched again, the source answered 404 or 410 for this collected document, after an earlier check got a different answer. The collected copy is unchanged.",
+        )),
+        "DIFFERENT_BYTES" => Some((
+            "SOURCE_DOCUMENT_BYTES_DIFFER",
+            "Fetched again, the source served bytes whose SHA-256 differs from the collected copy, after an earlier check got a different answer. A replaced file and a page served in its place both do this; the acquisition history records what was served.",
+        )),
+        "SAME_BYTES" => Some((
+            "SOURCE_DOCUMENT_SERVED_AGAIN",
+            "Fetched again, the source served the collected bytes, after an earlier check got a different answer.",
+        )),
+        _ => None,
     }
 }
 
@@ -782,6 +939,56 @@ mod tests {
             detail: "3 failures".into(),
             run_as_of: run.into(),
         }
+    }
+
+    fn checks(entries: &[(&str, &str, &str)], as_of: &str) -> WatchSnapshot {
+        WatchSnapshot {
+            source_checks: Slot::measured(
+                entries
+                    .iter()
+                    .map(|(document, outcome, checked_at)| {
+                        (
+                            document.to_string(),
+                            SourceCheckState {
+                                outcome: outcome.to_string(),
+                                checked_at: checked_at.to_string(),
+                                portal_key: "city".into(),
+                            },
+                        )
+                    })
+                    .collect(),
+                as_of,
+            ),
+            ..WatchSnapshot::unobserved("test")
+        }
+    }
+
+    #[test]
+    fn a_newer_check_with_a_new_outcome_is_a_change_and_a_first_check_is_not() {
+        let t1 = "2026-10-01T00:00:00Z";
+        let t2 = "2026-10-02T00:00:00Z";
+        let baseline = checks(&[("city:1", "SAME_BYTES", t1)], t1);
+        let current = checks(&[("city:1", "GONE", t2), ("city:2", "GONE", t2)], t2);
+        let out = diff("w", &baseline, &current, t2);
+        let kinds: Vec<_> = out
+            .changes
+            .iter()
+            .map(|c| (c.subject.as_str(), c.change_kind.as_str()))
+            .collect();
+        assert_eq!(kinds, vec![("city:1", "SOURCE_DOCUMENT_GONE")]);
+        let dimension = |out: &DiffOutput| {
+            out.dimensions
+                .iter()
+                .find(|d| d.dimension == WatchDimension::SourceChecks)
+                .unwrap()
+                .outcome
+        };
+        assert_eq!(dimension(&out), DimensionOutcome::Changed);
+
+        // Nothing checked since the baseline is not "unchanged".
+        let stale = diff("w", &out.next, &out.next, t2);
+        assert_eq!(dimension(&stale), DimensionOutcome::NotMeasured);
+        assert!(stale.changes.is_empty());
     }
 
     fn sources(entries: &[(&str, SourceHealth)], as_of: &str) -> WatchSnapshot {

@@ -9,6 +9,7 @@ mod manager;
 mod objects;
 mod payload;
 mod progress;
+mod recheck;
 mod resources;
 mod structured;
 #[cfg(test)]

@@ -26,6 +26,8 @@ export function SourceConnectorForm({ connector, inputId }: { connector: SourceC
     pauseSync,
     activeIsPaused,
     resumeSync,
+    recheckSource,
+    activeIsRechecking,
     setPendingRemoval,
     setPendingPurge,
   } = connector;
@@ -130,6 +132,11 @@ export function SourceConnectorForm({ connector, inputId }: { connector: SourceC
       {activeIsPaused && !activeIsSyncing && (
         <button type="button" onClick={() => void resumeSync()} title="Resume synchronization" aria-label="Resume synchronization" className="source-tool-button focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-lg text-warning transition hover:text-success">
           <Icon name="play" className="h-3.5 w-3.5" />
+        </button>
+      )}
+      {activePortal && !activeIsPaused && (
+        <button type="button" onClick={() => void recheckSource()} disabled={activeIsRechecking} title="Fetch collected documents again and record whether the source still serves the same bytes" aria-label="Check collected documents against the source" className="source-tool-button focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition hover:text-success disabled:opacity-50">
+          <Icon name="shield" className={cn('h-3.5 w-3.5', activeIsRechecking && 'animate-pulse')} />
         </button>
       )}
       {/* Two controls, because they are two operations. The withdrawal keeps the evidence and so

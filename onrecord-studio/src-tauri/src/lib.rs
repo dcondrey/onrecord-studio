@@ -69,6 +69,8 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::account::activate_this_device,
         commands::ingest::pause_source_sync,
         commands::ingest::resume_source_sync,
+        commands::ingest::recheck_source,
+        commands::ingest::list_source_checks,
         commands::ingest::remove_source,
         commands::ingest::preview_source_purge,
         commands::ingest::purge_source,

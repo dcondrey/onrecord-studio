@@ -77,3 +77,34 @@ export interface PastedContentInput {
   content: string;
   declaredMediaType?: string | null;
 }
+
+/**
+ * What one re-fetch of a collected document observed. DIFFERENT_BYTES is a digest comparison, not
+ * a finding of alteration; UNREACHABLE says nothing about the record.
+ */
+export type SourceCheckOutcome = 'SAME_BYTES' | 'DIFFERENT_BYTES' | 'GONE' | 'UNREACHABLE';
+
+export interface SourceCheck {
+  checkId: number;
+  runId: string;
+  portalKey: string;
+  documentId: number;
+  requestedUrl: string;
+  checkedAt: string;
+  outcome: SourceCheckOutcome;
+  httpStatus: number | null;
+  collectedSha256: string;
+  observedSha256: string | null;
+  detail: string | null;
+}
+
+export interface SourceRecheckSummary {
+  runId: string;
+  portalKey: string;
+  sameBytes: number;
+  differentBytes: number;
+  gone: number;
+  unreachable: number;
+  notChecked: number;
+  stoppedEarly: string | null;
+}

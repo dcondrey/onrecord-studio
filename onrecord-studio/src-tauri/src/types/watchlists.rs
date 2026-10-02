@@ -65,15 +65,17 @@ pub enum WatchDimension {
     Figures,
     Withheld,
     SourceHealth,
+    SourceChecks,
 }
 
 impl WatchDimension {
-    pub const ALL: [WatchDimension; 5] = [
+    pub const ALL: [WatchDimension; 6] = [
         Self::Documents,
         Self::Findings,
         Self::Figures,
         Self::Withheld,
         Self::SourceHealth,
+        Self::SourceChecks,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -83,6 +85,7 @@ impl WatchDimension {
             Self::Figures => "FIGURES",
             Self::Withheld => "WITHHELD",
             Self::SourceHealth => "SOURCE_HEALTH",
+            Self::SourceChecks => "SOURCE_CHECKS",
         }
     }
 

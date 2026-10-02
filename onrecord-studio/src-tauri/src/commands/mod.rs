@@ -37,8 +37,9 @@ pub use export::{
 };
 pub use ingest::{
     ingest_local_files, ingest_pasted_content, list_portal_runtimes, list_saved_portals,
-    pause_source_sync, preview_data_source, preview_source_purge, purge_document, purge_source,
-    remove_source, resume_source_sync, start_data_source,
+    list_source_checks, pause_source_sync, preview_data_source, preview_source_purge,
+    purge_document, purge_source, recheck_source, remove_source, resume_source_sync,
+    start_data_source,
 };
 pub use investigation::{
     audit_document_residual_evidence, carve_document_version_history,

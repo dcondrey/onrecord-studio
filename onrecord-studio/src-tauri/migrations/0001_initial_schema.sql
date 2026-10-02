@@ -13,6 +13,7 @@
 CREATE SEQUENCE IF NOT EXISTS source_ingestion_failure_seq;
 CREATE SEQUENCE IF NOT EXISTS ingestion_frontier_seq;
 CREATE SEQUENCE IF NOT EXISTS document_acquisition_seq;
+CREATE SEQUENCE IF NOT EXISTS document_source_check_seq;
 CREATE SEQUENCE IF NOT EXISTS document_integrity_flag_seq;
 CREATE SEQUENCE IF NOT EXISTS state_transition_log_seq;
 CREATE SEQUENCE IF NOT EXISTS provenance_assertion_seq;
@@ -757,6 +758,32 @@ CREATE TABLE IF NOT EXISTS document_acquisitions (
 );
 CREATE INDEX IF NOT EXISTS idx_document_acquisitions_document
     ON document_acquisitions(portal_subdomain, document_id);
+
+-- One row per re-fetch of a collected document. Each outcome states only what was observed:
+-- SAME_BYTES and DIFFERENT_BYTES compare the received digest with the one collected (a different
+-- digest is not a claim of alteration: a soft 404 page or a redesign changes it too); GONE means
+-- the source answered 404 or 410; UNREACHABLE means this check got no answer about the record
+-- (network, server error, refusal) and says nothing about it. A document with no row was not
+-- checked. A new table, so its constraints hold on an upgraded database as well.
+CREATE TABLE IF NOT EXISTS document_source_checks (
+    check_id BIGINT PRIMARY KEY DEFAULT nextval('document_source_check_seq'),
+    run_id TEXT NOT NULL,
+    portal_subdomain TEXT NOT NULL,
+    document_id BIGINT NOT NULL,
+    requested_url TEXT NOT NULL,
+    checked_at TEXT NOT NULL,
+    outcome TEXT NOT NULL
+        CHECK (outcome IN ('SAME_BYTES', 'DIFFERENT_BYTES', 'GONE', 'UNREACHABLE')),
+    http_status BIGINT CHECK (http_status IS NULL OR http_status BETWEEN 100 AND 599),
+    collected_sha256 TEXT NOT NULL CHECK (length(collected_sha256) = 64),
+    observed_sha256 TEXT CHECK (observed_sha256 IS NULL OR length(observed_sha256) = 64),
+    detail TEXT,
+    CHECK ((outcome IN ('SAME_BYTES', 'DIFFERENT_BYTES')) = (observed_sha256 IS NOT NULL)),
+    CHECK ((outcome = 'SAME_BYTES') = (observed_sha256 IS NOT DISTINCT FROM collected_sha256)),
+    CHECK (outcome <> 'GONE' OR (http_status IS NOT NULL AND http_status IN (404, 410)))
+);
+CREATE INDEX IF NOT EXISTS idx_document_source_checks_document
+    ON document_source_checks(portal_subdomain, document_id);
 
 -- The rule version each stored derivation was computed under. A rule change bumps the version in
 -- code, and startup recomputes what the old rule stored instead of leaving its findings standing.

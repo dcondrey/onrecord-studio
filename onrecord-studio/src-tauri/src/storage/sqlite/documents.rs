@@ -168,42 +168,19 @@ impl DuckDbRepository {
             AppError::DataParsing(format!("Document size cannot be stored: {error}"))
         })?;
         let raw_file_sha256 = normalize_sha256(raw_file_sha256)?;
-        let redirect_chain_json = serde_json::to_string(&acquisition.redirect_chain)
-            .map_err(|error| AppError::Internal(format!("Redirect chain encoding: {error}")))?;
         let portal_subdomain = portal_subdomain.to_string();
         let sync_run_id = sync_run_id.map(str::to_string);
         let acquisition = acquisition.clone();
         self.query_connection("Record document acquisition", move |conn| {
-            conn.execute(
-                "INSERT INTO document_acquisitions (
-                    portal_subdomain, document_id, sync_run_id, requested_url, resolved_url,
-                    redirect_chain_json, http_status, content_type, etag, last_modified,
-                    raw_file_sha256, file_size, previous_raw_file_sha256, retrieved_at
-                 ) VALUES (
-                    ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12,
-                    (SELECT raw_file_sha256 FROM documents WHERE id = ?2 AND portal_subdomain = ?1),
-                    ?13
-                 )",
-                params![
-                    portal_subdomain,
-                    document_id,
-                    sync_run_id,
-                    acquisition.requested_url,
-                    acquisition.resolved_url,
-                    redirect_chain_json,
-                    i64::from(acquisition.http_status),
-                    acquisition.content_type,
-                    acquisition.etag,
-                    acquisition.last_modified,
-                    raw_file_sha256,
-                    file_size,
-                    acquisition.retrieved_at,
-                ],
+            insert_document_acquisition(
+                conn,
+                &portal_subdomain,
+                document_id,
+                sync_run_id.as_deref(),
+                &raw_file_sha256,
+                file_size,
+                &acquisition,
             )
-            .map_err(|error| {
-                AppError::Storage(format!("Failed to record document acquisition: {error}"))
-            })?;
-            Ok(())
         })
         .await
     }
@@ -1059,4 +1036,49 @@ fn map_request_document_row(row: &Row<'_>) -> duckdb::Result<RequestDocumentRow>
         extraction_deferred_reason: row.get(11)?,
         original_source_uri: row.get(12)?,
     })
+}
+
+/// The insert behind [`DuckDbRepository::record_document_acquisition`], for callers that write a
+/// fetch event inside a larger transaction. `raw_file_sha256` must already be normalized.
+pub(super) fn insert_document_acquisition(
+    conn: &Connection,
+    portal_subdomain: &str,
+    document_id: i64,
+    sync_run_id: Option<&str>,
+    raw_file_sha256: &str,
+    file_size: i64,
+    acquisition: &crate::ingestion::client::AcquisitionRecord,
+) -> Result<(), AppError> {
+    let redirect_chain_json = serde_json::to_string(&acquisition.redirect_chain)
+        .map_err(|error| AppError::Internal(format!("Redirect chain encoding: {error}")))?;
+    conn.execute(
+        "INSERT INTO document_acquisitions (
+            portal_subdomain, document_id, sync_run_id, requested_url, resolved_url,
+            redirect_chain_json, http_status, content_type, etag, last_modified,
+            raw_file_sha256, file_size, previous_raw_file_sha256, retrieved_at
+         ) VALUES (
+            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12,
+            (SELECT raw_file_sha256 FROM documents WHERE id = ?2 AND portal_subdomain = ?1),
+            ?13
+         )",
+        params![
+            portal_subdomain,
+            document_id,
+            sync_run_id,
+            acquisition.requested_url,
+            acquisition.resolved_url,
+            redirect_chain_json,
+            i64::from(acquisition.http_status),
+            acquisition.content_type,
+            acquisition.etag,
+            acquisition.last_modified,
+            raw_file_sha256,
+            file_size,
+            acquisition.retrieved_at,
+        ],
+    )
+    .map_err(|error| {
+        AppError::Storage(format!("Failed to record document acquisition: {error}"))
+    })?;
+    Ok(())
 }

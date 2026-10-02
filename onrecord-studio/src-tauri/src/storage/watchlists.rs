@@ -11,7 +11,10 @@
 use crate::{
     analysis::{
         topic_packs::{build_topic_packs, TOPIC_PACKS},
-        watchlists::{diff, query_terms, FigureSource, Labeled, Slot, SourceHealth, WatchSnapshot},
+        watchlists::{
+            diff, query_terms, FigureSource, Labeled, Slot, SourceCheckState, SourceHealth,
+            WatchSnapshot,
+        },
     },
     error::AppError,
     storage::{
@@ -458,6 +461,7 @@ fn read_baseline(conn: &Connection, watch_id: &str) -> Result<WatchSnapshot, App
         figures: read_slot(conn, watch_id, WatchDimension::Figures)?,
         withheld: read_slot(conn, watch_id, WatchDimension::Withheld)?,
         source_health: read_slot(conn, watch_id, WatchDimension::SourceHealth)?,
+        source_checks: read_slot(conn, watch_id, WatchDimension::SourceChecks)?,
     })
 }
 
@@ -535,6 +539,12 @@ fn check_one(
         &watch.id,
         WatchDimension::SourceHealth,
         &out.next.source_health,
+    )?;
+    write_slot(
+        &tx,
+        &watch.id,
+        WatchDimension::SourceChecks,
+        &out.next.source_checks,
     )?;
 
     let status = serde_json::to_value(out.status).map_err(err)?;
@@ -671,11 +681,12 @@ fn observe(
         &documents,
         now,
     )?;
-    let (withheld, figures, source_health) = match &documents {
+    let (withheld, figures, source_health, source_checks) = match &documents {
         Ok(docs) => (
             observe_withheld(conn, docs, now)?,
             observe_figures(conn, docs, prefetch, now)?,
             observe_sources(conn, watch, docs, now)?,
+            observe_source_checks(conn, docs, now)?,
         ),
         Err(reason) => (
             Slot::not_measured(reason.clone()),
@@ -684,6 +695,7 @@ fn observe(
                 WatchKind::Source => observe_sources(conn, watch, &[], now)?,
                 _ => Slot::not_measured(reason.clone()),
             },
+            Slot::not_measured(reason.clone()),
         ),
     };
     let documents = match documents {
@@ -709,6 +721,7 @@ fn observe(
         figures,
         withheld,
         source_health,
+        source_checks,
     })
 }
 
@@ -994,6 +1007,65 @@ fn observe_figures(
     Ok(Slot::measured(value, now))
 }
 
+/// The latest informative check of each document in scope. UNREACHABLE rows are skipped, so a
+/// failed fetch leaves the previous answer standing instead of reading as a change.
+fn observe_source_checks(
+    conn: &Connection,
+    docs: &[ScopeDocument],
+    now: &str,
+) -> Result<Slot<BTreeMap<String, SourceCheckState>>, AppError> {
+    if !table_exists(conn, "document_source_checks")? {
+        return Ok(Slot::not_measured(
+            "No source check table exists in this database.",
+        ));
+    }
+    let scope: HashSet<(String, i64)> = docs.iter().map(|d| (d.portal_key.clone(), d.id)).collect();
+    let portals: BTreeSet<&str> = docs.iter().map(|d| d.portal_key.as_str()).collect();
+    let mut value = BTreeMap::new();
+    let mut statement = conn
+        .prepare(
+            "SELECT document_id, outcome, checked_at FROM (
+                SELECT document_id, outcome, checked_at, row_number() OVER (
+                    PARTITION BY document_id ORDER BY checked_at DESC, check_id DESC) AS latest
+                FROM document_source_checks
+                WHERE portal_subdomain = ?1 AND outcome <> 'UNREACHABLE'
+             ) WHERE latest = 1",
+        )
+        .map_err(err)?;
+    for portal in portals {
+        let rows = statement
+            .query_map(params![portal], |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                ))
+            })
+            .map_err(err)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(err)?;
+        for (document_id, outcome, checked_at) in rows {
+            if !scope.contains(&(portal.to_string(), document_id)) {
+                continue;
+            }
+            value.insert(
+                format!("{portal}:{document_id}"),
+                SourceCheckState {
+                    outcome,
+                    checked_at,
+                    portal_key: portal.to_string(),
+                },
+            );
+        }
+    }
+    if value.is_empty() {
+        return Ok(Slot::not_measured(
+            "No source check has reached a document in this watch's scope.",
+        ));
+    }
+    Ok(Slot::measured(value, now))
+}
+
 fn observe_sources(
     conn: &Connection,
     watch: &Watch,
@@ -1106,7 +1178,9 @@ pub(crate) fn purge_watchlist_references(
             !match (document, dimension) {
                 (None, WatchDimension::SourceHealth) => key == portal,
                 (None, _) => from_portal,
-                (Some(_), WatchDimension::Documents) => Some(key) == document_key.as_ref(),
+                (Some(_), WatchDimension::Documents | WatchDimension::SourceChecks) => {
+                    Some(key) == document_key.as_ref()
+                }
                 (Some(_), WatchDimension::Figures) => urls.contains(key),
                 (Some(_), _) => false,
             }

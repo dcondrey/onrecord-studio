@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
-import { invokeCommand } from '../ipc';
+import { formatNativeError, invokeCommand } from '../ipc';
 import { sanDiegoGuidance, sanDiegoSourceForUrl } from '../utils/sanDiego';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useAppStore } from '../store/useAppStore';
@@ -16,7 +16,7 @@ import {
   parseGuidanceFilters,
   type GuidanceFilterDraft,
 } from '../utils/sourceGuidance';
-import { BUILT_IN_SOURCE_OPTIONS, type PortalRegistration, type SourceDiscoveryPreview, type SourceGuidance, type SourceKind, type SourcePurgePreview } from '../types';
+import { BUILT_IN_SOURCE_OPTIONS, type PortalRegistration, type SourceDiscoveryPreview, type SourceGuidance, type SourceKind, type SourcePurgePreview, type SourceRecheckSummary } from '../types';
 import { useLatestRequestGate } from './useLatestRequestGate';
 
 type SourceGuidanceScope = Omit<SourceGuidance,
@@ -68,6 +68,9 @@ export function useSourceConnector() {
   // Holds the source a removal was requested for, not just a boolean, so the confirmation names
   // the source the operator actually clicked even if the selection moves under it.
   const [pendingRemoval, setPendingRemoval] = useState<PortalRegistration | null>(null);
+  // Keys of sources with a check in flight, so a check started before switching sources still
+  // disables only its own button.
+  const [recheckingKeys, setRecheckingKeys] = useState<ReadonlySet<string>>(() => new Set());
   // The purge confirmation is a separate piece of state from the removal confirmation, not a mode
   // flag on one dialog. `remove_source` withdraws a source and keeps its documents; `purge_source`
   // destroys them and deletes the registration. An operator who meant one and got the other has
@@ -395,6 +398,31 @@ export function useSourceConnector() {
     }
   };
 
+  // The summary names its source, so it stays true in the shared log whichever source is selected
+  // when it arrives.
+  const recheckSource = async () => {
+    const source = activePortal;
+    if (!source || recheckingKeys.has(source.portalKey)) return;
+    setError(null);
+    setRecheckingKeys((keys) => new Set(keys).add(source.portalKey));
+    appendSyncLog(`${source.displayName}: fetching collected documents again to compare them with what was collected.`);
+    try {
+      const summary = await invokeCommand('recheck_source', {
+        sourceKey: source.portalKey,
+        maxDocuments: RECHECK_DOCUMENTS_PER_RUN,
+      });
+      appendSyncLog(describeRecheck(source.displayName, summary));
+    } catch (reason) {
+      appendSyncLog(`${source.displayName}: source check failed: ${formatNativeError(reason)}`);
+    } finally {
+      setRecheckingKeys((keys) => {
+        const next = new Set(keys);
+        next.delete(source.portalKey);
+        return next;
+      });
+    }
+  };
+
   const removeSource = async () => {
     // The source the confirmation was opened for, not whichever one is selected when it resolves.
     const source = pendingRemoval;
@@ -550,9 +578,30 @@ export function useSourceConnector() {
     previewRepairSelectors,
     pauseSync,
     resumeSync,
+    recheckSource,
+    activeIsRechecking: activePortal ? recheckingKeys.has(activePortal.portalKey) : false,
     removeSource,
     purgeSource,
   };
 }
 
 export type SourceConnectorController = ReturnType<typeof useSourceConnector>;
+
+const RECHECK_DOCUMENTS_PER_RUN = 100;
+
+/** States only what the fetches observed: a different digest is not proof of alteration, and an
+ * unreachable document is not evidence of removal. */
+export function describeRecheck(sourceName: string, summary: SourceRecheckSummary): string {
+  const checked = summary.sameBytes + summary.differentBytes + summary.gone + summary.unreachable;
+  const parts = [
+    `${summary.sameBytes} served the same bytes`,
+    `${summary.differentBytes} served different bytes (a changed file, or a page that replaced it)`,
+    `${summary.gone} answered not found or gone (HTTP 404/410)`,
+    `${summary.unreachable} could not be reached, which says nothing about the record`,
+  ];
+  const remainder = summary.notChecked > 0
+    ? ` ${summary.notChecked} collected documents were not checked in this run; run it again to continue.`
+    : '';
+  const stopped = summary.stoppedEarly ? ` Stopped early: ${summary.stoppedEarly}.` : '';
+  return `${sourceName}: checked ${checked} documents against the source. ${parts.join('; ')}.${remainder}${stopped}`;
+}

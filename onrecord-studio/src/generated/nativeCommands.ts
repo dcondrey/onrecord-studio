@@ -19,6 +19,8 @@ export interface NativeCommandMap {
   activate_this_device: { args: { confirmRevokeOldest: boolean }; result: Types.LicenseStatus };
   pause_source_sync: { args: { sourceKey: string }; result: boolean };
   resume_source_sync: { args: { sourceKey: string }; result: Types.SourceIngestionStart };
+  recheck_source: { args: { sourceKey: string; maxDocuments: number }; result: Types.SourceRecheckSummary };
+  list_source_checks: { args: { sourceKey: string; documentId?: number | null; limit: number }; result: Types.SourceCheck[] };
   remove_source: { args: { sourceKey: string }; result: Types.SourceRemoval };
   preview_source_purge: { args: { sourceKey: string }; result: Types.SourcePurgePreview };
   purge_source: { args: { sourceKey: string }; result: Types.SourcePurge };

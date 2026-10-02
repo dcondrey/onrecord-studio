@@ -892,8 +892,9 @@ the audit report it came from.
   injection).
 
 Triaged 2026-10-02 from an external model review (DeepSeek, docs-only, so each claim was checked
-against code first). Built: phrase search, storage-version compression. Deferred, with the
-evidence:
+against code first). Built: phrase search, storage-version compression, source re-check with a
+watch dimension. Open on the re-check: an opt-in schedule (never on launch), and retaining the
+re-fetched bytes behind a referencing row that purge releases. Deferred, with the evidence:
 
 - Ingest-time C2PA reading: none of the 91 stored files in the real installation carries a C2PA
   manifest (every `c2pa`/`jumb` byte match was CSS or prose), and nothing outside purge reads

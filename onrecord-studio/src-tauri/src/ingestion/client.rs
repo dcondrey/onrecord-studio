@@ -200,6 +200,14 @@ pub struct ArcGisFeaturePage {
     pub exceeded_transfer_limit: bool,
 }
 
+/// What a re-fetch of a collected document received.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SourceRecheck {
+    Retrieved(DownloadedPayload),
+    /// The source answered 404 or 410.
+    Gone(AcquisitionRecord),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DownloadedPayload {
     pub path: PathBuf,
@@ -1084,12 +1092,17 @@ impl ApiClient {
         maximum_bytes: usize,
     ) -> Result<(reqwest::Response, HostPermit, AcquisitionRecord), AppError> {
         self.execute_with_retries(&initial_url, "Request", || async {
-            self.send_response_following_safe_redirects(initial_url.clone(), &[], maximum_bytes)
-                .await
-                .map(|(response, permit, redirect_chain)| {
-                    let acquisition = acquisition_record(&initial_url, &response, redirect_chain);
-                    (response, permit, acquisition)
-                })
+            self.send_response_following_safe_redirects(
+                initial_url.clone(),
+                &[],
+                maximum_bytes,
+                false,
+            )
+            .await
+            .map(|(response, permit, redirect_chain)| {
+                let acquisition = acquisition_record(&initial_url, &response, redirect_chain);
+                (response, permit, acquisition)
+            })
         })
         .await
     }
@@ -1182,7 +1195,7 @@ impl ApiClient {
     ) -> Result<ResponsePayload, RetryDisposition> {
         let requested_url = materialize_request_url(&initial_url, Some(query));
         let (response, _host_permit, redirect_chain) = self
-            .send_response_following_safe_redirects(initial_url, query, maximum_bytes)
+            .send_response_following_safe_redirects(initial_url, query, maximum_bytes, false)
             .await?;
         let acquisition = acquisition_record(&requested_url, &response, redirect_chain);
         let content_type = response
@@ -1225,6 +1238,7 @@ impl ApiClient {
         initial_url: Url,
         query: &[(&str, String)],
         maximum_bytes: usize,
+        answer_gone: bool,
     ) -> Result<(reqwest::Response, HostPermit, Vec<String>), RetryDisposition> {
         let mut current_url = initial_url;
         let mut current_query = Some(query);
@@ -1283,6 +1297,9 @@ impl ApiClient {
                 drop(host_permit);
                 continue;
             }
+            if answer_gone && matches!(status, StatusCode::NOT_FOUND | StatusCode::GONE) {
+                return Ok((response, host_permit, redirect_chain));
+            }
             validate_success_status("GET", &request_url, &response)?;
             if let Some(content_length) = response
                 .headers()
@@ -1312,65 +1329,105 @@ impl ApiClient {
         maximum_bytes: usize,
     ) -> Result<DownloadedPayload, RetryDisposition> {
         let (response, _host_permit, redirect_chain) = self
-            .send_response_following_safe_redirects(initial_url.clone(), &[], maximum_bytes)
+            .send_response_following_safe_redirects(initial_url.clone(), &[], maximum_bytes, false)
             .await?;
-        let final_url = response.url().clone();
         let acquisition = acquisition_record(&initial_url, &response, redirect_chain);
-        let mut file = tokio::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(destination)
-            .await
-            .map_err(|error| {
-                RetryDisposition::Terminal(AppError::Storage(format!(
-                    "Failed to create streaming download '{}': {error}",
-                    destination.display()
-                )))
-            })?;
-        let mut digest = Sha256::new();
-        let mut byte_count = 0_u64;
-        let mut stream = response.bytes_stream();
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|error| {
-                RetryDisposition::Retry(
-                    AppError::Network(format!(
-                        "Failed while streaming response from '{final_url}': {error}"
-                    )),
-                    None,
-                )
-            })?;
-            byte_count = byte_count.checked_add(chunk.len() as u64).ok_or_else(|| {
-                RetryDisposition::Terminal(AppError::PortalSecurity(
-                    "Document byte count overflowed".to_string(),
-                ))
-            })?;
-            if byte_count > maximum_bytes as u64 {
-                return Err(RetryDisposition::Terminal(AppError::PortalSecurity(
-                    format!("Response from '{final_url}' exceeded the {maximum_bytes}-byte limit"),
-                )));
+        write_response_to_path(response, acquisition, destination, maximum_bytes).await
+    }
+
+    /// Fetches a document again to compare it with what was collected. 404 and 410 come back as
+    /// [`SourceRecheck::Gone`] rather than an error, because they are the only answers that say
+    /// the source no longer serves the record; every other failure stays an error and says only
+    /// that this check did not reach it.
+    pub async fn recheck_document_to_path(
+        &self,
+        portal: &PortalRegistration,
+        download_url: &str,
+        destination: &Path,
+    ) -> Result<SourceRecheck, AppError> {
+        let url = normalize_document_url(&portal.origin_url, download_url)?;
+        validate_remote_url(&self.dns, &url).await?;
+        let maximum_bytes = self.config.max_document_bytes;
+        self.execute_with_retries(&url, "Recheck", || async {
+            let (response, _host_permit, redirect_chain) = self
+                .send_response_following_safe_redirects(url.clone(), &[], maximum_bytes, true)
+                .await?;
+            let acquisition = acquisition_record(&url, &response, redirect_chain);
+            if !response.status().is_success() {
+                return Ok(SourceRecheck::Gone(acquisition));
             }
-            file.write_all(&chunk).await.map_err(|error| {
-                RetryDisposition::Terminal(AppError::Storage(format!(
-                    "Failed to stream download '{}': {error}",
-                    destination.display()
-                )))
-            })?;
-            digest.update(&chunk);
-        }
-        file.sync_all().await.map_err(|error| {
+            let result =
+                write_response_to_path(response, acquisition, destination, maximum_bytes).await;
+            if result.is_err() {
+                let _ = tokio::fs::remove_file(destination).await;
+            }
+            result.map(SourceRecheck::Retrieved)
+        })
+        .await
+    }
+}
+
+async fn write_response_to_path(
+    response: reqwest::Response,
+    acquisition: AcquisitionRecord,
+    destination: &Path,
+    maximum_bytes: usize,
+) -> Result<DownloadedPayload, RetryDisposition> {
+    let final_url = response.url().clone();
+    let mut file = tokio::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(destination)
+        .await
+        .map_err(|error| {
             RetryDisposition::Terminal(AppError::Storage(format!(
-                "Failed to sync download '{}': {error}",
+                "Failed to create streaming download '{}': {error}",
                 destination.display()
             )))
         })?;
-        drop(file);
-        Ok(DownloadedPayload {
-            path: destination.to_path_buf(),
-            byte_count,
-            sha256: digest_hex(digest.finalize()),
-            acquisition,
-        })
+    let mut digest = Sha256::new();
+    let mut byte_count = 0_u64;
+    let mut stream = response.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|error| {
+            RetryDisposition::Retry(
+                AppError::Network(format!(
+                    "Failed while streaming response from '{final_url}': {error}"
+                )),
+                None,
+            )
+        })?;
+        byte_count = byte_count.checked_add(chunk.len() as u64).ok_or_else(|| {
+            RetryDisposition::Terminal(AppError::PortalSecurity(
+                "Document byte count overflowed".to_string(),
+            ))
+        })?;
+        if byte_count > maximum_bytes as u64 {
+            return Err(RetryDisposition::Terminal(AppError::PortalSecurity(
+                format!("Response from '{final_url}' exceeded the {maximum_bytes}-byte limit"),
+            )));
+        }
+        file.write_all(&chunk).await.map_err(|error| {
+            RetryDisposition::Terminal(AppError::Storage(format!(
+                "Failed to stream download '{}': {error}",
+                destination.display()
+            )))
+        })?;
+        digest.update(&chunk);
     }
+    file.sync_all().await.map_err(|error| {
+        RetryDisposition::Terminal(AppError::Storage(format!(
+            "Failed to sync download '{}': {error}",
+            destination.display()
+        )))
+    })?;
+    drop(file);
+    Ok(DownloadedPayload {
+        path: destination.to_path_buf(),
+        byte_count,
+        sha256: digest_hex(digest.finalize()),
+        acquisition,
+    })
 }
 
 // ---------------------------------------------------------------------------

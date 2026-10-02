@@ -27,6 +27,7 @@ const DIMENSION_LABELS: Record<WatchDimension, string> = {
   FIGURES: 'Figures',
   WITHHELD: 'Redaction',
   SOURCE_HEALTH: 'Source',
+  SOURCE_CHECKS: 'Source copies',
 };
 
 const CHANGE_LABELS: Record<string, string> = {

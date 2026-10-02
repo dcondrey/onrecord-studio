@@ -28,6 +28,7 @@ mod migrations;
 mod provenance;
 mod purge;
 mod search;
+mod source_checks;
 mod sources;
 mod timeline;
 
