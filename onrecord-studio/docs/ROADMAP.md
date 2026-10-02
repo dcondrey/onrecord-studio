@@ -894,7 +894,12 @@ the audit report it came from.
 Triaged 2026-10-02 from an external model review (DeepSeek, docs-only, so each claim was checked
 against code first). Built: phrase search, storage-version compression, source re-check with a
 watch dimension, Apple Vision and PDFKit OCR on macOS (no external tools, so it can run in the
-sandbox; unverified in a signed App Store build). Open on the re-check: an opt-in schedule (never on launch), and retaining the
+sandbox; unverified in a signed App Store build). PST mailboxes as bounded containers
+(`parsers/pst.rs`). Open on PST: the shared container caps (512 MB, about 2,000 entries) refuse
+most real productions whole; `outlook-pst` 1.2.0 cannot open attached messages and failed every
+message of the public `enron.pst` (recorded per entry, not fatal); release builds use
+`panic = "abort"`, so a crate panic the 65,000-mutation sweep did not reach would close the app.
+Raising the caps per format and parsing PSTs out of process are the next steps. Open on the re-check: an opt-in schedule (never on launch), and retaining the
 re-fetched bytes behind a referencing row that purge releases. Deferred, with the evidence:
 
 - Ingest-time C2PA reading: none of the 91 stored files in the real installation carries a C2PA
