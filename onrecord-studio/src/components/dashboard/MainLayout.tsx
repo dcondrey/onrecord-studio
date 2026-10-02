@@ -622,7 +622,7 @@ function CaseRequests() {
   if (caseScope.status === 'off') return null;
   return (
     <div className="mx-5 mt-2 space-y-2 lg:mx-6">
-      <CaseScopeBar state={caseScope} noun="requests" />
+      <CaseScopeBar state={caseScope} noun="requests" listOnly />
       {caseScope.status === 'ready' && (
         caseScope.value.scope.requests.length === 0 ? (
           <p className="text-label text-muted">None of this case's sources is a stored document, so no request is linked to it.</p>

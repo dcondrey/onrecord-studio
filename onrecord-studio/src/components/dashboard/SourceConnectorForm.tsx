@@ -42,7 +42,7 @@ export function SourceConnectorForm({ connector, inputId }: { connector: SourceC
           if (error) setError(null);
         }}
         disabled={isDiscovering}
-        className="h-8 w-44 border-0 bg-transparent px-2 text-label text-muted shadow-none"
+        className="h-8 w-40 border-0 bg-transparent px-2 text-label text-muted shadow-none"
       >
         <optgroup label="San Diego sources">
           {BUILT_IN_SOURCE_OPTIONS.map((source) => <option key={source.id} value={source.id}>{source.label}</option>)}
