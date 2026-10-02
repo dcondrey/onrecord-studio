@@ -20,17 +20,17 @@
     "sections": [
       {
         "paragraphs": [
-          "The default view, and the one where findings appear. From top to bottom it holds the post-ingest brief, the subject dossier, the change feed, the Findings inbox, the cross-corpus explorer, autonomous research, and a panel that opens the case workbench."
+          "The default view. From top to bottom it holds the post-ingest brief, the subject dossier, Needs attention, the watchlist and standing searches, autonomous research, and a panel that opens the case workbench."
         ]
       },
       {
         "heading": "Parts",
         "items": [
           "Post-ingest brief (headed Just landed): a non-modal panel that opens after a sync stops and lists findings discovered in the last 15 minutes. It appears only on this view.",
-          "Change feed (What changed since you last looked): how many findings are new since you last opened the inbox. It also counts statutory deadline violations for the active source when the analytics for that source have loaded.",
-          "Findings inbox: ranked list of everything the detectors surfaced. See Findings inbox.",
-          "Cross-corpus explorer: shared language, temporal shifts, orphan topics and reused grounds across agencies, with a jurisdiction by detector heat map.",
-          "Three collapsed drawers: plan an investigation or draft a request manually; collection, coverage and storage; browse sources and add records.",
+          "Needs attention: one ranked list of new findings, agencies with counted statutory violations, the next meeting within two weeks, and watch changes. The window control beside the title sets how far back \"new\" reaches: since you last opened the app, the last day, week or month, or any time. A source that did not load is named under the list rather than leaving it silently shorter.",
+          "All findings are in the Story desk view, under All findings. See Findings inbox.",
+          "Cross-corpus explorer (in a drawer): shared language, temporal shifts, orphan topics and reused grounds across agencies, with a jurisdiction by detector heat map.",
+          "Collapsed drawers: cross-corpus patterns; topics; plan an investigation or draft a request manually; collection, coverage and storage; browse sources and add records.",
           "Show response analytics: request counts, closure and deadline rates, and outlier charts. See Response analytics."
         ]
       },
@@ -349,14 +349,15 @@
     "id": "view-story",
     "title": "Story desk view",
     "group": "Views",
-    "summary": "Findings ranked by observable factors, with the fact behind each factor shown.",
+    "summary": "Findings ranked by observable factors, and the full findings inbox, with the fact behind each factor shown.",
     "keywords": [
       "story desk",
       "leads",
       "ranking",
       "attention score",
       "public interest",
-      "newsworthy"
+      "newsworthy",
+      "findings inbox"
     ],
     "sections": [
       {
@@ -373,9 +374,11 @@
       {
         "heading": "Actions",
         "items": [
+          "The headline opens the finding's evidence chain in the inspector: the claim, its basis, each cited passage, the file that holds it and that file's last provenance check.",
           "Inspect opens the evidence view filtered to the lead's agency.",
           "Add to briefing copies the finding's evidence into the briefing; a lead with no request anchor cannot be added.",
-          "Refresh re-ranks from the current findings."
+          "Refresh re-ranks from the current findings.",
+          "All findings switches to the full findings inbox. The window control limits ranked leads to those first seen in that window."
         ]
       }
     ],

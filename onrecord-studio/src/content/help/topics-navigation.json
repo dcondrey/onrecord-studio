@@ -1,0 +1,63 @@
+[
+  {
+    "id": "moving-around",
+    "title": "Moving around",
+    "group": "Getting started",
+    "summary": "Open anything without leaving your place, go back, search everything, and keep a case in view.",
+    "keywords": [
+      "inspector",
+      "back",
+      "forward",
+      "history",
+      "search",
+      "command palette",
+      "peek",
+      "preview",
+      "since",
+      "window",
+      "case",
+      "active case",
+      "link",
+      "navigation"
+    ],
+    "sections": [
+      {
+        "heading": "The inspector",
+        "paragraphs": [
+          "Underlined names are links to a finding, document, agency, entity, request or case. Hover one to preview it; click it to open it in the inspector on the right. The view underneath stays where it was.",
+          "A link inside the inspector opens another layer on top. The trail at the top walks back through the layers, and Esc steps back one layer at a time.",
+          "A finding opens as its evidence chain: the claim, what it was measured on, each cited passage, the file that holds it, and that file's last provenance check. A link the record does not have is shown as missing."
+        ]
+      },
+      {
+        "heading": "Back and forward",
+        "paragraphs": [
+          "The back button at the top left names the view it returns to. Cmd-[ and Cmd-], the mouse back and forward buttons, and Go back in the command palette step through the views you visited, with their filters, selection and scroll position."
+        ]
+      },
+      {
+        "heading": "Search everything",
+        "paragraphs": [
+          "Cmd-K searches findings, agencies, entities, request records and document passages as well as commands. Choosing a result opens it in the inspector. A sentence is treated as a question and answered from findings, the entity graph and document text; no AI model is used."
+        ]
+      },
+      {
+        "heading": "How far back \"new\" reaches",
+        "paragraphs": [
+          "The clock control on the San Diego and Story desk views sets the window: since you last opened the app, the last 24 hours, 7 days, 30 days, or any time. It filters on when something was first found. It does not show what the records looked like on an earlier date."
+        ]
+      },
+      {
+        "heading": "The case you are working",
+        "paragraphs": [
+          "The case button in the toolbar keeps one case in view. Choose a case to work it; open it to see its requests and cited sources in the inspector, or open its casework. A remembered case that no longer exists is shown as not found rather than silently cleared."
+        ]
+      }
+    ],
+    "related": [
+      "start-here",
+      "view-story",
+      "findings-inbox"
+    ]
+  }
+]

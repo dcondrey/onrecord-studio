@@ -4,7 +4,18 @@
     "title": "Start here",
     "group": "Getting started",
     "summary": "What OnRecord Studio does and the order to work in.",
-    "keywords": ["welcome", "overview", "workflow", "first", "begin", "tour", "support", "bug", "feedback", "contact"],
+    "keywords": [
+      "welcome",
+      "overview",
+      "workflow",
+      "first",
+      "begin",
+      "tour",
+      "support",
+      "bug",
+      "feedback",
+      "contact"
+    ],
     "sections": [
       {
         "paragraphs": [
@@ -17,31 +28,49 @@
         "items": [
           "Add a source: a public URL, local files, or pasted text (see Adding and managing sources).",
           "Wait for the sync. When it finishes the app runs every detector and opens a brief of anything new.",
-          "Read the Findings inbox on the San Diego view. Each row says whether it is a pattern signal or a counted legal claim, and how the confidence was derived.",
+          "Read Needs attention on the San Diego view, or every finding in the Story desk view. Each row says whether it is a pattern signal or a counted legal claim, and how the confidence was derived.",
           "Open the evidence behind a finding, read the source document, and check its provenance.",
           "Save what you have reviewed to the Briefing view and export an outline."
         ]
       },
       {
         "heading": "Nine views",
-        "paragraphs": ["San Diego, Patterns, Analysis, Evidence, Activity, Briefing, Story desk, Meetings and Compare. Switch with the sidebar, the command palette, or Cmd/Ctrl+1 to 9."]
+        "paragraphs": [
+          "San Diego, Patterns, Analysis, Evidence, Activity, Briefing, Story desk, Meetings and Compare. Switch with the sidebar, the command palette, or Cmd/Ctrl+1 to 9."
+        ]
       },
       {
         "heading": "Support",
-        "paragraphs": ["Questions, bug reports and feature requests go to github.com/writerslogic/support. The Support button at the top of Help opens it in your browser. Include the version shown in the Help header and, for a failed sync or export, the Activity view error text. Never attach confidential source documents to a public report."]
+        "paragraphs": [
+          "Questions, bug reports and feature requests go to github.com/writerslogic/support. The Support button at the top of Help opens it in your browser. Include the version shown in the Help header and, for a failed sync or export, the Activity view error text. Never attach confidential source documents to a public report."
+        ]
       }
     ],
     "views": [],
     "findingKinds": [],
     "commandGroups": [],
-    "related": ["keyboard-shortcuts", "evidence-ladder", "data-handling"]
+    "related": [
+      "keyboard-shortcuts",
+      "evidence-ladder",
+      "data-handling"
+    ]
   },
   {
     "id": "keyboard-shortcuts",
     "title": "Keyboard shortcuts",
     "group": "Getting started",
     "summary": "Every key binding, and how to change motion and contrast.",
-    "keywords": ["keys", "hotkey", "shortcut", "cmd", "ctrl", "accessibility", "motion", "contrast", "escape"],
+    "keywords": [
+      "keys",
+      "hotkey",
+      "shortcut",
+      "cmd",
+      "ctrl",
+      "accessibility",
+      "motion",
+      "contrast",
+      "escape"
+    ],
     "sections": [
       {
         "heading": "Shortcuts",
@@ -55,20 +84,40 @@
       },
       {
         "heading": "Motion and contrast",
-        "paragraphs": ["Motion and contrast follow the operating system by default. To override either direction, open the command palette and choose an Accessibility command. There is no header control for these. Appearance (light, dark, system) is in the header and the palette."]
+        "paragraphs": [
+          "Motion and contrast follow the operating system by default. To override either direction, open the command palette and choose an Accessibility command. There is no header control for these. Appearance (light, dark, system) is in the header and the palette."
+        ]
       }
     ],
     "views": [],
     "findingKinds": [],
     "commandGroups": [],
-    "related": ["command-palette", "start-here"]
+    "related": [
+      "command-palette",
+      "start-here"
+    ]
   },
   {
     "id": "sources",
     "title": "Adding and managing sources",
     "group": "Getting started",
     "summary": "Register a public source, pause it, remove it, or delete it and its documents.",
-    "keywords": ["source", "url", "crawl", "paste", "import", "files", "ingest", "sync", "pause", "resume", "delete", "remove", "guided repair", "verified badge"],
+    "keywords": [
+      "source",
+      "url",
+      "crawl",
+      "paste",
+      "import",
+      "files",
+      "ingest",
+      "sync",
+      "pause",
+      "resume",
+      "delete",
+      "remove",
+      "guided repair",
+      "verified badge"
+    ],
     "sections": [
       {
         "heading": "Adding",
@@ -81,7 +130,9 @@
       },
       {
         "heading": "While it runs",
-        "paragraphs": ["At most five sources sync at once. Pause and Resume continue from the queue the pause left. The Activity view shows queues and errors. If the app cannot find the data on a page, Guided repair lets you point at the links with CSS selectors and approve the mapping for that publisher hostname."]
+        "paragraphs": [
+          "At most five sources sync at once. Pause and Resume continue from the queue the pause left. The Activity view shows queues and errors. If the app cannot find the data on a page, Guided repair lets you point at the links with CSS selectors and approve the mapping for that publisher hostname."
+        ]
       },
       {
         "heading": "Remove versus delete",
@@ -93,23 +144,44 @@
       },
       {
         "heading": "The Verified badge",
-        "paragraphs": ["The green Verified badge beside the source name appears for any active saved source. It is not a fresh check of the source's contents."]
+        "paragraphs": [
+          "The green Verified badge beside the source name appears for any active saved source. It is not a fresh check of the source's contents."
+        ]
       }
     ],
     "views": [],
     "findingKinds": [],
-    "commandGroups": ["ingest"],
-    "related": ["view-activity", "data-upkeep", "data-handling"]
+    "commandGroups": [
+      "ingest"
+    ],
+    "related": [
+      "view-activity",
+      "data-upkeep",
+      "data-handling"
+    ]
   },
   {
     "id": "command-palette",
     "title": "Command palette and Ask",
     "group": "Getting started",
     "summary": "Jump to views and settings, or ask one of ten fixed questions. No AI model is involved.",
-    "keywords": ["palette", "ask", "question", "intent", "search", "command", "dossier", "subject", "contradictions", "deadline"],
+    "keywords": [
+      "palette",
+      "ask",
+      "question",
+      "intent",
+      "search",
+      "command",
+      "dossier",
+      "subject",
+      "contradictions",
+      "deadline"
+    ],
     "sections": [
       {
-        "paragraphs": ["Press Cmd/Ctrl+K. Type to filter commands. A phrase of several words, or one ending in ?, adds an Ask row."]
+        "paragraphs": [
+          "Press Cmd/Ctrl+K. Type to filter commands. A phrase of several words, or one ending in ?, adds an Ask row."
+        ]
       },
       {
         "heading": "Ask",
@@ -135,17 +207,26 @@
       },
       {
         "heading": "Reading an answer",
-        "paragraphs": ["Every row carries a basis chip: Stored finding, Typed relationship, Co-occurrence only, Text match, Sourced determination, Activity stand-in or Still running. Solid borders mark measured bases and dashed borders mark signals or proxies. Confidence reads Confidence not assessed when none was measured. Rows list their citations, and the footer lists the limits of the answer."]
+        "paragraphs": [
+          "Every row carries a basis chip: Stored finding, Typed relationship, Co-occurrence only, Text match, Sourced determination, Activity stand-in or Still running. Solid borders mark measured bases and dashed borders mark signals or proxies. Confidence reads Confidence not assessed when none was measured. Rows list their citations, and the footer lists the limits of the answer."
+        ]
       },
       {
         "heading": "Subject dossier",
-        "paragraphs": ["Open subject dossier asks for a name and stitches together findings that mention it and its neighbours in the entity graph. Matching is by text on the display name, so a namesake is possible."]
+        "paragraphs": [
+          "Open subject dossier asks for a name and stitches together findings that mention it and its neighbours in the entity graph. Matching is by text on the display name, so a namesake is possible."
+        ]
       }
     ],
     "views": [],
     "findingKinds": [],
-    "commandGroups": ["intent"],
-    "related": ["keyboard-shortcuts", "measured-vs-unassessed"]
+    "commandGroups": [
+      "intent"
+    ],
+    "related": [
+      "keyboard-shortcuts",
+      "measured-vs-unassessed"
+    ]
   },
   {
     "id": "whats-next",
@@ -153,7 +234,17 @@
     "title": "What's next: planned enhancements",
     "group": "Getting started",
     "summary": "The enhancements planned after this beta, in rough order, and the rule every one of them must obey.",
-    "keywords": ["roadmap", "planned", "coming", "future", "beta", "next", "release", "upcoming", "feature request"],
+    "keywords": [
+      "roadmap",
+      "planned",
+      "coming",
+      "future",
+      "beta",
+      "next",
+      "release",
+      "upcoming",
+      "feature request"
+    ],
     "sections": [
       {
         "paragraphs": [
@@ -187,6 +278,10 @@
     "views": [],
     "findingKinds": [],
     "commandGroups": [],
-    "related": ["start-here", "research-snapshot", "shared-folder-collaboration"]
+    "related": [
+      "start-here",
+      "research-snapshot",
+      "shared-folder-collaboration"
+    ]
   }
 ]

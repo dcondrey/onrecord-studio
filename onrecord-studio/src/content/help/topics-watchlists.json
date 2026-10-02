@@ -56,8 +56,15 @@
     ],
     "views": [],
     "findingKinds": [],
-    "commandGroups": ["watchlists"],
-    "related": ["coverage-monitoring", "topic-packs", "findings-inbox", "standing-search"]
+    "commandGroups": [
+      "watchlists"
+    ],
+    "related": [
+      "coverage-monitoring",
+      "topic-packs",
+      "findings-inbox",
+      "standing-search"
+    ]
   },
   {
     "id": "standing-search",
@@ -101,7 +108,12 @@
     ],
     "views": [],
     "findingKinds": [],
-    "commandGroups": ["standing_search"],
-    "related": ["watchlists", "research-snapshot"]
+    "commandGroups": [
+      "standing_search"
+    ],
+    "related": [
+      "watchlists",
+      "research-snapshot"
+    ]
   }
 ]
