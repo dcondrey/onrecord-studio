@@ -126,7 +126,7 @@ export default function AccountMenu() {
               type="button"
               disabled={busy}
               onClick={() => setConfirming(true)}
-              className="focus-ring rounded-lg border border-danger px-3 py-1.5 text-label leading-4 font-semibold text-danger hover:bg-danger disabled:opacity-50"
+              className="focus-ring rounded-lg border border-danger px-3 py-1.5 text-label leading-4 font-semibold text-danger hover:bg-danger/10 disabled:opacity-50"
             >
               Delete account
             </button>

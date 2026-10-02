@@ -111,7 +111,7 @@ export default function UpgradePanel({
         type="button"
         disabled={checkout.busy}
         onClick={() => onStartCheckout(seats)}
-        className="focus-ring mt-4 w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-muted hover:bg-accent disabled:cursor-wait disabled:opacity-60"
+        className="focus-ring mt-4 w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-canvas hover:bg-accent disabled:cursor-wait disabled:opacity-60"
       >
         {checkout.busy ? 'Preparing checkout...' : 'Continue to checkout'}
       </button>
@@ -127,7 +127,7 @@ export default function UpgradePanel({
           <button
             type="button"
             onClick={() => openCheckout(checkout.url ?? '')}
-            className="focus-ring mt-2 rounded-lg border border-accent px-3 py-1.5 font-semibold text-accent hover:bg-accent"
+            className="focus-ring mt-2 rounded-lg border border-accent px-3 py-1.5 font-semibold text-accent hover:bg-accent/10"
           >
             Open checkout in your browser
           </button>

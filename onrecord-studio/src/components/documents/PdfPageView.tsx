@@ -467,7 +467,7 @@ export default function PdfPageView({ portalKey, documentId, fileName }: { porta
                   className="pointer-events-none absolute border-2 border-dotted border-highlight bg-highlight/20"
                   style={{ left: `${bridge.pending.rectangle.x * 100}%`, top: `${bridge.pending.rectangle.y * 100}%`, width: `${bridge.pending.rectangle.width * 100}%`, height: `${bridge.pending.rectangle.height * 100}%` }}
                 >
-                  <span className="absolute left-0 top-0 -translate-y-full whitespace-nowrap rounded-t bg-highlight px-1 text-caption font-semibold text-highlight">Unsaved region</span>
+                  <span className="absolute left-0 top-0 -translate-y-full whitespace-nowrap rounded-t bg-highlight px-1 text-caption font-semibold text-canvas">Unsaved region</span>
                 </div>
               )}
               {drag && rubber && (

@@ -191,7 +191,7 @@ export default function LicenseGate({ controller }: { controller: LicenseControl
             type="button"
             disabled={busy || (loading && !error)}
             onClick={controller.refresh}
-            className="focus-ring mt-6 w-full rounded-lg bg-accent px-4 py-3 text-sm font-semibold text-muted transition hover:bg-accent disabled:cursor-wait disabled:opacity-50"
+            className="focus-ring mt-6 w-full rounded-lg bg-accent px-4 py-3 text-sm font-semibold text-canvas transition hover:bg-accent disabled:cursor-wait disabled:opacity-50"
           >
             {refreshing || (loading && !error)
               ? direct || loading

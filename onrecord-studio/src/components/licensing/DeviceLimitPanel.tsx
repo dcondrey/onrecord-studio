@@ -33,7 +33,7 @@ export default function DeviceLimitPanel({ busy, activating, onActivate, onSignO
               disabled={busy}
               aria-busy={activating}
               onClick={() => onActivate(true)}
-              className="focus-ring inline-flex min-h-[24px] items-center rounded-lg bg-warning px-3 py-2 text-sm font-semibold text-muted hover:bg-warning disabled:cursor-wait disabled:opacity-50"
+              className="focus-ring inline-flex min-h-[24px] items-center rounded-lg bg-warning px-3 py-2 text-sm font-semibold text-canvas hover:bg-warning disabled:cursor-wait disabled:opacity-50"
             >
               {activating ? 'Signing out oldest Mac...' : 'Yes, sign out my oldest Mac'}
             </button>
@@ -52,7 +52,7 @@ export default function DeviceLimitPanel({ busy, activating, onActivate, onSignO
           type="button"
           disabled={busy}
           onClick={() => setConfirming(true)}
-          className="focus-ring inline-flex min-h-[24px] w-full items-center justify-center rounded-lg bg-accent px-4 py-3 text-sm font-semibold text-muted hover:bg-accent disabled:opacity-50"
+          className="focus-ring inline-flex min-h-[24px] w-full items-center justify-center rounded-lg bg-accent px-4 py-3 text-sm font-semibold text-canvas hover:bg-accent disabled:opacity-50"
         >
           Use this Mac and sign out my oldest Mac
         </button>

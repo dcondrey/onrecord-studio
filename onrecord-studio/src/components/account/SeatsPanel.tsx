@@ -108,7 +108,7 @@ export default function SeatsPanel({ onClose }: { onClose: () => void }) {
                   type="button"
                   disabled={busy}
                   onClick={() => void run('revoke_seat', { email: seat.email })}
-                  className="focus-ring shrink-0 rounded-lg border border-danger px-2.5 py-1 text-label leading-4 font-semibold text-danger hover:bg-danger disabled:opacity-50"
+                  className="focus-ring shrink-0 rounded-lg border border-danger px-2.5 py-1 text-label leading-4 font-semibold text-danger hover:bg-danger/10 disabled:opacity-50"
                 >
                   Revoke
                 </button>
