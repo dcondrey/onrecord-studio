@@ -113,23 +113,45 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
     return licenseGate.begin();
   }, [checkoutGate, licenseGate]);
 
-  const load = useCallback(
-    (command: 'get_license_status' | 'refresh_license', showBusy: boolean) => {
-      if (!isTauri()) return;
+  // Shared gate-checking plumbing for every licenseGate-backed action: begin a token, run the
+  // IPC call, and drop the result/error/busy-clear if a newer action has since invalidated it.
+  const runGated = useCallback(
+    <T,>(
+      action: () => Promise<T>,
+      onSuccess: (result: T) => void,
+      options?: { onStart?: () => void; onError?: (failure: unknown) => void },
+    ) => {
       const token = begin();
-      if (showBusy) setRefreshing(true);
-      void invokeCommand(command, {})
-        .then((next) => {
-          if (licenseGate.isCurrent(token)) publishStatus(next);
+      options?.onStart?.();
+      void action()
+        .then((result) => {
+          if (licenseGate.isCurrent(token)) onSuccess(result);
         })
         .catch((failure: unknown) => {
-          if (licenseGate.isCurrent(token)) setError(formatNativeError(failure));
+          if (!licenseGate.isCurrent(token)) return;
+          if (options?.onError) {
+            options.onError(failure);
+          } else {
+            setError(formatNativeError(failure));
+          }
         })
         .finally(() => {
           if (licenseGate.isCurrent(token)) clearBusy();
         });
     },
-    [begin, clearBusy, licenseGate, publishStatus],
+    [begin, clearBusy, licenseGate],
+  );
+
+  const load = useCallback(
+    (command: 'get_license_status' | 'refresh_license', showBusy: boolean) => {
+      if (!isTauri()) return;
+      runGated(() => invokeCommand(command, {}), publishStatus, {
+        onStart: () => {
+          if (showBusy) setRefreshing(true);
+        },
+      });
+    },
+    [runGated, publishStatus],
   );
 
   useEffect(() => {
@@ -158,82 +180,66 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback(
     (provider: SignInProvider) => {
       if (!isTauri() || busyRef.current) return;
-      const token = begin();
-      setSignInNotice(null);
-      setSignInProvider(provider);
-      void invokeCommand('begin_sign_in', { provider })
-        .then((report) => {
-          if (!licenseGate.isCurrent(token)) return;
+      runGated(
+        () => invokeCommand('begin_sign_in', { provider }),
+        (report) => {
           publishStatus(report.license);
           // A cancelled sign-in is the user's choice, not a fault: nothing is shown for it.
           if (report.outcome === 'failed') setSignInNotice(report.message ?? 'Sign-in did not complete.');
-        })
-        .catch((failure: unknown) => {
-          if (licenseGate.isCurrent(token)) setSignInNotice(formatNativeError(failure));
-        })
-        .finally(() => {
-          if (licenseGate.isCurrent(token)) clearBusy();
-        });
+        },
+        {
+          onStart: () => {
+            setSignInNotice(null);
+            setSignInProvider(provider);
+          },
+          onError: (failure) => setSignInNotice(formatNativeError(failure)),
+        },
+      );
     },
-    [begin, clearBusy, licenseGate, publishStatus],
+    [runGated, publishStatus],
   );
 
   const signOut = useCallback(() => {
     if (!isTauri()) return;
-    const token = begin();
-    setSignInNotice(null);
-    setSigningOut(true);
-    void invokeCommand('sign_out', {})
-      .then((next) => {
-        if (licenseGate.isCurrent(token)) publishStatus(next);
-      })
-      .catch((failure: unknown) => {
-        if (licenseGate.isCurrent(token)) setError(formatNativeError(failure));
-      })
-      .finally(() => {
-        if (licenseGate.isCurrent(token)) clearBusy();
-      });
-  }, [begin, clearBusy, licenseGate, publishStatus]);
+    runGated(() => invokeCommand('sign_out', {}), publishStatus, {
+      onStart: () => {
+        setSignInNotice(null);
+        setSigningOut(true);
+      },
+    });
+  }, [runGated, publishStatus]);
 
   const activateThisDevice = useCallback(
     (confirmRevokeOldest: boolean) => {
       if (!isTauri() || busyRef.current) return;
-      const token = begin();
-      setSignInNotice(null);
-      setActivating(true);
-      void invokeCommand('activate_this_device', { confirmRevokeOldest })
-        .then((next) => {
-          if (licenseGate.isCurrent(token)) publishStatus(next);
-        })
-        .catch((failure: unknown) => {
-          if (licenseGate.isCurrent(token)) setError(formatNativeError(failure));
-        })
-        .finally(() => {
-          if (licenseGate.isCurrent(token)) clearBusy();
-        });
+      runGated(() => invokeCommand('activate_this_device', { confirmRevokeOldest }), publishStatus, {
+        onStart: () => {
+          setSignInNotice(null);
+          setActivating(true);
+        },
+      });
     },
-    [begin, clearBusy, licenseGate, publishStatus],
+    [runGated, publishStatus],
   );
 
   const deleteAccount = useCallback(() => {
     if (!isTauri()) return;
-    const token = begin();
-    setDeleteReport(null);
-    setDeleteError(null);
-    setDeleting(true);
-    void invokeCommand('delete_account', {})
-      .then((report) => {
-        if (!licenseGate.isCurrent(token)) return;
+    runGated(
+      () => invokeCommand('delete_account', {}),
+      (report) => {
         setDeleteReport(report);
         publishStatus(report.license);
-      })
-      .catch((failure: unknown) => {
-        if (licenseGate.isCurrent(token)) setDeleteError(formatNativeError(failure));
-      })
-      .finally(() => {
-        if (licenseGate.isCurrent(token)) clearBusy();
-      });
-  }, [begin, clearBusy, licenseGate, publishStatus]);
+      },
+      {
+        onStart: () => {
+          setDeleteReport(null);
+          setDeleteError(null);
+          setDeleting(true);
+        },
+        onError: (failure) => setDeleteError(formatNativeError(failure)),
+      },
+    );
+  }, [runGated, publishStatus]);
 
   const dismissDeleteResult = useCallback(() => {
     setDeleteReport(null);
