@@ -13,7 +13,7 @@ export const BUILT_IN_SOURCE_OPTIONS: BuiltInSourceOption[] = [
     id: 'auto',
     label: 'Document or source URL',
     description: 'Add a San Diego public document or source page.',
-    placeholder: 'Choose a San Diego source or paste a document URL',
+    placeholder: 'Paste a URL, or pick a source',
   },
   ...SAN_DIEGO_SOURCES.map((source) => ({
     id: source.id,
