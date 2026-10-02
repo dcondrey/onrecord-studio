@@ -232,6 +232,15 @@ pub fn assess_package_compression_risk(
                 ))
             })?;
         scanned_bytes += bytes.len() as u64;
+        if bytes.len() as u64 > MAXIMUM_TEXT_SCAN_ENTRY_BYTES {
+            coverage_complete = false;
+            warnings.push(format!(
+                "ZIP_PLAINTEXT_SCAN_ENTRY_TRUNCATED:{}:{}",
+                entry.name(),
+                bytes.len()
+            ));
+            continue;
+        }
         let Ok(text) = std::str::from_utf8(&bytes) else {
             continue;
         };
