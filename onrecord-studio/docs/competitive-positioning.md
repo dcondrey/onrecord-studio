@@ -229,6 +229,23 @@ most naturally a digest over the ordered (portal_key, document_id, extracted_tex
 or an append-only ingestion diff log; the raw material (mandatory per-document digests, indexed
 instants) already exists.
 
+Built (2026-10-01), standing search. The corpus-state identifier already shipped with the research
+snapshot (`get_corpus_state_digest`: sha256 over the ordered portal, document id and
+extracted-text digest set) and is reused rather than duplicated. `src-tauri/src/storage/standing_queries.rs`
+stores a query's `QueryAst` from `src/query` verbatim beside the flat filters it compiled to,
+refuses an AST with a negated, repeated or unsupported filter so a saved query never re-runs looser
+than written, and runs each query only against a corpus state its last run did not see, inside the
+one connection closure that also reads the digest. A run records that digest, a digest over its
+ordered match set, an exact match count, and whether the match set differs from the previous run.
+Breakdowns (status, department, source, year) and clusters of byte-identical extracted text across
+requests come before any row; above 10,000 matches they are scaled from a seeded fixed-size sample
+and carry `ESTIMATED_FROM_SAMPLE` with the sample size, which the panel renders as ≈. A query that
+reads document text is deferred while the search index is incomplete. Labelled series numbers
+(resolution, ordinance, contract, permit and similar) are extracted as `SERIES_NUMBER` entities,
+and `analysis/series_gaps.rs` lists short runs of numbers absent between two indexed members of a
+series with three or more; the panel states each as absence from this corpus, a lead for a request
+and not a finding about the agency.
+
 ## 9. Media forensics: answer the requester's question, not Amped's
 
 Don't chase PRNU camera attribution; a requester rarely holds the camera. The requester's

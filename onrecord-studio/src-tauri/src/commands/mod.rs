@@ -19,6 +19,7 @@ pub mod resolution;
 pub mod runtime;
 pub mod semantic;
 pub mod snapshot;
+pub mod standing_search;
 pub(crate) mod validation;
 
 pub use analysis_workbench::{

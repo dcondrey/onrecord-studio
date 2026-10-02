@@ -191,7 +191,7 @@ fn build_snapshot(
 
 /// The identity of the evidence corpus, independent of row layout: one line per document in
 /// (portal, id) order, each carrying the digest of its extracted text or nothing.
-fn corpus_state_digest(conn: &Connection) -> Result<String, AppError> {
+pub(crate) fn corpus_state_digest(conn: &Connection) -> Result<String, AppError> {
     digest_rows(
         conn,
         "SELECT portal_subdomain, id, extracted_text_sha256 FROM documents

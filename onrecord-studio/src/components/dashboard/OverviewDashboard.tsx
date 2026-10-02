@@ -21,6 +21,7 @@ import type { AgencyPerformanceProfile } from '../../types';
 import FindingsInbox from './FindingsInbox';
 import ChangeFeed from './ChangeFeed';
 import WatchlistPanel from './WatchlistPanel';
+import StandingSearchPanel from './StandingSearchPanel';
 import SubjectDossier from './SubjectDossier';
 import PostIngestBrief from './PostIngestBrief';
 import CrossCorpusExplorer from './CrossCorpusExplorer';
@@ -94,6 +95,7 @@ export default function OverviewDashboard() {
           <SubjectDossier />
           <ChangeFeed />
           <WatchlistPanel />
+          <StandingSearchPanel />
           <FindingsInbox />
           <CrossCorpusExplorer />
           <ResearchWorkspace onReview={(reportId) => setWorkbench({ reportId, review: true })} />

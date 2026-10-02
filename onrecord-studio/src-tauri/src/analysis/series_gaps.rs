@@ -79,11 +79,7 @@ pub fn series_gaps(observations: Vec<SeriesObservation>, limit: usize) -> Series
             continue;
         }
         series_count += 1;
-        let width = members
-            .values()
-            .map(|(width, _)| *width)
-            .max()
-            .unwrap_or(1);
+        let width = members.values().map(|(width, _)| *width).max().unwrap_or(1);
         let ordered: Vec<(&u64, &(usize, SeriesMember))> = members.iter().collect();
         for pair in ordered.windows(2) {
             let (before_number, before) = pair[0];
@@ -172,8 +168,18 @@ mod tests {
         assert_eq!(
             summary,
             vec![
-                ("2024-".to_string(), 12, 12, "resolution:2024-13".to_string()),
-                ("2024-".to_string(), 14, 15, "resolution:2024-016".to_string()),
+                (
+                    "2024-".to_string(),
+                    12,
+                    12,
+                    "resolution:2024-13".to_string()
+                ),
+                (
+                    "2024-".to_string(),
+                    14,
+                    15,
+                    "resolution:2024-016".to_string()
+                ),
             ]
         );
         assert_eq!(report.gaps[0].width, 3);

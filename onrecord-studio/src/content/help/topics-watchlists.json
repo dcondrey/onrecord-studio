@@ -57,6 +57,51 @@
     "views": [],
     "findingKinds": [],
     "commandGroups": ["watchlists"],
-    "related": ["coverage-monitoring", "topic-packs", "findings-inbox"]
+    "related": ["coverage-monitoring", "topic-packs", "findings-inbox", "standing-search"]
+  },
+  {
+    "id": "standing-search",
+    "title": "Standing searches and missing series numbers",
+    "group": "Findings",
+    "summary": "Save an exact query that re-runs whenever the corpus changes, read its breakdowns before any row, and find numbers absent from a document series.",
+    "keywords": [
+      "standing",
+      "saved search",
+      "corpus state",
+      "digest",
+      "facet",
+      "cluster",
+      "estimate",
+      "sample",
+      "series",
+      "missing number",
+      "gap"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "From the evidence search choose “Save as standing query”. The query is stored exactly as written, with the filters it compiled to; a query with a negated or repeated filter cannot be saved, because it would re-run as a looser query than the one on screen. Standing searches sit on the overview beside the watchlist."
+        ]
+      },
+      {
+        "heading": "What a run records",
+        "items": [
+          "The corpus state it saw: a digest over every document's source, id and extracted-text digest, with the document count. Re-running the same query against the same state gives the same match set.",
+          "The match set as a digest and an exact count of matching requests, and whether that set differs from the previous run's. A new document on a request that already matched changes the corpus but not the answer.",
+          "Breakdowns by status, department, source and year, and clusters of byte-identical extracted text released under several requests. Above 10,000 matches these are scaled from a fixed sample and every figure is marked ≈ with the sample size stated; the total is always exact.",
+          "A query that reads document text is deferred, not run, while the search index is still being built."
+        ]
+      },
+      {
+        "heading": "Missing series numbers",
+        "paragraphs": [
+          "The index reads labelled series numbers (Resolution No. 2024-012, Ordinance No. 1234, Contract No. C-45) from document text. For any series with three or more numbers, a short run of numbers absent between two that the corpus holds is listed with both neighbours. It is absence from this corpus: the number may have been skipped, voided, filed elsewhere, or simply not requested yet. It is a lead for a request, not a finding that anything was withheld."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": ["standing_search"],
+    "related": ["watchlists", "research-snapshot"]
   }
 ]

@@ -124,11 +124,18 @@ pub struct StandingQuerySummary {
     rename_all_fields = "camelCase"
 )]
 pub enum StandingQueryOutcome {
-    Ran { run: StandingQueryRun },
+    Ran {
+        run: StandingQueryRun,
+    },
     /// The corpus is the one the last run saw; nothing to re-run against.
-    NotDue { query_id: String },
+    NotDue {
+        query_id: String,
+    },
     /// Could not be run honestly right now; `reason` says why.
-    Deferred { query_id: String, reason: String },
+    Deferred {
+        query_id: String,
+        reason: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

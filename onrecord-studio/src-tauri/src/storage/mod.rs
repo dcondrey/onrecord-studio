@@ -34,6 +34,7 @@ pub mod snapshot_export;
 pub mod sqlite;
 #[cfg(test)]
 pub(crate) mod sqlite_snapshot;
+pub mod standing_queries;
 pub(crate) mod tabular;
 pub mod vector;
 

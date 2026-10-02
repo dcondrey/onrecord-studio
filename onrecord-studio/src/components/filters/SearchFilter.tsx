@@ -128,6 +128,32 @@ export default function SearchFilter() {
     }
   };
 
+  // A standing query stores the AST as written and the flat filters it compiled to. One that
+  // compiles with deferred filters is refused here and again natively: saved, it would re-run as a
+  // looser query than the one on screen.
+  const canStand = compiledQuery.deferredFilters.length === 0 && (compiledQuery.searchTerm.trim() !== '' || compiledQuery.status !== null || compiledQuery.policyDeviation !== null || compiledQuery.agencyId !== null || compiledQuery.portalKey !== null);
+  const saveStanding = async () => {
+    setWatchStatus(null);
+    try {
+      const saved = await invokeCommand('save_standing_query', {
+        input: {
+          label: inputValue.trim(),
+          astJson: JSON.stringify(parsedQuery),
+          filters: {
+            searchTerm: compiledQuery.searchTerm,
+            portalKey: compiledQuery.portalKey ?? activePortalKey,
+            agencyId: compiledQuery.agencyId ?? selectedAgencyId,
+            status: compiledQuery.status ?? selectedStatus,
+            policyDeviation: compiledQuery.policyDeviation ?? selectedPolicyDeviation,
+          },
+        },
+      });
+      setWatchStatus({ ok: true, text: `Standing query "${saved.label}" saved. It re-runs whenever the corpus changes; see Standing searches on the overview.` });
+    } catch (reason) {
+      setWatchStatus({ ok: false, text: `Could not save the standing query: ${formatNativeError(reason)}` });
+    }
+  };
+
   const copyRecord = async () => {
     const applied = appliedRecord.current;
     if (!applied) {
@@ -226,6 +252,11 @@ export default function SearchFilter() {
         {canWatch && (
           <button type="button" onClick={() => void watchTerm()} title="Watches this text across all sources. The agency, status and policy filters are not part of a watch." className="rounded-full border border-slate-800 px-2 py-0.5 font-semibold text-slate-400 hover:text-slate-300">
             Watch this text for changes
+          </button>
+        )}
+        {canStand && (
+          <button type="button" onClick={() => void saveStanding()} disabled={isSearching} title="Saves this exact query, filters included. It re-runs whenever the corpus changes and records the corpus state each run saw." className="rounded-full border border-slate-800 px-2 py-0.5 font-semibold text-slate-400 hover:text-slate-300">
+            Save as standing query
           </button>
         )}
         {watchStatus && (
