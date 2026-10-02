@@ -207,8 +207,6 @@ interface AppState {
    * one entity.
    */
   subjectDossierTarget: { kind: 'entity' | 'name'; value: string } | null;
-  /** The finding whose lead dossier is open, so any view can open one. */
-  dossierFindingId: string | null;
   /**
    * True when the post-ingest brief overlay should be visible. Set by `syncStopped` in App.tsx
    * after `refresh_findings` completes; cleared when the user dismisses it or opens a specific
@@ -217,7 +215,7 @@ interface AppState {
   postIngestBriefOpen: boolean;
   /**
    * ISO-8601 timestamp of the last moment the user visibly saw the findings inbox (its
-   * FindingsInbox mount, or a Refresh press, or a dismiss). Used by ChangeFeed to report "N new
+   * FindingsInbox mount, or a Refresh press, or a dismiss). Used by the sidebar badge to report "N new
    * findings since you last opened." `null` means the user has never opened the inbox in this
    * session — treat every finding as new.
    */
@@ -311,7 +309,6 @@ interface AppState {
   openSubjectDossier: (target: { kind: 'entity' | 'name'; value: string }) => void;
   clearSubjectDossier: () => void;
   openLeadDossier: (findingId: string) => void;
-  closeLeadDossier: () => void;
   setPostIngestBriefOpen: (open: boolean) => void;
   markFindingsSeen: () => void;
 }
@@ -375,7 +372,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     typeof window === 'undefined' ? undefined : window.localStorage,
   ),
   subjectDossierTarget: null,
-  dossierFindingId: null,
   postIngestBriefOpen: false,
   lastFindingsSeenAt: null,
   activeCaseId: readActiveCase(),
@@ -708,8 +704,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   }),
   openSubjectDossier: (target) => set({ subjectDossierTarget: target }),
   clearSubjectDossier: () => set({ subjectDossierTarget: null }),
-  openLeadDossier: (dossierFindingId) => set({ dossierFindingId, inspectorStack: [{ kind: 'finding', id: dossierFindingId }] }),
-  closeLeadDossier: () => set({ dossierFindingId: null }),
+  openLeadDossier: (findingId) => set({ inspectorStack: [{ kind: 'finding', id: findingId }] }),
   setPostIngestBriefOpen: (postIngestBriefOpen) => set({ postIngestBriefOpen }),
   markFindingsSeen: () => set({ lastFindingsSeenAt: new Date().toISOString() }),
 }));

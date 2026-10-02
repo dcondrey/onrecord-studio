@@ -94,8 +94,8 @@ describe('StoryDesk', () => {
     act(() => {
       screen.getByRole('button', { name: 'Assemble dossier: Second lead' }).click();
     });
-    expect(useAppStore.getState().dossierFindingId).toBe('b');
-    act(() => useAppStore.getState().closeLeadDossier());
+    expect(useAppStore.getState().inspectorStack).toEqual([{ kind: 'finding', id: 'b' }]);
+    act(() => useAppStore.getState().closeInspector());
   });
 
   it('asks which drafts apply to a lead only once its draft toggle is opened', async () => {

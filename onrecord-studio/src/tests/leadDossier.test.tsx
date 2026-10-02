@@ -59,6 +59,7 @@ function dossier(findingId: string, headline: string) {
 vi.mock('../ipc', () => ({
   invokeCommand: (command: string, args?: { findingId?: string }) => {
     if (command === 'draft_availability_for_finding') return Promise.resolve({ followup: true, appeal: false });
+    if (command === 'list_document_provenance_verifications') return Promise.resolve([]);
     if (command !== 'build_lead_dossier') return Promise.reject(new Error(`unexpected ${command}`));
     const id = args?.findingId ?? '';
     const answer = dossier(id, `Headline for ${id}`);
@@ -68,30 +69,27 @@ vi.mock('../ipc', () => ({
   formatNativeError: (reason: unknown) => String(reason),
 }));
 
-import { useAppStore } from '../store/useAppStore';
 import LeadDossier from '../components/dashboard/LeadDossier';
 
 afterEach(() => {
   cleanup();
   bridge.gates.clear();
   Object.assign(navigator, { clipboard: undefined });
-  act(() => useAppStore.setState({ dossierFindingId: null }));
 });
 
 describe('LeadDossier', () => {
   it('renders the evidence chain, falsification test and an uncomputed gap as such', async () => {
-    act(() => useAppStore.getState().openLeadDossier('finding-a'));
-    render(<LeadDossier />);
+    render(<LeadDossier findingId="finding-a" />);
     await screen.findByText('Headline for finding-a');
-    expect(screen.getByText(/budget-memo\.pdf/).textContent).toContain('Finance');
+    expect(screen.getByRole('button', { name: 'budget-memo.pdf' })).toBeTruthy();
+    expect(screen.getByText(/Source 1 · Finance/)).toBeTruthy();
     expect(screen.getByText(/later revision of the data/)).toBeTruthy();
     expect(screen.getByText(/figures not examined/)).toBeTruthy();
     expect(screen.queryByText(/Every figure found/)).toBeNull();
   });
 
   it('mounts the drafts panel for the finding below the evidence chain', async () => {
-    act(() => useAppStore.getState().openLeadDossier('finding-a'));
-    render(<LeadDossier />);
+    render(<LeadDossier findingId="finding-a" />);
     await screen.findByText('Headline for finding-a');
     expect(screen.getByRole('region', { name: 'Drafted artifacts' })).toBeTruthy();
     expect(await screen.findByRole('button', { name: /draft records request/i })).toBeTruthy();
@@ -100,8 +98,7 @@ describe('LeadDossier', () => {
   it('offers a request text per gap that quotes the claim and asks only for the records', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
-    act(() => useAppStore.getState().openLeadDossier('finding-a'));
-    render(<LeadDossier />);
+    render(<LeadDossier findingId="finding-a" />);
     await screen.findByText('Headline for finding-a');
     const buttons = screen.getAllByRole('button', { name: 'Copy request text' });
     expect(buttons).toHaveLength(2);
@@ -117,8 +114,7 @@ describe('LeadDossier', () => {
 
   it('shows the request text for selection when the clipboard is unavailable', async () => {
     Object.assign(navigator, { clipboard: undefined });
-    act(() => useAppStore.getState().openLeadDossier('finding-a'));
-    render(<LeadDossier />);
+    render(<LeadDossier findingId="finding-a" />);
     await screen.findByText('Headline for finding-a');
     fireEvent.click(screen.getAllByRole('button', { name: 'Copy request text' })[0]);
     await screen.findByText(/Copying was blocked/);
@@ -130,9 +126,8 @@ describe('LeadDossier', () => {
   it('discards a dossier that resolves after the reader opened another finding', async () => {
     let releaseA = () => {};
     bridge.gates.set('finding-a', new Promise<void>((resolve) => { releaseA = () => resolve(); }));
-    act(() => useAppStore.getState().openLeadDossier('finding-a'));
-    render(<LeadDossier />);
-    act(() => useAppStore.getState().openLeadDossier('finding-b'));
+    const view = render(<LeadDossier findingId="finding-a" />);
+    view.rerender(<LeadDossier findingId="finding-b" />);
     await screen.findByText('Headline for finding-b');
     await act(async () => {
       releaseA();
