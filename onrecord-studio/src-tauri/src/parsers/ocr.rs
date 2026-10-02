@@ -5,14 +5,19 @@ use std::process::{Command, ExitStatus, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
+#[cfg(not(target_os = "macos"))]
 use uuid::Uuid;
 
 use crate::error::AppError;
+
+#[cfg(target_os = "macos")]
+mod vision;
 
 const MAX_OCR_INPUT_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_OCR_OUTPUT_BYTES: usize = 128 * 1024 * 1024;
 const MAX_PROCESS_STDERR_BYTES: usize = 256 * 1024;
 const MAX_PDF_OCR_PAGES: usize = 25_000;
+#[cfg(not(target_os = "macos"))]
 const MAX_RASTER_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 const DEFAULT_OCR_TIMEOUT_SECONDS: u64 = 900;
 const MAX_OCR_TIMEOUT_SECONDS: u64 = 86_400;
@@ -100,6 +105,16 @@ pub fn probe_ocr_capability() -> OcrCapability {
         };
     }
 
+    probe_platform_capability()
+}
+
+#[cfg(target_os = "macos")]
+fn probe_platform_capability() -> OcrCapability {
+    vision::capability()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn probe_platform_capability() -> OcrCapability {
     let engine = OsString::from("tesseract");
     let engine_probe = probe_executable(&engine, &["--version"]);
     let language_probe = probe_language_packs(&engine);
@@ -124,7 +139,7 @@ pub fn probe_ocr_capability() -> OcrCapability {
     let pdf_ocr_available = image_ocr_available && renderer_probe.available;
     if !engine_probe.available || !renderer_probe.available {
         diagnostics.push(
-            "Install both tools with `brew install tesseract poppler` (or MacPorts), then relaunch"
+            "Install Tesseract and Poppler (pdftoppm) from your package manager, then relaunch"
                 .to_string(),
         );
     }
@@ -149,6 +164,7 @@ struct ExecutableProbe {
     diagnostic: Option<String>,
 }
 
+#[cfg(not(target_os = "macos"))]
 struct LanguageProbe {
     languages: Vec<String>,
     complete: bool,
@@ -191,6 +207,7 @@ fn probe_executable(program: &OsStr, arguments: &[&str]) -> ExecutableProbe {
     }
 }
 
+#[cfg(not(target_os = "macos"))]
 fn probe_language_packs(engine: &OsStr) -> LanguageProbe {
     let mut command = program_command(engine);
     command.arg("--list-langs");
@@ -267,11 +284,44 @@ pub fn execute_local_ocr_scan<P: AsRef<Path>>(document_path: P) -> Result<String
         return decode_ocr_output(path, output, false);
     }
 
-    if is_pdf(path)? {
-        return ocr_pdf(path, deadline);
-    }
+    platform_ocr(path, is_pdf(path)?, deadline)
+}
 
-    ocr_image(path, deadline)
+#[cfg(target_os = "macos")]
+fn platform_ocr(path: &Path, is_pdf: bool, deadline: Instant) -> Result<String, AppError> {
+    vision::recognize(path, is_pdf, deadline)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn platform_ocr(path: &Path, is_pdf: bool, deadline: Instant) -> Result<String, AppError> {
+    if is_pdf {
+        ocr_pdf(path, deadline)
+    } else {
+        ocr_image(path, deadline)
+    }
+}
+
+/// Appends one page's text, newline-separated, refusing to grow past `MAX_OCR_OUTPUT_BYTES`.
+fn append_page_text(text: &mut String, page_text: &str) -> Result<(), AppError> {
+    if page_text.is_empty() {
+        return Ok(());
+    }
+    let separator_bytes = usize::from(!text.is_empty());
+    if text
+        .len()
+        .checked_add(separator_bytes)
+        .and_then(|size| size.checked_add(page_text.len()))
+        .is_none_or(|size| size > MAX_OCR_OUTPUT_BYTES)
+    {
+        return Err(AppError::DataParsing(format!(
+            "OCR_OUTPUT_SIZE_EXCEEDED: extracted text exceeds {MAX_OCR_OUTPUT_BYTES} bytes"
+        )));
+    }
+    if !text.is_empty() {
+        text.push('\n');
+    }
+    text.push_str(page_text);
+    Ok(())
 }
 
 fn is_pdf(path: &Path) -> Result<bool, AppError> {
@@ -329,10 +379,12 @@ fn ocr_timeout() -> Duration {
     Duration::from_secs(seconds)
 }
 
+#[cfg(not(target_os = "macos"))]
 fn ocr_image(path: &Path, deadline: Instant) -> Result<String, AppError> {
     ocr_image_with_empty_policy(path, deadline, false)
 }
 
+#[cfg(not(target_os = "macos"))]
 fn ocr_image_with_empty_policy(
     path: &Path,
     deadline: Instant,
@@ -344,6 +396,7 @@ fn ocr_image_with_empty_policy(
     decode_ocr_output(path, output, allow_empty)
 }
 
+#[cfg(not(target_os = "macos"))]
 fn ocr_pdf(path: &Path, deadline: Instant) -> Result<String, AppError> {
     let workspace = OcrWorkspace::new()?;
     let renderer =
@@ -405,24 +458,7 @@ fn ocr_pdf(path: &Path, deadline: Instant) -> Result<String, AppError> {
                 page.display()
             ))
         })?;
-        if page_text.is_empty() {
-            continue;
-        }
-        let separator_bytes = usize::from(!text.is_empty());
-        if text
-            .len()
-            .checked_add(separator_bytes)
-            .and_then(|size| size.checked_add(page_text.len()))
-            .is_none_or(|size| size > MAX_OCR_OUTPUT_BYTES)
-        {
-            return Err(AppError::DataParsing(format!(
-                "OCR_OUTPUT_SIZE_EXCEEDED: extracted text exceeds {MAX_OCR_OUTPUT_BYTES} bytes"
-            )));
-        }
-        if !text.is_empty() {
-            text.push('\n');
-        }
-        text.push_str(&page_text);
+        append_page_text(&mut text, &page_text)?;
     }
 
     if text.trim().is_empty() {
@@ -434,6 +470,7 @@ fn ocr_pdf(path: &Path, deadline: Instant) -> Result<String, AppError> {
     Ok(text)
 }
 
+#[cfg(not(target_os = "macos"))]
 fn pdf_page_count(path: &Path, deadline: Instant) -> Result<usize, AppError> {
     if let Ok(document) = crate::parsers::pdf::load_bounded(path) {
         return Ok(document.get_pages().len());
@@ -603,10 +640,12 @@ fn decode_ocr_output(
     Ok(text)
 }
 
+#[cfg(not(target_os = "macos"))]
 struct OcrWorkspace {
     path: PathBuf,
 }
 
+#[cfg(not(target_os = "macos"))]
 impl OcrWorkspace {
     fn new() -> Result<Self, AppError> {
         let path = std::env::temp_dir().join(format!("onrecord-ocr-{}", Uuid::new_v4()));
@@ -620,6 +659,7 @@ impl OcrWorkspace {
     }
 }
 
+#[cfg(not(target_os = "macos"))]
 impl Drop for OcrWorkspace {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.path);

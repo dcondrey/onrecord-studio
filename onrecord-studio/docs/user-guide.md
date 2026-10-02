@@ -20,17 +20,12 @@ Requirements: macOS 13 or later, Apple silicon or Intel.
   launch you sign in with Google, Apple, LinkedIn or GitHub in a system sign-in window; a free trial
   starts once per account, and a purchased license is checked against the account service.
 
-### Optional OCR
+### OCR
 
-Scanned PDFs and images are only searchable when two command-line tools are installed; everything
-else is built in. With [Homebrew](https://brew.sh):
-
-```sh
-brew install tesseract poppler
-```
-
-The sidebar footer shows **Local OCR: Image + PDF** once both are found. Hover it for the probe
-details. Tesseract's `eng` language pack, which Homebrew installs by default, is required.
+Scanned PDFs and images are made searchable with the text recognition built into macOS (Apple
+Vision); scanned PDF pages are rendered with PDFKit. Nothing needs to be installed, and OCR runs on
+this Mac without sending anything anywhere. The sidebar footer shows **Local OCR: Image + PDF**;
+hover it for the engine version and recognized languages.
 
 ## First launch
 
@@ -156,8 +151,8 @@ the App Store.
 
 ## Troubleshooting
 
-- **Local OCR shows Unavailable or Image only**: install Tesseract and Poppler as above and relaunch.
-  The footer tooltip names what the probe could not find.
+- **Local OCR shows Unavailable**: the footer tooltip states what the macOS text-recognition probe
+  reported.
 - **A locked screen** (sign in, trial ended, license needs verification): **Verify license again**
   rechecks with the account service. Local evidence is never deleted by a lock.
 - **This Mac's clock looks wrong**: the clock was set earlier than a time the app already saw.

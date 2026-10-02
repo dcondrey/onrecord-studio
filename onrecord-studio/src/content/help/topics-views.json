@@ -254,6 +254,8 @@
       "log",
       "telemetry",
       "ocr",
+      "vision",
+      "pdfkit",
       "tesseract",
       "poppler",
       "scanned",
@@ -280,7 +282,7 @@
       {
         "heading": "Local OCR",
         "paragraphs": [
-          "OCR is not built into the app. It runs Tesseract with its eng language pack for images and Poppler's pdftoppm for scanned PDFs, found on this Mac in the usual Homebrew, MacPorts or /usr/local locations: brew install tesseract poppler. Until both are installed, a scanned document whose text cannot be read is kept but its text is not searchable. OCR runs locally and sends nothing anywhere."
+          "On a Mac, OCR uses the text recognition built into macOS (Apple Vision), and scanned PDFs are rendered page by page with PDFKit at up to 300 DPI. Nothing needs to be installed. On other systems the app runs Tesseract with its eng language pack for images and Poppler's pdftoppm for scanned PDFs, which must be installed from the system's package manager; until both are, a scanned document whose text cannot be read is kept but its text is not searchable. Either way OCR runs on this computer and sends nothing anywhere."
         ]
       },
       {
