@@ -212,9 +212,12 @@ async fn add_annotation(
         .await?
         .ok_or_else(|| invalid("enter your reviewer name before adding annotations"))?;
     let quote = clean_text("quote", &input.quote, MAXIMUM_QUOTE_CHARACTERS, true)?;
+    // Every kind, a bare note included, attaches to a public document in the corpus; a note keyed
+    // to an id with no such document would surface in search and exports about nothing.
     let text_sha256 = document_facts(repository, &portal, input.document_id)
         .await?
-        .and_then(|facts| facts.text_sha256);
+        .ok_or_else(|| invalid("annotations can only be added to a public document in the corpus"))?
+        .text_sha256;
     let placement = if quote.is_empty() || input.page_region.is_some() {
         None
     } else {
@@ -444,6 +447,7 @@ async fn search_annotations(
         .await?
     };
     let mut contexts: HashMap<(String, u64), DocumentContext> = HashMap::new();
+    let mut previous_key: Option<(String, u64)> = None;
     let mut rows: Vec<AnnotationSearchRow> = Vec::new();
     let mut next_cursor = None;
     for annotation in candidates {
@@ -454,6 +458,18 @@ async fn search_annotations(
             continue;
         }
         let key = (annotation.portal_key.clone(), annotation.document_id);
+        // Candidates arrive sorted by document, so a document's text is never needed again once
+        // the scan moves past it; keeping every view would hold the whole corpus in memory for
+        // an orphaned-only scan, which reads to the end.
+        if previous_key
+            .as_ref()
+            .is_some_and(|previous| *previous != key)
+        {
+            if let Some(previous) = previous_key.take() {
+                contexts.remove(&previous);
+            }
+        }
+        previous_key = Some(key.clone());
         if !contexts.contains_key(&key) {
             let facts = document_facts(repository, &key.0, key.1).await?;
             contexts.insert(key.clone(), DocumentContext { facts, view: None });
