@@ -545,7 +545,8 @@ pub(super) fn synchronize_policy_evidence_gaps(
             AppError::Storage(format!("Failed to encode missing policy evidence: {error}"))
         })?;
         let variance_metric = format!(
-            "0 of {} configured evidence phrases found across {} indexed evidence sources",
+            "{} of {} configured evidence phrases found across {} indexed evidence sources",
+            mandate.required_evidence_phrases.len() - missing_evidence_phrases.len(),
             mandate.required_evidence_phrases.len(),
             sources.len()
         );
