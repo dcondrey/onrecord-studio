@@ -57,7 +57,7 @@ struct PendingAttachment {
     bytes: Vec<u8>,
 }
 
-fn strip_html_markup(html: &str) -> String {
+pub(crate) fn strip_html_markup(html: &str) -> String {
     let document = Html::parse_fragment(html);
     let mut output = String::new();
     let mut current_block = None;
@@ -240,7 +240,7 @@ fn format_participants(participants: &[EmailParticipantMetadata]) -> String {
         .join("; ")
 }
 
-fn build_metadata_summary(metadata: &EmailMetadata) -> String {
+pub(crate) fn build_metadata_summary(metadata: &EmailMetadata) -> String {
     let mut fields = Vec::new();
     if let Some(sender) = &metadata.sender {
         fields.push(format!("From: {}", format_participant(sender)));

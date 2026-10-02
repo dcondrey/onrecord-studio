@@ -539,6 +539,27 @@ Three name collisions on crates.io to avoid, because two of them look right and 
 | `pst-rs` | **AGPL-3.0-or-later**, and version 0.0.1 describes itself as a "crates.io reservation" with 26 lifetime downloads. A placeholder, and the licence disqualifies it regardless |
 | `pff`, `pst` | neither is what the name suggests. `pff` is an Nginx log parser that blocks patterns on the PF firewall; `pst` publishes posts to Micro.blog. There is no `libpff-sys` or `pff-sys` on crates.io at all |
 
+**Adopted (`parsers/pst.rs`).** A PST is a container: each message becomes a `.txt` child under
+its folder path, and its attachments are written beside it. Measured limits of `outlook-pst` 1.2.0
+against real files:
+
+- An attachment whose PC holds a `PtypObject` value (an attached message) fails with "Missing
+  PidTagAttachMethod": the PC leaf reader stops at that entry. Such attachments are listed on the
+  parent message as not extracted. By-value attachments take a different path that no vendored
+  fixture exercises.
+- `pst-extractor`'s `enron.pst` opens, but every message fails with "Invalid HNPAGEMAP cFree:
+  0x0000" (the crate rejects a heap page map with no free count; which tool wrote that file is not
+  known). Each failure is recorded in the container's notes file.
+- OST files (`SO` client signature) and the 4K-page layout (`wVer` 36) are refused by the crate, so
+  the header is checked first and those are deferred with a reason.
+- A mutation sweep (about 65,000 truncations and byte flips across three fixtures) found no panic
+  with release arithmetic, and one debug-only `u16` multiply overflow in
+  `ndb/read_write.rs` that wraps silently in release. Release builds use `panic = "abort"`, so a
+  panic the sweep did not reach would end the app.
+- `compressed-rtf` 1.0.1 panics on a header under 16 bytes or a stored body shorter than its
+  declared size, and sizes its buffer from the declared size. The header is validated before the
+  crate sees it.
+
 ## 12. Document model, adopted from Docling
 
 Docling's code is Python and its models are 358 MB of safetensors with no ONNX published, so

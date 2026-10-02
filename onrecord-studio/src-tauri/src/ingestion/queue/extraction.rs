@@ -2,6 +2,7 @@
 
 use super::*;
 use super::{frontier::enqueue_tasks_resilient, guidance::next_msg_attachment_container_depth};
+use crate::parsers::{extract_pst_container_with_manifest, inspect_pst_header};
 
 #[derive(Clone, Copy)]
 pub(super) struct DocumentExtractionInput<'a> {
@@ -265,6 +266,16 @@ pub(super) async fn extract_document(
         DocumentFormat::Zip | DocumentFormat::EmailArchive => {
             expand_container(context, input).await
         }
+        DocumentFormat::OutlookStore => {
+            let path = local_path.to_path_buf();
+            match spawn_blocking("PST header", move || inspect_pst_header(&path)).await?? {
+                Ok(_) => expand_container(context, input).await,
+                Err(reason) => Ok(ExtractedDocument::Deferred {
+                    format,
+                    route: ExtractionRoute::ToolRequired(reason),
+                }),
+            }
+        }
         DocumentFormat::Tar
         | DocumentFormat::TarGzip
         | DocumentFormat::Gzip
@@ -365,6 +376,9 @@ async fn expand_container(
         match format {
             DocumentFormat::Zip | DocumentFormat::EmailArchive => {
                 extract_zip_container_with_manifest(&archive_path, &extraction_destination)
+            }
+            DocumentFormat::OutlookStore => {
+                extract_pst_container_with_manifest(&archive_path, &extraction_destination)
             }
             _ => extract_archive_container(&archive_path, &extraction_destination, format),
         }

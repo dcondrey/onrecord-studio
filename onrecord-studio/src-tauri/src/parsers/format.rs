@@ -123,7 +123,7 @@ impl DocumentFormat {
             Self::InternetMessage => ExtractionRoute::ToolRequired("MIME message parser"),
             Self::Mailbox => ExtractionRoute::ToolRequired("mbox parser"),
             Self::WebArchive => ExtractionRoute::ToolRequired("WARC parser"),
-            Self::OutlookStore => ExtractionRoute::ToolRequired("libpff"),
+            Self::OutlookStore => ExtractionRoute::Container("pst"),
             Self::MailStore => ExtractionRoute::ToolRequired("NSF parser"),
             Self::IWork => ExtractionRoute::ToolRequired("iWork IWA parser"),
             Self::LegacyWord | Self::LegacyPresentation => {
@@ -575,6 +575,15 @@ mod tests {
         assert_eq!(
             detect(b"WARC/1.1\r\n", "fixture.bin", Some("payload.txt"), None),
             DocumentFormat::WebArchive,
+        );
+        assert_eq!(
+            detect(
+                b"!BDN\0\0\0\0SM\x17\0",
+                "fixture.bin",
+                Some("mailbox.zip"),
+                Some("application/zip"),
+            ),
+            DocumentFormat::OutlookStore,
         );
         assert_eq!(
             detect(
