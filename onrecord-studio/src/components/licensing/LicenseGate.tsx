@@ -137,12 +137,12 @@ export default function LicenseGate({ controller }: { controller: LicenseControl
           </p>
         ) : null}
         {error ? (
-          <p role="alert" className="mt-4 rounded-lg border border-danger bg-danger px-4 py-3 text-sm text-danger">
+          <p role="alert" className="mt-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
             {error}
           </p>
         ) : null}
         {signInNotice ? (
-          <p role="alert" className="mt-4 rounded-lg border border-danger bg-danger px-4 py-3 text-sm text-danger">
+          <p role="alert" className="mt-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
             Sign-in did not complete. {signInNotice}
           </p>
         ) : null}

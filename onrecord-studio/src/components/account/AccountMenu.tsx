@@ -138,7 +138,7 @@ export default function AccountMenu() {
           ) : null}
           {billingNotice ? <p role="alert" className="mt-2 text-label leading-4 text-warning">{billingNotice}</p> : null}
           {confirming ? (
-            <div role="group" aria-label="Confirm account deletion" className="mt-4 rounded-lg border border-danger bg-danger p-4 text-label leading-5 text-danger">
+            <div role="group" aria-label="Confirm account deletion" className="mt-4 rounded-lg border border-danger/30 bg-danger/10 p-4 text-label leading-5 text-danger">
               <p className="font-semibold">Delete your account?</p>
               <ul className="mt-2 list-disc space-y-1 pl-4">
                 <li>Your license account is deleted on the server.</li>

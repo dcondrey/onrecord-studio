@@ -117,7 +117,7 @@ export default function UpgradePanel({
       </button>
       {checkout.busy ? <p role="status" className="sr-only">Preparing checkout</p> : null}
       {checkout.error ? (
-        <p role="alert" className="mt-3 rounded-lg border border-danger bg-danger px-3 py-2 text-label leading-4 text-danger">
+        <p role="alert" className="mt-3 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-label leading-4 text-danger">
           Checkout could not be started. {checkout.error}
         </p>
       ) : null}
