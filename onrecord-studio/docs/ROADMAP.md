@@ -851,6 +851,27 @@ Verified 2026-09-30: the research LLM path sends masked text only. `research/ret
 builds the outbound `messages` payload. Any new cloud LLM surface must go through the same
 masking step.
 
+## Version 2: map workspace (deferred, 2026-10-01)
+
+Decision (owner, 2026-10-01): a map view where a user draws or picks an area and asks counted
+questions of it — encampment abatements in a boundary, a heatmap of abatements, public restroom
+locations, Get It Done requests per area, shelter beds, budget by council district. Deferred to
+version 2.
+
+Already present: GeoJSON imports keep each feature's `_geometry` and `_crs`
+(`storage/tabular.rs`); facility coverage takes user-supplied latitude/longitude rectangles and
+never infers location from an address (`types/facilities.rs`); monitoring rows carry coordinates.
+
+Missing: point-in-polygon (DuckDB `spatial` is not loaded); an offline basemap (the CSP allows
+`connect-src 'self'` only, so tiles must be bundled, or start with boundaries drawn without
+tiles); a map renderer; a boundary-layer registry (council districts, community planning areas)
+with source citations. Questions are a structured picker (layer x measure x area) over the
+analytical datasets, not free text, until the v2 model work lands.
+
+Rules: a record without coordinates is counted and shown as "not placed", never dropped; no
+address geocoding unless an offline geocoder is added with its match quality shown; a drawn area
+is an inspectable object that can filter Evidence and Leads and be added to a case.
+
 ## Open follow-ups (2026-09-30, after the audit sweep)
 
 Small, cross-file items that audits confirmed but left for a later pass; each has a design in
