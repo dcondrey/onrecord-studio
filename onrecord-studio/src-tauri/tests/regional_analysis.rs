@@ -360,7 +360,10 @@ async fn ingestion_downloads_are_offered_to_analysis_with_original_provenance() 
     connection.execute("UPDATE portals SET base_url = 'https://pra.sandiegocounty.gov' WHERE subdomain = 'county'", []).unwrap();
     connection.execute("UPDATE documents SET extracted_text_sha256 = ?1 WHERE id = 7 AND portal_subdomain = 'county'", [&digest]).unwrap();
     connection.execute("INSERT INTO documents_fts(document_id, portal_subdomain, file_name, extracted_text) VALUES (7, 'county', 'acquired.csv', 'county health count')", []).unwrap();
-    let vector_sources = db.list_vector_source_documents().await.unwrap();
+    let vector_sources = db
+        .list_vector_source_documents_page(None, 10)
+        .await
+        .unwrap();
     assert_eq!(vector_sources.len(), 1);
     assert_eq!(vector_sources[0].jurisdiction, "San Diego County");
     assert!(vector_sources[0].publication_date.is_none());

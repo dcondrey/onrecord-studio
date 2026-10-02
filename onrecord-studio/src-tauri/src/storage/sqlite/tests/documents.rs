@@ -439,3 +439,92 @@ async fn fts_failure_rolls_back_document_and_audit_updates() {
         .expect("audit count must decode");
     assert_eq!(audit_count, 0);
 }
+
+/// The embedding rebuild reads its sources one keyset page at a time, so every eligible document
+/// must appear exactly once across pages, in order, including across a portal boundary.
+#[tokio::test]
+async fn vector_source_pages_visit_every_document_once_in_key_order() {
+    const OTHER_PORTAL: &str = "a-portal";
+    let repository = repository_with_document().await;
+    {
+        let connection = repository.conn.lock().await;
+        connection
+            .execute(
+                "INSERT INTO portals (subdomain, display_name, base_url) VALUES (?1, ?2, ?3)",
+                params![OTHER_PORTAL, "A Portal", "https://a.example.test"],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO requests (id, portal_subdomain, status, created_at, updated_at)
+                 VALUES (?1, ?2, 'open', '2026-08-24T12:00:00Z', '2026-08-24T12:00:00Z')",
+                params![REQUEST_ID, OTHER_PORTAL],
+            )
+            .unwrap();
+        for (portal, document_id) in [
+            (OTHER_PORTAL, DOCUMENT_ID),
+            (PORTAL_SUBDOMAIN, DOCUMENT_ID + 1),
+            (OTHER_PORTAL, DOCUMENT_ID + 2),
+        ] {
+            connection
+                .execute(
+                    "INSERT INTO documents (
+                        id, request_id, portal_subdomain, file_name, visibility,
+                        created_at, updated_at
+                     ) VALUES (?1, ?2, ?3, 'page.pdf', 'public',
+                        '2026-08-24T12:01:00Z', '2026-08-24T12:01:00Z')",
+                    params![document_id, REQUEST_ID, portal],
+                )
+                .unwrap();
+        }
+        for (portal, document_id) in [
+            (OTHER_PORTAL, DOCUMENT_ID),
+            (PORTAL_SUBDOMAIN, DOCUMENT_ID),
+            (PORTAL_SUBDOMAIN, DOCUMENT_ID + 1),
+            (OTHER_PORTAL, DOCUMENT_ID + 2),
+        ] {
+            connection
+                .execute(
+                    "UPDATE documents SET extracted_text_sha256 = ?3
+                     WHERE id = ?1 AND portal_subdomain = ?2",
+                    params![document_id, portal, RAW_FILE_SHA256],
+                )
+                .unwrap();
+            connection
+                .execute(
+                    "INSERT INTO documents_fts (
+                        document_id, portal_subdomain, file_name, extracted_text
+                     ) VALUES (?1, ?2, 'page.pdf', 'text')",
+                    params![document_id, portal],
+                )
+                .unwrap();
+        }
+    }
+
+    let mut visited = Vec::new();
+    let mut after = None;
+    loop {
+        let page = repository
+            .list_vector_source_documents_page(after.take(), 1)
+            .await
+            .expect("a vector source page must load");
+        let Some(last) = page.last() else {
+            break;
+        };
+        after = Some((last.portal_key.clone(), last.document_id));
+        visited.extend(
+            page.iter()
+                .map(|document| (document.portal_key.clone(), document.document_id)),
+        );
+    }
+    let document = |portal: &str, id: i64| (portal.to_string(), id as u64);
+    assert_eq!(
+        visited,
+        vec![
+            document(OTHER_PORTAL, DOCUMENT_ID),
+            document(OTHER_PORTAL, DOCUMENT_ID + 2),
+            document(PORTAL_SUBDOMAIN, DOCUMENT_ID),
+            document(PORTAL_SUBDOMAIN, DOCUMENT_ID + 1),
+        ]
+    );
+}

@@ -483,9 +483,22 @@ impl DuckDbRepository {
         .await
     }
 
-    pub async fn list_vector_source_documents(
+    /// One keyset page of the documents the embedding index is built from, ordered by
+    /// `(portal_key, document_id)` and starting after `after`. Paged because each row carries the
+    /// document's full extracted text, so reading the corpus at once holds all of it in memory.
+    pub async fn list_vector_source_documents_page(
         &self,
+        after: Option<(String, u64)>,
+        limit: usize,
     ) -> Result<Vec<VectorSourceDocument>, AppError> {
+        let (after_portal, after_document_id) = match after {
+            Some((portal_key, document_id)) => (Some(portal_key), document_id),
+            None => (None, 0),
+        };
+        let after_document_id = i64::try_from(after_document_id).map_err(|_| {
+            AppError::DataParsing("Vector source cursor exceeds supported capacity".to_string())
+        })?;
+        let limit = i64::try_from(limit.max(1)).unwrap_or(i64::MAX);
         self.query_connection("Vector source document listing", move |conn| {
             let mut statement = conn.prepare(
                 "SELECT
@@ -516,9 +529,12 @@ impl DuckDbRepository {
                  WHERE LOWER(TRIM(documents.visibility)) = 'public'
                    AND COALESCE(documents.extracted_text_sha256, '') <> ''
                    AND LENGTH(documents_fts.extracted_text) > 0
-                 ORDER BY documents.portal_subdomain, documents.id"
+                   AND (?1 IS NULL OR documents.portal_subdomain > ?1
+                        OR (documents.portal_subdomain = ?1 AND documents.id > ?2))
+                 ORDER BY documents.portal_subdomain, documents.id
+                 LIMIT ?3"
             ).map_err(|error| AppError::Storage(format!("Failed to prepare vector source list: {error}")))?;
-            let rows = statement.query_map([], |row| {
+            let rows = statement.query_map(params![after_portal, after_document_id, limit], |row| {
                 Ok(VectorSourceDocument {
                     portal_key: row.get(0)?,
                     request_id: row.get(1)?,

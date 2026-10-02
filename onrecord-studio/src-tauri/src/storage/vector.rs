@@ -3,6 +3,7 @@
 use crate::blocking::spawn_with;
 use crate::error::AppError;
 use crate::integrity::sha256_hex;
+use crate::storage::sqlite::DuckDbRepository;
 use crate::types::{
     EmbeddingIndexReport, EmbeddingIndexStatus, EmbeddingModelStatus, HybridSearchFilter,
     HybridSearchResult,
@@ -27,6 +28,8 @@ const VECTOR_SCHEMA_VERSION: i64 = 1;
 const MAX_CHUNK_CHARS: usize = 1_600;
 const CHUNK_OVERLAP_CHARS: usize = 160;
 const EMBED_BATCH_SIZE: usize = 16;
+/// Documents read per page during a rebuild; each carries its full extracted text.
+const VECTOR_SOURCE_PAGE_SIZE: usize = 32;
 
 #[derive(Debug, Clone)]
 pub struct VectorSourceDocument {
@@ -192,7 +195,7 @@ impl VectorIndex {
 
     pub async fn index_documents(
         &self,
-        documents: Vec<VectorSourceDocument>,
+        repository: &DuckDbRepository,
         rebuild: bool,
     ) -> Result<EmbeddingIndexReport, AppError> {
         if self.running.swap(true, Ordering::SeqCst) {
@@ -202,7 +205,7 @@ impl VectorIndex {
         }
         self.cancelled.store(false, Ordering::SeqCst);
         self.failed_documents.store(0, Ordering::SeqCst);
-        let result = self.index_documents_inner(documents, rebuild).await;
+        let result = self.index_documents_inner(repository, rebuild).await;
         self.running.store(false, Ordering::SeqCst);
         result
     }
@@ -403,7 +406,7 @@ impl VectorIndex {
 
     async fn index_documents_inner(
         &self,
-        documents: Vec<VectorSourceDocument>,
+        repository: &DuckDbRepository,
         rebuild: bool,
     ) -> Result<EmbeddingIndexReport, AppError> {
         self.initialize_model().await?;
@@ -431,26 +434,36 @@ impl VectorIndex {
             cancelled: false,
             first_error: None,
         };
-        for document in documents {
-            if self.cancelled.load(Ordering::SeqCst) {
-                report.cancelled = true;
+        let mut after = None;
+        'pages: loop {
+            let page = repository
+                .list_vector_source_documents_page(after.take(), VECTOR_SOURCE_PAGE_SIZE)
+                .await?;
+            let Some(last) = page.last() else {
                 break;
-            }
-            match self.index_one_document(document).await {
-                Ok(IndexOneOutcome::Indexed(chunks)) => {
-                    report.indexed_documents += 1;
-                    report.indexed_chunks += chunks;
+            };
+            after = Some((last.portal_key.clone(), last.document_id));
+            for document in page {
+                if self.cancelled.load(Ordering::SeqCst) {
+                    report.cancelled = true;
+                    break 'pages;
                 }
-                Ok(IndexOneOutcome::Skipped) => report.skipped_documents += 1,
-                Err(error) => {
-                    report.failed_documents += 1;
-                    self.failed_documents.fetch_add(1, Ordering::SeqCst);
-                    let message = error.to_string();
-                    report.first_error.get_or_insert_with(|| message.clone());
-                    *self.last_error.lock().await = Some(message);
+                match self.index_one_document(document).await {
+                    Ok(IndexOneOutcome::Indexed(chunks)) => {
+                        report.indexed_documents += 1;
+                        report.indexed_chunks += chunks;
+                    }
+                    Ok(IndexOneOutcome::Skipped) => report.skipped_documents += 1,
+                    Err(error) => {
+                        report.failed_documents += 1;
+                        self.failed_documents.fetch_add(1, Ordering::SeqCst);
+                        let message = error.to_string();
+                        report.first_error.get_or_insert_with(|| message.clone());
+                        *self.last_error.lock().await = Some(message);
+                    }
                 }
+                tokio::task::yield_now().await;
             }
-            tokio::task::yield_now().await;
         }
         Ok(report)
     }

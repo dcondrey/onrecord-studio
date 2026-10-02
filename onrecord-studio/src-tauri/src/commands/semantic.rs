@@ -39,9 +39,8 @@ pub async fn rebuild_embedding_index(
     repository: State<'_, DuckDbRepository>,
     index: State<'_, VectorIndex>,
 ) -> Result<EmbeddingIndexReport, AppError> {
-    let documents = repository.list_vector_source_documents().await?;
     index
-        .index_documents(documents, rebuild.unwrap_or(false))
+        .index_documents(&repository, rebuild.unwrap_or(false))
         .await
 }
 
