@@ -64,8 +64,11 @@ export default function DocumentAnnotations({
   const listGate = useLatestRequestGate();
   const settingsGate = useLatestRequestGate();
   const findingGate = useLatestRequestGate();
-  const gate = useLatestRequestGate();
   const saveGate = useLatestRequestGate();
+  const saveReviewerGate = useLatestRequestGate();
+  const removeGate = useLatestRequestGate();
+  const changeStatusGate = useLatestRequestGate();
+  const copyGate = useLatestRequestGate();
   const viewKey = pageViewKey(portalKey, documentId);
   const pageView = usePageViewState(viewKey);
   const pending = pageView.pending;
@@ -189,52 +192,52 @@ export default function DocumentAnnotations({
   };
 
   const saveReviewer = async () => {
-    const request = gate.begin();
+    const request = saveReviewerGate.begin();
     setActionError(null);
     try {
       const next = await invokeCommand('set_annotation_reviewer', { reviewer: reviewerDraft });
-      if (!gate.isCurrent(request)) return;
+      if (!saveReviewerGate.isCurrent(request)) return;
       setSettings(next);
       setEditingReviewer(false);
       setReviewerDraft('');
     } catch (reason) {
-      if (gate.isCurrent(request)) setActionError(formatNativeError(reason));
+      if (saveReviewerGate.isCurrent(request)) setActionError(formatNativeError(reason));
     }
   };
 
   const remove = async (id: string) => {
-    const request = gate.begin();
+    const request = removeGate.begin();
     setActionError(null);
     try {
       await invokeCommand('remove_document_annotation', { id });
-      if (!gate.isCurrent(request)) return;
+      if (!removeGate.isCurrent(request)) return;
       setConfirmingRemoval(null);
       load();
     } catch (reason) {
-      if (gate.isCurrent(request)) setActionError(formatNativeError(reason));
+      if (removeGate.isCurrent(request)) setActionError(formatNativeError(reason));
     }
   };
 
   const changeStatus = async (id: string, next: AnnotationStatus) => {
-    const request = gate.begin();
+    const request = changeStatusGate.begin();
     setActionError(null);
     try {
       await invokeCommand('set_annotation_status', { id, status: next });
-      if (gate.isCurrent(request)) load();
+      if (changeStatusGate.isCurrent(request)) load();
     } catch (reason) {
-      if (gate.isCurrent(request)) setActionError(formatNativeError(reason));
+      if (changeStatusGate.isCurrent(request)) setActionError(formatNativeError(reason));
     }
   };
 
   const items = useMemo(() => list?.annotations ?? [], [list]);
 
   const copy = async (text: string, done: string) => {
-    const request = gate.begin();
+    const request = copyGate.begin();
     try {
       await navigator.clipboard.writeText(text);
-      if (gate.isCurrent(request)) setStatus(done);
+      if (copyGate.isCurrent(request)) setStatus(done);
     } catch {
-      if (gate.isCurrent(request)) setActionError('The clipboard is unavailable. Copy the text by hand.');
+      if (copyGate.isCurrent(request)) setActionError('The clipboard is unavailable. Copy the text by hand.');
     }
   };
 
