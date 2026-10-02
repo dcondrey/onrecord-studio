@@ -55,6 +55,8 @@ Maintainability/Complexity, Comment/Code Clarity.
   (per-search reads would add an unmeasured full-corpus scan and still race; not every corpus
   write bumps `evidenceRefreshRequests`, so it can't gate this)
 - `149bdf0` sanDiegoWorkflow.test.tsx: valid meeting-calendar mock (`[]` crashed AttentionFeed)
+- `9d3ff4d` storage/review.rs: relationship evidence-check errors propagate (were shown as "source
+  needs review"); each source report decompressed once, not once per relationship
 
 Known flake, pre-existing (reproduced with pre-`7b05600` code): two `sanDiegoWorkflow.test.tsx`
 full-`<App />` tests time out under full-suite load; they pass when run alone.
