@@ -1,5 +1,21 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.hoisted(() => {
+  const entries = new Map<string, string>();
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => entries.get(key) ?? null,
+      setItem: (key: string, value: string) => void entries.set(key, String(value)),
+      removeItem: (key: string) => void entries.delete(key),
+      clear: () => entries.clear(),
+      key: (index: number) => [...entries.keys()][index] ?? null,
+      get length() { return entries.size; },
+    },
+  });
+});
+
 import { rankFeed } from '../components/dashboard/AttentionFeed';
 import type { AgencyPerformanceProfile, Finding, FindingKind, FindingSeverity } from '../types';
 

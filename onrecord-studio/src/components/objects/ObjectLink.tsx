@@ -84,7 +84,7 @@ export default function ObjectLink({ target, children, className }: { target: In
 
   // The peek describes this target only; a link re-pointed at another target drops it.
   const targetKey = JSON.stringify(target);
-  useEffect(() => close, [targetKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => close, [targetKey]);
 
   return (
     <>
@@ -109,7 +109,7 @@ export default function ObjectLink({ target, children, className }: { target: In
           style={{ left: position.left, top: position.top, width: PEEK_WIDTH, transform: position.above ? 'translateY(-100%)' : undefined }}
           className="fixed z-[110]"
         >
-          <div className="motion-pop app-panel rounded-xl p-3 text-label shadow-2xl">
+          <div className="motion-pop rounded-xl border border-line-strong bg-canvas p-3 text-label shadow-2xl">
             <PeekBody kind={target.kind} state={peek} />
           </div>
         </div>,

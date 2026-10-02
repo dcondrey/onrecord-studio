@@ -20,7 +20,7 @@ export function useGatedLoad<T>(key: string, load: () => Promise<T>): LoadState<
       .catch((reason) => { if (gate.isCurrent(token)) setState({ status: 'failed', message: formatNativeError(reason) }); });
     return gate.invalidate;
     // `load` is rebuilt each render; `key` names what it loads.
-  }, [key, gate]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [key, gate]);
 
   return state;
 }
