@@ -45,17 +45,27 @@ pub use duckdb::DuckDbWorkspace;
 /// native code from extensions.duckdb.org the first time a query needs one: App Review rejects
 /// downloaded executable code, and library validation in a signed build refuses to load it. Every
 /// extension the app needs is compiled in through Cargo features instead.
+///
+/// A file this creates is written at [`DUCKDB_STORAGE_VERSION`]. The library default is v0.10.2,
+/// under which DuckDB never compresses long text: measured on a real installation, 365 MB of
+/// extracted text stored `Uncompressed` there and ZSTD at 89 MB under v1.5.0. An existing file
+/// keeps the version in its header; this setting does not upgrade it.
 pub(crate) fn open_duckdb(
     path: Option<&std::path::Path>,
 ) -> ::duckdb::Result<::duckdb::Connection> {
     let config = ::duckdb::Config::default()
         .with("autoload_known_extensions", "false")?
-        .with("autoinstall_known_extensions", "false")?;
+        .with("autoinstall_known_extensions", "false")?
+        .with("storage_compatibility_version", DUCKDB_STORAGE_VERSION)?;
     match path {
         Some(path) => ::duckdb::Connection::open_with_flags(path, config),
         None => ::duckdb::Connection::open_in_memory_with_flags(config),
     }
 }
+
+/// Pinned rather than `latest` so a library upgrade cannot silently write files an older release
+/// cannot open; raising it is a deliberate change covered by the release rollback procedure.
+const DUCKDB_STORAGE_VERSION: &str = "v1.5.0";
 pub use pii::{mask_json_pii, mask_pii, PiiFinding, PiiKind, PiiMaskResult};
 pub use sqlite::{DocumentExtractionFinalization, DuckDbRepository};
 pub use vector::VectorIndex;
@@ -106,5 +116,64 @@ mod tests {
             )
             .expect("strftime over TIMESTAMPTZ must work without ICU");
         assert_eq!(rendered, "2026-01-01T20:00");
+    }
+
+    fn text_column_compression(connection: &::duckdb::Connection) -> Vec<String> {
+        let mut statement = connection
+            .prepare(
+                "SELECT DISTINCT compression FROM pragma_storage_info('t')
+                 WHERE column_name = 'body' AND segment_type = 'VARCHAR'",
+            )
+            .expect("storage info must be readable");
+        statement
+            .query_map([], |row| row.get(0))
+            .expect("storage info must query")
+            .collect::<Result<_, _>>()
+            .expect("storage info rows must read")
+    }
+
+    const POPULATE_LONG_TEXT: &str = "CREATE TABLE t AS
+        SELECT repeat('records request responsive document ' || i::VARCHAR, 4000) AS body
+        FROM range(64) r(i);
+        CHECKPOINT;";
+
+    #[test]
+    fn a_new_file_compresses_long_text() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let connection = super::open_duckdb(Some(&directory.path().join("fresh.db")))
+            .expect("a new file must open");
+        connection
+            .execute_batch(POPULATE_LONG_TEXT)
+            .expect("text must persist");
+        let compression = text_column_compression(&connection);
+        assert!(
+            !compression.is_empty() && !compression.iter().any(|c| c == "Uncompressed"),
+            "long text in a new file stored as {compression:?}"
+        );
+    }
+
+    #[test]
+    fn a_file_written_at_the_library_default_version_still_opens_and_writes() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("legacy.db");
+        {
+            let legacy = ::duckdb::Connection::open(&path).expect("legacy file must be created");
+            legacy
+                .execute_batch("CREATE TABLE kept (id BIGINT); INSERT INTO kept VALUES (1);")
+                .expect("legacy rows must persist");
+        }
+        let connection = super::open_duckdb(Some(&path)).expect("a legacy file must open");
+        connection
+            .execute_batch(&format!(
+                "INSERT INTO kept VALUES (2); {POPULATE_LONG_TEXT}"
+            ))
+            .expect("a legacy file must accept writes");
+        let kept: i64 = connection
+            .query_row("SELECT count(*) FROM kept", [], |row| row.get(0))
+            .expect("rows must read");
+        assert_eq!(kept, 2);
+        // The header's version governs, so this file still stores text uncompressed. Asserting it
+        // keeps the doc comment on `open_duckdb` honest if a library upgrade starts migrating files.
+        assert_eq!(text_column_compression(&connection), vec!["Uncompressed"]);
     }
 }

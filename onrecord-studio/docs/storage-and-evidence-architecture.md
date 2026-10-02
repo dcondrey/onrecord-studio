@@ -494,16 +494,18 @@ that the account holding it was uncompromised.
   currently apply here — an earlier answer claiming it already covered this column was wrong).
   Measured directly (same corpus and snapshot, same 84 rows, 365,086,281 raw UTF-8 bytes of
   concatenated `extracted_text`): standalone zstd over that text compresses to a 4.15:1 ratio (75.9%
-  smaller) at level 3, and 6.38:1 (84.3% smaller) at level 19 — a real, substantial, and currently
-  unclaimed lever, distinct from the zero-benefit dedup finding above. Not implemented, and two
-  claims below this point are unverified, not established, and should not be treated as fact without
-  checking DuckDB's storage-compression documentation for this exact `duckdb` crate version
-  (`1.10505.0` in `Cargo.lock`) and this database's `storage_compatibility_version`: whether DuckDB's
-  own automatic compression selection can already apply zstd to a column like this one (if so, the
-  lever may be far cheaper than a hand-rolled column codec — the `Uncompressed` result above may
-  reflect the analyzer's choice for this data, not an absence of the capability), and whether `lance`
-  addresses this same gap (not evaluated in this session). `async-duckdb` does not address this gap
-  regardless: it changes connection/query concurrency, not on-disk column compression.
+  smaller) at level 3, and 6.38:1 (84.3% smaller) at level 19. Resolved 2026-10-02 by measurement
+  with DuckDB 1.5.5 (the library `1.10505.0` links): the gate is the file's storage version, not
+  the analyzer. The installation's core reports `storage_compatibility_version = v0.10.2`, the
+  library default for a new file, under which this column stays `Uncompressed`. The same 90 rows
+  written to a file at storage `v1.5.0` store as `ZSTD`, 365.7 MB to 89.4 MB, with no codec of our
+  own. `storage::open_duckdb` now creates every file at `v1.5.0`. A file keeps the version in its
+  header, so an existing installation stays at `v0.10.2` until rewritten; `COPY FROM DATABASE`
+  cannot do that rewrite, because it copies tables out of foreign-key order and fails on the real
+  core (`analytical_rows` before `analytical_snapshots`). Research snapshots are still written at
+  `v0.10.2` so a recipient's older DuckDB can open them; they carry digests, not text. Whether
+  `lance` addresses the same gap was not evaluated. `async-duckdb` does not: it changes
+  connection/query concurrency, not on-disk column compression.
 - **Not measured: embedding chunk deduplication or quantization.** The installation's
   `onrecord_studio_vectors.db` was 12 KB at measurement time — no real embedding corpus exists yet
   to measure duplicate-chunk rate or f16/f32 top-k overlap against. Revisit once real usage

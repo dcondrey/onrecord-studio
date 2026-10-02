@@ -153,8 +153,13 @@ fn build_snapshot(
     let export =
         |error: duckdb::Error| AppError::Export(format!("Snapshot export failed: {error}"));
     let path = output.to_string_lossy().replace('\'', "''");
-    conn.execute_batch(&format!("ATTACH '{path}' AS {ATTACHED}"))
-        .map_err(export)?;
+    // Written for recipients, so at the oldest storage version any current DuckDB reads rather
+    // than the app's own (`storage::open_duckdb`). A snapshot carries digests, not text, so the
+    // compression that version gives up does not apply here.
+    conn.execute_batch(&format!(
+        "ATTACH '{path}' AS {ATTACHED} (STORAGE_VERSION 'v0.10.2')"
+    ))
+    .map_err(export)?;
     let mut table_rows = BTreeMap::new();
     for (table, select) in PROJECTION {
         conn.execute_batch(&format!("CREATE TABLE {ATTACHED}.{table} AS {select}"))
@@ -293,6 +298,18 @@ mod tests {
             )
             .expect("manifest row");
         assert_eq!(digest, built.corpus_state_digest);
+        let storage_version: String = reader
+            .query_row(
+                "SELECT tags['storage_version'] FROM duckdb_databases() WHERE NOT internal
+                 AND path IS NOT NULL",
+                [],
+                |row| row.get(0),
+            )
+            .expect("storage version tag");
+        assert_eq!(
+            storage_version, "v1.0.0+",
+            "a snapshot is written for recipients' readers, not the app's own storage version"
+        );
         let tables: i64 = reader
             .query_row(
                 "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'main'",
