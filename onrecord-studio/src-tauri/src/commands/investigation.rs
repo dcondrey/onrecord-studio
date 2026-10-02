@@ -97,8 +97,13 @@ pub async fn get_cross_agency_correlations(
             window_hours,
         )
         .await?;
+    // The engine stops at `result_limit`, so only a shorter answer is known to be complete.
     repository
-        .synchronize_cross_correlation_alerts(&correlations)
+        .synchronize_cross_correlation_alerts(
+            portal_key.as_deref(),
+            correlations.len() < result_limit,
+            &correlations,
+        )
         .await?;
     Ok(correlations)
 }

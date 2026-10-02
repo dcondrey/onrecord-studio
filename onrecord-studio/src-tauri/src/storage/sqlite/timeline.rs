@@ -348,11 +348,20 @@ impl DuckDbRepository {
         .await
     }
 
+    /// Records the correlations one evaluation produced over `scope_portal_key` (every portal
+    /// when `None`).
+    ///
+    /// When `evaluation_complete`, the set is the whole answer for that scope, so an alert it no
+    /// longer contains is withdrawn along with its audit flag: a request that correlated only under
+    /// looser settings is not still correlated. A truncated evaluation withdraws nothing, because
+    /// an absent request may simply have been cut off by the limit.
     pub async fn synchronize_cross_correlation_alerts(
         &self,
+        scope_portal_key: Option<&str>,
+        evaluation_complete: bool,
         correlations: &[CrossAgencyCorrelation],
     ) -> Result<(), AppError> {
-        if correlations.is_empty() {
+        if correlations.is_empty() && !evaluation_complete {
             return Ok(());
         }
         let mut identities = std::collections::BTreeSet::new();
@@ -372,8 +381,12 @@ impl DuckDbRepository {
         }
         let evaluated_at = chrono::Utc::now().to_rfc3339();
         let correlations = correlations.to_vec();
+        let scope_portal_key = scope_portal_key.map(str::to_string);
         self.query_connection("Synchronize cross correlation alerts", move |conn| {
         execute_transaction(conn, "correlation alert synchronization", |tx| {
+            if evaluation_complete {
+                withdraw_uncorrelated_alerts(tx, scope_portal_key.as_deref(), &identities)?;
+            }
             for correlation in &correlations {
                 tx.execute(
                     "INSERT INTO cross_correlation_alerts (
@@ -449,6 +462,71 @@ impl DuckDbRepository {
         })
         .await
     }
+}
+
+fn withdraw_uncorrelated_alerts(
+    tx: &Transaction<'_>,
+    scope_portal_key: Option<&str>,
+    still_correlated: &std::collections::BTreeSet<(String, u64)>,
+) -> Result<(), AppError> {
+    let stored = {
+        let mut statement = tx
+            .prepare(
+                "SELECT portal_subdomain, request_id FROM cross_correlation_alerts
+                 WHERE ?1 IS NULL OR portal_subdomain = ?1",
+            )
+            .map_err(|error| {
+                AppError::Storage(format!("Failed to read correlation alerts: {error}"))
+            })?;
+        statement
+            .query_map(params![scope_portal_key], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            })
+            .and_then(|rows| rows.collect::<duckdb::Result<Vec<_>>>())
+            .map_err(|error| {
+                AppError::Storage(format!("Failed to read correlation alerts: {error}"))
+            })?
+    };
+    for (portal_key, request_id) in stored {
+        let correlated_id = u64::try_from(request_id).map_err(|error| {
+            AppError::Storage(format!(
+                "A stored correlation alert has an invalid request id: {error}"
+            ))
+        })?;
+        if still_correlated.contains(&(portal_key.clone(), correlated_id)) {
+            continue;
+        }
+        tx.execute(
+            "DELETE FROM cross_correlation_alerts
+             WHERE portal_subdomain = ?1 AND request_id = ?2",
+            params![portal_key, request_id],
+        )
+        .map_err(|error| {
+            AppError::Storage(format!("Failed to withdraw a correlation alert: {error}"))
+        })?;
+        let audit_id = format!("auto-{portal_key}-{request_id}");
+        tx.execute(
+            "DELETE FROM document_integrity_flags
+             WHERE audit_id = ?1 AND flag_type = 'CROSS_AGENCY_311_CORRELATION'",
+            params![audit_id],
+        )
+        .map_err(|error| {
+            AppError::Storage(format!("Failed to withdraw a correlation flag: {error}"))
+        })?;
+        let audit_exists = tx
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM case_audits WHERE audit_id = ?1)",
+                params![audit_id],
+                |row| row.get::<_, bool>(0),
+            )
+            .map_err(|error| {
+                AppError::Storage(format!("Failed to inspect a correlation audit: {error}"))
+            })?;
+        if audit_exists {
+            update_automatic_audit_status(tx, &audit_id)?;
+        }
+    }
+    Ok(())
 }
 
 pub(super) fn upsert_statutory_extension(

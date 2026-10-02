@@ -380,22 +380,26 @@ async fn a_correlation_flag_on_a_compliant_audit_rederives_its_status() {
     }
 
     repository
-        .synchronize_cross_correlation_alerts(&[crate::types::CrossAgencyCorrelation {
-            portal_key: PORTAL_SUBDOMAIN.to_string(),
-            request_id: REQUEST_ID as u64,
-            agency_id: None,
-            agency_name: "Agency".to_string(),
-            request_title: "Request".to_string(),
-            request_timestamp: "2026-08-24T12:00:00Z".to_string(),
-            neighborhood_block: "block-1".to_string(),
-            complaint_count: 3,
-            correlation_window_hours: 72,
-            distinct_source_count: 2,
-            first_correlated_event_at: "2026-08-23T12:00:00Z".to_string(),
-            last_correlated_event_at: "2026-08-24T11:00:00Z".to_string(),
-            keyword_signal_count: 1,
-            correlation_density: 0.5,
-        }])
+        .synchronize_cross_correlation_alerts(
+            None,
+            false,
+            &[crate::types::CrossAgencyCorrelation {
+                portal_key: PORTAL_SUBDOMAIN.to_string(),
+                request_id: REQUEST_ID as u64,
+                agency_id: None,
+                agency_name: "Agency".to_string(),
+                request_title: "Request".to_string(),
+                request_timestamp: "2026-08-24T12:00:00Z".to_string(),
+                neighborhood_block: "block-1".to_string(),
+                complaint_count: 3,
+                correlation_window_hours: 72,
+                distinct_source_count: 2,
+                first_correlated_event_at: "2026-08-23T12:00:00Z".to_string(),
+                last_correlated_event_at: "2026-08-24T11:00:00Z".to_string(),
+                keyword_signal_count: 1,
+                correlation_density: 0.5,
+            }],
+        )
         .await
         .expect("correlation sync must succeed");
 
@@ -408,4 +412,130 @@ async fn a_correlation_flag_on_a_compliant_audit_rederives_its_status() {
         )
         .expect("the audit must be readable");
     assert_eq!(status, "DataAnomalyFlagged");
+}
+
+fn correlation(portal_key: &str, request_id: i64) -> crate::types::CrossAgencyCorrelation {
+    crate::types::CrossAgencyCorrelation {
+        portal_key: portal_key.to_string(),
+        request_id: request_id as u64,
+        agency_id: None,
+        agency_name: "Agency".to_string(),
+        request_title: "Request".to_string(),
+        request_timestamp: "2026-08-24T12:00:00Z".to_string(),
+        neighborhood_block: "block-1".to_string(),
+        complaint_count: 3,
+        correlation_window_hours: 72,
+        distinct_source_count: 2,
+        first_correlated_event_at: "2026-08-23T12:00:00Z".to_string(),
+        last_correlated_event_at: "2026-08-24T11:00:00Z".to_string(),
+        keyword_signal_count: 1,
+        correlation_density: 0.5,
+    }
+}
+
+/// A complete evaluation is the whole answer for its scope: an alert it no longer produces is
+/// withdrawn with its audit flag, while a truncated evaluation, or one scoped to another portal,
+/// withdraws nothing it did not evaluate.
+#[tokio::test]
+async fn a_complete_correlation_run_withdraws_alerts_it_no_longer_produces_within_its_scope() {
+    const OTHER_PORTAL: &str = "other-portal";
+    let repository = repository_with_document().await;
+    {
+        let connection = repository.conn.lock().await;
+        connection
+            .execute(
+                "INSERT INTO portals (subdomain, display_name, base_url) VALUES (?1, ?2, ?3)",
+                params![OTHER_PORTAL, "Other Portal", "https://other.example.test"],
+            )
+            .unwrap();
+        for (portal, request_id) in [
+            (PORTAL_SUBDOMAIN, REQUEST_ID + 1),
+            (OTHER_PORTAL, REQUEST_ID),
+        ] {
+            connection
+                .execute(
+                    "INSERT INTO requests (id, portal_subdomain, status, created_at, updated_at)
+                     VALUES (?1, ?2, 'open', '2026-08-24T12:00:00Z', '2026-08-24T12:00:00Z')",
+                    params![request_id, portal],
+                )
+                .unwrap();
+        }
+    }
+    let alerts = |repository: DuckDbRepository| async move {
+        let connection = repository.conn.lock().await;
+        let mut statement = connection
+            .prepare(
+                "SELECT alerts.portal_subdomain, alerts.request_id, audits.verification_status,
+                        EXISTS(SELECT 1 FROM document_integrity_flags flags
+                               WHERE flags.audit_id = audits.audit_id
+                                 AND flags.flag_type = 'CROSS_AGENCY_311_CORRELATION')
+                 FROM case_audits audits
+                 LEFT JOIN cross_correlation_alerts alerts
+                   ON audits.audit_id = 'auto-' || alerts.portal_subdomain || '-' || CAST(alerts.request_id AS VARCHAR)
+                 ORDER BY audits.audit_id",
+            )
+            .unwrap();
+        statement
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, Option<String>>(0)?,
+                    row.get::<_, Option<i64>>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, bool>(3)?,
+                ))
+            })
+            .unwrap()
+            .collect::<duckdb::Result<Vec<_>>>()
+            .unwrap()
+    };
+
+    repository
+        .synchronize_cross_correlation_alerts(
+            None,
+            true,
+            &[
+                correlation(PORTAL_SUBDOMAIN, REQUEST_ID),
+                correlation(PORTAL_SUBDOMAIN, REQUEST_ID + 1),
+                correlation(OTHER_PORTAL, REQUEST_ID),
+            ],
+        )
+        .await
+        .expect("the first run must record every alert");
+    repository
+        .synchronize_cross_correlation_alerts(Some(PORTAL_SUBDOMAIN), false, &[])
+        .await
+        .expect("a truncated run must succeed");
+    assert_eq!(
+        alerts(repository.clone()).await.len(),
+        3,
+        "a truncated run withdraws nothing"
+    );
+
+    repository
+        .synchronize_cross_correlation_alerts(
+            Some(PORTAL_SUBDOMAIN),
+            true,
+            &[correlation(PORTAL_SUBDOMAIN, REQUEST_ID)],
+        )
+        .await
+        .expect("the narrower run must succeed");
+    let anomaly = "DataAnomalyFlagged".to_string();
+    assert_eq!(
+        alerts(repository.clone()).await,
+        vec![
+            (
+                Some(OTHER_PORTAL.to_string()),
+                Some(REQUEST_ID),
+                anomaly.clone(),
+                true
+            ),
+            (
+                Some(PORTAL_SUBDOMAIN.to_string()),
+                Some(REQUEST_ID),
+                anomaly,
+                true
+            ),
+            (None, None, "Compliant".to_string(), false),
+        ]
+    );
 }
