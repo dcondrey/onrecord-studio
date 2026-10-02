@@ -407,6 +407,8 @@ pub async fn export_case_evidence_package(
             .await;
         return Err(error);
     }
+    // The package is already on disk and chain-linked, so a failed outcome record must not read
+    // as a failed export: retrying would write a second package while this one stays delivered.
     repository
         .record_case_export_outcome(
             case_id.clone(),
@@ -414,7 +416,14 @@ pub async fn export_case_evidence_package(
             EXPORT_OUTCOME_WRITTEN,
             Some(output_path.to_string_lossy().into_owned()),
         )
-        .await?;
+        .await
+        .map_err(|error| {
+            AppError::Export(format!(
+                "The evidence package was written to '{}', but recording that it was written \
+                 failed, so the export ledger still shows it as reserved: {error}",
+                output_path.display()
+            ))
+        })?;
     Ok(CaseEvidencePackageResult {
         case_id,
         case_revision: package.manifest.case.revision,
