@@ -628,6 +628,39 @@ impl CorpusIndex {
         .await
     }
 
+    /// Organization and acronym entities whose display name normalizes to one of `names`,
+    /// however rarely they are mentioned. The affiliation disclosure needs every confirmed
+    /// subject, not only those inside the top-entity ranking.
+    pub async fn organization_entity_ids_named(
+        &self,
+        names: std::collections::BTreeSet<String>,
+    ) -> Result<std::collections::BTreeSet<String>, AppError> {
+        if names.is_empty() {
+            return Ok(std::collections::BTreeSet::new());
+        }
+        self.read("Corpus organization lookup", move |connection| {
+            let failed = |error: duckdb::Error| {
+                AppError::Storage(format!("Failed to read organization entities: {error}"))
+            };
+            let mut statement = connection
+                .prepare(
+                    "SELECT entity_id, display_value FROM corpus_entities
+                     WHERE entity_kind IN ('ORGANIZATION', 'ACRONYM')",
+                )
+                .map_err(failed)?;
+            let mut rows = statement.query([]).map_err(failed)?;
+            let mut ids = std::collections::BTreeSet::new();
+            while let Some(row) = rows.next().map_err(failed)? {
+                let display: String = row.get(1).map_err(failed)?;
+                if names.contains(&normalized_name(&display)) {
+                    ids.insert(row.get(0).map_err(failed)?);
+                }
+            }
+            Ok(ids)
+        })
+        .await
+    }
+
     /// The subgraph around one entity: its neighbours, ranked by how many documents each shares
     /// with it.
     ///

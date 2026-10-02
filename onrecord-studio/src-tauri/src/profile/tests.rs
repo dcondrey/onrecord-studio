@@ -409,6 +409,44 @@ fn the_name_normalization_agrees_with_what_the_corpus_resolver_stores() {
 }
 
 #[test]
+fn a_confirmed_organization_resolves_however_rarely_it_is_mentioned() {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    runtime.block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let index = CorpusIndex::open(directory.path().join("corpus.db")).unwrap();
+        let documents = [
+            "The San Diego Police Department released the log.",
+            "The Los Angeles Police Department released the log.",
+            "The Los Angeles Police Department released the report.",
+            "The Los Angeles Police Department released the memo.",
+        ];
+        for (id, text) in (1_u64..).zip(documents) {
+            index
+                .index_document(CorpusDocumentInput {
+                    portal_key: "records".into(),
+                    request_id: id,
+                    document_id: id,
+                    raw_file_sha256: format!("{:064x}", id),
+                    extracted_text_sha256: format!("{:064x}", id + 100),
+                    text: text.into(),
+                })
+                .await
+                .unwrap();
+        }
+        let top = index.top_entities(1).await.unwrap();
+        let named = index
+            .organization_entity_ids_named(["the san diego police department".to_string()].into())
+            .await
+            .unwrap();
+        assert_eq!(named.len(), 1, "{top:?}");
+        assert!(
+            !top.iter().any(|entity| named.contains(&entity.entity_id)),
+            "the lookup must reach past the ranking: {top:?}"
+        );
+    });
+}
+
+#[test]
 fn the_disclosure_is_the_standard_sentence_and_absent_when_unset() {
     assert_eq!(disclosure_sentence(None), None);
     let empty = apply_input(None, profile_input(vec![])).unwrap();

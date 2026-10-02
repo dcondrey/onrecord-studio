@@ -80,6 +80,19 @@ async fn gather_sources(
     repository: &DuckDbRepository,
     corpus: &CorpusIndex,
 ) -> Result<Sources, AppError> {
+    let (portals, agencies) = portals_and_agencies(repository, MAXIMUM_AGENCIES_SEARCHED).await?;
+    let entities = corpus.top_entities(ENTITY_SEARCH_LIMIT).await?;
+    Ok(Sources {
+        portals,
+        agencies,
+        entities,
+    })
+}
+
+async fn portals_and_agencies(
+    repository: &DuckDbRepository,
+    agency_limit: i64,
+) -> Result<(Vec<PortalTarget>, Vec<AgencyTarget>), AppError> {
     let portals = repository
         .list_portal_registrations()
         .await?
@@ -90,39 +103,37 @@ async fn gather_sources(
         })
         .collect();
     let agencies = repository
-        .query_connection("Agency listing for affiliation matching", |connection| {
-            let mut statement = connection
-                .prepare(
-                    "SELECT portal_subdomain, id, name FROM agencies
+        .query_connection(
+            "Agency listing for affiliation matching",
+            move |connection| {
+                let mut statement = connection
+                    .prepare(
+                        "SELECT portal_subdomain, id, name FROM agencies
                      ORDER BY portal_subdomain, id LIMIT ?1",
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to prepare the agency listing: {error}"))
-                })?;
-            let rows = statement
-                .query_map([MAXIMUM_AGENCIES_SEARCHED], |row| {
-                    Ok(AgencyTarget {
-                        portal_key: row.get(0)?,
-                        agency_id: row.get(1)?,
-                        name: row.get(2)?,
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to prepare the agency listing: {error}"))
+                    })?;
+                let rows = statement
+                    .query_map([agency_limit], |row| {
+                        Ok(AgencyTarget {
+                            portal_key: row.get(0)?,
+                            agency_id: row.get(1)?,
+                            name: row.get(2)?,
+                        })
                     })
-                })
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to read the agency listing: {error}"))
-                })?
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to read an agency row: {error}"))
-                })?;
-            Ok(rows)
-        })
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to read the agency listing: {error}"))
+                    })?
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to read an agency row: {error}"))
+                    })?;
+                Ok(rows)
+            },
+        )
         .await?;
-    let entities = corpus.top_entities(ENTITY_SEARCH_LIMIT).await?;
-    Ok(Sources {
-        portals,
-        agencies,
-        entities,
-    })
+    Ok((portals, agencies))
 }
 
 #[tauri::command]
@@ -230,14 +241,22 @@ pub(crate) async fn resolve_disclosure(
         .as_ref()
         .filter(|profile| !profile.match_decisions.is_empty())
     {
+        // Not the capped matching sample: a confirmed subject outside it would silently lose
+        // its disclosure sentence.
         Some(profile) => {
-            let sources = gather_sources(repository, corpus).await?;
-            matching::resolve_confirmed_subjects(
-                profile,
-                &sources.portals,
-                &sources.agencies,
-                &sources.entities,
-            )
+            let (portals, agencies) = portals_and_agencies(repository, i64::MAX).await?;
+            let mut own = matching::resolve_confirmed_subjects(profile, &portals, &agencies, &[]);
+            let organizations = profile
+                .match_decisions
+                .iter()
+                .filter(|decision| {
+                    decision.decision == MatchDecisionKind::Confirmed
+                        && decision.kind == AffiliationMatchKind::Organization
+                })
+                .map(|decision| decision.normalized_name.clone())
+                .collect();
+            own.entity_ids = corpus.organization_entity_ids_named(organizations).await?;
+            own
         }
         None => matching::ConfirmedSubjects::default(),
     };
