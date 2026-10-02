@@ -11,17 +11,17 @@ const cases = [
   },
   {
     label: '100,000-link structured discovery bound',
-    filter: 'ingestion::queue::tests::release_stress_harness_bounds_high_link_discovery',
+    filter: 'ingestion::queue::tests::crawl::release_stress_harness_bounds_high_link_discovery',
     maximumSeconds: 60,
   },
   {
     label: 'parser-memory backpressure',
-    filter: 'ingestion::queue::tests::release_stress_harness_applies_parser_memory_backpressure',
+    filter: 'ingestion::queue::tests::payload::release_stress_harness_applies_parser_memory_backpressure',
     maximumSeconds: 30,
   },
   {
     label: 'durable restart recovery',
-    filter: 'storage::sqlite::tests::interrupted_frontier_is_recovered_into_a_new_run',
+    filter: 'storage::sqlite::tests::frontier::interrupted_frontier_is_recovered_into_a_new_run',
     maximumSeconds: 30,
   },
 ];

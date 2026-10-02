@@ -392,7 +392,7 @@ fn classify_extension(extension: &str) -> DocumentFormat {
         | "sass" | "markdown" | "md" | "inf" | "reg" | "sh" | "bat" | "cmd" | "ps1" | "patch"
         | "diff" | "fods" | "sylk" | "slk" | "vcf" | "vcard" | "dxf" | "prj" | "pbtxt"
         | "prototxt" | "bib" | "ris" | "enw" | "end" | "tex" => DocumentFormat::PlainText,
-        // SVG is XML, so it rides the PlainText route; `queue.rs` dispatches a PlainText document
+        // SVG is XML, so it rides the PlainText route; `queue/extraction.rs` dispatches a PlainText document
         // named `.svg` (or typed `image/svg+xml`) to `parsers::svg::extract_svg_text` rather than
         // to the raw-text reader, which would otherwise index path data as if it were prose.
         "svg" => DocumentFormat::PlainText,

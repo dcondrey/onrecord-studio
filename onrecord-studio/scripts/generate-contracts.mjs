@@ -27,7 +27,7 @@ ${nativeCommands.map((command) => `  ${command.name}: { args: ${command.args.len
 }
 `;
 
-const queue = read('src-tauri/src/ingestion/queue.rs');
+const queue = read('src-tauri/src/ingestion/queue/progress.rs');
 const progressBody = blockAfter(queue, 'pub enum IngestionProgress');
 const progressVariants = parseStructVariants(progressBody);
 const telemetryOutput = `${banner('Rust IngestionProgress and IngestionTelemetryEnvelope')}import type * as Types from '../types';

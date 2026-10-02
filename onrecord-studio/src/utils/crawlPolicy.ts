@@ -1,6 +1,6 @@
 // Crawl and pacing settings the connector composer can hand to `start_data_source`.
 //
-// The bounds below mirror `validate_crawl_policy` (src-tauri/src/ingestion/queue.rs) and
+// The bounds below mirror `validate_crawl_policy` (src-tauri/src/ingestion/queue/guidance.rs) and
 // `validate_policy` (src-tauri/src/ingestion/limiter.rs). They exist so a typo is rejected in the
 // dialog instead of after a round trip; the backend remains the authority.
 
@@ -97,7 +97,7 @@ export function parseCrawlSettings(draft: CrawlSettingsDraft): CrawlSettingsResu
   ) {
     return { ok: false, problem: 'Requests per second must be between 0.001 and 100.' };
   }
-  // Bounds are `validate_page_parameters` (src-tauri/src/ingestion/queue.rs): MAXIMUM_METADATA_PAGE
+  // Bounds are `validate_page_parameters` (src-tauri/src/ingestion/queue/guidance.rs): MAXIMUM_METADATA_PAGE
   // is 50_000 and the page size is capped at 100 by the portal API itself.
   const startPage = parseWholeNumber(draft.metadataStartPage, 'Metadata start page', 1, 50_000);
   if (!startPage.ok) return startPage;
@@ -118,7 +118,7 @@ export function parseCrawlSettings(draft: CrawlSettingsDraft): CrawlSettingsResu
 
 /**
  * `start_data_source` persists a connector recipe row for any window it is handed that differs
- * from the built-in one (src-tauri/src/ingestion/queue.rs). An untouched dialog must therefore
+ * from the built-in one (src-tauri/src/ingestion/queue/manager.rs). An untouched dialog must therefore
  * send `null`, so a source the operator never configured stores no choice it did not make.
  */
 export function metadataPageWindowOverride(

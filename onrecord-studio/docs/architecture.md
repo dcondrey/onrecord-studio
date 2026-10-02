@@ -53,7 +53,7 @@ one-way upgrade path described in section 3.
 
 ### A. Queue
 Portal work is dispatched over a bounded `tokio::sync::mpsc` channel.
-`PORTAL_QUEUE_CAPACITY = 2_048` (`ingestion/queue.rs`) bounds memory when an investigator schedules
+`PORTAL_QUEUE_CAPACITY = 2_048` (`ingestion/queue/mod.rs`) bounds memory when an investigator schedules
 a large multi-year sweep. Durable work is held in the `ingestion_task_frontier` table so an
 interrupted run is recovered into a new run at startup rather than lost.
 
@@ -90,7 +90,7 @@ response compression.
 ## 3. Storage
 
 ### A. DuckDB core
-Opened once by `DuckDbRepository::new` (`storage/sqlite.rs` — the file name is historical; the
+Opened once by `DuckDbRepository::new` (`storage/sqlite/connection.rs` — the module name is historical; the
 implementation is entirely DuckDB). Configuration is three `SET` statements, not SQLite pragmas:
 
 ```sql

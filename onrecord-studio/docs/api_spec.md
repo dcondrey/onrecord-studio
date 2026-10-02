@@ -26,7 +26,7 @@ Retrieves paginated arrays of public records requests and their associated metad
 | Parameter | Data Type | Default Value | Max Value Range | Functional Description |
 | :--- | :--- | :--- | :--- | :--- |
 | `page` | Unsigned Integer | `1` | None | Identifies the targeted paginated slice window to return. |
-| `per_page` | Unsigned Integer | `50` | `100` | Records per page. **This client** defaults to `50` (`PortalSyncWindow::default()`, `types/source.rs`) and rejects anything outside `1..=100` before sending (`ingestion/client.rs`, `ingestion/queue.rs`). No client-side truncation exists; an out-of-range value is an error, not a clamp. The parameter may instead be named `page_size` depending on what discovery found. |
+| `per_page` | Unsigned Integer | `50` | `100` | Records per page. **This client** defaults to `50` (`PortalSyncWindow::default()`, `types/source.rs`) and rejects anything outside `1..=100` before sending (`ingestion/client.rs`, `ingestion/queue/guidance.rs`). No client-side truncation exists; an out-of-range value is an error, not a clamp. The parameter may instead be named `page_size` depending on what discovery found. |
 | `status` | String Option | None | `open`, `closed` | Accepted by the portal. **This client never sends it** — only the page and page-size parameters are attached. Status filtering happens locally, after ingestion. |
 
 ### Headers this client sends

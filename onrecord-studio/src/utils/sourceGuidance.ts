@@ -1,7 +1,7 @@
 // Filename, size, content, organization, and date rules an operator can hand to
 // `start_data_source` alongside a guided-repair seed URL. Mirrors the new fields on
 // `SourceGuidance` (src-tauri/src/types/source.rs) and the exclusion rules they drive
-// (`FrontierExclusion` in src-tauri/src/ingestion/queue.rs).
+// (`FrontierExclusion` in src-tauri/src/ingestion/queue/mod.rs).
 
 import type { SourceGuidance } from '../types';
 

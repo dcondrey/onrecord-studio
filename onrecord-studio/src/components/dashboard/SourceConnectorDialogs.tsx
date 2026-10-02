@@ -45,7 +45,7 @@ interface GuidanceListField {
   hint: string;
 }
 
-// Mirrors the `FrontierExclusion` rules this guidance drives (src-tauri/src/ingestion/queue.rs).
+// Mirrors the `FrontierExclusion` rules this guidance drives (src-tauri/src/ingestion/queue/mod.rs).
 // Each field is one rule per line, or comma-separated.
 const guidanceListFields: GuidanceListField[] = [
   { field: 'includeFilenameGlobs', label: 'Filename include globs', hint: 'Only admits a discovered file whose name matches one of these globs, e.g. *.pdf' },
