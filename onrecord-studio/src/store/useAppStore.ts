@@ -224,6 +224,9 @@ interface AppState {
   /** The case the user is working; persisted. A stored id whose case no longer exists is shown as missing, not silently cleared. */
   activeCaseId: string | null;
   setActiveCase: (caseId: string | null) => void;
+  /** With a case active, views that can be scoped show only what the case covers. */
+  scopeToCase: boolean;
+  setScopeToCase: (scoped: boolean) => void;
   /** Casework to open in the overview workbench, from any surface. */
   requestedCasework: { reportId: string } | null;
   openCasework: (reportId: string) => void;
@@ -384,6 +387,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     return { activeCaseId };
   }),
+  scopeToCase: true,
+  setScopeToCase: (scopeToCase) => set({ scopeToCase }),
   requestedCasework: null,
   openCasework: (reportId) => {
     get().setWorkspaceView('overview');

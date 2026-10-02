@@ -9,6 +9,8 @@ import ObjectLink from '../objects/ObjectLink';
 import { claimBasisLabel, formatShortDate, severityLabel, severityTone } from '../objects/labels';
 import Icon, { type IconName } from '../ui/icons';
 import { useSinceInstant } from './SinceControl';
+import CaseScopeBar from './CaseScopeBar';
+import { useCaseScope } from '../../hooks/useCaseScope';
 
 const FEED_LIMIT = 8;
 const FINDINGS_SCAN_LIMIT = 200;
@@ -46,11 +48,14 @@ export default function AttentionFeed() {
   const calendar = useGatedLoad('calendar', () => invokeCommand('get_meeting_calendar', {}));
   const changes = useGatedLoad(`changes:${findingsRefreshRequests}`, () => invokeCommand('list_watch_changes', { watchId: null, limit: 20 }));
 
+  const caseScope = useCaseScope();
   const items = useMemo(() => rankFeed({
-    findings: findings.status === 'ready' ? findings.data : [],
+    findings: findings.status === 'ready'
+      ? findings.data.filter((finding) => caseScope.status !== 'ready' || caseScope.value.findingIds.has(finding.id))
+      : [],
     calendar: calendar.status === 'ready' ? calendar.data : null,
     changes: changes.status === 'ready' ? changes.data.filter((change) => !since || change.detectedAt > since) : [],
-  }, profiles.filter((profile) => !activePortalKey || profile.portalSubdomain === activePortalKey), setWorkspaceView), [activePortalKey, calendar, changes, findings, profiles, setWorkspaceView, since]);
+  }, caseScope.status === 'ready' ? [] : profiles.filter((profile) => !activePortalKey || profile.portalSubdomain === activePortalKey), setWorkspaceView), [activePortalKey, calendar, caseScope, changes, findings, profiles, setWorkspaceView, since]);
 
   const pending = findings.status === 'pending';
   const unavailable = [
@@ -74,6 +79,7 @@ export default function AttentionFeed() {
           All findings <Icon name="arrow" className="h-3.5 w-3.5" />
         </button>
       </div>
+      <div className="px-5 pt-3 empty:hidden"><CaseScopeBar state={caseScope} noun="findings" /></div>
       {pending ? (
         <div role="status" aria-label="Loading what needs attention" className="space-y-3 p-5">
           {[0, 1, 2].map((row) => <div key={row} className="flex gap-3"><div className="skeleton h-8 w-8 rounded-lg" /><div className="flex-1 space-y-1.5"><div className="skeleton h-3 w-1/3 rounded" /><div className="skeleton h-4 w-5/6 rounded" /></div></div>)}

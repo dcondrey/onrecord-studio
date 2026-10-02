@@ -11,6 +11,8 @@ import EmptyState from '../ui/EmptyState';
 import ObjectLink from '../objects/ObjectLink';
 import { openSourceConnector } from './sourceEvents';
 import SinceControl, { useSinceInstant } from './SinceControl';
+import CaseScopeBar from './CaseScopeBar';
+import { useCaseScope } from '../../hooks/useCaseScope';
 import { cn } from '../../utils/cn';
 import ArtifactDrafts from './ArtifactDrafts';
 
@@ -39,9 +41,12 @@ export default function StoryDesk() {
   const [mode, setMode] = useState<'ranked' | 'all'>('ranked');
   const since = useSinceInstant();
   const setSincePreset = useAppStore((s) => s.setSincePreset);
+  const caseScope = useCaseScope();
   const visibleLeads = useMemo(
-    () => state.status === 'READY' ? state.leads.filter((lead) => !since || lead.firstSeenAt > since) : [],
-    [since, state],
+    () => state.status === 'READY'
+      ? state.leads.filter((lead) => (!since || lead.firstSeenAt > since) && (caseScope.status !== 'ready' || caseScope.value.findingIds.has(lead.findingId)))
+      : [],
+    [caseScope, since, state],
   );
 
   const load = useCallback(() => {
@@ -136,6 +141,8 @@ export default function StoryDesk() {
         />
         {notice && <p role="status" className="motion-reveal text-label text-success">{notice}</p>}
 
+        <CaseScopeBar state={caseScope} noun={mode === 'all' ? 'findings' : 'leads'} />
+
         {mode === 'all' ? <FindingsInbox /> : <>
         {state.status === 'PENDING' && <p role="status" className="text-label text-muted">Ranking leads…</p>}
         {state.status === 'FAILED' && (
@@ -145,8 +152,8 @@ export default function StoryDesk() {
         )}
         {state.status === 'READY' && state.leads.length > 0 && visibleLeads.length < state.leads.length && (
           <p role="status" className="text-label text-muted">
-            Showing {visibleLeads.length.toLocaleString()} of {state.leads.length.toLocaleString()} leads first seen in this window.{' '}
-            <button type="button" onClick={() => setSincePreset('all')} className="focus-ring rounded text-accent hover:underline">Show all</button>
+            Showing {visibleLeads.length.toLocaleString()} of {state.leads.length.toLocaleString()} leads{since ? ' first seen in this window' : ''}{caseScope.status === 'ready' ? ' in the active case' : ''}.{' '}
+            {since && <button type="button" onClick={() => setSincePreset('all')} className="focus-ring rounded text-accent hover:underline">Any time</button>}
           </p>
         )}
         {state.status === 'READY' && state.leads.length === 0 && (

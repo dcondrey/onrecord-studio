@@ -3,6 +3,8 @@ import SearchFilter from '../filters/SearchFilter';
 import { useAppStore } from '../../store/useAppStore';
 import { useScrollRestore } from '../../hooks/useScrollRestore';
 import ObjectLink from '../objects/ObjectLink';
+import CaseScopeBar from './CaseScopeBar';
+import { useCaseScope } from '../../hooks/useCaseScope';
 import { cn } from '../../utils/cn';
 import DocumentViewer from '../documents/DocumentViewer';
 import AnnotationSearch from '../documents/AnnotationSearch';
@@ -298,6 +300,7 @@ export default function MainLayout() {
         </div>
       </div>
       {evidenceMode === 'timeline' ? <CaseTimeline /> : <>
+      <CaseRequests />
       <SearchFilter />
       <AnnotationSearch onOpen={setPendingEvidenceLink} />
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -611,6 +614,33 @@ function readEvidenceLink() {
   const characterOffset = Number(parameters.get('offset') ?? 0);
   if (!Number.isSafeInteger(requestId) || requestId < 0 || !Number.isSafeInteger(documentId) || documentId < 0 || !Number.isSafeInteger(characterOffset) || characterOffset < 0) return null;
   return { portalKey, requestId, documentId, characterOffset };
+}
+
+/** With a case active, the requests holding its sources, one click from their documents and findings. */
+function CaseRequests() {
+  const caseScope = useCaseScope();
+  if (caseScope.status === 'off') return null;
+  return (
+    <div className="mx-5 mt-2 space-y-2 lg:mx-6">
+      <CaseScopeBar state={caseScope} noun="requests" />
+      {caseScope.status === 'ready' && (
+        caseScope.value.scope.requests.length === 0 ? (
+          <p className="text-label text-muted">None of this case's sources is a stored document, so no request is linked to it.</p>
+        ) : (
+          <ul aria-label="Requests in the active case" className="motion-stagger flex flex-wrap gap-2">
+            {caseScope.value.scope.requests.map((request) => (
+              <li key={`${request.portalKey}:${request.requestId}`} className="rounded-lg border border-line bg-surface/60 px-2.5 py-1 text-label">
+                <ObjectLink target={{ kind: 'request', portalKey: request.portalKey, requestId: request.requestId, label: `Request ${request.requestId}` }}>
+                  Request {request.requestId}
+                </ObjectLink>
+                <span className="text-muted"> · {request.portalKey}</span>
+              </li>
+            ))}
+          </ul>
+        )
+      )}
+    </div>
+  );
 }
 
 function EmptyResults({ error, sourceCount }: { error: string | null; sourceCount: number }) {

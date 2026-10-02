@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isTauri } from '@tauri-apps/api/core';
 import { formatNativeError, invokeCommand } from '../../ipc';
+import { useCaseScope } from '../../hooks/useCaseScope';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { ShapeGlyph, type GlyphShape } from '../ui/shapeGlyph';
 import { useAppStore } from '../../store/useAppStore';
@@ -202,10 +203,11 @@ export default function FindingsInbox() {
     disclosure !== null && (disclosure.ownPortalKeys.length > 0 ||
       disclosure.ownAgencies.length > 0 ||
       disclosure.ownEntityIds.length > 0);
-  const lensedFindings = useMemo(
-    () => (lensEnabled ? findings.filter((finding) => touchesOwnOrganization(finding, disclosure)) : findings),
-    [lensEnabled, findings, disclosure],
-  );
+  const caseScope = useCaseScope();
+  const lensedFindings = useMemo(() => {
+    const lensed = lensEnabled ? findings.filter((finding) => touchesOwnOrganization(finding, disclosure)) : findings;
+    return caseScope.status === 'ready' ? lensed.filter((finding) => caseScope.value.findingIds.has(finding.id)) : lensed;
+  }, [caseScope, lensEnabled, findings, disclosure]);
   const summary = useMemo(() => summariseSeverity(lensedFindings), [lensedFindings]);
   const visibleFindings = useMemo(() => {
     const needle = textFilter.trim().toLowerCase();
