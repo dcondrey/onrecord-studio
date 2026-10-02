@@ -21,6 +21,7 @@ import { useProfileLensStore } from '../../store/useProfileLensStore';
 import { useAffiliationDisclosure } from '../account/useProfile';
 import AnalyticsUnavailable from '../charts/AnalyticsUnavailable';
 import { ShapeGlyph } from '../ui/shapeGlyph';
+import { RegistryAnchorNote } from '../ui/RegistryAnchorNote';
 import {
   ConfidenceMeter,
   EdgeBasisChip,
@@ -695,6 +696,11 @@ export default function EntityGraph() {
               Node badge shape carries validation grade; hollow badge with dashed outline is a lead.
             </span>
           </div>
+          {centre.kind === 'CONTRACTOR_LICENSE' && (
+            <div className="mt-2 border-t border-slate-800 pt-2">
+              <RegistryAnchorNote identifierKind={centre.kind} value={centre.displayValue} />
+            </div>
+          )}
 
           <form
             className="mt-2 flex flex-wrap items-center gap-2 border-t border-slate-800 pt-2 text-[9px]"

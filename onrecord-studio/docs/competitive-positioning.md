@@ -124,6 +124,33 @@ read parquet today. `src-tauri/Cargo.toml:36` enables only `features = ["bundled
 build compiles the parquet extension only under the `parquet` feature. Enabling it is a Cargo
 feature change plus a `CORPUS_SCHEMA_VERSION` bump for any new corpus-side tables.
 
+Registry terms (checked 2026-10-01, official pages only). CSLB publishes a free "Master List of
+Contractors" (License Master, Personnel, Workers' Compensation) as CSV or `.xls` from its data
+portal, licence number, business name, status, dates and classifications included, with no size or
+refresh cadence printed; the paid full and update files are fixed-block text at $235 per file, with
+the License Master at 700,000+ records, produced in January and July with monthly updates. Neither
+page carries a use restriction; the site's conditions of use point at ca.gov/use, which places state
+information "in the public domain" unless marked otherwise. The Secretary of State's bizfile bulk
+product exists ("BE & UCC Bulk Orders", master unloads $100, weekly unloads free, per a help guide
+not reachable in full), keyed by entity number rather than any identifier this app extracts, with no
+licence text anywhere on the site; the free bizfile search has a draft keyed JSON API. Cal-Access
+raw data is a daily tab-delimited `dbwebexport.zip` of the database tables (over 1 GB by a
+third-party report, unverified) with no terms on the page. No dataset forbids redistribution, and
+only CSLB inherits an explicit public-domain statement; the importer below takes an
+operator-downloaded file rather than redistributing any of them, and only CSLB is anchored because
+only the licence number is an identifier the extractor reads.
+
+Built (2026-10-01), registry anchoring. `src-tauri/src/storage/corpus_registry.rs` imports the CSLB
+License Master CSV into `corpus_registry_records` beside the corpus index (schema version 11),
+keyed by licence number with leading zeros removed on both sides, and records the file's SHA-256,
+import instant, record count and skipped-row count in `corpus_registry_snapshots`. A lookup gives
+one of four answers that the UI keeps apart: no registry for the kind, no snapshot imported, not
+listed in the named file, or registered to a name and status in it. The entity graph and the
+resolution review show the answer beside a licence number as "number N is registered to NAME in
+file F as of D"; it anchors the number, never a party in the documents, and absence from the
+License Master is stated as absence from that file, since the list omits cancelled and revoked
+licences.
+
 ## 5. AI: hypotheses gated by the quote verifier
 
 The existing rule "a statistical claim is not a legal one" generalizes to "an LLM claim is not
