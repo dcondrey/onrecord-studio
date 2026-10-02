@@ -270,7 +270,7 @@ export default function MainLayout() {
           <h2 className="mt-1.5 text-[26px] font-semibold tracking-[-0.035em] text-slate-100 sm:text-[30px]">Search, inspect, and build the record.</h2>
         </div>
         <div className="flex items-center gap-3">
-          <div role="group" aria-label="Evidence view" className="flex gap-1 text-[10px]">
+          <div role="group" aria-label="Evidence view" className="flex gap-1 text-label">
             {(['records', 'timeline'] as const).map((mode) => (
               <button
                 key={mode}
@@ -283,7 +283,7 @@ export default function MainLayout() {
               </button>
             ))}
           </div>
-          <div className="hidden items-center gap-2 text-[9px] text-slate-400 sm:flex"><Icon name="shield" className="h-3.5 w-3.5 text-emerald-400/60" /> Sensitive fields are masked locally</div>
+          <div className="hidden items-center gap-2 text-caption text-slate-400 sm:flex"><Icon name="shield" className="h-3.5 w-3.5 text-emerald-400/60" /> Sensitive fields are masked locally</div>
         </div>
       </div>
       {evidenceMode === 'timeline' ? <CaseTimeline /> : <>
@@ -294,21 +294,21 @@ export default function MainLayout() {
           <section className="app-panel flex min-h-[520px] flex-col overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
               <div>
-                <h2 className="text-xs font-semibold text-slate-200">Evidence workbench</h2>
-                <p className="mt-0.5 text-[9px] text-slate-400">Request metadata is PII-masked before it reaches this view.</p>
+                <h2 className="text-label leading-4 font-semibold text-slate-200">Evidence workbench</h2>
+                <p className="mt-0.5 text-caption text-slate-400">Request metadata is PII-masked before it reaches this view.</p>
               </div>
               <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setLegalLibraryOpen(true)} className="rounded border border-indigo-400/20 bg-indigo-500/[0.07] px-2 py-1 text-[9px] font-semibold text-indigo-200/80 transition hover:border-indigo-400/35 hover:bg-indigo-500/10">Legal authority library</button>
-                <span className="rounded border border-slate-800 bg-slate-950 px-2 py-1 font-mono text-[9px] text-slate-400">{formatMatchCount(resultsTotal)} records</span>
+                <button type="button" onClick={() => setLegalLibraryOpen(true)} className="whitespace-nowrap rounded border border-indigo-400/20 bg-indigo-500/[0.07] px-2 py-1 text-caption font-semibold text-indigo-200/80 transition hover:border-indigo-400/35 hover:bg-indigo-500/10">Legal authority library</button>
+                <span className="rounded border border-slate-800 bg-slate-950 px-2 py-1 font-mono text-caption text-slate-400">{formatMatchCount(resultsTotal)} records</span>
               </div>
             </div>
             {resultsTotal > results.length && (
-              <p role="status" className="border-b border-slate-800 px-4 py-2 text-[10px] text-slate-400">
+              <p role="status" className="border-b border-slate-800 px-4 py-2 text-label text-slate-400">
                 Showing {formatMatchCount(results.length)} of {formatMatchCount(resultsTotal)} matches. More load as you scroll, or use Load more below the list.
               </p>
             )}
             {searchPaging?.nextCursor === null && results.length !== resultsTotal && (
-              <p role="status" className="border-b border-amber-500/20 bg-amber-500/[0.05] px-4 py-2 text-[10px] text-amber-200">
+              <p role="status" className="border-b border-amber-500/20 bg-amber-500/[0.05] px-4 py-2 text-label text-amber-200">
                 The records changed while the pages loaded, so the list holds {formatMatchCount(results.length)} and the count is {formatMatchCount(resultsTotal)}. Search again for a consistent view.
               </p>
             )}
@@ -326,7 +326,7 @@ export default function MainLayout() {
                   getKey={(result) => `${result.portalKey}-${result.requestId}`}
                   onNearEnd={() => void loadMoreResults()}
                   footer={searchPaging?.nextCursor != null ? (
-                    <div className="flex items-center gap-2 px-4 py-3 text-[10px] text-slate-400">
+                    <div className="flex items-center gap-2 px-4 py-3 text-label text-slate-400">
                       {searchPaging.moreError !== null && (
                         <span role="alert" className="text-rose-300">The next page could not be read: {searchPaging.moreError}</span>
                       )}
@@ -354,14 +354,14 @@ export default function MainLayout() {
                       >
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="font-mono text-[9px] text-slate-400">{result.portalKey} / {result.requestId}</span>
+                            <span className="font-mono text-caption text-slate-400">{result.portalKey} / {result.requestId}</span>
                             <StatusBadge status={result.status} />
                           </div>
-                          <div className="mt-1 truncate text-xs font-medium text-slate-200">{result.title || 'Untitled public-records request'}</div>
-                          <div className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-slate-400">{result.descriptionPreview || 'No public description supplied.'}</div>
+                          <div className="mt-1 truncate text-label leading-4 font-medium text-slate-200">{result.title || 'Untitled public-records request'}</div>
+                          <div className="mt-1 line-clamp-2 text-label leading-relaxed text-slate-400">{result.descriptionPreview || 'No public description supplied.'}</div>
                           {(() => {
                             const basis = matchBasis(result, resultsTerm);
-                            return basis && <p className="mt-1 text-[8px] uppercase tracking-wider text-slate-400">{MATCH_BASIS_LABELS[basis]}</p>;
+                            return basis && <p className="mt-1 text-caption uppercase tracking-wider text-slate-400">{MATCH_BASIS_LABELS[basis]}</p>;
                           })()}
                           {result.integrityFlags.length > 0 && (
                             <div className="mt-2 flex flex-wrap gap-1">
@@ -369,7 +369,7 @@ export default function MainLayout() {
                             </div>
                           )}
                         </div>
-                        <div className="text-right font-mono text-[9px] text-slate-400">
+                        <div className="text-right font-mono text-caption text-slate-400">
                           <div className="truncate text-slate-400">{result.agencyName}</div>
                           <div className="mt-2">{formatDate(result.createdAt)}</div>
                           <div className="mt-1">{result.documentCount} document{result.documentCount === 1 ? '' : 's'}</div>
@@ -384,13 +384,13 @@ export default function MainLayout() {
 
           <div className="grid min-h-0 grid-rows-[auto_minmax(220px,1fr)] gap-4">
             <section className="app-panel p-4">
-              <div className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400">Case context</div>
+              <div className="text-caption font-bold uppercase tracking-[0.18em] text-slate-400">Case context</div>
               {selected ? (
                 <div className="mt-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <h2 className="text-sm font-semibold leading-snug text-slate-100">{selected.title || 'Untitled request'}</h2>
-                      <p className="mt-1 text-[10px] text-slate-400">{selected.agencyName} · {selected.portalKey}</p>
+                      <p className="mt-1 text-label text-slate-400">{selected.agencyName} · {selected.portalKey}</p>
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-2">
                       <StatusBadge status={selected.status} />
@@ -398,25 +398,25 @@ export default function MainLayout() {
                         type="button"
                         disabled={briefingEvidence.some((item) => item.id === `request:${selected.portalKey}:${selected.requestId}`)}
                         onClick={() => addBriefingEvidence(requestBriefingEvidence(selected, selectedSourceUrl))}
-                        className="focus-ring rounded-lg border border-indigo-400/25 bg-indigo-500/10 px-2.5 py-1.5 text-[8px] font-semibold text-indigo-200 disabled:cursor-default disabled:border-emerald-400/20 disabled:bg-emerald-500/[0.06] disabled:text-emerald-300"
+                        className="focus-ring rounded-lg border border-indigo-400/25 bg-indigo-500/10 px-2.5 py-1.5 text-caption font-semibold text-indigo-200 disabled:cursor-default disabled:border-emerald-400/20 disabled:bg-emerald-500/[0.06] disabled:text-emerald-300"
                       >
                         {briefingEvidence.some((item) => item.id === `request:${selected.portalKey}:${selected.requestId}`) ? 'Saved to briefing' : 'Save lead to briefing'}
                       </button>
                     </div>
                   </div>
-                  <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-slate-800 pt-3 text-[10px]">
+                  <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-slate-800 pt-3 text-label">
                     <CaseField label="Request ID" value={String(selected.requestId)} />
                     <CaseField label="Documents" value={String(selected.documentCount)} />
                     <CaseField label="Created" value={formatDate(selected.createdAt)} />
                     <CaseField label="Closed" value={selected.closedAt ? formatDate(selected.closedAt) : 'Not recorded'} />
                   </dl>
-                  <div className="mt-4 rounded-lg border border-slate-800 bg-slate-950/60 p-3 text-[10px] leading-relaxed text-slate-400">
+                  <div className="mt-4 rounded-lg border border-slate-800 bg-slate-950/60 p-3 text-label leading-relaxed text-slate-400">
                     {selected.descriptionPreview || 'No public description supplied.'}
                   </div>
                   <LegalCompliancePanel record={selected} onOpenLibrary={() => setLegalLibraryOpen(true)} />
                   {documents.length > 0 && (
                     <div className="mt-3">
-                      <div className="text-[8px] font-semibold uppercase tracking-wider text-slate-400">Public documents</div>
+                      <div className="text-caption font-semibold uppercase tracking-wider text-slate-400">Public documents</div>
                       <div className="mt-1.5 max-h-64 space-y-1.5 overflow-y-auto pr-1">
                         {documents.map((document) => {
                           const canOpen = document.extractionStatus === 'SEARCHABLE'
@@ -432,10 +432,10 @@ export default function MainLayout() {
                                 className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 text-left transition hover:border-indigo-400/30 hover:bg-indigo-500/[0.05] disabled:cursor-default disabled:opacity-65 disabled:hover:border-slate-800 disabled:hover:bg-slate-950/50"
                               >
                                 <span className="min-w-0">
-                                  <span className="block truncate text-[10px] font-medium text-slate-300">{document.fileName}</span>
-                                  <span className="mt-0.5 block truncate text-[8px] text-slate-400">{stateLabel}</span>
+                                  <span className="block truncate text-label font-medium text-slate-300">{document.fileName}</span>
+                                  <span className="mt-0.5 block truncate text-caption text-slate-400">{stateLabel}</span>
                                 </span>
-                                <span className="shrink-0 font-mono text-[8px] text-slate-400">{formatFileSize(document.fileSize)}</span>
+                                <span className="shrink-0 font-mono text-caption text-slate-400">{formatFileSize(document.fileSize)}</span>
                               </button>
                               {/* Its own control, never a modifier on the open action, and never a
                                   swipe or a long press. Destroying a piece of evidence is not a
@@ -464,7 +464,7 @@ export default function MainLayout() {
                       </div>
                     </div>
                   )}
-                  {documentError && <div role="alert" className="mt-2 text-[9px] leading-relaxed text-rose-300">Document view unavailable: {documentError}</div>}
+                  {documentError && <div role="alert" className="mt-2 text-caption leading-relaxed text-rose-300">Document view unavailable: {documentError}</div>}
                   {isTauri() && selected.integrityFlags.includes('STATUTORY_LATENCY_VIOLATION') && (
                     <div className="mt-3">
                       <StatutoryDeadlineAppeal portalKey={selected.portalKey} requestId={selected.requestId} />
@@ -476,25 +476,25 @@ export default function MainLayout() {
                         type="button"
                         disabled={exportState?.key === `${selected.portalKey}-${selected.requestId}` && exportState.isExporting}
                         onClick={() => void exportBrief(selected)}
-                        className="rounded-lg border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-[10px] font-semibold text-amber-200 transition hover:border-amber-300/40 hover:bg-amber-500/15 disabled:cursor-wait disabled:opacity-60"
+                        className="rounded-lg border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-label font-semibold text-amber-200 transition hover:border-amber-300/40 hover:bg-amber-500/15 disabled:cursor-wait disabled:opacity-60"
                       >
                         {exportState?.key === `${selected.portalKey}-${selected.requestId}` && exportState.isExporting ? 'Compiling protected draft…' : 'Generate administrative appeal draft'}
                       </button>
                       {exportState?.key === `${selected.portalKey}-${selected.requestId}` && exportState.result && (
-                        <div className="mt-2 break-all font-mono text-[8px] leading-relaxed text-emerald-300">
+                        <div className="mt-2 break-all font-mono text-caption leading-relaxed text-emerald-300">
                           <div>Saved immutable report: {exportState.result.outputPath}</div>
                           <div>Signed evidence package: {exportState.result.packagePath}</div>
                           <div>Signer {exportState.result.signatureAlgorithm}: {exportState.result.signerKeyId}</div>
                         </div>
                       )}
                       {exportState?.key === `${selected.portalKey}-${selected.requestId}` && exportState.error && (
-                        <div role="alert" className="mt-2 text-[9px] leading-relaxed text-rose-300">{exportState.error}</div>
+                        <div role="alert" className="mt-2 text-caption leading-relaxed text-rose-300">{exportState.error}</div>
                       )}
                     </div>
                   )}
                 </div>
               ) : (
-                <div className="mt-3 rounded-lg border border-dashed border-slate-800 px-4 py-6 text-center text-[10px] leading-relaxed text-slate-400">Select a record to inspect its evidence summary and compliance markers.</div>
+                <div className="mt-3 rounded-lg border border-dashed border-slate-800 px-4 py-6 text-center text-label leading-relaxed text-slate-400">Select a record to inspect its evidence summary and compliance markers.</div>
               )}
             </section>
 
@@ -510,7 +510,7 @@ export default function MainLayout() {
               <div className="app-eyebrow text-rose-300/70">Evidence</div>
               <h2 id="purge-document-title" className="mt-1 break-all text-sm font-semibold text-slate-100">Delete {pendingDocumentPurge.fileName}?</h2>
             </div>
-            <div className="space-y-2 p-4 text-[10px] leading-relaxed text-slate-400">
+            <div className="space-y-2 p-4 text-label leading-relaxed text-slate-400">
               <p className="text-slate-300">Destroys the {formatFileSize(pendingDocumentPurge.fileSize)} file on disk, its extracted text, and every search, provenance, and integrity record derived from it.</p>
               <p>The request this document belongs to is kept, and so is every other document under it. This cannot be undone from inside the application.</p>
               {/* No tombstone survives the delete: the crawl frontier is rebuilt per sync run and
@@ -520,8 +520,8 @@ export default function MainLayout() {
               <p>Synchronizing this source again can download the same file back. Remove the source to stop that.</p>
             </div>
             <div className="flex items-center justify-end gap-2 border-t border-slate-800 px-4 py-3">
-              <button type="button" onClick={() => setPendingDocumentPurge(null)} className="rounded-lg px-3 py-2 text-[9px] font-semibold text-slate-400 hover:text-slate-300">Cancel</button>
-              <button type="button" disabled={isPurgingDocument} onClick={() => void purgeDocument()} className="focus-ring rounded-lg border border-rose-400/40 bg-rose-500/20 px-4 py-2 text-[9px] font-semibold text-rose-100 disabled:cursor-not-allowed disabled:opacity-60">{isPurgingDocument ? 'Deleting…' : 'Delete this document'}</button>
+              <button type="button" onClick={() => setPendingDocumentPurge(null)} className="rounded-lg px-3 py-2 text-caption font-semibold text-slate-400 hover:text-slate-300">Cancel</button>
+              <button type="button" disabled={isPurgingDocument} onClick={() => void purgeDocument()} className="focus-ring rounded-lg border border-rose-400/40 bg-rose-500/20 px-4 py-2 text-caption font-semibold text-rose-100 disabled:cursor-not-allowed disabled:opacity-60">{isPurgingDocument ? 'Deleting…' : 'Delete this document'}</button>
             </div>
           </div>
         </DialogBackdrop>
@@ -529,7 +529,7 @@ export default function MainLayout() {
       {activeDocument && (
         <DialogBackdrop label={`Document ${activeDocument.summary.fileName}`} onClose={() => setActiveDocument(null)} className="app-backdrop fixed inset-0 z-50 grid place-items-center p-8 backdrop-blur-sm">
           <div className={cn('relative h-[min(760px,88vh)]', isPdfDocument(activeDocument.summary) ? 'w-[min(1440px,96vw)]' : 'w-[min(1080px,92vw)]')}>
-            <button type="button" autoFocus onClick={() => setActiveDocument(null)} className="absolute -top-7 right-0 z-10 rounded-md border border-slate-700 bg-slate-950/90 px-2 py-1 text-[9px] font-semibold text-slate-300 shadow-lg hover:border-slate-500">Close</button>
+            <button type="button" autoFocus onClick={() => setActiveDocument(null)} className="absolute -top-7 right-0 z-10 rounded-md border border-slate-700 bg-slate-950/90 px-2 py-1 text-caption font-semibold text-slate-300 shadow-lg hover:border-slate-500">Close</button>
             <div className="grid h-full grid-cols-[minmax(0,1fr)_360px] gap-4">
               <DocumentViewer
                 documentId={activeDocument.summary.documentId}
@@ -561,8 +561,8 @@ export default function MainLayout() {
                 }}
               />
               <aside className="min-h-0 space-y-4 overflow-y-auto" aria-label="Document evidence details">
-                {activeDocument.summary.extractionDeferredReason?.startsWith('REFERENCE_ONLY:') && <p className="rounded border border-amber-500/30 p-3 text-xs text-amber-200">{activeDocument.summary.extractionDeferredReason.slice('REFERENCE_ONLY:'.length)}</p>}
-                {activeDocument.summary.originalSourceUri && <a className="block break-all text-xs text-cyan-300 underline" href={activeDocument.summary.originalSourceUri} target="_blank" rel="noreferrer">View publisher’s original file</a>}
+                {activeDocument.summary.extractionDeferredReason?.startsWith('REFERENCE_ONLY:') && <p className="rounded border border-amber-500/30 p-3 text-label leading-4 text-amber-200">{activeDocument.summary.extractionDeferredReason.slice('REFERENCE_ONLY:'.length)}</p>}
+                {activeDocument.summary.originalSourceUri && <a className="block break-all text-label leading-4 text-cyan-300 underline" href={activeDocument.summary.originalSourceUri} target="_blank" rel="noreferrer">View publisher’s original file</a>}
                 <MetadataCard
                   documentId={activeDocument.summary.documentId}
                   portalKey={activeDocument.summary.portalKey}
@@ -617,14 +617,14 @@ function EmptyResults({ error, sourceCount }: { error: string | null; sourceCoun
         <div className="mx-auto grid h-9 w-9 place-items-center rounded-lg border border-slate-800 bg-slate-950 text-slate-400">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5h18M5.25 3h13.5A2.25 2.25 0 0 1 21 5.25v13.5A2.25 2.25 0 0 1 18.75 21H5.25A2.25 2.25 0 0 1 3 18.75V5.25A2.25 2.25 0 0 1 5.25 3Z" /></svg>
         </div>
-        <h2 className="mt-3 text-xs font-semibold text-slate-400">{error ? 'Search unavailable' : 'No matching evidence'}</h2>
+        <h2 className="mt-3 text-label leading-4 font-semibold text-slate-400">{error ? 'Search unavailable' : 'No matching evidence'}</h2>
         {error ? (
-          <p className="mt-1 text-[10px] leading-relaxed text-slate-400">
+          <p className="mt-1 text-label leading-relaxed text-slate-400">
             The query did not complete, so there is no result set to interpret. Retry before drawing a conclusion from these filters.
           </p>
         ) : (
           <>
-            <p className="mt-1 text-[10px] leading-relaxed text-slate-400">
+            <p className="mt-1 text-label leading-relaxed text-slate-400">
               {sourceCount === 0
                 ? 'No sources are added yet, so there is nothing to search.'
                 : `Searched ${activePortalKey ? '1 source' : `${sourceCount} source${sourceCount === 1 ? '' : 's'}`}: request titles and descriptions, and extracted text of documents already ingested. Nothing here shows that no such record exists. It may not have been collected, ingested yet, or readable as text.`}
@@ -632,7 +632,7 @@ function EmptyResults({ error, sourceCount }: { error: string | null; sourceCoun
             {narrowing.length > 0 && (
               <div className="mt-3 flex flex-wrap justify-center gap-1.5" role="group" aria-label="Narrowing the search">
                 {narrowing.map((item) => (
-                  <button key={item.label} type="button" onClick={item.remove} className="focus-ring rounded-full border border-slate-700 px-2.5 py-1 text-[9px] font-medium text-slate-300 hover:border-cyan-400/50">
+                  <button key={item.label} type="button" onClick={item.remove} className="focus-ring rounded-full border border-slate-700 px-2.5 py-1 text-caption font-medium text-slate-300 hover:border-cyan-400/50">
                     Remove {item.label}
                   </button>
                 ))}
@@ -647,15 +647,15 @@ function EmptyResults({ error, sourceCount }: { error: string | null; sourceCoun
 
 function StatusBadge({ status }: { status: string }) {
   const closed = status.toLowerCase() === 'closed';
-  return <span className={cn('rounded-full border px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wider', closed ? 'border-slate-700 bg-slate-800/70 text-slate-400' : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300')}>{status}</span>;
+  return <span className={cn('rounded-full border px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wider', closed ? 'border-slate-700 bg-slate-800/70 text-slate-400' : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300')}>{status}</span>;
 }
 
 function PolicyBadge({ flag }: { flag: string }) {
-  return <span className="rounded border border-amber-500/20 bg-amber-500/[0.07] px-1.5 py-0.5 text-[8px] font-medium text-amber-300">{flag.split('_').join(' ')}</span>;
+  return <span className="rounded border border-amber-500/20 bg-amber-500/[0.07] px-1.5 py-0.5 text-caption font-medium text-amber-300">{flag.split('_').join(' ')}</span>;
 }
 
 function CaseField({ label, value }: { label: string; value: string }) {
-  return <div><dt className="text-[8px] font-semibold uppercase tracking-wider text-slate-400">{label}</dt><dd className="mt-1 font-mono text-slate-400">{value}</dd></div>;
+  return <div><dt className="text-caption font-semibold uppercase tracking-wider text-slate-400">{label}</dt><dd className="mt-1 font-mono text-slate-400">{value}</dd></div>;
 }
 
 function formatDate(value: string) {

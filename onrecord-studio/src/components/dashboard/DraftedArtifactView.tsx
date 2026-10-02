@@ -69,7 +69,7 @@ export default function DraftedArtifactView({
   return (
     <div className="mt-3 flex flex-col gap-2">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div className="text-[9px] uppercase tracking-wider text-slate-400">
+        <div className="text-caption uppercase tracking-wider text-slate-400">
           {draft.kind === "FOLLOWUP_REQUEST"
             ? "Draft records request"
             : "Draft appeal or complaint"}
@@ -80,14 +80,14 @@ export default function DraftedArtifactView({
           <button
             type="button"
             onClick={copyToClipboard}
-            className="focus-ring rounded-md border border-slate-700 px-2 py-1 text-[9px] font-medium text-slate-300 transition hover:border-cyan-400/40"
+            className="focus-ring rounded-md border border-slate-700 px-2 py-1 text-caption font-medium text-slate-300 transition hover:border-cyan-400/40"
           >
             Copy
           </button>
           <button
             type="button"
             onClick={download}
-            className="focus-ring rounded-md border border-slate-700 px-2 py-1 text-[9px] font-medium text-slate-300 transition hover:border-cyan-400/40"
+            className="focus-ring rounded-md border border-slate-700 px-2 py-1 text-caption font-medium text-slate-300 transition hover:border-cyan-400/40"
           >
             Download .txt
           </button>
@@ -96,19 +96,19 @@ export default function DraftedArtifactView({
       {error && (
         <div
           role="alert"
-          className="rounded-md border border-rose-500/20 bg-rose-500/[0.04] px-2 py-1.5 text-[9px] text-rose-200"
+          className="rounded-md border border-rose-500/20 bg-rose-500/[0.04] px-2 py-1.5 text-caption text-rose-200"
         >
           {error}
         </div>
       )}
-      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[9px] text-slate-400">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-caption text-slate-400">
         <dt>Evidence basis</dt>
         <dd className="text-slate-300">{BASIS_LABEL[draft.evidenceBasis]}</dd>
         <dt>Confidence</dt>
         <dd className="text-slate-300">{confidenceLabel(draft.confidence)}</dd>
       </dl>
       {draft.unknownFacts.length > 0 && (
-        <div className="rounded-md border border-amber-500/20 bg-amber-500/[0.04] px-2 py-1.5 text-[9px] text-amber-200">
+        <div className="rounded-md border border-amber-500/20 bg-amber-500/[0.04] px-2 py-1.5 text-caption text-amber-200">
           <div className="font-semibold">
             Unknown to the app, fill before sending
           </div>
@@ -123,21 +123,21 @@ export default function DraftedArtifactView({
         value={editedText}
         onChange={(event) => setEditedText(event.target.value)}
         aria-label="Drafted artifact text (editable)"
-        className="min-h-[220px] w-full resize-y rounded-md border border-slate-800 bg-slate-950/70 p-3 font-mono text-[10px] leading-relaxed text-slate-200 focus:border-cyan-400/40 focus:outline-none focus:ring-1 focus:ring-cyan-400/30"
+        className="min-h-[220px] w-full resize-y rounded-md border border-slate-800 bg-slate-950/70 p-3 font-mono text-label leading-relaxed text-slate-200 focus:border-cyan-400/40 focus:outline-none focus:ring-1 focus:ring-cyan-400/30"
       />
       {draft.disclosure !== null && (
         <p
           data-testid="draft-disclosure"
-          className="rounded-md border border-slate-800 bg-slate-900/60 px-3 py-2 font-mono text-[10px] leading-relaxed text-slate-300"
+          className="rounded-md border border-slate-800 bg-slate-900/60 px-3 py-2 font-mono text-label leading-relaxed text-slate-300"
         >
           Disclosure: {draft.disclosure}
-          <span className="ml-2 font-sans text-[8px] italic text-slate-400">
+          <span className="ml-2 font-sans text-caption italic text-slate-400">
             Added to every copy and download; not editable.
           </span>
         </p>
       )}
       {draft.citations.length > 0 && (
-        <details className="text-[9px] text-slate-400">
+        <details className="text-caption text-slate-400">
           <summary className="cursor-pointer">
             Citations ({draft.citations.length})
           </summary>
@@ -155,7 +155,7 @@ export default function DraftedArtifactView({
         </details>
       )}
       {draft.citedAuthorities.length > 0 && (
-        <details className="text-[9px] text-slate-400">
+        <details className="text-caption text-slate-400">
           <summary className="cursor-pointer">
             Cited authorities ({draft.citedAuthorities.length})
           </summary>
@@ -166,7 +166,7 @@ export default function DraftedArtifactView({
           </ul>
         </details>
       )}
-      <p className="text-[8px] italic text-slate-400">
+      <p className="text-caption italic text-slate-400">
         The app produces drafts only; nothing is sent. Review and edit before
         submitting.
       </p>

@@ -53,38 +53,38 @@ export default function RedactionInferencePanel({
       <header className="mb-3 flex items-baseline justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-slate-100">Inferred identity for this redaction</h3>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-label leading-4 text-slate-400">
             Candidates below are inferred from the words around the redaction and from other released documents in
             this corpus that share the same context. This is inference, not decryption. Treat each candidate as a
             lead to verify.
           </p>
         </div>
         {onClose && (
-          <button type="button" onClick={onClose} className="text-xs text-slate-400 underline">
+          <button type="button" onClick={onClose} className="text-label leading-4 text-slate-400 underline">
             Close
           </button>
         )}
       </header>
 
-      {isLoading && <p className="text-xs text-slate-400">Reading corpus for corroborating context…</p>}
-      {error && <p className="text-xs text-rose-300">{error}</p>}
+      {isLoading && <p className="text-label leading-4 text-slate-400">Reading corpus for corroborating context…</p>}
+      {error && <p className="text-label leading-4 text-rose-300">{error}</p>}
 
       {report && !isLoading && (
         <>
-          <p className="mb-3 text-xs text-slate-400">
+          <p className="mb-3 text-label leading-4 text-slate-400">
             {report.semanticRankingUsed
               ? 'Ranked using the local semantic model.'
               : 'Ranked using lexical corroboration (semantic model not initialized).'}
           </p>
 
           {report.contextSnippet && (
-            <blockquote className="mb-3 rounded border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-200">
+            <blockquote className="mb-3 rounded border border-slate-800 bg-slate-900/60 p-3 text-label leading-4 text-slate-200">
               …{report.contextSnippet}…
             </blockquote>
           )}
 
           {report.candidates.length === 0 ? (
-            <p className="text-xs text-slate-400">
+            <p className="text-label leading-4 text-slate-400">
               No corroborating context found for this redaction. Nothing to infer.
             </p>
           ) : (
@@ -94,17 +94,17 @@ export default function RedactionInferencePanel({
                   <div className="flex items-baseline justify-between gap-2">
                     <div className="text-sm text-slate-100">
                       <span className="font-medium">{candidate.value}</span>
-                      <span className="ml-2 text-xs uppercase tracking-wide text-slate-400">{candidate.kind}</span>
+                      <span className="ml-2 text-label leading-4 uppercase tracking-wide text-slate-400">{candidate.kind}</span>
                     </div>
-                    <div className="text-xs text-slate-400" aria-label={`likelihood ${candidate.likelihoodBasisPoints} basis points`}>
+                    <div className="text-label leading-4 text-slate-400" aria-label={`likelihood ${candidate.likelihoodBasisPoints} basis points`}>
                       {(candidate.likelihoodBasisPoints / 100).toFixed(1)}%
                     </div>
                   </div>
-                  <p className="mt-1 text-xs text-slate-400">
+                  <p className="mt-1 text-label leading-4 text-slate-400">
                     Supported by {candidate.supportingEvidence.length} corroborating document
                     {candidate.supportingEvidence.length === 1 ? '' : 's'}.
                   </p>
-                  <ul className="mt-2 space-y-1 text-xs text-slate-300">
+                  <ul className="mt-2 space-y-1 text-label leading-4 text-slate-300">
                     {candidate.supportingEvidence.slice(0, 3).map((evidence, evidenceIndex) => (
                       <li key={`${evidence.documentId}-${evidenceIndex}`} className="rounded bg-slate-900/70 p-2">
                         <div className="text-slate-400">

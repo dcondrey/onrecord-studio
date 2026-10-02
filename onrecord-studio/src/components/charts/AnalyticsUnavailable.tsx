@@ -31,8 +31,8 @@ export default function AnalyticsUnavailable({ heading, detail, className }: Ana
     >
       <div className="max-w-xs">
         <Icon name="shield" className="mx-auto h-5 w-5 text-amber-400/70" />
-        <div className="mt-2 text-[10px] font-semibold text-amber-200/90">{heading}</div>
-        <p className="mt-1 text-[9px] leading-relaxed text-slate-400">
+        <div className="mt-2 text-label font-semibold text-amber-200/90">{heading}</div>
+        <p className="mt-1 text-caption leading-relaxed text-slate-400">
           {detail ?? 'The analytics query did not complete, so this panel has nothing to report either way. The activity log records the failure.'}
         </p>
       </div>

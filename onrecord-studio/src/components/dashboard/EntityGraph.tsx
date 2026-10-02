@@ -307,13 +307,13 @@ export default function EntityGraph() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="app-eyebrow">Entity graph</div>
-          <div className="mt-1 text-[10px] text-slate-400">
+          <div className="mt-1 text-label text-slate-400">
             Dotted arcs with a hollow marker are co-occurrence: proximity this app derived, not a
             relationship the documents stated. Labelled arcs with a solid diamond are relations read
             from the text. Distance reads shared documents.
           </div>
         </div>
-        <div className="rounded border border-slate-800 bg-slate-900/60 px-2 py-1 font-mono text-[9px] text-slate-400">
+        <div className="rounded border border-slate-800 bg-slate-900/60 px-2 py-1 font-mono text-caption text-slate-400">
           {seeds.length} entities indexed
         </div>
       </div>
@@ -326,7 +326,7 @@ export default function EntityGraph() {
             onClick={() => setSelectedId(seed.entityId)}
             data-own-organization={isOwn(seed.entityId) ? 'true' : undefined}
             className={cn(
-              'focus-ring rounded border px-2 py-1 font-mono text-[9px] transition-colors',
+              'focus-ring rounded border px-2 py-1 font-mono text-caption transition-colors',
               isOwn(seed.entityId) && 'ring-1 ring-cyan-400/60',
               dimOthers && !isOwn(seed.entityId) && 'opacity-40',
               seed.entityId === selectedId
@@ -340,7 +340,7 @@ export default function EntityGraph() {
         ))}
       </div>
 
-      <details className="mt-2 text-[9px] text-slate-400">
+      <details className="mt-2 text-caption text-slate-400">
         <summary className="focus-ring cursor-pointer font-semibold text-slate-300">Entities that connect the most others</summary>
         {brokersFailed ? (
           <p role="alert" className="mt-1 text-rose-300">The ranking could not be read. This does not mean no entity bridges others.</p>
@@ -367,8 +367,8 @@ export default function EntityGraph() {
       {seeds.length === 0 ? (
         <div className="mt-6 grid flex-1 place-items-center text-center">
           <div className="max-w-xs">
-            <div className="text-[10px] font-semibold text-slate-300">No entities indexed yet</div>
-            <div className="mt-1 text-[9px] leading-relaxed text-slate-400">
+            <div className="text-label font-semibold text-slate-300">No entities indexed yet</div>
+            <div className="mt-1 text-caption leading-relaxed text-slate-400">
               The graph draws entities the corpus index extracted from ingested documents. Nothing
               has been indexed, so there is nothing here to read.
             </div>
@@ -376,14 +376,14 @@ export default function EntityGraph() {
         </div>
       ) : missing ? (
         <div className="mt-6 grid flex-1 place-items-center text-center">
-          <div className="max-w-xs text-[9px] leading-relaxed text-slate-400">
+          <div className="max-w-xs text-caption leading-relaxed text-slate-400">
             That entity is no longer in the index. A corpus rebuild discards every entity
             identifier, so this is a stale selection rather than an isolated node.
           </div>
         </div>
       ) : !centre ? (
         <div className="mt-6 grid flex-1 place-items-center text-center" aria-busy="true">
-          <div className="max-w-xs text-[9px] leading-relaxed text-slate-400">
+          <div className="max-w-xs text-caption leading-relaxed text-slate-400">
             Reading the neighbourhood from the corpus index. Nothing is known about this entity's
             relationships until it answers.
           </div>
@@ -391,7 +391,7 @@ export default function EntityGraph() {
       ) : (
         <>
           {reviewed && reviewedIds.length > 0 && (
-            <div role="group" aria-label="Entities combined by review" className="mt-3 rounded border border-emerald-500/25 p-2 text-[9px] text-slate-300">
+            <div role="group" aria-label="Entities combined by review" className="mt-3 rounded border border-emerald-500/25 p-2 text-caption text-slate-300">
               <p className="font-semibold text-emerald-300">
                 Combined by your review: {reviewed.members.map((member) => member.displayValue).join(' · ')}
               </p>
@@ -411,7 +411,7 @@ export default function EntityGraph() {
             </div>
           )}
           {lookalikes.length > 0 && (
-            <div role="group" aria-label="Possible duplicate entities" className="mt-3 rounded border border-slate-800 p-2 text-[9px] text-slate-400">
+            <div role="group" aria-label="Possible duplicate entities" className="mt-3 rounded border border-slate-800 p-2 text-caption text-slate-400">
               <p>
                 These look like other spellings of {truncateLabel(centre.displayValue)}. A similar name is a lead, not proof they are the same. Combine them to see their relationships together; this changes only this view.
               </p>
@@ -443,7 +443,7 @@ export default function EntityGraph() {
               </ul>
             </div>
           )}
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-[9px] text-slate-400">
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-caption text-slate-400">
             <div role="group" aria-label="Show relationships by how they are known" className="flex gap-1">
               {ALL_BASES.map((basis) => (
                 <button
@@ -538,7 +538,7 @@ export default function EntityGraph() {
                     />
                   </g>
                   {visual.family === 'typed' && (
-                    <text x={mx + 6} y={my - 4} className="fill-slate-200 text-[8px] font-semibold" {...HALO}>
+                    <text x={mx + 6} y={my - 4} className="fill-slate-200 text-caption font-semibold" {...HALO}>
                       {visual.label}
                     </text>
                   )}
@@ -594,7 +594,7 @@ export default function EntityGraph() {
                   x={anchor === 'end' ? x - nodeRadius(edge.neighbor) - 5 : x + nodeRadius(edge.neighbor) + 5}
                   y={y + 3}
                   textAnchor={anchor}
-                  className="fill-slate-300 text-[9px]"
+                  className="fill-slate-300 text-caption"
                   {...HALO}
                 >
                   {truncateLabel(edge.neighbor.displayValue)}
@@ -610,12 +610,12 @@ export default function EntityGraph() {
               strokeWidth={isOwn(centre.entityId) ? 4 : 2}
               data-own-organization={isOwn(centre.entityId) ? 'true' : undefined}
             />
-            <text x={CENTRE} y={CENTRE + 4} textAnchor="middle" className="fill-slate-100 text-[10px] font-semibold" {...HALO}>
+            <text x={CENTRE} y={CENTRE + 4} textAnchor="middle" className="fill-slate-100 text-label font-semibold" {...HALO}>
               {truncateLabel(centre.displayValue)}
             </text>
           </svg>
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-[9px] text-slate-400" aria-busy={list.status === 'loading'}>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-caption text-slate-400" aria-busy={list.status === 'loading'}>
             {list.status === 'loading' ? (
               <span role="status">Updating the neighbours for this filter…</span>
             ) : (
@@ -646,7 +646,7 @@ export default function EntityGraph() {
           <ul className="mt-2 flex flex-col gap-1.5" aria-label="Relationships and their evidence basis">
             {placed.map(({ edge }) => (
               <li key={`basis-${edge.neighbor.entityId}`} className="rounded-lg border border-slate-800 p-2">
-                <div className="flex flex-wrap items-center gap-2 text-[10px]">
+                <div className="flex flex-wrap items-center gap-2 text-label">
                   <span className="font-semibold text-slate-100">{edge.neighbor.displayValue}</span>
                   <EdgeBasisChip kind={edge.kind} basis={edge.basis} />
                   <ValidationGradeChip grade={edge.neighbor.validationGrade} />
@@ -675,14 +675,14 @@ export default function EntityGraph() {
                 onLoadAll={loadAll}
               />
               {loadedAliases.length > 0 && (
-                <p className="mt-1 text-[9px] text-slate-400">
+                <p className="mt-1 text-caption text-slate-400">
                   The table lists {centre.displayValue}'s own neighbours. Combined spellings add their strongest neighbours to the drawing only.
                 </p>
               )}
             </>
           )}
 
-          <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-slate-800 pt-2 text-[9px] text-slate-400">
+          <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-slate-800 pt-2 text-caption text-slate-400">
             <span>
               {kindLabels[centre.kind]} · {centre.documentCount} documents
             </span>
@@ -705,7 +705,7 @@ export default function EntityGraph() {
           )}
 
           <form
-            className="mt-2 flex flex-wrap items-center gap-2 border-t border-slate-800 pt-2 text-[9px]"
+            className="mt-2 flex flex-wrap items-center gap-2 border-t border-slate-800 pt-2 text-caption"
             onSubmit={(event) => {
               event.preventDefault();
               const toEntityId = pathTargetId.trim();
@@ -738,12 +738,12 @@ export default function EntityGraph() {
               type="text"
               value={pathTargetId}
               onChange={(event) => setPathTargetId(event.target.value)}
-              className="focus-ring min-w-[220px] flex-1 rounded border border-slate-800 bg-slate-900/60 px-2 py-1 font-mono text-[9px] text-slate-100"
+              className="focus-ring min-w-[220px] flex-1 rounded border border-slate-800 bg-slate-900/60 px-2 py-1 font-mono text-caption text-slate-100"
               placeholder="paste the neighbour id from another view"
             />
             <button
               type="submit"
-              className="focus-ring rounded border border-slate-700 bg-slate-800/80 px-2 py-1 font-mono text-[9px] text-slate-200 hover:border-slate-500"
+              className="focus-ring rounded border border-slate-700 bg-slate-800/80 px-2 py-1 font-mono text-caption text-slate-200 hover:border-slate-500"
             >
               Trace
             </button>

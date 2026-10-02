@@ -92,14 +92,14 @@ export function HelpDialog({ initialTopicId, onClose }: { initialTopicId: string
         <header className="flex items-center justify-between gap-3 border-b border-slate-800/70 px-4 py-3">
           <div>
             <h2 id="help-title" className="text-[15px] font-semibold text-slate-100">OnRecord Studio Help</h2>
-            <p className="text-[12px] text-slate-400">Version {__APP_VERSION__}. Cmd/Ctrl+Shift+/ opens Help from anywhere. Esc closes it.</p>
-            {supportNotice ? <p role="alert" className="mt-1 text-[12px] text-amber-200">{supportNotice}</p> : null}
+            <p className="text-label text-slate-400">Version {__APP_VERSION__}. Cmd/Ctrl+Shift+/ opens Help from anywhere. Esc closes it.</p>
+            {supportNotice ? <p role="alert" className="mt-1 text-label text-amber-200">{supportNotice}</p> : null}
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
               onClick={() => void openSupport()}
-              className="focus-ring h-9 rounded-xl border border-slate-700 px-3 text-[12px] font-medium text-slate-200 hover:bg-slate-800"
+              className="focus-ring h-9 rounded-xl border border-slate-700 px-3 text-label font-medium text-slate-200 hover:bg-slate-800"
             >
               Support
             </button>
@@ -129,17 +129,17 @@ export function HelpDialog({ initialTopicId, onClose }: { initialTopicId: string
                   placeholder="Search help"
                   autoComplete="off"
                   spellCheck={false}
-                  className="focus-ring h-10 min-w-0 flex-1 rounded border-0 bg-transparent text-[13px] text-slate-100 outline-none placeholder:text-slate-400"
+                  className="focus-ring h-10 min-w-0 flex-1 rounded border-0 bg-transparent text-label text-slate-100 outline-none placeholder:text-slate-400"
                 />
               </div>
-              <p className="mt-2 text-[12px] text-slate-400" role="status" aria-live="polite">
+              <p className="mt-2 text-label text-slate-400" role="status" aria-live="polite">
                 {searching ? `${hits.length} ${hits.length === 1 ? 'topic matches' : 'topics match'}` : `${HELP_TOPICS.length} topics`}
               </p>
             </div>
             <nav aria-label="Help topics" className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
               {searching ? (
                 hits.length === 0 ? (
-                  <p className="px-3 py-6 text-[13px] text-slate-300">No topic matches. Try a shorter word, or a term such as deadline, provenance or research.</p>
+                  <p className="px-3 py-6 text-label text-slate-300">No topic matches. Try a shorter word, or a term such as deadline, provenance or research.</p>
                 ) : (
                   <ul className="space-y-1">
                     {hits.map(({ topic }) => (
@@ -202,8 +202,8 @@ function TopicButton({
           selected ? 'command-row-selected text-slate-100' : 'text-slate-300 hover:bg-slate-800/60',
         )}
       >
-        <span className="block text-[13px] font-medium">{topic.title}</span>
-        {excerpt ? <span className="mt-0.5 block text-[12px] leading-snug text-slate-400">{excerpt}</span> : null}
+        <span className="block text-label font-medium">{topic.title}</span>
+        {excerpt ? <span className="mt-0.5 block text-label leading-snug text-slate-400">{excerpt}</span> : null}
       </button>
     </li>
   );
@@ -223,10 +223,10 @@ export function TopicView({ topic, onOpenTopic }: { topic: HelpTopic; onOpenTopi
         <section key={`${section.heading ?? 'intro'}-${sectionIndex}`} className="mt-4">
           {section.heading ? <h3 className="text-[14px] font-semibold text-slate-100">{section.heading}</h3> : null}
           {section.paragraphs?.map((paragraph) => (
-            <p key={paragraph} className="mt-1.5 text-[13px] leading-relaxed text-slate-300">{paragraph}</p>
+            <p key={paragraph} className="mt-1.5 text-label leading-relaxed text-slate-300">{paragraph}</p>
           ))}
           {section.items ? (
-            <ul className="mt-1.5 list-disc space-y-1.5 pl-5 text-[13px] leading-relaxed text-slate-300 marker:text-slate-400">
+            <ul className="mt-1.5 list-disc space-y-1.5 pl-5 text-label leading-relaxed text-slate-300 marker:text-slate-400">
               {section.items.map((item) => <li key={item}>{item}</li>)}
             </ul>
           ) : null}
@@ -235,19 +235,19 @@ export function TopicView({ topic, onOpenTopic }: { topic: HelpTopic; onOpenTopi
       {shot ? (
         <figure className="mt-5">
           <img src={shot.src} alt={shot.alt} loading="lazy" className="w-full rounded-lg border border-slate-700" />
-          <figcaption className="mt-1.5 text-[12px] text-slate-400">{shot.caption}</figcaption>
+          <figcaption className="mt-1.5 text-label text-slate-400">{shot.caption}</figcaption>
         </figure>
       ) : null}
       {related.length > 0 ? (
         <section className="mt-6 border-t border-slate-800/70 pt-3" aria-label="Related topics">
-          <h3 className="text-[12px] font-semibold uppercase tracking-wider text-slate-400">Related</h3>
+          <h3 className="text-label font-semibold uppercase tracking-wider text-slate-400">Related</h3>
           <ul className="mt-2 flex flex-wrap gap-2">
             {related.map((entry) => (
               <li key={entry.id}>
                 <button
                   type="button"
                   onClick={() => onOpenTopic(entry.id)}
-                  className="focus-ring rounded-lg border border-slate-700 px-2.5 py-1 text-[12px] font-medium text-slate-200 hover:bg-slate-800"
+                  className="focus-ring rounded-lg border border-slate-700 px-2.5 py-1 text-label font-medium text-slate-200 hover:bg-slate-800"
                 >
                   {entry.title}
                 </button>

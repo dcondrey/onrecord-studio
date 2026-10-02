@@ -26,7 +26,7 @@ export default function ResearchAgenda({
       <h3 className="mt-2 text-xl font-semibold text-slate-100">
         {meetingsOnly ? "Dated actions in the record" : "Move the cases forward"}
       </h3>
-      <p className="mt-2 text-xs leading-relaxed text-slate-400">
+      <p className="mt-2 text-label leading-relaxed text-slate-400">
         Dates below appear in cited, retained agenda text. They are not confirmed
         participation deadlines or proof that a decision occurred.
       </p>
@@ -36,7 +36,7 @@ export default function ResearchAgenda({
             key={action.key}
             className="rounded-xl border border-slate-700 p-4"
           >
-            <div className="flex flex-wrap gap-2 text-xs text-cyan-300">
+            <div className="flex flex-wrap gap-2 text-label leading-4 text-cyan-300">
               <span>
                 {action.date
                   ? `${action.date} · ${action.date < today ? "Check the outcome" : "Verify current agenda"}`
@@ -49,13 +49,13 @@ export default function ResearchAgenda({
             <h4 className="mt-2 text-sm font-semibold text-slate-100">
               {action.title}
             </h4>
-            <p className="mt-2 text-xs leading-relaxed text-slate-300">
+            <p className="mt-2 text-label leading-relaxed text-slate-300">
               {action.purpose}
             </p>
             {action.section === "meetings" && (() => {
               const report = reports.find((item) => item.id === action.reportId);
               const meeting = report?.synthesis.meetings[action.itemIndex];
-              return report && meeting && <details className="mt-3 text-xs"><summary className="cursor-pointer text-cyan-300">Read the dated agenda evidence</summary><div className="mt-2"><Citations citations={meeting.citations} report={report} /></div></details>;
+              return report && meeting && <details className="mt-3 text-label leading-4"><summary className="cursor-pointer text-cyan-300">Read the dated agenda evidence</summary><div className="mt-2"><Citations citations={meeting.citations} report={report} /></div></details>;
             })()}
             <button
               type="button"

@@ -40,7 +40,7 @@ export default function WorkEmailVerification({
   const freeMail = verifiedDomains.filter((item) => item.isFreeMail);
 
   if (!affiliation) {
-    return <p className="mt-2 text-[10px] text-slate-400">Save the profile before verifying this organization.</p>;
+    return <p className="mt-2 text-label text-slate-400">Save the profile before verifying this organization.</p>;
   }
 
   return (
@@ -52,9 +52,9 @@ export default function WorkEmailVerification({
           {affiliation.verifiedDomain ? `: ${affiliation.verifiedDomain}` : ''}
         </p>
       ) : (
-        <p className="mt-1 text-[10px] text-slate-400">Self-declared, not verified.</p>
+        <p className="mt-1 text-label text-slate-400">Self-declared, not verified.</p>
       )}
-      <p className="mt-1 text-[10px] leading-relaxed text-slate-400">
+      <p className="mt-1 text-label leading-relaxed text-slate-400">
         A code sent to a mailbox proves you control that mailbox, not that you work there. Only the
         domain is kept on this device, never the address or the code.
       </p>
@@ -135,7 +135,7 @@ export default function WorkEmailVerification({
               <div>
                 Mailbox confirmed at <strong>{item.domain}</strong>
               </div>
-              <label className="mt-1 flex items-start gap-1 text-[10px] text-slate-300">
+              <label className="mt-1 flex items-start gap-1 text-label text-slate-300">
                 <input
                   type="checkbox"
                   checked={linkConsent === item.domain}
@@ -160,7 +160,7 @@ export default function WorkEmailVerification({
         </ul>
       )}
       {freeMail.length > 0 && (
-        <p className="mt-1 text-[10px] text-slate-400">
+        <p className="mt-1 text-label text-slate-400">
           Consumer mail domains ({freeMail.map((item) => item.domain).join(', ')}) are recorded, not
           used as proof.
         </p>

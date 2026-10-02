@@ -35,14 +35,14 @@ export default function StarterSets() {
     return registryGate.invalidate;
   }, [registryGate]);
 
-  if (error) return <div role="alert" className="text-xs text-rose-300">Starter sets unavailable: {error}</div>;
-  if (!report) return <div role="status" className="text-xs text-slate-400">Loading starter sets…</div>;
+  if (error) return <div role="alert" className="text-label leading-4 text-rose-300">Starter sets unavailable: {error}</div>;
+  if (!report) return <div role="status" className="text-label leading-4 text-slate-400">Loading starter sets…</div>;
 
   return (
     <section aria-label="Starter sets" className="space-y-3">
       <div>
         <h3 className="text-sm font-semibold text-slate-200">Starter sets</h3>
-        <p className="mt-1 max-w-3xl text-xs leading-relaxed text-slate-400">
+        <p className="mt-1 max-w-3xl text-label leading-relaxed text-slate-400">
           Bundles of public San Diego sources and records portals. Nothing is fetched until you confirm a set. A source
           that does not load is listed as unavailable with the reason, not as an empty source.
         </p>
@@ -53,38 +53,38 @@ export default function StarterSets() {
           return (
             <article key={set.id} aria-label={set.title} className="app-panel flex flex-col p-4">
               <h4 className="text-sm font-semibold text-slate-200">{set.title}</h4>
-              <p className="mt-1 text-xs leading-relaxed text-slate-400">{set.summary}</p>
-              <ul className="mt-3 space-y-2 text-xs text-slate-300">
+              <p className="mt-1 text-label leading-relaxed text-slate-400">{set.summary}</p>
+              <ul className="mt-3 space-y-2 text-label leading-4 text-slate-300">
                 {set.entries.map((entry) => (
                   <EntryRow key={entry.id} entry={entry} saved={entryIsSaved(entry, portals)} status={statuses[entry.id]} />
                 ))}
               </ul>
               <div className="mt-4">
                 {confirmingId === set.id ? (
-                  <div role="group" aria-label={`Confirm ${set.title}`} className="space-y-2 rounded-lg border border-cyan-500/30 p-3 text-xs text-slate-300">
+                  <div role="group" aria-label={`Confirm ${set.title}`} className="space-y-2 rounded-lg border border-cyan-500/30 p-3 text-label leading-4 text-slate-300">
                     <p>
                       This contacts {[...new Set(pending.map(entryHost))].join(', ')} and downloads their public pages
                       and linked files, one source at a time.
                     </p>
                     <div className="flex gap-2">
-                      <button type="button" onClick={() => { setConfirmingId(null); void useStarterRunStore.getState().run(set, pending); }} className="primary-action focus-ring rounded-lg px-3 py-2 text-xs font-semibold text-white">
+                      <button type="button" onClick={() => { setConfirmingId(null); void useStarterRunStore.getState().run(set, pending); }} className="primary-action focus-ring rounded-lg px-3 py-2 text-label leading-4 font-semibold text-white">
                         Fetch {pending.length} source{pending.length === 1 ? '' : 's'}
                       </button>
-                      <button type="button" onClick={() => setConfirmingId(null)} className="secondary-action focus-ring rounded-lg border px-3 py-2 text-xs text-slate-300">Cancel</button>
+                      <button type="button" onClick={() => setConfirmingId(null)} className="secondary-action focus-ring rounded-lg border px-3 py-2 text-label leading-4 text-slate-300">Cancel</button>
                     </div>
                   </div>
                 ) : runningId === set.id ? (
-                  <button type="button" onClick={() => useStarterRunStore.getState().cancel()} className="secondary-action focus-ring rounded-lg border px-3 py-2 text-xs text-slate-300">
+                  <button type="button" onClick={() => useStarterRunStore.getState().cancel()} className="secondary-action focus-ring rounded-lg border px-3 py-2 text-label leading-4 text-slate-300">
                     Adding… stop after the current source
                   </button>
                 ) : pending.length === 0 ? (
-                  <span className="text-xs text-slate-400">Every source in this set is already in your library.</span>
+                  <span className="text-label leading-4 text-slate-400">Every source in this set is already in your library.</span>
                 ) : (
                   <button
                     type="button"
                     disabled={runningId !== null}
                     onClick={() => setConfirmingId(set.id)}
-                    className="secondary-action focus-ring rounded-lg border px-3 py-2 text-xs font-semibold text-slate-200 disabled:opacity-50"
+                    className="secondary-action focus-ring rounded-lg border px-3 py-2 text-label leading-4 font-semibold text-slate-200 disabled:opacity-50"
                   >
                     {`Add ${pending.length} source${pending.length === 1 ? '' : 's'}…`}
                   </button>
@@ -94,7 +94,7 @@ export default function StarterSets() {
           );
         })}
       </div>
-      <p className="text-[11px] text-slate-400">Registry version {report.registryVersion}. Verification dates record one check, not a promise the page is still there.</p>
+      <p className="text-label text-slate-400">Registry version {report.registryVersion}. Verification dates record one check, not a promise the page is still there.</p>
     </section>
   );
 }

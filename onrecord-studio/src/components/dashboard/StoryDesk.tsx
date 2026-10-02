@@ -87,28 +87,28 @@ export default function StoryDesk() {
       <div className="mx-auto w-full max-w-[1200px] space-y-4 p-4 lg:p-6">
         <header className="space-y-1">
           <h2 className="text-sm font-semibold text-slate-200">Story desk</h2>
-          <p className="text-[11px] leading-relaxed text-slate-400">
+          <p className="text-label leading-relaxed text-slate-400">
             Findings ordered by what the records show: money at stake, how many documents, requests and
             agencies repeat the pattern, a record contradicting a statement, a counted violation, evidence
             strength and freshness. The score ranks attention; it is not a measure of newsworthiness and
             not a claim about any record.
           </p>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={load} className="focus-ring rounded-lg border border-slate-700 px-3 py-1.5 text-[10px] font-semibold text-slate-300 hover:border-cyan-400/40">
+            <button type="button" onClick={load} className="focus-ring rounded-lg border border-slate-700 px-3 py-1.5 text-label font-semibold text-slate-300 hover:border-cyan-400/40">
               Refresh
             </button>
-            {notice && <span role="status" className="text-[10px] text-emerald-300">{notice}</span>}
+            {notice && <span role="status" className="text-label text-emerald-300">{notice}</span>}
           </div>
         </header>
 
-        {state.status === 'PENDING' && <p role="status" className="text-[11px] text-slate-400">Ranking leads…</p>}
+        {state.status === 'PENDING' && <p role="status" className="text-label text-slate-400">Ranking leads…</p>}
         {state.status === 'FAILED' && (
-          <p role="alert" className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-[11px] text-rose-200">
+          <p role="alert" className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-label text-rose-200">
             Leads could not be loaded: {state.message}
           </p>
         )}
         {state.status === 'READY' && state.leads.length === 0 && (
-          <p className="text-[11px] text-slate-400">No leads yet. Run analysis on an ingested source to produce findings.</p>
+          <p className="text-label text-slate-400">No leads yet. Run analysis on an ingested source to produce findings.</p>
         )}
         {state.status === 'READY' && state.leads.length > 0 && (
           <ol className="space-y-3" aria-label="Ranked story leads">
@@ -116,14 +116,14 @@ export default function StoryDesk() {
               <li key={lead.findingId} className="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <div className="text-[9px] font-semibold uppercase tracking-wider text-cyan-300/80">
+                    <div className="text-caption font-semibold uppercase tracking-wider text-cyan-300/80">
                       #{index + 1} · {kindLabel(lead.kind)} · {severityLabel(lead.severity)}
                       {isLegalClaimKind(lead.kind) ? ' · counted violation' : ' · pattern signal'}
                     </div>
-                    <h3 className="mt-1 text-[12px] font-semibold text-slate-200">{lead.headline}</h3>
+                    <h3 className="mt-1 text-label font-semibold text-slate-200">{lead.headline}</h3>
                   </div>
                   <div className="text-right">
-                    <div className="text-[9px] uppercase tracking-wider text-slate-400">Attention score</div>
+                    <div className="text-caption uppercase tracking-wider text-slate-400">Attention score</div>
                     <div className="font-mono text-sm text-slate-200" aria-label="Attention score">
                       {(lead.publicInterest.totalBasisPoints / 100).toFixed(1)}
                     </div>
@@ -134,14 +134,14 @@ export default function StoryDesk() {
                     <li
                       key={factor.name}
                       title={factor.evidence}
-                      className="rounded-full border border-slate-700 px-2 py-0.5 text-[9px] text-slate-300"
+                      className="rounded-full border border-slate-700 px-2 py-0.5 text-caption text-slate-300"
                     >
                       <span className="font-semibold">{factor.name}</span> +{(factor.basisPoints / 100).toFixed(0)}
                       <span className="text-slate-400"> · {factor.evidence}</span>
                     </li>
                   ))}
                 </ul>
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px]">
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-label">
                   <button type="button" onClick={() => inspect(lead)} className="focus-ring rounded-lg border border-slate-700 px-2.5 py-1 font-semibold text-slate-300 hover:border-cyan-400/40">
                     Inspect records
                   </button>
@@ -180,7 +180,7 @@ export default function StoryDesk() {
 function LeadDraftToggle({ findingId }: { findingId: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <details open={open} className="mt-3 text-[10px]">
+    <details open={open} className="mt-3 text-label">
       <summary
         onClick={(event) => {
           event.preventDefault();

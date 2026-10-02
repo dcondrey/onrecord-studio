@@ -62,19 +62,19 @@ export default function UnredactorPanel({ documentId, portalKey }: { documentId:
     <section className="flex max-h-96 flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-900/20">
       <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">PDF overlay integrity</div>
-          <div className="mt-0.5 text-[9px] text-slate-400">Conservative vector, text-layer, and metadata inspection; permanently removed content cannot be recovered</div>
+          <div className="text-label font-bold uppercase tracking-[0.18em] text-slate-400">PDF overlay integrity</div>
+          <div className="mt-0.5 text-caption text-slate-400">Conservative vector, text-layer, and metadata inspection; permanently removed content cannot be recovered</div>
         </div>
-        <button type="button" onClick={() => void scan()} disabled={isScanning} className="rounded-lg border border-indigo-400/25 bg-indigo-500/10 px-3 py-2 text-[10px] font-semibold text-indigo-300 transition hover:bg-indigo-500/15 disabled:cursor-not-allowed disabled:opacity-50">
+        <button type="button" onClick={() => void scan()} disabled={isScanning} className="rounded-lg border border-indigo-400/25 bg-indigo-500/10 px-3 py-2 text-label font-semibold text-indigo-300 transition hover:bg-indigo-500/15 disabled:cursor-not-allowed disabled:opacity-50">
           {isScanning ? `Inspecting… ${elapsedSeconds}s` : 'Run integrity scan'}
         </button>
       </div>
       {isScanning && <div className="h-1 overflow-hidden bg-slate-950" role="progressbar" aria-label="Redaction evidence collectors are running"><div className="h-full w-1/3 animate-pulse rounded-full bg-indigo-400" /></div>}
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        {error && <div role="alert" className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-3 text-[10px] text-rose-300">{error}</div>}
+        {error && <div role="alert" className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-3 text-label text-rose-300">{error}</div>}
         {report ? (
           <div className="space-y-3">
-            <div className={cn('rounded-lg border p-3 text-[10px] font-medium', report.requiresManualReview ? 'border-amber-500/25 bg-amber-500/10 text-amber-200' : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200')}>
+            <div className={cn('rounded-lg border p-3 text-label font-medium', report.requiresManualReview ? 'border-amber-500/25 bg-amber-500/10 text-amber-200' : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200')}>
               {report.isLeakyRedaction
                 ? 'Approximate text bounds intersect a dark shape or redaction annotation. Backgrounds and layout elements can trigger this; concealed content has not been established.'
                 : coverageLimited
@@ -83,7 +83,7 @@ export default function UnredactorPanel({ documentId, portalKey }: { documentId:
                     ? 'Unapplied redaction annotations remain in the PDF and require manual review.'
                   : 'No qualifying mask/text intersection was detected by this bounded structural pass.'}
             </div>
-            <dl className="grid grid-cols-2 gap-3 rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-[9px]">
+            <dl className="grid grid-cols-2 gap-3 rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-caption">
               <Metric label="Pages analyzed" value={report.scannedPageCount.toLocaleString()} />
               <Metric label="Potential clashes" value={report.boundingBoxClashesCount.toLocaleString()} />
               <Metric label="Text redaction density" value={report.calculatedRedactionRatio === null ? 'No text measured' : `${(report.calculatedRedactionRatio * 100).toFixed(2)}%`} />
@@ -94,8 +94,8 @@ export default function UnredactorPanel({ documentId, portalKey }: { documentId:
             </dl>
             {report.extractedHiddenText && (
               <div>
-                <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-wider text-slate-400">Quarantined PII-masked intersecting text fragments</div>
-                <div className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-lg border border-slate-800 bg-slate-950 p-3 font-mono text-[10px] leading-relaxed text-slate-400">{report.extractedHiddenText}</div>
+                <div className="mb-1.5 text-caption font-semibold uppercase tracking-wider text-slate-400">Quarantined PII-masked intersecting text fragments</div>
+                <div className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-lg border border-slate-800 bg-slate-950 p-3 font-mono text-label leading-relaxed text-slate-400">{report.extractedHiddenText}</div>
               </div>
             )}
             {report.metadataLeaks.length > 0 && <ForensicList title="PII-masked metadata" values={report.metadataLeaks} />}
@@ -109,7 +109,7 @@ export default function UnredactorPanel({ documentId, portalKey }: { documentId:
             {report.isolatedStructuralAnomalies.length > 0 && <ForensicList title="Structural signals" values={report.isolatedStructuralAnomalies} />}
           </div>
         ) : !error && (
-          <div className="grid min-h-40 place-items-center text-center text-[10px] leading-relaxed text-slate-400">Run the bounded integrity scan to inspect potential visual-mask and live-text co-location.</div>
+          <div className="grid min-h-40 place-items-center text-center text-label leading-relaxed text-slate-400">Run the bounded integrity scan to inspect potential visual-mask and live-text co-location.</div>
         )}
       </div>
     </section>
@@ -123,8 +123,8 @@ function Metric({ label, value, title }: { label: string; value: string; title?:
 function ForensicList({ title, values }: { title: string; values: string[] }) {
   return (
     <div>
-      <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-wider text-slate-400">{title}</div>
-      <ul className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950 p-3 font-mono text-[9px] text-slate-400">
+      <div className="mb-1.5 text-caption font-semibold uppercase tracking-wider text-slate-400">{title}</div>
+      <ul className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950 p-3 font-mono text-caption text-slate-400">
         {values.map((value, index) => <li className="break-words" key={`${index}-${value}`}>{value}</li>)}
       </ul>
     </div>
@@ -134,10 +134,10 @@ function ForensicList({ title, values }: { title: string; values: string[] }) {
 function PageFindings({ findings, notes, onNoteChange }: { findings: RedactionPageFinding[]; notes: Record<string, string>; onNoteChange: (key: string, value: string) => void }) {
   return (
     <div>
-      <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-wider text-slate-400">Page-level findings</div>
+      <div className="mb-1.5 text-caption font-semibold uppercase tracking-wider text-slate-400">Page-level findings</div>
       <div className="max-h-48 space-y-1.5 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950 p-2">
         {findings.map((finding) => (
-          <div key={finding.pageNumber} className="rounded border border-slate-800 px-2.5 py-2 text-[9px] text-slate-400">
+          <div key={finding.pageNumber} className="rounded border border-slate-800 px-2.5 py-2 text-caption text-slate-400">
             <div className="flex items-center justify-between gap-3">
               <span className="font-semibold text-slate-300">Page {finding.pageNumber}</span>
               <span className={finding.coverageComplete ? 'text-emerald-400' : 'text-amber-300'}>{finding.coverageComplete ? 'Complete pass' : 'Limited pass'}</span>
@@ -148,11 +148,11 @@ function PageFindings({ findings, notes, onNoteChange }: { findings: RedactionPa
             {finding.intersections.length > 0 && (
               <details className="mt-1.5 border-t border-slate-800 pt-1.5">
                 <summary className="cursor-pointer text-slate-400">Intersection coordinates</summary>
-                <ul className="mt-1 space-y-1 font-mono text-[8px] text-slate-400">
+                <ul className="mt-1 space-y-1 font-mono text-caption text-slate-400">
                   {finding.intersections.map((intersection, index) => (
                     <li key={`${intersection.kind}-${index}`} className="space-y-1.5 rounded border border-slate-800 p-2">
                       <div>{intersection.kind} · text [{formatBounds(intersection.textBounds)}] · mask [{formatBounds(intersection.maskBounds)}]</div>
-                      <label className="block text-[8px] text-slate-400">Review note (geometry only; no recovered text)<textarea value={notes[reviewKey(finding.pageNumber, intersection.kind, index)] ?? ''} onChange={(event) => onNoteChange(reviewKey(finding.pageNumber, intersection.kind, index), event.target.value.slice(0, 2_000))} className="mt-1 block min-h-14 w-full rounded border border-slate-800 bg-slate-950 p-2 text-[9px] text-slate-300" placeholder="Record reviewer disposition or follow-up…" /></label>
+                      <label className="block text-caption text-slate-400">Review note (geometry only; no recovered text)<textarea value={notes[reviewKey(finding.pageNumber, intersection.kind, index)] ?? ''} onChange={(event) => onNoteChange(reviewKey(finding.pageNumber, intersection.kind, index), event.target.value.slice(0, 2_000))} className="mt-1 block min-h-14 w-full rounded border border-slate-800 bg-slate-950 p-2 text-caption text-slate-300" placeholder="Record reviewer disposition or follow-up…" /></label>
                     </li>
                   ))}
                 </ul>
@@ -169,7 +169,7 @@ const EVIDENCE_CLASSES: EvidenceClass[] = ['preserved', 'historical', 'derived',
 
 function EvidenceTabs({ bundle, activeClass, onSelect }: { bundle: EvidenceBundle; activeClass: EvidenceClass; onSelect: (value: EvidenceClass) => void }) {
   const findings = bundle.findings.filter((finding) => finding.class === activeClass);
-  return <section className="rounded-lg border border-slate-800 bg-slate-950/50 p-3"><div className="flex flex-wrap gap-1" role="tablist" aria-label="Evidence class">{EVIDENCE_CLASSES.map((value) => { const count = bundle.findings.filter((finding) => finding.class === value).length; return <button key={value} type="button" role="tab" aria-selected={activeClass === value} onClick={() => onSelect(value)} className={activeClass === value ? 'rounded border border-indigo-400/30 bg-indigo-500/10 px-2 py-1 text-[8px] font-semibold uppercase text-indigo-200' : 'rounded border border-slate-800 px-2 py-1 text-[8px] uppercase text-slate-400'}>{value} · {count}</button>; })}</div><div className="mt-2 space-y-1.5">{findings.length === 0 ? <p className="text-[9px] text-slate-400">No {activeClass} findings were reported by the collectors that completed.</p> : findings.map((finding, index) => <article key={`${finding.kind}-${finding.valueSha256 ?? index}`} className="rounded border border-slate-800 p-2 text-[9px]"><div className="font-semibold text-slate-300">{finding.kind.split('_').join(' ').toLocaleLowerCase()} · {finding.confidence}</div>{finding.maskedPreview && <pre className="mt-1 max-h-20 overflow-auto whitespace-pre-wrap font-mono text-slate-400">{finding.maskedPreview}</pre>}<p className="mt-1 text-slate-400">{finding.explanation}</p></article>)}</div></section>;
+  return <section className="rounded-lg border border-slate-800 bg-slate-950/50 p-3"><div className="flex flex-wrap gap-1" role="tablist" aria-label="Evidence class">{EVIDENCE_CLASSES.map((value) => { const count = bundle.findings.filter((finding) => finding.class === value).length; return <button key={value} type="button" role="tab" aria-selected={activeClass === value} onClick={() => onSelect(value)} className={activeClass === value ? 'rounded border border-indigo-400/30 bg-indigo-500/10 px-2 py-1 text-caption font-semibold uppercase text-indigo-200' : 'rounded border border-slate-800 px-2 py-1 text-caption uppercase text-slate-400'}>{value} · {count}</button>; })}</div><div className="mt-2 space-y-1.5">{findings.length === 0 ? <p className="text-caption text-slate-400">No {activeClass} findings were reported by the collectors that completed.</p> : findings.map((finding, index) => <article key={`${finding.kind}-${finding.valueSha256 ?? index}`} className="rounded border border-slate-800 p-2 text-caption"><div className="font-semibold text-slate-300">{finding.kind.split('_').join(' ').toLocaleLowerCase()} · {finding.confidence}</div>{finding.maskedPreview && <pre className="mt-1 max-h-20 overflow-auto whitespace-pre-wrap font-mono text-slate-400">{finding.maskedPreview}</pre>}<p className="mt-1 text-slate-400">{finding.explanation}</p></article>)}</div></section>;
 }
 
 function firstPopulatedEvidenceClass(bundle: EvidenceBundle): EvidenceClass {

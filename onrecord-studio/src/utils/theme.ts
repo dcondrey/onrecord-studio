@@ -7,7 +7,7 @@ export function readThemePreference(storage?: Pick<Storage, 'getItem'>): ThemePr
   const availableStorage = storage
     ?? (typeof window === 'undefined' ? undefined : window.localStorage);
   const savedTheme = availableStorage?.getItem(THEME_STORAGE_KEY);
-  return savedTheme === 'dark' || savedTheme === 'auto' ? savedTheme : 'light';
+  return savedTheme === 'dark' || savedTheme === 'light' ? savedTheme : 'auto';
 }
 
 export function resolveTheme(

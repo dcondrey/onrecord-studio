@@ -43,7 +43,7 @@ export default function RegistrySnapshots() {
   };
 
   return (
-    <details className="mt-4 text-[10px]">
+    <details className="mt-4 text-label">
       <summary className="cursor-pointer text-slate-300">Public registry snapshots</summary>
       <div className="mt-3 space-y-3 text-slate-400">
         <p>

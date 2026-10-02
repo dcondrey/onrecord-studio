@@ -60,7 +60,7 @@ export default function DataDiscovery({ schema, onInspect }: { schema: Analytica
     anchor.click();
     URL.revokeObjectURL(url);
   };
-  return <div className="space-y-3 text-xs text-slate-300">
+  return <div className="space-y-3 text-label leading-4 text-slate-300">
     <p className="leading-relaxed text-slate-400">Explore coverage, group differences, changes over time, unusual values, and repeated records. Each check runs across the imported snapshot and retains its query for review.</p>
     {!schema.datasets.length && <p>Import an acquired table to begin discovery. Document excerpts are searchable below.</p>}
     <fieldset disabled={running} className="space-y-2 disabled:opacity-70">
@@ -122,7 +122,7 @@ export default function DataDiscovery({ schema, onInspect }: { schema: Analytica
 function DiscoveryTable({ result, onRow }: { result: SqlQueryResult; onRow?: (row: unknown[]) => void }) {
   return <div className="mt-2">
     {result.truncated && <p className="mb-1 text-amber-200">First {result.rowCount} results shown. Calculations use all matching records. Open the query to explore or export more.</p>}
-    {!result.rowCount ? <p>No matching results for this check.</p> : <div className="max-h-72 overflow-auto"><table className="w-full text-left text-[10px]">
+    {!result.rowCount ? <p>No matching results for this check.</p> : <div className="max-h-72 overflow-auto"><table className="w-full text-left text-label">
       <thead><tr>{result.columns.map((name) => <th key={name} className="whitespace-nowrap border-b border-slate-700 p-1">{name}</th>)}{onRow && <th>Evidence</th>}</tr></thead>
       <tbody>{result.rows.map((row, i) => <tr key={i}>{row.map((cell, j) => <td key={j} title={cell === null ? 'Missing / unavailable' : String(cell)} className="max-w-64 truncate border-b border-slate-800 p-1">{cell === null ? '—' : String(cell)}</td>)}{onRow && <td><button type="button" className="analysis-button whitespace-nowrap" onClick={() => onRow(row)}>Explore records</button></td>}</tr>)}</tbody>
     </table></div>}

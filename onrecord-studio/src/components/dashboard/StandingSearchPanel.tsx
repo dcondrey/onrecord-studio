@@ -87,24 +87,24 @@ export default function StandingSearchPanel() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="app-eyebrow">Standing searches</div>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-label leading-4 text-slate-400">
             Saved queries re-run whenever the corpus changes. Each run names the corpus state it saw.{' '}
             <button type="button" className="underline" onClick={() => openHelp('standing-search')}>How to read a run</button>
           </p>
         </div>
         <button type="button" className="analysis-button" disabled={busy} onClick={() => void sync(true)}>{busy ? 'Working…' : 'Run due queries'}</button>
       </div>
-      {notice && <p role="status" className="mt-2 text-[10px] text-slate-400">{notice}</p>}
-      {error && <p role="alert" className="mt-2 text-[10px] text-amber-200">{error}</p>}
+      {notice && <p role="status" className="mt-2 text-label text-slate-400">{notice}</p>}
+      {error && <p role="alert" className="mt-2 text-label text-amber-200">{error}</p>}
 
       {summaries === null ? (
-        <p className="mt-3 text-[10px] text-slate-400">Reading standing searches.</p>
+        <p className="mt-3 text-label text-slate-400">Reading standing searches.</p>
       ) : summaries.length === 0 ? (
-        <p className="mt-3 text-[10px] text-slate-400">None saved. Run a search in the evidence view and choose “Save as standing query”.</p>
+        <p className="mt-3 text-label text-slate-400">None saved. Run a search in the evidence view and choose “Save as standing query”.</p>
       ) : (
         <ul className="mt-3 space-y-3">
           {summaries.map((summary) => (
-            <li key={summary.query.id} className="rounded-lg border border-slate-800 p-3 text-[10px]">
+            <li key={summary.query.id} className="rounded-lg border border-slate-800 p-3 text-label">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-semibold text-slate-100">{summary.query.label || '(untitled)'}</span>
                 <span className="font-mono text-slate-400">{JSON.parse(summary.query.astJson).text || ''}</span>
@@ -126,15 +126,15 @@ export default function StandingSearchPanel() {
 
       <div className="mt-4 border-t border-slate-800 pt-3">
         <div className="app-eyebrow">Missing series numbers</div>
-        <p className="mt-1 text-[10px] text-slate-400">
+        <p className="mt-1 text-label text-slate-400">
           Numbers absent from the corpus between two documents of one labelled series (resolutions, ordinances, contracts, permits). A gap is a lead for a request, not evidence that the agency withheld anything.
         </p>
         {gaps === null ? null : gaps.gaps.length === 0 ? (
-          <p className="mt-2 text-[10px] text-slate-400">
+          <p className="mt-2 text-label text-slate-400">
             {gaps.seriesCount === 0 ? 'No labelled series with three or more numbers has been read from the corpus.' : `No short gaps in ${gaps.seriesCount} series.`}
           </p>
         ) : (
-          <ul className="mt-2 space-y-1 text-[10px] text-slate-300">
+          <ul className="mt-2 space-y-1 text-label text-slate-300">
             {gaps.gaps.map((gap) => (
               <li key={`${gap.label}:${gap.prefix}:${gap.fromNumber}`}>{describeGap(gap)}</li>
             ))}

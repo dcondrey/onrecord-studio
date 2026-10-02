@@ -150,7 +150,7 @@ export default function AnomalyRadar() {
       <section className="app-panel flex min-h-[360px] flex-col overflow-hidden p-5">
         <div>
           <div className="app-eyebrow">Department deviation sunburst</div>
-          <div className="mt-1 text-[10px] text-slate-400">Portal ring → department ring. Select a slice to inspect evidence.</div>
+          <div className="mt-1 text-label text-slate-400">Portal ring → department ring. Select a slice to inspect evidence.</div>
         </div>
         {analyticsError ? (
           <AnalyticsUnavailable className="mt-4 flex-1" heading="Deviation map unavailable" />
@@ -165,8 +165,8 @@ export default function AnomalyRadar() {
             <circle cx="120" cy="120" r="4" fill="var(--viz-cyan)" opacity="0.8" />
           </svg>
           <div className="chart-ready-card absolute max-w-[230px] rounded-xl border px-4 py-3 text-center backdrop-blur-xl">
-            <div className="text-[10px] font-semibold text-slate-300">No departments profiled yet</div>
-            <div className="mt-1 text-[9px] leading-relaxed text-slate-400">This panel draws one ring per source and one slice per department, from the agency performance profiles. None have been computed, so there is nothing here to read.</div>
+            <div className="text-label font-semibold text-slate-300">No departments profiled yet</div>
+            <div className="mt-1 text-caption leading-relaxed text-slate-400">This panel draws one ring per source and one slice per department, from the agency performance profiles. None have been computed, so there is nothing here to read.</div>
           </div>
         </div>
         )}
@@ -179,11 +179,11 @@ export default function AnomalyRadar() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="app-eyebrow">Department deviation sunburst</div>
-          <div className="mt-1 text-[10px] text-slate-400">Portal ring → department ring. Select a slice to inspect evidence.</div>
+          <div className="mt-1 text-label text-slate-400">Portal ring → department ring. Select a slice to inspect evidence.</div>
         </div>
         <div className="flex items-center gap-1.5">
-          <label className="rounded border border-slate-800 bg-slate-900/60 px-2 py-1 font-mono text-[8px] text-slate-400">Slice by <select value={weightMode} onChange={(event) => setWeightMode(event.target.value as 'volume' | 'severity')} className="bg-transparent text-slate-300"><option value="volume">request volume</option><option value="severity">anomaly rate</option></select></label>
-          <div className="rounded border border-slate-800 bg-slate-900/60 px-2 py-1 font-mono text-[9px] text-slate-400">{profiles.length} departments</div>
+          <label className="rounded border border-slate-800 bg-slate-900/60 px-2 py-1 font-mono text-caption text-slate-400">Slice by <select value={weightMode} onChange={(event) => setWeightMode(event.target.value as 'volume' | 'severity')} className="bg-transparent text-slate-300"><option value="volume">request volume</option><option value="severity">anomaly rate</option></select></label>
+          <div className="rounded border border-slate-800 bg-slate-900/60 px-2 py-1 font-mono text-caption text-slate-400">{profiles.length} departments</div>
         </div>
       </div>
       <div className="grid flex-1 grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_160px]">
@@ -227,8 +227,8 @@ export default function AnomalyRadar() {
           <text x="120" y="116" textAnchor="middle" fill="var(--text-muted)" fontSize="11" fontWeight="700">AUDIT</text>
           <text x="120" y="130" textAnchor="middle" fill="var(--chart-axis)" fontSize="11">{weightMode === 'volume' ? 'VOLUME' : 'SEVERITY'}</text>
         </svg>
-        <div className="space-y-2 rounded-lg border border-slate-800 bg-slate-950/70 p-3 font-mono text-[9px]">
-          <div className="truncate text-[10px] font-bold text-slate-300">{focused?.label ?? 'Hover a slice'}</div>
+        <div className="space-y-2 rounded-lg border border-slate-800 bg-slate-950/70 p-3 font-mono text-caption">
+          <div className="truncate text-label font-bold text-slate-300">{focused?.label ?? 'Hover a slice'}</div>
           {focused?.profile ? (
             <>
               <Metric label="Requests" value={focused.profile.totalRequestsProcessed} />

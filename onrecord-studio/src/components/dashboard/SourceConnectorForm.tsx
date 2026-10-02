@@ -42,7 +42,7 @@ export function SourceConnectorForm({ connector, inputId }: { connector: SourceC
           if (error) setError(null);
         }}
         disabled={isDiscovering}
-        className="h-8 w-44 border-0 bg-transparent px-2 text-[10px] text-slate-400 shadow-none"
+        className="h-8 w-44 border-0 bg-transparent px-2 text-label text-slate-400 shadow-none"
       >
         <optgroup label="San Diego sources">
           {BUILT_IN_SOURCE_OPTIONS.map((source) => <option key={source.id} value={source.id}>{source.label}</option>)}
@@ -63,7 +63,7 @@ export function SourceConnectorForm({ connector, inputId }: { connector: SourceC
           }}
           placeholder={selectedSource.placeholder}
           autoComplete="url"
-          className="h-full w-full rounded-lg border-0 bg-transparent pl-8 pr-2 text-[11px] text-slate-100 outline-none placeholder:text-slate-400"
+          className="h-full w-full rounded-lg border-0 bg-transparent pl-8 pr-2 text-label text-slate-100 outline-none placeholder:text-slate-400"
         />
         <datalist id={`${inputId}-saved-sources`}>
           {portals.map(({ registration }) => (
@@ -113,7 +113,7 @@ export function SourceConnectorForm({ connector, inputId }: { connector: SourceC
         type="submit"
         disabled={isDiscovering || syncCapacityReached || (activeIsSyncing && !portalUrlDraft.trim())}
         className={cn(
-          'focus-ring flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border px-3 text-[10px] font-semibold transition',
+          'focus-ring flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border px-3 text-label font-semibold transition',
           isDiscovering || syncCapacityReached || (activeIsSyncing && !portalUrlDraft.trim())
             ? 'cursor-not-allowed border-slate-800 bg-slate-900 text-slate-400'
             : 'primary-action border-transparent text-white hover:brightness-105',

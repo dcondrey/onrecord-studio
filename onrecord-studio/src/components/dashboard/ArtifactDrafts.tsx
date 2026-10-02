@@ -7,7 +7,7 @@ import DraftedArtifactView from './DraftedArtifactView';
 type DraftKind = 'followup' | 'appeal';
 
 const BUTTON =
-  'focus-ring rounded-md border border-slate-700 bg-slate-900/60 px-3 py-1 text-[10px] font-semibold text-slate-200 transition disabled:opacity-60';
+  'focus-ring rounded-md border border-slate-700 bg-slate-900/60 px-3 py-1 text-label font-semibold text-slate-200 transition disabled:opacity-60';
 
 /**
  * Offers the drafts that apply to one finding and shows the result. Which buttons appear comes
@@ -92,14 +92,14 @@ export default function ArtifactDrafts({ findingId }: { findingId: string }) {
           </button>
         )}
         {availability && !availability.followup && !availability.appeal && (
-          <span className="text-[9px] text-slate-400">
+          <span className="text-caption text-slate-400">
             This finding names no specific gap to ask about, so no draft applies.
           </span>
         )}
       </div>
 
       {error && (
-        <div role="alert" className="mt-2 rounded-md border border-rose-500/20 bg-rose-500/[0.04] px-2 py-1.5 text-[9px] text-rose-200">
+        <div role="alert" className="mt-2 rounded-md border border-rose-500/20 bg-rose-500/[0.04] px-2 py-1.5 text-caption text-rose-200">
           {error}
         </div>
       )}

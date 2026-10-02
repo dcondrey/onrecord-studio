@@ -190,11 +190,11 @@ export default function FindingsInbox() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-[14rem] flex-1">
           <div className="app-eyebrow">Findings inbox</div>
-          <h3 className="mt-1 text-[13px] font-semibold text-slate-200">
+          <h3 className="mt-1 text-label font-semibold text-slate-200">
             What the detectors are surfacing
           </h3>
           {summary && (
-            <p className="mt-1 text-[9px] text-slate-400">
+            <p className="mt-1 text-caption text-slate-400">
               {summary} — ranked by severity, then confidence, then freshness.
             </p>
           )}
@@ -205,7 +205,7 @@ export default function FindingsInbox() {
           aria-pressed={lensEnabled}
           onClick={() => setLensEnabled(!lensEnabled)}
           title="Show only findings about your confirmed organization. Ranking and confidence are unchanged."
-          className="secondary-action focus-ring whitespace-nowrap rounded-lg border px-3 py-1.5 text-[10px] font-semibold text-slate-300 transition"
+          className="secondary-action focus-ring whitespace-nowrap rounded-lg border px-3 py-1.5 text-label font-semibold text-slate-300 transition"
         >
           {lensEnabled ? 'Showing: my organization' : 'My organization'}
         </button>
@@ -213,7 +213,7 @@ export default function FindingsInbox() {
           type="button"
           onClick={refresh}
           disabled={isRefreshing}
-          className="secondary-action focus-ring shrink-0 whitespace-nowrap rounded-lg border px-3 py-1.5 text-[10px] font-semibold text-slate-300 transition disabled:opacity-60"
+          className="secondary-action focus-ring shrink-0 whitespace-nowrap rounded-lg border px-3 py-1.5 text-label font-semibold text-slate-300 transition disabled:opacity-60"
         >
           {isRefreshing ? 'Analyzing…' : 'Refresh findings'}
         </button>
@@ -221,7 +221,7 @@ export default function FindingsInbox() {
       </div>
 
       {isTauri() && (
-        <details className="text-[10px] text-slate-300">
+        <details className="text-label text-slate-300">
           <summary className="focus-ring cursor-pointer font-semibold">Export a verifiable report of these findings</summary>
           <div className="mt-2">
             <VerifiableReportExport />
@@ -233,7 +233,7 @@ export default function FindingsInbox() {
       )}
 
       {isTauri() && (
-        <details className="text-[10px] text-slate-300">
+        <details className="text-label text-slate-300">
           <summary className="focus-ring cursor-pointer font-semibold">Share these findings as a read-only file</summary>
           <div className="mt-2">
             <ShareableBundleExport findings={lensedFindings} />
@@ -242,7 +242,7 @@ export default function FindingsInbox() {
       )}
 
       {findings.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 text-[9px] text-slate-400">
+        <div className="flex flex-wrap items-center gap-2 text-caption text-slate-400">
           <div role="group" aria-label="Filter by severity" className="flex gap-1">
             {SEVERITIES.map((level) => (
               <button
@@ -263,14 +263,14 @@ export default function FindingsInbox() {
             value={textFilter}
             onChange={(event) => setTextFilter(event.target.value)}
             placeholder="Filter findings"
-            className="focus-ring min-w-[10rem] flex-1 rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] text-slate-200"
+            className="focus-ring min-w-[10rem] flex-1 rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-label text-slate-200"
           />
           <label htmlFor="findings-sort" className="sr-only">Sort findings</label>
           <select
             id="findings-sort"
             value={sort}
             onChange={(event) => setSort(event.target.value as FindingSort)}
-            className="focus-ring rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] text-slate-200"
+            className="focus-ring rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-label text-slate-200"
           >
             <option value="ranked">Ranked</option>
             <option value="newest">Newest first</option>
@@ -279,7 +279,7 @@ export default function FindingsInbox() {
       )}
 
       {lensEnabled && !hasConfirmedSubject && (
-        <div role="status" className="rounded-lg border border-slate-800 px-3 py-2 text-[9px] text-slate-300">
+        <div role="status" className="rounded-lg border border-slate-800 px-3 py-2 text-caption text-slate-300">
           {disclosureStatus === 'loading'
             ? 'Reading the local profile.'
             : disclosureStatus === 'failed'
@@ -290,7 +290,7 @@ export default function FindingsInbox() {
         </div>
       )}
       {lensEnabled && hasConfirmedSubject && (
-        <div className="flex items-center gap-2 text-[9px] text-slate-400">
+        <div className="flex items-center gap-2 text-caption text-slate-400">
           <span>{visibleFindings.length} of {findings.length} findings touch your confirmed organization.</span>
           <button type="button" onClick={() => setSelfReviewOpen(true)} className="focus-ring underline">
             Open records self-review
@@ -299,12 +299,12 @@ export default function FindingsInbox() {
       )}
 
       {loadError && (
-        <div role="alert" className="rounded-lg border border-rose-500/20 bg-rose-500/[0.04] px-3 py-2 text-[9px] text-rose-200">
+        <div role="alert" className="rounded-lg border border-rose-500/20 bg-rose-500/[0.04] px-3 py-2 text-caption text-rose-200">
           Findings unavailable: {loadError}
         </div>
       )}
       {actionError && (
-        <div role="alert" className="rounded-lg border border-rose-500/20 bg-rose-500/[0.04] px-3 py-2 text-[9px] text-rose-200">
+        <div role="alert" className="rounded-lg border border-rose-500/20 bg-rose-500/[0.04] px-3 py-2 text-caption text-rose-200">
           {actionError.action === 'refresh'
             ? 'Analysis did not run; the list below is from the previous sweep: '
             : 'The finding could not be dismissed and has been restored: '}
@@ -313,15 +313,15 @@ export default function FindingsInbox() {
       )}
 
       {isLoading && findings.length === 0 ? (
-        <div role="status" className="text-[10px] text-slate-400">
+        <div role="status" className="text-label text-slate-400">
           Loading findings…
         </div>
       ) : lensEnabled && !hasConfirmedSubject ? null : findings.length === 0 && loadError ? null : findings.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-800 bg-slate-950/25 p-4 text-center">
-          <p className="text-[10px] font-medium text-slate-300">
+          <p className="text-label font-medium text-slate-300">
             No findings surfaced yet.
           </p>
-          <p className="mt-1 text-[9px] leading-relaxed text-slate-400">
+          <p className="mt-1 text-caption leading-relaxed text-slate-400">
             Add a data source or press Refresh — analysis runs automatically after ingest.
           </p>
         </div>
@@ -343,16 +343,16 @@ export default function FindingsInbox() {
         </ul>
       )}
       {isNarrowed && visibleFindings.length === 0 && findings.length > 0 && (
-        <p role="status" className="text-[10px] text-slate-400">No loaded findings match this filter.</p>
+        <p role="status" className="text-label text-slate-400">No loaded findings match this filter.</p>
       )}
       {hasMore && (
-        <div className="flex items-center gap-2 text-[9px] text-slate-400">
+        <div className="flex items-center gap-2 text-caption text-slate-400">
           <span>Showing the top {findings.length} findings; more exist. Filters apply only to what is loaded.</span>
           <button
             type="button"
             onClick={() => setLimit((current) => current + PAGE_SIZE)}
             disabled={isLoading}
-            className="secondary-action focus-ring rounded-lg border px-3 py-1 text-[10px] font-semibold text-slate-300 disabled:opacity-60"
+            className="secondary-action focus-ring rounded-lg border px-3 py-1 text-label font-semibold text-slate-300 disabled:opacity-60"
           >
             Load {PAGE_SIZE} more
           </button>
@@ -386,7 +386,7 @@ function FindingRow({
   const [shape, tone] = severityGlyph(finding.severity);
   return (
     <li className="focus-within:ring-1 focus-within:ring-cyan-400/40 group rounded-xl border border-slate-800/70 bg-slate-950/30 p-3 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.03]" data-own-organization={own ? 'true' : undefined}>
-      {own && <p className="mb-1 text-[8px] uppercase tracking-wider text-cyan-300">Your organization (self-declared)</p>}
+      {own && <p className="mb-1 text-caption uppercase tracking-wider text-cyan-300">Your organization (self-declared)</p>}
       <div className="flex flex-wrap items-start gap-3 sm:flex-nowrap">
         <span
           className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-slate-900/70 ${tone}`}
@@ -404,9 +404,9 @@ function FindingRow({
           aria-label={finding.headline}
           aria-describedby={`finding-${finding.id}-explanation`}
         >
-          <p className="text-[11px] font-semibold text-slate-100">{finding.headline}</p>
-          <p id={`finding-${finding.id}-explanation`} className="mt-1 text-[10px] leading-relaxed text-slate-400">{finding.explanation}</p>
-          <p className="mt-1 text-[8px] uppercase tracking-wider text-slate-400">
+          <p className="text-label font-semibold text-slate-100">{finding.headline}</p>
+          <p id={`finding-${finding.id}-explanation`} className="mt-1 text-label leading-relaxed text-slate-400">{finding.explanation}</p>
+          <p className="mt-1 text-caption uppercase tracking-wider text-slate-400">
             {severityLabel(finding.severity)} · {formatRelativeTime(finding.lastSeenAt)}
           </p>
         </button>
@@ -418,14 +418,14 @@ function FindingRow({
             onClick={onToggle}
             aria-expanded={expanded}
             aria-controls={`finding-drafts-${finding.id}`}
-            className="focus-ring rounded-md border border-slate-800 px-2 py-1 text-[8px] font-medium text-slate-400 transition hover:border-cyan-400/40 hover:text-slate-200"
+            className="focus-ring rounded-md border border-slate-800 px-2 py-1 text-caption font-medium text-slate-400 transition hover:border-cyan-400/40 hover:text-slate-200"
           >
             {expanded ? 'Hide drafts' : 'Draft…'}
           </button>
           <button
             type="button"
             onClick={onAssemble}
-            className="focus-ring rounded-md border border-slate-800 px-2 py-1 text-[8px] font-medium text-slate-400 transition hover:border-cyan-400/40 hover:text-slate-200"
+            className="focus-ring rounded-md border border-slate-800 px-2 py-1 text-caption font-medium text-slate-400 transition hover:border-cyan-400/40 hover:text-slate-200"
             aria-label={`Assemble dossier: ${finding.headline}`}
           >
             Assemble dossier
@@ -433,7 +433,7 @@ function FindingRow({
           <button
             type="button"
             onClick={onDismiss}
-            className="focus-ring rounded-md border border-slate-800 px-2 py-1 text-[8px] font-medium text-slate-400 transition hover:border-slate-600 hover:text-slate-200"
+            className="focus-ring rounded-md border border-slate-800 px-2 py-1 text-caption font-medium text-slate-400 transition hover:border-slate-600 hover:text-slate-200"
             aria-label={`Dismiss finding: ${finding.headline}`}
           >
             Dismiss

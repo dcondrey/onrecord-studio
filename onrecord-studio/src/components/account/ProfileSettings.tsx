@@ -74,7 +74,7 @@ function CandidateRow({
   onReject: () => void;
 }) {
   return (
-    <li className="rounded-lg border border-slate-800 p-2 text-[10px]">
+    <li className="rounded-lg border border-slate-800 p-2 text-label">
       <div className="font-semibold text-slate-100">{candidate.displayValue}</div>
       <div className="text-slate-400">
         {candidate.kind === 'PORTAL'
@@ -150,14 +150,14 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Local profile" className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onKeyDown={dialogFocus.onKeyDown}>
-      <div ref={dialogFocus.ref} tabIndex={-1} className="app-panel max-h-[90vh] w-full max-w-2xl overflow-y-auto p-4 text-[11px] text-slate-300 outline-none">
+      <div ref={dialogFocus.ref} tabIndex={-1} className="app-panel max-h-[90vh] w-full max-w-2xl overflow-y-auto p-4 text-label text-slate-300 outline-none">
         <div className="flex items-center justify-between">
-          <h2 className="text-[13px] font-semibold text-slate-100">Local profile</h2>
+          <h2 className="text-label font-semibold text-slate-100">Local profile</h2>
           <button type="button" onClick={onClose} className="focus-ring rounded border border-slate-700 px-2 py-1">
             Close
           </button>
         </div>
-        <p className="mt-2 text-[10px] leading-relaxed text-slate-400">
+        <p className="mt-2 text-label leading-relaxed text-slate-400">
           Affiliation is self-declared: you type the name and nothing checks it against a list. It
           is stored only on this device and never transmitted. It never changes any finding,
           confidence, severity, statutory result or ranking. It only filters, highlights and adds a
@@ -306,7 +306,7 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
               })}
             </ul>
             {profile.matches.limitations.length > 0 && (
-              <ul className="mt-2 list-disc pl-4 text-[10px] text-slate-400" aria-label="Match limitations">
+              <ul className="mt-2 list-disc pl-4 text-label text-slate-400" aria-label="Match limitations">
                 {profile.matches.limitations.map((line) => (
                   <li key={line}>{line}</li>
                 ))}

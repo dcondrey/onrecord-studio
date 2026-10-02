@@ -87,10 +87,6 @@ function LicensedWorkspace() {
   useEffect(() => {
     document.documentElement.dataset.theme = resolvedTheme;
     document.documentElement.dataset.themePreference = theme;
-    document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute(
-      'content',
-      resolvedTheme === 'dark' ? '#050a12' : '#eef2f6',
-    );
     window.localStorage.setItem(THEME_STORAGE_KEY, theme);
     if (isTauri()) void setNativeTheme(theme === 'auto' ? null : theme);
   }, [resolvedTheme, theme]);

@@ -73,14 +73,14 @@ export function SelfReviewPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Records self-review" className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onKeyDown={dialogFocus.onKeyDown}>
-      <div ref={dialogFocus.ref} tabIndex={-1} className="app-panel max-h-[90vh] w-full max-w-2xl overflow-y-auto p-4 text-[11px] text-slate-300 outline-none">
+      <div ref={dialogFocus.ref} tabIndex={-1} className="app-panel max-h-[90vh] w-full max-w-2xl overflow-y-auto p-4 text-label text-slate-300 outline-none">
         <div className="flex items-center justify-between">
-          <h2 className="text-[13px] font-semibold text-slate-100">What the public record shows about your organization</h2>
+          <h2 className="text-label font-semibold text-slate-100">What the public record shows about your organization</h2>
           <button type="button" onClick={onClose} className="focus-ring rounded border border-slate-700 px-2 py-1">
             Close
           </button>
         </div>
-        <p className="mt-2 text-[10px] leading-relaxed text-slate-400">
+        <p className="mt-2 text-label leading-relaxed text-slate-400">
           A records-hygiene view: gaps and inconsistencies a requester could find, so you can
           correct the record and respond completely. Your profile did not change any of these
           findings, their confidence or their severity.

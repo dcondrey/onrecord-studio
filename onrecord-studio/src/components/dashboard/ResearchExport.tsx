@@ -41,7 +41,7 @@ export default function ResearchExport({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h4 className="text-sm font-semibold text-slate-100">Take the case forward</h4>
-          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-slate-400">
+          <p className="mt-1 max-w-3xl text-label leading-relaxed text-slate-400">
             A portable packet with linked citations, exact query results, source hashes,
             request drafts, meeting actions, and your follow-through states.
           </p>
@@ -52,18 +52,18 @@ export default function ResearchExport({
       </div>
       {packet && (
         <div className="mt-4 space-y-3">
-          <p role="status" className="text-xs text-slate-400">
+          <p role="status" className="text-label leading-4 text-slate-400">
             Snapshot prepared {new Date(packet.exportedAt).toLocaleString()}. Refresh
             the packet to include later casework changes.
           </p>
-          <label className="block text-xs text-slate-300">
+          <label className="block text-label leading-4 text-slate-300">
             Review case packet
             <textarea
               ref={preview}
               readOnly
               value={packet.markdown}
               rows={12}
-              className="analysis-input mt-2 w-full resize-y font-mono text-xs"
+              className="analysis-input mt-2 w-full resize-y font-mono text-label leading-4"
             />
           </label>
           <div className="flex flex-wrap gap-2">
@@ -83,7 +83,7 @@ export default function ResearchExport({
               Close packet preview
             </button>
           </div>
-          <p className="text-xs text-slate-400">
+          <p className="text-label leading-4 text-slate-400">
             Markdown is ready for editorial review. JSON preserves the exact saved evidence,
             SQL, and provenance for independent checking. Exporting does not submit requests
             or mark findings verified.

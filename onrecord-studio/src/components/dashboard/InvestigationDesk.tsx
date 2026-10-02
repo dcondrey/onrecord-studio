@@ -147,7 +147,7 @@ export default function InvestigationDesk() {
           <p className="mt-2 text-sm leading-relaxed text-slate-300">
             {topic.method}
           </p>
-          <p className="mt-2 text-xs leading-relaxed text-slate-400">
+          <p className="mt-2 text-label leading-relaxed text-slate-400">
             {topic.limitation}
           </p>
         </div>
@@ -171,7 +171,7 @@ export default function InvestigationDesk() {
           <h4 className="text-sm font-semibold text-slate-200">
             2. Review and compare
           </h4>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-label leading-4 text-slate-400">
             Searches cover records already in your library. In Analysis, import
             a collected table, then compare department allocations or budgets
             with actuals.
@@ -189,7 +189,7 @@ export default function InvestigationDesk() {
             ))}
             <button
               type="button"
-              className="primary-action focus-ring rounded-lg px-3 py-2 text-xs font-semibold text-white"
+              className="primary-action focus-ring rounded-lg px-3 py-2 text-label leading-4 font-semibold text-white"
               onClick={() => state.getState().setWorkspaceView("analysis")}
             >
               Compare spending
@@ -207,7 +207,7 @@ export default function InvestigationDesk() {
           <summary className="cursor-pointer text-sm font-semibold text-slate-200">
             3. Request the missing records
           </summary>
-          <p className="mt-3 text-xs text-slate-400">
+          <p className="mt-3 text-label leading-4 text-slate-400">
             Suggested custodians: {topic.custodians}
           </p>
           <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-300">
@@ -216,7 +216,7 @@ export default function InvestigationDesk() {
             ))}
           </ul>
           <div className="mt-4 flex flex-wrap items-end gap-3">
-            <label className="text-xs text-slate-300">
+            <label className="text-label leading-4 text-slate-300">
               Records from
               <input
                 type="date"
@@ -227,7 +227,7 @@ export default function InvestigationDesk() {
                 }
               />
             </label>
-            <label className="text-xs text-slate-300">
+            <label className="text-label leading-4 text-slate-300">
               Records through
               <input
                 type="date"
@@ -268,7 +268,7 @@ export default function InvestigationDesk() {
           )}
           {draft.requestText && (
             <>
-              <label className="mt-4 block text-xs text-slate-300">
+              <label className="mt-4 block text-label leading-4 text-slate-300">
                 Editable request draft
                 <textarea
                   className="analysis-input mt-2 min-h-72 w-full"
@@ -278,7 +278,7 @@ export default function InvestigationDesk() {
                   }
                 />
               </label>
-              <p className="mt-2 text-xs text-slate-400">
+              <p className="mt-2 text-label leading-4 text-slate-400">
                 Review the dates, custodians, and scope in this text before
                 submitting. Date controls do not replace an existing draft.
                 Clear the text to generate a new one.
@@ -294,7 +294,7 @@ export default function InvestigationDesk() {
               </button>
             </>
           )}
-          <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
+          <div className="mt-3 flex flex-wrap items-center gap-3 text-label leading-4">
             <a
               href={SAN_DIEGO_RECORDS_URL}
               target="_blank"
@@ -319,7 +319,7 @@ export default function InvestigationDesk() {
               Import response files
             </button>
           </div>
-          <p className="mt-2 text-xs text-slate-400">
+          <p className="mt-2 text-label leading-4 text-slate-400">
             Drafts stay on this device. Submit them yourself in the appropriate
             agency portal; no request has been sent.
           </p>
@@ -341,7 +341,7 @@ export default function InvestigationDesk() {
           >
             Download investigation notes
           </button>
-          <span className="text-xs text-slate-400">
+          <span className="text-label leading-4 text-slate-400">
             Notes and request drafts are saved separately for each topic on this
             device.
           </span>
@@ -416,8 +416,8 @@ function InvestigationSource({
   return (
     <article className="rounded-xl border border-slate-700/70 p-4">
       <h5 className="text-sm font-semibold text-slate-200">{source.label}</h5>
-      <p className="mt-1 text-xs leading-relaxed text-slate-300">{purpose}</p>
-      <p className="mt-2 text-xs leading-relaxed text-slate-400">
+      <p className="mt-1 text-label leading-relaxed text-slate-300">{purpose}</p>
+      <p className="mt-2 text-label leading-relaxed text-slate-400">
         {source.coverage}
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -436,7 +436,7 @@ function InvestigationSource({
           </button>
         )}
         <a
-          className="focus-ring rounded px-2 py-1 text-xs text-cyan-300"
+          className="focus-ring rounded px-2 py-1 text-label leading-4 text-cyan-300"
           href={source.url}
           target="_blank"
           rel="noreferrer"
@@ -450,17 +450,17 @@ function InvestigationSource({
         )}
       </div>
       {!isTauri() && source.access !== "export" && (
-        <p className="mt-2 text-xs text-slate-400">
+        <p className="mt-2 text-label leading-4 text-slate-400">
           Open the desktop app to collect records.
         </p>
       )}
       {saved?.lastError && (
-        <p role="alert" className="mt-2 text-xs text-amber-200">
+        <p role="alert" className="mt-2 text-label leading-4 text-amber-200">
           Latest source error: {saved.lastError}
         </p>
       )}
       {error && (
-        <p role="alert" className="mt-2 text-xs text-rose-300">
+        <p role="alert" className="mt-2 text-label leading-4 text-rose-300">
           {error} Open the source to download files, then use Import response
           files.
         </p>

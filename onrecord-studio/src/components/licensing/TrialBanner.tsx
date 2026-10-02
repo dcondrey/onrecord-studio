@@ -44,8 +44,8 @@ export default function TrialBanner() {
         role="status"
         className={
           urgent
-            ? 'flex items-center gap-3 border-b border-amber-500 bg-amber-950 px-4 py-1.5 text-xs text-amber-50'
-            : 'flex items-center gap-3 border-b border-slate-700 bg-slate-900 px-4 py-1.5 text-xs text-slate-200'
+            ? 'flex items-center gap-3 border-b border-amber-500 bg-amber-950 px-4 py-1.5 text-label leading-4 text-amber-50'
+            : 'flex items-center gap-3 border-b border-slate-700 bg-slate-900 px-4 py-1.5 text-label leading-4 text-slate-200'
         }
       >
         <span aria-hidden="true">{urgent ? '▲' : '●'}</span>

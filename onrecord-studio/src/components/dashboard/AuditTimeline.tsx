@@ -5,12 +5,12 @@ export default function AuditTimeline() {
 
   return (
     <div className="p-4 bg-slate-950/30 border border-slate-900 rounded-xl space-y-4 font-sans select-none">
-      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+      <div className="text-label font-bold text-slate-400 uppercase tracking-wider">
         Recent operational activity
       </div>
       <div className="relative border-l border-slate-800 ml-2 pl-4 space-y-4">
         {timelineEvents.length === 0 ? (
-          <p className="pl-1 text-xs italic text-slate-400">No activity has been recorded in this session.</p>
+          <p className="pl-1 text-label leading-4 italic text-slate-400">No activity has been recorded in this session.</p>
         ) : (
           timelineEvents.map((event, idx) => {
             const isWarning = isErrorLog(event);
@@ -26,7 +26,7 @@ export default function AuditTimeline() {
                   }`}
                 />
                 <div className="space-y-0.5">
-                  <div className="max-w-md break-words font-mono text-[10px] text-slate-400">
+                  <div className="max-w-md break-words font-mono text-label text-slate-400">
                     {event}
                   </div>
                 </div>

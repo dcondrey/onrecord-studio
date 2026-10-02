@@ -24,7 +24,7 @@ export default function CaseMerge({
 }) {
   const candidates = useMemo(() => mergeCandidates(local, incoming), [local, incoming]);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
-  if (candidates.length === 0) return <p className="text-xs text-slate-400">The open case and the shared case have the same items.</p>;
+  if (candidates.length === 0) return <p className="text-label leading-4 text-slate-400">The open case and the shared case have the same items.</p>;
   const toggle = (key: string) =>
     setSelected((current) => {
       const next = new Set(current);
@@ -35,12 +35,12 @@ export default function CaseMerge({
   return (
     <section aria-label="Merge selected items into the open case" className="rounded border border-slate-700 p-3">
       <h5 className="text-sm font-semibold text-slate-100">Merge selected items into your open case</h5>
-      <p className="mt-1 text-xs text-slate-400">Tick what to take. The result is a draft in the open case; review it, then save a new revision. Nothing is saved by this step, and a shared case that lacks an item may only be older.</p>
-      <div className="mt-2 flex gap-3 text-xs">
+      <p className="mt-1 text-label leading-4 text-slate-400">Tick what to take. The result is a draft in the open case; review it, then save a new revision. Nothing is saved by this step, and a shared case that lacks an item may only be older.</p>
+      <div className="mt-2 flex gap-3 text-label leading-4">
         <button type="button" className="underline" onClick={() => setSelected(new Set(candidates.filter((c) => c.change === 'added').map((c) => c.key)))}>Select additions</button>
         <button type="button" className="underline" onClick={() => setSelected(new Set())}>Clear</button>
       </div>
-      <ul className="mt-2 space-y-1 text-xs text-slate-300">
+      <ul className="mt-2 space-y-1 text-label leading-4 text-slate-300">
         {candidates.map((candidate) => (
           <li key={candidate.key}>
             <label className="flex items-start gap-2">

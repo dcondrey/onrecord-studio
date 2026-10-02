@@ -71,7 +71,7 @@ window.__TAURI_INTERNALS__ = { invoke: async (command) => {
   throw new Error('Capture harness has no data for ' + command);
 } };
 document.documentElement.dataset.theme = 'dark';
-document.documentElement.dataset.motion = 'reduced';
+document.documentElement.dataset.motion = 'reduce';
 useAppStore.setState({ workspaceInitializationStatus: 'ready', workspaceInitializationError: null });
 const shot = new URLSearchParams(location.search).get('shot');
 const root = createRoot(document.getElementById('root'));
@@ -106,7 +106,7 @@ try {
     { name: 'briefing', wait: (page) => page.getByText('Turn evidence into a defensible public comment.').waitFor(), viewport: { width: 1200, height: 900 }, clip: '#capture' },
   ];
   for (const shot of shots) {
-    const page = await browser.newPage({ viewport: shot.viewport, deviceScaleFactor: 1 });
+    const page = await browser.newPage({ viewport: shot.viewport, deviceScaleFactor: 2 });
     page.on('pageerror', (error) => errors.push(`${shot.name}: ${error.message}`));
     page.setDefaultTimeout(120_000);
     await page.goto(`${origin}/${stem}.html?shot=${shot.name}`, { timeout: 120_000 });

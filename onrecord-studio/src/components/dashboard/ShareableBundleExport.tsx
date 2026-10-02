@@ -91,14 +91,14 @@ export default function ShareableBundleExport({ findings }: ShareableBundleExpor
   return (
     <section className="app-panel p-4" aria-label="Shareable bundle">
       <h3 className="font-semibold text-slate-200">Shareable read-only bundle</h3>
-      <p className="mt-2 text-xs text-slate-400">
+      <p className="mt-2 text-label leading-4 text-slate-400">
         Writes one HTML file anyone can open without this app. It has no edit controls, loads nothing from the
         network, and holds only masked text from public records. Findings that rest on a private or removed record
         are left out. You review exactly what it will contain before anything is written.
       </p>
       {step.kind === 'select' && (
         <>
-          <ul className="mt-3 max-h-40 overflow-y-auto text-xs text-slate-300" aria-label="Findings to share">
+          <ul className="mt-3 max-h-40 overflow-y-auto text-label leading-4 text-slate-300" aria-label="Findings to share">
             {findings.map((finding) => (
               <li key={finding.id}>
                 <label className="flex items-start gap-2">
@@ -124,7 +124,7 @@ export default function ShareableBundleExport({ findings }: ShareableBundleExpor
         </>
       )}
       {step.kind === 'preview' && (
-        <div className="mt-3 text-xs text-slate-300" role="region" aria-label="What will be shared">
+        <div className="mt-3 text-label leading-4 text-slate-300" role="region" aria-label="What will be shared">
           <p className="font-semibold text-slate-200">
             This file will contain {step.preview.included.length} finding(s) and name{' '}
             {step.preview.sourceNames.length} source file(s).
@@ -188,7 +188,7 @@ export default function ShareableBundleExport({ findings }: ShareableBundleExpor
         </p>
       )}
       {step.kind === 'done' && (
-        <div role="status" className="mt-3 rounded border border-slate-700 bg-slate-950/60 p-3 text-xs text-slate-300">
+        <div role="status" className="mt-3 rounded border border-slate-700 bg-slate-950/60 p-3 text-label leading-4 text-slate-300">
           <p className="font-semibold text-slate-200">
             Wrote {step.result.findingCount} finding(s); {step.result.excludedCount} left out.
           </p>

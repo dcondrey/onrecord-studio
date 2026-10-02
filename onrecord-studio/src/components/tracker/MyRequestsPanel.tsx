@@ -151,7 +151,7 @@ function ClaimForm({ portals, onSubmit, isBusy }: {
       {jurisdiction === 'OTHER' && (
         <input aria-label="Jurisdiction name" maxLength={TRACKER_LIMITS.jurisdictionCharacters} className={field} value={otherJurisdiction} onChange={(event) => setOtherJurisdiction(event.target.value)} />
       )}
-      <p className="text-[10px] text-slate-400">
+      <p className="text-label text-slate-400">
         Nothing here is sent anywhere, and no portal login is used or stored. Only the dates you enter or confirm from emails count.
       </p>
       <button type="submit" disabled={isBusy || reference.trim() === ''} className={button}>Track this request</button>
@@ -175,9 +175,9 @@ function SuggestionCard({ claim, suggestion, isBusy, onConfirm, onReject }: {
   const ready = occurredAt !== null && (!needsReason || reason !== '');
   return (
     <li className="rounded border border-dashed border-slate-500 p-2" aria-label={`Suggested ${KIND_LABELS[suggestion.kind]} for ${claim.reference}`}>
-      <p className="text-[10px] font-semibold text-slate-200">Suggested, not counted until you confirm</p>
+      <p className="text-label font-semibold text-slate-200">Suggested, not counted until you confirm</p>
       <blockquote className="mt-1 border-l-2 border-slate-500 pl-1.5 italic">{suggestion.evidence.matchedSentence}</blockquote>
-      <p className="text-[10px] text-slate-400">
+      <p className="text-label text-slate-400">
         From an email{suggestion.evidence.subjectExcerpt ? ` titled "${suggestion.evidence.subjectExcerpt}"` : ''}.
       </p>
       <div className="mt-1 grid gap-1.5">
@@ -249,7 +249,7 @@ function Detail({ claim, deadline, tracker }: { claim: ClaimedRequest; deadline:
     <div className="flex flex-col gap-3" aria-label={`Request ${claim.reference}`}>
       <section aria-label="Deadline" className="rounded border border-slate-700 p-2">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-[12px] font-semibold text-slate-100">{claim.reference}</h3>
+          <h3 className="text-label font-semibold text-slate-100">{claim.reference}</h3>
           {deadline && <DeadlineChip deadline={deadline} />}
         </div>
         {claim.title && <p>{claim.title}</p>}
@@ -257,19 +257,19 @@ function Detail({ claim, deadline, tracker }: { claim: ClaimedRequest; deadline:
           <>
             <p className="mt-1" data-testid="basis-statement">{deadline.basisStatement}</p>
             {deadline.notes.map((note) => (
-              <p key={note} className="text-[10px] text-slate-400">{note}</p>
+              <p key={note} className="text-label text-slate-400">{note}</p>
             ))}
           </>
         ) : (
           <p className="mt-1 text-slate-400">Loading the deadline.</p>
         )}
         {claim.sourceUrl && (
-          <p className="mt-1 break-all text-[10px] text-slate-400">Link you saved: {claim.sourceUrl}</p>
+          <p className="mt-1 break-all text-label text-slate-400">Link you saved: {claim.sourceUrl}</p>
         )}
       </section>
 
       <section aria-label="Timeline">
-        <h3 className="text-[11px] font-semibold text-slate-100">Timeline</h3>
+        <h3 className="text-label font-semibold text-slate-100">Timeline</h3>
         {events.length === 0 ? (
           <p className="text-slate-400">No dates recorded yet.</p>
         ) : (
@@ -323,7 +323,7 @@ function Detail({ claim, deadline, tracker }: { claim: ClaimedRequest; deadline:
       </section>
 
       <section aria-label="Suggested events">
-        <h3 className="text-[11px] font-semibold text-slate-100">Suggested from emails</h3>
+        <h3 className="text-label font-semibold text-slate-100">Suggested from emails</h3>
         {claim.suggestions.length === 0 ? (
           <p className="text-slate-400">Nothing waiting for confirmation.</p>
         ) : (
@@ -352,8 +352,8 @@ function Detail({ claim, deadline, tracker }: { claim: ClaimedRequest; deadline:
       </section>
 
       <section aria-label="Import emails">
-        <h3 className="text-[11px] font-semibold text-slate-100">Notification emails</h3>
-        <p className="text-[10px] text-slate-400">
+        <h3 className="text-label font-semibold text-slate-100">Notification emails</h3>
+        <p className="text-label text-slate-400">
           Choose .eml or .msg files the portal emailed you. They are read on this device only; attachments and remote content are never opened.
         </p>
         <button type="button" className={button} disabled={tracker.isBusy} onClick={() => void choose()}>Choose email files</button>
@@ -412,9 +412,9 @@ export default function MyRequestsPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <div role="dialog" aria-modal="true" aria-label="My requests" className="fixed inset-0 z-50 flex justify-end bg-black/60" onKeyDown={dialogFocus.onKeyDown}>
-      <div ref={dialogFocus.ref} tabIndex={-1} className="app-panel h-full w-full max-w-xl overflow-y-auto p-4 text-[11px] text-slate-300 outline-none">
+      <div ref={dialogFocus.ref} tabIndex={-1} className="app-panel h-full w-full max-w-xl overflow-y-auto p-4 text-label text-slate-300 outline-none">
         <div className="flex items-center justify-between">
-          <h2 className="text-[13px] font-semibold text-slate-100">My requests</h2>
+          <h2 className="text-label font-semibold text-slate-100">My requests</h2>
           <button type="button" onClick={onClose} className={button}>Close</button>
         </div>
         {tracker.error && <p role="alert" className="mt-2 text-rose-300">{tracker.error}</p>}
@@ -438,7 +438,7 @@ export default function MyRequestsPanel({ onClose }: { onClose: () => void }) {
                       <span className="block font-semibold text-slate-100">{claim.reference}{claim.title ? `: ${claim.title}` : ''}</span>
                       {tracker.deadlines[claim.id] && <DeadlineChip deadline={tracker.deadlines[claim.id]} />}
                       {claim.suggestions.length > 0 && (
-                        <span className="ml-2 text-[10px] text-slate-300">{claim.suggestions.length} suggested event{claim.suggestions.length === 1 ? '' : 's'} to review</span>
+                        <span className="ml-2 text-label text-slate-300">{claim.suggestions.length} suggested event{claim.suggestions.length === 1 ? '' : 's'} to review</span>
                       )}
                     </button>
                   </li>

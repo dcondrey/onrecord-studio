@@ -377,7 +377,7 @@ export default function PdfPageView({ portalKey, documentId, fileName }: { porta
   const shown = rendered?.pageNumber === pageNumber;
 
   return (
-    <section aria-label={`Page view of ${fileName}`} className="flex min-h-0 min-w-0 flex-1 flex-col border-b border-slate-800 text-[10px] text-slate-300">
+    <section aria-label={`Page view of ${fileName}`} className="flex min-h-0 min-w-0 flex-1 flex-col border-b border-slate-800 text-label text-slate-300">
       {banner && <p role="status" className={`border-b px-3 py-1.5 ${banner.tone}`}>{banner.text}</p>}
       {load.status === 'loading' && <p role="status" className="p-3 text-slate-400">Opening the original file…</p>}
       {load.status === 'error' && <p role="alert" className="p-3 text-rose-300">The page view could not open this file: {load.message}</p>}
@@ -454,7 +454,7 @@ export default function PdfPageView({ portalKey, documentId, fileName }: { porta
                       aria-label={`${label}. Show in the annotations list.`}
                       aria-pressed={bridge.selectedId === item.id}
                       onClick={() => pageViewBridge.update(key, { selectedId: item.id })}
-                      className={`focus-ring pointer-events-auto absolute left-0 top-0 max-w-full -translate-y-full truncate rounded-t px-1 text-[9px] font-semibold ${changed ? 'bg-amber-200 text-amber-950' : color.split(' ').slice(1).join(' ')}`}
+                      className={`focus-ring pointer-events-auto absolute left-0 top-0 max-w-full -translate-y-full truncate rounded-t px-1 text-caption font-semibold ${changed ? 'bg-amber-200 text-amber-950' : color.split(' ').slice(1).join(' ')}`}
                     >
                       {label}
                     </button>
@@ -467,7 +467,7 @@ export default function PdfPageView({ portalKey, documentId, fileName }: { porta
                   className="pointer-events-none absolute border-2 border-dotted border-indigo-600 bg-indigo-400/15"
                   style={{ left: `${bridge.pending.rectangle.x * 100}%`, top: `${bridge.pending.rectangle.y * 100}%`, width: `${bridge.pending.rectangle.width * 100}%`, height: `${bridge.pending.rectangle.height * 100}%` }}
                 >
-                  <span className="absolute left-0 top-0 -translate-y-full whitespace-nowrap rounded-t bg-indigo-200 px-1 text-[9px] font-semibold text-indigo-950">Unsaved region</span>
+                  <span className="absolute left-0 top-0 -translate-y-full whitespace-nowrap rounded-t bg-indigo-200 px-1 text-caption font-semibold text-indigo-950">Unsaved region</span>
                 </div>
               )}
               {drag && rubber && (

@@ -43,12 +43,12 @@ export default function TopicPacks() {
     return gate.invalidate;
   }, [findingsRefreshRequests, gate]);
 
-  if (error) return <div role="alert" className="text-[10px] text-rose-300">Topics unavailable: {error}</div>;
-  if (!report) return <div role="status" className="text-[10px] text-slate-400">Reading records for topic cues…</div>;
+  if (error) return <div role="alert" className="text-label text-rose-300">Topics unavailable: {error}</div>;
+  if (!report) return <div role="status" className="text-label text-slate-400">Reading records for topic cues…</div>;
 
   const topic = report.topics.find((candidate) => candidate.id === selectedId) ?? report.topics[0];
   return (
-    <section aria-label="Topics" className="space-y-3 text-[10px] text-slate-300">
+    <section aria-label="Topics" className="space-y-3 text-label text-slate-300">
       <p className="text-slate-400">
         Scanned {report.documentsScanned.toLocaleString()} documents{report.documentLimitReached ? ' (scan limit reached)' : ''} and {report.requestsScanned.toLocaleString()} requests{report.requestLimitReached ? ' (scan limit reached)' : ''}.
         {report.documentsPrefixOnly > 0 && ` ${report.documentsPrefixOnly.toLocaleString()} documents were read to their first ${report.textPrefixCharacters.toLocaleString()} characters only.`}
@@ -168,7 +168,7 @@ function TopicFindingRow({ match }: { match: TopicFindingMatch }) {
     <li className="rounded-lg border border-slate-800 p-2" data-basis={basis}>
       <p className="font-semibold text-slate-100">{finding.headline}</p>
       <div className="mt-1 flex flex-wrap items-center gap-2">
-        <span className="rounded-full border border-slate-600 px-1.5 py-0.5 text-[9px] font-semibold">{TOPIC_BASIS_LABELS[basis]}</span>
+        <span className="rounded-full border border-slate-600 px-1.5 py-0.5 text-caption font-semibold">{TOPIC_BASIS_LABELS[basis]}</span>
         {finding.confidence.kind === 'MEASURED' && <ConfidenceMeter confidence={finding.confidence} />}
       </div>
       <div className="mt-1">

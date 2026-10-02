@@ -13,7 +13,7 @@ export function Citations({
       {citations.map((citation, index) => (
         <blockquote
           key={index}
-          className="border-l-2 border-cyan-400/30 pl-3 text-xs leading-relaxed text-slate-300"
+          className="border-l-2 border-cyan-400/30 pl-3 text-label leading-relaxed text-slate-300"
         >
           <CitationContent
             citation={citation}
@@ -39,7 +39,7 @@ function QueryTable({ text }: { text: string }) {
     const rows = data.rows as unknown[][];
     return (
       <div className="max-h-72 max-w-full overflow-auto">
-        <table className="w-full text-left text-xs">
+        <table className="w-full text-left text-label leading-4">
           <thead>
             <tr>
               {columns.map((column, i) => (
@@ -125,9 +125,9 @@ export function EvidenceLinks({
         if (!evidence) return null;
         const links = [...(evidence.sourceReferences ?? []).map((source) => ({ url: source.url, label: `Original source · ${source.snapshot}` })), ...(evidence.sourceUrl ? [{ url: evidence.sourceUrl, label: "Open original source" }] : [])].filter((source, index, all) => /^https?:\/\//.test(source.url) && all.findIndex((item) => item.url === source.url) === index);
         return (
-          <div key={id} className="min-w-0 w-full text-xs text-slate-400">
+          <div key={id} className="min-w-0 w-full text-label leading-4 text-slate-400">
           <div className="mb-2 flex flex-wrap gap-3">{links.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer" className="text-cyan-300 underline underline-offset-2">{source.label}</a>)}</div>
-          <details className="min-w-0 text-xs text-slate-400">
+          <details className="min-w-0 text-label leading-4 text-slate-400">
             <summary className="cursor-pointer text-cyan-300">
               {evidence.label}
             </summary>

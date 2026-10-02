@@ -55,7 +55,7 @@ export default function Header() {
           </div>
         )}
         {error && (
-          <div role="alert" className="border-t border-rose-500/10 bg-rose-500/[0.05] px-5 py-2 text-right text-[9px] text-rose-300">
+          <div role="alert" className="border-t border-rose-500/10 bg-rose-500/[0.05] px-5 py-2 text-right text-caption text-rose-300">
             {error}
           </div>
         )}

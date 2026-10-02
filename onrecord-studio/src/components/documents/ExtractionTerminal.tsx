@@ -10,14 +10,14 @@ export default function ExtractionTerminal() {
   const clear = useAppStore((state) => state.resetTelemetryMetrics);
 
   return (
-    <section className="flex h-full flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-950 font-mono text-[10px] leading-relaxed shadow-lg" aria-label="Extraction event stream">
+    <section className="flex h-full flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-950 font-mono text-label leading-relaxed shadow-lg" aria-label="Extraction event stream">
       <div className="h-9 border-b border-slate-800 px-4 bg-slate-900/30 flex items-center justify-between select-none">
-        <button type="button" className="focus-ring flex items-center gap-2 rounded text-[9px] font-bold uppercase tracking-wider text-slate-400" aria-expanded={isOpen} onClick={() => setOpen(!isOpen)}>
+        <button type="button" className="focus-ring flex items-center gap-2 rounded text-caption font-bold uppercase tracking-wider text-slate-400" aria-expanded={isOpen} onClick={() => setOpen(!isOpen)}>
           Extraction event stream
           <span aria-hidden="true">{isOpen ? '−' : '+'}</span>
         </button>
         <div className="flex items-center gap-3">
-          {syncLogs.length > 0 && <button type="button" onClick={clear} className="focus-ring rounded px-1.5 py-1 text-[8px] text-slate-400 hover:text-slate-300">Clear session telemetry</button>}
+          {syncLogs.length > 0 && <button type="button" onClick={clear} className="focus-ring rounded px-1.5 py-1 text-caption text-slate-400 hover:text-slate-300">Clear session telemetry</button>}
           <StatusDot state={isSyncing ? 'active' : 'idle'} label={isSyncing ? 'Synchronization active' : 'Synchronization idle'} className={isSyncing ? 'status-pulse rounded-full' : undefined} />
         </div>
       </div>

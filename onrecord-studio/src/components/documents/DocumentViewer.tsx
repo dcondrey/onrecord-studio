@@ -340,40 +340,40 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
     <section className="flex h-full flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-950 shadow-md">
       <div className="flex items-center justify-between gap-4 border-b border-slate-800 bg-slate-900/40 px-4 py-3">
         <div className="min-w-0">
-          <div className="truncate text-xs font-semibold text-slate-200">{fileName}</div>
-          <div className="mt-1 font-mono text-[9px] text-slate-400">{portalKey} / document {documentId} · {fileSizeFormatted}</div>
+          <div className="truncate text-label leading-4 font-semibold text-slate-200">{fileName}</div>
+          <div className="mt-1 font-mono text-caption text-slate-400">{portalKey} / document {documentId} · {fileSizeFormatted}</div>
         </div>
         <div className="flex items-center gap-2">
-          <button type="button" onClick={() => void inspectResidualEvidence()} disabled={!originalAvailable || isAuditingResiduals} className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-2.5 py-1 text-[9px] font-medium text-cyan-300 transition hover:border-cyan-300/40 disabled:cursor-wait disabled:opacity-60">
+          <button type="button" onClick={() => void inspectResidualEvidence()} disabled={!originalAvailable || isAuditingResiduals} className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-2.5 py-1 text-caption font-medium text-cyan-300 transition hover:border-cyan-300/40 disabled:cursor-wait disabled:opacity-60">
             {isAuditingResiduals ? 'Auditing residuals…' : residualAudit ? 'Reaudit residuals' : 'Audit residual evidence'}
           </button>
-          <button type="button" onClick={() => setShowRedactionAudit((visible) => !visible)} aria-expanded={showRedactionAudit} className="rounded-full border border-indigo-400/25 bg-indigo-500/10 px-2.5 py-1 text-[9px] font-medium text-indigo-300 transition hover:border-indigo-300/40">
+          <button type="button" onClick={() => setShowRedactionAudit((visible) => !visible)} aria-expanded={showRedactionAudit} className="rounded-full border border-indigo-400/25 bg-indigo-500/10 px-2.5 py-1 text-caption font-medium text-indigo-300 transition hover:border-indigo-300/40">
             {showRedactionAudit ? 'Hide redaction audit' : 'Audit redactions'}
           </button>
           {fileName.toLocaleLowerCase().endsWith('.pdf') && (
             <>
 
-              <button type="button" onClick={() => void inspectRevisionHistory()} disabled={!originalAvailable || isRecovering} className="rounded-full border border-indigo-400/25 bg-indigo-500/10 px-2.5 py-1 text-[9px] font-medium text-indigo-300 transition hover:border-indigo-300/40 disabled:cursor-wait disabled:opacity-60">
+              <button type="button" onClick={() => void inspectRevisionHistory()} disabled={!originalAvailable || isRecovering} className="rounded-full border border-indigo-400/25 bg-indigo-500/10 px-2.5 py-1 text-caption font-medium text-indigo-300 transition hover:border-indigo-300/40 disabled:cursor-wait disabled:opacity-60">
                 {isRecovering ? 'Inspecting revisions…' : recoveryProfile ? 'Reinspect revisions' : 'Inspect revision history'}
               </button>
             </>
           )}
-          <button type="button" onClick={() => void checkFigures()} disabled={claimChecksState === 'pending'} className="rounded-full border border-slate-700 px-2.5 py-1 text-[9px] font-medium text-slate-400 transition hover:border-indigo-400/30 hover:text-indigo-300 disabled:cursor-wait disabled:opacity-60">
+          <button type="button" onClick={() => void checkFigures()} disabled={claimChecksState === 'pending'} className="rounded-full border border-slate-700 px-2.5 py-1 text-caption font-medium text-slate-400 transition hover:border-indigo-400/30 hover:text-indigo-300 disabled:cursor-wait disabled:opacity-60">
             {claimChecksState === 'pending' ? 'Checking figures…' : claimChecks ? 'Recheck figures' : 'Check figures'}
           </button>
           {claimChecks && claimChecks.checks.some((check) => check.result.outcome !== 'unreconciled') && (
-            <button type="button" onClick={() => void downloadQueryPack()} disabled={packState === 'pending'} className="rounded-full border border-slate-700 px-2.5 py-1 text-[9px] font-medium text-slate-400 transition hover:border-indigo-400/30 hover:text-indigo-300 disabled:cursor-wait disabled:opacity-60">
+            <button type="button" onClick={() => void downloadQueryPack()} disabled={packState === 'pending'} className="rounded-full border border-slate-700 px-2.5 py-1 text-caption font-medium text-slate-400 transition hover:border-indigo-400/30 hover:text-indigo-300 disabled:cursor-wait disabled:opacity-60">
               {packState === 'pending' ? 'Building query pack…' : 'Download query pack'}
             </button>
           )}
-          {packError && <span role="alert" className="text-[9px] text-rose-300">Query pack failed: {packError}</span>}
-          <button type="button" onClick={() => void toggleVerificationHistory()} aria-expanded={showVerificationHistory} className="rounded-full border border-slate-700 px-2.5 py-1 text-[9px] font-medium text-slate-400 transition hover:border-indigo-400/30 hover:text-indigo-300">
+          {packError && <span role="alert" className="text-caption text-rose-300">Query pack failed: {packError}</span>}
+          <button type="button" onClick={() => void toggleVerificationHistory()} aria-expanded={showVerificationHistory} className="rounded-full border border-slate-700 px-2.5 py-1 text-caption font-medium text-slate-400 transition hover:border-indigo-400/30 hover:text-indigo-300">
             {showVerificationHistory ? 'Hide verification log' : 'Verification log'}
           </button>
-          {originalAvailable ? <ProvenanceShield isValidating={isValidating} result={manifestForActiveDocument} error={provenanceError} /> : <span className="text-[9px] text-amber-200">Original referenced · file verification unavailable</span>}
+          {originalAvailable ? <ProvenanceShield isValidating={isValidating} result={manifestForActiveDocument} error={provenanceError} /> : <span className="text-caption text-amber-200">Original referenced · file verification unavailable</span>}
         </div>
       </div>
-      <div className="flex items-center justify-between border-b border-slate-900 px-4 py-2 text-[9px] text-slate-400">
+      <div className="flex items-center justify-between border-b border-slate-900 px-4 py-2 text-caption text-slate-400">
         <span>Local extracted-text view</span>
         <div className="flex items-center gap-3">
           {textPositionLabel && <span>{textPositionLabel}</span>}
@@ -382,10 +382,10 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
           {onNextChunk && <button type="button" onClick={onNextChunk} className="rounded border border-slate-800 px-2 py-1 text-slate-400 transition hover:border-indigo-400/30 hover:text-indigo-300">Next chunk</button>}
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-900 px-4 py-2 text-[9px]">
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-900 px-4 py-2 text-caption">
         <label className="relative min-w-[220px] flex-1">
           <span className="sr-only">Search within this extracted-text chunk</span>
-          <input value={documentSearch} onChange={(event) => setDocumentSearch(event.target.value)} placeholder="Find in extracted text" className="focus-ring h-8 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 text-[10px] text-slate-200 placeholder:text-slate-400" />
+          <input value={documentSearch} onChange={(event) => setDocumentSearch(event.target.value)} placeholder="Find in extracted text" className="focus-ring h-8 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 text-label text-slate-200 placeholder:text-slate-400" />
         </label>
         <span className="min-w-16 text-center font-mono text-slate-400">{searchMatches.length === 0 ? '0 matches' : `${activeMatch + 1}/${searchMatches.length}`}</span>
         <button type="button" onClick={() => moveToMatch(-1)} disabled={searchMatches.length === 0} className="rounded border border-slate-800 px-2 py-1 text-slate-400 disabled:opacity-40">Previous</button>
@@ -403,7 +403,7 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
       {showVerificationHistory && <VerificationHistoryPanel records={verificationHistory} isLoading={isLoadingHistory} error={historyError} />}
       {(recoveryProfile || recoveryError) && <RevisionRecoveryPanel profile={recoveryProfile} error={recoveryError} />}
       {truncatedEntityKinds.length > 0 && (
-        <p role="status" className="text-xs text-amber-200">
+        <p role="status" className="text-label leading-4 text-amber-200">
           Entity extraction stopped early for {truncatedEntityKinds.join(', ').toLowerCase().replace(/_/g, ' ')}. Entities listed for this document are incomplete.
         </p>
       )}
@@ -443,15 +443,15 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
         />
       )}
       {showPageView && canViewPages && (
-        <Suspense fallback={<p role="status" className="p-3 text-[10px] text-slate-400">Loading the page viewer…</p>}>
+        <Suspense fallback={<p role="status" className="p-3 text-label text-slate-400">Loading the page viewer…</p>}>
           <PdfPageView key={`${portalKey}:${documentId}`} portalKey={portalKey} documentId={documentId} fileName={fileName} />
         </Suspense>
       )}
       </div>
-      <div ref={textPaneRef} hidden={showPageView && canViewPages} className="min-h-0 flex-1 overflow-y-auto p-5 font-mono text-xs leading-relaxed text-slate-300 selection:bg-indigo-500/30">
+      <div ref={textPaneRef} hidden={showPageView && canViewPages} className="min-h-0 flex-1 overflow-y-auto p-5 font-mono text-label leading-relaxed text-slate-300 selection:bg-indigo-500/30">
         <HighlightedTextPage text={textContent} query={documentSearch} page={textPage} activeMatchIndex={selectedMatch} />
       </div>
-      {pageCount > 1 && <div className="flex items-center justify-center gap-3 border-t border-slate-900 px-4 py-2 text-[9px] text-slate-400"><button type="button" disabled={textPage === 0} onClick={() => setTextPage((page) => Math.max(0, page - 1))} className="rounded border border-slate-800 px-2 py-1 disabled:opacity-40">Previous text page</button><span className="font-mono">{textPage + 1}/{pageCount}</span><button type="button" disabled={textPage + 1 >= pageCount} onClick={() => setTextPage((page) => Math.min(pageCount - 1, page + 1))} className="rounded border border-slate-800 px-2 py-1 disabled:opacity-40">Next text page</button></div>}
+      {pageCount > 1 && <div className="flex items-center justify-center gap-3 border-t border-slate-900 px-4 py-2 text-caption text-slate-400"><button type="button" disabled={textPage === 0} onClick={() => setTextPage((page) => Math.max(0, page - 1))} className="rounded border border-slate-800 px-2 py-1 disabled:opacity-40">Previous text page</button><span className="font-mono">{textPage + 1}/{pageCount}</span><button type="button" disabled={textPage + 1 >= pageCount} onClick={() => setTextPage((page) => Math.min(pageCount - 1, page + 1))} className="rounded border border-slate-800 px-2 py-1 disabled:opacity-40">Next text page</button></div>}
     </section>
   );
 }
@@ -474,14 +474,14 @@ function InferenceLauncher({
   const spans = useMemo(() => scanRedactionMarkers(textContent).slice(0, 20), [textContent]);
   if (spans.length === 0) {
     return (
-      <p className="text-[10px] text-slate-400">
+      <p className="text-label text-slate-400">
         No `[REDACTED]`, exemption tag, or block-run markers found in the extracted text of this document.
       </p>
     );
   }
   return (
     <div className="rounded border border-slate-800 bg-slate-900/30 p-2">
-      <div className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+      <div className="text-caption font-semibold uppercase tracking-wide text-slate-400">
         Infer identity for a redaction
       </div>
       <ul className="mt-1 flex flex-wrap gap-1">
@@ -493,7 +493,7 @@ function InferenceLauncher({
               <button
                 type="button"
                 onClick={() => onSelectSpan(isActive ? null : span)}
-                className={`rounded border px-2 py-1 text-[10px] ${
+                className={`rounded border px-2 py-1 text-label ${
                   isActive
                     ? 'border-indigo-400 bg-indigo-500/20 text-indigo-100'
                     : 'border-slate-800 text-slate-300'
@@ -536,13 +536,13 @@ function scanRedactionMarkers(text: string): { start: number; end: number }[] {
 function ProvenanceGraphPanel({ graph }: { graph: import('../../types').ProvenanceClaimGraph }) {
   return (
     <details className="border-b border-slate-800 bg-slate-900/20 px-4 py-2">
-      <summary className="cursor-pointer text-[9px] font-semibold text-slate-300">
+      <summary className="cursor-pointer text-caption font-semibold text-slate-300">
         C2PA claim graph · {graph.claims.length} claim{graph.claims.length === 1 ? '' : 's'} · {graph.ingredients.length} ingredient relationship{graph.ingredients.length === 1 ? '' : 's'}
       </summary>
       <div className="mt-2 grid gap-3 border-t border-slate-800 pt-2 lg:grid-cols-2">
         <div>
-          <div className="text-[9px] font-semibold text-slate-400">Claims</div>
-          <ul className="mt-1 space-y-1 text-[9px] text-slate-400">
+          <div className="text-caption font-semibold text-slate-400">Claims</div>
+          <ul className="mt-1 space-y-1 text-caption text-slate-400">
             {graph.claims.map((claim) => (
               <li key={claim.manifestLabel} className="rounded border border-slate-800 bg-slate-950/60 px-2 py-1.5">
                 <div className="font-mono text-slate-300">{claim.manifestLabel}{claim.isActive ? ' · active' : ''}</div>
@@ -553,11 +553,11 @@ function ProvenanceGraphPanel({ graph }: { graph: import('../../types').Provenan
           </ul>
         </div>
         <div>
-          <div className="text-[9px] font-semibold text-slate-400">Ingredient relationships</div>
+          <div className="text-caption font-semibold text-slate-400">Ingredient relationships</div>
           {graph.ingredients.length === 0 ? (
-            <p className="mt-1 text-[9px] text-slate-400">The manifest declares no ingredient relationships.</p>
+            <p className="mt-1 text-caption text-slate-400">The manifest declares no ingredient relationships.</p>
           ) : (
-            <ul className="mt-1 space-y-1 text-[9px] text-slate-400">
+            <ul className="mt-1 space-y-1 text-caption text-slate-400">
               {graph.ingredients.map((ingredient, index) => (
                 <li key={`${ingredient.sourceManifestLabel}-${ingredient.targetManifestLabel ?? ingredient.instanceId ?? index}`} className="rounded border border-slate-800 bg-slate-950/60 px-2 py-1.5">
                   <span className="font-mono text-slate-300">{ingredient.sourceManifestLabel}</span>
@@ -570,7 +570,7 @@ function ProvenanceGraphPanel({ graph }: { graph: import('../../types').Provenan
           )}
         </div>
       </div>
-      <ul className="mt-2 space-y-0.5 text-[9px] text-slate-400">
+      <ul className="mt-2 space-y-0.5 text-caption text-slate-400">
         {graph.certificateChainDiagnostics.map((diagnostic) => <li key={diagnostic}>{diagnostic}</li>)}
         {graph.validationStatuses.map((status) => <li key={status} className="text-amber-300">{status}</li>)}
         {graph.truncated && <li className="text-amber-300">The embedded graph exceeded safety bounds; this view is incomplete.</li>}
@@ -617,18 +617,18 @@ function HighlightedTextPage({ text, query, page, activeMatchIndex }: { text: st
 
 function ResidualEvidencePanel({ bundle, error }: { bundle: EvidenceBundle | null; error: string | null }) {
   if (error) {
-    return <div role="alert" className="border-b border-rose-500/20 bg-rose-500/[0.06] px-4 py-2 text-[9px] leading-relaxed text-rose-300">Residual-evidence audit unavailable: {error}</div>;
+    return <div role="alert" className="border-b border-rose-500/20 bg-rose-500/[0.06] px-4 py-2 text-caption leading-relaxed text-rose-300">Residual-evidence audit unavailable: {error}</div>;
   }
   if (!bundle) return null;
   return (
     <section className="max-h-72 overflow-y-auto border-b border-cyan-400/15 bg-cyan-500/[0.03] px-4 py-3" aria-label="Residual evidence audit result">
-      <div className="flex flex-wrap items-center gap-2 text-[9px]">
+      <div className="flex flex-wrap items-center gap-2 text-caption">
         <span className="font-semibold text-cyan-300">Residual evidence audit</span>
         <span className={bundle.coverageComplete ? 'text-emerald-300' : 'text-amber-300'}>{bundle.coverageComplete ? 'Supported collector coverage complete' : 'Coverage incomplete'}</span>
         <span className="text-slate-400">{bundle.findings.length.toLocaleString()} finding{bundle.findings.length === 1 ? '' : 's'}</span>
       </div>
-      {bundle.warnings.length > 0 && <ul className="mt-2 space-y-1 text-[9px] text-amber-200/80">{bundle.warnings.map((warning) => <li key={warning}>{humanizeEvidenceKind(warning)}</li>)}</ul>}
-      {bundle.findings.length === 0 && <p className="mt-2 text-[9px] text-slate-400">No evidence was reported by the collectors that ran. An incomplete audit is not a negative finding.</p>}
+      {bundle.warnings.length > 0 && <ul className="mt-2 space-y-1 text-caption text-amber-200/80">{bundle.warnings.map((warning) => <li key={warning}>{humanizeEvidenceKind(warning)}</li>)}</ul>}
+      {bundle.findings.length === 0 && <p className="mt-2 text-caption text-slate-400">No evidence was reported by the collectors that ran. An incomplete audit is not a negative finding.</p>}
       <div className="mt-2 space-y-2">
         {bundle.findings.map((finding, index) => <ResidualFinding key={`${finding.kind}-${finding.valueSha256 ?? index}-${index}`} finding={finding} />)}
       </div>
@@ -646,15 +646,15 @@ function ResidualFinding({ finding }: { finding: ForensicFinding }) {
   ].filter(Boolean).join(' · ');
   return (
     <article className="rounded-lg border border-slate-800 bg-slate-950/70 p-2.5">
-      <div className="flex flex-wrap items-center gap-2 text-[8px] uppercase tracking-wider">
+      <div className="flex flex-wrap items-center gap-2 text-caption uppercase tracking-wider">
         <span className="font-semibold text-slate-300">{humanizeEvidenceKind(finding.kind)}</span>
         <span className="rounded border border-slate-700 px-1.5 py-0.5 text-slate-400">{finding.class}</span>
         <span className="rounded border border-slate-700 px-1.5 py-0.5 text-slate-400">{finding.confidence}</span>
       </div>
-      {location && <div className="mt-1 break-all font-mono text-[8px] text-slate-400">{location}</div>}
-      {finding.maskedPreview && <pre className="mt-2 max-h-24 overflow-auto whitespace-pre-wrap rounded border border-slate-800 p-2 font-mono text-[9px] text-slate-400">{finding.maskedPreview}</pre>}
-      <p className="mt-2 text-[9px] leading-relaxed text-slate-400">{finding.explanation}</p>
-      {finding.valueSha256 && <div className="mt-1 break-all font-mono text-[8px] text-slate-400">SHA-256 {finding.valueSha256}</div>}
+      {location && <div className="mt-1 break-all font-mono text-caption text-slate-400">{location}</div>}
+      {finding.maskedPreview && <pre className="mt-2 max-h-24 overflow-auto whitespace-pre-wrap rounded border border-slate-800 p-2 font-mono text-caption text-slate-400">{finding.maskedPreview}</pre>}
+      <p className="mt-2 text-caption leading-relaxed text-slate-400">{finding.explanation}</p>
+      {finding.valueSha256 && <div className="mt-1 break-all font-mono text-caption text-slate-400">SHA-256 {finding.valueSha256}</div>}
     </article>
   );
 }
@@ -665,45 +665,45 @@ function humanizeEvidenceKind(value: string) {
 
 function RevisionRecoveryPanel({ profile, error }: { profile: RecoveredVersionProfile | null; error: string | null }) {
   if (error) {
-    return <div role="alert" className="border-b border-rose-500/20 bg-rose-500/[0.06] px-4 py-2 text-[9px] leading-relaxed text-rose-300">Revision inspection unavailable: {error}</div>;
+    return <div role="alert" className="border-b border-rose-500/20 bg-rose-500/[0.06] px-4 py-2 text-caption leading-relaxed text-rose-300">Revision inspection unavailable: {error}</div>;
   }
   if (!profile) return null;
   return (
     <div className="max-h-60 overflow-y-auto border-b border-indigo-400/15 bg-indigo-500/[0.04] px-4 py-3">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[9px] text-slate-400">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-caption text-slate-400">
         <span className="font-semibold text-indigo-300">Incremental revision inspection</span>
         <span>{profile.historicalVersionsFound} candidate revision boundar{profile.historicalVersionsFound === 1 ? 'y' : 'ies'}</span>
         <span>{profile.recoveredTextSegments.length} extracted historical text layer{profile.recoveredTextSegments.length === 1 ? '' : 's'}</span>
         <span className="font-mono">SHA-256 {profile.sourceSha256.slice(0, 12)}…</span>
       </div>
-      {profile.historicalVersionsFound === 0 && <p className="mt-2 text-[9px] text-slate-400">No earlier incremental-save boundary was present. This does not rule out edits made before the current file was created.</p>}
-      {profile.recoveredTextSegments.length > 0 && <p className="mt-2 text-[9px] text-slate-400">Historical text may duplicate the current document. A revision boundary does not establish removed or concealed content.</p>}
-      {profile.analysisTruncated && <p className="mt-2 text-[9px] text-amber-300">The bounded inspection reached a safety limit; the results are incomplete.</p>}
-      {profile.warnings.length > 0 && <ul className="mt-2 space-y-1 text-[9px] text-amber-200/80">{profile.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
+      {profile.historicalVersionsFound === 0 && <p className="mt-2 text-caption text-slate-400">No earlier incremental-save boundary was present. This does not rule out edits made before the current file was created.</p>}
+      {profile.recoveredTextSegments.length > 0 && <p className="mt-2 text-caption text-slate-400">Historical text may duplicate the current document. A revision boundary does not establish removed or concealed content.</p>}
+      {profile.analysisTruncated && <p className="mt-2 text-caption text-amber-300">The bounded inspection reached a safety limit; the results are incomplete.</p>}
+      {profile.warnings.length > 0 && <ul className="mt-2 space-y-1 text-caption text-amber-200/80">{profile.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
       {profile.revisionDiagnostics.map((diagnostic) => (
         <details key={`diagnostic-${diagnostic.revisionNumber}-${diagnostic.snapshotEndOffset}`} className="mt-2 rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2">
-          <summary className="cursor-pointer text-[9px] font-medium text-slate-300">Revision {diagnostic.revisionNumber} structure · {diagnostic.objectCount.toLocaleString()} objects · {diagnostic.pageCount.toLocaleString()} pages · {diagnostic.pageExtractionFailureCount.toLocaleString()} page errors</summary>
-          <dl className="mt-2 grid grid-cols-2 gap-2 border-t border-slate-800 pt-2 text-[9px] text-slate-400">
+          <summary className="cursor-pointer text-caption font-medium text-slate-300">Revision {diagnostic.revisionNumber} structure · {diagnostic.objectCount.toLocaleString()} objects · {diagnostic.pageCount.toLocaleString()} pages · {diagnostic.pageExtractionFailureCount.toLocaleString()} page errors</summary>
+          <dl className="mt-2 grid grid-cols-2 gap-2 border-t border-slate-800 pt-2 text-caption text-slate-400">
             <div><dt>Xref</dt><dd className="font-mono text-slate-300">{diagnostic.crossReferenceType ?? 'unparsed'} at {diagnostic.xrefStartOffset?.toLocaleString() ?? 'unknown'}</dd></div>
             <div><dt>Previous xref</dt><dd className="font-mono text-slate-300">{diagnostic.declaredPreviousXrefOffset?.toLocaleString() ?? 'none declared'}</dd></div>
             <div><dt>Nonzero generations</dt><dd className="font-mono text-slate-300">{diagnostic.nonzeroGenerationObjectCount.toLocaleString()}</dd></div>
             <div><dt>Unreferenced objects / streams</dt><dd className="font-mono text-slate-300">{diagnostic.unreferencedObjectCount.toLocaleString()} / {diagnostic.unreferencedStreamCount.toLocaleString()}</dd></div>
           </dl>
-          {!diagnostic.objectGraphTraversalComplete && <p className="mt-2 text-[9px] text-amber-300">Object-graph traversal encountered an unresolved reference or nesting limit.</p>}
-          {diagnostic.structuralParseError && <p className="mt-2 break-words font-mono text-[9px] text-rose-300">{diagnostic.structuralParseError}</p>}
-          {diagnostic.representativePageErrors.length > 0 && <ul className="mt-2 space-y-1 font-mono text-[9px] text-amber-200/80">{diagnostic.representativePageErrors.map((message) => <li key={message}>{message}</li>)}</ul>}
+          {!diagnostic.objectGraphTraversalComplete && <p className="mt-2 text-caption text-amber-300">Object-graph traversal encountered an unresolved reference or nesting limit.</p>}
+          {diagnostic.structuralParseError && <p className="mt-2 break-words font-mono text-caption text-rose-300">{diagnostic.structuralParseError}</p>}
+          {diagnostic.representativePageErrors.length > 0 && <ul className="mt-2 space-y-1 font-mono text-caption text-amber-200/80">{diagnostic.representativePageErrors.map((message) => <li key={message}>{message}</li>)}</ul>}
         </details>
       ))}
       {profile.recoveredTextSegments.map((segment) => (
         <details key={`${segment.revisionNumber}-${segment.recoveredTextSha256}`} className="mt-2 rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2">
-          <summary className="cursor-pointer text-[9px] font-medium text-slate-300">Revision {segment.revisionNumber} · {segment.recoveredCharacterCount.toLocaleString()} recovered characters · {segment.maskedFindingCount} sensitive values masked</summary>
-          <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap border-t border-slate-800 pt-2 font-mono text-[9px] leading-relaxed text-slate-400">{segment.maskedText}</pre>
+          <summary className="cursor-pointer text-caption font-medium text-slate-300">Revision {segment.revisionNumber} · {segment.recoveredCharacterCount.toLocaleString()} recovered characters · {segment.maskedFindingCount} sensitive values masked</summary>
+          <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap border-t border-slate-800 pt-2 font-mono text-caption leading-relaxed text-slate-400">{segment.maskedText}</pre>
         </details>
       ))}
       {profile.postEofMetadataArtifacts.length > 0 && (
         <details className="mt-2 rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2">
-          <summary className="cursor-pointer text-[9px] font-medium text-slate-300">{profile.postEofMetadataArtifacts.length} post-EOF metadata artifact{profile.postEofMetadataArtifacts.length === 1 ? '' : 's'}</summary>
-          <ul className="mt-2 space-y-1 border-t border-slate-800 pt-2 font-mono text-[9px] text-slate-400">{profile.postEofMetadataArtifacts.map((artifact) => <li key={`${artifact.byteOffset}-${artifact.valueSha256}`}>{artifact.category.split('_').join(' ')} at byte {artifact.byteOffset.toLocaleString()}: {artifact.maskedValue}</li>)}</ul>
+          <summary className="cursor-pointer text-caption font-medium text-slate-300">{profile.postEofMetadataArtifacts.length} post-EOF metadata artifact{profile.postEofMetadataArtifacts.length === 1 ? '' : 's'}</summary>
+          <ul className="mt-2 space-y-1 border-t border-slate-800 pt-2 font-mono text-caption text-slate-400">{profile.postEofMetadataArtifacts.map((artifact) => <li key={`${artifact.byteOffset}-${artifact.valueSha256}`}>{artifact.category.split('_').join(' ')} at byte {artifact.byteOffset.toLocaleString()}: {artifact.maskedValue}</li>)}</ul>
         </details>
       )}
     </div>
@@ -732,8 +732,8 @@ const SIGNATURE_INVALID_BADGE = { label: 'Manifest signature invalid', detail: '
 const UNRECOGNIZED_BADGE = { label: 'Unrecognized confidence state', detail: 'The backend reported a confidence level this build does not know how to present. Treat the result as unclassified.', className: 'border-fuchsia-400/30 bg-fuchsia-500/10 font-semibold text-fuchsia-300' };
 
 function ProvenanceShield({ isValidating, result, error }: { isValidating: boolean; result: ReturnType<typeof useC2PA>['activeManifest']; error: string | null }) {
-  if (isValidating) return <span className="rounded-full border border-slate-700 px-2.5 py-1 text-[9px] text-slate-400">Verifying…</span>;
-  if (!result) return <span title={error ?? 'No verification has been run for this document.'} className="rounded-full border border-slate-700 bg-slate-800/40 px-2.5 py-1 text-[9px] font-medium text-slate-400">Provenance not checked</span>;
+  if (isValidating) return <span className="rounded-full border border-slate-700 px-2.5 py-1 text-caption text-slate-400">Verifying…</span>;
+  if (!result) return <span title={error ?? 'No verification has been run for this document.'} className="rounded-full border border-slate-700 bg-slate-800/40 px-2.5 py-1 text-caption font-medium text-slate-400">Provenance not checked</span>;
   const badge: { label: string; detail: string; className: string } | undefined = PROVENANCE_BADGES[result.provenanceConfidence];
   // An invalid manifest never lowers what the digest earned, so the backend keeps the rung and
   // records a finding. Show both: the finding must not be absorbed by a cyan badge, and the
@@ -743,10 +743,10 @@ function ProvenanceShield({ isValidating, result, error }: { isValidating: boole
   const title = [shown.detail, ...result.verificationErrors].join(' ');
   return (
     <>
-      {signatureInvalid && <span title={SIGNATURE_INVALID_BADGE.detail} className={`rounded-full border px-2.5 py-1 text-[9px] ${SIGNATURE_INVALID_BADGE.className}`}>{SIGNATURE_INVALID_BADGE.label}</span>}
-      <span title={title} className={`rounded-full border px-2.5 py-1 text-[9px] ${shown.className}`}>{shown.label}</span>
+      {signatureInvalid && <span title={SIGNATURE_INVALID_BADGE.detail} className={`rounded-full border px-2.5 py-1 text-caption ${SIGNATURE_INVALID_BADGE.className}`}>{SIGNATURE_INVALID_BADGE.label}</span>}
+      <span title={title} className={`rounded-full border px-2.5 py-1 text-caption ${shown.className}`}>{shown.label}</span>
       {result.textProjectionMatches === false && (
-        <span title="The extracted text this application indexes and quotes no longer hashes to the digest recorded when the document was extracted. The file itself may still be intact." className="rounded-full border border-rose-500/40 bg-rose-500/10 px-2.5 py-1 text-[9px] font-semibold text-rose-300">Quoted text drifted</span>
+        <span title="The extracted text this application indexes and quotes no longer hashes to the digest recorded when the document was extracted. The file itself may still be intact." className="rounded-full border border-rose-500/40 bg-rose-500/10 px-2.5 py-1 text-caption font-semibold text-rose-300">Quoted text drifted</span>
       )}
     </>
   );
@@ -790,31 +790,31 @@ function formatVerifiedAt(value: string): string {
 // evidence about the past, not the header's current state.
 function VerificationHistoryPanel({ records, isLoading, error }: { records: ProvenanceVerificationRecord[] | null; isLoading: boolean; error: string | null }) {
   if (error) {
-    return <div role="alert" className="border-b border-rose-500/20 bg-rose-500/[0.06] px-4 py-2 text-[9px] leading-relaxed text-rose-300">Verification log unavailable: {error}</div>;
+    return <div role="alert" className="border-b border-rose-500/20 bg-rose-500/[0.06] px-4 py-2 text-caption leading-relaxed text-rose-300">Verification log unavailable: {error}</div>;
   }
   if (isLoading || !records) {
-    return <div className="border-b border-slate-800 bg-slate-900/30 px-4 py-2 text-[9px] text-slate-400">Reading verification log…</div>;
+    return <div className="border-b border-slate-800 bg-slate-900/30 px-4 py-2 text-caption text-slate-400">Reading verification log…</div>;
   }
   if (records.length === 0) {
-    return <div className="border-b border-slate-800 bg-slate-900/30 px-4 py-2 text-[9px] text-slate-400">No verification has been recorded for this document. The absence of a log entry is not a verification result.</div>;
+    return <div className="border-b border-slate-800 bg-slate-900/30 px-4 py-2 text-caption text-slate-400">No verification has been recorded for this document. The absence of a log entry is not a verification result.</div>;
   }
   return (
     <div className="max-h-60 overflow-y-auto border-b border-slate-800 bg-slate-900/30 px-4 py-3">
-      <div className="text-[9px] font-semibold text-slate-300">Verification log · {records.length} recorded check{records.length === 1 ? '' : 's'}, newest first</div>
+      <div className="text-caption font-semibold text-slate-300">Verification log · {records.length} recorded check{records.length === 1 ? '' : 's'}, newest first</div>
       <ol className="mt-2 space-y-2">
         {records.map((record) => {
           const badge = badgeForRecord(record);
           return (
             <li key={record.verificationId} className="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <time dateTime={record.verifiedAt} title={record.verifiedAt} className="font-mono text-[9px] text-slate-400">{formatVerifiedAt(record.verifiedAt)}</time>
-                <span title={badge.detail} className={`rounded-full border px-2 py-0.5 text-[9px] ${badge.className}`}>{badge.label}</span>
-                {record.signatureVerification === 'INVALID' && <span className="rounded-full border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 text-[9px] font-semibold text-rose-300">Signature invalid</span>}
-                {record.signatureVerification === 'VALID' && <span className="rounded-full border border-emerald-400/25 bg-emerald-500/[0.07] px-2 py-0.5 text-[9px] font-medium text-emerald-200">Signature valid</span>}
-                {record.textProjectionMatches === false && <span className="rounded-full border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 text-[9px] font-semibold text-rose-300">Quoted text drifted</span>}
-                {record.evidenceFilePresent === false && <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-0.5 text-[9px] font-medium text-amber-300">No evidence file</span>}
+                <time dateTime={record.verifiedAt} title={record.verifiedAt} className="font-mono text-caption text-slate-400">{formatVerifiedAt(record.verifiedAt)}</time>
+                <span title={badge.detail} className={`rounded-full border px-2 py-0.5 text-caption ${badge.className}`}>{badge.label}</span>
+                {record.signatureVerification === 'INVALID' && <span className="rounded-full border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 text-caption font-semibold text-rose-300">Signature invalid</span>}
+                {record.signatureVerification === 'VALID' && <span className="rounded-full border border-emerald-400/25 bg-emerald-500/[0.07] px-2 py-0.5 text-caption font-medium text-emerald-200">Signature valid</span>}
+                {record.textProjectionMatches === false && <span className="rounded-full border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 text-caption font-semibold text-rose-300">Quoted text drifted</span>}
+                {record.evidenceFilePresent === false && <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-0.5 text-caption font-medium text-amber-300">No evidence file</span>}
               </div>
-              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[9px] text-slate-400">
+              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 font-mono text-caption text-slate-400">
                 <span>computed {record.computedSha256 ? `${record.computedSha256.slice(0, 12)}…` : '—'}</span>
                 <span>recorded {record.expectedSha256 ? `${record.expectedSha256.slice(0, 12)}…` : '—'}</span>
                 {/* 'NONE' printed bare would sit beside two digest facts and read as a truncated value. */}
@@ -823,7 +823,7 @@ function VerificationHistoryPanel({ records, isLoading, error }: { records: Prov
                 {record.invalidAssertionCount > 0 && <span className="text-amber-300">{record.invalidAssertionCount} invalid assertion{record.invalidAssertionCount === 1 ? '' : 's'}</span>}
               </div>
               {record.verificationErrors.length > 0 && (
-                <ul className="mt-1 space-y-0.5 text-[9px] leading-relaxed text-amber-200/80">{record.verificationErrors.map((reason) => <li key={reason}>{reason}</li>)}</ul>
+                <ul className="mt-1 space-y-0.5 text-caption leading-relaxed text-amber-200/80">{record.verificationErrors.map((reason) => <li key={reason}>{reason}</li>)}</ul>
               )}
             </li>
           );
@@ -835,8 +835,8 @@ function VerificationHistoryPanel({ records, isLoading, error }: { records: Prov
 
 function ClaimChecksPanel({ checks, state, error }: { checks: DocumentClaimChecks | null; state: 'idle' | 'pending' | 'failed'; error: string | null }) {
   return (
-    <section aria-label="Figures checked against imported tables" className="space-y-2 border-b border-slate-800 p-3 text-[10px]">
-      <h3 className="text-[11px] font-semibold text-slate-200">Figures checked against imported tables</h3>
+    <section aria-label="Figures checked against imported tables" className="space-y-2 border-b border-slate-800 p-3 text-label">
+      <h3 className="text-label font-semibold text-slate-200">Figures checked against imported tables</h3>
       {state === 'pending' && <p role="status" className="text-slate-400">Checking the figures in this document…</p>}
       {state === 'failed' && <p role="alert" className="text-rose-300">The check could not run: {error}</p>}
       {state === 'idle' && checks && checks.checks.length === 0 && (
@@ -847,7 +847,7 @@ function ClaimChecksPanel({ checks, state, error }: { checks: DocumentClaimCheck
           {checks.checks.map((check) => (
             <li key={`${check.characterStart}-${check.characterEnd}`} className="rounded-lg border border-slate-800 bg-slate-950/40 p-2">
               <blockquote className="text-slate-300">“{check.claimText}”</blockquote>
-              <div className="mt-1 text-[9px] text-slate-400">
+              <div className="mt-1 text-caption text-slate-400">
                 {check.kindLabel}
                 {check.scope.fiscalYear !== null && ` · FY ${check.scope.fiscalYear}`}
                 {check.scope.fund !== null && ` · fund ${check.scope.fund}`}

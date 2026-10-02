@@ -178,7 +178,7 @@ export default function AnalysisWorkbench() {
         <div className="lg:col-span-2"><AutomaticDiscovery /></div>
         <section className="min-w-0 space-y-4">
           <Panel title="Semantic Index" icon="sparkles">
-            <div className="grid gap-2 text-[11px] text-slate-300">
+            <div className="grid gap-2 text-label text-slate-300">
               <Metric label="Model" value={modelStatus ? modelStatus.modelId : 'Checking'} />
               <Metric label="State" value={modelStatus?.ready ? 'Ready' : modelStatus?.installed ? 'Installed' : 'Not installed'} />
               <Metric label="Vectors" value={indexStatus ? `${indexStatus.indexedChunkCount.toLocaleString()} chunks` : 'Checking'} />
@@ -200,14 +200,14 @@ export default function AnalysisWorkbench() {
               </button>
             </div>
             {indexReport && (
-              <p className="mt-2 text-[10px] text-slate-400">
+              <p className="mt-2 text-label text-slate-400">
                 Indexed {indexReport.indexedDocuments.toLocaleString()} documents, {indexReport.indexedChunks.toLocaleString()} chunks; skipped {indexReport.skippedDocuments.toLocaleString()}.
               </p>
             )}
           </Panel>
 
           <Panel title="Analytical Import" icon="database">
-            <p className="mb-3 text-xs leading-relaxed text-slate-400">Choose an acquired table or a local CSV, TSV, JSON, GeoJSON, JSONL, XLSX, XLS, or ODS export. General regional data infers numeric columns while preserving codes and suppression markers.</p>
+            <p className="mb-3 text-label leading-relaxed text-slate-400">Choose an acquired table or a local CSV, TSV, JSON, GeoJSON, JSONL, XLSX, XLS, or ODS export. General regional data infers numeric columns while preserving codes and suppression markers.</p>
             <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
               <select aria-label="Acquired table" value={selectedCandidate ? `${selectedCandidate.portalKey}:${selectedCandidate.documentId}` : ''} onChange={(event) => {
                 const candidate = candidates.find((item) => `${item.portalKey}:${item.documentId}` === event.target.value) ?? null;
@@ -234,10 +234,10 @@ export default function AnalysisWorkbench() {
               <input aria-label="Original source URL" className="analysis-input" value={sourceUri} onChange={(event) => setSourceUri(event.target.value)} placeholder="Original source URL (including FTP or SFTP export paths)" />
               <input aria-label="Worksheet name" className="analysis-input" value={worksheet} onChange={(event) => setWorksheet(event.target.value)} placeholder="Worksheet name (required for a workbook with several sheets)" />
               <div className="grid grid-cols-2 gap-2">
-                <label className="text-xs text-slate-400">Observation start<input aria-label="Observation start" type="date" className="analysis-input mt-1 w-full" value={observationStart} onChange={(event) => setObservationStart(event.target.value)} /></label>
-                <label className="text-xs text-slate-400">Observation end<input aria-label="Observation end" type="date" className="analysis-input mt-1 w-full" value={observationEnd} onChange={(event) => setObservationEnd(event.target.value)} /></label>
+                <label className="text-label leading-4 text-slate-400">Observation start<input aria-label="Observation start" type="date" className="analysis-input mt-1 w-full" value={observationStart} onChange={(event) => setObservationStart(event.target.value)} /></label>
+                <label className="text-label leading-4 text-slate-400">Observation end<input aria-label="Observation end" type="date" className="analysis-input mt-1 w-full" value={observationEnd} onChange={(event) => setObservationEnd(event.target.value)} /></label>
               </div>
-              <label className="flex items-center gap-2 text-xs text-slate-300"><input type="checkbox" checked={partialDataset} onChange={(event) => setPartialDataset(event.target.checked)} />Partial export or completeness not established</label>
+              <label className="flex items-center gap-2 text-label leading-4 text-slate-300"><input type="checkbox" checked={partialDataset} onChange={(event) => setPartialDataset(event.target.checked)} />Partial export or completeness not established</label>
               <button className="analysis-button w-fit" type="button" disabled={Boolean(status) || !sourcePath.trim() || !displayName.trim()} onClick={() => void run('Importing table', () => invokeCommand('import_analytical_dataset', {
                 input: {
                   datasetKind,
@@ -256,7 +256,7 @@ export default function AnalysisWorkbench() {
               </button>
             </div>
             {importResult && (
-              <div className="mt-2 text-xs text-slate-400" role="status">
+              <div className="mt-2 text-label leading-4 text-slate-400" role="status">
                 <p>{importResult.importedRows.toLocaleString()} rows imported to {importResult.tableName}; {importResult.rejectedRows.toLocaleString()} rejected.{importResult.datasetKind !== 'REGIONAL_DATA' && ` ${importResult.duplicateKeyRows.toLocaleString()} duplicate keys.`}</p>
                 {importResult.schemaWarnings.map((warning, index) => <p key={index} className="mt-1 text-amber-200">{warning}</p>)}
               </div>
@@ -276,7 +276,7 @@ export default function AnalysisWorkbench() {
             }} />
           </Panel>}
           <Panel title="Hybrid Retrieval" icon="search">
-            <p className="mb-2 text-xs text-slate-400">Search extracted text across reports, budgets, minutes, and articles. Exact search requires every word in the document; excerpts show the closest matching passage. Semantic matches are added when the model is ready. Text indexing covers the first four million characters per document.</p>
+            <p className="mb-2 text-label leading-4 text-slate-400">Search extracted text across reports, budgets, minutes, and articles. Exact search requires every word in the document; excerpts show the closest matching passage. Semantic matches are added when the model is ready. Text indexing covers the first four million characters per document.</p>
             <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_220px_auto]">
               <input aria-label="Document evidence query" className="analysis-input" value={hybridQuery} onChange={(event) => setHybridQuery(event.target.value)} />
               <select aria-label="Source jurisdiction" className="analysis-input" value={jurisdiction} onChange={(event) => setJurisdiction(event.target.value)}>
@@ -315,20 +315,20 @@ export default function AnalysisWorkbench() {
             <div className="mt-3 divide-y divide-slate-800">
               {hybridResults.map((result) => (
                 <div key={result.stableId} className="py-3">
-                  <div className="flex flex-wrap items-center gap-2 text-[9px] text-slate-400">
+                  <div className="flex flex-wrap items-center gap-2 text-caption text-slate-400">
                     <span className="font-mono">{result.portalKey} / doc {result.documentId || 'metadata'}</span>
                     <span>{result.agencyName}</span>
                     <span>{result.jurisdiction}</span>
                     <span>{result.retrievalStatus}</span>
                     {result.semanticScore !== null && <span>cos {result.semanticScore.toFixed(3)}</span>}
                   </div>
-                  <h3 className="mt-1 text-xs font-semibold text-slate-100">{result.fileName}{result.title && ` · ${result.title}`}</h3>
-                  <p className="mt-1 whitespace-pre-wrap text-[11px] leading-relaxed text-slate-300">{result.excerpt}</p>
-                  <div className="mt-1 font-mono text-[9px] text-slate-400">source chars {result.characterStart}-{result.characterEnd} · detected personal identifiers masked</div>
+                  <h3 className="mt-1 text-label leading-4 font-semibold text-slate-100">{result.fileName}{result.title && ` · ${result.title}`}</h3>
+                  <p className="mt-1 whitespace-pre-wrap text-label leading-relaxed text-slate-300">{result.excerpt}</p>
+                  <div className="mt-1 font-mono text-caption text-slate-400">source chars {result.characterStart}-{result.characterEnd} · detected personal identifiers masked</div>
                   <button type="button" className="analysis-button mt-2" onClick={() => reviewSearchResult(result)}>Review source record</button>
                 </div>
               ))}
-              {hybridResults.length === 0 && <p className="py-4 text-[11px] text-slate-400">Search acquired documents after text extraction. Try a few distinctive terms such as “shelter capacity” or “contract amendment”. A missing match does not establish that the source lacks the information.</p>}
+              {hybridResults.length === 0 && <p className="py-4 text-label text-slate-400">Search acquired documents after text extraction. Try a few distinctive terms such as “shelter capacity” or “contract amendment”. A missing match does not establish that the source lacks the information.</p>}
             </div>
           </Panel>
 
@@ -350,9 +350,9 @@ export default function AnalysisWorkbench() {
                   <div className="analysis-label">Datasets</div>
                   <div className="mt-1 max-h-40 overflow-y-auto rounded border border-slate-800">
                     {(schema?.datasets ?? []).map((dataset) => (
-                      <button key={dataset.snapshotId} type="button" onClick={() => { setSql(`SELECT * FROM ${dataset.tableName} LIMIT 50`); setSqlResult(null); sqlGate.invalidate(); }} className="block w-full border-b border-slate-800 px-2 py-1.5 text-left text-[10px] text-slate-300 last:border-b-0 hover:bg-slate-900">
+                      <button key={dataset.snapshotId} type="button" onClick={() => { setSql(`SELECT * FROM ${dataset.tableName} LIMIT 50`); setSqlResult(null); sqlGate.invalidate(); }} className="block w-full border-b border-slate-800 px-2 py-1.5 text-left text-label text-slate-300 last:border-b-0 hover:bg-slate-900">
                         <span className="font-semibold">{dataset.displayName}</span>
-                        <span className="block font-mono text-[9px] text-slate-400">{dataset.tableName}</span>
+                        <span className="block font-mono text-caption text-slate-400">{dataset.tableName}</span>
                         <span className="block text-slate-400">{dataset.importedRows.toLocaleString()} rows · {dataset.rejectedRows.toLocaleString()} rejected · {dataset.partialDataset ? 'Partial / unverified coverage' : 'Declared complete'}</span>
                         <span className="block break-all text-slate-400">{dataset.sourceUri ?? 'Local export'} · SHA-256 {dataset.sourceSha256.slice(0, 16)}</span>
                         {(dataset.observationPeriodStart || dataset.observationPeriodEnd) && <span className="block text-slate-400">Observed {dataset.observationPeriodStart ?? '?'} – {dataset.observationPeriodEnd ?? '?'}</span>}
@@ -382,7 +382,7 @@ export default function AnalysisWorkbench() {
                   </button>
                 </div>
                 {sqlResult && <SqlTable result={sqlResult} />}
-                {exportResult && <p className="mt-2 break-all text-xs text-slate-400">Exported {exportResult.rowCount.toLocaleString()} rows to {exportResult.outputPath}. Export limit: 10,000 rows.</p>}
+                {exportResult && <p className="mt-2 break-all text-label leading-4 text-slate-400">Exported {exportResult.rowCount.toLocaleString()} rows to {exportResult.outputPath}. Export limit: 10,000 rows.</p>}
               </div>
             </div>
           </Panel>
@@ -392,9 +392,9 @@ export default function AnalysisWorkbench() {
               <div className="grid gap-2 md:grid-cols-2">
                 {groupedColumns.map(([table, columns]) => (
                   <div key={table} className="rounded border border-slate-800 p-2">
-                    <div className="font-mono text-[10px] text-cyan-200">{table}</div>
+                    <div className="font-mono text-label text-cyan-200">{table}</div>
                     <div className="mt-1 flex flex-wrap gap-1">
-                      {columns.map((column) => <span key={`${table}-${column.columnName}`} className="rounded bg-slate-900 px-1.5 py-0.5 text-[9px] text-slate-300">{column.columnName}:{column.logicalType}</span>)}
+                      {columns.map((column) => <span key={`${table}-${column.columnName}`} className="rounded bg-slate-900 px-1.5 py-0.5 text-caption text-slate-300">{column.columnName}:{column.logicalType}</span>)}
                     </div>
                   </div>
                 ))}
@@ -404,7 +404,7 @@ export default function AnalysisWorkbench() {
         </section>
       </div>
       {(status || error) && (
-        <div className="fixed bottom-4 right-4 z-50 rounded border border-slate-800 bg-slate-950 px-3 py-2 text-[11px] text-slate-200 shadow-xl">
+        <div className="fixed bottom-4 right-4 z-50 rounded border border-slate-800 bg-slate-950 px-3 py-2 text-label text-slate-200 shadow-xl">
           {error ? <span className="text-rose-300">{error}</span> : status}
         </div>
       )}
@@ -434,9 +434,9 @@ function TemplateList({ templates, onChoose }: { templates: SqlTemplate[]; onCho
       <div className="analysis-label">Templates</div>
       <div className="mt-1 space-y-1">
         {templates.map((template) => (
-          <button key={template.templateId} type="button" onClick={() => onChoose(template.sql)} title={template.denominator} className="block w-full rounded border border-slate-800 px-2 py-1.5 text-left text-[10px] text-slate-300 hover:bg-slate-900">
+          <button key={template.templateId} type="button" onClick={() => onChoose(template.sql)} title={template.denominator} className="block w-full rounded border border-slate-800 px-2 py-1.5 text-left text-label text-slate-300 hover:bg-slate-900">
             <span className="font-semibold">{template.title}</span>
-            <span className="mt-0.5 line-clamp-2 block text-[9px] text-slate-400">{template.description}</span>
+            <span className="mt-0.5 line-clamp-2 block text-caption text-slate-400">{template.description}</span>
           </button>
         ))}
       </div>
@@ -447,12 +447,12 @@ function TemplateList({ templates, onChoose }: { templates: SqlTemplate[]; onCho
 function SqlTable({ result }: { result: SqlQueryResult }) {
   return (
     <div className="mt-3 overflow-hidden rounded border border-slate-800">
-      <div className="flex justify-between border-b border-slate-800 px-2 py-1 text-[9px] text-slate-400">
+      <div className="flex justify-between border-b border-slate-800 px-2 py-1 text-caption text-slate-400">
         <span>{result.rowCount.toLocaleString()} rows{result.truncated ? ' shown, truncated' : ''}</span>
         <span>{result.elapsedMs} ms</span>
       </div>
       <div className="max-h-80 overflow-auto">
-        <table className="min-w-full border-collapse text-left text-[10px]">
+        <table className="min-w-full border-collapse text-left text-label">
           <thead className="sticky top-0 bg-slate-950">
             <tr>{result.columns.map((column) => <th key={column} className="border-b border-slate-800 px-2 py-1 font-semibold text-slate-300">{column}</th>)}</tr>
           </thead>

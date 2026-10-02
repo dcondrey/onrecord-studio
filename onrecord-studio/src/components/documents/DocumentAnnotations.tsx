@@ -328,9 +328,9 @@ export default function DocumentAnnotations({
   };
 
   return (
-    <section aria-label="Annotations" className={`space-y-2 border-b border-slate-800 p-3 text-[10px] text-slate-300${pageView.open ? ' w-[24rem] max-w-[45%] shrink-0 overflow-y-auto border-r' : ''}`}>
+    <section aria-label="Annotations" className={`space-y-2 border-b border-slate-800 p-3 text-label text-slate-300${pageView.open ? ' w-[24rem] max-w-[45%] shrink-0 overflow-y-auto border-r' : ''}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-[11px] font-semibold text-slate-200">Annotations</h3>
+        <h3 className="text-label font-semibold text-slate-200">Annotations</h3>
         <button type="button" className={button} disabled={items.length === 0} onClick={() => void copy(annotationsToMarkdown(fileName, portalKey, documentId, items), 'Copied annotations as Markdown')}>
           Copy as Markdown
         </button>

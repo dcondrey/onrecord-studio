@@ -16,7 +16,7 @@ import type { CheckoutState } from './LicenseProvider';
 export function PriceTable() {
   return (
     <div>
-      <table className="w-full text-left text-xs text-slate-300">
+      <table className="w-full text-left text-label leading-4 text-slate-300">
         <caption className="sr-only">Price per seat per year</caption>
         <thead>
           <tr className="text-slate-400">
@@ -33,7 +33,7 @@ export function PriceTable() {
           ))}
         </tbody>
       </table>
-      <p className="mt-2 text-[11px] leading-4 text-slate-400">{PRICE_TERMS}</p>
+      <p className="mt-2 text-label leading-4 text-slate-400">{PRICE_TERMS}</p>
     </div>
   );
 }
@@ -72,7 +72,7 @@ export default function UpgradePanel({
         <PriceTable />
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
-        <label htmlFor={seatsId} className="text-xs font-medium text-slate-300">Seats</label>
+        <label htmlFor={seatsId} className="text-label leading-4 font-medium text-slate-300">Seats</label>
         <div className="flex items-center gap-1">
           <button
             type="button"
@@ -103,7 +103,7 @@ export default function UpgradePanel({
             +
           </button>
         </div>
-        <p className="text-xs text-slate-300" aria-live="polite">
+        <p className="text-label leading-4 text-slate-300" aria-live="polite">
           {seats} {seats === 1 ? 'seat' : 'seats'} at ${tier.usdPerSeatPerYear} = ${yearlyTotalUsd(seats)} per year, before tax
         </p>
       </div>
@@ -117,12 +117,12 @@ export default function UpgradePanel({
       </button>
       {checkout.busy ? <p role="status" className="sr-only">Preparing checkout</p> : null}
       {checkout.error ? (
-        <p role="alert" className="mt-3 rounded-lg border border-rose-700 bg-rose-950/60 px-3 py-2 text-xs text-rose-100">
+        <p role="alert" className="mt-3 rounded-lg border border-rose-700 bg-rose-950/60 px-3 py-2 text-label leading-4 text-rose-100">
           Checkout could not be started. {checkout.error}
         </p>
       ) : null}
       {checkout.url ? (
-        <div role="status" className="mt-3 text-xs text-slate-300">
+        <div role="status" className="mt-3 text-label leading-4 text-slate-300">
           <p>Checkout opened in your browser. If nothing opened, use the button.</p>
           <button
             type="button"
@@ -131,11 +131,11 @@ export default function UpgradePanel({
           >
             Open checkout in your browser
           </button>
-          <p className="mt-2 break-all text-[11px] text-slate-400">{checkout.url}</p>
+          <p className="mt-2 break-all text-label text-slate-400">{checkout.url}</p>
           {openError ? <p role="alert" className="mt-2 text-rose-200">{openError}</p> : null}
         </div>
       ) : null}
-      <p className="mt-3 text-[11px] leading-4 text-slate-400">
+      <p className="mt-3 text-label leading-4 text-slate-400">
         After you pay, return here. The license is checked again when this window regains focus.
       </p>
     </section>

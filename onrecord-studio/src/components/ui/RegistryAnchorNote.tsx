@@ -24,11 +24,11 @@ export function RegistryAnchorNote({ identifierKind, value }: { identifierKind: 
       });
   }, [gate, identifierKind, value]);
 
-  if (lookup.kind === 'pending') return <p className="text-[10px] text-slate-400" aria-busy="true">Checking the registry snapshot.</p>;
-  if (lookup.kind === 'failed') return <p className="text-[10px] text-amber-200">Registry lookup failed: {lookup.message}</p>;
+  if (lookup.kind === 'pending') return <p className="text-label text-slate-400" aria-busy="true">Checking the registry snapshot.</p>;
+  if (lookup.kind === 'failed') return <p className="text-label text-amber-200">Registry lookup failed: {lookup.message}</p>;
   const registered = lookup.anchor.state === 'REGISTERED';
   return (
-    <p className={`text-[10px] ${registered ? 'text-slate-200' : 'text-slate-400'}`} data-registry-state={lookup.anchor.state}>
+    <p className={`text-label ${registered ? 'text-slate-200' : 'text-slate-400'}`} data-registry-state={lookup.anchor.state}>
       {describeRegistryAnchor(lookup.anchor)}
       {lookup.anchor.state === 'REGISTERED' && lookup.anchor.record.detail && (
         <span className="block text-slate-400">{lookup.anchor.record.detail}</span>

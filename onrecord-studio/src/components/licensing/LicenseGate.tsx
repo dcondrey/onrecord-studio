@@ -114,14 +114,14 @@ export default function LicenseGate({ controller }: { controller: LicenseControl
   return (
     <main className="app-theme flex h-screen w-screen items-center justify-center overflow-y-auto bg-slate-950 px-6 text-slate-100">
       <section className="my-auto w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900/80 p-8 shadow-2xl" aria-labelledby="license-gate-heading">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-400">OnRecord Studio</p>
+        <p className="text-label leading-4 font-semibold uppercase tracking-[0.24em] text-cyan-400">OnRecord Studio</p>
         <h1 id="license-gate-heading" ref={headingRef} tabIndex={-1} className="mt-3 text-2xl font-semibold outline-none">
           {copy.heading}
         </h1>
         <p className="mt-4 text-sm leading-6 text-slate-300">{copy.sentence}</p>
-        {detail ? <p className="mt-2 text-xs leading-5 text-slate-400">Detail: {detail}</p> : null}
+        {detail ? <p className="mt-2 text-label leading-5 text-slate-400">Detail: {detail}</p> : null}
         {direct && status?.accountEmail && !showDeviceLimit ? (
-          <p className="mt-3 text-xs text-slate-300">
+          <p className="mt-3 text-label leading-4 text-slate-300">
             Signed in as {status.accountEmail}
             {status.signInProvider ? ` with ${status.signInProvider}` : ''}.{' '}
             <button
@@ -178,7 +178,7 @@ export default function LicenseGate({ controller }: { controller: LicenseControl
         {showUpgrade ? <UpgradePanel checkout={controller.checkout} onStartCheckout={controller.startCheckout} /> : null}
 
         {!loading && !direct ? (
-          <div className="mt-5 space-y-2 rounded-lg bg-slate-950/70 px-4 py-3 text-xs leading-5 text-slate-400">
+          <div className="mt-5 space-y-2 rounded-lg bg-slate-950/70 px-4 py-3 text-label leading-5 text-slate-400">
             <p>Open the Mac App Store and sign in with the Apple Account that purchased this app.</p>
             <p>This is a one-time paid app; no subscription or separate license key is required.</p>
           </div>
@@ -201,7 +201,7 @@ export default function LicenseGate({ controller }: { controller: LicenseControl
           </button>
         ) : null}
         {refreshing ? <p role="status" className="sr-only">Checking license</p> : null}
-        <p className="mt-4 text-center text-[11px] leading-4 text-slate-400">
+        <p className="mt-4 text-center text-label leading-4 text-slate-400">
           {loading
             ? 'Workspace commands stay locked until the license check finishes. Local evidence on this Mac is not deleted.'
             : direct

@@ -84,31 +84,31 @@ export default function CrossCorpusExplorer() {
     <section className="app-panel flex flex-col gap-3 p-4" aria-label="Cross-corpus findings">
       <div className="min-w-0">
         <div className="app-eyebrow">Cross-corpus explorer</div>
-        <h3 className="mt-1 text-[13px] font-semibold text-slate-200">
+        <h3 className="mt-1 text-label font-semibold text-slate-200">
           Patterns that span jurisdictions, agencies, and time
         </h3>
-        <p className="mt-1 text-[9px] text-slate-400">
+        <p className="mt-1 text-caption text-slate-400">
           Coordinated language, behavioral change-points, orphan topics, and reused denial
           grounds — signals no single-agency detector can see.
         </p>
       </div>
 
       {error && (
-        <div role="alert" className="rounded-lg border border-rose-500/20 bg-rose-500/[0.04] px-3 py-2 text-[9px] text-rose-200">
+        <div role="alert" className="rounded-lg border border-rose-500/20 bg-rose-500/[0.04] px-3 py-2 text-caption text-rose-200">
           Cross-corpus findings unavailable: {error}
         </div>
       )}
 
       {isLoading && findings.length === 0 ? (
-        <div role="status" className="text-[10px] text-slate-400">
+        <div role="status" className="text-label text-slate-400">
           Loading cross-corpus findings…
         </div>
       ) : findings.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-800 bg-slate-950/25 p-4 text-center">
-          <p className="text-[10px] font-medium text-slate-300">
+          <p className="text-label font-medium text-slate-300">
             No cross-corpus patterns surfaced yet.
           </p>
-          <p className="mt-1 text-[9px] leading-relaxed text-slate-400">
+          <p className="mt-1 text-caption leading-relaxed text-slate-400">
             These detectors compare across agencies, time windows, and jurisdictions; they need
             a broader ingest to fire.
           </p>
@@ -138,16 +138,16 @@ function Heatmap({
 }) {
   if (heatmap.portals.length === 0 || heatmap.maxCount === 0) {
     return (
-      <div className="rounded-lg border border-slate-800/70 bg-slate-950/30 p-3 text-[9px] text-slate-400">
+      <div className="rounded-lg border border-slate-800/70 bg-slate-950/30 p-3 text-caption text-slate-400">
         No jurisdictions to plot yet.
       </div>
     );
   }
   return (
     <div className="rounded-lg border border-slate-800/70 bg-slate-950/30 p-3">
-      <p className="text-[9px] uppercase tracking-wider text-slate-400">Jurisdiction × detector</p>
+      <p className="text-caption uppercase tracking-wider text-slate-400">Jurisdiction × detector</p>
       <div role="region" tabIndex={0} aria-label="Jurisdiction × detector heatmap" className="focus-ring mt-2 overflow-x-auto">
-        <table className="w-full text-[9px] text-slate-300">
+        <table className="w-full text-caption text-slate-300">
           <thead>
             <tr>
               <th className="pr-2 text-left font-normal text-slate-400">Portal</th>
@@ -161,7 +161,7 @@ function Heatmap({
           <tbody>
             {heatmap.portals.map((portal) => (
               <tr key={portal}>
-                <td className="pr-2 text-[9px] text-slate-300">{portal}</td>
+                <td className="pr-2 text-caption text-slate-300">{portal}</td>
                 {(Object.keys(KIND_LABEL) as (keyof typeof KIND_LABEL)[]).map((kind) => {
                   const label = KIND_LABEL[kind];
                   const count = heatmap.cellCounts.get(`${portal}\u001f${label}`) ?? 0;
@@ -206,9 +206,9 @@ function CrossCorpusRow({ finding, onInspect }: { finding: Finding; onInspect: (
             </svg>
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold text-slate-100">{finding.headline}</p>
-            <p className="mt-1 text-[10px] leading-relaxed text-slate-400">{finding.explanation}</p>
-            <p className="mt-1 text-[8px] uppercase tracking-wider text-slate-400">
+            <p className="text-label font-semibold text-slate-100">{finding.headline}</p>
+            <p className="mt-1 text-label leading-relaxed text-slate-400">{finding.explanation}</p>
+            <p className="mt-1 text-caption uppercase tracking-wider text-slate-400">
               {isCrossCorpusKind(finding.kind) ? KIND_LABEL[finding.kind] : finding.kind}
               {finding.confidence.kind === 'MEASURED' &&
                 ` · ${(finding.confidence.basisPoints / 100).toFixed(0)}% confidence`}

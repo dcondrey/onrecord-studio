@@ -77,7 +77,7 @@ export default function ChangeFeed() {
   return (
     <section
       aria-label="What changed since you last looked"
-      className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-800/70 bg-slate-950/30 px-3 py-2 text-[10px] text-slate-400"
+      className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-800/70 bg-slate-950/30 px-3 py-2 text-label text-slate-400"
     >
       <button
         type="button"

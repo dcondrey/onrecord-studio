@@ -5,8 +5,9 @@ describe('theme resolution', () => {
   it('accepts only persisted theme preferences', () => {
     expect(readThemePreference({ getItem: () => 'auto' })).toBe('auto');
     expect(readThemePreference({ getItem: () => 'dark' })).toBe('dark');
-    expect(readThemePreference({ getItem: () => 'invalid' })).toBe('light');
-    expect(readThemePreference({ getItem: () => null })).toBe('light');
+    expect(readThemePreference({ getItem: () => 'invalid' })).toBe('auto');
+    expect(readThemePreference({ getItem: () => 'light' })).toBe('light');
+    expect(readThemePreference({ getItem: () => null })).toBe('auto');
   });
 
   it('resolves auto from the current system preference', () => {

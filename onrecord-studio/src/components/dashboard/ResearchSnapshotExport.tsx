@@ -23,7 +23,7 @@ export default function ResearchSnapshotExport() {
 
   const rows = result ? Object.values(result.manifest.tableRows).reduce((sum, count) => sum + count, 0) : 0;
   return (
-    <details className="mt-4 text-[10px]">
+    <details className="mt-4 text-label">
       <summary className="cursor-pointer text-slate-300">Research snapshot for outside tools</summary>
       <div className="mt-3 space-y-3 text-slate-400">
         <p>

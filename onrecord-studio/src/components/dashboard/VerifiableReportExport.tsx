@@ -63,7 +63,7 @@ export default function VerifiableReportExport({ portalKey = null, findingIds }:
   return (
     <section className="app-panel p-4" aria-label="Verifiable report">
       <h3 className="font-semibold text-slate-200">Verifiable report</h3>
-      <p className="mt-2 text-xs text-slate-400">
+      <p className="mt-2 text-label leading-4 text-slate-400">
         Exports one HTML file that checks its own signature in the reader&apos;s browser. Quoted text is
         masked for personal information, hypotheses about redacted identities are left out, and the
         file lists what was withheld. The signature shows the file is unchanged; it does not identify
@@ -79,7 +79,7 @@ export default function VerifiableReportExport({ portalKey = null, findingIds }:
       </button>
       {error && <p role="alert" className="mt-3 text-sm text-rose-300">{error}</p>}
       {result && (
-        <div role="status" className="mt-3 rounded border border-slate-700 bg-slate-950/60 p-3 text-xs text-slate-300">
+        <div role="status" className="mt-3 rounded border border-slate-700 bg-slate-950/60 p-3 text-label leading-4 text-slate-300">
           <p className="font-semibold text-slate-200">
             Wrote {result.claimCount} claim(s); {result.withheldCount} item(s) withheld.
           </p>

@@ -114,11 +114,11 @@ export default function CaseTimeline() {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto w-full max-w-[1100px] space-y-3 p-4 lg:p-5">
-        <p className="text-[10px] leading-relaxed text-slate-400">
+        <p className="text-label leading-relaxed text-slate-400">
           One timeline from your tracked requests, detector findings, watch changes and case records. An event date is when something happened. Last seen and noticed dates are when this app saw it, which can be later than the event. A due or modeled date is owed or computed, not observed. Case dates are the ones you recorded; none is read out of a document.
         </p>
 
-        <div className="app-panel flex flex-wrap items-center gap-2 p-2 text-[10px] text-slate-300">
+        <div className="app-panel flex flex-wrap items-center gap-2 p-2 text-label text-slate-300">
           <div role="group" aria-label="Show sources" className="flex gap-1">
             {SOURCES.map((source) => (
               <button
@@ -154,17 +154,17 @@ export default function CaseTimeline() {
         </div>
 
         {SOURCES.filter((source) => sources[source].error).map((source) => (
-          <p key={source} role="alert" className="rounded-lg border border-rose-500/20 bg-rose-500/[0.04] px-3 py-2 text-[10px] text-rose-200">
+          <p key={source} role="alert" className="rounded-lg border border-rose-500/20 bg-rose-500/[0.04] px-3 py-2 text-label text-rose-200">
             {SOURCE_LABELS[source]} could not be read, so they are missing from this timeline: {sources[source].error}
           </p>
         ))}
         {SOURCES.filter((source) => sources[source].capped).map((source) => (
-          <p key={source} role="status" className="text-[10px] text-amber-200">
+          <p key={source} role="status" className="text-label text-amber-200">
             Only the most recent {source === 'FINDING' ? FINDING_LIMIT : WATCH_LIMIT} {SOURCE_LABELS[source].toLowerCase()} are loaded; older ones are not shown.
           </p>
         ))}
         {contradictions.length > 0 && (
-          <section aria-label="Date contradictions" className="rounded-lg border border-amber-500/30 bg-amber-500/[0.04] px-3 py-2 text-[10px] text-amber-100">
+          <section aria-label="Date contradictions" className="rounded-lg border border-amber-500/30 bg-amber-500/[0.04] px-3 py-2 text-label text-amber-100">
             <h3 className="font-semibold">Two sources give different dates</h3>
             <ul className="mt-1 space-y-1">
               {contradictions.map((entry) => (
@@ -180,13 +180,13 @@ export default function CaseTimeline() {
           </section>
         )}
         {view.unreadableDates > 0 && (
-          <p role="status" className="text-[10px] text-amber-200">{view.unreadableDates} item{view.unreadableDates === 1 ? ' has' : 's have'} a date that could not be read and {view.unreadableDates === 1 ? 'is' : 'are'} not shown.</p>
+          <p role="status" className="text-label text-amber-200">{view.unreadableDates} item{view.unreadableDates === 1 ? ' has' : 's have'} a date that could not be read and {view.unreadableDates === 1 ? 'is' : 'are'} not shown.</p>
         )}
 
         {loading && all.length === 0 ? (
-          <p role="status" className="text-[10px] text-slate-400">Loading the timeline…</p>
+          <p role="status" className="text-label text-slate-400">Loading the timeline…</p>
         ) : view.items.length === 0 ? (
-          <div className="app-panel p-5 text-center text-[10px] text-slate-400">
+          <div className="app-panel p-5 text-center text-label text-slate-400">
             {all.length === 0
               ? 'Nothing to place on a timeline yet. Dates you record in My requests, findings and watch changes appear here. This is not a statement that nothing happened.'
               : 'No items match these filters.'}
@@ -194,20 +194,20 @@ export default function CaseTimeline() {
         ) : (
           groups.map((group) => (
             <section key={group.month} aria-label={`Items from ${group.month}`}>
-              <h3 className="mb-1 text-[11px] font-semibold text-slate-200">{group.month}</h3>
+              <h3 className="mb-1 text-label font-semibold text-slate-200">{group.month}</h3>
               <ol className="divide-y divide-slate-800/70 rounded-xl border border-slate-800">
                 {group.rows.map((row) => (
                   <li key={row.id} className="px-3 py-2">
-                    <div className="flex flex-wrap items-baseline gap-x-2 text-[10px]">
+                    <div className="flex flex-wrap items-baseline gap-x-2 text-label">
                       <time dateTime={row.at} className="font-mono text-slate-300">{row.at.slice(0, 10)}</time>
-                      <span className="rounded border border-slate-700 px-1.5 text-[8px] uppercase tracking-wider text-slate-400">{DATE_MEANING_LABELS[row.dateMeaning]}</span>
-                      <span className="rounded border border-slate-700 px-1.5 text-[8px] uppercase tracking-wider text-slate-400">{SOURCE_LABELS[row.source]}</span>
+                      <span className="rounded border border-slate-700 px-1.5 text-caption uppercase tracking-wider text-slate-400">{DATE_MEANING_LABELS[row.dateMeaning]}</span>
+                      <span className="rounded border border-slate-700 px-1.5 text-caption uppercase tracking-wider text-slate-400">{SOURCE_LABELS[row.source]}</span>
                     </div>
-                    <p className="mt-1 text-[11px] font-medium text-slate-100">{row.title}</p>
-                    {row.detail && <p className="mt-0.5 text-[10px] text-slate-400">{row.detail}</p>}
-                    <p className="mt-0.5 text-[9px] text-slate-400">{row.provenance}</p>
-                    {row.citations && row.citations.length === 0 && <p className="mt-0.5 text-[9px] text-amber-200">No citation recorded: this date rests on your entry alone.</p>}
-                    <div className="mt-1 flex gap-3 text-[9px]">
+                    <p className="mt-1 text-label font-medium text-slate-100">{row.title}</p>
+                    {row.detail && <p className="mt-0.5 text-label text-slate-400">{row.detail}</p>}
+                    <p className="mt-0.5 text-caption text-slate-400">{row.provenance}</p>
+                    {row.citations && row.citations.length === 0 && <p className="mt-0.5 text-caption text-amber-200">No citation recorded: this date rests on your entry alone.</p>}
+                    <div className="mt-1 flex gap-3 text-caption">
                       {row.evidence && (
                         <button type="button" aria-expanded={expanded === row.id} onClick={() => setExpanded((current) => (current === row.id ? null : row.id))} className="focus-ring underline text-slate-300">
                           {expanded === row.id ? 'Hide basis' : 'Show basis'}
@@ -220,7 +220,7 @@ export default function CaseTimeline() {
                         <button type="button" onClick={() => setWorkspaceView('overview')} className="focus-ring underline text-slate-300">Open watchlist</button>
                       )}
                     </div>
-                    {expanded === row.id && row.evidence && <blockquote className="mt-1 border-l border-slate-600 pl-2 text-[10px] text-slate-300">{row.evidence}</blockquote>}
+                    {expanded === row.id && row.evidence && <blockquote className="mt-1 border-l border-slate-600 pl-2 text-label text-slate-300">{row.evidence}</blockquote>}
                   </li>
                 ))}
               </ol>
@@ -228,7 +228,7 @@ export default function CaseTimeline() {
           ))
         )}
         {view.items.length > limit && (
-          <button type="button" onClick={() => setLimit((current) => current + PAGE)} className="secondary-action focus-ring rounded-lg border px-3 py-1.5 text-[10px] font-semibold text-slate-300">
+          <button type="button" onClick={() => setLimit((current) => current + PAGE)} className="secondary-action focus-ring rounded-lg border px-3 py-1.5 text-label font-semibold text-slate-300">
             Show {PAGE} more ({view.items.length - limit} remaining)
           </button>
         )}

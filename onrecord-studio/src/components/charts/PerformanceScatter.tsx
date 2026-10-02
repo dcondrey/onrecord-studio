@@ -96,13 +96,13 @@ export default function PerformanceScatter() {
       <div className="flex items-start justify-between gap-4 border-b border-slate-800/70 px-5 py-4">
         <div>
           <div className="app-eyebrow">Department performance map</div>
-          <h2 className="mt-1 text-[13px] font-semibold text-slate-200">Response time vs. statistical deviation</h2>
-          <p className="mt-1 text-[10px] text-slate-400">Bubble size represents audited request volume. Select a department to inspect its evidence.</p>
+          <h2 className="mt-1 text-label font-semibold text-slate-200">Response time vs. statistical deviation</h2>
+          <p className="mt-1 text-label text-slate-400">Bubble size represents audited request volume. Select a department to inspect its evidence.</p>
         </div>
         <div className="hidden flex-wrap items-center justify-end gap-2 sm:flex">
-          {dayRange && <button type="button" onClick={() => setDayRange(null)} className="rounded-lg border border-slate-800 bg-slate-950/40 px-2 py-1.5 text-[8px] text-slate-400">Reset zoom</button>}
-          <button type="button" onClick={exportSvg} className="rounded-lg border border-slate-800 bg-slate-950/40 px-2 py-1.5 text-[8px] text-slate-400">Export SVG</button>
-          <div className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2 text-[8px] text-slate-400">
+          {dayRange && <button type="button" onClick={() => setDayRange(null)} className="rounded-lg border border-slate-800 bg-slate-950/40 px-2 py-1.5 text-caption text-slate-400">Reset zoom</button>}
+          <button type="button" onClick={exportSvg} className="rounded-lg border border-slate-800 bg-slate-950/40 px-2 py-1.5 text-caption text-slate-400">Export SVG</button>
+          <div className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2 text-caption text-slate-400">
           <LegendDot severity="typical" label="Typical" />
           <LegendDot severity="elevated" label="Elevated" />
           <LegendDot severity="critical" label="Critical" />
@@ -121,12 +121,12 @@ export default function PerformanceScatter() {
               // Saying so beats silently dropping them: an agency with no recorded closure cannot
               // be placed on either axis, and it must not be implied to be missing for any other
               // reason.
-              <p className="mb-2 text-[9px] text-slate-400">
+              <p className="mb-2 text-caption text-slate-400">
                 {unmeasuredCount} department{unmeasuredCount === 1 ? '' : 's'} not plotted: no closure has been recorded, so there is no closure time or deviation to place.
               </p>
             )}
-            {visiblePoints.length > renderedPoints.length && <p className="mb-1 text-[8px] text-amber-300/70">Showing the 800 highest-volume departments in this viewport; narrow the day range to inspect the remainder.</p>}
-            <p className="mb-1 text-[8px] text-slate-400">Drag horizontally across the plot to zoom the closure-time axis.</p>
+            {visiblePoints.length > renderedPoints.length && <p className="mb-1 text-caption text-amber-300/70">Showing the 800 highest-volume departments in this viewport; narrow the day range to inspect the remainder.</p>}
+            <p className="mb-1 text-caption text-slate-400">Drag horizontally across the plot to zoom the closure-time axis.</p>
             <svg ref={svgRef} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="h-full min-h-[280px] w-full" role="img" aria-label="Scatter plot of agency average closure time and performance z-score">
               <defs>
                 <filter id="pointGlow" x="-100%" y="-100%" width="300%" height="300%">
@@ -193,7 +193,7 @@ export default function PerformanceScatter() {
           <aside className="min-h-0 p-4">
             <div className="flex items-center justify-between">
               <div className="app-eyebrow">Priority review</div>
-              <span className="font-mono text-[8px] text-slate-400">Top {Math.min(5, data.length)}</span>
+              <span className="font-mono text-caption text-slate-400">Top {Math.min(5, data.length)}</span>
             </div>
             <div className="mt-3 space-y-1.5">
               {data.slice(0, 5).map((profile, index) => (
@@ -208,12 +208,12 @@ export default function PerformanceScatter() {
                     focused?.agencyId === profile.agencyId ? 'border-slate-700 bg-slate-800/55' : 'border-transparent hover:border-slate-800 hover:bg-slate-900/70',
                   )}
                 >
-                  <span className="font-mono text-[9px] text-slate-400">{String(index + 1).padStart(2, '0')}</span>
+                  <span className="font-mono text-caption text-slate-400">{String(index + 1).padStart(2, '0')}</span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[10px] font-medium text-slate-300">{profile.agencyName}</span>
-                    <span className="mt-0.5 block text-[8px] text-slate-400">{profile.totalRequestsProcessed.toLocaleString()} requests · {profile.averageClosureDays === null ? 'no closures recorded' : `${profile.averageClosureDays.toFixed(1)}d avg.`}</span>
+                    <span className="block truncate text-label font-medium text-slate-300">{profile.agencyName}</span>
+                    <span className="mt-0.5 block text-caption text-slate-400">{profile.totalRequestsProcessed.toLocaleString()} requests · {profile.averageClosureDays === null ? 'no closures recorded' : `${profile.averageClosureDays.toFixed(1)}d avg.`}</span>
                   </span>
-                  <span className={cn('flex items-center gap-1.5 font-mono text-[10px] font-semibold', severityFor(profile) === 'critical' ? 'text-rose-300' : severityFor(profile) === 'elevated' ? 'text-amber-300' : 'text-cyan-300')}>
+                  <span className={cn('flex items-center gap-1.5 font-mono text-label font-semibold', severityFor(profile) === 'critical' ? 'text-rose-300' : severityFor(profile) === 'elevated' ? 'text-amber-300' : 'text-cyan-300')}>
                     <svg viewBox="-6 -6 12 12" className="h-2 w-2 shrink-0" role="img" aria-label={`${severityFor(profile)} band`}>
                       <SeverityMark severity={severityFor(profile)} cx={0} cy={0} radius={4.5} fill="currentColor" fillOpacity={0.85} stroke="currentColor" strokeWidth={1} />
                     </svg>
@@ -222,7 +222,7 @@ export default function PerformanceScatter() {
                 </button>
               ))}
             </div>
-            <button type="button" onClick={() => setWorkspaceView('evidence')} className="focus-ring mt-3 flex w-full items-center justify-between rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2.5 text-[9px] font-semibold text-slate-400 transition hover:border-cyan-400/20 hover:text-cyan-300">
+            <button type="button" onClick={() => setWorkspaceView('evidence')} className="focus-ring mt-3 flex w-full items-center justify-between rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2.5 text-caption font-semibold text-slate-400 transition hover:border-cyan-400/20 hover:text-cyan-300">
               Open evidence workspace
               <Icon name="arrow" className="h-3.5 w-3.5" />
             </button>
@@ -268,11 +268,11 @@ function ChartEmptyState() {
       </svg>
       <div className="absolute inset-0 grid place-items-center p-6 text-center">
         <div className="chart-ready-card max-w-sm rounded-2xl border px-5 py-4 backdrop-blur-xl">
-          <div className="mx-auto flex w-fit items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/[0.07] px-2.5 py-1 text-[8px] font-semibold uppercase tracking-[0.12em] text-cyan-300">
+          <div className="mx-auto flex w-fit items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/[0.07] px-2.5 py-1 text-caption font-semibold uppercase tracking-[0.12em] text-cyan-300">
             <Icon name="activity" className="h-3.5 w-3.5" /> Analytics canvas ready
           </div>
-          <h3 className="mt-3 text-[13px] font-semibold text-slate-200">Patterns become visible as evidence arrives.</h3>
-          <p className="mt-1.5 text-[10px] leading-relaxed text-slate-400">Response time, request volume, and statistical deviation will resolve into an interactive department map.</p>
+          <h3 className="mt-3 text-label font-semibold text-slate-200">Patterns become visible as evidence arrives.</h3>
+          <p className="mt-1.5 text-label leading-relaxed text-slate-400">Response time, request volume, and statistical deviation will resolve into an interactive department map.</p>
         </div>
       </div>
     </div>

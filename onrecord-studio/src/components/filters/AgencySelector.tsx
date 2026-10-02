@@ -32,7 +32,7 @@ export default function AgencySelector() {
           if (agency && activePortalKey !== agency.portalKey) setActivePortal(agency.portalKey);
           setSearchFilters(searchTerm, agency?.agencyId ?? null, selectedStatus, selectedPolicyDeviation);
         }}
-        className="focus-ring h-10 max-w-52 rounded-xl border border-slate-800 bg-slate-950/65 px-3 text-[10px] text-slate-300 transition focus:border-indigo-400/50"
+        className="focus-ring h-10 max-w-52 rounded-xl border border-slate-800 bg-slate-950/65 px-3 text-label text-slate-300 transition focus:border-indigo-400/50"
       >
         <option value="">All departments</option>
         {agencies.map((agency) => (

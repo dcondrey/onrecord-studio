@@ -340,9 +340,9 @@ export default function CommandPalette() {
         <div aria-live="polite">
           {answering && (
             <div id="command-results" className="max-h-[min(480px,62vh)] overflow-y-auto">
-              {asking && <p className="px-6 py-8 text-center text-[13px] text-slate-300" role="status">Searching findings, the entity graph and document text…</p>}
+              {asking && <p className="px-6 py-8 text-center text-label text-slate-300" role="status">Searching findings, the entity graph and document text…</p>}
               {askError !== null && (
-                <p className="px-6 py-8 text-center text-[13px] text-slate-300" role="alert">The question could not be answered: {askError}</p>
+                <p className="px-6 py-8 text-center text-label text-slate-300" role="alert">The question could not be answered: {askError}</p>
               )}
               {answer !== null && <IntentAnswerView answer={answer} onChooseOption={chooseOption} />}
             </div>
@@ -353,8 +353,8 @@ export default function CommandPalette() {
           {filteredActions.length === 0 ? (
             <div className="px-4 py-10 text-center">
               <Icon name="search" className="mx-auto h-5 w-5 text-slate-400" />
-              <p className="mt-3 text-[13px] font-medium text-slate-300">No matching commands</p>
-              <p className="mt-1 text-[12px] text-slate-400">Try a workspace name, “source,” or “appearance.”</p>
+              <p className="mt-3 text-label font-medium text-slate-300">No matching commands</p>
+              <p className="mt-1 text-label text-slate-400">Try a workspace name, “source,” or “appearance.”</p>
             </div>
           ) : filteredActions.map((action, index) => {
             const showGroup = index === 0 || filteredActions[index - 1].group !== action.group;
@@ -380,8 +380,8 @@ export default function CommandPalette() {
                     <Icon name={action.icon} className="h-4 w-4" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-medium">{action.label}</span>
-                    <span className="mt-0.5 block truncate text-[12px] text-slate-400">{action.detail}</span>
+                    <span className="block truncate text-label font-medium">{action.label}</span>
+                    <span className="mt-0.5 block truncate text-label text-slate-400">{action.detail}</span>
                   </span>
                   {action.shortcut && <Keycap>{action.shortcut}</Keycap>}
                 </button>
@@ -390,7 +390,7 @@ export default function CommandPalette() {
           })}
         </div>
         )}
-        <footer className="flex items-center justify-between border-t border-slate-800/70 px-4 py-2.5 text-[12px] text-slate-400">
+        <footer className="flex items-center justify-between border-t border-slate-800/70 px-4 py-2.5 text-label text-slate-400">
           <span>{answering ? 'Esc returns to commands' : 'OnRecord commands'}</span>
           <span className="flex items-center gap-2"><Keycap>↑↓</Keycap> Navigate <Keycap>↵</Keycap> Open or ask</span>
         </footer>
@@ -405,7 +405,7 @@ function isQuestionLike(normalized: string) {
 }
 
 function Keycap({ children }: { children: string }) {
-  return <kbd className="keycap shrink-0 rounded-md border px-1.5 py-0.5 font-sans text-[11px] font-medium text-slate-400">{children}</kbd>;
+  return <kbd className="keycap shrink-0 rounded-md border px-1.5 py-0.5 font-sans text-label font-medium text-slate-400">{children}</kbd>;
 }
 
 function focusSourceComposer() {

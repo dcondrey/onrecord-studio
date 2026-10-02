@@ -51,14 +51,11 @@ export default function Sidebar() {
         )}
       >
         <div className={cn('flex h-[64px] shrink-0 items-center border-b border-slate-800/70', isCollapsed ? 'justify-center px-3' : 'gap-2.5 px-3.5')}>
-          <div className="app-brand-mark relative grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-xl text-[10px] font-black tracking-[-0.08em] text-white">
-            <span className="relative z-10">OR</span>
-            <span className="absolute inset-x-2 bottom-1.5 h-px bg-white/60" />
-          </div>
+          <img src="/brand-mark.png" alt="" className="h-9 w-9 shrink-0 rounded-[9px]" />
           {!isCollapsed && (
             <div className="min-w-0">
-              <div className="truncate text-[13px] font-semibold tracking-[-0.015em] text-slate-100">OnRecord Studio</div>
-              <div className="mt-0.5 text-[12px] text-slate-400">San Diego research workspace</div>
+              <div className="truncate text-label font-semibold tracking-[-0.015em] text-slate-100">OnRecord Studio</div>
+              <div className="mt-0.5 text-label text-slate-400">San Diego research workspace</div>
             </div>
           )}
           <button
@@ -96,9 +93,9 @@ export default function Sidebar() {
                     <Icon name={item.icon} className="h-4 w-4" />
                   </span>
                   {!isCollapsed && (
-                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{item.navigationLabel}</span>
+                    <span className="min-w-0 flex-1 truncate text-label font-medium">{item.navigationLabel}</span>
                   )}
-                  {!isCollapsed && <span className="text-[11px] text-slate-400">{isApplePlatform() ? '⌘' : 'Ctrl'}{item.shortcutIndex}</span>}
+                  {!isCollapsed && <span className="text-label text-slate-400">{isApplePlatform() ? '⌘' : 'Ctrl'}{item.shortcutIndex}</span>}
                 </button>
               );
             })}
@@ -111,7 +108,7 @@ export default function Sidebar() {
           {!isCollapsed && (
             <div className="mb-2 flex items-center justify-between px-2">
               <span className="sidebar-section-label">Data sources</span>
-              <span className="numeric-value text-[11px] text-slate-400">{portals.length}</span>
+              <span className="numeric-value text-label text-slate-400">{portals.length}</span>
             </div>
           )}
           <button
@@ -129,8 +126,8 @@ export default function Sidebar() {
             <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md">
               <Icon name="globe" className="h-4 w-4" />
             </span>
-            {!isCollapsed && <span className="min-w-0 flex-1 text-[13px] font-medium">All saved sources</span>}
-            {!isCollapsed && <span className="numeric-value rounded-md bg-slate-900 px-1.5 py-0.5 text-[11px] text-slate-400">{portals.length}</span>}
+            {!isCollapsed && <span className="min-w-0 flex-1 text-label font-medium">All saved sources</span>}
+            {!isCollapsed && <span className="numeric-value rounded-md bg-slate-900 px-1.5 py-0.5 text-label text-slate-400">{portals.length}</span>}
           </button>
 
           {portals.map(({ registration: portal, lifecycleState, healthStatus, lastError }) => {
@@ -171,7 +168,7 @@ export default function Sidebar() {
                 )}
               >
                 <div className={cn('flex items-center', isCollapsed ? 'justify-center' : 'gap-2.5')}>
-                  <span className={cn('relative grid h-7 w-7 shrink-0 place-items-center rounded-lg font-mono text-[9px] font-semibold', selected ? 'bg-indigo-400/10 text-indigo-200' : 'bg-slate-900 text-slate-400')}>
+                  <span className={cn('relative grid h-7 w-7 shrink-0 place-items-center rounded-lg font-mono text-caption font-semibold', selected ? 'bg-indigo-400/10 text-indigo-200' : 'bg-slate-900 text-slate-400')}>
                     {portal.displayName.slice(0, 2).toUpperCase()}
                     {/* Paused is its own colour rather than the idle grey. A source the operator
                         halted and one that has simply finished are different facts, and a shared
@@ -184,13 +181,13 @@ export default function Sidebar() {
                       />
                     </span>
                   </span>
-                  {!isCollapsed && <span className={cn('min-w-0 flex-1 truncate text-[13px] font-medium', selected ? 'text-indigo-100' : 'text-slate-300')}>{portal.displayName}</span>}
-                  {!isCollapsed && paused && <span className="shrink-0 rounded-md bg-amber-400/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-300/90">Paused</span>}
-                  {!isCollapsed && degraded && <span className="shrink-0 rounded-md bg-rose-400/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-rose-300/90">Attention</span>}
+                  {!isCollapsed && <span className={cn('min-w-0 flex-1 truncate text-label font-medium', selected ? 'text-indigo-100' : 'text-slate-300')}>{portal.displayName}</span>}
+                  {!isCollapsed && paused && <span className="shrink-0 rounded-md bg-amber-400/10 px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wide text-amber-300/90">Paused</span>}
+                  {!isCollapsed && degraded && <span className="shrink-0 rounded-md bg-rose-400/10 px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wide text-rose-300/90">Attention</span>}
                 </div>
                 {!isCollapsed && runtime && totalTasks > 0 && (
                   <div className="mt-1 pl-9">
-                    <div className="numeric-value text-[11px] text-slate-400">
+                    <div className="numeric-value text-label text-slate-400">
                       {settledTasks.toLocaleString()} of {totalTasks.toLocaleString()} done
                       {runtime.failedTasks > 0 && (
                         <span className="text-amber-500/80"> · {runtime.failedTasks.toLocaleString()} failed</span>
@@ -217,7 +214,7 @@ export default function Sidebar() {
 
           {portals.length === 0 && !isCollapsed && (
             <div className="mx-1 mt-3 rounded-xl border border-dashed border-slate-800 bg-slate-900/25 p-3.5">
-              <div className="flex items-center gap-2 text-[10px] font-semibold text-slate-400">
+              <div className="flex items-center gap-2 text-label font-semibold text-slate-400">
                 <Icon name="database" className="h-4 w-4 text-cyan-400/70" />
                 {workspaceInitializationStatus === 'loading'
                   ? 'Loading saved sources'
@@ -225,7 +222,7 @@ export default function Sidebar() {
                     ? 'Saved sources unavailable'
                     : 'No sources connected'}
               </div>
-              <p className="mt-2 text-[9px] leading-relaxed text-slate-400">
+              <p className="mt-2 text-caption leading-relaxed text-slate-400">
                 {workspaceInitializationStatus === 'loading'
                   ? 'Checking the local source catalog.'
                   : workspaceInitializationStatus === 'error'
@@ -239,17 +236,17 @@ export default function Sidebar() {
         <div className="border-t border-slate-800/70 p-2.5">
           {!isCollapsed ? (
             <>
-              <button type="button" onClick={openCommandPalette} className="command-trigger focus-ring flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-[12px] font-medium text-slate-400 transition hover:text-slate-200">
+              <button type="button" onClick={openCommandPalette} className="command-trigger focus-ring flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-label font-medium text-slate-400 transition hover:text-slate-200">
                 <Icon name="search" className="h-4 w-4" />
                 <span className="flex-1 text-left">Commands</span>
-                <span className="keycap rounded-md border px-1.5 py-0.5 text-[11px]">{isApplePlatform() ? '⌘K' : 'Ctrl K'}</span>
+                <span className="keycap rounded-md border px-1.5 py-0.5 text-label">{isApplePlatform() ? '⌘K' : 'Ctrl K'}</span>
               </button>
-              <div className="mt-2 flex items-center justify-between px-2 text-[12px] text-slate-400">
+              <div className="mt-2 flex items-center justify-between px-2 text-label text-slate-400">
                 <span className="flex items-center gap-2"><StatusDot state={syncingPortalKeys.length ? 'active' : 'idle'} label={syncingPortalKeys.length ? 'Workers busy' : 'Workers idle'} /> Worker capacity</span>
                 <span className={cn('numeric-value', syncingPortalKeys.length > 0 && 'font-semibold text-emerald-300')}>{syncingPortalKeys.length}/5</span>
               </div>
               <div
-                className="mt-1 flex items-center justify-between gap-3 px-2 text-[12px] text-slate-400"
+                className="mt-1 flex items-center justify-between gap-3 px-2 text-label text-slate-400"
                 title={ocrCapability
                   ? [
                       `${ocrCapability.engine}${ocrCapability.engineVersion ? ` ${ocrCapability.engineVersion}` : ''}`,
@@ -274,7 +271,7 @@ export default function Sidebar() {
                   )} />
                   Local OCR
                 </span>
-                <span className="truncate text-right text-[11px]">
+                <span className="truncate text-right text-label">
                   {!ocrCapability
                     ? 'Checking'
                     : ocrCapability.imageOcrAvailable && ocrCapability.pdfOcrAvailable
@@ -292,7 +289,7 @@ export default function Sidebar() {
             type="button"
             onClick={toggleSidebarCollapsed}
             aria-label={isCollapsed ? 'Expand navigation' : undefined}
-            className="focus-ring mt-1.5 hidden w-full items-center justify-center gap-2 rounded-lg py-1.5 text-[12px] font-medium text-slate-400 transition hover:bg-slate-800/50 hover:text-slate-300 md:flex"
+            className="focus-ring mt-1.5 hidden w-full items-center justify-center gap-2 rounded-lg py-1.5 text-label font-medium text-slate-400 transition hover:bg-slate-800/50 hover:text-slate-300 md:flex"
           >
             <Icon name="collapse" className={cn('h-3.5 w-3.5 transition-transform', isCollapsed && 'rotate-180')} />
             {!isCollapsed && 'Collapse navigation'}

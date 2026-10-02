@@ -13,7 +13,7 @@ export default function UpdatePrompt() {
     <div
       role="status"
       aria-live="polite"
-      className="fixed right-4 top-16 z-40 w-72 rounded-xl border border-cyan-400/30 bg-slate-900 p-3 text-xs text-slate-200 shadow-lg"
+      className="fixed right-4 top-16 z-40 w-72 rounded-xl border border-cyan-400/30 bg-slate-900 p-3 text-label leading-4 text-slate-200 shadow-lg"
     >
       {state.phase === 'error' && (
         <p role="alert" className="mb-2 text-rose-300">

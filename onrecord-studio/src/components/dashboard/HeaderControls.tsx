@@ -51,7 +51,7 @@ export function HeaderControls({
       <UpdatePrompt />
       <ProfileSettings />
       <SelfReview />
-      <div className="system-status hidden h-9 items-center gap-2 rounded-xl border px-2.5 text-[9px] sm:flex" role="status" title={syncingPortalKeys.length > 0 ? `${syncingPortalKeys.length} sources synchronizing` : 'All systems ready'}>
+      <div className="system-status hidden h-9 items-center gap-2 rounded-xl border px-2.5 text-caption sm:flex" role="status" title={syncingPortalKeys.length > 0 ? `${syncingPortalKeys.length} sources synchronizing` : 'All systems ready'}>
         <span className={cn('grid h-5 w-5 place-items-center rounded-md', syncingPortalKeys.length > 0 ? 'status-pulse bg-emerald-400/10 text-emerald-300' : 'bg-emerald-400/10 text-emerald-300')}>
           <Icon name={syncingPortalKeys.length > 0 ? 'sync' : 'shield'} className={cn('h-3.5 w-3.5', syncingPortalKeys.length > 0 && 'animate-spin')} />
         </span>

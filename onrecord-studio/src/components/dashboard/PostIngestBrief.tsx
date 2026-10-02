@@ -117,7 +117,7 @@ export default function PostIngestBrief() {
                   : `${notable.length} new finding${notable.length === 1 ? '' : 's'} from this ingest`}
             </h2>
             {error && (
-              <p role="alert" className="mt-1 text-[9px] text-rose-300">
+              <p role="alert" className="mt-1 text-caption text-rose-300">
                 Findings load failed: {error}
               </p>
             )}
@@ -125,17 +125,17 @@ export default function PostIngestBrief() {
           <button
             type="button"
             onClick={() => close(false)}
-            className="focus-ring shrink-0 rounded-lg border border-slate-800 px-3 py-1.5 text-[10px] font-semibold text-slate-300 transition hover:border-slate-600 hover:text-slate-100"
+            className="focus-ring shrink-0 rounded-lg border border-slate-800 px-3 py-1.5 text-label font-semibold text-slate-300 transition hover:border-slate-600 hover:text-slate-100"
           >
             Dismiss
           </button>
         </header>
         {isLoading && notable.length === 0 ? (
-          <p role="status" className="text-[10px] text-slate-400">
+          <p role="status" className="text-label text-slate-400">
             Reading detector output…
           </p>
         ) : notable.length === 0 ? (
-          <p className="text-[10px] text-slate-400">
+          <p className="text-label text-slate-400">
             {error !== null
               ? 'Whether this ingest surfaced anything is not known until the findings load.'
               : 'The findings inbox below carries anything the detectors have surfaced on prior data.'}
@@ -152,10 +152,10 @@ export default function PostIngestBrief() {
                 >
                   <PostIngestSeverityGlyph severity={finding.severity} />
                   <span className="min-w-0 flex-1">
-                    <span className="block text-[11px] font-semibold text-slate-100">
+                    <span className="block text-label font-semibold text-slate-100">
                       {finding.headline}
                     </span>
-                    <span className="mt-1 block text-[9px] leading-relaxed text-slate-400">
+                    <span className="mt-1 block text-caption leading-relaxed text-slate-400">
                       {finding.explanation}
                     </span>
                   </span>

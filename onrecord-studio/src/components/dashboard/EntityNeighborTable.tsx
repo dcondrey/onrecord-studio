@@ -68,7 +68,7 @@ export default function EntityNeighborTable({ centre, list, kindLabel, onSelect,
 
   return (
     <section aria-label={`All neighbours of ${centre.displayValue}`} className="mt-3 rounded-lg border border-slate-800">
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 px-2 py-1.5 text-[9px] text-slate-400">
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 px-2 py-1.5 text-caption text-slate-400">
         <span role="status" className="font-mono text-slate-300">{status}</span>
         {hidden > 0 && <span>{hidden.toLocaleString('en-US')} more are hidden by the filters, not absent.</span>}
         {drifted && <span className="text-amber-200">The index changed while loading, so the list and the count differ.</span>}
@@ -77,7 +77,7 @@ export default function EntityNeighborTable({ centre, list, kindLabel, onSelect,
         </button>
         {copied && <span role="status" className="w-full text-slate-300">{copied}</span>}
       </div>
-      <div className={`grid ${COLUMNS} gap-2 border-b border-slate-800 px-2 py-1 text-[8px] font-semibold uppercase tracking-wider text-slate-400`} aria-hidden="true">
+      <div className={`grid ${COLUMNS} gap-2 border-b border-slate-800 px-2 py-1 text-caption font-semibold uppercase tracking-wider text-slate-400`} aria-hidden="true">
         <span>Neighbour</span><span>Kind</span><span>Grade</span><span>Relationship</span><span className="text-right">Shared</span>
       </div>
       <VirtualList
@@ -91,7 +91,7 @@ export default function EntityNeighborTable({ centre, list, kindLabel, onSelect,
           if (nextCursor !== null && !list.loadingMore && list.moreError === null && !list.guardStopped) onLoadMore();
         }}
         renderRow={(edge, { tabIndex }) => (
-          <div className={`grid h-full ${COLUMNS} items-center gap-2 border-b border-slate-800/60 px-2 text-[10px]`}>
+          <div className={`grid h-full ${COLUMNS} items-center gap-2 border-b border-slate-800/60 px-2 text-label`}>
             <button
               type="button"
               tabIndex={tabIndex}
@@ -109,7 +109,7 @@ export default function EntityNeighborTable({ centre, list, kindLabel, onSelect,
           </div>
         )}
         footer={
-          <div className="flex flex-wrap items-center gap-2 px-2 py-2 text-[9px] text-slate-400">
+          <div className="flex flex-wrap items-center gap-2 px-2 py-2 text-caption text-slate-400">
             {list.moreError !== null && (
               <span role="alert" className="text-rose-300">The next page could not be read: {list.moreError}</span>
             )}

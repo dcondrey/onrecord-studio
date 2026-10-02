@@ -188,7 +188,7 @@ export default function SearchFilter() {
             value={inputValue}
             onChange={(event) => updateTerm(event.target.value)}
             placeholder="Search request metadata and extracted text"
-            className="focus-ring h-10 w-full rounded-xl border border-transparent bg-slate-950/65 pl-9 pr-10 text-[11px] text-slate-100 transition placeholder:text-slate-400 focus:border-indigo-400/50"
+            className="focus-ring h-10 w-full rounded-xl border border-transparent bg-slate-950/65 pl-9 pr-10 text-label text-slate-100 transition placeholder:text-slate-400 focus:border-indigo-400/50"
           />
           {isSearching && <span className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin rounded-full border-2 border-slate-700 border-t-indigo-400" aria-label="Searching" />}
         </div>
@@ -198,7 +198,7 @@ export default function SearchFilter() {
           <select
             value={selectedStatus ?? ''}
             onChange={(event) => setSearchFilters(inputValue, selectedAgencyId, event.target.value || null, selectedPolicyDeviation)}
-            className="focus-ring h-10 rounded-xl border border-slate-800 bg-slate-950/65 px-3 text-[10px] text-slate-300 transition focus:border-indigo-400/50"
+            className="focus-ring h-10 rounded-xl border border-slate-800 bg-slate-950/65 px-3 text-label text-slate-300 transition focus:border-indigo-400/50"
           >
             <option value="">All statuses</option>
             <option value="open">Open</option>
@@ -207,21 +207,21 @@ export default function SearchFilter() {
           </select>
         </label>
         {hasFilters && (
-          <button type="button" onClick={clear} className="focus-ring h-10 rounded-xl border border-slate-800 px-3 text-[10px] font-medium text-slate-400 transition hover:border-slate-700 hover:text-slate-200">
+          <button type="button" onClick={clear} className="focus-ring h-10 rounded-xl border border-slate-800 px-3 text-label font-medium text-slate-400 transition hover:border-slate-700 hover:text-slate-200">
             Clear
           </button>
         )}
         <div className="ml-auto hidden shrink-0 border-l border-slate-800 px-2 text-right sm:block">
-          <div className="font-mono text-[11px] font-semibold text-slate-300">{isSearching ? '—' : formatMatchCount(resultCount)}</div>
-          <div className="text-[7px] uppercase tracking-wider text-slate-400">matches</div>
+          <div className="font-mono text-label font-semibold text-slate-300">{isSearching ? '—' : formatMatchCount(resultCount)}</div>
+          <div className="text-caption uppercase tracking-wider text-slate-400">matches</div>
         </div>
       </div>
-      <div className="mt-1.5 flex min-h-4 items-center gap-2 px-2 text-[8px]">
+      <div className="mt-1.5 flex min-h-4 flex-wrap items-center gap-2 px-2 text-caption">
         <button
           type="button"
           aria-pressed={interpretPlainLanguage}
           onClick={() => setInterpretPlainLanguage((enabled) => !enabled)}
-          className={interpretPlainLanguage ? 'rounded-full border border-indigo-400/30 bg-indigo-500/10 px-2 py-0.5 font-semibold text-indigo-200' : 'rounded-full border border-slate-800 px-2 py-0.5 font-semibold text-slate-400 hover:text-slate-300'}
+          className={interpretPlainLanguage ? 'whitespace-nowrap rounded-full border border-indigo-400/30 bg-indigo-500/10 px-2 py-0.5 font-semibold text-indigo-200' : 'whitespace-nowrap rounded-full border border-slate-800 px-2 py-0.5 font-semibold text-slate-400 hover:text-slate-300'}
         >
           Plain-language interpretation {interpretPlainLanguage ? 'on' : 'off'}
         </button>
@@ -246,7 +246,7 @@ export default function SearchFilter() {
             {formatPolicy(selectedPolicyDeviation)} ×
           </button>
         )}
-        <button type="button" onClick={() => void copyRecord()} disabled={isSearching} className="rounded-full border border-slate-800 px-2 py-0.5 font-semibold text-slate-400 hover:text-slate-300">
+        <button type="button" onClick={() => void copyRecord()} disabled={isSearching} className="whitespace-nowrap rounded-full border border-slate-800 px-2 py-0.5 font-semibold text-slate-400 hover:text-slate-300">
           Copy search record
         </button>
         {canWatch && (

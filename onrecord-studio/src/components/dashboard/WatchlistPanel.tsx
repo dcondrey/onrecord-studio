@@ -155,7 +155,7 @@ export default function WatchlistPanel() {
   const selected = summaries.find((summary) => summary.watch.id === selectedId) ?? null;
 
   return (
-    <section aria-label="Watchlist" className="app-panel space-y-3 p-4 text-[11px] text-slate-300">
+    <section aria-label="Watchlist" className="app-panel space-y-3 p-4 text-label text-slate-300">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="app-eyebrow">Watchlist</div>

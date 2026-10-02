@@ -32,17 +32,17 @@ export default function PackageVerifier() {
   return (
     <details className="app-panel p-4" aria-label="Verify a signed package">
       <summary className="cursor-pointer font-semibold text-slate-200">Verify a signed chain-of-custody or evidence package</summary>
-      <p className="mt-2 text-xs text-slate-400">
+      <p className="mt-2 text-label leading-4 text-slate-400">
         Checks a package's signature and integrity without leaving the application. This confirms the
         file has not changed since whoever exported it signed it locally; it does not authenticate
         that signer's real-world identity, and it is not a legal determination of admissibility.
       </p>
-      <label className="mt-3 block text-xs text-slate-300">
+      <label className="mt-3 block text-label leading-4 text-slate-300">
         Open a signed package (.json)
         <input
           type="file"
           accept=".json,application/json"
-          className="mt-2 block w-full text-xs"
+          className="mt-2 block w-full text-label leading-4"
           disabled={busy}
           onChange={(event) => {
             const file = event.target.files?.[0];
@@ -60,7 +60,7 @@ export default function PackageVerifier() {
       {error && <p role="alert" className="mt-3 text-sm text-rose-300">{error}</p>}
       {busy && <p role="status" className="mt-3 text-sm text-slate-400">Verifying…</p>}
       {result && (
-        <div className="mt-3 rounded border border-slate-700 bg-slate-950/60 p-3 text-xs">
+        <div className="mt-3 rounded border border-slate-700 bg-slate-950/60 p-3 text-label leading-4">
           <p className="font-semibold text-slate-200">{fileName}</p>
           {result.parseError ? (
             <p className="mt-2 text-rose-300">{result.parseError}</p>

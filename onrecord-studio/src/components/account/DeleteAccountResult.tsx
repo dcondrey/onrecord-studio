@@ -15,7 +15,7 @@ export default function DeleteAccountResult({
   return (
     <div
       role={complete ? 'status' : 'alert'}
-      className="mt-4 rounded-lg border border-slate-600 bg-slate-950/80 px-4 py-3 text-xs leading-5 text-slate-200"
+      className="mt-4 rounded-lg border border-slate-600 bg-slate-950/80 px-4 py-3 text-label leading-5 text-slate-200"
     >
       {report ? (
         <>

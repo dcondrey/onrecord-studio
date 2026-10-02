@@ -30,7 +30,7 @@ export default function ModalDialog({
         <button
           type="button"
           onClick={onClose}
-          className="focus-ring mt-4 rounded-lg border border-slate-500 px-3 py-1.5 text-xs font-semibold text-slate-100 hover:bg-slate-800"
+          className="focus-ring mt-4 rounded-lg border border-slate-500 px-3 py-1.5 text-label leading-4 font-semibold text-slate-100 hover:bg-slate-800"
         >
           Close
         </button>

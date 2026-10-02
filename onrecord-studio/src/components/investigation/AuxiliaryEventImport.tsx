@@ -368,41 +368,41 @@ export default function AuxiliaryEventImport({ isOpen, onClose }: AuxiliaryEvent
       <form onSubmit={(event) => void submit(event)} className="flex h-[min(820px,92vh)] w-[min(1080px,96vw)] flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl shadow-black/60">
         <div className="flex items-start justify-between gap-4 border-b border-slate-800 px-5 py-4">
           <div>
-            <div className="text-[8px] font-bold uppercase tracking-[0.2em] text-cyan-300/70">Auxiliary municipal stream</div>
+            <div className="text-caption font-bold uppercase tracking-[0.2em] text-cyan-300/70">Auxiliary municipal stream</div>
             <h2 id="auxiliary-import-title" className="mt-1 text-base font-semibold text-slate-100">Import 311 and enforcement events</h2>
-            <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-slate-400">
+            <p className="mt-1 max-w-2xl text-label leading-relaxed text-slate-400">
               A CSV or JSON export becomes the correlation baseline the temporal panel reads. Each row is stored verbatim
               alongside the mapped fields, and the whole import is content-addressed so re-importing the same export updates
               rather than duplicates it.
             </p>
           </div>
-          <button type="button" onClick={onClose} className="focus-ring rounded-lg px-3 py-2 text-[9px] font-semibold text-slate-400 hover:text-slate-300">Close</button>
+          <button type="button" onClick={onClose} className="focus-ring rounded-lg px-3 py-2 text-caption font-semibold text-slate-400 hover:text-slate-300">Close</button>
         </div>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-[9px] text-slate-400">
+            <label className="block text-caption text-slate-400">
               Source name
-              <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required maxLength={256} placeholder="City 311 service requests, 2026" className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-2 text-[10px] text-slate-200" />
+              <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required maxLength={256} placeholder="City 311 service requests, 2026" className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-2 text-label text-slate-200" />
             </label>
-            <label className="block text-[9px] text-slate-400">
+            <label className="block text-caption text-slate-400">
               Stream kind
-              <select value={sourceKind} onChange={(event) => setSourceKind(event.target.value as AuxiliaryStreamKind)} className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-2 text-[10px] text-slate-200">
+              <select value={sourceKind} onChange={(event) => setSourceKind(event.target.value as AuxiliaryStreamKind)} className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-2 text-label text-slate-200">
                 {STREAM_KINDS.map((kind) => <option key={kind.value} value={kind.value}>{kind.label}</option>)}
               </select>
             </label>
-            <label className="block text-[9px] text-slate-400">
+            <label className="block text-caption text-slate-400">
               Source URI <span className="text-slate-400">(optional, recorded as provenance)</span>
-              <input value={sourceUri} onChange={(event) => setSourceUri(event.target.value)} maxLength={2048} placeholder="https://data.example.gov/311.csv" className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-2 font-mono text-[9px] text-slate-200" />
+              <input value={sourceUri} onChange={(event) => setSourceUri(event.target.value)} maxLength={2048} placeholder="https://data.example.gov/311.csv" className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-2 font-mono text-caption text-slate-200" />
             </label>
-            <label className="block text-[9px] text-slate-400">
+            <label className="block text-caption text-slate-400">
               Offset for timestamps that carry none
-              <select value={zoneOffset} onChange={(event) => setZoneOffset(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-2 font-mono text-[10px] text-slate-200">
+              <select value={zoneOffset} onChange={(event) => setZoneOffset(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-2 font-mono text-label text-slate-200">
                 <option value="">— not stated —</option>
                 {ZONE_OFFSETS.map((offset) => <option key={offset} value={offset}>UTC{offset}</option>)}
               </select>
             </label>
-            <label className="flex items-center gap-2 self-end pb-2 text-[9px] text-slate-400">
+            <label className="flex items-center gap-2 self-end pb-2 text-caption text-slate-400">
               <input type="checkbox" checked={scopeToActivePortal && Boolean(activePortalKey)} disabled={!activePortalKey} onChange={(event) => setScopeToActivePortal(event.target.checked)} className="h-3 w-3" />
               {activePortalKey ? `Scope to the active source (${activePortalKey})` : 'No active source selected; this import will be global'}
             </label>
@@ -411,29 +411,29 @@ export default function AuxiliaryEventImport({ isOpen, onClose }: AuxiliaryEvent
           <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <div className="text-[10px] font-semibold text-slate-300">Export file</div>
-                <div className="mt-0.5 text-[9px] text-slate-400">{parsed ? `${parsed.fileName} · ${parsed.rows.length.toLocaleString()} rows · ${parsed.columns.length} columns` : 'CSV with a header row, or a JSON array of event objects.'}</div>
+                <div className="text-label font-semibold text-slate-300">Export file</div>
+                <div className="mt-0.5 text-caption text-slate-400">{parsed ? `${parsed.fileName} · ${parsed.rows.length.toLocaleString()} rows · ${parsed.columns.length} columns` : 'CSV with a header row, or a JSON array of event objects.'}</div>
               </div>
-              <button type="button" onClick={() => fileInput.current?.click()} className="focus-ring rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-[9px] font-semibold text-slate-300">{parsed ? 'Choose a different file' : 'Choose a file'}</button>
+              <button type="button" onClick={() => fileInput.current?.click()} className="focus-ring rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-caption font-semibold text-slate-300">{parsed ? 'Choose a different file' : 'Choose a file'}</button>
               <input ref={fileInput} type="file" accept=".csv,.json,text/csv,application/json" onChange={(event) => void loadFile(event)} className="sr-only" />
             </div>
             {parsed && parsed.malformedRowCount > 0 && (
-              <p className="mt-2 text-[9px] text-amber-300">{parsed.malformedRowCount.toLocaleString()} record{parsed.malformedRowCount === 1 ? '' : 's'} could not be read as a row and are not counted below.</p>
+              <p className="mt-2 text-caption text-amber-300">{parsed.malformedRowCount.toLocaleString()} record{parsed.malformedRowCount === 1 ? '' : 's'} could not be read as a row and are not counted below.</p>
             )}
           </div>
 
           {parsed && (
             <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-4">
-              <div className="text-[10px] font-semibold text-slate-300">Column mapping</div>
-              <div className="mt-0.5 text-[9px] text-slate-400">Detected from the header where the names matched. Correct anything that is wrong before importing.</div>
+              <div className="text-label font-semibold text-slate-300">Column mapping</div>
+              <div className="mt-0.5 text-caption text-slate-400">Detected from the header where the names matched. Correct anything that is wrong before importing.</div>
               <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {FIELDS.map((field) => (
-                  <label key={field.key} className="block text-[9px] text-slate-400">
+                  <label key={field.key} className="block text-caption text-slate-400">
                     {field.label}{field.required && <span className="text-rose-300"> *</span>}
                     <select
                       value={mapping[field.key]}
                       onChange={(event) => setMapping((current) => ({ ...current, [field.key]: event.target.value }))}
-                      className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-2 py-1.5 font-mono text-[9px] text-slate-200"
+                      className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-2 py-1.5 font-mono text-caption text-slate-200"
                     >
                       <option value="">{field.required ? '— not mapped —' : '— not recorded —'}</option>
                       {parsed.columns.map((column) => <option key={column} value={column}>{column}</option>)}
@@ -443,7 +443,7 @@ export default function AuxiliaryEventImport({ isOpen, onClose }: AuxiliaryEvent
               </div>
               {previewRows.length > 0 && (
                 <div className="mt-3 overflow-x-auto rounded-lg border border-slate-800">
-                  <table className="w-full min-w-[640px] border-collapse text-left font-mono text-[8px]">
+                  <table className="w-full min-w-[640px] border-collapse text-left font-mono text-caption">
                     <thead className="bg-slate-950/80 text-slate-400">
                       <tr>{FIELDS.map((field) => <th key={field.key} className="px-2 py-1.5 font-semibold">{field.label}</th>)}</tr>
                     </thead>
@@ -466,22 +466,22 @@ export default function AuxiliaryEventImport({ isOpen, onClose }: AuxiliaryEvent
 
           {parsed && (
             <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-4">
-              <div className="text-[10px] font-semibold text-slate-300">What this import will write</div>
+              <div className="text-label font-semibold text-slate-300">What this import will write</div>
               {missingRequired.length > 0 ? (
-                <p className="mt-2 text-[9px] text-amber-300">Map {missingRequired.map((field) => field.label.toLowerCase()).join(', ')} before this export can be imported.</p>
+                <p className="mt-2 text-caption text-amber-300">Map {missingRequired.map((field) => field.label.toLowerCase()).join(', ')} before this export can be imported.</p>
               ) : (
                 <>
-                  <div className="mt-2 flex flex-wrap gap-4 font-mono text-[9px]">
+                  <div className="mt-2 flex flex-wrap gap-4 font-mono text-caption">
                     <span className="text-cyan-300">{mapped.events.length.toLocaleString()} events accepted</span>
                     <span className={mapped.rejected.length > 0 ? 'text-amber-300' : 'text-slate-400'}>{mapped.rejected.length.toLocaleString()} rows refused</span>
                   </div>
                   {overCapacity && (
-                    <p className="mt-2 text-[9px] text-rose-300">
+                    <p className="mt-2 text-caption text-rose-300">
                       One import may carry at most {MAXIMUM_EVENTS.toLocaleString()} events and {MAXIMUM_PAYLOAD_BYTES / (1024 * 1024)} MiB of encoded records; this one is {mapped.events.length.toLocaleString()} events and {(payloadBytes / (1024 * 1024)).toFixed(1)} MiB. Split the export by date range and import each part as its own source.
                     </p>
                   )}
                   {mapped.rejected.length > 0 && (
-                    <ul className="mt-2 space-y-0.5 font-mono text-[8px] text-slate-400">
+                    <ul className="mt-2 space-y-0.5 font-mono text-caption text-slate-400">
                       {mapped.rejected.slice(0, PREVIEW_ROWS).map((rejection) => (
                         <li key={rejection.rowNumber}>Row {rejection.rowNumber.toLocaleString()}: {rejection.reason}</li>
                       ))}
@@ -493,11 +493,11 @@ export default function AuxiliaryEventImport({ isOpen, onClose }: AuxiliaryEvent
             </div>
           )}
 
-          {error && <p role="alert" className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-[9px] text-rose-200">{error}</p>}
+          {error && <p role="alert" className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-caption text-rose-200">{error}</p>}
           {result && (
-            <div role="status" className="rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-3 py-2 text-[9px] text-cyan-100">
+            <div role="status" className="rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-3 py-2 text-caption text-cyan-100">
               <div className="font-semibold">Imported as source {result.sourceId}</div>
-              <div className="mt-1 font-mono text-[8px] text-cyan-200/80">
+              <div className="mt-1 font-mono text-caption text-cyan-200/80">
                 {result.importedCount.toLocaleString()} new · {result.updatedCount.toLocaleString()} updated · {result.rejectedCount.toLocaleString()} refused by validation · SHA-256 {result.sourceSha256}
               </div>
             </div>
@@ -505,8 +505,8 @@ export default function AuxiliaryEventImport({ isOpen, onClose }: AuxiliaryEvent
         </div>
 
         <div className="flex justify-end gap-2 border-t border-slate-800 px-5 py-3">
-          <button type="button" onClick={onClose} className="focus-ring rounded-lg px-3 py-2 text-[9px] font-semibold text-slate-400 hover:text-slate-300">Cancel</button>
-          <button type="submit" disabled={!canImport} className="focus-ring rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-4 py-2 text-[9px] font-semibold text-cyan-200 disabled:opacity-40">
+          <button type="button" onClick={onClose} className="focus-ring rounded-lg px-3 py-2 text-caption font-semibold text-slate-400 hover:text-slate-300">Cancel</button>
+          <button type="submit" disabled={!canImport} className="focus-ring rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-4 py-2 text-caption font-semibold text-cyan-200 disabled:opacity-40">
             {isImporting ? 'Importing…' : `Import ${mapped.events.length.toLocaleString()} events`}
           </button>
         </div>

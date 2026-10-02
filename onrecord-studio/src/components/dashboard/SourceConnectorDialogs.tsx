@@ -134,7 +134,7 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
               </div>
               <button type="button" onClick={() => setPendingRemoval(null)} aria-label="Close removal confirmation" className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-300"><Icon name="x" /></button>
             </div>
-            <div className="space-y-2 p-4 text-[10px] leading-relaxed text-slate-400">
+            <div className="space-y-2 p-4 text-label leading-relaxed text-slate-400">
               {/* Saying which of the two this is, is the point. A "Remove" that silently keeps
                   hundreds of ingested records and one that silently destroys them are both false
                   statements about the evidence if the interface does not distinguish them. */}
@@ -142,8 +142,8 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
               <p className="text-slate-300">Documents already ingested from this source are kept and stay searchable and exportable.</p>
             </div>
             <div className="flex items-center justify-end gap-2 border-t border-slate-800 px-4 py-3">
-              <button type="button" onClick={() => setPendingRemoval(null)} className="rounded-lg px-3 py-2 text-[9px] font-semibold text-slate-400 hover:text-slate-300">Cancel</button>
-              <button type="button" onClick={() => void removeSource()} className="focus-ring rounded-lg border border-rose-400/25 bg-rose-500/10 px-4 py-2 text-[9px] font-semibold text-rose-200">Remove and keep documents</button>
+              <button type="button" onClick={() => setPendingRemoval(null)} className="rounded-lg px-3 py-2 text-caption font-semibold text-slate-400 hover:text-slate-300">Cancel</button>
+              <button type="button" onClick={() => void removeSource()} className="focus-ring rounded-lg border border-rose-400/25 bg-rose-500/10 px-4 py-2 text-caption font-semibold text-rose-200">Remove and keep documents</button>
             </div>
           </div>
         </DialogBackdrop>
@@ -158,7 +158,7 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
               </div>
               <button type="button" onClick={() => setPendingPurge(null)} aria-label="Close deletion confirmation" className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-300"><Icon name="x" /></button>
             </div>
-            <div className="space-y-2 p-4 text-[10px] leading-relaxed text-slate-400">
+            <div className="space-y-2 p-4 text-label leading-relaxed text-slate-400">
               {/* The counts are the point. "This cannot be undone" asks the operator to approve an
                   unknown quantity of evidence loss; the numbers say what is at stake. Until they
                   arrive the confirming button stays disabled rather than defaulting to zero, because
@@ -181,8 +181,8 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
               <p className="text-slate-300">The registration is deleted as well, so the source can be added again from scratch afterwards.</p>
             </div>
             <div className="flex items-center justify-end gap-2 border-t border-slate-800 px-4 py-3">
-              <button type="button" onClick={() => setPendingPurge(null)} className="rounded-lg px-3 py-2 text-[9px] font-semibold text-slate-400 hover:text-slate-300">Cancel</button>
-              <button type="button" disabled={purgePreview === null || isPurging} onClick={() => void purgeSource()} className="focus-ring rounded-lg border border-rose-400/40 bg-rose-500/20 px-4 py-2 text-[9px] font-semibold text-rose-100 disabled:cursor-not-allowed disabled:border-slate-800 disabled:bg-slate-900 disabled:text-slate-400">{isPurging ? 'Deleting…' : 'Delete source and documents'}</button>
+              <button type="button" onClick={() => setPendingPurge(null)} className="rounded-lg px-3 py-2 text-caption font-semibold text-slate-400 hover:text-slate-300">Cancel</button>
+              <button type="button" disabled={purgePreview === null || isPurging} onClick={() => void purgeSource()} className="focus-ring rounded-lg border border-rose-400/40 bg-rose-500/20 px-4 py-2 text-caption font-semibold text-rose-100 disabled:cursor-not-allowed disabled:border-slate-800 disabled:bg-slate-900 disabled:text-slate-400">{isPurging ? 'Deleting…' : 'Delete source and documents'}</button>
             </div>
           </div>
         </DialogBackdrop>
@@ -194,29 +194,29 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
               <div>
                 <div className="app-eyebrow text-cyan-300/70">Add data</div>
                 <h2 id="paste-source-title" className="mt-1 text-sm font-semibold text-slate-100">Paste content to analyze</h2>
-                <p className="mt-1 text-[9px] text-slate-400">Text, CSV, JSON, XML, HTML, and tabular content are detected automatically. Paste a press release, agenda, minutes or budget message to check its figures against the released records.</p>
+                <p className="mt-1 text-caption text-slate-400">Text, CSV, JSON, XML, HTML, and tabular content are detected automatically. Paste a press release, agenda, minutes or budget message to check its figures against the released records.</p>
               </div>
               <button type="button" onClick={closePasteDialog} aria-label="Close paste dialog" className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-300"><Icon name="x" /></button>
             </div>
             <div className="space-y-3 p-4">
-              <label className="block text-[9px] font-semibold text-slate-400">
+              <label className="block text-caption font-semibold text-slate-400">
                 Source title
-                <input value={pasteTitle} onChange={(event) => setPasteTitle(event.target.value)} maxLength={256} className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 text-[11px] text-slate-200" />
+                <input value={pasteTitle} onChange={(event) => setPasteTitle(event.target.value)} maxLength={256} className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 text-label text-slate-200" />
               </label>
               <label className="flex items-start gap-2 rounded-xl border border-slate-800 bg-slate-950/35 p-3">
                 <input type="checkbox" checked={reuseRepairForPublisher} onChange={(event) => setReuseRepairForPublisher(event.target.checked)} className="focus-ring mt-0.5 h-3.5 w-3.5 rounded border-slate-700 bg-slate-950 accent-cyan-400" />
-                <span><span className="block text-[9px] font-semibold text-slate-400">Approve for this publisher hostname</span><span className="mt-1 block text-[8px] leading-relaxed text-slate-400">Reuse this mapping for a different source root only when its normalized hostname is exactly the same. Leave off for a source-specific layout.</span></span>
+                <span><span className="block text-caption font-semibold text-slate-400">Approve for this publisher hostname</span><span className="mt-1 block text-caption leading-relaxed text-slate-400">Reuse this mapping for a different source root only when its normalized hostname is exactly the same. Leave off for a source-specific layout.</span></span>
               </label>
-              <label className="block text-[9px] font-semibold text-slate-400">
+              <label className="block text-caption font-semibold text-slate-400">
                 Content
-                <textarea value={pasteContent} onChange={(event) => setPasteContent(event.target.value)} autoFocus rows={14} placeholder="Paste the source material here…" className="focus-ring mt-1.5 w-full resize-y rounded-xl border border-slate-800 bg-slate-950/70 p-3 font-mono text-[10px] leading-relaxed text-slate-300 placeholder:text-slate-400" />
+                <textarea value={pasteContent} onChange={(event) => setPasteContent(event.target.value)} autoFocus rows={14} placeholder="Paste the source material here…" className="focus-ring mt-1.5 w-full resize-y rounded-xl border border-slate-800 bg-slate-950/70 p-3 font-mono text-label leading-relaxed text-slate-300 placeholder:text-slate-400" />
               </label>
             </div>
             <div className="flex items-center justify-between border-t border-slate-800 px-4 py-3">
-              <span className="font-mono text-[8px] text-slate-400">{new Blob([pasteContent]).size.toLocaleString()} / 16,777,216 bytes</span>
+              <span className="font-mono text-caption text-slate-400">{new Blob([pasteContent]).size.toLocaleString()} / 16,777,216 bytes</span>
               <div className="flex gap-2">
-                <button type="button" onClick={closePasteDialog} className="rounded-lg px-3 py-2 text-[9px] font-semibold text-slate-400 hover:text-slate-300">Cancel</button>
-                <button type="submit" disabled={isDiscovering || !pasteContent.trim() || !pasteTitle.trim()} className="focus-ring rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-4 py-2 text-[9px] font-semibold text-cyan-200 disabled:opacity-40">{isDiscovering ? 'Analyzing…' : 'Add & analyze'}</button>
+                <button type="button" onClick={closePasteDialog} className="rounded-lg px-3 py-2 text-caption font-semibold text-slate-400 hover:text-slate-300">Cancel</button>
+                <button type="submit" disabled={isDiscovering || !pasteContent.trim() || !pasteTitle.trim()} className="focus-ring rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-4 py-2 text-caption font-semibold text-cyan-200 disabled:opacity-40">{isDiscovering ? 'Analyzing…' : 'Add & analyze'}</button>
               </div>
             </div>
           </form>
@@ -229,15 +229,15 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
               <div>
                 <div className="app-eyebrow text-cyan-300/70">Acquisition</div>
                 <h2 id="crawl-settings-title" className="mt-1 text-sm font-semibold text-slate-100">Crawl settings</h2>
-                <p className="mt-1 max-w-xl text-[9px] leading-relaxed text-slate-400">Applied to the next source you add, and saved with that source when it differs from the defaults. Crawl limits govern crawled websites and catalogs; request pacing governs every network source; the metadata page window governs portals with a request API, and a non-default window is remembered so a resume continues from it.</p>
+                <p className="mt-1 max-w-xl text-caption leading-relaxed text-slate-400">Applied to the next source you add, and saved with that source when it differs from the defaults. Crawl limits govern crawled websites and catalogs; request pacing governs every network source; the metadata page window governs portals with a request API, and a non-default window is remembered so a resume continues from it.</p>
               </div>
               <button type="button" onClick={() => setCrawlSettingsOpen(false)} aria-label="Close crawl settings" className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-300"><Icon name="x" /></button>
             </div>
             <div className="space-y-3 p-4">
               <div className="grid gap-3 sm:grid-cols-3">
-                {selectedPreset && <p className="text-[10px] text-cyan-300 sm:col-span-3">{selectedPreset.label}: {selectedPreset.coverage}</p>}
+                {selectedPreset && <p className="text-label text-cyan-300 sm:col-span-3">{selectedPreset.label}: {selectedPreset.coverage}</p>}
                 {crawlNumberFields.map(({ field, label, hint, min, max, step }) => (
-                  <label key={field} className="block text-[9px] font-semibold text-slate-400">
+                  <label key={field} className="block text-caption font-semibold text-slate-400">
                     {label}
                     <input
                       type="number"
@@ -247,9 +247,9 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
                       step={step}
                       value={effectiveCrawlDraft[field]}
                       onChange={(event) => updateCrawlDraft({ [field]: event.target.value })}
-                      className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 font-mono text-[11px] text-slate-200"
+                      className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 font-mono text-label text-slate-200"
                     />
-                    <span className="mt-1 block text-[8px] font-normal leading-relaxed text-slate-400">{hint}</span>
+                    <span className="mt-1 block text-caption font-normal leading-relaxed text-slate-400">{hint}</span>
                   </label>
                 ))}
               </div>
@@ -261,13 +261,13 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
                   className="focus-ring mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-slate-700 bg-slate-950 accent-cyan-400"
                 />
                 <span>
-                  <span className="block text-[9px] font-semibold text-slate-400">Follow supported external platforms</span>
-                  <span className="mt-1 block text-[8px] leading-relaxed text-slate-400">Follows links off the source host into recognized document platforms such as hosted folders and drives.</span>
+                  <span className="block text-caption font-semibold text-slate-400">Follow supported external platforms</span>
+                  <span className="mt-1 block text-caption leading-relaxed text-slate-400">Follows links off the source host into recognized document platforms such as hosted folders and drives.</span>
                 </span>
               </label>
               <div className="grid gap-3 sm:grid-cols-3">
                 {metadataPageFields.map(({ field, label, hint, min, max, step }) => (
-                  <label key={field} className="block text-[9px] font-semibold text-slate-400">
+                  <label key={field} className="block text-caption font-semibold text-slate-400">
                     {label}
                     <input
                       type="number"
@@ -277,17 +277,17 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
                       step={step}
                       value={crawlDraft[field]}
                       onChange={(event) => updateCrawlDraft({ [field]: event.target.value })}
-                      className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 font-mono text-[11px] text-slate-200"
+                      className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 font-mono text-label text-slate-200"
                     />
-                    <span className="mt-1 block text-[8px] font-normal leading-relaxed text-slate-400">{hint}</span>
+                    <span className="mt-1 block text-caption font-normal leading-relaxed text-slate-400">{hint}</span>
                   </label>
                 ))}
               </div>
-              {!crawlSettings.ok && <p role="alert" className="text-[9px] text-rose-300">{crawlSettings.problem}</p>}
+              {!crawlSettings.ok && <p role="alert" className="text-caption text-rose-300">{crawlSettings.problem}</p>}
             </div>
             <div className="flex items-center justify-between border-t border-slate-800 px-4 py-3">
-              <button type="button" onClick={() => setCrawlDraft(DEFAULT_CRAWL_SETTINGS_DRAFT)} disabled={!crawlSettingsAreCustom} className="rounded-lg px-3 py-2 text-[9px] font-semibold text-slate-400 hover:text-slate-300 disabled:opacity-40">Reset to defaults</button>
-              <button type="button" onClick={() => setCrawlSettingsOpen(false)} disabled={!crawlSettings.ok} className="focus-ring rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-4 py-2 text-[9px] font-semibold text-cyan-200 disabled:opacity-40">Done</button>
+              <button type="button" onClick={() => setCrawlDraft(DEFAULT_CRAWL_SETTINGS_DRAFT)} disabled={!crawlSettingsAreCustom} className="rounded-lg px-3 py-2 text-caption font-semibold text-slate-400 hover:text-slate-300 disabled:opacity-40">Reset to defaults</button>
+              <button type="button" onClick={() => setCrawlSettingsOpen(false)} disabled={!crawlSettings.ok} className="focus-ring rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-4 py-2 text-caption font-semibold text-cyan-200 disabled:opacity-40">Done</button>
             </div>
           </div>
         </DialogBackdrop>
@@ -299,24 +299,24 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
               <div>
                 <div className="app-eyebrow text-amber-300/70">Guided repair</div>
                 <h2 id="repair-source-title" className="mt-1 text-sm font-semibold text-slate-100">Show OnRecord where the data lives</h2>
-                <p className="mt-1 max-w-xl text-[9px] leading-relaxed text-slate-400">The site is reachable, but it did not expose a reliable static data link. Paste the underlying download, folder, catalog, dashboard, or API URL. This guidance is saved and reused automatically.</p>
+                <p className="mt-1 max-w-xl text-caption leading-relaxed text-slate-400">The site is reachable, but it did not expose a reliable static data link. Paste the underlying download, folder, catalog, dashboard, or API URL. This guidance is saved and reused automatically.</p>
               </div>
               <button type="button" onClick={closeRepairDialog} aria-label="Close repair dialog" className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-300"><Icon name="x" /></button>
             </div>
             <div className="space-y-4 overflow-y-auto p-4">
               <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-[9px] font-semibold text-slate-400">Detected {repairPreview.detectedKind.replace(/_/g, ' ').toLocaleLowerCase()}</span>
-                  <span className="font-mono text-[8px] text-slate-400">{(repairPreview.confidenceBasisPoints / 100).toFixed(0)}% confidence</span>
+                  <span className="text-caption font-semibold text-slate-400">Detected {repairPreview.detectedKind.replace(/_/g, ' ').toLocaleLowerCase()}</span>
+                  <span className="font-mono text-caption text-slate-400">{(repairPreview.confidenceBasisPoints / 100).toFixed(0)}% confidence</span>
                 </div>
-                {repairPreview.warnings.map((warning) => <p key={warning} className="mt-2 text-[9px] leading-relaxed text-amber-200/70">{warning}</p>)}
+                {repairPreview.warnings.map((warning) => <p key={warning} className="mt-2 text-caption leading-relaxed text-amber-200/70">{warning}</p>)}
               </div>
               {repairPreview.candidateLinks.length > 0 && (
                 <div>
-                  <div className="mb-1.5 text-[8px] font-bold uppercase tracking-wider text-slate-400">Possible data links</div>
+                  <div className="mb-1.5 text-caption font-bold uppercase tracking-wider text-slate-400">Possible data links</div>
                   <div className="max-h-40 space-y-1 overflow-y-auto">
                     {repairPreview.candidateLinks.slice(0, 30).map((link) => (
-                      <button key={link.url} type="button" onClick={() => setRepairSeedUrl(link.url)} className={cn('block w-full truncate rounded-lg border px-3 py-2 text-left text-[9px] transition', repairSeedUrl === link.url ? 'border-cyan-400/30 bg-cyan-400/[0.07] text-cyan-200' : 'border-slate-800 text-slate-400 hover:text-slate-300')} title={link.url}>
+                      <button key={link.url} type="button" onClick={() => setRepairSeedUrl(link.url)} className={cn('block w-full truncate rounded-lg border px-3 py-2 text-left text-caption transition', repairSeedUrl === link.url ? 'border-cyan-400/30 bg-cyan-400/[0.07] text-cyan-200' : 'border-slate-800 text-slate-400 hover:text-slate-300')} title={link.url}>
                         {link.label || link.url}
                       </button>
                     ))}
@@ -324,43 +324,43 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
                 </div>
               )}
               <details className="rounded-xl border border-slate-800 bg-slate-950/35" open={repairPreview.selectorPreviewApplied || undefined}>
-                <summary className="focus-ring cursor-pointer list-none rounded-xl px-3 py-2.5 text-[9px] font-semibold text-slate-400">CSS selector mapping <span className="ml-2 font-normal text-slate-400">Preview exact matches before saving</span></summary>
-                <div className="space-y-3 border-t border-slate-800 p-3"><div className="grid gap-3 sm:grid-cols-2"><label className="text-[9px] font-semibold text-slate-400">Link selector<input value={repairLinkSelector} onChange={(event) => setRepairLinkSelector(event.target.value)} placeholder="main a[href]" className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 font-mono text-[10px] text-slate-200" /></label><label className="text-[9px] font-semibold text-slate-400">Forced-download selector<input value={repairDownloadSelector} onChange={(event) => setRepairDownloadSelector(event.target.value)} placeholder="a.download[href]" className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 font-mono text-[10px] text-slate-200" /></label></div><div className="flex items-center justify-between"><p className="text-[8px] text-slate-400">Selectors are parsed natively; invalid CSS is rejected and no recipe is persisted by previewing.</p><button type="button" onClick={() => void previewRepairSelectors()} disabled={isPreviewingSelectors || (!repairLinkSelector.trim() && !repairDownloadSelector.trim())} className="rounded-lg border border-indigo-400/25 bg-indigo-500/10 px-3 py-2 text-[8px] font-semibold text-indigo-200 disabled:opacity-40">{isPreviewingSelectors ? 'Matching…' : 'Preview selector matches'}</button></div>{repairPreview.selectorPreviewApplied && <p role="status" className="text-[8px] text-emerald-300">Selector preview returned {repairPreview.candidateLinks.length.toLocaleString()} matched resource links. Choose one above or refine the selectors.</p>}</div>
+                <summary className="focus-ring cursor-pointer list-none rounded-xl px-3 py-2.5 text-caption font-semibold text-slate-400">CSS selector mapping <span className="ml-2 font-normal text-slate-400">Preview exact matches before saving</span></summary>
+                <div className="space-y-3 border-t border-slate-800 p-3"><div className="grid gap-3 sm:grid-cols-2"><label className="text-caption font-semibold text-slate-400">Link selector<input value={repairLinkSelector} onChange={(event) => setRepairLinkSelector(event.target.value)} placeholder="main a[href]" className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 font-mono text-label text-slate-200" /></label><label className="text-caption font-semibold text-slate-400">Forced-download selector<input value={repairDownloadSelector} onChange={(event) => setRepairDownloadSelector(event.target.value)} placeholder="a.download[href]" className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 font-mono text-label text-slate-200" /></label></div><div className="flex items-center justify-between"><p className="text-caption text-slate-400">Selectors are parsed natively; invalid CSS is rejected and no recipe is persisted by previewing.</p><button type="button" onClick={() => void previewRepairSelectors()} disabled={isPreviewingSelectors || (!repairLinkSelector.trim() && !repairDownloadSelector.trim())} className="rounded-lg border border-indigo-400/25 bg-indigo-500/10 px-3 py-2 text-caption font-semibold text-indigo-200 disabled:opacity-40">{isPreviewingSelectors ? 'Matching…' : 'Preview selector matches'}</button></div>{repairPreview.selectorPreviewApplied && <p role="status" className="text-caption text-emerald-300">Selector preview returned {repairPreview.candidateLinks.length.toLocaleString()} matched resource links. Choose one above or refine the selectors.</p>}</div>
               </details>
-              <label className="block text-[9px] font-semibold text-slate-400">
+              <label className="block text-caption font-semibold text-slate-400">
                 Data, folder, dashboard, or API URL
-                <input type="url" required value={repairSeedUrl} onChange={(event) => setRepairSeedUrl(event.target.value)} placeholder="https://…" className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 text-[10px] text-slate-200" />
+                <input type="url" required value={repairSeedUrl} onChange={(event) => setRepairSeedUrl(event.target.value)} placeholder="https://…" className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 text-label text-slate-200" />
               </label>
               <details className="rounded-xl border border-slate-800 bg-slate-950/35">
-                <summary className="focus-ring flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-[9px] font-semibold text-slate-400">
+                <summary className="focus-ring flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-caption font-semibold text-slate-400">
                   <span>
                     Scope imported documents
                     <span className="ml-2 font-normal text-slate-400">Optional filename, content, agency, size, and date rules</span>
                   </span>
-                  {hasGuidanceFilters && <span className="rounded-full bg-cyan-400/10 px-2 py-0.5 text-[8px] text-cyan-300">Customized</span>}
+                  {hasGuidanceFilters && <span className="rounded-full bg-cyan-400/10 px-2 py-0.5 text-caption text-cyan-300">Customized</span>}
                 </summary>
                 <div className="space-y-4 border-t border-slate-800 p-3">
-                  <p className="text-[8px] leading-relaxed text-slate-400">
+                  <p className="text-caption leading-relaxed text-slate-400">
                     Include rules admit a document when any entry in that field matches. Exclude rules take precedence. Simple lists accept lines or commas; regular expressions use one line each.
                   </p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     {guidanceListFields.map(({ field, label, hint }) => (
-                      <label key={field} className="block text-[9px] font-semibold text-slate-400">
+                      <label key={field} className="block text-caption font-semibold text-slate-400">
                         {label}
                         <textarea
                           rows={2}
                           value={guidanceDraft[field]}
                           onChange={(event) => updateGuidanceDraft({ [field]: event.target.value })}
                           placeholder="One rule per line"
-                          className="focus-ring mt-1.5 w-full resize-y rounded-xl border border-slate-800 bg-slate-950/70 p-2.5 font-mono text-[10px] leading-relaxed text-slate-200 placeholder:text-slate-400"
+                          className="focus-ring mt-1.5 w-full resize-y rounded-xl border border-slate-800 bg-slate-950/70 p-2.5 font-mono text-label leading-relaxed text-slate-200 placeholder:text-slate-400"
                         />
-                        <span className="mt-1 block text-[8px] font-normal leading-relaxed text-slate-400">{hint}</span>
+                        <span className="mt-1 block text-caption font-normal leading-relaxed text-slate-400">{hint}</span>
                       </label>
                     ))}
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     {guidanceSizeFields.map(({ field, label, hint }) => (
-                      <label key={field} className="block text-[9px] font-semibold text-slate-400">
+                      <label key={field} className="block text-caption font-semibold text-slate-400">
                         {label}
                         <input
                           type="number"
@@ -369,25 +369,25 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
                           step={1}
                           value={guidanceDraft[field]}
                           onChange={(event) => updateGuidanceDraft({ [field]: event.target.value })}
-                          className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 font-mono text-[10px] text-slate-200"
+                          className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 font-mono text-label text-slate-200"
                         />
-                        <span className="mt-1 block text-[8px] font-normal leading-relaxed text-slate-400">{hint}</span>
+                        <span className="mt-1 block text-caption font-normal leading-relaxed text-slate-400">{hint}</span>
                       </label>
                     ))}
                     {guidanceDateFields.map(({ field, label, hint }) => (
-                      <label key={field} className="block text-[9px] font-semibold text-slate-400">
+                      <label key={field} className="block text-caption font-semibold text-slate-400">
                         {label}
                         <input
                           type="date"
                           value={guidanceDraft[field]}
                           onChange={(event) => updateGuidanceDraft({ [field]: event.target.value })}
-                          className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 font-mono text-[10px] text-slate-200"
+                          className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 font-mono text-label text-slate-200"
                         />
-                        <span className="mt-1 block text-[8px] font-normal leading-relaxed text-slate-400">{hint}</span>
+                        <span className="mt-1 block text-caption font-normal leading-relaxed text-slate-400">{hint}</span>
                       </label>
                     ))}
                   </div>
-                  <label className="flex items-start gap-2.5 rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-[9px] font-semibold text-slate-400">
+                  <label className="flex items-start gap-2.5 rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-caption font-semibold text-slate-400">
                     <input
                       type="checkbox"
                       checked={guidanceDraft.restrictDownloadsToSourceHost}
@@ -396,20 +396,20 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
                     />
                     <span>
                       Download only from this source&apos;s own host
-                      <span className="mt-1 block text-[8px] font-normal leading-relaxed text-slate-400">
+                      <span className="mt-1 block text-caption font-normal leading-relaxed text-slate-400">
                         Off by default. Many government portals serve their documents from S3, Azure Blob, Granicus or
                         CivicPlus, and turning this on refuses those. Hosts listed in the source&apos;s allowed hostnames stay
                         permitted, and which links get followed is unaffected either way.
                       </span>
                     </span>
                   </label>
-                  {!guidanceFilters.ok && <p role="alert" className="text-[9px] text-rose-300">{guidanceFilters.problem}</p>}
+                  {!guidanceFilters.ok && <p role="alert" className="text-caption text-rose-300">{guidanceFilters.problem}</p>}
                   <div className="flex justify-end">
                     <button
                       type="button"
                       onClick={() => setGuidanceDraft(DEFAULT_GUIDANCE_FILTER_DRAFT)}
                       disabled={!hasGuidanceFilters}
-                      className="rounded-lg px-3 py-2 text-[9px] font-semibold text-slate-400 hover:text-slate-300 disabled:opacity-40"
+                      className="rounded-lg px-3 py-2 text-caption font-semibold text-slate-400 hover:text-slate-300 disabled:opacity-40"
                     >
                       Clear scope rules
                     </button>
@@ -418,8 +418,8 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
               </details>
             </div>
             <div className="flex justify-end gap-2 border-t border-slate-800 px-4 py-3">
-              <button type="button" onClick={closeRepairDialog} className="rounded-lg px-3 py-2 text-[9px] font-semibold text-slate-400 hover:text-slate-300">Cancel</button>
-              <button type="submit" disabled={isDiscovering || !repairSeedUrl.trim() || !guidanceFilters.ok} className="focus-ring rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-4 py-2 text-[9px] font-semibold text-cyan-200 disabled:opacity-40">{isDiscovering ? 'Testing…' : 'Use this data source'}</button>
+              <button type="button" onClick={closeRepairDialog} className="rounded-lg px-3 py-2 text-caption font-semibold text-slate-400 hover:text-slate-300">Cancel</button>
+              <button type="submit" disabled={isDiscovering || !repairSeedUrl.trim() || !guidanceFilters.ok} className="focus-ring rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-4 py-2 text-caption font-semibold text-cyan-200 disabled:opacity-40">{isDiscovering ? 'Testing…' : 'Use this data source'}</button>
             </div>
           </form>
         </DialogBackdrop>

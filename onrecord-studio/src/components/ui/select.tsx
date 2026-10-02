@@ -10,14 +10,14 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
     return (
       <div className="flex flex-col space-y-1 select-none font-sans">
         {label && (
-          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block px-0.5">
+          <label className="text-label font-bold text-slate-400 uppercase tracking-wider block px-0.5">
             {label}
           </label>
         )}
         <div className="relative">
           <select
             className={cn(
-              "w-full bg-slate-950 text-slate-300 text-xs border border-slate-800 rounded-lg pl-3 pr-8 py-2 appearance-none focus:outline-none focus:border-indigo-500 font-medium shadow-sm transition-all cursor-pointer",
+              "w-full bg-slate-950 text-slate-300 text-label leading-4 border border-slate-800 rounded-lg pl-3 pr-8 py-2 appearance-none focus:outline-none focus:border-indigo-500 font-medium shadow-sm transition-all cursor-pointer",
               className
             )}
             ref={ref}

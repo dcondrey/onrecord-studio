@@ -42,7 +42,7 @@ export function DeadlineChip({ deadline }: { deadline: RequestDeadline }) {
     <span
       data-countdown={deadline.countdown.kind}
       className={cn(
-        'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold',
+        'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-caption font-semibold',
         spec.dashed && 'border-dashed',
         spec.tone,
       )}

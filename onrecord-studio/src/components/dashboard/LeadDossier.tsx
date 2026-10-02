@@ -56,10 +56,10 @@ export default function LeadDossier() {
   };
 
   return (
-    <section aria-label="Lead dossier" className="mt-4 rounded-xl border border-slate-800 bg-slate-950/40 p-4 text-[10px] text-slate-300">
+    <section aria-label="Lead dossier" className="mt-4 rounded-xl border border-slate-800 bg-slate-950/40 p-4 text-label text-slate-300">
       <div className="flex items-start justify-between gap-3">
-        <h3 className="text-[11px] font-semibold text-slate-200">Lead dossier</h3>
-        <button type="button" onClick={close} className="focus-ring rounded-md border border-slate-800 px-2 py-1 text-[8px] text-slate-400 hover:text-slate-200">Close</button>
+        <h3 className="text-label font-semibold text-slate-200">Lead dossier</h3>
+        <button type="button" onClick={close} className="focus-ring rounded-md border border-slate-800 px-2 py-1 text-caption text-slate-400 hover:text-slate-200">Close</button>
       </div>
       {state.status === 'pending' && <p role="status" className="mt-2 text-slate-400">Assembling the dossier…</p>}
       {state.status === 'failed' && <p role="alert" className="mt-2 text-rose-300">The dossier could not be assembled: {state.message}</p>}
@@ -116,8 +116,8 @@ export default function LeadDossier() {
             )}
           </Section>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => addToBriefing(state.dossier)} className="focus-ring rounded-md border border-indigo-400/25 bg-indigo-500/10 px-2 py-1 text-[8px] font-semibold text-indigo-200">Add to briefing</button>
-            <button type="button" onClick={() => exportMarkdown(state.dossier)} className="focus-ring rounded-md border border-slate-800 px-2 py-1 text-[8px] font-medium text-slate-400 hover:text-slate-200">Export as Markdown</button>
+            <button type="button" onClick={() => addToBriefing(state.dossier)} className="focus-ring rounded-md border border-indigo-400/25 bg-indigo-500/10 px-2 py-1 text-caption font-semibold text-indigo-200">Add to briefing</button>
+            <button type="button" onClick={() => exportMarkdown(state.dossier)} className="focus-ring rounded-md border border-slate-800 px-2 py-1 text-caption font-medium text-slate-400 hover:text-slate-200">Export as Markdown</button>
           </div>
         </div>
       )}
@@ -128,7 +128,7 @@ export default function LeadDossier() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h4 className="text-[9px] font-semibold uppercase tracking-wider text-cyan-300/80">{title}</h4>
+      <h4 className="text-caption font-semibold uppercase tracking-wider text-cyan-300/80">{title}</h4>
       <div className="mt-1">{children}</div>
     </div>
   );
@@ -169,16 +169,16 @@ function GapRequest({ gap }: { gap: DossierGap }) {
         <button
           type="button"
           onClick={() => void copyRequest()}
-          className="focus-ring rounded-md border border-slate-800 px-2 py-0.5 text-[8px] font-medium text-slate-400 hover:text-slate-200"
+          className="focus-ring rounded-md border border-slate-800 px-2 py-0.5 text-caption font-medium text-slate-400 hover:text-slate-200"
         >
           Copy request text
         </button>
-        {copy.kind === 'copied' && <span role="status" className="text-[8px] text-emerald-300">Request text copied.</span>}
+        {copy.kind === 'copied' && <span role="status" className="text-caption text-emerald-300">Request text copied.</span>}
       </div>
       {copy.kind === 'fallback' && (
         <>
-          <p role="status" className="mt-1 text-[8px] text-amber-200">Copying was blocked by the system. Select the text below to copy it.</p>
-          <pre className="mt-1 whitespace-pre-wrap rounded-md border border-slate-800 bg-slate-950/60 p-2 text-[9px] text-slate-300">{copy.text}</pre>
+          <p role="status" className="mt-1 text-caption text-amber-200">Copying was blocked by the system. Select the text below to copy it.</p>
+          <pre className="mt-1 whitespace-pre-wrap rounded-md border border-slate-800 bg-slate-950/60 p-2 text-caption text-slate-300">{copy.text}</pre>
         </>
       )}
     </div>

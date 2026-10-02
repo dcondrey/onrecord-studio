@@ -28,6 +28,18 @@ document.documentElement.dataset.contrast = resolveContrast(
   system.prefersMoreContrast,
 );
 
+// WebKit's default menu offers browser actions (Reload, Back) that mean nothing in a desktop app.
+// It stays where it does real work: editing fields and copying a selection. Development builds
+// keep it for Inspect Element.
+if (!import.meta.env.DEV) {
+  document.addEventListener('contextmenu', (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    const editable = target?.closest('input, textarea, [contenteditable="true"]');
+    const selection = window.getSelection();
+    if (!editable && (!selection || selection.isCollapsed)) event.preventDefault();
+  });
+}
+
 const rootElement = document.getElementById('root');
 
 if (!rootElement) {

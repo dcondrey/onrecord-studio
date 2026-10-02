@@ -53,12 +53,12 @@ export default function StatutoryDeadlineAppeal({
         type="button"
         onClick={run}
         disabled={busy}
-        className="focus-ring rounded-md border border-slate-700 bg-slate-900/60 px-3 py-1 text-[10px] font-semibold text-slate-200 transition hover:border-amber-400/40 disabled:opacity-60"
+        className="focus-ring rounded-md border border-slate-700 bg-slate-900/60 px-3 py-1 text-label font-semibold text-slate-200 transition hover:border-amber-400/40 disabled:opacity-60"
       >
         {busy ? 'Drafting…' : 'Draft statutory deadline appeal'}
       </button>
       {error && (
-        <div role="alert" className="mt-2 rounded-md border border-rose-500/20 bg-rose-500/[0.04] px-2 py-1.5 text-[9px] text-rose-200">
+        <div role="alert" className="mt-2 rounded-md border border-rose-500/20 bg-rose-500/[0.04] px-2 py-1.5 text-caption text-rose-200">
           {error}
         </div>
       )}

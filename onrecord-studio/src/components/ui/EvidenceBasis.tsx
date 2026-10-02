@@ -38,7 +38,7 @@ function Chip({ shape, dashed, tone, border, children, ...rest }: {
   return (
     <span
       {...rest}
-      className={cn('inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold', tone, border)}
+      className={cn('inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-caption font-semibold', tone, border)}
     >
       <Glyph shape={shape} dashed={dashed} />
       {children}
@@ -74,7 +74,7 @@ export function ConfidenceMeter({ confidence }: { confidence: FindingConfidence 
         data-confidence="unassessed"
         role="img"
         aria-label="Confidence unassessed: no measurement was made"
-        className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-300"
+        className="inline-flex items-center gap-1 text-caption font-medium text-slate-300"
       >
         <span
           aria-hidden="true"
@@ -88,7 +88,7 @@ export function ConfidenceMeter({ confidence }: { confidence: FindingConfidence 
   const bp = Math.min(10000, Math.max(0, Math.round(confidence.basisPoints)));
   const percent = Math.round(bp / 100);
   return (
-    <span data-confidence="measured" className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-200">
+    <span data-confidence="measured" className="inline-flex items-center gap-1 text-caption font-medium text-slate-200">
       <span
         role="meter"
         aria-label="Measured confidence"
@@ -246,7 +246,7 @@ export function EvidenceTrace({
   };
 
   return (
-    <div onKeyDown={onKeyDown} className="text-[9px]">
+    <div onKeyDown={onKeyDown} className="text-caption">
       <button
         ref={triggerRef}
         type="button"
@@ -309,7 +309,7 @@ export function PlainLanguageDisclosure({ kind, label }: { kind: FindingKind; la
     ? 'Basis: a counted comparison against a stated rule. It is not a court finding.'
     : 'Basis: a pattern signal, not a legal claim. It is a reason to look, not a conclusion.';
   return (
-    <div className="text-[9px]">
+    <div className="text-caption">
       <button
         type="button"
         aria-expanded={open}

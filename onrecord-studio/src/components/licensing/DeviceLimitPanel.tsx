@@ -23,7 +23,7 @@ export default function DeviceLimitPanel({ busy, activating, onActivate, onSignO
           <p ref={confirmRef} tabIndex={-1} className="font-semibold outline-none">
             Sign out your oldest Mac and use this one?
           </p>
-          <p className="mt-1 text-xs leading-5">
+          <p className="mt-1 text-label leading-5">
             The Mac that signed in longest ago will be signed out of this account and will need to sign in again. Local
             evidence on that Mac is not deleted.
           </p>

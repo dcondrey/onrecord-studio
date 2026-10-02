@@ -171,7 +171,7 @@ export default function SubjectDossier() {
             {subjectLabel ?? 'Resolving subject…'}
           </h2>
           {target.kind === 'name' && resolution.status === 'RESOLVED' && (
-            <p className="mt-0.5 text-[9px] text-slate-400">
+            <p className="mt-0.5 text-caption text-slate-400">
               Resolved from &ldquo;{target.value}&rdquo;.
             </p>
           )}
@@ -179,26 +179,26 @@ export default function SubjectDossier() {
         <button
           type="button"
           onClick={clear}
-          className="focus-ring shrink-0 rounded-lg border border-slate-800 px-3 py-1.5 text-[10px] font-semibold text-slate-300 transition hover:border-slate-600 hover:text-slate-100"
+          className="focus-ring shrink-0 rounded-lg border border-slate-800 px-3 py-1.5 text-label font-semibold text-slate-300 transition hover:border-slate-600 hover:text-slate-100"
         >
           Close dossier
         </button>
       </header>
 
       {resolution.status === 'RESOLVING' && (
-        <p role="status" className="text-[10px] text-slate-400">
+        <p role="status" className="text-label text-slate-400">
           Resolving subject in the entity index…
         </p>
       )}
 
       {resolution.status === 'ERROR' && (
-        <p role="alert" className="text-[10px] text-rose-300">
+        <p role="alert" className="text-label text-rose-300">
           Subject resolution failed: {resolution.message}
         </p>
       )}
 
       {resolution.status === 'NONE' && (
-        <p className="text-[10px] text-slate-400">
+        <p className="text-label text-slate-400">
           No corpus entity matches &ldquo;{target.value}&rdquo;
           in the 500 most-cited entities. Add data or refine the name to try again.
         </p>
@@ -206,7 +206,7 @@ export default function SubjectDossier() {
 
       {resolution.status === 'AMBIGUOUS' && (
         <div className="rounded-xl border border-amber-400/20 bg-amber-500/[0.06] p-3">
-          <p className="text-[10px] font-semibold text-amber-200">
+          <p className="text-label font-semibold text-amber-200">
             &ldquo;{target.value}&rdquo; matches {resolution.matches.length} entities. Pick one.
           </p>
           <ul className="mt-2 flex flex-wrap gap-1.5" role="list">
@@ -215,7 +215,7 @@ export default function SubjectDossier() {
                 <button
                   type="button"
                   onClick={() => open({ kind: 'entity', value: entity.entityId })}
-                  className="focus-ring rounded-full border border-amber-400/30 bg-amber-500/[0.08] px-2 py-1 text-[9px] font-semibold text-amber-100"
+                  className="focus-ring rounded-full border border-amber-400/30 bg-amber-500/[0.08] px-2 py-1 text-caption font-semibold text-amber-100"
                 >
                   {entity.displayValue}
                   <span className="ml-1 text-amber-300/80">
@@ -246,12 +246,12 @@ export default function SubjectDossier() {
                   />
                 ))}
                 {items.length > 5 && (
-                  <li className="text-[9px] text-slate-400">
+                  <li className="text-caption text-slate-400">
                     + {items.length - 5} more finding{items.length - 5 === 1 ? '' : 's'} mention this
                     subject. Open the findings inbox to see them all.
                   </li>
                 )}
-                <li className="text-[8px] italic text-slate-400">
+                <li className="text-caption italic text-slate-400">
                   Matches are text-based on the subject&rsquo;s display value; a namesake is possible.
                 </li>
               </ul>
@@ -262,16 +262,16 @@ export default function SubjectDossier() {
             state={neighborhood}
             emptyText="No corpus edges recorded for this subject yet."
             render={(value) => {
-              if (!value) return <p className="text-[9px] text-slate-400">Entity has no recorded neighborhood.</p>;
+              if (!value) return <p className="text-caption text-slate-400">Entity has no recorded neighborhood.</p>;
               const edges = value.edges.slice(0, 8);
               return (
                 <div className="space-y-2">
-                  <p className="text-[9px] text-slate-400">
+                  <p className="text-caption text-slate-400">
                     Center: <span className="font-mono text-slate-300">{value.center.displayValue}</span> · seen
                     in {value.center.documentCount} documents.
                   </p>
                   {edges.length === 0 ? (
-                    <p className="text-[9px] text-slate-400">No co-occurrence edges.</p>
+                    <p className="text-caption text-slate-400">No co-occurrence edges.</p>
                   ) : (
                     <ul className="flex flex-wrap gap-1.5">
                       {edges.map((edge) => (
@@ -281,7 +281,7 @@ export default function SubjectDossier() {
                             onClick={() =>
                               open({ kind: 'entity', value: edge.neighbor.entityId })
                             }
-                            className="focus-ring rounded-full border border-slate-700 bg-slate-950/50 px-2 py-1 text-[9px] font-medium text-slate-300 transition hover:border-cyan-400/25 hover:text-cyan-200"
+                            className="focus-ring rounded-full border border-slate-700 bg-slate-950/50 px-2 py-1 text-caption font-medium text-slate-300 transition hover:border-cyan-400/25 hover:text-cyan-200"
                           >
                             {edge.neighbor.displayValue}
                             <span className="ml-1 text-slate-400">· {edge.sharedDocumentCount} docs</span>
@@ -291,7 +291,7 @@ export default function SubjectDossier() {
                     </ul>
                   )}
                   {(value.edges.length > 8 || (neighborTotal !== null && neighborTotal > 8)) && (
-                    <p className="text-[8px] text-slate-400">
+                    <p className="text-caption text-slate-400">
                       Showing 8{neighborTotal !== null ? ` of ${neighborTotal.toLocaleString()}` : ''}. Open the entity graph to see every one.
                     </p>
                   )}
@@ -330,20 +330,20 @@ function DossierSection<T>({
 }) {
   return (
     <section className="rounded-xl border border-slate-800/70 bg-slate-950/30 p-3">
-      <h3 className="text-[10px] font-semibold uppercase tracking-wider text-slate-300">{title}</h3>
+      <h3 className="text-label font-semibold uppercase tracking-wider text-slate-300">{title}</h3>
       <div className="mt-2">
         {state.status === 'LOADING' && (
-          <p role="status" className="text-[9px] text-slate-400">
+          <p role="status" className="text-caption text-slate-400">
             Loading…
           </p>
         )}
         {state.status === 'ERROR' && (
-          <p role="alert" className="text-[9px] text-rose-300">
+          <p role="alert" className="text-caption text-rose-300">
             {state.message}
           </p>
         )}
         {state.status === 'READY' && (Array.isArray(state.value) && state.value.length === 0
-          ? <p className="text-[9px] text-slate-400">{emptyText}</p>
+          ? <p className="text-caption text-slate-400">{emptyText}</p>
           : render(state.value))}
       </div>
     </section>
@@ -366,8 +366,8 @@ function DossierFindingRow({ finding, onOpen }: { finding: Finding; onOpen: () =
           </svg>
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-[10px] font-semibold text-slate-100">{finding.headline}</span>
-          <span className="mt-0.5 block text-[9px] text-slate-400">{finding.explanation}</span>
+          <span className="block text-label font-semibold text-slate-100">{finding.headline}</span>
+          <span className="mt-0.5 block text-caption text-slate-400">{finding.explanation}</span>
         </span>
       </button>
     </li>
