@@ -440,6 +440,9 @@ impl DuckDbRepository {
                 .map_err(|error| {
                     AppError::Storage(format!("Failed to synchronize correlation flag: {error}"))
                 })?;
+                // An existing audit keeps the status its earlier writer concluded, so a flag added
+                // here has to re-derive it or the audit goes on reading as compliant.
+                update_automatic_audit_status(tx, &audit_id)?;
             }
             Ok(())
         })

@@ -358,3 +358,54 @@ async fn a_cpra_finding_resting_on_an_unobserved_date_is_stored_below_certainty(
         8_900
     );
 }
+
+/// The correlation writer adds a flag to the shared automatic audit. When that audit already
+/// existed with a compliant conclusion, the conclusion has to be re-derived from its flags, or the
+/// audit reads compliant while carrying an anomaly flag.
+#[tokio::test]
+async fn a_correlation_flag_on_a_compliant_audit_rederives_its_status() {
+    let repository = repository_with_document().await;
+    let audit_id = format!("auto-{PORTAL_SUBDOMAIN}-{REQUEST_ID}");
+    {
+        let connection = repository.conn.lock().await;
+        connection
+            .execute(
+                "INSERT INTO case_audits (
+                    audit_id, target_request_id, target_subdomain, auditor_notes,
+                    verified_at, verification_status
+                 ) VALUES (?1, ?2, ?3, 'timeline', '2026-08-24T12:05:00Z', 'Compliant')",
+                params![audit_id, REQUEST_ID, PORTAL_SUBDOMAIN],
+            )
+            .expect("compliant audit fixture must insert");
+    }
+
+    repository
+        .synchronize_cross_correlation_alerts(&[crate::types::CrossAgencyCorrelation {
+            portal_key: PORTAL_SUBDOMAIN.to_string(),
+            request_id: REQUEST_ID as u64,
+            agency_id: None,
+            agency_name: "Agency".to_string(),
+            request_title: "Request".to_string(),
+            request_timestamp: "2026-08-24T12:00:00Z".to_string(),
+            neighborhood_block: "block-1".to_string(),
+            complaint_count: 3,
+            correlation_window_hours: 72,
+            distinct_source_count: 2,
+            first_correlated_event_at: "2026-08-23T12:00:00Z".to_string(),
+            last_correlated_event_at: "2026-08-24T11:00:00Z".to_string(),
+            keyword_signal_count: 1,
+            correlation_density: 0.5,
+        }])
+        .await
+        .expect("correlation sync must succeed");
+
+    let connection = repository.conn.lock().await;
+    let status: String = connection
+        .query_row(
+            "SELECT verification_status FROM case_audits WHERE audit_id = ?1",
+            params![audit_id],
+            |row| row.get(0),
+        )
+        .expect("the audit must be readable");
+    assert_eq!(status, "DataAnomalyFlagged");
+}
