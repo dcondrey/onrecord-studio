@@ -499,7 +499,8 @@
       "affiliation-profile",
       "data-handling",
       "account-trial-license"
-    ]
+    ],
+    "channel": "direct"
   },
   {
     "id": "autonomous-research",
@@ -540,7 +541,18 @@
           "It sends nothing to OpenAI or OpenRouter unless a credential is found: OPENAI_API_KEY or OPENROUTER_API_KEY in the environment or in ~/.env. There is no key field in the app. Once you enable research, it uses a key it finds there without asking again.",
           "It also needs budget: a daily model-call limit (24 by default, counted per UTC day) that must cover a whole investigation.",
           "Investigate now starts one on demand."
-        ]
+        ],
+        "channel": "direct"
+      },
+      {
+        "heading": "When it runs",
+        "items": [
+          "Research is off on a fresh install. After you tick Autonomous research enabled in Research settings, a background check runs about every 30 seconds while the app is open and licensed, to decide whether an investigation is due.",
+          "It sends nothing to OpenAI or OpenRouter unless a credential is found: an OPENAI_API_KEY or OPENROUTER_API_KEY line in ~/Library/Containers/com.onrecord.studio/Data/.env. This App Store copy runs in the macOS sandbox, so it cannot read your shell environment or a .env file in your home folder. There is no key field in the app. Once you enable research, it uses a key it finds there without asking again.",
+          "It also needs budget: a daily model-call limit (24 by default, counted per UTC day) that must cover a whole investigation.",
+          "Investigate now starts one on demand."
+        ],
+        "channel": "app-store"
       },
       {
         "heading": "What leaves your Mac",
@@ -564,7 +576,18 @@
           "Or choose Local Ollama, which keeps model calls on this Mac.",
           "Or remove the key from ~/.env and the environment. Without a credential, no provider call is made.",
           "Untick Collect primary sources automatically to stop background collection. Neither setting is on until you turn it on."
-        ]
+        ],
+        "channel": "direct"
+      },
+      {
+        "heading": "Turning it off",
+        "items": [
+          "Open Research settings on the San Diego view. Untick Autonomous research enabled and save. That stops model calls.",
+          "Or choose Local Ollama, which keeps model calls on this Mac.",
+          "Or remove the key from ~/Library/Containers/com.onrecord.studio/Data/.env. Without a credential, no provider call is made.",
+          "Untick Collect primary sources automatically to stop background collection. Neither setting is on until you turn it on."
+        ],
+        "channel": "app-store"
       },
       {
         "heading": "Results",

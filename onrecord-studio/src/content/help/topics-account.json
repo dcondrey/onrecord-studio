@@ -81,7 +81,8 @@
       "work-email-verification",
       "updates",
       "data-handling"
-    ]
+    ],
+    "channel": "direct"
   },
   {
     "id": "updates",
@@ -103,7 +104,8 @@
       {
         "paragraphs": [
           "In the direct download build the app checks for an update at start and about every 24 hours. When one is available a notice in the header shows the version and release notes. Install and restart downloads it, installs it and relaunches. Later hides the notice for that version until you restart the app. Your license and account are not affected by an update."
-        ]
+        ],
+        "channel": "direct"
       },
       {
         "heading": "Details",
@@ -112,6 +114,13 @@
           "The check contacts updates.writerslogic.com with the app's current version, operating system target and architecture in the request address.",
           "The Mac App Store build has no updater and updates through the App Store.",
           "If an install fails the notice says so and offers Retry install."
+        ],
+        "channel": "direct"
+      },
+      {
+        "channel": "app-store",
+        "paragraphs": [
+          "This copy of OnRecord Studio updates through the Mac App Store. It has no updater of its own and makes no update checks."
         ]
       }
     ],
@@ -152,7 +161,7 @@
     "sections": [
       {
         "paragraphs": [
-          "Nothing here says that nothing is sent. Some features contact other servers. This is the full list, and it applies to the current direct download build. Details of each are in the topics linked below."
+          "Nothing here says that nothing is sent. Some features contact other servers. This is the full list for this copy of the app. Details of each are in the topics linked below."
         ]
       },
       {
@@ -172,6 +181,14 @@
           "Checkout: a request for a checkout session with your seat count. Payment itself happens at Stripe in your browser.",
           "Delete account: a request that deletes your account record.",
           "Work-email verification: the full email address you type is sent so a code can be emailed to it, and the code you enter is sent back. Only the domain is kept on this Mac afterwards."
+        ],
+        "channel": "direct"
+      },
+      {
+        "heading": "Sent to Apple",
+        "channel": "app-store",
+        "items": [
+          "Purchase verification: at launch, and when you choose to verify again, macOS asks the App Store to confirm this Mac’s purchase of the app. No account service of ours is involved, and no documents or findings are sent."
         ]
       },
       {
@@ -179,14 +196,29 @@
         "items": [
           "If you use OpenAI or OpenRouter, excerpts of public records you collected, query results and case questions are sent to that provider using your API key. The app masks personal information it detects in the passages it prepares, which is best effort.",
           "It is off until you enable it in Research settings, and then needs a key in your environment or ~/.env. You can turn it off again, or choose Local Ollama, which stays on this Mac. See Autonomous research."
-        ]
+        ],
+        "channel": "direct"
+      },
+      {
+        "heading": "Sent to the AI provider you choose (autonomous research only)",
+        "items": [
+          "If you use OpenAI or OpenRouter, excerpts of public records you collected, query results and case questions are sent to that provider using your API key. The app masks personal information it detects in the passages it prepares, which is best effort.",
+          "It is off until you enable it in Research settings, and then needs an OPENAI_API_KEY or OPENROUTER_API_KEY line in ~/Library/Containers/com.onrecord.studio/Data/.env, the only place this App Store copy can read a key from. You can turn it off again, or choose Local Ollama, which stays on this Mac. See Autonomous research."
+        ],
+        "channel": "app-store"
       },
       {
         "heading": "Fetched from the internet by the app",
         "items": [
           "Public web pages, documents and data files at the addresses you add, and rechecks of them on the schedule you set. Those sites can see requests from this Mac.",
           "Automatic collection of primary sources from a built-in list of public publishers, unless you turn it off.",
-          "The semantic model files, downloaded the first time the semantic model is initialized. Your documents are not part of that download.",
+          "The semantic model files, downloaded the first time the semantic model is initialized. Your documents are not part of that download."
+        ]
+      },
+      {
+        "heading": "Update checks",
+        "channel": "direct",
+        "items": [
           "Update checks (direct download build only), which contact updates.writerslogic.com with the app version, operating system target and architecture."
         ]
       },
@@ -201,7 +233,15 @@
       {
         "heading": "Not covered here",
         "paragraphs": [
-          "What your sign-in provider, Stripe, OpenAI, OpenRouter and the sites you fetch do with data on their side is set by their terms. In the Mac App Store build, purchase verification is done by Apple and no account service is used."
+          "What your sign-in provider, Stripe, OpenAI, OpenRouter and the sites you fetch do with data on their side is set by their terms."
+        ],
+        "channel": "direct"
+      },
+      {
+        "heading": "Not covered here",
+        "channel": "app-store",
+        "paragraphs": [
+          "What Apple, OpenAI, OpenRouter and the sites you fetch do with data on their side is set by their terms."
         ]
       }
     ],
@@ -221,7 +261,22 @@
     "title": "Research snapshot: query your evidence from Python, R or SQL",
     "group": "Data handling",
     "summary": "A read-only DuckDB file of the evidence projection, with a signed manifest that names the exact corpus state, so a query result can be cited and re-run.",
-    "keywords": ["snapshot", "duckdb", "python", "r", "sql", "export", "reproducible", "cite", "manifest", "digest", "api", "pandas", "jupyter", "notebook"],
+    "keywords": [
+      "snapshot",
+      "duckdb",
+      "python",
+      "r",
+      "sql",
+      "export",
+      "reproducible",
+      "cite",
+      "manifest",
+      "digest",
+      "api",
+      "pandas",
+      "jupyter",
+      "notebook"
+    ],
     "sections": [
       {
         "paragraphs": [
@@ -253,7 +308,13 @@
     ],
     "views": [],
     "findingKinds": [],
-    "commandGroups": ["snapshot"],
-    "related": ["data-handling", "package-verification", "evidence-packets"]
+    "commandGroups": [
+      "snapshot"
+    ],
+    "related": [
+      "data-handling",
+      "package-verification",
+      "evidence-packets"
+    ]
   }
 ]

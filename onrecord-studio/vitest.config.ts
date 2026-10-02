@@ -5,7 +5,7 @@ import path from 'path';
 // validation) rather than rendered components, so the default node environment is correct and
 // keeps them dependency-free. src/tests/App.test.tsx opts itself into jsdom per-file.
 export default defineConfig({
-  define: { __APP_VERSION__: JSON.stringify('0.0.0-test') },
+  define: { __APP_VERSION__: JSON.stringify('0.0.0-test'), __DISTRIBUTION__: 'null' },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

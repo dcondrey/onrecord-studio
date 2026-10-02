@@ -29,7 +29,11 @@ export type HelpGroup =
   | 'Accounts and updates'
   | 'Data handling';
 
+/** Content that is true of only one release. Untagged content is shown in every build. */
+export type HelpChannel = 'app-store' | 'direct';
+
 export interface HelpSection {
+  channel?: HelpChannel;
   heading?: string;
   paragraphs?: string[];
   items?: string[];
@@ -37,6 +41,7 @@ export interface HelpSection {
 
 export interface HelpTopic {
   id: string;
+  channel?: HelpChannel;
   title: string;
   group: HelpGroup;
   summary: string;
@@ -64,7 +69,7 @@ export const HELP_GROUP_ORDER: readonly HelpGroup[] = [
   'Data handling',
 ];
 
-export const HELP_TOPICS = [
+const ALL_HELP_TOPICS = [
   ...start,
   ...views,
   ...features,
@@ -85,6 +90,24 @@ export const HELP_TOPICS = [
   ...identifiers,
   ...pageView,
 ] as HelpTopic[];
+
+/**
+ * The topics a build may show. The App Store build must not describe the direct build's accounts,
+ * trials, Stripe checkout or updater (App Review 3.1.1), and the direct build has no App Store
+ * purchase. `null` (development) keeps everything.
+ */
+export function helpTopicsFor(distribution: HelpChannel | null): HelpTopic[] {
+  const shown = (channel?: HelpChannel) => !channel || !distribution || channel === distribution;
+  const topics = ALL_HELP_TOPICS.filter((topic) => shown(topic.channel));
+  const ids = new Set(topics.map((topic) => topic.id));
+  return topics.map((topic) => ({
+    ...topic,
+    sections: topic.sections.filter((section) => shown(section.channel)),
+    related: topic.related.filter((id) => ids.has(id)),
+  }));
+}
+
+export const HELP_TOPICS = helpTopicsFor(__DISTRIBUTION__);
 
 export function findHelpTopic(id: string): HelpTopic | undefined {
   return HELP_TOPICS.find((topic) => topic.id === id);

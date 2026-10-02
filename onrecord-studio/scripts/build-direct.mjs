@@ -7,6 +7,8 @@ const root = resolve(import.meta.dirname, '..');
 // loadEnvFile never overrides a variable the shell already set.
 const localEnvironment = join(root, '.env.direct.local');
 if (existsSync(localEnvironment)) process.loadEnvFile(localEnvironment);
+// Read by vite.config.ts through Tauri's beforeBuildCommand, so Help shows only direct-build topics.
+process.env.ONRECORD_DISTRIBUTION = 'direct';
 
 const checkOnly = process.argv.includes('--check');
 const dryRun = process.argv.includes('--dry-run');

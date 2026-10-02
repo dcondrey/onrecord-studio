@@ -19,7 +19,7 @@
     "test:budget-comparison": "node scripts/verify-budget-comparison.mjs",
     "test:release-performance": "node scripts/validate-release-performance.mjs",
     "prepare:app-store": "node scripts/prepare-app-store.mjs",
-    "build:app-store": "npm run prepare:app-store && tauri build --ci --bundles app --target aarch64-apple-darwin --features app-store --config src-tauri/tauri.appstore.conf.json",
+    "build:app-store": "npm run prepare:app-store && ONRECORD_DISTRIBUTION=app-store tauri build --ci --bundles app --target aarch64-apple-darwin --features app-store --config src-tauri/tauri.appstore.conf.json",
     "notarize:direct": "node scripts/notarize-direct.mjs",
     "prepare:direct": "node scripts/prepare-direct.mjs",
     "build:direct": "node scripts/build-direct.mjs",

@@ -6,10 +6,17 @@ import path from 'path';
 // package.json is the version the release scripts check against Cargo.toml and tauri.conf.json.
 const { version } = JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf8')) as { version: string };
 
+// Set by the App Store and direct release scripts so Help describes only the build it ships in.
+// Development leaves it unset and shows every topic.
+const distribution = process.env.ONRECORD_DISTRIBUTION ?? '';
+if (!['', 'app-store', 'direct'].includes(distribution)) {
+  throw new Error(`ONRECORD_DISTRIBUTION must be app-store or direct, not ${distribution}.`);
+}
+
 // https://vitejs.dev
 export default defineConfig({
   plugins: [react()],
-  define: { __APP_VERSION__: JSON.stringify(version) },
+  define: { __APP_VERSION__: JSON.stringify(version), __DISTRIBUTION__: JSON.stringify(distribution || null) },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

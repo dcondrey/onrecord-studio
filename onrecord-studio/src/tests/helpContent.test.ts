@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HELP_GROUP_ORDER, HELP_TOPICS, findHelpTopic, helpTopicForView } from '../content/help';
+import { HELP_GROUP_ORDER, HELP_TOPICS, findHelpTopic, helpTopicForView, helpTopicsFor } from '../content/help';
 import { workspaceCommandRegistry } from '../commands/registry';
 import { HELP_SHOTS } from '../components/help/shots';
 import { LEGAL_CLAIM_KINDS } from '../types/findings';
@@ -20,6 +20,21 @@ describe('help content', () => {
       for (const related of entry.related) expect(ids).toContain(related);
       if (entry.screenshot) expect(HELP_SHOTS[entry.screenshot]).toBeDefined();
     }
+  });
+
+  it('keeps the direct build\'s accounts, payment and updater out of App Store help', () => {
+    for (const distribution of ['app-store', 'direct'] as const) {
+      const topics = helpTopicsFor(distribution);
+      const ids = new Set(topics.map((topic) => topic.id));
+      for (const topic of topics) {
+        expect(topic.sections.length).toBeGreaterThan(0);
+        for (const related of topic.related) expect(ids).toContain(related);
+      }
+    }
+    const appStoreText = helpTopicsFor('app-store')
+      .flatMap((topic) => [topic.title, topic.summary, ...topic.sections.flatMap((s) => [s.heading ?? '', ...(s.paragraphs ?? []), ...(s.items ?? [])])])
+      .join('\n');
+    expect(appStoreText).not.toMatch(/stripe|checkout|trial|subscription|per seat|sign in with|writerslogic account|updates\.writerslogic|~\/\.env|\bbeta\b/i);
   });
 
   it('gives every workspace view a contextual topic that lists it', () => {
