@@ -104,6 +104,10 @@ pub async fn hybrid_search(
         .into_iter()
         .map(|source| (source.registration.portal_key.clone(), source.registration))
         .collect::<std::collections::HashMap<_, _>>();
+    let mut seen = combined
+        .iter()
+        .map(|existing| (existing.portal_key.clone(), existing.request_id))
+        .collect::<std::collections::HashSet<_>>();
     for (rank, result) in lexical.into_iter().enumerate() {
         let source = sources.get(&result.portal_key);
         let jurisdiction = source
@@ -121,9 +125,7 @@ pub async fn hybrid_search(
             continue;
         }
         let stable_id = format!("lexical:{}:{}", result.portal_key, result.request_id);
-        if combined.iter().any(|existing| {
-            existing.portal_key == result.portal_key && existing.request_id == result.request_id
-        }) {
+        if !seen.insert((result.portal_key.clone(), result.request_id)) {
             continue;
         }
         combined.push(HybridSearchResult {
