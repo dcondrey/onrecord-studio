@@ -41,6 +41,7 @@ vi.mock('@tauri-apps/api/core', () => ({
     if (command === 'verify_document_provenance') throw new Error('No fixture provenance');
     if (command === 'get_request_statutory_extension') return null;
     if (command === 'get_affiliation_disclosure') return null;
+    if (command === 'get_meeting_calendar') return { today: '2026-09-13', meetings: [], limitations: [] };
     if (command === 'get_ocr_capability') return { engine: 'fixture', engineAvailable: false, engineVersion: null, languagePacks: [], languageProbeComplete: true, pdfRenderer: null, pdfRendererAvailable: false, pdfRendererVersion: null, imageOcrAvailable: false, pdfOcrAvailable: false, diagnostics: [] };
     if (command === 'start_data_source') return {
       source: { portalKey: 'sd-policies', displayName: 'SDPD policies', canonicalUrl: args.url, originUrl: 'https://www.sandiego.gov', apiLayout: {}, verifiedAt: '2026-09-13T00:00:00Z', sourceKind: 'WEB_CRAWL' },
