@@ -18,8 +18,8 @@ import AutomaticDiscovery from './AutomaticDiscovery';
 import { invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { AgencyPerformanceProfile } from '../../types';
-import FindingsInbox from './FindingsInbox';
-import ChangeFeed from './ChangeFeed';
+import AttentionFeed from './AttentionFeed';
+import SinceControl from './SinceControl';
 import WatchlistPanel from './WatchlistPanel';
 import StandingSearchPanel from './StandingSearchPanel';
 import SubjectDossier from './SubjectDossier';
@@ -72,6 +72,7 @@ export default function OverviewDashboard() {
             ) : analyticsUpdatedAt ? (
               <span className="overview-freshness hidden items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-caption text-muted sm:flex" title={`Analytics updated ${formatRelativeTime(analyticsUpdatedAt)}`}><span className="h-1.5 w-1.5 rounded-full bg-success" /> Live · {formatRelativeTime(analyticsUpdatedAt)}</span>
             ) : null)}
+            {portals.length > 0 && <SinceControl />}
             <button type="button" onClick={() => setWorkspaceView('evidence')} className="secondary-action focus-ring flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border px-3.5 py-2.5 text-label font-semibold text-fg-secondary transition hover:text-accent">
               Review evidence <Icon name="arrow" className="h-3.5 w-3.5" />
             </button>
@@ -93,14 +94,15 @@ export default function OverviewDashboard() {
           <ProfessionalWorkbench key={`${workbench.reportId}:${workbench.review}`} initialReportId={workbench.reportId} initialTab={workbench.review ? 'Evidence review' : 'Cases and follow-through'} />
         </> : <>
           <SubjectDossier />
-          <ChangeFeed />
-          <WatchlistPanel />
-          <StandingSearchPanel />
-          <FindingsInbox />
-          <CrossCorpusExplorer />
+          {portals.length > 0 && <AttentionFeed />}
+          <section aria-label="Following" className="grid grid-cols-1 items-start gap-4 2xl:grid-cols-2">
+            <WatchlistPanel />
+            <StandingSearchPanel />
+          </section>
           <ResearchWorkspace onReview={(reportId) => setWorkbench({ reportId, review: true })} />
           <section className="app-panel flex flex-wrap items-center justify-between gap-3 p-4"><div><h3 className="text-sm font-semibold text-fg">Develop a lead into a durable case</h3><p className="mt-1 text-label leading-4 text-muted">Track requests, productions and commitments; reconcile spending; challenge the evidence.</p></div><button type="button" className="analysis-button" onClick={() => setWorkbench({ reportId: '', review: false })}>Open casework and research tools</button></section>
         </>}
+        <ToolDrawer label="Shared language and topics across corpora"><CrossCorpusExplorer /></ToolDrawer>
         <ToolDrawer label="Topics: encampments, belongings, police spending, public restrooms"><TopicPacks /></ToolDrawer>
         <ToolDrawer label="Plan an investigation or draft a request manually"><InvestigationDesk /></ToolDrawer>
         <ToolDrawer label="Collection, coverage and storage"><AutomaticDiscovery /><div className="mt-4"><DataMaintenance /></div><ResearchSnapshotExport /><RegistrySnapshots /></ToolDrawer>

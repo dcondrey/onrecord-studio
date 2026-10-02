@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { sinceInstant, useAppStore, type SincePreset } from '../../store/useAppStore';
 import { formatShortDate } from '../objects/labels';
 import Icon from '../ui/icons';
@@ -31,8 +32,9 @@ export default function SinceControl() {
   );
 }
 
+/** Fixed when the preset is chosen, so a relative window does not slide (and refetch) on every render. */
 export function useSinceInstant(): string | null {
   const preset = useAppStore((state) => state.sincePreset);
   const previousOpenAt = useAppStore((state) => state.previousOpenAt);
-  return sinceInstant(preset, previousOpenAt);
+  return useMemo(() => sinceInstant(preset, previousOpenAt), [preset, previousOpenAt]);
 }
