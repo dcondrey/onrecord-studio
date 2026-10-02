@@ -1,0 +1,57 @@
+{
+  "manifestCanonicalBase64": "eyJzY2hlbWFWZXJzaW9uIjoib25yZWNvcmQtcmVxdWVzdC1maWxpbmctcmVjb3JkLXYxIiwiZ2VuZXJhdGVkQXQiOiIyMDI2LTEwLTAyVDEyOjAwOjAwWiIsImNhc2VJZCI6ImNhc2UtZml4dHVyZSIsImNhc2VSZXZpc2lvbiI6MiwicmVxdWVzdElkIjoicmVxdWVzdC0wIiwidGl0bGUiOiJNb250aGx5IHBlcmZvcm1hbmNlIHJlcG9ydHMiLCJjdXN0b2RpYW4iOiJIb3VzaW5nIENvbW1pc3Npb24iLCJleHRlcm5hbFJlZmVyZW5jZSI6IiIsImZpbGVkQXQiOiIyMDI2LTA5LTAxIiwicmVxdWVzdFRleHQiOiJUbzogSG91c2luZyBDb21taXNzaW9uXG5TdWJqZWN0OiBDYWxpZm9ybmlhIFB1YmxpYyBSZWNvcmRzIEFjdCByZXF1ZXN0IOKAlCBNb250aGx5IHBlcmZvcm1hbmNlIHJlcG9ydHNcblxuVW5kZXIgdGhlIENhbGlmb3JuaWEgUHVibGljIFJlY29yZHMgQWN0IEkgcmVxdWVzdCB0aGUgZm9sbG93aW5nIGRpc2Nsb3NhYmxlIHB1YmxpYyByZWNvcmRzIGluIHlvdXIgYWdlbmN5J3MgcG9zc2Vzc2lvbiwgY3VzdG9keSBvciBjb250cm9sLlxuXG5SZWNvcmRzIHJlcXVlc3RlZDpcbi0gTW9udGhseSBwZXJmb3JtYW5jZSByZXBvcnRzXG5cbkZpZWxkcyBvciBkYXRhIGVsZW1lbnRzIHNvdWdodCB3aXRoaW4gdGhvc2UgcmVjb3Jkczpcbi0gTm8gZmllbGQgd2FzIHJlY29yZGVkIHdpdGggdGhpcyByZXF1ZXN0OyB0aGUgcmVxdWVzdCBpcyBmb3IgdGhlIHJlY29yZHMgYXMga2VwdC5cblxuUGVyaW9kOiBub3Qgc3RhdGVkLiBObyBwZXJpb2Qgd2FzIHJlY29yZGVkIHdpdGggdGhpcyByZXF1ZXN0LlxuXG5SZWNvcmRzIGFscmVhZHkgaW4gbXkgcG9zc2Vzc2lvbiB0aGF0IGlkZW50aWZ5IHRoZSByZWNvcmRzIHJlcXVlc3RlZCBhYm92ZTpcbi0gU2hlbHRlciBjb250cmFjdCBhbmQgYWdlbmRhIChTSEEtMjU2IGFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEpXG5cbkRldGVybWluYXRpb246IENhbGlmb3JuaWEgR292ZXJubWVudCBDb2RlIMKnIDc5MjIuNTM1IHJlcXVpcmVzIGEgZGV0ZXJtaW5hdGlvbiB3aGV0aGVyIHRoaXMgcmVxdWVzdCBzZWVrcyBkaXNjbG9zYWJsZSByZWNvcmRzLCBhbmQgcHJvbXB0IG5vdGljZSBvZiB0aGF0IGRldGVybWluYXRpb24gYW5kIGl0cyByZWFzb25zLCB3aXRoaW4gMTAgY2FsZW5kYXIgZGF5cyBvZiByZWNlaXB0LCB3aGVyZSBhIGxhc3QgZGF5IG9uIGEgU2F0dXJkYXksIFN1bmRheSBvciBqdWRpY2lhbCBob2xpZGF5IG1vdmVzIHRvIHRoZSBuZXh0IGNvdXJ0IGRheSAoQ29kZSBDaXYuIFByb2MuIMKnwqcgMTIsIDEyYSwgMTM1KTsgZGF5cyBwcm9jbGFpbWVkIGFkIGhvYyBhcmUgbm90IG1vZGVsZWQuIEEgc2luZ2xlIHdyaXR0ZW4gZXh0ZW5zaW9uIG9mIHVwIHRvIDE0IGRheXMgaXMgYXZhaWxhYmxlIG9ubHkgb24gd3JpdHRlbiBub3RpY2Ugc3RhdGluZyBhIHJlYXNvbiB0aGUgc3RhdHV0ZSByZWNvZ25pemVzLlxuXG5QbGVhc2UgcHJvZHVjZSByZWNvcmRzIGluIHRoZSBlbGVjdHJvbmljIGZvcm1hdCBpbiB3aGljaCB0aGV5IGFyZSBrZXB0LCBpZGVudGlmeSBhbnkgd2l0aGhlbGQgcmVjb3JkIG9yIHBvcnRpb24gYW5kIHRoZSBleGVtcHRpb24gY2xhaW1lZCBmb3IgaXQsIGFuZCBwcm92aWRlIGFsbCByZWFzb25hYmx5IHNlZ3JlZ2FibGUgcmVzcG9uc2l2ZSBtYXRlcmlhbC4gSWYgYW55IHJlcXVlc3RlZCByZWNvcmQgZG9lcyBub3QgZXhpc3QsIHBsZWFzZSBzYXkgc28gZXhwcmVzc2x5IHJhdGhlciB0aGFuIG9taXR0aW5nIGl0IGZyb20gdGhlIHJlc3BvbnNlLlxuXG5XaGF0IHRoZXNlIHJlY29yZHMgd291bGQgZXN0YWJsaXNoOiBEZWxpdmVyZWQgc2VydmljZSB2b2x1bWVcblxuRHJhZnQgZm9yIHJldmlldzsgdGhpcyBhcHBsaWNhdGlvbiBzZW5kcyBub3RoaW5nLiIsInJlcXVlc3RUZXh0U2hhMjU2IjoiNzFjMjFhMzFiZGRmOTNiNGJjZmM4N2ZjYTM4NGIwMjZiZjZhYzhmNTFlNTY2MzNjNDEzMGViZTE2ZTIyNmJmYSIsImV4cGVjdGVkUmVjb3JkVHlwZXMiOlsiTW9udGhseSBwZXJmb3JtYW5jZSByZXBvcnRzIl0sImV4cGVjdGVkRmllbGRzIjpbXSwiZXhwZWN0ZWRQZXJpb2QiOiIiLCJpZGVudGlmeWluZ1NvdXJjZXMiOlt7ImxhYmVsIjoiU2hlbHRlciBjb250cmFjdCBhbmQgYWdlbmRhIiwic291cmNlU2hhMjU2IjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYSIsInZlcmlmaWNhdGlvbiI6IlNBVkVEX1JFUE9SVCJ9XSwiZmlsaW5nUGxhbiI6eyJzdGF0dXRlQ2l0YXRpb24iOiJDYWxpZm9ybmlhIEdvdmVybm1lbnQgQ29kZSDCpyA3OTIyLjUzNSIsImV2YWx1YXRlZEF0IjoiMjAyNi0xMC0wMiIsImZpbGVkT24iOiIyMDI2LTA5LTAxIiwiZGV0ZXJtaW5hdGlvbkR1ZU9uIjoiMjAyNi0wOS0xMSIsImNhbGVuZGFyRGF5c0VsYXBzZWQiOjMxLCJhbGxvd2VkQ2FsZW5kYXJEYXlzIjoxMCwiZGV0ZXJtaW5hdGlvbkJhc2lzIjoiT0JTRVJWQVRJT05fV0lUSE9VVF9SRUNPUkRFRF9BQ1RJVklUWSIsIm1lYXN1cmVkVG8iOm51bGwsImRlYWRsaW5lUGFzc2VkV2l0aG91dFJlY29yZGVkUmVzcG9uc2UiOnRydWUsImZvbGxvd1VwcyI6W3sidHJpZ2dlciI6IkRFVEVSTUlOQVRJT05fT1ZFUkRVRSIsInNjaGVkdWxlZEZvciI6IjIwMjYtMDktMTEiLCJyYXRpb25hbGUiOiIzMSBjYWxlbmRhciBkYXlzIGVsYXBzZWQgYWdhaW5zdCAxMCBhbGxvd2VkIHVuZGVyIENhbGlmb3JuaWEgR292ZXJubWVudCBDb2RlIMKnIDc5MjIuNTM1LCB3aGVyZSBhIGxhc3QgZGF5IG9uIGEgU2F0dXJkYXksIFN1bmRheSBvciBqdWRpY2lhbCBob2xpZGF5IG1vdmVzIHRvIHRoZSBuZXh0IGNvdXJ0IGRheSAoQ29kZSBDaXYuIFByb2MuIMKnwqcgMTIsIDEyYSwgMTM1KTsgZGF5cyBwcm9jbGFpbWVkIGFkIGhvYyBhcmUgbm90IG1vZGVsZWQuIE5vdGhpbmcgd2FzIHJlY29yZGVkIGF0IG9yIGFmdGVyIGZpbGluZywgc28gdGhlIHBlcmlvZCB3YXMgbWVhc3VyZWQgdG8gdG9kYXkgYW5kIGlzIHN0aWxsIHJ1bm5pbmc7IHRoaXMgc3RhdGVzIG9ubHkgdGhhdCB0aGUgZGVhZGxpbmUgcGFzc2VkIHdpdGggbm8gcmVjb3JkZWQgcmVzcG9uc2UuIn1dfSwicmVtYWluaW5nT21pc3Npb25zIjpbIkV4cGVjdGVkIHJlY29yZCBub3QgeWV0IHJlY29yZGVkIGFzIHByb2R1Y2VkOiBNb250aGx5IHBlcmZvcm1hbmNlIHJlcG9ydHMiXX0=",
+  "manifestSha256": "3864fc3bc40caa69e6f344b175bf5857a13b5c30227371dcc39a4a950c641a07",
+  "manifest": {
+    "schemaVersion": "onrecord-request-filing-record-v1",
+    "generatedAt": "2026-10-02T12:00:00Z",
+    "caseId": "case-fixture",
+    "caseRevision": 2,
+    "requestId": "request-0",
+    "title": "Monthly performance reports",
+    "custodian": "Housing Commission",
+    "externalReference": "",
+    "filedAt": "2026-09-01",
+    "requestText": "To: Housing Commission\nSubject: California Public Records Act request — Monthly performance reports\n\nUnder the California Public Records Act I request the following disclosable public records in your agency's possession, custody or control.\n\nRecords requested:\n- Monthly performance reports\n\nFields or data elements sought within those records:\n- No field was recorded with this request; the request is for the records as kept.\n\nPeriod: not stated. No period was recorded with this request.\n\nRecords already in my possession that identify the records requested above:\n- Shelter contract and agenda (SHA-256 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)\n\nDetermination: California Government Code § 7922.535 requires a determination whether this request seeks disclosable records, and prompt notice of that determination and its reasons, within 10 calendar days of receipt, where a last day on a Saturday, Sunday or judicial holiday moves to the next court day (Code Civ. Proc. §§ 12, 12a, 135); days proclaimed ad hoc are not modeled. A single written extension of up to 14 days is available only on written notice stating a reason the statute recognizes.\n\nPlease produce records in the electronic format in which they are kept, identify any withheld record or portion and the exemption claimed for it, and provide all reasonably segregable responsive material. If any requested record does not exist, please say so expressly rather than omitting it from the response.\n\nWhat these records would establish: Delivered service volume\n\nDraft for review; this application sends nothing.",
+    "requestTextSha256": "71c21a31bddf93b4bcfc87fca384b026bf6ac8f51e56633c4130ebe16e226bfa",
+    "expectedRecordTypes": [
+      "Monthly performance reports"
+    ],
+    "expectedFields": [],
+    "expectedPeriod": "",
+    "identifyingSources": [
+      {
+        "label": "Shelter contract and agenda",
+        "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "verification": "SAVED_REPORT"
+      }
+    ],
+    "filingPlan": {
+      "statuteCitation": "California Government Code § 7922.535",
+      "evaluatedAt": "2026-10-02",
+      "filedOn": "2026-09-01",
+      "determinationDueOn": "2026-09-11",
+      "calendarDaysElapsed": 31,
+      "allowedCalendarDays": 10,
+      "determinationBasis": "OBSERVATION_WITHOUT_RECORDED_ACTIVITY",
+      "measuredTo": null,
+      "deadlinePassedWithoutRecordedResponse": true,
+      "followUps": [
+        {
+          "trigger": "DETERMINATION_OVERDUE",
+          "scheduledFor": "2026-09-11",
+          "rationale": "31 calendar days elapsed against 10 allowed under California Government Code § 7922.535, where a last day on a Saturday, Sunday or judicial holiday moves to the next court day (Code Civ. Proc. §§ 12, 12a, 135); days proclaimed ad hoc are not modeled. Nothing was recorded at or after filing, so the period was measured to today and is still running; this states only that the deadline passed with no recorded response."
+        }
+      ]
+    },
+    "remainingOmissions": [
+      "Expected record not yet recorded as produced: Monthly performance reports"
+    ]
+  },
+  "signature": {
+    "algorithm": "Ed25519",
+    "publicKeyHex": "66be7e332c7a453332bd9d0a7f7db055f5c5ef1a06ada66d98b39fb6810c473a",
+    "signerKeyId": "fdf72a088f18f7399e8c52bce448441501f759a595a86980e5d9a422a01e5d55",
+    "signatureHex": "dc21c1c7a4c56388b6b9a027bdad0afc56b87b5ac0cf69317a93db31dd433a64022d7a7a8644c5be6626a86f12fb237b4203e63453ff784033e69c628c42270c",
+    "identityAssurance": "SELF_MANAGED_LOCAL_KEY_NOT_EXTERNALLY_ATTESTED"
+  }
+}

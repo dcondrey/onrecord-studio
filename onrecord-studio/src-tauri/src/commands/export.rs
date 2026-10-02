@@ -29,6 +29,11 @@ const REPORT_TEMPLATE: &str = include_str!("../../../templates/report_template.m
 /// opposing party who receives an exported package has no checkout to run it from.
 const VERIFIER_SCRIPT: &str = include_str!("../../../scripts/verify-evidence-package.mjs");
 const VERIFIER_SCRIPT_FILE: &str = "verify-evidence-package.mjs";
+/// The same checks as the script, for a recipient who has a browser but not Node. Self-contained
+/// and network-free by construction (its own CSP forbids any fetch), so it can be opened from a
+/// file:// path or handed over on media with the package.
+const VERIFIER_PAGE: &str = include_str!("../../../scripts/verify-evidence-package.html");
+const VERIFIER_PAGE_FILE: &str = "verify-evidence-package.html";
 const MAXIMUM_REPORT_BYTES: usize = 32 * 1024 * 1024;
 const MAXIMUM_EVIDENCE_PACKAGE_BYTES: usize = 64 * 1024 * 1024;
 const MAXIMUM_CASE_EVIDENCE_PACKAGE_BYTES: usize = 8 * 1024 * 1024;
@@ -227,7 +232,7 @@ pub async fn export_legal_brief(
         )));
     }
     let signing_key = load_or_create_signing_key(&key_directory.0).await?;
-    let verifier_script_path = ensure_verifier_script(&report_directory).await?;
+    let verifiers = ensure_verifier_script(&report_directory).await?;
     let manifest = validate_evidence_manifest(EvidencePackageManifest {
         schema_version: EVIDENCE_PACKAGE_SCHEMA.to_string(),
         generated_at: generated_at.clone(),
@@ -307,7 +312,8 @@ pub async fn export_legal_brief(
         signer_key_id: package.signature.signer_key_id,
         generated_at,
         included_violation_markers: markers,
-        verifier_script_path: verifier_script_path.to_string_lossy().into_owned(),
+        verifier_script_path: verifiers.script_path.to_string_lossy().into_owned(),
+        verifier_page_path: verifiers.page_path.to_string_lossy().into_owned(),
     };
     if let Err(error) = repository.record_report_export(&result).await {
         let report_cleanup = tokio::fs::remove_file(&output_path).await.err();
@@ -353,7 +359,7 @@ pub async fn export_case_evidence_package(
     // position in the case's append-only export chain.
     let output_path = validate_report_path(&target_path, &report_directory, "json").await?;
     let signing_key = load_or_create_signing_key(&key_directory.0).await?;
-    let verifier_script_path = ensure_verifier_script(&report_directory).await?;
+    let verifiers = ensure_verifier_script(&report_directory).await?;
     let generated_at = chrono::Utc::now().to_rfc3339();
     let package = repository
         .export_case_evidence_package_signed(
@@ -427,7 +433,8 @@ pub async fn export_case_evidence_package(
             .collect(),
         ledger_sequence: sequence,
         previous_export_sha256: package.manifest.previous_export_sha256,
-        verifier_script_path: verifier_script_path.to_string_lossy().into_owned(),
+        verifier_script_path: verifiers.script_path.to_string_lossy().into_owned(),
+        verifier_page_path: verifiers.page_path.to_string_lossy().into_owned(),
     })
 }
 
@@ -460,7 +467,7 @@ pub async fn export_request_filing_record(
     });
     let output_path = validate_report_path(&target_path, &report_directory, "json").await?;
     let signing_key = load_or_create_signing_key(&key_directory.0).await?;
-    let verifier_script_path = ensure_verifier_script(&report_directory).await?;
+    let verifiers = ensure_verifier_script(&report_directory).await?;
     let generated_at = chrono::Utc::now().to_rfc3339();
     let package = repository
         .sign_request_filing_record(
@@ -489,7 +496,8 @@ pub async fn export_request_filing_record(
         generated_at,
         determination_due_on: package.manifest.filing_plan.determination_due_on,
         remaining_omissions: package.manifest.remaining_omissions,
-        verifier_script_path: verifier_script_path.to_string_lossy().into_owned(),
+        verifier_script_path: verifiers.script_path.to_string_lossy().into_owned(),
+        verifier_page_path: verifiers.page_path.to_string_lossy().into_owned(),
     })
 }
 
@@ -747,14 +755,26 @@ fn is_sha256(value: &str) -> bool {
 /// always has a runnable path, never a reference to this repository's working tree. Overwritten on
 /// every export rather than left stale, since the verifier ships with the app and can change
 /// between versions; it never depends on anything exported alongside it.
-async fn ensure_verifier_script(report_directory: &Path) -> Result<PathBuf, AppError> {
-    let path = report_directory.join(VERIFIER_SCRIPT_FILE);
-    tokio::fs::write(&path, VERIFIER_SCRIPT)
+async fn ensure_verifier_script(report_directory: &Path) -> Result<EmittedVerifiers, AppError> {
+    let script_path = report_directory.join(VERIFIER_SCRIPT_FILE);
+    tokio::fs::write(&script_path, VERIFIER_SCRIPT)
         .await
         .map_err(|error| {
             AppError::Export(format!("Failed to write the verifier script: {error}"))
         })?;
-    Ok(path)
+    let page_path = report_directory.join(VERIFIER_PAGE_FILE);
+    tokio::fs::write(&page_path, VERIFIER_PAGE)
+        .await
+        .map_err(|error| AppError::Export(format!("Failed to write the verifier page: {error}")))?;
+    Ok(EmittedVerifiers {
+        script_path,
+        page_path,
+    })
+}
+
+struct EmittedVerifiers {
+    script_path: PathBuf,
+    page_path: PathBuf,
 }
 
 fn reportable_markers(
@@ -1126,9 +1146,46 @@ mod tests {
     use crate::types::casework::{CaseworkCase, CaseworkCitation};
     use ed25519_dalek::SigningKey;
 
-    // The cross-language fixture test now lives in `storage::casework::tests`, alongside
-    // `export_case_evidence_package_signed` — the manifest it locks is built there, through the
-    // real repository (`read_case`/`refresh_evidence` and the export ledger), not hand-constructed.
+    /// Locks the bytes the browser verifier (`scripts/verify-evidence-package.html`, exercised by
+    /// `src/tests/staticPackageVerifier.test.ts`) is tested against for this schema. Regenerate the
+    /// committed fixture from this same construction if the package layout changes deliberately.
+    #[test]
+    fn evidence_package_bytes_match_the_committed_browser_verifier_fixture() {
+        let report = "# Evidence report\n".to_string();
+        let manifest = validate_evidence_manifest(EvidencePackageManifest {
+            schema_version: EVIDENCE_PACKAGE_SCHEMA.to_string(),
+            generated_at: "2026-10-02T12:00:00Z".to_string(),
+            request_id: 7,
+            portal_key: "records".to_string(),
+            report: PackagedReport {
+                file_name: "report.md".to_string(),
+                media_type: "text/markdown; charset=utf-8".to_string(),
+                sha256: sha256_hex(report.as_bytes()),
+                content: report,
+            },
+            source_documents: vec![PackagedSourceDocument {
+                document_id: 9,
+                file_size: Some(12),
+                visibility: "public".to_string(),
+                raw_file_sha256: Some(sha256_hex(b"source")),
+                extracted_text_sha256: Some(sha256_hex(b"text")),
+            }],
+            legal_authorities: Vec::new(),
+            legal_findings: Vec::new(),
+            violation_markers: vec!["STATUTORY_LATENCY_VIOLATION".to_string()],
+        })
+        .unwrap();
+        let key = SigningKey::from_bytes(&[11_u8; 32]);
+        let package = sign_package(manifest, &key).unwrap();
+        verify_package(&package).expect("the generated fixture must self-verify");
+        assert_eq!(
+            String::from_utf8_lossy(&serde_json::to_vec_pretty(&package).unwrap()),
+            String::from_utf8_lossy(include_bytes!(
+                "../../tests/fixtures/evidence-package-v3-fixture.json"
+            )),
+            "the signed package's byte layout has changed; see this test's doc comment"
+        );
+    }
 
     #[test]
     fn signed_package_is_externally_verifiable_and_tamper_evident() {

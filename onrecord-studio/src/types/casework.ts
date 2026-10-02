@@ -36,7 +36,7 @@ export interface FilingIdentifyingSource { label: string; sourceSha256: string; 
 export interface RequestFilingRecordResult {
   caseId: string; requestId: string; outputPath: string; packageSha256: string;
   signatureAlgorithm: string; signerKeyId: string; generatedAt: string;
-  determinationDueOn: string; remainingOmissions: string[]; verifierScriptPath: string;
+  determinationDueOn: string; remainingOmissions: string[]; verifierScriptPath: string; verifierPagePath: string;
 }
 export interface CaseworkDecision {
   id: string; body: string; date: string; agendaItem: string; proposedDecision: string;

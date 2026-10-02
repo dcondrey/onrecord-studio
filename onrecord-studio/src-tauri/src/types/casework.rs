@@ -253,6 +253,7 @@ pub struct RequestFilingRecordResult {
     pub determination_due_on: String,
     pub remaining_omissions: Vec<String>,
     pub verifier_script_path: String,
+    pub verifier_page_path: String,
 }
 /// One entry of a case's local export ledger, joined with its recorded outcome (if any). `outcome`
 /// is `"RESERVED"` when a sequence position was signed and committed to the chain but no outcome

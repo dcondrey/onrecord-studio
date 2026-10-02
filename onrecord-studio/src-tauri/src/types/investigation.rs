@@ -288,6 +288,7 @@ pub struct LegalBriefExportResult {
     pub generated_at: String,
     pub included_violation_markers: Vec<String>,
     pub verifier_script_path: String,
+    pub verifier_page_path: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -306,6 +307,7 @@ pub struct CaseEvidencePackageResult {
     pub ledger_sequence: u64,
     pub previous_export_sha256: Option<String>,
     pub verifier_script_path: String,
+    pub verifier_page_path: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

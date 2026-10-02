@@ -290,6 +290,7 @@ export interface LegalBriefExportResult {
   generatedAt: string;
   includedViolationMarkers: string[];
   verifierScriptPath: string;
+  verifierPagePath: string;
 }
 
 export interface CaseEvidencePackageResult {
@@ -306,6 +307,7 @@ export interface CaseEvidencePackageResult {
   ledgerSequence: number;
   previousExportSha256: string | null;
   verifierScriptPath: string;
+  verifierPagePath: string;
 }
 
 export interface PackageVerificationResult {

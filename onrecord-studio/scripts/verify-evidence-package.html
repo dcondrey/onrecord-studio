@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- `default-src 'none'` is the structural guarantee, not a convenience: this page must never be
+     able to send a package anyone opens in it anywhere, and must never load code it did not ship
+     with. Everything it needs is inline below. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'">
+<title>OnRecord Studio package verifier</title>
+<style>
+body { font: 15px/1.5 system-ui, sans-serif; margin: 2rem auto; max-width: 48rem; color: #0f172a; }
+h1 { font-size: 1.3rem; }
+.scope { border: 1px solid #c7d2fe; background: #eef2ff; padding: .75rem 1rem; border-radius: .4rem; }
+.pass { color: #166534; } .fail { color: #9f1239; }
+.overall { font-weight: 700; margin-top: 1rem; }
+ul { padding-left: 1.2rem; } code { font-size: .9em; word-break: break-all; }
+</style>
+</head>
+<body>
+<h1>Verify a signed OnRecord Studio package</h1>
+<p class="scope" id="scope">
+This page checks <strong>internal consistency only</strong>: that the package&rsquo;s signed manifest
+bytes hash to the SHA-256 recorded in the file, that the Ed25519 signature over those bytes verifies
+against the public key carried in the same file, and that the human-readable
+<code>manifest</code> field matches the signed bytes. The signing key is self-managed by the
+installation that produced the package and is <strong>not externally attested</strong>, so a pass
+proves the bytes are unaltered since that installation signed them &mdash; it does
+<strong>not</strong> prove who signed, and it makes no claim inside the manifest true. Nothing is
+uploaded: this page has no network access.
+</p>
+<p><input type="file" id="package-file" accept=".json,application/json"></p>
+<div id="result"></div>
+<script>
+'use strict';
+// Every package type shares one signed envelope, so the three cryptographic checks below are
+// schema-independent. The schema is still read from the *signed* bytes and reported, because a
+// reader needs to know which kind of record passed.
+const RECOGNIZED_SCHEMAS = {
+  'onrecord-evidence-package-v3': 'legal brief evidence package',
+  'onrecord-request-filing-record-v1': 'records-request filing record',
+  'onrecord-case-evidence-package-v2': 'case chain-of-custody package',
+  'onrecord-signing-key-revocations-v1': 'signing-key revocation list',
+};
+const SELF_MANAGED_KEY = 'SELF_MANAGED_LOCAL_KEY_NOT_EXTERNALLY_ATTESTED';
+
+function hexToBytes(hex) {
+  if (typeof hex !== 'string' || hex.length % 2 !== 0 || !/^[0-9a-f]*$/i.test(hex)) {
+    throw new Error('not a hex string');
+  }
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i += 1) bytes[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return bytes;
+}
+
+function base64ToBytes(value) {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+async function sha256Hex(bytes) {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  return Array.from(digest, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function deepEqual(a, b) {
+  if (a === b) return true;
+  if (typeof a !== typeof b || a === null || b === null || typeof a !== 'object') return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const keys = Object.keys(a);
+  if (keys.length !== Object.keys(b).length) return false;
+  return keys.every((key) => deepEqual(a[key], b[key]));
+}
+
+// The signature block sits outside the signed bytes, so the key id a reader is shown must be
+// derived from the key that actually verified; otherwise any key could claim any id.
+async function signatureBlockBound(signature, publicKeyBytes) {
+  return (
+    signature.algorithm === 'Ed25519' &&
+    signature.identityAssurance === SELF_MANAGED_KEY &&
+    (await sha256Hex(publicKeyBytes)) === String(signature.signerKeyId).toLowerCase()
+  );
+}
+
+async function verifyPackage(text) {
+  let package_;
+  try {
+    package_ = JSON.parse(text);
+  } catch (error) {
+    return { passed: false, checks: [], schemaVersion: null, signerKeyId: null, problem: `This file is not JSON: ${error.message}` };
+  }
+  for (const field of ['manifestCanonicalBase64', 'manifestSha256', 'manifest', 'signature']) {
+    if (!(field in (package_ ?? {}))) {
+      return { passed: false, checks: [], schemaVersion: null, signerKeyId: null, problem: `Missing "${field}": this is not a signed package this application produced, or it predates the embedded-canonical-bytes format.` };
+    }
+  }
+
+  const checks = [];
+  let canonicalBytes = null;
+  try {
+    canonicalBytes = base64ToBytes(package_.manifestCanonicalBase64);
+  } catch {
+    canonicalBytes = null;
+  }
+  const hashMatches =
+    canonicalBytes !== null && (await sha256Hex(canonicalBytes)) === package_.manifestSha256;
+  checks.push({ passed: hashMatches, label: 'The signed manifest bytes hash to the recorded manifestSha256' });
+
+  let signatureValid = false;
+  try {
+    const publicKeyBytes = hexToBytes(package_.signature.publicKeyHex);
+    const key = await crypto.subtle.importKey('raw', publicKeyBytes, { name: 'Ed25519' }, false, ['verify']);
+    signatureValid =
+      canonicalBytes !== null &&
+      (await signatureBlockBound(package_.signature, publicKeyBytes)) &&
+      (await crypto.subtle.verify('Ed25519', key, hexToBytes(package_.signature.signatureHex), canonicalBytes));
+  } catch {
+    signatureValid = false;
+  }
+  checks.push({ passed: signatureValid, label: 'The Ed25519 signature over those bytes verifies against the embedded public key, whose SHA-256 is the signer key id' });
+
+  // Read the manifest only from the verified bytes: `manifest` is unsigned JSON sitting beside the
+  // signature, so a schema or a finding taken from it directly would be attacker-chosen.
+  let signedManifest = null;
+  try {
+    signedManifest = JSON.parse(new TextDecoder().decode(canonicalBytes));
+  } catch {
+    signedManifest = null;
+  }
+  const manifestConsistent = signedManifest !== null && deepEqual(signedManifest, package_.manifest);
+  checks.push({ passed: manifestConsistent, label: 'The readable "manifest" field matches the signed bytes structurally' });
+
+  const schemaVersion = manifestConsistent ? (signedManifest.schemaVersion ?? null) : null;
+  return {
+    passed: checks.every((check) => check.passed),
+    checks,
+    schemaVersion,
+    schemaLabel: schemaVersion ? (RECOGNIZED_SCHEMAS[schemaVersion] ?? null) : null,
+    signerKeyId: signatureValid ? package_.signature.signerKeyId : null,
+    problem: null,
+  };
+}
+
+function render(result, fileName) {
+  const target = document.getElementById('result');
+  if (result.problem) {
+    target.innerHTML = `<p class="fail"><strong>Cannot verify ${fileName}:</strong> ${result.problem}</p>`;
+    return;
+  }
+  const rows = result.checks
+    .map((check) => `<li class="${check.passed ? 'pass' : 'fail'}">${check.passed ? 'PASS' : 'FAIL'} &mdash; ${check.label}</li>`)
+    .join('');
+  const schema = result.schemaVersion
+    ? `<p>Signed record type: <code>${result.schemaVersion}</code>${result.schemaLabel ? ` (${result.schemaLabel})` : ' &mdash; a type this page does not recognize; the checks above still hold, but read the manifest itself with care'}.</p>`
+    : '';
+  const signer = result.signerKeyId
+    ? `<p>Signed by local key <code>${result.signerKeyId}</code>. That key is not attested by anyone: it identifies the installation&rsquo;s key, not a person or organization.</p>`
+    : '';
+  target.innerHTML = `<h2>${fileName}</h2><ul>${rows}</ul>${schema}${signer}<p class="overall ${result.passed ? 'pass' : 'fail'}">${result.passed ? 'PASS \u2014 internally consistent and unaltered since signing. This is not a statement about who signed it or about the truth of its contents.' : 'FAIL \u2014 treat this package as unverified.'}</p>`;
+}
+
+if (typeof document !== 'undefined' && document.getElementById('package-file')) {
+  document.getElementById('package-file').addEventListener('change', async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    render(await verifyPackage(await file.text()), file.name);
+  });
+}
+globalThis.onrecordPackageVerifier = { verifyPackage };
+</script>
+</body>
+</html>

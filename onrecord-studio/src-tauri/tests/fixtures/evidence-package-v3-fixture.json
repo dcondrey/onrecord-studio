@@ -1,0 +1,37 @@
+{
+  "manifestCanonicalBase64": "eyJzY2hlbWFWZXJzaW9uIjoib25yZWNvcmQtZXZpZGVuY2UtcGFja2FnZS12MyIsImdlbmVyYXRlZEF0IjoiMjAyNi0xMC0wMlQxMjowMDowMFoiLCJyZXF1ZXN0SWQiOjcsInBvcnRhbEtleSI6InJlY29yZHMiLCJyZXBvcnQiOnsiZmlsZU5hbWUiOiJyZXBvcnQubWQiLCJtZWRpYVR5cGUiOiJ0ZXh0L21hcmtkb3duOyBjaGFyc2V0PXV0Zi04Iiwic2hhMjU2IjoiNzY3ZDQzZjYxMTU5MTMxOGNmYWQ0YjQwYWJkN2Q2YWZlMThkNzZjYTc4YWNjZjc0MDk2ODRlODI4MWQ2ZjNhZSIsImNvbnRlbnQiOiIjIEV2aWRlbmNlIHJlcG9ydFxuIn0sInNvdXJjZURvY3VtZW50cyI6W3siZG9jdW1lbnRJZCI6OSwiZmlsZVNpemUiOjEyLCJ2aXNpYmlsaXR5IjoicHVibGljIiwicmF3RmlsZVNoYTI1NiI6IjQxY2Y2Nzk0YmE0MjAwYjgzOWM1MzUzMTU1NWYwZjM5OThkZjRjYmIwMWE0ZDVjYjBiOTRlM2NhNWUyMzk0N2QiLCJleHRyYWN0ZWRUZXh0U2hhMjU2IjoiOTgyZDllM2ViOTk2ZjU1OWU2MzNmNGQxOTRkZWYzNzYxZDkwOWY1YTNiNjQ3ZDFhODUxZmVhZDY3YzMyYzlkMSJ9XSwibGVnYWxBdXRob3JpdGllcyI6W10sImxlZ2FsRmluZGluZ3MiOltdLCJ2aW9sYXRpb25NYXJrZXJzIjpbIlNUQVRVVE9SWV9MQVRFTkNZX1ZJT0xBVElPTiJdfQ==",
+  "manifestSha256": "f2c0515ec701ebddccdeffbb449c1cf5641ba9ecfb9a3a503b3c918c7037abfe",
+  "manifest": {
+    "schemaVersion": "onrecord-evidence-package-v3",
+    "generatedAt": "2026-10-02T12:00:00Z",
+    "requestId": 7,
+    "portalKey": "records",
+    "report": {
+      "fileName": "report.md",
+      "mediaType": "text/markdown; charset=utf-8",
+      "sha256": "767d43f611591318cfad4b40abd7d6afe18d76ca78accf7409684e8281d6f3ae",
+      "content": "# Evidence report\n"
+    },
+    "sourceDocuments": [
+      {
+        "documentId": 9,
+        "fileSize": 12,
+        "visibility": "public",
+        "rawFileSha256": "41cf6794ba4200b839c53531555f0f3998df4cbb01a4d5cb0b94e3ca5e23947d",
+        "extractedTextSha256": "982d9e3eb996f559e633f4d194def3761d909f5a3b647d1a851fead67c32c9d1"
+      }
+    ],
+    "legalAuthorities": [],
+    "legalFindings": [],
+    "violationMarkers": [
+      "STATUTORY_LATENCY_VIOLATION"
+    ]
+  },
+  "signature": {
+    "algorithm": "Ed25519",
+    "publicKeyHex": "66be7e332c7a453332bd9d0a7f7db055f5c5ef1a06ada66d98b39fb6810c473a",
+    "signerKeyId": "fdf72a088f18f7399e8c52bce448441501f759a595a86980e5d9a422a01e5d55",
+    "signatureHex": "7eecc521336081adaebed649ddb7c0d3cf26bd540d8ca941095b1c45b9f091af27f5f9c61387e48c2683184395b76b0a9e76e7a83532b7bb0806a8a7a380db0f",
+    "identityAssurance": "SELF_MANAGED_LOCAL_KEY_NOT_EXTERNALLY_ATTESTED"
+  }
+}

@@ -641,7 +641,7 @@ fn validate(
             return Err(invalid("This request still has unresolved expected records, fields or periods. Keep it partial or resolve the omissions."));
         }
         r.follow_up_draft = follow_up(r);
-        compile_request(r, &case.evidence)?;
+        compile_request(r, &case.evidence, &now())?;
     }
     for d in &mut case.decisions {
         check_id(&d.id)?;
@@ -770,7 +770,14 @@ pub fn request_omissions(request: &CaseworkRequest) -> Vec<String> {
 }
 /// Recomputes a request's CPRA draft and its statutory clock, so neither can be edited into
 /// disagreeing with the request's own recorded scope, citations and submission date.
-fn compile_request(r: &mut CaseworkRequest, evidence: &[CaseworkCitation]) -> Result<(), AppError> {
+/// `observed_at` is the instant the clock is counted to: the save instant on a save, the record's
+/// own generation instant on a signed filing record, so a record's bytes do not depend on when the
+/// test or the reader happens to run.
+fn compile_request(
+    r: &mut CaseworkRequest,
+    evidence: &[CaseworkCitation],
+    observed_at: &str,
+) -> Result<(), AppError> {
     let identified_by = r
         .citation_ids
         .iter()
@@ -797,7 +804,7 @@ fn compile_request(r: &mut CaseworkRequest, evidence: &[CaseworkCitation]) -> Re
                 .map(|p| p.received_at.clone())
                 .collect::<Vec<_>>(),
             &request_omissions(r),
-            &now(),
+            observed_at,
         )?),
         None => None,
     };
@@ -1148,7 +1155,7 @@ if case.report_id!=prior.report_id||case.topic!=prior.topic{return Err(invalid("
                 ));
             };
             let mut request = request;
-            compile_request(&mut request, &case.evidence)?;
+            compile_request(&mut request, &case.evidence, &generated_at)?;
             let filing_plan = request
                 .filing_plan
                 .clone()
@@ -2174,6 +2181,46 @@ mod tests {
     /// The filing record is the only artifact in this application that states a request was filed,
     /// and the application never observes a send. So it must refuse to exist for a request with no
     /// recorded submission date, and must carry the digest of the exact text it names as filed.
+    /// The filing record is the only artifact in this application that states a request was filed,
+    /// and the application never observes a send. So it must refuse to exist for a request with no
+    /// recorded submission date, and must carry the digest of the exact text it names as filed.
+    /// Same cross-language lock as the chain-of-custody fixture above, for the filing-record
+    /// schema the browser verifier (`scripts/verify-evidence-package.html`) is tested against.
+    #[tokio::test]
+    async fn filing_record_bytes_match_the_committed_browser_verifier_fixture() {
+        let db = setup(true).await;
+        let mut case = db.create_casework_case("report-1".into()).await.unwrap();
+        let request_id = case.requests[0].id.clone();
+        case.requests[0].state = "SUBMITTED".into();
+        case.requests[0].submitted_at = Some("2026-09-01".into());
+        let saved = db
+            .save_casework_case(case, 1, "Reporter".into())
+            .await
+            .unwrap();
+        let package = db
+            .sign_request_filing_record(
+                saved.id.clone(),
+                request_id,
+                "2026-10-02T12:00:00Z".into(),
+                SigningKey::from_bytes(&[11_u8; 32]),
+            )
+            .await
+            .unwrap();
+        verify_package(&package).expect("the generated record must self-verify");
+        // The case id is minted at creation, so the repository-built manifest is re-signed under
+        // a fixed id; everything else (compiled text, clock, omissions) is the repository's own.
+        let mut manifest = package.manifest;
+        manifest.case_id = "case-fixture".into();
+        let package = sign_package(manifest, &SigningKey::from_bytes(&[11_u8; 32])).unwrap();
+        assert_eq!(
+            String::from_utf8_lossy(&serde_json::to_vec_pretty(&package).unwrap()),
+            String::from_utf8_lossy(include_bytes!(
+                "../../tests/fixtures/request-filing-record-v1-fixture.json"
+            )),
+            "the signed filing record's byte layout has changed; regenerate the fixture"
+        );
+    }
+
     #[tokio::test]
     async fn a_filing_record_requires_a_recorded_submission_and_binds_the_request_text_digest() {
         let db = setup(true).await;

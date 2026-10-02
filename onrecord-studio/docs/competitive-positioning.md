@@ -271,6 +271,14 @@ structure that does not exist: every digest in the system is a flat whole-object
 (`sha256_hex`/`sha256_file`/`sha256_file_async`, `src-tauri/src/integrity.rs:150-174`), which can prove only the entire withheld original.
 Excerpt-plus-membership proofs require per-chunk or per-page commitments computed at ingestion.
 
+Built (2026-10-01), browser verifier. `scripts/verify-evidence-package.html` is written beside
+every signed export with the Node verifier; it is self-contained under a `default-src 'none'`
+CSP and re-checks the manifest digest, the Ed25519 signature against the embedded key, and the
+readable manifest against the signed bytes, for every package schema this application signs.
+Committed fixtures produced by the Rust signer pin both sides together under test. It states
+internal consistency only; the key is still unattested and the bundle still carries digests, not
+source bytes.
+
 ## 12. API: the open file is the API
 
 Publish a documented, stable read-only projection and the DuckDB file becomes queryable from

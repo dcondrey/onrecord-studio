@@ -66,7 +66,7 @@ describe("persistent casework",()=>{
     await screen.findByText("Saved revision 2.");
     expect(bridge.invoke).toHaveBeenLastCalledWith("save_casework_case", expect.objectContaining({ case: expect.objectContaining({ notes: "Compare the preserved quotation to the new publication." }) }));
   });
-  const custodyResult=(overrides:Partial<CaseEvidencePackageResult>={}):CaseEvidencePackageResult=>({caseId:"case-a",caseRevision:1,outputPath:"/reports/case-a-custody.json",packageSha256:"deadbeef",signatureAlgorithm:"Ed25519",signerKeyId:"abc123def456",generatedAt:"2026-09-28T00:00:00Z",verifiedCitationCount:1,unverifiedCitationLabels:["Imported claim (UNVERIFIED_PORTABLE)"],withheldCitationLabels:[],ledgerSequence:1,previousExportSha256:null,verifierScriptPath:"/reports/verify-evidence-package.mjs",...overrides});
+  const custodyResult=(overrides:Partial<CaseEvidencePackageResult>={}):CaseEvidencePackageResult=>({caseId:"case-a",caseRevision:1,outputPath:"/reports/case-a-custody.json",packageSha256:"deadbeef",signatureAlgorithm:"Ed25519",signerKeyId:"abc123def456",generatedAt:"2026-09-28T00:00:00Z",verifiedCitationCount:1,unverifiedCitationLabels:["Imported claim (UNVERIFIED_PORTABLE)"],withheldCitationLabels:[],ledgerSequence:1,previousExportSha256:null,verifierScriptPath:"/reports/verify-evidence-package.mjs",verifierPagePath:"/reports/verify-evidence-package.html",...overrides});
   it("surfaces unverified citations and the signed revision inside a chain-of-custody export instead of hiding them",async()=>{
     await openA();
     bridge.invoke.mockResolvedValue(custodyResult());
