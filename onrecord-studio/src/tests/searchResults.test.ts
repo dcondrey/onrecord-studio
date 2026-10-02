@@ -45,6 +45,6 @@ describe('searchQueryId', () => {
     const full = searchRecordText({ ...base, queryId: 'abc123abc123', corpus: { digest: 'f'.repeat(64), documentCount: 1200 } });
     expect(full).toContain('Query ID: abc123abc123');
     expect(full).toContain('sha256:ffffffffffffffff (1,200 documents)');
-    expect(searchRecordText({ ...base, corpus: null })).toContain('Corpus state: could not be read.');
+    expect(searchRecordText({ ...base, corpus: null })).toContain('Corpus state when copied: could not be read.');
   });
 });

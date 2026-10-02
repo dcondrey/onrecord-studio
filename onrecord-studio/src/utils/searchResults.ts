@@ -58,8 +58,8 @@ export function searchRecordText(input: SearchRecordInput): string {
     `Sources searched: ${input.sourceCount}`,
     `Matches: ${formatMatchCount(input.resultCount)} (exact count when the search ran)`,
     input.corpus
-      ? `Corpus state: sha256:${input.corpus.digest.slice(0, 16)} (${input.corpus.documentCount.toLocaleString('en-US')} documents). It covers extracted document text only, not request status or titles.`
-      : 'Corpus state: could not be read.',
+      ? `Corpus state when copied: sha256:${input.corpus.digest.slice(0, 16)} (${input.corpus.documentCount.toLocaleString('en-US')} documents). It covers extracted document text only, not request status or titles, and may differ from the state the search ran against.`
+      : 'Corpus state when copied: could not be read.',
     'The query ID names the query, not its answer. Re-running it against the same corpus state returns the same document-text matches; request metadata can still change as sources synchronize.',
   ].join('\n');
 }
