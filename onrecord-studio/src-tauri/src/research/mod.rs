@@ -1036,13 +1036,14 @@ pub async fn collect_one(
 /// only under the operator's collection opt-in; `collect_one` then acquires them on its own tick.
 async fn analyze_new_evidence(
     repository: &DuckDbRepository,
+    semantic: Option<&crate::storage::vector::VectorIndex>,
     analyzed: &mut Option<String>,
 ) -> Result<(), AppError> {
     let marker = repository.corpus_change_marker().await?;
     if analyzed.as_deref() == Some(marker.as_str()) {
         return Ok(());
     }
-    crate::analysis::detectors::refresh_all_findings(repository).await?;
+    crate::analysis::detectors::refresh_all_findings_with_embeddings(repository, semantic).await?;
     let (found, errors) = crate::analysis::gaps::collect(repository).await;
     let policy = repository.research_policy().await?;
     crate::analysis::gaps::resolve(repository, &found, policy.enabled && policy.auto_collect)
@@ -1084,7 +1085,12 @@ pub fn start_service<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
                     .research_phase("Collection needs attention", Some(e.to_string()))
                     .await;
             }
-            if let Err(error) = analyze_new_evidence(&repository, &mut analyzed_corpus).await {
+            let vector_index = app
+                .try_state::<crate::storage::vector::VectorIndex>()
+                .map(|state| state.inner().clone());
+            if let Err(error) =
+                analyze_new_evidence(&repository, vector_index.as_ref(), &mut analyzed_corpus).await
+            {
                 let _ = repository
                     .research_phase("Evidence analysis needs attention", Some(error.to_string()))
                     .await;
@@ -1357,7 +1363,7 @@ mod tests {
             })
             .await
             .unwrap();
-            analyze_new_evidence(&db, &mut None).await.unwrap();
+            analyze_new_evidence(&db, None, &mut None).await.unwrap();
             assert!(
                 queued().await.is_empty(),
                 "enabled={enabled} auto_collect={auto_collect}"
@@ -1371,7 +1377,7 @@ mod tests {
         })
         .await
         .unwrap();
-        analyze_new_evidence(&db, &mut None).await.unwrap();
+        analyze_new_evidence(&db, None, &mut None).await.unwrap();
         let first = queued().await;
         let urls: Vec<&str> = first.iter().map(|row| row.0.as_str()).collect();
         assert_eq!(
@@ -1379,7 +1385,7 @@ mod tests {
             crate::analysis::gaps::GapRole::Appropriations.catalog_urls()
         );
         assert!(first.iter().all(|row| row.1 == "QUEUED"));
-        analyze_new_evidence(&db, &mut None).await.unwrap();
+        analyze_new_evidence(&db, None, &mut None).await.unwrap();
         assert_eq!(queued().await, first, "a second refresh queues nothing new");
     }
 }

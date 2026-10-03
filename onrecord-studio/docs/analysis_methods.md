@@ -266,3 +266,22 @@ The finding states that two releases made different redaction decisions about th
 * The tables are `Record`s over `FindingKind` and `VerificationState`, so a new variant fails `tsc` until it has text. `scripts/check-help-coverage.mjs` fails on the same omission, and on a key with an empty field, without a build.
 * `src/tests/plainLanguage.test.tsx` rejects accusatory wording for every kind, rejects wording of violation or breach for a kind or state that is not a legal claim, and requires the `LatencyOutlier` explanation to say it is a comparison with peers.
 * An evidence gap is an untested route. It is never explained as a finding and never as evidence of compliance or non-compliance.
+
+## 15. Denials Checked Against Earlier Releases
+
+`analysis/detectors/no_records_contradicted.rs`; findings carry the kind `NO_RECORDS_CONTRADICTED_BY_RELEASE`.
+
+### A. Which denials are tested
+A public document whose text states a plain denial ("no responsive records", "no responsive documents", "no records exist", "unable to locate any records", ...; the shared `extract_denial` pattern) on a request with a stated description or title. A denial limited to a year or fiscal year within 120 characters of the phrase is not tested: a release from outside that scope does not contradict it.
+
+### B. Candidate recall
+The on-device embedding model (`bge-small-en-v1.5`, unit vectors) scores every embedded document of the same portal by the cosine of its closest chunk against the denied request's description (the title only when there is no description; NextRequest titles are a truncated copy of it). The model proposes candidates and decides nothing.
+
+### C. Deterministic checks
+A candidate is cited only when all hold: cosine at or above `SIMILARITY_THRESHOLD`; public; same portal; a different request; that request was assigned the same `agency_id` as the denying request (exact id: a multi-department assignment is its own agency id and is not matched, and a request with no recorded agency matches nothing); its `created_at` is strictly before the denying request's `closed_at`, both parsed as RFC 3339 instants (an unparseable or absent date fails the check); and its own text is not a denial. `SIMILARITY_THRESHOLD` is 0.86: on the San Diego collection the highest cosine of any release judged not to contradict its denial was 0.8531 (see ROADMAP, "Findings on real collections"). It is a precision floor; recall is unmeasured.
+
+### D. Not run
+Without an installed embedding model, or with no embedded document, the detector reports not-run with the reason (`RefreshSummary::not_run`) and leaves its earlier findings in place. It never falls back to word overlap, which matched every San Diego denial to unrelated releases. The benchmark harness and `live_evaluation` run without the semantic index and so report this detector as not run.
+
+### E. What a finding does and does not claim
+The finding states that the agency had already released a document, before closing the request with a denial, whose text is near the request's own at the stated cosine, and cites the closest passage with its character range. Cosine measures closeness of subject and wording, not responsiveness, so the finding carries no confidence score (`Unassessed`) and is a pattern signal (`is_legal_claim` false). It does not show the search was inadequate: the release may fall outside what was asked.

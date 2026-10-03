@@ -39,15 +39,29 @@ macro_rules! detectors {
     };
 }
 
+/// The benchmark has no semantic index, so this detector reports not-run, surfaced as an error
+/// rather than as zero findings.
+fn no_records_without_embeddings(
+    repository: &DuckDbRepository,
+) -> Pin<Box<dyn Future<Output = Result<Vec<Finding>, AppError>> + '_>> {
+    Box::pin(async move {
+        match no_records_contradicted::run(repository, None).await? {
+            no_records_contradicted::Outcome::Ran(findings) => Ok(findings),
+            no_records_contradicted::Outcome::NotRun(reason) => {
+                Err(AppError::Analysis(format!("not run: {reason}")))
+            }
+        }
+    })
+}
+
 fn registry() -> Vec<(&'static str, Run)> {
-    detectors![
+    let mut registry = detectors![
         held_back_response,
         boilerplate_denial,
         just_in_time_compliance,
         extension_abuse,
         contradictory_statement,
         claim_data_mismatch,
-        no_records_contradicted,
         absence_of_records,
         differential_treatment,
         metadata_vs_content,
@@ -70,13 +84,22 @@ fn registry() -> Vec<(&'static str, Run)> {
         practice_departure,
         budget_line_comparison,
         correlated_findings,
-    ]
+    ];
+    registry.insert(
+        6,
+        (
+            no_records_contradicted::SLUG,
+            no_records_without_embeddings as Run,
+        ),
+    );
+    registry
 }
 
 #[test]
 fn registry_matches_refresh_all_findings() {
     let source = include_str!("../src/analysis/detectors/mod.rs");
-    let called = source.matches("run_detector!(").count();
+    let called = source.matches("run_detector!(").count()
+        + source.matches("no_records_contradicted::run(").count();
     assert_eq!(registry().len(), called, "update registry() in this file");
 }
 

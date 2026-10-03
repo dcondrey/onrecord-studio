@@ -3,7 +3,7 @@
 use crate::{
     analysis::{detectors, finding::Finding, gaps},
     error::AppError,
-    storage::{findings::FindingsFilter, sqlite::DuckDbRepository},
+    storage::{findings::FindingsFilter, sqlite::DuckDbRepository, vector::VectorIndex},
 };
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -19,8 +19,10 @@ pub struct RefreshFindingsSummary {
 #[tauri::command]
 pub async fn refresh_findings(
     repository: State<'_, DuckDbRepository>,
+    vector_index: State<'_, VectorIndex>,
 ) -> Result<RefreshFindingsSummary, AppError> {
-    let summary = detectors::refresh_all_findings(&repository).await?;
+    let summary =
+        detectors::refresh_all_findings_with_embeddings(&repository, Some(&vector_index)).await?;
     Ok(RefreshFindingsSummary {
         detectors_run: summary.detectors_run,
         findings_recorded: summary.findings_recorded,

@@ -1,149 +1,222 @@
-//! Denial-vs-corpus contradiction detector.
+//! Denial-vs-release contradiction detector.
 //!
-//! For every response letter that plainly denies having responsive records ("no responsive
-//! records", "no records exist", "unable to locate"), searches the rest of the corpus for public
-//! documents from OTHER requests whose text mentions the same topic. When at least
-//! [`MIN_CONTRADICTING_DOCS`] such documents exist, emits a finding so the reader can see the
-//! agency told one requester nothing existed while releasing matching material to another.
+//! For every response that plainly denies having responsive records ("no responsive records",
+//! "no responsive documents", "unable to locate"), looks for public documents the same agency had
+//! already released to OTHER requests on the subject the denied request asked about.
 //!
-//! Guards:
-//! - Scope-narrow denials ("for FY 2023, no records exist") are skipped — a contradicting match
-//!   from outside that scope isn't a contradiction. See [`assertion_index::extract_denial`].
-//! - Documents from the SAME request as the denial are excluded from the match set.
-//! - Non-public documents (visibility != 'public') are excluded, so the finding reports only
-//!   material the agency has already released.
-//! - Empty or over-broad topic-token sets (fewer than [`MIN_TOPIC_TOKENS`]) are skipped, since a
-//!   one-token FTS query would match half the corpus and produce false positives.
+//! The on-device embedding model only proposes candidates: each embedded document of the portal
+//! is scored by the cosine of its closest chunk against the denied request's own text. A
+//! candidate becomes evidence only through deterministic checks, all in [`admit`]:
+//! - cosine at or above [`SIMILARITY_THRESHOLD`];
+//! - public, from the same portal, from a different request;
+//! - that request was assigned to the same agency (`requests.agency_id`, exact id equality; a
+//!   department shared by a multi-department assignment is a different agency id and is not
+//!   matched, and a request with no recorded agency matches nothing);
+//! - released (`documents.created_at`) strictly before the denying request's `closed_at`, both
+//!   parsed as RFC 3339 instants, so material the agency could not yet have had is never cited;
+//! - not itself a denial.
+//!
+//! Word overlap is never used as a fallback: a records-request description is mostly boilerplate,
+//! and on a live collection every token rule matched denials to unrelated releases. Without an
+//! installed model or any embedded document the detector reports [`Outcome::NotRun`], which keeps
+//! its earlier findings instead of reading the absence of a test as the absence of a finding.
+//!
+//! Cosine measures closeness of subject and wording, not responsiveness, so the finding has no
+//! confidence score; its explanation states the observed cosine, threshold, and both dates.
 
 use crate::{
     analysis::{
-        assertion_index::{extract_denial, extract_topic_tokens},
+        assertion_index::extract_denial,
         finding::{
             finding_id, Finding, FindingCitation, FindingConfidence, FindingKind, FindingSeverity,
             FindingSubject,
         },
-        gaps::{EvidenceGap, GapRole},
     },
     error::AppError,
-    storage::DuckDbRepository,
+    storage::{
+        vector::{DocumentSimilarity, VectorIndex},
+        DuckDbRepository,
+    },
 };
-use chrono::Utc;
+use chrono::{DateTime, FixedOffset, Utc};
 use duckdb::params;
-use std::collections::HashSet;
 
 pub const SLUG: &str = "no_records_contradicted";
 
 /// Max denial candidates inspected per invocation.
 const MAX_CANDIDATES: i64 = 500;
 
-/// Minimum contradicting-document count to fire.
-const MIN_CONTRADICTING_DOCS: usize = 3;
-
-/// A single-token FTS query would match too broadly. Require enough topic vocabulary to make the
-/// claim of "corpus contradicts denial" credible.
-const MIN_TOPIC_TOKENS: usize = 2;
+/// Minimum cosine (bge-small-en-v1.5, unit vectors) between a release's closest chunk and the
+/// denied request's text. A precision floor, not a calibrated cut: on the San Diego collection
+/// the highest-scoring release judged not to contradict its denial scored 0.8531, and no
+/// candidate judged a plausible contradiction scored above that. Recall is unmeasured. See
+/// docs/ROADMAP.md, "Findings on real collections".
+pub(crate) const SIMILARITY_THRESHOLD: f32 = 0.86;
 
 /// Maximum contradicting-document rows to include in citations, to keep the inbox row compact.
 const MAX_CITATION_ROWS: usize = 4;
 
-struct Candidate {
+pub enum Outcome {
+    Ran(Vec<Finding>),
+    /// The test could not be performed; the reason says why. Not a finding count of zero.
+    NotRun(String),
+}
+
+pub(crate) struct Denial {
     portal_key: String,
     request_id: i64,
-    denial_document_id: i64,
-    denial_file_name: Option<String>,
+    rpid: Option<String>,
+    agency_id: Option<i64>,
+    agency_name: Option<String>,
+    closed_at: Option<String>,
+    document_id: i64,
+    file_name: Option<String>,
     request_title: String,
     request_description: String,
-    denial_text: String,
-}
-
-/// A plain, unscoped denial with enough topic vocabulary to test, and the other-request
-/// documents that match it.
-struct Tested {
-    candidate: Candidate,
     matched_phrase: String,
-    tokens: Vec<String>,
-    matches: Vec<ContradictingMatch>,
 }
 
-async fn test_denials(repository: &DuckDbRepository) -> Result<Vec<Tested>, AppError> {
-    let mut tested = Vec::new();
-    for candidate in load_denial_candidates(repository).await? {
-        // The SQL LIKE gate is coarse; `extract_denial` re-verifies with the shared regex.
-        let Some(fingerprint) = extract_denial(&candidate.denial_text) else {
-            continue;
-        };
-        if fingerprint.scope_narrow {
-            continue;
-        }
-        let tokens = extract_topic_tokens(&candidate.request_title, &candidate.request_description);
-        if tokens.len() < MIN_TOPIC_TOKENS {
-            continue;
-        }
-        let matches = search_contradicting_documents(
-            repository,
-            tokens.clone(),
-            &candidate.portal_key,
-            candidate.request_id,
-        )
-        .await?;
-        tested.push(Tested {
-            candidate,
-            matched_phrase: fingerprint.matched_phrase,
-            tokens,
-            matches,
-        });
+impl Denial {
+    /// The text the request itself states. NextRequest titles are a truncated prefix of the
+    /// description, so the description is used whole when present.
+    fn query_text(&self) -> Option<&str> {
+        [&self.request_description, &self.request_title]
+            .into_iter()
+            .map(|text| text.trim())
+            .find(|text| !text.is_empty())
     }
-    Ok(tested)
+
+    fn display_title(&self) -> String {
+        if self.request_title.trim().is_empty() {
+            format!("request {}", self.label())
+        } else {
+            self.request_title.trim().to_string()
+        }
+    }
+
+    fn label(&self) -> String {
+        self.rpid
+            .clone()
+            .unwrap_or_else(|| self.request_id.to_string())
+    }
 }
 
-pub async fn run(repository: &DuckDbRepository) -> Result<Vec<Finding>, AppError> {
-    Ok(test_denials(repository)
-        .await?
-        .iter()
-        .filter(|t| t.matches.len() >= MIN_CONTRADICTING_DOCS)
-        .filter_map(|t| build_finding(&t.candidate, &t.matched_phrase, &t.tokens, &t.matches))
-        .collect())
+pub(crate) struct Release {
+    portal_key: String,
+    request_id: i64,
+    document_id: i64,
+    file_name: Option<String>,
+    public: bool,
+    agency_id: Option<i64>,
+    released_at: String,
+    is_denial: bool,
+    similarity: DocumentSimilarity,
 }
 
-/// A denial the corpus holds no other releases to test. `run` returns nothing for these; that is
-/// not evidence the denial was accurate.
-pub async fn gaps(repository: &DuckDbRepository) -> Result<Vec<EvidenceGap>, AppError> {
-    Ok(test_denials(repository)
-        .await?
-        .into_iter()
-        .filter(|t| t.matches.is_empty())
-        .map(|t| {
-            let c = t.candidate;
-            EvidenceGap {
-                detector: SLUG,
-                key: format!("{SLUG}:{}:{}", c.portal_key, c.denial_document_id),
-                route: format!(
-                    "Request {} on {} was answered that no responsive records exist",
-                    c.request_id, c.portal_key
-                ),
-                blocked: format!(
-                    "No public release on the topic ({}) is in the corpus, so the denial can be neither contradicted nor supported.",
-                    t.tokens.join(", ")
-                ),
-                role: GapRole::AgencyRecords,
-                request: format!(
-                    "Provide existing records released in response to other requests on: {}.",
-                    t.tokens.join(", ")
-                ),
-            }
-        })
-        .collect())
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Rejection {
+    BelowThreshold,
+    NotPublic,
+    OtherPortal,
+    SameRequest,
+    AgencyUnrecorded,
+    OtherAgency,
+    ClosureUndated,
+    ReleaseUndated,
+    NotBeforeClosure,
+    ItselfADenial,
 }
 
-async fn load_denial_candidates(repository: &DuckDbRepository) -> Result<Vec<Candidate>, AppError> {
-    repository
+fn instant(value: &str) -> Option<DateTime<FixedOffset>> {
+    DateTime::parse_from_rfc3339(value.trim()).ok()
+}
+
+/// The deterministic checks a semantically near document must pass to be cited as a release
+/// that contradicts the denial.
+pub(crate) fn admit(denial: &Denial, release: &Release, threshold: f32) -> Result<(), Rejection> {
+    if release.similarity.cosine < threshold {
+        return Err(Rejection::BelowThreshold);
+    }
+    if !release.public {
+        return Err(Rejection::NotPublic);
+    }
+    if release.portal_key != denial.portal_key {
+        return Err(Rejection::OtherPortal);
+    }
+    if release.request_id == denial.request_id {
+        return Err(Rejection::SameRequest);
+    }
+    let Some(denying_agency) = denial.agency_id else {
+        return Err(Rejection::AgencyUnrecorded);
+    };
+    if release.agency_id != Some(denying_agency) {
+        return Err(Rejection::OtherAgency);
+    }
+    let Some(closed_at) = denial.closed_at.as_deref().and_then(instant) else {
+        return Err(Rejection::ClosureUndated);
+    };
+    let Some(released_at) = instant(&release.released_at) else {
+        return Err(Rejection::ReleaseUndated);
+    };
+    if released_at >= closed_at {
+        return Err(Rejection::NotBeforeClosure);
+    }
+    if release.is_denial {
+        return Err(Rejection::ItselfADenial);
+    }
+    Ok(())
+}
+
+pub async fn run(
+    repository: &DuckDbRepository,
+    semantic: Option<&VectorIndex>,
+) -> Result<Outcome, AppError> {
+    let denials = load_denials(repository).await?;
+    if denials.is_empty() {
+        return Ok(Outcome::Ran(Vec::new()));
+    }
+    let Some(index) = semantic else {
+        return Ok(Outcome::NotRun(
+            "the on-device embedding model is not available to this run".into(),
+        ));
+    };
+    if !index.model_status().await?.installed {
+        return Ok(Outcome::NotRun(
+            "the on-device embedding model is not installed".into(),
+        ));
+    }
+    if index.index_status(0).await?.indexed_document_count == 0 {
+        return Ok(Outcome::NotRun(
+            "no document has been embedded; build the semantic index first".into(),
+        ));
+    }
+    let mut findings = Vec::new();
+    for denial in &denials {
+        let Some(scored) = score_releases(repository, index, denial, None).await? else {
+            return Ok(Outcome::NotRun(
+                "the on-device embedding model is not installed".into(),
+            ));
+        };
+        let admitted: Vec<Release> = scored
+            .into_iter()
+            .filter(|release| admit(denial, release, SIMILARITY_THRESHOLD).is_ok())
+            .collect();
+        if let Some(finding) = build_finding(denial, &admitted) {
+            findings.push(finding);
+        }
+    }
+    Ok(Outcome::Ran(findings))
+}
+
+/// Plain, unscoped denials with a stated request text. The SQL LIKE gate is coarse;
+/// `extract_denial` re-verifies with the shared regex.
+async fn load_denials(repository: &DuckDbRepository) -> Result<Vec<Denial>, AppError> {
+    let rows = repository
         .query_connection("Denial-candidate query", move |conn| {
-            // The LIKE gate is a coarse pre-filter; `extract_denial` re-verifies with the same
-            // regex used by other callers so the true set is aligned. Ordered newest-first so a
-            // hit cap surfaces the most recent evidence.
             let mut statement = conn
                 .prepare(
-                    "SELECT documents.portal_subdomain, documents.request_id,
+                    "SELECT documents.portal_subdomain, documents.request_id, requests.rpid,
+                            requests.agency_id, agencies.name, requests.closed_at,
                             documents.id, documents.file_name,
                             COALESCE(requests.title, ''), COALESCE(requests.description, ''),
                             documents_fts.extracted_text
@@ -154,16 +227,20 @@ async fn load_denial_candidates(repository: &DuckDbRepository) -> Result<Vec<Can
                      INNER JOIN requests
                         ON requests.id = documents.request_id
                        AND requests.portal_subdomain = documents.portal_subdomain
+                     LEFT JOIN agencies
+                        ON agencies.id = requests.agency_id
+                       AND agencies.portal_subdomain = requests.portal_subdomain
                      WHERE LOWER(TRIM(documents.visibility)) = 'public'
                        AND LENGTH(documents_fts.extracted_text) > 0
                        AND (
                            LOWER(documents_fts.extracted_text) LIKE '%no responsive records%' OR
+                           LOWER(documents_fts.extracted_text) LIKE '%no responsive documents%' OR
                            LOWER(documents_fts.extracted_text) LIKE '%no records exist%' OR
                            LOWER(documents_fts.extracted_text) LIKE '%no records were found%' OR
                            LOWER(documents_fts.extracted_text) LIKE '%unable to locate%' OR
                            LOWER(documents_fts.extracted_text) LIKE '%cannot locate any records%'
                        )
-                     ORDER BY documents.updated_at DESC
+                     ORDER BY documents.updated_at DESC, documents.id
                      LIMIT ?1",
                 )
                 .map_err(|error| {
@@ -172,219 +249,223 @@ async fn load_denial_candidates(repository: &DuckDbRepository) -> Result<Vec<Can
             let rows = statement
                 .query_map(params![MAX_CANDIDATES], |row| {
                     Ok((
-                        row.get::<_, String>(0)?,
-                        row.get::<_, i64>(1)?,
-                        row.get::<_, i64>(2)?,
-                        row.get::<_, Option<String>>(3)?,
-                        row.get::<_, String>(4)?,
-                        row.get::<_, String>(5)?,
-                        row.get::<_, String>(6)?,
+                        Denial {
+                            portal_key: row.get(0)?,
+                            request_id: row.get(1)?,
+                            rpid: row.get(2)?,
+                            agency_id: row.get(3)?,
+                            agency_name: row.get(4)?,
+                            closed_at: row.get(5)?,
+                            document_id: row.get(6)?,
+                            file_name: row.get(7)?,
+                            request_title: row.get(8)?,
+                            request_description: row.get(9)?,
+                            matched_phrase: String::new(),
+                        },
+                        row.get::<_, String>(10)?,
                     ))
                 })
                 .map_err(|error| {
                     AppError::Storage(format!("Failed to run denial candidate query: {error}"))
                 })?;
-            let mut out = Vec::new();
-            for row in rows {
-                let (
-                    portal_key,
-                    request_id,
-                    denial_document_id,
-                    denial_file_name,
-                    request_title,
-                    request_description,
-                    denial_text,
-                ) = row.map_err(|error| {
-                    AppError::Storage(format!("Failed to decode denial row: {error}"))
-                })?;
-                out.push(Candidate {
-                    portal_key,
-                    request_id,
-                    denial_document_id,
-                    denial_file_name,
-                    request_title,
-                    request_description,
-                    denial_text,
-                });
-            }
-            Ok(out)
+            rows.collect::<duckdb::Result<Vec<_>>>()
+                .map_err(|error| AppError::Storage(format!("Failed to decode denial row: {error}")))
         })
-        .await
+        .await?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|(mut denial, text)| {
+            let fingerprint = extract_denial(&text)?;
+            if fingerprint.scope_narrow || denial.query_text().is_none() {
+                return None;
+            }
+            denial.matched_phrase = fingerprint.matched_phrase.trim().to_string();
+            Some(denial)
+        })
+        .collect())
 }
 
-/// A contradicting-document row surfaced by the FTS search over topic tokens.
-struct ContradictingMatch {
-    portal_key: String,
-    document_id: i64,
-    request_id: i64,
-    file_name: Option<String>,
-}
-
-/// Runs an all-terms conjunctive FTS query over the corpus's search-token index, then filters out
-/// documents from the denying request. Reuses the same search-tokens table
-/// (`document_search_tokens`) used elsewhere in the app so the semantics match search-driven
-/// retrieval the user is already familiar with.
-async fn search_contradicting_documents(
+/// Every embedded document of the denial's portal scored against the request text, with the
+/// metadata [`admit`] checks. Only documents at or above the threshold are returned unless
+/// `top` asks for the closest N regardless (the measurement harness). `None` when no model is
+/// installed.
+async fn score_releases(
     repository: &DuckDbRepository,
-    tokens: Vec<String>,
-    denying_portal: &str,
-    denying_request: i64,
-) -> Result<Vec<ContradictingMatch>, AppError> {
-    let denying_portal = denying_portal.to_string();
-    repository
-        .query_connection("Denial contradiction FTS", move |conn| {
-            // Positional params: ?1 = denying_portal, ?2..?N+1 = tokens, ?N+2 = denying_request.
-            let placeholders = (2..2 + tokens.len())
-                .map(|index| format!("?{index}"))
+    index: &VectorIndex,
+    denial: &Denial,
+    top: Option<usize>,
+) -> Result<Option<Vec<Release>>, AppError> {
+    let Some(query) = denial.query_text() else {
+        return Ok(Some(Vec::new()));
+    };
+    let Some(mut nearest) = index
+        .nearest_documents(query, &denial.portal_key, usize::MAX)
+        .await?
+    else {
+        return Ok(None);
+    };
+    match top {
+        Some(count) => nearest.truncate(count),
+        None => nearest.retain(|near| near.cosine >= SIMILARITY_THRESHOLD),
+    }
+    if nearest.is_empty() {
+        return Ok(Some(Vec::new()));
+    }
+    let portal_key = denial.portal_key.clone();
+    let ids: Vec<i64> = nearest
+        .iter()
+        .filter_map(|near| i64::try_from(near.document_id).ok())
+        .collect();
+    let metadata = repository
+        .query_connection("Release metadata", move |conn| {
+            let placeholders = (2..2 + ids.len())
+                .map(|slot| format!("?{slot}"))
                 .collect::<Vec<_>>()
                 .join(", ");
-            let required = tokens.len();
-            let denying_request_slot = 2 + tokens.len();
-            let query = format!(
-                "SELECT documents.portal_subdomain, documents.id, documents.request_id,
-                        documents.file_name
-                 FROM documents
-                 INNER JOIN (
-                     SELECT document_id, portal_subdomain
-                     FROM document_search_tokens
-                     WHERE token IN ({placeholders})
-                     GROUP BY document_id, portal_subdomain
-                     HAVING COUNT(*) = {required}
-                 ) AS matched
-                    ON matched.document_id = documents.id
-                   AND matched.portal_subdomain = documents.portal_subdomain
-                 WHERE LOWER(TRIM(documents.visibility)) = 'public'
-                   AND NOT (documents.portal_subdomain = ?1
-                            AND documents.request_id = ?{denying_request_slot})
-                 ORDER BY documents.updated_at DESC
-                 LIMIT 32"
-            );
-            let mut statement = conn.prepare(&query).map_err(|error| {
-                AppError::Storage(format!("Failed to prepare contradiction FTS: {error}"))
-            })?;
-            let mut params_vec: Vec<Box<dyn duckdb::ToSql>> = Vec::with_capacity(tokens.len() + 2);
-            params_vec.push(Box::new(denying_portal.clone()));
-            for token in &tokens {
-                params_vec.push(Box::new(token.clone()));
+            let mut statement = conn
+                .prepare(&format!(
+                    "SELECT documents.id, documents.request_id, documents.file_name,
+                            LOWER(TRIM(documents.visibility)) = 'public', requests.agency_id,
+                            documents.created_at, COALESCE(documents_fts.extracted_text, '')
+                     FROM documents
+                     INNER JOIN requests
+                        ON requests.id = documents.request_id
+                       AND requests.portal_subdomain = documents.portal_subdomain
+                     LEFT JOIN documents_fts
+                        ON documents_fts.document_id = documents.id
+                       AND documents_fts.portal_subdomain = documents.portal_subdomain
+                     WHERE documents.portal_subdomain = ?1 AND documents.id IN ({placeholders})"
+                ))
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to prepare release metadata: {error}"))
+                })?;
+            let mut bound: Vec<&dyn duckdb::ToSql> = Vec::with_capacity(ids.len() + 1);
+            bound.push(&portal_key);
+            for id in &ids {
+                bound.push(id);
             }
-            params_vec.push(Box::new(denying_request));
-            let refs: Vec<&dyn duckdb::ToSql> =
-                params_vec.iter().map(|boxed| boxed.as_ref()).collect();
             let rows = statement
-                .query_map(refs.as_slice(), |row| {
-                    Ok(ContradictingMatch {
-                        portal_key: row.get(0)?,
-                        document_id: row.get(1)?,
-                        request_id: row.get(2)?,
-                        file_name: row.get::<_, Option<String>>(3)?,
-                    })
+                .query_map(bound.as_slice(), |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, i64>(1)?,
+                        row.get::<_, Option<String>>(2)?,
+                        row.get::<_, bool>(3)?,
+                        row.get::<_, Option<i64>>(4)?,
+                        row.get::<_, String>(5)?,
+                        extract_denial(&row.get::<_, String>(6)?).is_some(),
+                    ))
                 })
                 .map_err(|error| {
-                    AppError::Storage(format!("Failed to run contradiction FTS: {error}"))
+                    AppError::Storage(format!("Failed to run release metadata: {error}"))
                 })?;
-            let mut out = Vec::new();
-            let mut seen_requests: HashSet<(String, i64)> = HashSet::new();
-            for row in rows {
-                let matched = row.map_err(|error| {
-                    AppError::Storage(format!("Failed to decode contradiction FTS row: {error}"))
-                })?;
-                // Deduplicate by (portal, request) so multiple documents in the same OTHER request
-                // count once — the finding is "N other requests contain matching material", not
-                // "N documents".
-                let key = (matched.portal_key.clone(), matched.request_id);
-                if seen_requests.insert(key) {
-                    out.push(matched);
-                }
-            }
-            Ok(out)
+            rows.collect::<duckdb::Result<Vec<_>>>().map_err(|error| {
+                AppError::Storage(format!("Failed to decode release metadata: {error}"))
+            })
         })
-        .await
+        .await?;
+    let mut by_id: std::collections::HashMap<i64, _> =
+        metadata.into_iter().map(|row| (row.0, row)).collect();
+    Ok(
+        Some(
+            nearest
+                .into_iter()
+                .filter_map(|similarity| {
+                    let id = i64::try_from(similarity.document_id).ok()?;
+                    let (
+                        document_id,
+                        request_id,
+                        file_name,
+                        public,
+                        agency_id,
+                        released_at,
+                        is_denial,
+                    ) = by_id.remove(&id)?;
+                    Some(Release {
+                        portal_key: denial.portal_key.clone(),
+                        request_id,
+                        document_id,
+                        file_name,
+                        public,
+                        agency_id,
+                        released_at,
+                        is_denial,
+                        similarity,
+                    })
+                })
+                .collect(),
+        ),
+    )
 }
 
-fn build_finding(
-    candidate: &Candidate,
-    matched_phrase: &str,
-    tokens: &[String],
-    matches: &[ContradictingMatch],
-) -> Option<Finding> {
-    if matches.len() < MIN_CONTRADICTING_DOCS {
-        return None;
-    }
-    // Base 6000bp at MIN_CONTRADICTING_DOCS, +500bp per additional distinct matching request,
-    // capped at 9500bp.
-    let extra = matches.len().saturating_sub(MIN_CONTRADICTING_DOCS);
-    let confidence_bp = u16::min(6000 + (extra as u16).saturating_mul(500), 9500);
-    let confidence = FindingConfidence::measured(confidence_bp);
-
+fn build_finding(denial: &Denial, admitted: &[Release]) -> Option<Finding> {
+    let closest = admitted.first()?;
     let subject = FindingSubject {
-        portal_key: Some(candidate.portal_key.clone()),
-        request_id: Some(candidate.request_id),
-        document_id: Some(candidate.denial_document_id),
+        portal_key: Some(denial.portal_key.clone()),
+        agency_id: denial.agency_id,
+        request_id: Some(denial.request_id),
+        document_id: Some(denial.document_id),
         ..Default::default()
     };
-
     let id = finding_id(
         FindingKind::NoRecordsContradictedByRelease,
         SLUG,
         &subject,
-        &[&format!(
-            "n_matches={};tokens={}",
-            matches.len(),
-            tokens.join("+")
-        )],
+        &[],
     );
-
-    let display_title = if candidate.request_title.is_empty() {
-        format!("request {}", candidate.request_id)
-    } else {
-        candidate.request_title.clone()
-    };
+    let display_title = denial.display_title();
+    let agency = denial
+        .agency_name
+        .clone()
+        .unwrap_or_else(|| "the same agency".into());
+    let closed_at = denial.closed_at.clone().unwrap_or_default();
     let headline = format!(
-        "Denial for '{display_title}' contradicted by {n} other public records",
-        n = matches.len()
+        "Denial for '{display_title}' follows {n} earlier release(s) by {agency} on its subject",
+        n = admitted.len()
     );
-
-    let token_list = tokens.join(", ");
     let explanation = format!(
-        "The response to request {request_id} ('{display_title}') asserts \"{phrase}\". \
-         A search of {n} other requests' public documents on the same topic ({token_list}) \
-         returned {n_matches} contradicting matches. If those matches concern the same subject \
-         the denial covers, the denial's factual basis needs review.",
-        request_id = candidate.request_id,
-        phrase = matched_phrase.trim(),
-        n = matches.len(),
-        n_matches = matches.len(),
+        "Request {label} ('{display_title}') was closed {closed_at} with \"{phrase}\". Before that \
+         closure, {agency} had released {n} public document(s) to other requests whose text is \
+         near this request's own: the closest, {closest_name} (request {closest_request}, \
+         released {released}), has cosine {cosine:.3} against the request text, at or above the \
+         {threshold:.2} threshold of the on-device bge-small-en-v1.5 model. Cosine measures \
+         closeness of subject and wording, not that the release answers this request; read the \
+         cited passages to judge whether the denial's factual basis holds.",
+        label = denial.label(),
+        phrase = denial.matched_phrase,
+        n = admitted.len(),
+        closest_name = document_label(closest.file_name.as_deref(), closest.document_id),
+        closest_request = closest.request_id,
+        released = closest.released_at,
+        cosine = closest.similarity.cosine,
+        threshold = SIMILARITY_THRESHOLD,
     );
 
     let mut citations = Vec::with_capacity(1 + MAX_CITATION_ROWS);
     citations.push(FindingCitation {
-        portal_key: candidate.portal_key.clone(),
-        document_id: candidate.denial_document_id,
+        portal_key: denial.portal_key.clone(),
+        document_id: denial.document_id,
         character_start: None,
         character_end: None,
-        quote: Some(matched_phrase.trim().to_string()),
+        quote: Some(denial.matched_phrase.clone()),
         label: Some(format!(
             "Denial: {}",
-            candidate
-                .denial_file_name
-                .clone()
-                .unwrap_or_else(|| format!("document {}", candidate.denial_document_id))
+            document_label(denial.file_name.as_deref(), denial.document_id)
         )),
     });
-    for matched in matches.iter().take(MAX_CITATION_ROWS) {
+    for release in admitted.iter().take(MAX_CITATION_ROWS) {
         citations.push(FindingCitation {
-            portal_key: matched.portal_key.clone(),
-            document_id: matched.document_id,
-            character_start: None,
-            character_end: None,
-            quote: None,
+            portal_key: release.portal_key.clone(),
+            document_id: release.document_id,
+            character_start: Some(release.similarity.character_start),
+            character_end: Some(release.similarity.character_end),
+            quote: Some(release.similarity.excerpt.clone()),
             label: Some(format!(
-                "Contradicting release (request {}): {}",
-                matched.request_id,
-                matched
-                    .file_name
-                    .clone()
-                    .unwrap_or_else(|| format!("document {}", matched.document_id))
+                "Released {} to request {} (cosine {:.3}): {}",
+                release.released_at,
+                release.request_id,
+                release.similarity.cosine,
+                document_label(release.file_name.as_deref(), release.document_id)
             )),
         });
     }
@@ -393,8 +474,8 @@ fn build_finding(
     Some(Finding {
         id,
         kind: FindingKind::NoRecordsContradictedByRelease,
-        severity: FindingSeverity::Serious,
-        confidence,
+        severity: FindingSeverity::Notable,
+        confidence: FindingConfidence::Unassessed,
         subject,
         headline,
         explanation,
@@ -406,116 +487,225 @@ fn build_finding(
     })
 }
 
+fn document_label(file_name: Option<&str>, document_id: i64) -> String {
+    file_name
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("document {document_id}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn candidate(text: &str, title: &str, desc: &str) -> Candidate {
-        Candidate {
-            portal_key: "test".into(),
-            request_id: 42,
-            denial_document_id: 100,
-            denial_file_name: Some("denial.pdf".into()),
-            request_title: title.into(),
-            request_description: desc.into(),
-            denial_text: text.into(),
+    fn denial() -> Denial {
+        Denial {
+            portal_key: "sd".into(),
+            request_id: 1,
+            rpid: Some("25-1".into()),
+            agency_id: Some(7),
+            agency_name: Some("Purchasing & Contracting".into()),
+            closed_at: Some("2026-01-15T15:56:00-08:00".into()),
+            document_id: 100,
+            file_name: Some("closure-notice-25-1.txt".into()),
+            request_title: "Maintenance contracts with Caltrans".into(),
+            request_description: "Maintenance contracts with Caltrans for the bike path".into(),
+            matched_phrase: "no responsive documents".into(),
         }
     }
 
-    fn one_match(id: i64, req: i64) -> ContradictingMatch {
-        ContradictingMatch {
-            portal_key: "test".into(),
-            document_id: id,
-            request_id: req,
-            file_name: Some(format!("rel_{id}.pdf")),
+    fn release(released_at: &str, agency_id: Option<i64>) -> Release {
+        Release {
+            portal_key: "sd".into(),
+            request_id: 2,
+            document_id: 200,
+            file_name: Some("caltrans-maintenance-agreement.pdf".into()),
+            public: true,
+            agency_id,
+            released_at: released_at.into(),
+            is_denial: false,
+            similarity: DocumentSimilarity {
+                request_id: 2,
+                document_id: 200,
+                cosine: SIMILARITY_THRESHOLD + 0.05,
+                character_start: 0,
+                character_end: 40,
+                excerpt: "Maintenance agreement between the City and Caltrans".into(),
+            },
         }
     }
 
     #[test]
-    fn build_finding_returns_none_below_minimum() {
-        let c = candidate(
-            "After a diligent search, no responsive records were located.",
-            "Contracts with Downtown Redevelopment",
-            "Provide all contracts",
+    fn a_near_release_after_the_closure_is_not_a_contradiction() {
+        // 14:57 -10:00 is 61 minutes after the 15:56 -08:00 closure, though it sorts before it
+        // as a string.
+        assert_eq!(
+            admit(
+                &denial(),
+                &release("2026-01-15T14:57:00-10:00", Some(7)),
+                SIMILARITY_THRESHOLD
+            ),
+            Err(Rejection::NotBeforeClosure)
         );
-        // Only 2 matches - below MIN_CONTRADICTING_DOCS.
-        let matches = vec![one_match(1, 51), one_match(2, 52)];
-        assert!(build_finding(
-            &c,
-            "no responsive records",
-            &["contracts".into(), "downtown".into()],
-            &matches
-        )
-        .is_none());
     }
 
     #[test]
-    fn build_finding_serious_with_three_contradicting_matches() {
-        let c = candidate(
-            "After a diligent search, no responsive records were located.",
-            "Contracts with Downtown Redevelopment",
-            "Provide all contracts",
+    fn a_near_release_before_the_closure_from_the_same_agency_is() {
+        let denial = denial();
+        let earlier = release("2025-11-01T09:00:00-07:00", Some(7));
+        assert_eq!(admit(&denial, &earlier, SIMILARITY_THRESHOLD), Ok(()));
+        let finding = build_finding(&denial, &[earlier]).expect("an admitted release fires");
+        assert_eq!(finding.confidence, FindingConfidence::Unassessed);
+        assert!(finding.explanation.contains("2025-11-01T09:00:00-07:00"));
+        assert!(finding.explanation.contains("2026-01-15T15:56:00-08:00"));
+    }
+
+    #[test]
+    fn a_near_release_from_another_agency_is_not_a_contradiction() {
+        assert_eq!(
+            admit(
+                &denial(),
+                &release("2025-11-01T09:00:00-07:00", Some(8)),
+                SIMILARITY_THRESHOLD
+            ),
+            Err(Rejection::OtherAgency)
         );
-        let matches = vec![one_match(1, 51), one_match(2, 52), one_match(3, 53)];
-        let finding = build_finding(
-            &c,
-            "no responsive records",
-            &[
-                "contracts".into(),
-                "downtown".into(),
-                "redevelopment".into(),
-            ],
-            &matches,
-        )
-        .expect("must fire");
-        assert_eq!(finding.severity, FindingSeverity::Serious);
-        assert_eq!(finding.kind, FindingKind::NoRecordsContradictedByRelease);
-        // 1 denial + 3 contradicting citations.
-        assert_eq!(finding.citations.len(), 4);
-        assert!(finding.citations[0]
-            .label
-            .as_ref()
-            .unwrap()
-            .contains("Denial"));
-        assert!(finding.headline.contains("Downtown"));
     }
 
-    #[test]
-    fn confidence_rises_with_more_contradicting_requests() {
-        let c = candidate("no records exist", "Housing contracts", "Provide records");
-        let three = vec![one_match(1, 1), one_match(2, 2), one_match(3, 3)];
-        let seven = vec![
-            one_match(1, 1),
-            one_match(2, 2),
-            one_match(3, 3),
-            one_match(4, 4),
-            one_match(5, 5),
-            one_match(6, 6),
-            one_match(7, 7),
-        ];
-        let base = build_finding(
-            &c,
-            "no records exist",
-            &["housing".into(), "contracts".into()],
-            &three,
-        )
-        .unwrap();
-        let strong = build_finding(
-            &c,
-            "no records exist",
-            &["housing".into(), "contracts".into()],
-            &seven,
-        )
-        .unwrap();
-        assert!(strong.confidence.rank_weight() > base.confidence.rank_weight());
+    async fn seeded_with_a_denial() -> DuckDbRepository {
+        let repository = DuckDbRepository::new(":memory:").expect("open");
+        repository
+            .run_migrations(include_str!("../../../migrations/0001_initial_schema.sql"))
+            .await
+            .expect("migrate");
+        repository
+            .query_connection("no-records fixture", |connection| {
+                connection
+                    .execute_batch(
+                        "INSERT INTO portals (subdomain, display_name, base_url)
+                           VALUES ('sd', 'SD', 'https://sd.example');
+                         INSERT INTO agencies (id, portal_subdomain, name) VALUES (7, 'sd', 'Purchasing');
+                         INSERT INTO requests (id, portal_subdomain, title, description, status,
+                                               created_at, updated_at, closed_at, agency_id)
+                           VALUES (1, 'sd', 'Caltrans maintenance contracts',
+                                   'Maintenance contracts with Caltrans for the bike path', 'closed',
+                                   '2026-01-01T00:00:00Z', '2026-01-15T00:00:00Z',
+                                   '2026-01-15T00:00:00Z', 7);
+                         INSERT INTO documents (id, request_id, portal_subdomain, file_name,
+                                                visibility, created_at, updated_at)
+                           VALUES (100, 1, 'sd', 'closure-notice.txt', 'public',
+                                   '2026-01-15T00:00:00Z', '2026-01-15T00:00:00Z');
+                         INSERT INTO documents_fts (document_id, portal_subdomain, file_name, extracted_text)
+                           VALUES (100, 'sd', 'closure-notice.txt',
+                                   'The City of San Diego has no responsive documents.');",
+                    )
+                    .map_err(|error| AppError::Storage(format!("fixture: {error}")))
+            })
+            .await
+            .expect("seed");
+        repository
     }
 
-    #[test]
-    fn scope_narrow_denial_would_be_skipped_by_run() {
-        // Direct test of extract_denial exercised in assertion_index tests; this covers the
-        // integration decision: a narrow denial produces a fingerprint with scope_narrow=true,
-        // which run() checks before calling build_finding. Verify the primitive here.
-        let narrow = extract_denial("For FY 2023, no responsive records exist.").unwrap();
-        assert!(narrow.scope_narrow);
+    #[tokio::test]
+    async fn without_the_model_the_detector_is_not_run_and_keeps_its_findings() {
+        let repository = seeded_with_a_denial().await;
+        let earlier = build_finding(&denial(), &[release("2025-11-01T09:00:00-07:00", Some(7))])
+            .expect("finding");
+        let earlier_id = earlier.id.clone();
+        repository
+            .record_findings(vec![earlier])
+            .await
+            .expect("record");
+
+        let temp = tempfile::tempdir().expect("temp");
+        let index = VectorIndex::open(&temp.path().join("v.db"), temp.path().join("cache"))
+            .expect("vector index");
+        for semantic in [None, Some(&index)] {
+            match run(&repository, semantic).await.expect("run") {
+                Outcome::NotRun(reason) => assert!(reason.contains("model"), "{reason}"),
+                Outcome::Ran(findings) => {
+                    panic!("ran without a model: {} findings", findings.len())
+                }
+            }
+        }
+
+        let summary = crate::analysis::detectors::refresh_all_findings_with_embeddings(
+            &repository,
+            Some(&index),
+        )
+        .await
+        .expect("refresh");
+        assert!(summary
+            .not_run
+            .iter()
+            .any(|not_run| not_run.detector == SLUG));
+        let kept = repository
+            .list_findings(Default::default(), 50)
+            .await
+            .expect("list");
+        assert!(kept.iter().any(|finding| finding.id == earlier_id));
+    }
+
+    /// Scores every denial in a collected live database against its nearest releases and prints
+    /// the evidence the threshold is pinned from. `ONRECORD_EVAL_DIR` holds the `core.db` a
+    /// `live_evaluation` run left; the semantic index is built beside it as `vectors.db` from
+    /// the installed model in `ONRECORD_EMBEDDING_CACHE` (never downloaded).
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    #[ignore = "needs a collected live database and an installed embedding model"]
+    async fn measure_on_a_live_collection() {
+        let root = std::path::PathBuf::from(std::env::var("ONRECORD_EVAL_DIR").expect("dir"));
+        let cache = std::path::PathBuf::from(
+            std::env::var("ONRECORD_EMBEDDING_CACHE").expect("ONRECORD_EMBEDDING_CACHE"),
+        );
+        let repository = DuckDbRepository::new(root.join("core.db")).unwrap();
+        let index = VectorIndex::open(&root.join("vectors.db"), cache).unwrap();
+        let report = index.index_documents(&repository, false).await.unwrap();
+        eprintln!("index: {report:?}");
+        let denials = load_denials(&repository).await.unwrap();
+        eprintln!("{} denials tested", denials.len());
+        for denial in &denials {
+            eprintln!(
+                "\n{} [{}] closed {:?}: {}",
+                denial.label(),
+                denial.agency_name.as_deref().unwrap_or("-"),
+                denial.closed_at,
+                denial
+                    .query_text()
+                    .unwrap_or("")
+                    .chars()
+                    .take(160)
+                    .collect::<String>()
+            );
+            let scored = score_releases(&repository, &index, denial, Some(8))
+                .await
+                .unwrap()
+                .expect("model installed");
+            for release in &scored {
+                eprintln!(
+                    "  {:.4} req {} doc {} {:?} released {} -> {:?}\n      {}",
+                    release.similarity.cosine,
+                    release.request_id,
+                    release.document_id,
+                    release.file_name,
+                    release.released_at,
+                    admit(denial, release, 0.0),
+                    release
+                        .similarity
+                        .excerpt
+                        .chars()
+                        .take(200)
+                        .collect::<String>()
+                        .replace('\n', " ")
+                );
+            }
+        }
+        match run(&repository, Some(&index)).await.unwrap() {
+            Outcome::NotRun(reason) => eprintln!("not run: {reason}"),
+            Outcome::Ran(findings) => {
+                eprintln!("\n{} findings at {SIMILARITY_THRESHOLD}", findings.len());
+                for finding in findings {
+                    eprintln!("  {}", finding.headline);
+                }
+            }
+        }
     }
 }
