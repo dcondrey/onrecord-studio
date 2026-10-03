@@ -3,7 +3,7 @@
 use super::*;
 use super::{
     guidance::{validate_crawl_policy, validate_source_guidance},
-    objects::{sanitize_file_name, store_inline_payload},
+    objects::{local_import_limit, sanitize_file_name, store_inline_payload},
 };
 
 impl QueueManager {
@@ -238,11 +238,11 @@ impl QueueManager {
                     path.display()
                 )));
             }
-            if metadata.len() > MAXIMUM_LOCAL_IMPORT_BYTES {
+            let maximum_bytes = local_import_limit(&path).await;
+            if metadata.len() > maximum_bytes {
                 return Err(AppError::DataParsing(format!(
-                    "Selected file '{}' exceeds the {}-byte import limit",
-                    path.display(),
-                    MAXIMUM_LOCAL_IMPORT_BYTES
+                    "Selected file '{}' exceeds the {maximum_bytes}-byte import limit",
+                    path.display()
                 )));
             }
             canonical_paths.push(path);

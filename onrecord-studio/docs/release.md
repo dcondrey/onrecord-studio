@@ -25,6 +25,15 @@ installer package (this document). The Developer ID build is notarized and self-
   entitlements.
 - Runtime data is stored below Tauri's resolved application-data container, including
   `onrecord_studio_core.db`, `onrecord_studio_corpus.db`, `documents/`, and `reports/`.
+- The bundle holds one executable. Outlook PST files are read by a child process that is that same
+  signed executable started with the hidden first argument `--onrecord-expand-pst`; `main` handles
+  it before Tauri, StoreKit, or the license gate start. Nothing extra is signed, embedded, or
+  given `com.apple.security.inherit`. The child gets the same entitlements and App Sandbox
+  container as the app, and touches only the managed copy under `documents/` and a staging
+  directory beside it. The mechanism was checked with a minimal C probe, not the OnRecord build: an
+  ad-hoc-signed bundle with only the sandbox entitlement that started its own executable again.
+  The child was sandboxed, shared the parent's container, wrote inside it, and was refused outside
+  it. Repeat the check on the provisioned build by importing a PST in the sandboxed smoke test.
 
 ## Paid-license enforcement
 

@@ -369,7 +369,12 @@ async fn expand_container(
             "CONTAINER_HASH_INVALID: raw file SHA-256 is not normalized".to_string(),
         )
     })?;
-    let destination = parent.join(format!("{}_{}_contents", source_document.id, hash_prefix));
+    let (suffix, maximum_cached_entries) = if format == DocumentFormat::OutlookStore {
+        (PST_EXPANSION_SUFFIX, MAXIMUM_PST_CONTAINER_ENTRIES)
+    } else {
+        ("contents", MAXIMUM_CONTAINER_ENTRIES)
+    };
+    let destination = parent.join(format!("{}_{}_{suffix}", source_document.id, hash_prefix));
     let archive_path = local_path.to_path_buf();
     let extraction_destination = destination.clone();
     let extracted_files = spawn_blocking("Container parser", move || {
@@ -379,7 +384,7 @@ async fn expand_container(
                 extraction_destination.display()
             ))
         })? {
-            return existing_container_manifest(&extraction_destination);
+            return existing_container_manifest(&extraction_destination, maximum_cached_entries);
         }
         match format {
             DocumentFormat::Zip | DocumentFormat::EmailArchive => {
@@ -482,7 +487,10 @@ async fn expand_container(
     })
 }
 
-pub(super) fn existing_container_manifest(destination: &Path) -> Result<Vec<PathBuf>, AppError> {
+pub(super) fn existing_container_manifest(
+    destination: &Path,
+    maximum_entries: usize,
+) -> Result<Vec<PathBuf>, AppError> {
     let root_metadata = std::fs::symlink_metadata(destination).map_err(|error| {
         AppError::Storage(format!(
             "Failed to inspect cached container '{}': {error}",
@@ -515,9 +523,9 @@ pub(super) fn existing_container_manifest(destination: &Path) -> Result<Vec<Path
             entry_count = entry_count.checked_add(1).ok_or_else(|| {
                 AppError::DataParsing("Cached container entry count overflowed".to_string())
             })?;
-            if entry_count > MAXIMUM_CONTAINER_ENTRIES {
+            if entry_count > maximum_entries {
                 return Err(AppError::DataParsing(format!(
-                    "Cached container '{}' exceeds {MAXIMUM_CONTAINER_ENTRIES} entries",
+                    "Cached container '{}' exceeds {maximum_entries} entries",
                     destination.display()
                 )));
             }
@@ -554,11 +562,25 @@ pub(super) fn existing_container_manifest(destination: &Path) -> Result<Vec<Path
 /// per-archive expansion ceiling, this bound covers every recursively extracted descendant and is
 /// recomputed from disk, so a durable child task cannot reset it by resuming after process restart.
 fn validate_container_tree_budget(root: &Path) -> Result<u64, AppError> {
-    validate_container_tree_budget_with_limits(
-        root,
-        MAXIMUM_CONTAINER_TREE_ENTRIES,
-        MAXIMUM_CONTAINER_TREE_BYTES,
-    )
+    let (maximum_entries, maximum_bytes) = container_tree_limits(root);
+    validate_container_tree_budget_with_limits(root, maximum_entries, maximum_bytes)
+}
+
+/// See `PST_EXPANSION_SUFFIX` for why the root's name may select the budget.
+pub(super) fn container_tree_limits(root: &Path) -> (usize, u64) {
+    let pst_root = root
+        .file_name()
+        .and_then(|name| name.to_str())
+        .and_then(|name| name.strip_suffix(PST_EXPANSION_SUFFIX))
+        .is_some_and(|stem| stem.ends_with('_'));
+    if pst_root {
+        (
+            MAXIMUM_PST_CONTAINER_TREE_ENTRIES,
+            MAXIMUM_PST_CONTAINER_TREE_BYTES,
+        )
+    } else {
+        (MAXIMUM_CONTAINER_TREE_ENTRIES, MAXIMUM_CONTAINER_TREE_BYTES)
+    }
 }
 
 pub(super) fn validate_container_tree_budget_with_limits(

@@ -26,22 +26,30 @@ use uuid::Uuid;
 use crate::error::AppError;
 use crate::file_name::sanitized_component;
 use crate::parsers::msg::{build_metadata_summary, strip_html_markup};
+use crate::parsers::pst_isolation::{expand_in_child, ChildBudget};
 use crate::parsers::rtf::extract_rtf_bytes;
 use crate::parsers::source::inspect_regular_file;
 use crate::parsers::staging::cleanup_failed_extraction;
 use crate::parsers::text::windows_1252_char;
 use crate::types::{EmailMetadata, EmailParticipantMetadata};
 
-const MAX_PST_BYTES: u64 = 1024 * 1024 * 1024;
+// PST budgets are their own, above the generic container caps (512 MB source, 2,000 entries),
+// which a real production mailbox routinely exceeds. Each run happens in a child process (see
+// `pst_isolation`) whose wall-clock time is bounded by `pst_isolation::child_timeout`.
+/// Source size. The ingestion queue admits a PST up to this size for local import and parsing;
+/// network downloads keep the generic 512 MB document limit.
+pub const MAX_PST_BYTES: u64 = 8 * 1024 * 1024 * 1024;
 /// Counts every directory and file written. A cached re-run is re-listed by
-/// `existing_container_manifest`, which counts directories too, so counting only messages here
-/// would let a first run pass that its own cache then refuses.
-const MAX_ENTRY_COUNT: usize = 2_000;
+/// `existing_container_manifest` with this same limit, and it counts directories too, so counting
+/// only messages here would let a first run pass that its own cache then refuses.
+pub const MAX_ENTRY_COUNT: usize = 50_000;
 const MAX_ENTRY_BYTES: u64 = 512 * 1024 * 1024;
-const MAX_TOTAL_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+/// Total bytes written for one mailbox.
+pub const MAX_TOTAL_BYTES: u64 = 8 * 1024 * 1024 * 1024;
 const MAX_FOLDER_COUNT: usize = 10_000;
 const MAX_FOLDER_DEPTH: usize = 64;
-const MAX_MESSAGE_ROWS: usize = 20_000;
+/// Rows read from contents tables, including rows whose message cannot be opened.
+const MAX_MESSAGE_ROWS: usize = 100_000;
 /// Folders deeper than this share the deepest directory; the full path stays in the text. With
 /// `MAX_NAME_BYTES` this keeps a relative path well inside macOS's 1024-byte PATH_MAX.
 const MAX_DIRECTORY_DEPTH: usize = 8;
@@ -123,14 +131,28 @@ pub fn inspect_pst_header(path: &Path) -> Result<Result<PstLayout, &'static str>
     })
 }
 
+/// Expands `pst_path` into the new directory `destination` atomically. The reader runs in a child
+/// process; a crash, abort or timeout there is an `Err` for this file, never an empty mailbox.
 pub fn extract_pst_container_with_manifest<A: AsRef<Path>, D: AsRef<Path>>(
     pst_path: A,
     destination: D,
 ) -> Result<Vec<PathBuf>, AppError> {
-    let pst_path = pst_path.as_ref();
-    let destination = destination.as_ref();
-    inspect_regular_file(pst_path, "PST", MAX_PST_BYTES)?;
-    let layout = inspect_pst_header(pst_path)?
+    extract_in_child(
+        pst_path.as_ref(),
+        destination.as_ref(),
+        ChildBudget::for_source,
+        |_| {},
+    )
+}
+
+fn extract_in_child(
+    pst_path: &Path,
+    destination: &Path,
+    budget_for_source: impl FnOnce(u64) -> ChildBudget,
+    configure: impl FnOnce(&mut std::process::Command),
+) -> Result<Vec<PathBuf>, AppError> {
+    let source = inspect_regular_file(pst_path, "PST", MAX_PST_BYTES)?;
+    inspect_pst_header(pst_path)?
         .map_err(|reason| AppError::DataParsing(format!("PST_FORMAT_UNSUPPORTED: {reason}")))?;
     if destination.as_os_str().is_empty() || destination.file_name().is_none() {
         return Err(AppError::DataParsing(
@@ -173,7 +195,8 @@ pub fn extract_pst_container_with_manifest<A: AsRef<Path>, D: AsRef<Path>>(
         ))
     })?;
 
-    let relative_files = match extract_into(pst_path, layout, &staging) {
+    let budget = budget_for_source(source.len());
+    let relative_files = match expand_in_child(pst_path, &staging, &budget, configure) {
         Ok(files) => files,
         Err(error) => return Err(cleanup_failed_extraction(&staging, "PST", error)),
     };
@@ -189,6 +212,23 @@ pub fn extract_pst_container_with_manifest<A: AsRef<Path>, D: AsRef<Path>>(
         .into_iter()
         .map(|relative_path| destination.join(relative_path))
         .collect())
+}
+
+/// The child process's whole job: read the mailbox into the empty staging directory the parent
+/// created. Commit and cleanup stay with the parent.
+pub(crate) fn expand_into_staging(pst_path: &Path, staging: &Path) -> Result<(), AppError> {
+    inspect_regular_file(pst_path, "PST", MAX_PST_BYTES)?;
+    let layout = inspect_pst_header(pst_path)?
+        .map_err(|reason| AppError::DataParsing(format!("PST_FORMAT_UNSUPPORTED: {reason}")))?;
+    let empty_directory = fs::symlink_metadata(staging).is_ok_and(|metadata| metadata.is_dir())
+        && fs::read_dir(staging).is_ok_and(|mut entries| entries.next().is_none());
+    if !empty_directory {
+        return Err(AppError::Internal(format!(
+            "PST_STAGING_INVALID: '{}' is not an empty directory",
+            staging.display()
+        )));
+    }
+    extract_into(pst_path, layout, staging).map(|_| ())
 }
 
 enum PstStore {
@@ -1287,6 +1327,73 @@ mod tests {
     }
 
     #[test]
+    fn the_pst_entry_cap_holds_at_its_real_value() {
+        let directory = tempfile::tempdir().expect("temp dir");
+        let mut output = Output::new(directory.path(), MAX_ENTRY_COUNT);
+        output.entries = MAX_ENTRY_COUNT - 2;
+        output
+            .write_file(PathBuf::from("limit-1.txt"), b"x")
+            .expect("limit - 1");
+        output
+            .write_file(PathBuf::from("limit.txt"), b"x")
+            .expect("at the limit");
+        let over = output.write_file(PathBuf::from("limit+1.txt"), b"x");
+        assert!(over.is_err_and(|error| error.to_string().contains("PST_ENTRY_COUNT_EXCEEDED")));
+    }
+
+    /// What `extraction.rs` sees when the reader dies: an error, no destination, no staging left.
+    #[test]
+    fn a_crashed_or_hung_reader_commits_nothing_and_leaves_no_staging() {
+        for fault in ["abort", "hang"] {
+            let directory = tempfile::tempdir().expect("temp dir");
+            let destination = directory.path().join("contents");
+            let result = extract_in_child(
+                Path::new(TIKA_FIXTURE),
+                &destination,
+                |_| ChildBudget {
+                    timeout: std::time::Duration::from_secs(1),
+                    max_entries: MAX_ENTRY_COUNT,
+                    max_bytes: MAX_TOTAL_BYTES,
+                },
+                |command| {
+                    command.env(crate::parsers::pst_isolation::tests::FAULT_ENV, fault);
+                },
+            );
+            assert!(result.is_err(), "{fault}: {result:?}");
+            assert!(!destination.exists(), "{fault}: nothing committed");
+            let leftovers = fs::read_dir(directory.path())
+                .expect("list")
+                .filter_map(Result::ok)
+                .count();
+            assert_eq!(leftovers, 0, "{fault}: staging removed");
+        }
+    }
+
+    /// Sparse files, so the real 8 GiB boundary costs no disk.
+    #[test]
+    fn the_pst_source_cap_admits_the_limit_and_refuses_one_byte_more() {
+        let directory = tempfile::tempdir().expect("temp dir");
+        for (length, admitted) in [
+            (MAX_PST_BYTES - 1, true),
+            (MAX_PST_BYTES, true),
+            (MAX_PST_BYTES + 1, false),
+        ] {
+            let source = directory.path().join(format!("{length}.pst"));
+            let file = File::create(&source).expect("create");
+            file.set_len(length).expect("sparse length");
+            let error = extract_pst_container_with_manifest(&source, directory.path().join("out"))
+                .expect_err("zeros are not a mailbox")
+                .to_string();
+            assert_eq!(
+                !error.contains("PST_SIZE_INVALID"),
+                admitted,
+                "{length}: {error}"
+            );
+            fs::remove_file(&source).expect("remove");
+        }
+    }
+
+    #[test]
     fn a_truncated_mailbox_fails_cleanly_and_leaves_no_staging() {
         let original = fs::read(TIKA_FIXTURE).expect("fixture");
         for length in [
@@ -1332,7 +1439,13 @@ mod tests {
             let directory = tempfile::tempdir().expect("temp dir");
             let source = directory.path().join("flipped.pst");
             fs::write(&source, &bytes).expect("write");
-            let _ = extract_pst_container_with_manifest(&source, directory.path().join("contents"));
+            // The child contains a panic now; it is still a reader defect worth failing on.
+            let result =
+                extract_pst_container_with_manifest(&source, directory.path().join("contents"));
+            assert!(
+                !result.is_err_and(|error| error.to_string().contains("PST_CHILD_CRASHED")),
+                "seed {seed:x}"
+            );
         }
     }
 

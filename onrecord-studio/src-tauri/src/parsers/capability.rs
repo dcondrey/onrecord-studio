@@ -50,7 +50,10 @@ pub const fn parser_capability(format: DocumentFormat) -> ParserCapability {
     ParserCapability {
         format,
         route,
-        maximum_source_bytes: 512 * 1024 * 1024,
+        maximum_source_bytes: match format {
+            DocumentFormat::OutlookStore => super::pst::MAX_PST_BYTES,
+            _ => 512 * 1024 * 1024,
+        },
         working_set_multiplier,
         cost_class,
         residual_evidence_audit,

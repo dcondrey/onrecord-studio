@@ -381,6 +381,18 @@ fn application_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .build()
 }
 
+/// When this process was started as an isolated worker (the PST reader child), runs it and returns
+/// its exit code. `main` must call this before [`run`], so a worker never starts Tauri.
+pub fn run_isolated_worker() -> Option<i32> {
+    let mut arguments = std::env::args_os().skip(1);
+    if arguments.next()? != parsers::pst_isolation::PST_CHILD_FLAG {
+        return None;
+    }
+    Some(parsers::pst_isolation::run_pst_child(
+        &arguments.collect::<Vec<_>>(),
+    ))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
