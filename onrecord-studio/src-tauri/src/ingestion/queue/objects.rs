@@ -185,6 +185,22 @@ pub(super) async fn stream_download(
     Ok(DownloadedPayload { path, ..downloaded })
 }
 
+/// The import ceiling for one selected file: the PST cap when it starts with the Outlook store
+/// signature, the generic limit otherwise. The signature is re-checked by format detection on the
+/// managed copy, and a non-PST over the generic limit is refused there by its parser capability.
+pub(super) async fn local_import_limit(path: &Path) -> u64 {
+    let mut signature = [0_u8; 4];
+    let is_outlook_store = match tokio::fs::File::open(path).await {
+        Ok(mut file) => file.read_exact(&mut signature).await.is_ok() && &signature == b"!BDN",
+        Err(_) => false,
+    };
+    if is_outlook_store {
+        MAXIMUM_PST_LOCAL_IMPORT_BYTES
+    } else {
+        MAXIMUM_LOCAL_IMPORT_BYTES
+    }
+}
+
 pub(super) async fn import_local_payload(
     download_root: &Path,
     source_path: &Path,
@@ -204,11 +220,11 @@ pub(super) async fn import_local_payload(
             source_path.display()
         )));
     }
-    if metadata.len() > MAXIMUM_LOCAL_IMPORT_BYTES {
+    let maximum_bytes = local_import_limit(source_path).await;
+    if metadata.len() > maximum_bytes {
         return Err(AppError::DataParsing(format!(
-            "Selected file '{}' exceeds the {}-byte limit",
-            source_path.display(),
-            MAXIMUM_LOCAL_IMPORT_BYTES
+            "Selected file '{}' exceeds the {maximum_bytes}-byte limit",
+            source_path.display()
         )));
     }
     let staging_directory = download_root.join(".staging");
@@ -243,11 +259,11 @@ pub(super) async fn import_local_payload(
         byte_count = byte_count.checked_add(count as u64).ok_or_else(|| {
             AppError::DataParsing("Selected file byte count overflowed".to_string())
         })?;
-        if byte_count > MAXIMUM_LOCAL_IMPORT_BYTES {
+        if byte_count > maximum_bytes {
             drop(destination);
             let _ = tokio::fs::remove_file(&staging_path).await;
             return Err(AppError::DataParsing(format!(
-                "Selected file exceeded the {MAXIMUM_LOCAL_IMPORT_BYTES}-byte limit while reading"
+                "Selected file exceeded the {maximum_bytes}-byte limit while reading"
             )));
         }
         destination

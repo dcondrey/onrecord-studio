@@ -101,6 +101,24 @@ const MAXIMUM_CONTAINER_TREE_ENTRIES: usize = MAXIMUM_CONTAINER_ENTRIES * MAXIMU
 
 const MAXIMUM_CONTAINER_TREE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 
+// A PST mailbox expands under its own budgets (`parsers::pst`). Its cached re-run is listed
+// against the same entry cap its first run was held to, and a tree rooted at a mailbox gets the
+// generic recursive budget on top for archives attached inside it. Zip and tar keep the caps above.
+const MAXIMUM_PST_CONTAINER_ENTRIES: usize = crate::parsers::pst::MAX_ENTRY_COUNT;
+
+const MAXIMUM_PST_CONTAINER_TREE_ENTRIES: usize =
+    MAXIMUM_PST_CONTAINER_ENTRIES + MAXIMUM_CONTAINER_TREE_ENTRIES;
+
+const MAXIMUM_PST_CONTAINER_TREE_BYTES: u64 =
+    crate::parsers::pst::MAX_TOTAL_BYTES + MAXIMUM_CONTAINER_TREE_BYTES;
+
+/// Names a mailbox expansion `<id>_<hash>_mailbox` instead of `_contents`. A tree root is always a
+/// top-level destination this module named, never a path from inside an archive, so the suffix
+/// alone selects the PST tree budget; a PST nested in a zip stays under the zip root's budget.
+const PST_EXPANSION_SUFFIX: &str = "mailbox";
+
+const MAXIMUM_PST_LOCAL_IMPORT_BYTES: u64 = crate::parsers::pst::MAX_PST_BYTES;
+
 // Synthetic child IDs occupy a dedicated range that remains exactly representable by JavaScript.
 // Keep this namespace disjoint from upstream IDs when introducing another derived document kind.
 const SYNTHETIC_DOCUMENT_NAMESPACE: u64 = 1_u64 << 52;

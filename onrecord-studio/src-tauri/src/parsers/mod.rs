@@ -21,6 +21,7 @@ pub mod pdf_auxiliary;
 pub mod pdf_metadata_signals;
 pub mod pixelation;
 pub mod pst;
+pub mod pst_isolation;
 pub mod raster_audit;
 pub mod recovery;
 pub mod rtf;

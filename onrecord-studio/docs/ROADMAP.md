@@ -895,11 +895,21 @@ Triaged 2026-10-02 from an external model review (DeepSeek, docs-only, so each c
 against code first). Built: phrase search, storage-version compression, source re-check with a
 watch dimension, Apple Vision and PDFKit OCR on macOS (no external tools, so it can run in the
 sandbox; unverified in a signed App Store build). PST mailboxes as bounded containers
-(`parsers/pst.rs`). Open on PST: the shared container caps (512 MB, about 2,000 entries) refuse
-most real productions whole; `outlook-pst` 1.2.0 cannot open attached messages and failed every
-message of the public `enron.pst` (recorded per entry, not fatal); release builds use
-`panic = "abort"`, so a crate panic the 65,000-mutation sweep did not reach would close the app.
-Raising the caps per format and parsing PSTs out of process are the next steps. Open on the re-check: an opt-in schedule (never on launch), and retaining the
+(`parsers/pst.rs`). Built 2026-10-03: the PST reader runs in a child process, the app's own
+executable re-invoked with a hidden first argument that `main` dispatches before Tauri starts
+(`parsers/pst_isolation.rs`), because `panic = "abort"` makes `catch_unwind` useless. The parent
+owns the staging directory, kills the child at a wall-clock timeout (120 s plus 1 s per 2 MiB of
+source), re-measures what it wrote, and records a crash, abort or timeout as a failure of that
+file, never as an empty mailbox. PSTs have their own caps: 8 GiB source (local import and parser
+capability; network downloads stay at 512 MB), 50,000 files and folders written, 8 GiB written,
+100,000 message rows; the expansion is named `_mailbox`, which gives its tree the generic
+recursive budget on top for attached archives. Zip and tar keep their caps. Sandboxed self-spawn was verified only with
+a minimal ad-hoc-signed C probe bundle, not the OnRecord build; a provisioned App Store build and
+App Review's view of it are unverified. Still open on PST: `outlook-pst` 1.2.0 cannot open
+attached messages and failed every message of the public `enron.pst` (recorded per entry, not
+fatal); memory is bounded only by the timeout, since macOS does not enforce `RLIMIT_AS`; a PST
+cached under the previous `_contents` name is re-expanded and the old directory is left behind.
+Open on the re-check: an opt-in schedule (never on launch), and retaining the
 re-fetched bytes behind a referencing row that purge releases. Deferred, with the evidence:
 
 - Ingest-time C2PA reading: none of the 91 stored files in the real installation carries a C2PA
