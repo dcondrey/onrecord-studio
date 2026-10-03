@@ -92,12 +92,18 @@ async fn load_scanned_documents(
         .query_connection("Absence-of-records scan", move |conn| {
             let mut statement = conn
                 .prepare(
+                    // Only a records release is a set whose gaps mean anything. A crawled site's
+                    // files are fetched by link and, under a collection subject, deliberately in
+                    // part, so a missing number there is a file not collected, not one withheld.
                     "SELECT d.portal_subdomain, d.request_id, d.id, d.file_name, fts.extracted_text
                      FROM documents_fts fts
                      JOIN documents d
                         ON d.id = fts.document_id
                        AND d.portal_subdomain = fts.portal_subdomain
+                     JOIN portals p ON p.subdomain = d.portal_subdomain
                      WHERE LOWER(TRIM(d.visibility)) = 'public'
+                       AND COALESCE(p.source_kind, 'NEXT_REQUEST')
+                           IN ('NEXT_REQUEST', 'LOCAL_FILE', 'PASTED_CONTENT')
                      ORDER BY d.request_id ASC, d.portal_subdomain ASC, d.id ASC
                      LIMIT ?1",
                 )
@@ -525,5 +531,51 @@ mod tests {
         let a = collect_findings(&scanned);
         let b = collect_findings(&scanned);
         assert_eq!(a[0].id, b[0].id);
+    }
+
+    #[tokio::test]
+    async fn a_crawled_sites_numbering_gap_is_not_read_as_withheld_records() {
+        let temp = tempfile::tempdir().unwrap();
+        let repository = DuckDbRepository::new(temp.path().join("core.db")).unwrap();
+        repository
+            .run_migrations(include_str!("../../../migrations/0001_initial_schema.sql"))
+            .await
+            .unwrap();
+        {
+            let conn = repository.analytics_connection().await.unwrap();
+            for (portal, kind) in [("release", "NEXT_REQUEST"), ("site", "WEB_CRAWL")] {
+                conn.execute(
+                    "INSERT INTO portals (subdomain, display_name, base_url, source_kind)
+                     VALUES (?1, ?1, 'https://example.test', ?2)",
+                    params![portal, kind],
+                )
+                .unwrap();
+                for (id, number) in [(1_i64, 101), (2, 102), (3, 104), (4, 105), (5, 106)] {
+                    conn.execute(
+                        "INSERT INTO documents (id, request_id, portal_subdomain, visibility, created_at, updated_at)
+                         VALUES (?1, 7, ?2, 'public', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+                        params![id, portal],
+                    )
+                    .unwrap();
+                    conn.execute(
+                        "INSERT INTO documents_fts (document_id, portal_subdomain, file_name, extracted_text)
+                         VALUES (?1, ?2, ?3, ?4)",
+                        params![id, portal, format!("doc-{id}.pdf"), format!("Invoice #{number} approved.")],
+                    )
+                    .unwrap();
+                }
+            }
+        }
+        let findings = run(&repository).await.unwrap();
+        assert!(
+            !findings.is_empty(),
+            "the release's gap must still be found"
+        );
+        assert!(
+            findings
+                .iter()
+                .all(|finding| finding.subject.portal_key.as_deref() == Some("release")),
+            "a crawled site's gap must not be reported: {findings:#?}"
+        );
     }
 }
