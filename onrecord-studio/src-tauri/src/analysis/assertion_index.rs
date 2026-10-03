@@ -348,7 +348,7 @@ pub struct DenialFingerprint {
 
 static DENIAL_PHRASE_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r"(?i)\bno\s+(?:responsive\s+records|records\s+(?:exist|were\s+found|are\s+available|were\s+located|were\s+identified|responsive))\b|\bunable\s+to\s+locate\s+(?:any\s+)?records\b|\bcannot\s+locate\s+(?:any\s+)?records\b"
+        r"(?i)\bno\s+(?:responsive\s+(?:records|documents)|records\s+(?:exist|were\s+found|are\s+available|were\s+located|were\s+identified|responsive))\b|\bunable\s+to\s+locate\s+(?:any\s+)?records\b|\bcannot\s+locate\s+(?:any\s+)?records\b"
     ).expect("denial phrase regex")
 });
 
@@ -593,6 +593,8 @@ mod tests {
         assert!(extract_denial("The City was unable to locate any records.").is_some());
         assert!(extract_denial("We regret to inform you that no records were found.").is_some());
         assert!(extract_denial("Attached please find the responsive records.").is_none());
+        // San Diego's NextRequest closure wording.
+        assert!(extract_denial("The City of San Diego has no responsive documents.").is_some());
     }
 
     #[test]

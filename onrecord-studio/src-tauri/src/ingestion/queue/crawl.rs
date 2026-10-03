@@ -1,11 +1,13 @@
 //! Crawl admission: path identity, host scope, frontier exclusions, and page and resource budgets.
 
+use super::intake::stable_source_identifier;
+use super::objects::store_inline_payload;
 use super::*;
 use super::{
     frontier::enqueue_tasks_resilient,
     guidance::{
         guidance_allows_url, guidance_explicitly_allows_host, is_supported_external_data_platform,
-        source_host_matches, validate_page_parameters,
+        source_host_matches, subject_searches, validate_page_parameters,
     },
     relevance::admitted,
     worker::send_progress,
@@ -281,6 +283,7 @@ pub(super) async fn fetch_metadata_page(
     context: &WorkerContext,
     page: usize,
     per_page: usize,
+    search: Option<String>,
 ) -> Result<(), AppError> {
     validate_page_parameters(page, per_page)?;
     context.limiter.acquire(&context.portal.portal_key).await?;
@@ -293,7 +296,7 @@ pub(super) async fn fetch_metadata_page(
     )
     .await;
     if context.portal.api_layout.page_parameter == hosted_nextrequest::PAGE_PARAMETER {
-        return list_hosted_page(context, page, per_page).await;
+        return list_hosted_page(context, page, per_page, search).await;
     }
     let response = context
         .client
@@ -377,6 +380,7 @@ pub(super) async fn fetch_metadata_page(
                 subdomain: context.portal.portal_key.clone(),
                 page: next_page,
                 per_page,
+                search: None,
             });
         }
     }
@@ -391,14 +395,33 @@ async fn list_hosted_page(
     context: &WorkerContext,
     page: usize,
     per_page: usize,
+    search: Option<String>,
 ) -> Result<(), AppError> {
+    let searches = context
+        .crawl
+        .guidance
+        .subject
+        .as_deref()
+        .map(subject_searches)
+        .unwrap_or_default();
+    // A subject naming several searches ("encampment, safe parking") runs each one; a request
+    // two searches both find is queued once, because its task identifier is the request's.
+    if search.is_none() && searches.len() > 1 {
+        let tasks = searches
+            .into_iter()
+            .map(|search| IngestionTask::FetchMetadataPage {
+                subdomain: context.portal.portal_key.clone(),
+                page,
+                per_page,
+                search: Some(search),
+            })
+            .collect();
+        return enqueue_tasks_resilient(context, tasks).await;
+    }
+    let search = search.or_else(|| searches.into_iter().next());
     let listed = context
         .client
-        .list_hosted_nextrequest_page(
-            &context.portal,
-            page,
-            context.crawl.guidance.subject.as_deref(),
-        )
+        .list_hosted_nextrequest_page(&context.portal, page, search.as_deref())
         .await?;
     let records_found = listed.requests.len();
     let mut tasks: Vec<IngestionTask> = listed
@@ -418,6 +441,7 @@ async fn list_hosted_page(
             subdomain: context.portal.portal_key.clone(),
             page: next_page,
             per_page,
+            search: search.clone(),
         });
     }
     send_progress(
@@ -443,7 +467,7 @@ pub(super) async fn fetch_hosted_request(
     request: hosted_nextrequest::ListedRequest,
 ) -> Result<(), AppError> {
     context.limiter.acquire(&context.portal.portal_key).await?;
-    let mut record = context
+    let (mut record, closure_notice) = context
         .client
         .fetch_hosted_request(&context.portal, request)
         .await?;
@@ -457,7 +481,7 @@ pub(super) async fn fetch_hosted_request(
         .requests_processed
         .fetch_add(1, Ordering::AcqRel);
     let request_id = record.id;
-    let tasks = std::mem::take(&mut record.documents)
+    let mut tasks: Vec<IngestionTask> = std::mem::take(&mut record.documents)
         .into_iter()
         .map(|document| {
             standard_document_task(
@@ -468,5 +492,46 @@ pub(super) async fn fetch_hosted_request(
             )
         })
         .collect();
+    if let (Some(notice), Some(closed_at)) = (closure_notice, record.closed_at.as_deref()) {
+        tasks.push(closure_notice_task(context, &record, closed_at, &notice).await?);
+    }
     enqueue_tasks_resilient(context, tasks).await
+}
+
+/// The agency's closing response ("No responsive documents ...") is its answer to the request,
+/// so it is kept as a document of the request, where denial and boilerplate detectors read it. It
+/// is labelled as the portal's closure notice, not as a released record.
+async fn closure_notice_task(
+    context: &WorkerContext,
+    record: &PublicRequest,
+    closed_at: &str,
+    notice: &str,
+) -> Result<IngestionTask, AppError> {
+    let rpid = record.rpid.as_deref().unwrap_or_default();
+    let document_id = stable_source_identifier(&format!(
+        "nextrequest-closure|{}|{rpid}",
+        context.portal.portal_key
+    ));
+    let managed_path =
+        store_inline_payload(&context.download_root, document_id, notice.as_bytes()).await?;
+    let document = DocumentMetadata {
+        id: document_id,
+        file_name: Some(format!("closure-notice-{rpid}.txt")),
+        file_size: Some(notice.len() as u64),
+        description: Some(format!("NextRequest closure notice for request {rpid}")),
+        content_type: None,
+        download_url: None,
+        created_at: closed_at.to_string(),
+        updated_at: closed_at.to_string(),
+        visibility: "public".to_string(),
+        local_path: Some(managed_path.to_string_lossy().into_owned()),
+        extracted_text_sha256: None,
+        was_ocr_processed: false,
+    };
+    Ok(standard_document_task(
+        context,
+        record.id,
+        document,
+        PayloadDepth::discovered(0, 0),
+    ))
 }

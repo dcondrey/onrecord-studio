@@ -1027,12 +1027,13 @@ impl ApiClient {
         hosted_nextrequest::decode_listing(&listing, page)
     }
 
-    /// A listed request with its opening/closing dates and public documents.
+    /// A listed request with its opening/closing dates and public documents, and the text of the
+    /// agency's closing response when the request is closed.
     pub async fn fetch_hosted_request(
         &self,
         portal: &PortalRegistration,
         request: hosted_nextrequest::ListedRequest,
-    ) -> Result<PublicRequest, AppError> {
+    ) -> Result<(PublicRequest, Option<String>), AppError> {
         if !hosted_nextrequest::is_safe_request_identifier(&request.id) {
             return Err(AppError::DataParsing(format!(
                 "NextRequest listed a request identifier '{}' that cannot be addressed",
@@ -1102,7 +1103,11 @@ impl ApiClient {
                 break;
             }
         }
-        hosted_nextrequest::to_public_request(request, timeline, documents)
+        let closure_notice = timeline.closure_notice.clone();
+        Ok((
+            hosted_nextrequest::to_public_request(request, timeline, documents)?,
+            closure_notice,
+        ))
     }
 
     async fn hosted_json(&self, url: Url, query: &[(&str, String)]) -> Result<Value, AppError> {
@@ -4725,7 +4730,7 @@ mod hosted_nextrequest_live {
         let mut documents = 0;
         let mut read = 0;
         for listed_request in listed.requests.into_iter().take(15) {
-            let request = client
+            let (request, _) = client
                 .fetch_hosted_request(&portal, listed_request)
                 .await
                 .expect("a listed request must be read");

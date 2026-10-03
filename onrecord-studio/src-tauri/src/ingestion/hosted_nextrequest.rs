@@ -55,6 +55,9 @@ pub struct ListedPage {
 pub(crate) struct RequestTimeline {
     pub opened_at: Option<String>,
     pub closed_at: Option<String>,
+    /// The text of the closing event: the agency's response, such as "No responsive documents
+    /// The City of San Diego has no responsive documents." Present only when `closed_at` is.
+    pub closure_notice: Option<String>,
 }
 
 pub(crate) fn is_listing(value: &Value) -> bool {
@@ -122,6 +125,8 @@ struct TimelineEntry {
     timeline_name: Option<String>,
     #[serde(default)]
     timeline_byline: Option<String>,
+    #[serde(default)]
+    timeline_display_text: Option<String>,
 }
 
 /// The earliest "Request Opened" and the latest "Request Closed" event. A request reopened after
@@ -133,13 +138,19 @@ pub(crate) fn decode_timeline(value: &Value) -> Result<RequestTimeline, AppError
     let mut opened: Option<NaiveDateTime> = None;
     let mut closed: Option<NaiveDateTime> = None;
     let mut reopened: Option<NaiveDateTime> = None;
+    let mut notice: Option<String> = None;
     for entry in page.timeline {
         let Some(at) = entry.timeline_byline.as_deref().and_then(parse_byline) else {
             continue;
         };
         match entry.timeline_name.as_deref().map(str::trim) {
             Some("Request Opened") => opened = Some(opened.map_or(at, |seen| seen.min(at))),
-            Some("Request Closed") => closed = Some(closed.map_or(at, |seen| seen.max(at))),
+            Some("Request Closed") => {
+                if closed.is_none_or(|seen| at >= seen) {
+                    closed = Some(at);
+                    notice = entry.timeline_display_text.as_deref().map(plain_text);
+                }
+            }
             Some("Request Reopened") => reopened = Some(reopened.map_or(at, |seen| seen.max(at))),
             _ => {}
         }
@@ -147,8 +158,33 @@ pub(crate) fn decode_timeline(value: &Value) -> Result<RequestTimeline, AppError
     let closed = closed.filter(|closed| reopened.is_none_or(|reopened| reopened < *closed));
     Ok(RequestTimeline {
         opened_at: opened.map(pacific_rfc3339),
+        closure_notice: closed.and(notice).filter(|notice| !notice.is_empty()),
         closed_at: closed.map(pacific_rfc3339),
     })
+}
+
+/// Event HTML as plain text: tags become spaces, common entities are decoded, whitespace collapses.
+fn plain_text(html: &str) -> String {
+    let mut text = String::with_capacity(html.len());
+    let mut in_tag = false;
+    for character in html.chars() {
+        match character {
+            '<' => in_tag = true,
+            '>' if in_tag => {
+                in_tag = false;
+                text.push(' ');
+            }
+            _ if !in_tag => text.push(character),
+            _ => {}
+        }
+    }
+    text.replace("&nbsp;", " ")
+        .replace("&amp;", "&")
+        .replace("&#39;", "'")
+        .replace("&quot;", "\"")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// `"August  8, 2024, 11:48am by the requester"` as a local wall-clock time.
@@ -370,6 +406,21 @@ mod tests {
         assert_eq!(
             timeline.closed_at.as_deref(),
             Some("2024-08-29T14:01:00-07:00")
+        );
+    }
+
+    #[test]
+    fn the_latest_closure_text_is_the_agency_response() {
+        let value = json!({"timeline": [
+            {"timeline_name": "Request Closed", "timeline_byline": "March 9, 2024, 9:00am",
+             "timeline_display_text": "<p>No responsive documents</p><p>The City of San Diego has no responsive documents.</p>"},
+            {"timeline_name": "Request Closed", "timeline_byline": "March 5, 2024, 9:00am",
+             "timeline_display_text": "<p>02. Released</p>"},
+            {"timeline_name": "Request Opened", "timeline_byline": "March 1, 2024, 9:00am"}
+        ]});
+        assert_eq!(
+            decode_timeline(&value).unwrap().closure_notice.as_deref(),
+            Some("No responsive documents The City of San Diego has no responsive documents.")
         );
     }
 
