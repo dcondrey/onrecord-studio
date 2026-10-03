@@ -39,12 +39,16 @@ const MIN_SAMPLE: i64 = 5;
 /// Reading `average` as `median` is a category error; each metric compares with its own.
 const AVERAGE: Phrases = &[&["average"], &["mean"], &["on", "average"]];
 const MEDIAN: Phrases = &[&["median"], &["typical"]];
+/// Records requests specifically. A bare "requests" admitted service-request statistics: on a
+/// live San Diego collection, "NPD closed 882 requests with an average response time of 14 days"
+/// (police calls for service) was set against the records portal's closures.
 const REQUEST_CONTEXT: Phrases = &[
     &["records", "request"],
     &["records", "requests"],
     &["public", "records"],
-    &["request"],
-    &["requests"],
+    &["pra"],
+    &["cpra"],
+    &["foia"],
 ];
 const RESPONSE_CONTEXT: Phrases = &[
     &["response", "time"],
@@ -584,7 +588,7 @@ mod tests {
                 )),
             ),
             (
-                "Requests were closed in a median of eight days during fiscal year 2023-24.",
+                "Records requests were closed in a median of eight days during fiscal year 2023-24.",
                 Some((Metric::Median, 8, Hedge::Exact, Some(Period::Fiscal(2024)))),
             ),
             (
@@ -592,7 +596,7 @@ mod tests {
                 Some((Metric::Average, 12, Hedge::AtMost, None)),
             ),
             (
-                "The average response time for requests was about 15 days.",
+                "The average response time for PRA requests was about 15 days.",
                 Some((Metric::Average, 15, Hedge::Approximate, None)),
             ),
             // Business days are not measured here.
@@ -740,5 +744,17 @@ mod tests {
         )
         .await;
         assert!(run(&other_year).await.unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_service_request_statistic_is_not_a_records_response_claim() {
+        assert!(extract_claims(
+            "The week proceeding, NPD closed 882 requests with an average response time of 14 days."
+        )
+        .is_empty());
+        assert_eq!(
+            extract_claims("The average CPRA response time was 14 days in 2024.").len(),
+            1
+        );
     }
 }
