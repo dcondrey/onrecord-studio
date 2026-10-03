@@ -88,6 +88,9 @@ pub enum ExtractionRoute {
     Container(&'static str),
     ToolRequired(&'static str),
     KeyRequired,
+    /// A photograph or other image OCR read no text from. It is kept as evidence to view; it
+    /// has nothing to search.
+    ImageWithoutText,
     Unknown,
 }
 

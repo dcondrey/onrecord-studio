@@ -213,11 +213,19 @@ pub(super) async fn extract_document(
                 .await
                 .map_err(|_| AppError::Internal("OCR scheduler is unavailable".to_string()))?;
             let path = local_path.to_path_buf();
-            let text = spawn_blocking("OCR", move || execute_local_ocr_scan(&path)).await??;
-            Ok(ExtractedDocument::Searchable {
-                text,
-                was_ocr_processed: true,
-            })
+            match spawn_blocking("OCR", move || execute_local_ocr_scan(&path)).await? {
+                Ok(text) => Ok(ExtractedDocument::Searchable {
+                    text,
+                    was_ocr_processed: true,
+                }),
+                // A released photograph has no text to read, and is evidence all the same.
+                // Recording it as a failure discarded every encampment photo in a response.
+                Err(error) if is_empty_ocr(&error) => Ok(ExtractedDocument::Deferred {
+                    format,
+                    route: ExtractionRoute::ImageWithoutText,
+                }),
+                Err(error) => Err(error),
+            }
         }
         DocumentFormat::WordPackage
         | DocumentFormat::PresentationPackage
@@ -655,12 +663,17 @@ pub(super) fn archive_entry_id(
     SYNTHETIC_DOCUMENT_NAMESPACE | (identifier & (SYNTHETIC_DOCUMENT_NAMESPACE - 1))
 }
 
+fn is_empty_ocr(error: &AppError) -> bool {
+    matches!(error, AppError::DataParsing(message) if message.starts_with("OCR_OUTPUT_EMPTY"))
+}
+
 pub(super) fn extraction_route_label(route: ExtractionRoute) -> String {
     match route {
         ExtractionRoute::Container(name) => format!("container extractor required: {name}"),
         ExtractionRoute::ToolRequired(name) => format!("specialist tool required: {name}"),
         ExtractionRoute::KeyRequired => "decryption key required".to_string(),
         ExtractionRoute::Unknown => "unrecognized document format".to_string(),
+        ExtractionRoute::ImageWithoutText => "image with no recognizable text".to_string(),
         ExtractionRoute::DuckDb | ExtractionRoute::SqlDump => {
             "trusted database extractor unexpectedly deferred".to_string()
         }

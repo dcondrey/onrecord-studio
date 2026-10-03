@@ -33,6 +33,7 @@ pub const fn parser_capability(format: DocumentFormat) -> ParserCapability {
         ExtractionRoute::Container(_) => (3, ParserCostClass::ContainerExpansion),
         ExtractionRoute::ToolRequired(_)
         | ExtractionRoute::KeyRequired
+        | ExtractionRoute::ImageWithoutText
         | ExtractionRoute::Unknown => (1, ParserCostClass::Deferred),
         _ => (3, ParserCostClass::CpuBound),
     };

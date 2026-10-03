@@ -338,6 +338,9 @@ struct HostState {
     throttle_strikes: u32,
     /// Pacing learned from this host's 429s, which every later request to it keeps.
     throttled_interval: Option<Duration>,
+    /// The end of the current 429 back-off. Requests already in flight when a host throttles
+    /// answer 429 too; those belong to the same episode and are not further strikes.
+    backoff_until: Option<Instant>,
     stop: Option<HostStopReason>,
     /// URLs the operator pointed the application at, or endpoints a platform adapter identified
     /// as the publisher's own documented API. Robots path exclusions govern link-following
@@ -356,6 +359,7 @@ impl HostState {
             requests_spent: 0,
             throttle_strikes: 0,
             throttled_interval: None,
+            backoff_until: None,
             stop: None,
             user_directed: HashSet::new(),
         }
@@ -586,6 +590,10 @@ impl HostGovernor {
                     return None;
                 }
                 self.with_host(&host, |state| {
+                    let now = Instant::now();
+                    if let Some(until) = state.backoff_until.filter(|until| *until > now) {
+                        return Some(until - now);
+                    }
                     state.throttle_strikes = state.throttle_strikes.saturating_add(1);
                     if state.throttle_strikes >= THROTTLE_STRIKES_BEFORE_STOP
                         && state.stop.is_none()
@@ -606,7 +614,7 @@ impl HostGovernor {
                             THROTTLE_BACKOFF_FLOOR * (1 << (state.throttle_strikes - 1).min(5)),
                         )
                         .min(MAXIMUM_RETRY_AFTER);
-                    let now = Instant::now();
+                    state.backoff_until = Some(now + backoff);
                     state.next_allowed = Some(state.next_allowed.unwrap_or(now).max(now) + backoff);
                     Some(backoff)
                 })
@@ -618,7 +626,7 @@ impl HostGovernor {
                     state.throttle_strikes = 0;
                     state.throttled_interval = state
                         .throttled_interval
-                        .map(|learned| learned.mul_f32(0.95))
+                        .map(|learned| learned.mul_f32(0.99))
                         .filter(|learned| *learned > self.minimum_interval);
                 });
                 None
@@ -788,12 +796,12 @@ mod tests {
         let target = url("https://example.gov/a");
         for _ in 1..THROTTLE_STRIKES_BEFORE_STOP {
             assert!(governor
-                .record_status(&target, 429, Some(Duration::from_secs(4)))
+                .record_status(&target, 429, Some(Duration::ZERO))
                 .is_some());
             assert!(governor.admits(&target, None).is_ok());
         }
         assert_eq!(
-            governor.record_status(&target, 429, Some(Duration::from_secs(4))),
+            governor.record_status(&target, 429, Some(Duration::ZERO)),
             None
         );
         assert!(matches!(
@@ -820,6 +828,20 @@ mod tests {
         );
         for _ in 0..(THROTTLE_STRIKES_BEFORE_STOP * 3) {
             governor.record_status(&target, 200, None);
+            assert!(governor
+                .record_status(&target, 429, Some(Duration::ZERO))
+                .is_some());
+        }
+        assert!(governor.admits(&target, None).is_ok());
+    }
+
+    /// Measured on sandiego.nextrequest.com: requests in flight when the host first throttles
+    /// all answer 429, and counting each as a strike stopped the host within one burst.
+    #[test]
+    fn a_burst_of_429s_during_one_back_off_is_one_strike() {
+        let governor = HostGovernor::default();
+        let target = url("https://example.gov/a");
+        for _ in 0..(THROTTLE_STRIKES_BEFORE_STOP * 4) {
             assert!(governor.record_status(&target, 429, None).is_some());
         }
         assert!(governor.admits(&target, None).is_ok());
@@ -839,7 +861,7 @@ mod tests {
             })
         };
         assert!(learned(&governor).is_some_and(|interval| interval <= MAXIMUM_THROTTLED_INTERVAL));
-        for _ in 0..200 {
+        for _ in 0..1_000 {
             governor.record_status(&target, 200, None);
         }
         assert_eq!(

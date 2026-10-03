@@ -32,54 +32,12 @@ async fn collect_a_subject_and_report_findings() {
         .await
         .unwrap();
     let corpus = CorpusIndex::open(root.join("corpus.db")).unwrap();
-    let (sender, mut receiver) = mpsc::channel::<IngestionProgress>(4_096);
-    let failures = tokio::spawn(async move {
-        let mut failures = Vec::new();
-        while let Some(progress) = receiver.recv().await {
-            if let IngestionProgress::TaskFailed { error_msg, .. } = progress {
-                failures.push(error_msg);
-            }
-        }
-        failures
-    });
-    let manager = QueueManager::new(
-        ApiClient::new(HttpClientConfig::default()).unwrap(),
-        repository.clone(),
-        corpus,
-        RateLimiter::new(5).unwrap(),
-        sender,
-        root.join("downloads"),
-    )
-    .unwrap();
-    let started = Instant::now();
-    manager
-        .discover_and_start(
-            PORTAL,
-            MetadataPageWindow::default(),
-            RateLimitPolicy::default(),
-            Some(subject.clone()),
-        )
-        .await
-        .expect("the portal must start");
-    loop {
-        tokio::time::sleep(Duration::from_secs(30)).await;
-        let runtimes = manager.runtime_snapshots().await.unwrap();
-        let running = runtimes.iter().any(|runtime| runtime.is_running);
-        for runtime in &runtimes {
-            eprintln!(
-                "[{:>5}s] queued {} completed {} failed {}",
-                started.elapsed().as_secs(),
-                runtime.queued_tasks,
-                runtime.completed_tasks,
-                runtime.failed_tasks
-            );
-        }
-        if !running || started.elapsed() > MAXIMUM_RUN {
-            break;
-        }
-    }
-    drop(manager);
-    let failures = failures.await.unwrap_or_default();
+    // ONRECORD_EVAL_REUSE=1 re-runs the detectors over a database an earlier run collected.
+    let failures = if std::env::var("ONRECORD_EVAL_REUSE").is_ok() {
+        Vec::new()
+    } else {
+        collect(&root, &repository, corpus, &subject).await
+    };
     let summary = crate::analysis::detectors::refresh_all_findings(&repository)
         .await
         .unwrap();
@@ -112,4 +70,60 @@ async fn collect_a_subject_and_report_findings() {
     for line in report {
         eprintln!("  {line}");
     }
+}
+
+async fn collect(
+    root: &std::path::Path,
+    repository: &DuckDbRepository,
+    corpus: CorpusIndex,
+    subject: &str,
+) -> Vec<String> {
+    let (sender, mut receiver) = mpsc::channel::<IngestionProgress>(4_096);
+    let failures = tokio::spawn(async move {
+        let mut failures = Vec::new();
+        while let Some(progress) = receiver.recv().await {
+            if let IngestionProgress::TaskFailed { error_msg, .. } = progress {
+                failures.push(error_msg);
+            }
+        }
+        failures
+    });
+    let manager = QueueManager::new(
+        ApiClient::new(HttpClientConfig::default()).unwrap(),
+        repository.clone(),
+        corpus,
+        RateLimiter::new(5).unwrap(),
+        sender,
+        root.join("downloads"),
+    )
+    .unwrap();
+    let started = Instant::now();
+    manager
+        .discover_and_start(
+            PORTAL,
+            MetadataPageWindow::default(),
+            RateLimitPolicy::default(),
+            Some(subject.to_string()),
+        )
+        .await
+        .expect("the portal must start");
+    loop {
+        tokio::time::sleep(Duration::from_secs(30)).await;
+        let runtimes = manager.runtime_snapshots().await.unwrap();
+        let running = runtimes.iter().any(|runtime| runtime.is_running);
+        for runtime in &runtimes {
+            eprintln!(
+                "[{:>5}s] queued {} completed {} failed {}",
+                started.elapsed().as_secs(),
+                runtime.queued_tasks,
+                runtime.completed_tasks,
+                runtime.failed_tasks
+            );
+        }
+        if !running || started.elapsed() > MAXIMUM_RUN {
+            break;
+        }
+    }
+    drop(manager);
+    failures.await.unwrap_or_default()
 }
