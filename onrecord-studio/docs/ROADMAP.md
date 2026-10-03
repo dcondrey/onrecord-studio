@@ -936,3 +936,23 @@ Product direction under discussion: rank leads by observable public-interest fac
 "Story desk"), ingest public statements as a source class and run claim-versus-record checks
 against them, and assemble a lead into a dossier with its evidence chain, falsification test
 and gaps. Not started.
+
+## Findings on real collections (measured 2026-10-03)
+
+Measured with `ingestion::live_evaluation` (ignored test; `ONRECORD_EVAL_DIR`, `ONRECORD_EVAL_SUBJECT`,
+`ONRECORD_EVAL_REUSE=1` re-runs detectors only) against sandiego.nextrequest.com, subject
+"encampment": 140/142 requests with open/close dates, ~600 documents. Every finding the detectors
+produced was false and has been fixed away (form blanks read as redactions, section citations as
+FOIA stamps, police service-request stats as records response times, keyword-collided award IDs).
+The detectors now produce 0 findings on this corpus. Next, in order:
+
+1. `no_records_contradicted` by meaning, not word overlap. 13/140 requests closed "No responsive
+   documents" (closure notices are stored as documents). Word overlap matched them to unrelated
+   releases under every token rule tried (all-8, 75%, extra stopwords); match the denied request's
+   text to releases with the on-device embedding model, and require the release to predate the
+   denial's closure.
+2. Rolling productions: 24/140 requests released in installments, 6 over 180 days (20-2226: 30
+   releases over 809 days). Needs release events stored per request (timeline "Document(s)
+   Released" bylines); a pattern finding, not a legal claim; never derive `determination_at`.
+3. Disposition counts (87 released, 33 redacted/withheld in part, 3 withheld, 13 no records,
+   3 withdrawn) per department as a descriptive surface, not a finding.
