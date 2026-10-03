@@ -39,6 +39,10 @@ pub const THROTTLE_STRIKES_BEFORE_STOP: u32 = 5;
 /// Measured against sandiego.nextrequest.com on 2026-10-02: 20 requests in 12 s drew a 429 with no
 /// `Retry-After`, and the host answered again 5 s later.
 pub const THROTTLE_BACKOFF_FLOOR: Duration = Duration::from_secs(5);
+/// The widest pacing 429s alone can push a host to. The same measurement found roughly one
+/// request per 1.5 s sustainable; unbounded doubling reached 30 s per request and turned a
+/// 400-request collection into hours.
+pub const MAXIMUM_THROTTLED_INTERVAL: Duration = Duration::from_secs(5);
 /// robots.txt is a text file; anything larger is not one.
 pub const MAXIMUM_ROBOTS_BYTES: usize = 512 * 1024;
 
@@ -595,7 +599,7 @@ impl HostGovernor {
                     // interval for every subsequent request rather than only this one.
                     state.throttled_interval = Some(
                         (state.throttled_interval.unwrap_or(self.minimum_interval) * 2)
-                            .min(MAXIMUM_HOST_INTERVAL),
+                            .min(MAXIMUM_THROTTLED_INTERVAL),
                     );
                     let backoff = retry_after
                         .unwrap_or(
@@ -607,8 +611,16 @@ impl HostGovernor {
                     Some(backoff)
                 })
             }
+            // Each success eases learned pacing back toward the floor, so one burst of 429s
+            // early in a run does not set the pace for the rest of it.
             200..=299 => {
-                self.with_host(&host, |state| state.throttle_strikes = 0);
+                self.with_host(&host, |state| {
+                    state.throttle_strikes = 0;
+                    state.throttled_interval = state
+                        .throttled_interval
+                        .map(|learned| learned.mul_f32(0.95))
+                        .filter(|learned| *learned > self.minimum_interval);
+                });
                 None
             }
             _ => None,
@@ -813,6 +825,30 @@ mod tests {
         assert!(governor.admits(&target, None).is_ok());
     }
 
+    #[test]
+    fn learned_pacing_is_bounded_and_eases_back() {
+        let governor = HostGovernor::new(1, 1_000, Duration::from_millis(400));
+        let target = url("https://example.gov/a");
+        for _ in 0..20 {
+            governor.record_status(&target, 429, Some(Duration::ZERO));
+            governor.record_status(&target, 200, None);
+        }
+        let learned = |governor: &HostGovernor| {
+            governor.with_host(&HostGovernor::host_key(&target), |state| {
+                state.throttled_interval
+            })
+        };
+        assert!(learned(&governor).is_some_and(|interval| interval <= MAXIMUM_THROTTLED_INTERVAL));
+        for _ in 0..200 {
+            governor.record_status(&target, 200, None);
+        }
+        assert_eq!(
+            learned(&governor),
+            None,
+            "steady success returns to the configured pace"
+        );
+    }
+
     #[tokio::test]
     async fn a_throttled_host_keeps_its_wider_pacing() {
         let governor = HostGovernor::new(1, 100, Duration::from_millis(10));
@@ -823,8 +859,8 @@ mod tests {
         let started = Instant::now();
         drop(governor.reserve(&target, None).await.unwrap());
         assert!(
-            started.elapsed() >= Duration::from_millis(20),
-            "the doubled interval must still apply after the host recovered"
+            started.elapsed() >= Duration::from_millis(15),
+            "the learned interval must outlast one success"
         );
     }
 
