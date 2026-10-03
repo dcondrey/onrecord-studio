@@ -51,6 +51,8 @@ pub mod spending_rules;
 
 pub(crate) mod phrase_match;
 
+pub mod dispositions;
+
 pub mod intent;
 
 pub mod typed_edges;

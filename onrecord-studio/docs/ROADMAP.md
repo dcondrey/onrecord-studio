@@ -954,5 +954,11 @@ The detectors now produce 0 findings on this corpus. Next, in order:
 2. Rolling productions: 24/140 requests released in installments, 6 over 180 days (20-2226: 30
    releases over 809 days). Needs release events stored per request (timeline "Document(s)
    Released" bylines); a pattern finding, not a legal claim; never derive `determination_at`.
-3. Disposition counts (87 released, 33 redacted/withheld in part, 3 withheld, 13 no records,
-   3 withdrawn) per department as a descriptive surface, not a finding.
+3. Done: disposition counts per department (`analysis/dispositions.rs`,
+   `get_department_dispositions`, table under Compare agencies). Classified from the stored
+   closure notice by ordered word-phrase rules; "not recorded" (no notice) and "not classified"
+   (notice no rule matches) are separate counts. On the same collection (142 requests, re-read
+   2026-10-03): 88 released, 35 released in part, 3 withheld, 13 no records, 3 withdrawn, 0
+   unclassified, 0 unrecorded. The earlier 87/33 figures came from a different run. Rules are
+   measured only against San Diego's wording; other NextRequest portals' notices will show as
+   not classified until a rule names them.

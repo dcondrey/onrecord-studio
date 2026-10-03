@@ -20,6 +20,7 @@ import annotationExport from './topics-annotation-export.json';
 import identifiers from './topics-identifiers.json';
 import pageView from './topics-page-view.json';
 import navigation from './topics-navigation.json';
+import dispositions from './topics-dispositions.json';
 
 export type HelpGroup =
   | 'Getting started'
@@ -91,6 +92,7 @@ const ALL_HELP_TOPICS = [
   ...identifiers,
   ...pageView,
   ...navigation,
+  ...dispositions,
 ] as HelpTopic[];
 
 /**

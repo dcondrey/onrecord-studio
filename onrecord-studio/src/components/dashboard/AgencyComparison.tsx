@@ -5,6 +5,7 @@ import PageHeader from '../ui/PageHeader';
 import EmptyState from '../ui/EmptyState';
 import { openSourceConnector } from './sourceEvents';
 import ObjectLink from '../objects/ObjectLink';
+import DispositionCounts from './DispositionCounts';
 
 /**
  * Mirrors `STATUTORY_DEADLINE_Z_SCORE` in `src-tauri/src/analysis/anomaly.rs`, which is not
@@ -247,6 +248,8 @@ export default function AgencyComparison() {
             </div>
           </>
         )}
+
+        {savedSourceCount > 0 && <DispositionCounts portalSubdomain={portalFilter || null} />}
       </div>
     </main>
   );

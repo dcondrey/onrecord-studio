@@ -163,6 +163,7 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::export::get_signing_key_revocations,
         commands::export::verify_evidence_package,
         commands::investigation::get_agency_performance_profiles,
+        commands::dispositions::get_department_dispositions,
         commands::investigation::get_cross_agency_correlations,
         commands::investigation::import_auxiliary_events,
         commands::investigation::register_statutory_extension,
