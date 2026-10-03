@@ -202,6 +202,15 @@ smoke-test result without recording private credentials.
 The legacy SQLite-to-DuckDB migration retains its source as a sibling backup, but that narrow backup
 is not a substitute for the full pre-release backup.
 
+The core and corpus databases, when at an older DuckDB storage version (`v0.10.2`), are rewritten
+once at startup to the pinned version (`v1.5.0`; `storage::storage_rewrite`). A DuckDB library
+older than 1.5 cannot open a rewritten file, so rolling back to a release that links one needs the
+originals. Each is kept as `<file>.storage-rewrite.bak` through the launch that rewrote it and
+deleted once a later launch completes startup; after that only the full pre-upgrade container
+backup restores them. To roll back before then, with the app closed, move each `.bak` file over the
+file it was named after; work recorded since the rewrite is not in it. A rewrite that fails or is refused (insufficient free space: it needs
+twice the database's size) leaves the original in place and is retried on the next launch.
+
 ## Support evidence
 
 For a release failure, record the version, macOS version, AppTransaction state (without transaction

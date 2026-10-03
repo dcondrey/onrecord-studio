@@ -914,8 +914,10 @@ re-fetched bytes behind a referencing row that purge releases. Deferred, with th
   and transcript anchoring; large schema and viewer change.
 - Redaction production with self-attack, and excerpted verifiable bundles: depends on spans.
 - Outbound filing with proof of transmission: a new outbound trust boundary (mail/portal accounts).
-- Rewriting existing installations to storage `v1.5.0`: needs a foreign-key-ordered copy with
-  per-table row-count verification and an atomic swap; `COPY FROM DATABASE` fails on the real core.
+- [x] Rewriting existing installations to storage `v1.5.0` (2026-10-03, `storage::storage_rewrite`):
+  foreign-key-ordered catalog copy, per-table count and digest verification, atomic swap with a
+  retained backup. Real core 5.3 GB to 1.6 GB, corpus 1.12 GB to 0.81 GB. Not surfaced in the UI:
+  outcomes go to stderr only, since a telemetry event needs a new `IngestionProgress` variant.
 
 Closed on 2026-09-30 (second batch): `count_findings` and `FindingsFilter.id`; Story desk and
 dossier draft records requests (10da52e); cross-agency comparison view (604a610); response-time

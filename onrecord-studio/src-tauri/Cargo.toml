@@ -78,6 +78,11 @@ tauri-plugin-process = { version = "2.4.0", optional = true }
 outlook-pst = "1.2.0"
 compressed-rtf = "1.0.1"
 
+# `statvfs`, for the free-space check before a database storage rewrite. Already in the dependency
+# tree; named directly so the check stays safe code.
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1", features = ["fs"] }
+
 [build-dependencies]
 tauri-build = { version = "2.6.3", features = [] }
 

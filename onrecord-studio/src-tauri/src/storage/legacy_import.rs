@@ -411,7 +411,7 @@ fn count_rows(connection: &Connection, schema: &str, table: &str) -> Result<u64,
 }
 
 /// Reads `(table, referenced_table)` pairs for every foreign key defined in one catalog.
-fn foreign_key_dependencies(
+pub(super) fn foreign_key_dependencies(
     connection: &Connection,
     database: &str,
 ) -> Result<Vec<(String, String)>, AppError> {
@@ -440,7 +440,10 @@ fn foreign_key_dependencies(
 /// parent rows arrive in the same `INSERT` is satisfied. Tables left over from a reference cycle
 /// are appended in their original order; the copy then surfaces a genuine constraint error, which
 /// the caller rolls back without touching the original database.
-fn order_by_foreign_keys(tables: Vec<String>, dependencies: &[(String, String)]) -> Vec<String> {
+pub(super) fn order_by_foreign_keys(
+    tables: Vec<String>,
+    dependencies: &[(String, String)],
+) -> Vec<String> {
     let mut remaining = tables;
     let mut ordered: Vec<String> = Vec::with_capacity(remaining.len());
 
@@ -572,7 +575,7 @@ fn load_sqlite_extension(connection: &Connection) -> Result<(), AppError> {
     })
 }
 
-fn remove_if_present(path: &Path) -> Result<(), AppError> {
+pub(super) fn remove_if_present(path: &Path) -> Result<(), AppError> {
     match fs::remove_file(path) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -584,18 +587,18 @@ fn remove_if_present(path: &Path) -> Result<(), AppError> {
 }
 
 /// Appends `suffix` to the file name so the sibling shares the core's directory and permissions.
-fn sibling_path(path: &Path, suffix: &str) -> PathBuf {
+pub(super) fn sibling_path(path: &Path, suffix: &str) -> PathBuf {
     let mut name = path.file_name().unwrap_or_default().to_os_string();
     name.push(".");
     name.push(suffix);
     path.with_file_name(name)
 }
 
-fn quote_identifier(identifier: &str) -> String {
+pub(super) fn quote_identifier(identifier: &str) -> String {
     format!("\"{}\"", identifier.replace('"', "\"\""))
 }
 
-fn quote_sql_literal(path: &Path) -> Result<String, AppError> {
+pub(super) fn quote_sql_literal(path: &Path) -> Result<String, AppError> {
     let value = path.to_str().ok_or_else(|| {
         AppError::DataParsing(format!("Database path '{}' is not UTF-8", path.display()))
     })?;
