@@ -133,6 +133,9 @@ pub enum IngestionTask {
         subdomain: String,
         page: usize,
         per_page: usize,
+        /// One of the subject's comma-separated searches, for a portal searched server-side.
+        #[serde(default)]
+        search: Option<String>,
     },
     /// One request a hosted NextRequest listing named; see `crawl::fetch_hosted_request`.
     FetchHostedRequest {
@@ -305,8 +308,17 @@ impl IngestionTask {
     fn target_id(&self) -> String {
         match self {
             Self::FetchMetadataPage {
-                subdomain, page, ..
-            } => format!("{subdomain}-page-{page}"),
+                subdomain,
+                page,
+                search,
+                ..
+            } => match search {
+                Some(search) => format!(
+                    "{subdomain}-page-{page}-search-{}",
+                    stable_source_identifier(search)
+                ),
+                None => format!("{subdomain}-page-{page}"),
+            },
             Self::FetchHostedRequest { subdomain, request } => {
                 format!("{subdomain}-request-{}", request.id)
             }

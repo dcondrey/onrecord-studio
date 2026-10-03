@@ -137,11 +137,11 @@ export default function CollectionPlanDialog() {
               value={subject}
               maxLength={200}
               onChange={(event) => setSubject(event.target.value)}
-              placeholder="e.g. encampment sweeps, police overtime"
+              placeholder="e.g. encampment, safe parking"
               className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-control bg-canvas px-3 text-label text-fg"
             />
             <span className="mt-1 block font-normal text-muted">
-              Records portals are searched for it; websites are walked, but only files whose link, name or page title mention every word are downloaded. Leave empty to collect everything.
+              Separate searches with commas (encampment, safe parking). Records portals run each search. Websites and data catalogs are walked, and a file is downloaded when its link, name or page title matches a search by its words or, using the on-device language model, by meaning. Leave empty to collect everything.
             </span>
           </label>
           <fieldset>

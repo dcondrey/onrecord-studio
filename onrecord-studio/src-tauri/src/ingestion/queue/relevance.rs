@@ -8,7 +8,7 @@
 //! ones, where keywords admitted 1 of 12. The set is small; the threshold is a measurement on it,
 //! not a guarantee.
 
-use super::guidance::{subject_terms, texts_match_subject};
+use super::guidance::{subject_searches, subject_terms, texts_match_subject};
 use crate::storage::vector::VectorIndex;
 
 pub(super) const SIMILARITY_THRESHOLD: f32 = 0.55;
@@ -16,8 +16,9 @@ pub(super) const SIMILARITY_THRESHOLD: f32 = 0.55;
 const QUERY_INSTRUCTION: &str = "Represent this sentence for searching relevant passages: ";
 
 pub(super) struct SubjectMatcher {
-    terms: Vec<String>,
-    semantic: Option<(VectorIndex, Vec<f32>)>,
+    terms: Vec<Vec<String>>,
+    /// One query vector per comma-separated search.
+    semantic: Option<(VectorIndex, Vec<Vec<f32>>)>,
 }
 
 impl SubjectMatcher {
@@ -26,14 +27,18 @@ impl SubjectMatcher {
     pub(super) async fn new(subject: Option<&str>, model: Option<&VectorIndex>) -> Option<Self> {
         let subject = subject?;
         let terms = subject_terms(Some(subject));
+        let queries = subject_searches(subject)
+            .into_iter()
+            .map(|search| format!("{QUERY_INSTRUCTION}{search}"))
+            .collect();
         let semantic = match model {
             Some(model) => model
-                .embed_short_texts(vec![format!("{QUERY_INSTRUCTION}{subject}")])
+                .embed_short_texts(queries)
                 .await
                 .ok()
                 .flatten()
-                .and_then(|mut vectors| vectors.pop())
-                .map(|vector| (model.clone(), vector)),
+                .filter(|vectors| !vectors.is_empty())
+                .map(|vectors| (model.clone(), vectors)),
             None => None,
         };
         Some(Self { terms, semantic })
@@ -46,7 +51,7 @@ impl SubjectMatcher {
             .iter()
             .map(|text| texts_match_subject(&self.terms, &[text]))
             .collect();
-        let Some((model, subject)) = &self.semantic else {
+        let Some((model, searches)) = &self.semantic else {
             return matched;
         };
         let pending: Vec<usize> = (0..readable.len())
@@ -61,8 +66,10 @@ impl SubjectMatcher {
             .collect();
         if let Ok(Some(vectors)) = model.embed_short_texts(texts).await {
             for (index, vector) in pending.into_iter().zip(vectors) {
-                let similarity: f32 = vector.iter().zip(subject).map(|(a, b)| a * b).sum();
-                matched[index] = similarity >= SIMILARITY_THRESHOLD;
+                matched[index] = searches.iter().any(|search| {
+                    let similarity: f32 = vector.iter().zip(search).map(|(a, b)| a * b).sum();
+                    similarity >= SIMILARITY_THRESHOLD
+                });
             }
         }
         matched
@@ -140,5 +147,18 @@ mod tests {
             [true, false]
         );
         assert!(SubjectMatcher::new(None, None).await.is_none());
+        let either = SubjectMatcher::new(Some("encampment, safe parking"), None)
+            .await
+            .unwrap();
+        assert_eq!(
+            either
+                .matches_each(&[
+                    "Safe_Parking_Program.pdf".into(),
+                    "Parking_Revenue.pdf".into(),
+                    "Encampment_Abatement.pdf".into(),
+                ])
+                .await,
+            [true, false, true]
+        );
     }
 }

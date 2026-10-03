@@ -83,10 +83,11 @@
       {
         "heading": "Subject",
         "items": [
-          "A records request portal such as NextRequest is searched for the subject, so only matching requests and their released documents are downloaded.",
-          "A website is still walked to find files, but a file is downloaded only when its link text, address or page title contains every word of the subject. Pages that never mention the subject are not kept.",
-          "The subject is saved with each source, so resuming a source later keeps it. Leave the field empty to collect everything a source offers.",
-          "Matching is by words, so a record that uses a different term for the same thing is not collected. Choose the words the agency itself uses."
+          "Separate searches with commas, such as \"encampment, safe parking\". A record that matches any one search is collected.",
+          "A records request portal such as NextRequest runs each search on its own server, so only matching requests and their released documents are downloaded. Its search matches words, not meaning.",
+          "A website or data catalog is still walked to find files. A file is downloaded when its link text, address or page title contains every word of a search, or, when the on-device language model is installed, when it is close in meaning to a search. Pages that never mention the subject are not kept.",
+          "Matching by meaning was checked on a small labelled set of real titles and is not exhaustive: a record described in unrelated terms can still be missed, and leaving the subject empty collects everything.",
+          "The subject is saved with each source, so resuming a source later keeps it."
         ]
       }
     ],

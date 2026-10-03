@@ -37,28 +37,47 @@ pub(super) fn validate_crawl_policy(policy: &CrawlPolicy) -> Result<(), AppError
 
 const MAXIMUM_SUBJECT_LENGTH: usize = 200;
 
-/// The words a collection subject must find, lower-cased with stopwords dropped. A trailing plural
-/// `s` is removed so "encampments" also finds "encampment"; matching is by substring.
-pub(super) fn subject_terms(subject: Option<&str>) -> Vec<String> {
-    let Some(subject) = subject else {
-        return Vec::new();
-    };
-    crate::analysis::assertion_index::extract_topic_tokens(subject, "")
-        .into_iter()
-        .map(|term| match term.strip_suffix('s') {
-            Some(stem) if stem.len() >= 4 && !stem.ends_with('s') => stem.to_string(),
-            _ => term,
-        })
+/// The searches a subject names: "encampment, safe parking" is two, either of which admits a record.
+pub(super) fn subject_searches(subject: &str) -> Vec<String> {
+    subject
+        .split(',')
+        .map(str::trim)
+        .filter(|search| !search.is_empty())
+        .map(str::to_string)
         .collect()
 }
 
-/// Every subject term appears somewhere in `texts`. No terms means no subject: everything matches.
-pub(super) fn texts_match_subject(terms: &[String], texts: &[&str]) -> bool {
-    if terms.is_empty() {
+/// Each search's words, lower-cased with stopwords dropped. A trailing plural `s` is removed so
+/// "encampments" also finds "encampment"; matching is by substring.
+pub(super) fn subject_terms(subject: Option<&str>) -> Vec<Vec<String>> {
+    let Some(subject) = subject else {
+        return Vec::new();
+    };
+    subject_searches(subject)
+        .iter()
+        .map(|search| {
+            crate::analysis::assertion_index::extract_topic_tokens(search, "")
+                .into_iter()
+                .map(|term| match term.strip_suffix('s') {
+                    Some(stem) if stem.len() >= 4 && !stem.ends_with('s') => stem.to_string(),
+                    _ => term,
+                })
+                .collect::<Vec<_>>()
+        })
+        .filter(|words| !words.is_empty())
+        .collect()
+}
+
+/// Some search has every one of its words in `texts`. No searches means no subject: everything
+/// matches.
+pub(super) fn texts_match_subject(searches: &[Vec<String>], texts: &[&str]) -> bool {
+    if searches.is_empty() {
         return true;
     }
     let haystack = texts.join(" ").to_lowercase();
-    terms.iter().all(|term| haystack.contains(term.as_str()))
+    searches
+        .iter()
+        .any(|words| words.iter().all(|word| haystack.contains(word.as_str())))
 }
 
 pub(crate) fn validate_source_guidance(guidance: &SourceGuidance) -> Result<(), AppError> {
@@ -68,9 +87,9 @@ pub(crate) fn validate_source_guidance(guidance: &SourceGuidance) -> Result<(), 
                 "A collection subject must contain between 1 and {MAXIMUM_SUBJECT_LENGTH} characters"
             )));
         }
-        if subject_terms(Some(subject)).is_empty() {
+        if subject_terms(Some(subject)).len() != subject_searches(subject).len() {
             return Err(AppError::DataParsing(
-                "A collection subject needs at least one searchable word of three or more letters"
+                "Each subject search needs at least one searchable word of three or more letters"
                     .to_string(),
             ));
         }

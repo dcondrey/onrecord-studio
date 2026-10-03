@@ -416,9 +416,12 @@ async fn execute_task(context: &WorkerContext, task: IngestionTask) -> Result<()
             AppError::Internal(format!("Global queue semaphore closed: {error}"))
         })?;
     match task {
-        IngestionTask::FetchMetadataPage { page, per_page, .. } => {
-            fetch_metadata_page(context, page, per_page).await
-        }
+        IngestionTask::FetchMetadataPage {
+            page,
+            per_page,
+            search,
+            ..
+        } => fetch_metadata_page(context, page, per_page, search).await,
         IngestionTask::FetchHostedRequest { request, .. } => {
             fetch_hosted_request(context, request).await
         }

@@ -25,6 +25,7 @@ fn metadata_task(page: usize) -> IngestionTask {
         subdomain: "records".to_string(),
         page,
         per_page: 50,
+        search: None,
     }
 }
 

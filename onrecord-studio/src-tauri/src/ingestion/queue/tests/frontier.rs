@@ -74,6 +74,7 @@ fn a_resume_defers_to_an_interrupted_walk_and_re_seeds_every_other_start() {
                 subdomain: "records".to_string(),
                 page: 400,
                 per_page: 25,
+                search: None,
             },
             IngestionTask::CrawlPublicResource {
                 subdomain: "records".to_string(),
@@ -119,6 +120,7 @@ fn the_metadata_page_prefix_matches_the_identifier_such_a_task_is_stored_under()
         subdomain: "records".to_string(),
         page: 901,
         per_page: 50,
+        search: None,
     };
     assert!(
         page.target_id().starts_with(&prefix),

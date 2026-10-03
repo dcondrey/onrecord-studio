@@ -154,6 +154,7 @@ impl QueueManager {
                 subdomain: portal_key,
                 page: window.start_page,
                 per_page: window.page_size,
+                search: None,
             }],
             CrawlPolicy::default(),
             guidance,

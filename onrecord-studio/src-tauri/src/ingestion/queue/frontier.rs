@@ -226,6 +226,7 @@ pub(super) fn resume_initial_tasks(
             subdomain: source.portal_key.clone(),
             page: window.start_page,
             per_page: window.page_size,
+            search: None,
         }],
         SourceKind::LocalFile | SourceKind::PastedContent => Vec::new(),
         _ => vec![IngestionTask::CrawlPublicResource {

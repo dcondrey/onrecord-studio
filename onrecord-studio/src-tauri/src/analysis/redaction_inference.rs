@@ -245,7 +245,7 @@ pub fn scan_redaction_spans(text: &str) -> Vec<RedactionSpan> {
     spans.extend(
         underscores
             .into_iter()
-            .filter(|span| text[..span.start].trim_end().chars().next_back() != Some(':')),
+            .filter(|span| !text[..span.start].trim_end().ends_with(':')),
     );
     scan_char_runs(text, &['X', 'x'], 5, &mut spans);
     // De-duplicate overlapping spans; keep the earliest start with the widest end.
