@@ -216,7 +216,11 @@ pub fn scan_redaction_spans(text: &str) -> Vec<RedactionSpan> {
     let bytes = text.as_bytes();
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == b'(' && i + 4 < bytes.len() {
+        // A stamp stands alone. Attached to a section number (`983.301(b)(6)`, `8(b)(6)`) the
+        // same shape is a legal citation, which HUD notices and statutes are full of.
+        let cites_a_section = i > 0
+            && (bytes[i - 1].is_ascii_alphanumeric() || matches!(bytes[i - 1], b')' | b'.' | b'-'));
+        if bytes[i] == b'(' && i + 4 < bytes.len() && !cites_a_section {
             // Look for `(b)(N)` or `(b)(N)(X)` shape.
             let rest = &text[i..];
             if let Some(match_end) = match_foia_exemption(rest) {
@@ -831,6 +835,20 @@ mod tests {
         assert!(!spans.is_empty());
         assert!(spans.iter().any(|s| &text[s.start..s.end] == "(b)(6)"));
         assert!(spans.iter().any(|s| &text[s.start..s.end] == "(b)(7)(C)"));
+    }
+
+    #[test]
+    fn a_section_citation_is_not_a_redaction_stamp() {
+        let text = "PBV limits in 24 CFR § 983.301(b)(6) apply. Name: (b)(6) Phone: (b)(7)(C)";
+        let spans = scan_redaction_spans(text);
+        let marked: Vec<&str> = spans
+            .iter()
+            .map(|span| &text[span.start..span.end])
+            .collect();
+        assert_eq!(marked, ["(b)(6)", "(b)(7)(C)"]);
+        assert!(spans
+            .iter()
+            .all(|span| span.start > text.find("Name").unwrap()));
     }
 
     #[test]

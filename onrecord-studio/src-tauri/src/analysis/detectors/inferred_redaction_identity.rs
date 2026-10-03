@@ -88,7 +88,8 @@ pub async fn run(repository: &DuckDbRepository) -> Result<Vec<Finding>, AppError
                 Ok(report) => report,
                 Err(_) => continue,
             };
-            if let Some(finding) = build_finding(&target, span, &report.candidates) {
+            let candidates = candidates_not_printed_elsewhere(&text, span, report.candidates);
+            if let Some(finding) = build_finding(&target, span, &candidates) {
                 findings.push(finding);
                 per_doc += 1;
             }
@@ -156,6 +157,28 @@ async fn load_targets(repository: &DuckDbRepository) -> Result<Vec<SweepTarget>,
             Ok(out)
         })
         .await
+}
+
+/// A document does not redact a value it prints in the clear, so a candidate that appears in the
+/// same document outside the span is not what the span hides. Without this, the place or agency
+/// a notice names on every page ("San Diego CA") outranked every real candidate.
+fn candidates_not_printed_elsewhere(
+    text: &str,
+    span: crate::analysis::redaction_inference::RedactionSpan,
+    candidates: Vec<Candidate>,
+) -> Vec<Candidate> {
+    let (Some(before), Some(after)) = (text.get(..span.start), text.get(span.end..)) else {
+        return candidates;
+    };
+    let before = before.to_lowercase();
+    let after = after.to_lowercase();
+    candidates
+        .into_iter()
+        .filter(|candidate| {
+            let value = candidate.value.trim().to_lowercase();
+            value.is_empty() || !(before.contains(&value) || after.contains(&value))
+        })
+        .collect()
 }
 
 fn build_finding(
@@ -363,6 +386,25 @@ mod tests {
         let b =
             build_finding(&target(), RedactionSpan { start: 10, end: 20 }, &candidates).unwrap();
         assert_eq!(a.id, b.id);
+    }
+
+    #[test]
+    fn a_candidate_printed_elsewhere_in_the_document_is_not_what_it_redacted() {
+        let text = "Grantee: San Diego CA. Contact (b)(6) for details. Office: San Diego CA.";
+        let start = text.find("(b)(6)").unwrap();
+        let span = RedactionSpan {
+            start,
+            end: start + 6,
+        };
+        let mut printed = cand_of_likelihood(8000, 3);
+        printed.value = "San Diego CA".to_string();
+        let mut hidden = cand_of_likelihood(7500, 3);
+        hidden.value = "Maria Lopez".to_string();
+        let kept = candidates_not_printed_elsewhere(text, span, vec![printed, hidden]);
+        assert_eq!(
+            kept.iter().map(|c| c.value.as_str()).collect::<Vec<_>>(),
+            ["Maria Lopez"]
+        );
     }
 
     #[test]
