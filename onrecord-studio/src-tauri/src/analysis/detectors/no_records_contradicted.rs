@@ -158,7 +158,6 @@ async fn load_denial_candidates(repository: &DuckDbRepository) -> Result<Vec<Can
                        AND LENGTH(documents_fts.extracted_text) > 0
                        AND (
                            LOWER(documents_fts.extracted_text) LIKE '%no responsive records%' OR
-                           LOWER(documents_fts.extracted_text) LIKE '%no responsive documents%' OR
                            LOWER(documents_fts.extracted_text) LIKE '%no records exist%' OR
                            LOWER(documents_fts.extracted_text) LIKE '%no records were found%' OR
                            LOWER(documents_fts.extracted_text) LIKE '%unable to locate%' OR
