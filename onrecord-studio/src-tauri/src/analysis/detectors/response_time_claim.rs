@@ -339,6 +339,7 @@ async fn recorded_closures(
                         FROM requests
                         WHERE portal_subdomain = ?1
                           AND agency_id = ?2
+                          AND LOWER(TRIM(status)) <> 'withdrawn'
                           AND TRY_CAST(created_at AS TIMESTAMPTZ) IS NOT NULL
                           AND TRY_CAST(closed_at AS TIMESTAMPTZ) IS NOT NULL
                           AND TRY_CAST(closed_at AS TIMESTAMPTZ) >= TRY_CAST(created_at AS TIMESTAMPTZ)

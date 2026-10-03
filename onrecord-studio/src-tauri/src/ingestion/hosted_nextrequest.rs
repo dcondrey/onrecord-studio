@@ -311,6 +311,12 @@ pub(crate) fn to_public_request(
             listed.id
         ))
     })?;
+    // A request its requester withdrew is closed on the portal but was never answered, so it
+    // must not count as an agency response time.
+    let withdrawn = timeline
+        .closure_notice
+        .as_deref()
+        .is_some_and(|notice| notice.starts_with("Request withdrawn"));
     let status = listed
         .request_state
         .as_deref()
@@ -318,6 +324,11 @@ pub(crate) fn to_public_request(
         .filter(|state| !state.is_empty())
         .unwrap_or("unreported")
         .to_ascii_lowercase();
+    let status = if withdrawn {
+        "withdrawn".to_string()
+    } else {
+        status
+    };
     let text = listed
         .request_text
         .as_deref()
@@ -464,6 +475,25 @@ mod tests {
         );
         assert_eq!(documents[0].created_at, "2024-08-14T12:38:53.425-07:00");
         assert_eq!(documents[0].description, None);
+    }
+
+    #[test]
+    fn a_withdrawn_request_is_not_recorded_as_closed() {
+        let listed: ListedRequest =
+            serde_json::from_value(json!({"id": "24-9", "request_state": "Closed"})).unwrap();
+        let timeline = RequestTimeline {
+            opened_at: Some("2024-03-01T09:00:00-08:00".into()),
+            closed_at: Some("2024-03-04T09:00:00-08:00".into()),
+            closure_notice: Some(
+                "Request withdrawn The requestor has withdrawn this request.".into(),
+            ),
+        };
+        assert_eq!(
+            to_public_request(listed, timeline, Vec::new())
+                .unwrap()
+                .status,
+            "withdrawn"
+        );
     }
 
     #[test]
