@@ -113,6 +113,7 @@ export interface NativeCommandMap {
   get_signing_key_revocations: { args: NoArgs; result: Types.SigningKeyRevocations };
   verify_evidence_package: { args: { payload: string }; result: Types.PackageVerificationResult };
   get_agency_performance_profiles: { args: { config?: Types.AnalysisConfig | null }; result: Types.AgencyPerformanceProfile[] };
+  get_department_dispositions: { args: { portalSubdomain?: string | null }; result: Types.DepartmentDispositions[] };
   get_cross_agency_correlations: { args: { portalKey?: string | null; minimumComplaints?: number | null; resultLimit?: number | null; windowHours?: number | null }; result: Types.CrossAgencyCorrelation[] };
   import_auxiliary_events: { args: { portalKey?: string | null; sourceKind: Types.AuxiliaryStreamKind; displayName: string; sourceUri?: string | null; events: Types.AuxiliaryEventInput[] }; result: Types.AuxiliaryImportResult };
   register_statutory_extension: { args: { requestId: number; portalKey: string; extension: Types.StatutoryExtensionRecord }; result: string[] };
