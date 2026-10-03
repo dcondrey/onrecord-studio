@@ -77,18 +77,8 @@ export function metadataObservations(dataset: AnalyticalDatasetSummary): Discove
 export function profileObservations(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary, profile: AutomaticProfile): DiscoveryObservation[] {
   const observations: DiscoveryObservation[] = [];
   const get = (id: string) => profile.results.find((entry) => entry.query.id === id);
-  const quality = get('quality');
-  if (quality?.result) {
-    const missing = records(quality.result).filter((row) => (number(row.missing_rows) ?? 0) > 0 && (number(row.source_rows) ?? 0) > 0)
-      .sort((a, b) => Number(b.missing_rows) - Number(a.missing_rows)).slice(0, 2);
-    for (const row of missing) {
-      const percentage = 100 * Number(row.missing_rows) / Number(row.source_rows);
-      observations.push({ id: `${dataset.snapshotId}:missing:${row.column_name}`, snapshotId: dataset.snapshotId, kind: 'quality', priority: percentage >= 20 ? 85 : 50,
-        title: `${percentage.toFixed(1)}% missing in ${row.column_name}`, detail: `${Number(row.missing_rows).toLocaleString()} of ${Number(row.source_rows).toLocaleString()} imported rows have no value in this field. Missing is not zero.`,
-        question: 'Is missingness caused by reporting coverage, suppression, or a source-format issue?', query: quality.query,
-      });
-    }
-  }
+  // A column's missing-value rate describes the source table's own completeness, not the subject
+  // of the investigation; it stays on the import/quality screen rather than "what stands out".
   const coverage = get('coverage');
   if (coverage?.result?.rows.length) {
     const row = records(coverage.result)[0];
@@ -115,12 +105,9 @@ export function profileObservations(schema: AnalyticalSchema, dataset: Analytica
   const changes = get('changes');
   if (changes?.result) {
     const rows = records(changes.result);
-    const change = rows.find((row) => Math.abs(number(row.change) ?? 0) >= 20 && Math.abs(number(row.change_percent) ?? 0) >= 25);
-    if (change) observations.push({ id: `${dataset.snapshotId}:change`, snapshotId: dataset.snapshotId, kind: 'pattern', priority: 88,
-      title: `Recorded rows changed ${Number(change.change_percent).toFixed(1)}% for ${display(change.group_value)}`,
-      detail: `${display(change.previous_value)} → ${display(change.observed_value)} records, ${display(change.previous_period)} → ${display(change.discovery_period)}. Changes in collection and incomplete periods can explain this.`,
-      question: 'Did activity change, or did the source’s coverage, definitions, or reporting cadence change?', query: changes.query,
-    });
+    // A change in RECORD COUNT between periods is at least as often caused by reporting cadence,
+    // collection changes, or an incomplete period as by the subject's own activity changing; its
+    // own detail text admits as much. It is a state of the source table, not a finding.
     if (rows.some((row) => row.comparison_status === 'Missing intervening periods')) observations.push({ id: `${dataset.snapshotId}:gaps`, snapshotId: dataset.snapshotId, kind: 'quality', priority: 82,
       title: 'The recorded time series has gaps', detail: 'At least one group skips an intervening period. Missing periods are not treated as zero and changes across gaps are withheld.',
       question: 'Can earlier exports fill these periods without duplicating existing records?', query: changes.query,

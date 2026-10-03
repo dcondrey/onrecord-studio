@@ -22,7 +22,8 @@ describe('automatic discovery landing experience', () => {
     });
     mount();
     await screen.findByText('Coverage is partial or unverified');
-    await screen.findByText('3.6% missing in amount');
+    await screen.findAllByRole('button', { name: 'Explore this finding' });
+    expect(screen.queryByText(/missing in amount/)).toBeNull();
     expect(bridge.invoke.mock.calls.some(([name]) => name === 'run_analytical_sql')).toBe(true);
     fireEvent.click(screen.getAllByRole('button', { name: 'Explore this finding' })[0]);
     expect(bridge.view).toHaveBeenCalledWith('analysis');

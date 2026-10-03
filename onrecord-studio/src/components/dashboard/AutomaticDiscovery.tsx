@@ -17,6 +17,9 @@ export default function AutomaticDiscovery() {
     ...(state.profiles[dataset.snapshotId] ? profileObservations(state.schema!, dataset, state.profiles[dataset.snapshotId]) : []),
   ]);
   const ranked = rankObservations(observations, showAll ? 30 : 6);
+  // Byte-identical extracted text is a corpus/ingestion fact (the same document released more
+  // than once), not an observation about the investigation's subject; it stays off this feed.
+  const standoutPatterns = state.patterns.filter((pattern) => pattern.kind !== 'EXACT_DUPLICATE');
   const profileErrors = Object.values(state.profiles).flatMap((profile) => profile.results.filter((entry) => entry.error));
   const stage = (url: string) => { store.getState().setPortalUrlDraft(url); focusSourceComposer(); };
   const openAnalysis = () => store.getState().setWorkspaceView('analysis');
@@ -45,7 +48,7 @@ export default function AutomaticDiscovery() {
           {item.query && <button type="button" className="analysis-button mt-2" onClick={() => { controller.inspect(item.query!.sql); openAnalysis(); }}>Explore this finding</button>}
         </article>;
       })}
-      {state.patterns.slice(0, showAll ? 8 : 3).map((pattern) => <article key={pattern.patternId} className="rounded-xl border border-line-strong p-3">
+      {standoutPatterns.slice(0, showAll ? 8 : 3).map((pattern) => <article key={pattern.patternId} className="rounded-xl border border-line-strong p-3">
         <div className="text-label uppercase tracking-wide text-accent">Across indexed documents</div><h3 className="mt-1 text-sm font-semibold text-fg">{pattern.title}</h3>
         <p className="mt-2 text-label leading-relaxed text-fg-secondary">{pattern.explanation}</p>
         <p className="mt-2 text-label leading-4 text-muted">{pattern.evidence.length} returned evidence references. Shared language or entities do not establish a causal connection.</p>
@@ -54,7 +57,7 @@ export default function AutomaticDiscovery() {
     </div>
     {observations.length > 6 && <button type="button" className="analysis-button" onClick={() => setShowAll((value) => !value)}>{showAll ? 'Show fewer observations' : 'Show more observations'}</button>}
     {state.candidates.length > 0 && <p className="text-label leading-4 text-fg-secondary">{state.candidates.length} acquired tables are available for analysis. <button type="button" className="text-accent underline" onClick={openAnalysis}>Review acquired tables</button></p>}
-    {!datasets.length && !state.patterns.length && <div className="grid gap-3 text-label leading-4 sm:grid-cols-2">
+    {!datasets.length && !standoutPatterns.length && <div className="grid gap-3 text-label leading-4 sm:grid-cols-2">
       <div className="rounded-xl border border-line p-3"><h3 className="font-semibold text-fg">Where does funding reach the community?</h3><p className="mt-1 text-muted">Start with operating-budget records. Separate adopted allocations from proposals, then compare with actuals for matching years.</p><button type="button" className="analysis-button mt-2" onClick={() => stage('https://data.sandiego.gov/datasets/operating-budget')}>Choose budget data</button></div>
       <div className="rounded-xl border border-line p-3"><h3 className="font-semibold text-fg">Do housing outcomes match the reported investment?</h3><p className="mt-1 text-muted">Bring in performance reports and preserve each measure’s population and period. The app will surface connections as records arrive.</p><button type="button" className="analysis-button mt-2" onClick={() => stage('https://www.rtfhsd.org/reports-data/')}>Choose housing reports</button></div>
       <p className="text-muted sm:col-span-2">These are starting questions, not findings about data that has not been imported.</p>

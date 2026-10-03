@@ -33,7 +33,7 @@ describe('automatic discovery evidence', () => {
       { query: queries[3], result: response(['comparison_status', 'change', 'change_percent'], [['Missing intervening periods', null, null]]) },
     ];
     const findings = profileObservations(schema, dataset, { fingerprint: snapshotFingerprint(schema, dataset), checkedAt: 'now', results });
-    expect(findings.some((o) => o.title === '25.0% missing in amount')).toBe(true);
+    expect(findings.some((o) => o.id.includes(':missing:'))).toBe(false);
     expect(findings.some((o) => o.title === 'Latest observed year code: 25')).toBe(true);
     expect(findings.some((o) => o.id.endsWith(':gaps'))).toBe(true);
     expect(findings.some((o) => o.id.endsWith(':change'))).toBe(false);
