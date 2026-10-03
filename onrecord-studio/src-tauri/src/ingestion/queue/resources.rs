@@ -67,7 +67,8 @@ pub(super) async fn process_public_resource(
             // With a subject, a page that never names it is walked for links but not kept, and a
             // file is fetched only when its link, address or page title names it.
             let subject = context.crawl.subject.as_ref();
-            let page_title_on_subject = admitted(subject, std::slice::from_ref(&inspection.title)).await[0];
+            let page_title_on_subject =
+                admitted(subject, std::slice::from_ref(&inspection.title)).await[0];
             let page_on_subject = page_title_on_subject
                 || subject.is_some_and(|subject| {
                     inspection
