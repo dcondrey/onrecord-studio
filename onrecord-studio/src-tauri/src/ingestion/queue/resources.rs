@@ -7,12 +7,10 @@ use super::{
         reserve_paginated_page, reserve_resource, standard_document_task,
     },
     frontier::{enqueue_task_resilient, enqueue_tasks_resilient},
-    guidance::{
-        describe_discovery_origin, download_host_allowed, guidance_allows_url, subject_terms,
-        texts_match_subject,
-    },
+    guidance::{describe_discovery_origin, download_host_allowed, guidance_allows_url},
     intake::{discovered_file_name, source_file_name, stable_source_identifier},
     objects::{release_object_link, store_inline_payload},
+    relevance::{admitted, readable_title},
     structured::{
         arcgis_item_companion_urls, arcgis_layer_url, arcgis_metadata_url,
         tableau_export_companion_urls,
@@ -68,11 +66,14 @@ pub(super) async fn process_public_resource(
             }
             // With a subject, a page that never names it is walked for links but not kept, and a
             // file is fetched only when its link, address or page title names it.
-            let subject = subject_terms(context.crawl.guidance.subject.as_deref());
-            let page_title_on_subject = texts_match_subject(&subject, &[&inspection.title]);
+            let subject = context.crawl.subject.as_ref();
+            let page_title_on_subject = admitted(subject, std::slice::from_ref(&inspection.title)).await[0];
             let page_on_subject = page_title_on_subject
-                || inspection.body.as_deref().is_some_and(|body| {
-                    texts_match_subject(&subject, &[&String::from_utf8_lossy(body)])
+                || subject.is_some_and(|subject| {
+                    inspection
+                        .body
+                        .as_deref()
+                        .is_some_and(|body| subject.mentions(&String::from_utf8_lossy(body)))
                 });
             let request_id = if page_on_subject {
                 Some(ensure_crawl_request(context, &inspection).await?)
@@ -131,7 +132,23 @@ pub(super) async fn process_public_resource(
                     }
                 }
             }
-            for link in inspection.links {
+            let link_on_subject = if page_title_on_subject {
+                vec![true; inspection.links.len()]
+            } else {
+                let candidates: Vec<String> = inspection
+                    .links
+                    .iter()
+                    .map(|link| {
+                        if link.download_candidate {
+                            format!("{} {}", link.label, readable_title(&link.url))
+                        } else {
+                            String::new()
+                        }
+                    })
+                    .collect();
+                admitted(subject, &candidates).await
+            };
+            for (link, link_on_subject) in inspection.links.into_iter().zip(link_on_subject) {
                 if let Err(exclusion) = guidance_allows_url(
                     &context.crawl.guidance,
                     &context.crawl.compiled_guidance,
@@ -159,9 +176,7 @@ pub(super) async fn process_public_resource(
                     let Some(request_id) = request_id else {
                         continue;
                     };
-                    if !page_title_on_subject
-                        && !texts_match_subject(&subject, &[&link.label, &link.url])
-                    {
+                    if !link_on_subject {
                         continue;
                     }
                     if let Some(task) = prepare_discovered_download(
@@ -333,9 +348,14 @@ pub(super) async fn process_data_catalog_page(
     )
     .await?;
     let mut tasks = Vec::new();
-    let subject = subject_terms(context.crawl.guidance.subject.as_deref());
+    let candidates: Vec<String> = page
+        .downloads
+        .iter()
+        .map(|download| format!("{} {}", download.label, readable_title(&download.url)))
+        .collect();
+    let on_subject = admitted(context.crawl.subject.as_ref(), &candidates).await;
     let mut outside_subject = 0_u64;
-    for download in &page.downloads {
+    for (download, on_subject) in page.downloads.iter().zip(on_subject) {
         if let Err(exclusion) = guidance_allows_url(
             &context.crawl.guidance,
             &context.crawl.compiled_guidance,
@@ -345,7 +365,7 @@ pub(super) async fn process_data_catalog_page(
             record_frontier_exclusion(context, &exclusion).await;
             continue;
         }
-        if !texts_match_subject(&subject, &[&download.label, &download.url]) {
+        if !on_subject {
             outside_subject += 1;
             continue;
         }

@@ -91,6 +91,7 @@ async fn crawl_worker_context(
         crawl: Arc::new(CrawlState {
             policy: CrawlPolicy::default(),
             guidance,
+            subject: None,
             visited_urls: Mutex::new(HashSet::new()),
             resource_urls: Mutex::new(HashSet::new()),
             crawl_path_claims: Mutex::new(HashSet::new()),

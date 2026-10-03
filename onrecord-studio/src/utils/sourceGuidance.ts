@@ -232,3 +232,30 @@ export function guidanceFiltersAreCustom(draft: GuidanceFilterDraft): boolean {
     (field) => draft[field] !== DEFAULT_GUIDANCE_FILTER_DRAFT[field],
   );
 }
+
+/** Guidance that only scopes a source to a collection subject, leaving every other rule open. */
+export function guidanceForSubject(subject: string): SourceGuidance {
+  return {
+    additionalSeedUrls: [],
+    allowedHostnames: [],
+    includeUrlPrefixes: [],
+    excludeUrlPrefixes: [],
+    linkSelector: null,
+    downloadSelector: null,
+    includeFilenameGlobs: [],
+    excludeFilenameGlobs: [],
+    includeFilenamePatterns: [],
+    excludeFilenamePatterns: [],
+    includeContentKeywords: [],
+    excludeContentKeywords: [],
+    includeContentPatterns: [],
+    excludeContentPatterns: [],
+    includeOrganizations: [],
+    excludeOrganizations: [],
+    minimumFileSizeBytes: null,
+    maximumFileSizeBytes: null,
+    documentDateFrom: null,
+    documentDateTo: null,
+    subject,
+  };
+}

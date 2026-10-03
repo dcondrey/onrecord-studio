@@ -987,14 +987,7 @@ impl ApiClient {
         })
     }
 
-    /// One listing page of a hosted NextRequest portal with each request's opening/closing dates
-    /// and public documents, which the listing itself does not carry.
-    async fn fetch_hosted_nextrequest_page(
-        &self,
-        portal: &PortalRegistration,
-        page: usize,
-        search_term: Option<&str>,
-    ) -> Result<NextRequestResponse, AppError> {
+    fn hosted_urls(portal: &PortalRegistration) -> Result<(Url, Url), AppError> {
         let endpoint = Url::parse(&portal.api_layout.requests_endpoint).map_err(|error| {
             AppError::PortalDiscovery(format!(
                 "Stored endpoint for portal '{}' is invalid: {error}",
@@ -1007,6 +1000,23 @@ impl ApiClient {
                 portal.portal_key
             ))
         })?;
+        Ok((endpoint, origin))
+    }
+
+    /// One listing page of a hosted NextRequest portal, optionally searched for a subject. The
+    /// listing carries no dates or documents; [`Self::fetch_hosted_request`] reads those.
+    pub async fn list_hosted_nextrequest_page(
+        &self,
+        portal: &PortalRegistration,
+        page: usize,
+        search_term: Option<&str>,
+    ) -> Result<hosted_nextrequest::ListedPage, AppError> {
+        if page == 0 {
+            return Err(AppError::DataParsing(
+                "Request page must be greater than zero".to_string(),
+            ));
+        }
+        let (endpoint, _) = Self::hosted_urls(portal)?;
         validate_remote_url(&self.dns, &endpoint).await?;
         let mut query = vec![(hosted_nextrequest::PAGE_PARAMETER, page.to_string())];
         if let Some(term) = search_term {
@@ -1014,85 +1024,85 @@ impl ApiClient {
         }
         self.governor.mark_user_directed(&endpoint);
         let listing = self.hosted_json(endpoint, &query).await?;
-        let listed = hosted_nextrequest::decode_listing(&listing, page)?;
-        let mut requests = Vec::with_capacity(listed.requests.len());
-        for request in listed.requests {
-            if !hosted_nextrequest::is_safe_request_identifier(&request.id) {
-                return Err(AppError::DataParsing(format!(
-                    "NextRequest listed a request identifier '{}' that cannot be addressed",
-                    request.id
-                )));
-            }
-            let timeline_url = origin
-                .join(&format!("client/requests/{}/timeline", request.id))
-                .map_err(|error| AppError::PortalDiscovery(error.to_string()))?;
-            // The timeline pages newest first, so the opening event is on its last page.
-            let mut entries = Vec::new();
-            for timeline_page in 1..=hosted_nextrequest::MAXIMUM_TIMELINE_PAGES {
-                let value = self
-                    .hosted_json(
-                        timeline_url.clone(),
-                        &[(
-                            hosted_nextrequest::PAGE_PARAMETER,
-                            timeline_page.to_string(),
-                        )],
-                    )
-                    .await?;
-                let page_entries = value
-                    .get("timeline")
-                    .and_then(Value::as_array)
-                    .cloned()
-                    .unwrap_or_default();
-                let reported = value.get("total_count").and_then(Value::as_u64);
-                let listed_here = page_entries.len();
-                entries.extend(page_entries);
-                if listed_here == 0 || reported.is_none_or(|total| entries.len() as u64 >= total) {
-                    break;
-                }
-            }
-            let timeline =
-                hosted_nextrequest::decode_timeline(&serde_json::json!({ "timeline": entries }))?;
-            let fallback_created_at = timeline.opened_at.clone().unwrap_or_default();
-            let documents_url = origin
-                .join("client/request_documents")
-                .map_err(|error| AppError::PortalDiscovery(error.to_string()))?;
-            let mut documents = Vec::new();
-            for document_page in 1..=hosted_nextrequest::MAXIMUM_DOCUMENT_PAGES {
-                let value = self
-                    .hosted_json(
-                        documents_url.clone(),
-                        &[
-                            ("request_id", request.id.clone()),
-                            (
-                                hosted_nextrequest::PAGE_PARAMETER,
-                                document_page.to_string(),
-                            ),
-                        ],
-                    )
-                    .await?;
-                let (page_documents, total) = hosted_nextrequest::decode_documents(
-                    &value,
-                    origin.as_str(),
-                    &fallback_created_at,
-                )?;
-                let listed_here = value
-                    .get("documents")
-                    .and_then(Value::as_array)
-                    .map_or(0, Vec::len);
-                documents.extend(page_documents);
-                let seen = (document_page - 1) * hosted_nextrequest::PAGE_SIZE + listed_here;
-                if listed_here == 0 || total.is_none_or(|total| seen as u64 >= total) {
-                    break;
-                }
-            }
-            requests.push(hosted_nextrequest::to_public_request(
-                request, timeline, documents,
-            )?);
+        hosted_nextrequest::decode_listing(&listing, page)
+    }
+
+    /// A listed request with its opening/closing dates and public documents.
+    pub async fn fetch_hosted_request(
+        &self,
+        portal: &PortalRegistration,
+        request: hosted_nextrequest::ListedRequest,
+    ) -> Result<PublicRequest, AppError> {
+        if !hosted_nextrequest::is_safe_request_identifier(&request.id) {
+            return Err(AppError::DataParsing(format!(
+                "NextRequest listed a request identifier '{}' that cannot be addressed",
+                request.id
+            )));
         }
-        Ok(NextRequestResponse {
-            requests,
-            meta: Some(listed.meta),
-        })
+        let (_, origin) = Self::hosted_urls(portal)?;
+        let timeline_url = origin
+            .join(&format!("client/requests/{}/timeline", request.id))
+            .map_err(|error| AppError::PortalDiscovery(error.to_string()))?;
+        // The timeline pages newest first, so the opening event is on its last page.
+        let mut entries = Vec::new();
+        for timeline_page in 1..=hosted_nextrequest::MAXIMUM_TIMELINE_PAGES {
+            let value = self
+                .hosted_json(
+                    timeline_url.clone(),
+                    &[(
+                        hosted_nextrequest::PAGE_PARAMETER,
+                        timeline_page.to_string(),
+                    )],
+                )
+                .await?;
+            let page_entries = value
+                .get("timeline")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            let reported = value.get("total_count").and_then(Value::as_u64);
+            let listed_here = page_entries.len();
+            entries.extend(page_entries);
+            if listed_here == 0 || reported.is_none_or(|total| entries.len() as u64 >= total) {
+                break;
+            }
+        }
+        let timeline =
+            hosted_nextrequest::decode_timeline(&serde_json::json!({ "timeline": entries }))?;
+        let fallback_created_at = timeline.opened_at.clone().unwrap_or_default();
+        let documents_url = origin
+            .join("client/request_documents")
+            .map_err(|error| AppError::PortalDiscovery(error.to_string()))?;
+        let mut documents = Vec::new();
+        for document_page in 1..=hosted_nextrequest::MAXIMUM_DOCUMENT_PAGES {
+            let value = self
+                .hosted_json(
+                    documents_url.clone(),
+                    &[
+                        ("request_id", request.id.clone()),
+                        (
+                            hosted_nextrequest::PAGE_PARAMETER,
+                            document_page.to_string(),
+                        ),
+                    ],
+                )
+                .await?;
+            let (page_documents, total) = hosted_nextrequest::decode_documents(
+                &value,
+                origin.as_str(),
+                &fallback_created_at,
+            )?;
+            let listed_here = value
+                .get("documents")
+                .and_then(Value::as_array)
+                .map_or(0, Vec::len);
+            documents.extend(page_documents);
+            let seen = (document_page - 1) * hosted_nextrequest::PAGE_SIZE + listed_here;
+            if listed_here == 0 || total.is_none_or(|total| seen as u64 >= total) {
+                break;
+            }
+        }
+        hosted_nextrequest::to_public_request(request, timeline, documents)
     }
 
     async fn hosted_json(&self, url: Url, query: &[(&str, String)]) -> Result<Value, AppError> {
@@ -1112,17 +1122,11 @@ impl ApiClient {
         portal: &PortalRegistration,
         page: usize,
         per_page: usize,
-        search_term: Option<&str>,
     ) -> Result<NextRequestResponse, AppError> {
         if page == 0 {
             return Err(AppError::DataParsing(
                 "Request page must be greater than zero".to_string(),
             ));
-        }
-        if portal.api_layout.page_parameter == hosted_nextrequest::PAGE_PARAMETER {
-            return self
-                .fetch_hosted_nextrequest_page(portal, page, search_term)
-                .await;
         }
         if !(1..=100).contains(&per_page) {
             return Err(AppError::DataParsing(
@@ -4709,17 +4713,22 @@ mod hosted_nextrequest_live {
             portal.api_layout.page_parameter,
             hosted_nextrequest::PAGE_PARAMETER
         );
-        let page = client
-            .fetch_requests(&portal, 2, 50, Some("encampment"))
+        let listed = client
+            .list_hosted_nextrequest_page(&portal, 2, Some("encampment"))
             .await
             .expect("a searched page must decode");
-        let meta = page.meta.expect("hosted pages report pagination");
         assert!(
-            meta.total_count < 10_000,
+            listed.meta.total_count < 10_000,
             "the search must narrow the portal"
         );
-        assert!(!page.requests.is_empty());
-        for request in &page.requests {
+        assert!(!listed.requests.is_empty());
+        let mut documents = 0;
+        let mut read = 0;
+        for listed_request in listed.requests.into_iter().take(15) {
+            let request = client
+                .fetch_hosted_request(&portal, listed_request)
+                .await
+                .expect("a listed request must be read");
             assert!(chrono::DateTime::parse_from_rfc3339(&request.created_at).is_ok());
             if request.status == "closed" {
                 assert!(
@@ -4728,16 +4737,9 @@ mod hosted_nextrequest_live {
                     request.rpid
                 );
             }
+            documents += request.documents.len();
+            read += 1;
         }
-        let documents: usize = page
-            .requests
-            .iter()
-            .map(|request| request.documents.len())
-            .sum();
-        eprintln!(
-            "{} of {} requests on page 2, {documents} public documents",
-            page.requests.len(),
-            meta.total_count
-        );
+        eprintln!("{read} requests read from page 2, {documents} public documents");
     }
 }

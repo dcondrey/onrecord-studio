@@ -5,8 +5,9 @@ use super::{
     frontier::enqueue_tasks_resilient,
     guidance::{
         guidance_allows_url, guidance_explicitly_allows_host, is_supported_external_data_platform,
-        source_host_matches, subject_terms, texts_match_subject, validate_page_parameters,
+        source_host_matches, validate_page_parameters,
     },
+    relevance::admitted,
     worker::send_progress,
 };
 use crate::ingestion::hosted_nextrequest;
@@ -291,30 +292,41 @@ pub(super) async fn fetch_metadata_page(
         },
     )
     .await;
-    let subject = context.crawl.guidance.subject.as_deref();
+    if context.portal.api_layout.page_parameter == hosted_nextrequest::PAGE_PARAMETER {
+        return list_hosted_page(context, page, per_page).await;
+    }
     let response = context
         .client
-        .fetch_requests(&context.portal, page, per_page, subject)
+        .fetch_requests(&context.portal, page, per_page)
         .await?;
     let record_count = response.requests.len();
-    // Hosted NextRequest already searched for the subject server-side; any other request API is
-    // filtered here on what each request says it is about.
-    let searched_server_side =
-        context.portal.api_layout.page_parameter == hosted_nextrequest::PAGE_PARAMETER;
-    let terms = subject_terms(subject);
+    // Any request API other than hosted NextRequest is filtered here on what each request says
+    // it is about; hosted NextRequest is searched for the subject server-side.
+    let on_subject = {
+        let candidates: Vec<String> = response
+            .requests
+            .iter()
+            .map(|record| {
+                let description: String = record
+                    .description
+                    .as_deref()
+                    .unwrap_or_default()
+                    .chars()
+                    .take(400)
+                    .collect();
+                format!(
+                    "{} {description}",
+                    record.title.as_deref().unwrap_or_default()
+                )
+            })
+            .collect();
+        admitted(context.crawl.subject.as_ref(), &candidates).await
+    };
     let requests: Vec<_> = response
         .requests
         .into_iter()
-        .filter(|record| {
-            searched_server_side
-                || texts_match_subject(
-                    &terms,
-                    &[
-                        record.title.as_deref().unwrap_or_default(),
-                        record.description.as_deref().unwrap_or_default(),
-                    ],
-                )
-        })
+        .zip(on_subject)
+        .filter_map(|(record, on_subject)| on_subject.then_some(record))
         .collect();
     let processed_requests = u64::try_from(requests.len()).map_err(|error| {
         AppError::Internal(format!("Request page count cannot be represented: {error}"))
@@ -370,4 +382,91 @@ pub(super) async fn fetch_metadata_page(
     }
     enqueue_tasks_resilient(context, discovered_tasks).await?;
     Ok(())
+}
+
+/// A hosted NextRequest listing page, searched for the subject. Each listed request becomes its
+/// own durable task, so a request's dates and documents are saved as they are read, and one that
+/// fails is retried alone rather than with the hundred listed beside it.
+async fn list_hosted_page(
+    context: &WorkerContext,
+    page: usize,
+    per_page: usize,
+) -> Result<(), AppError> {
+    let listed = context
+        .client
+        .list_hosted_nextrequest_page(
+            &context.portal,
+            page,
+            context.crawl.guidance.subject.as_deref(),
+        )
+        .await?;
+    let records_found = listed.requests.len();
+    let mut tasks: Vec<IngestionTask> = listed
+        .requests
+        .into_iter()
+        .map(|request| IngestionTask::FetchHostedRequest {
+            subdomain: context.portal.portal_key.clone(),
+            request,
+        })
+        .collect();
+    if let Some(next_page) = listed
+        .meta
+        .next_page
+        .filter(|next| *next > page && *next <= MAXIMUM_METADATA_PAGE)
+    {
+        tasks.push(IngestionTask::FetchMetadataPage {
+            subdomain: context.portal.portal_key.clone(),
+            page: next_page,
+            per_page,
+        });
+    }
+    send_progress(
+        context,
+        IngestionProgress::PageCompleted {
+            portal_key: context.portal.portal_key.clone(),
+            page,
+            records_found,
+        },
+    )
+    .await;
+    context
+        .statistics
+        .pages_processed
+        .fetch_add(1, Ordering::AcqRel);
+    enqueue_tasks_resilient(context, tasks).await
+}
+
+/// One hosted NextRequest request: its dates and public documents, stored, with each document
+/// queued for download.
+pub(super) async fn fetch_hosted_request(
+    context: &WorkerContext,
+    request: hosted_nextrequest::ListedRequest,
+) -> Result<(), AppError> {
+    context.limiter.acquire(&context.portal.portal_key).await?;
+    let mut record = context
+        .client
+        .fetch_hosted_request(&context.portal, request)
+        .await?;
+    record.compute_timeline_anomalies()?;
+    context
+        .repository
+        .insert_or_update_request(&context.portal.portal_key, &record)
+        .await?;
+    context
+        .statistics
+        .requests_processed
+        .fetch_add(1, Ordering::AcqRel);
+    let request_id = record.id;
+    let tasks = std::mem::take(&mut record.documents)
+        .into_iter()
+        .map(|document| {
+            standard_document_task(
+                context,
+                request_id,
+                document,
+                PayloadDepth::discovered(0, 0),
+            )
+        })
+        .collect();
+    enqueue_tasks_resilient(context, tasks).await
 }

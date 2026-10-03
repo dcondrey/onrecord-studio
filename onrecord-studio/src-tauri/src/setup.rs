@@ -110,6 +110,7 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
         corpus_index.clone(),
         &download_root,
     ))?;
+    manager.set_relevance_model(vector_index.clone());
     if let Some(report) = migration_report {
         let _ = app_handle.emit(
             "ingestion-telemetry",

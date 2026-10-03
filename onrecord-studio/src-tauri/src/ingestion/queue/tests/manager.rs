@@ -514,6 +514,7 @@ async fn a_failed_initial_enqueue_stops_its_workers_and_releases_the_lifecycle_l
             source.clone(),
             MetadataPageWindow::default(),
             RateLimitPolicy::default(),
+            SourceGuidance::default(),
         ),
     )
     .await
@@ -562,6 +563,7 @@ fn placeholder_pool(portal_key: &str) -> PortalPool {
         crawl: Arc::new(CrawlState {
             policy: CrawlPolicy::default(),
             guidance: SourceGuidance::default(),
+            subject: None,
             visited_urls: Mutex::new(HashSet::new()),
             resource_urls: Mutex::new(HashSet::new()),
             crawl_path_claims: Mutex::new(HashSet::new()),
@@ -617,6 +619,7 @@ async fn a_start_beyond_the_concurrency_cap_parks_and_is_promoted_when_a_slot_fr
                 parked_second,
                 MetadataPageWindow::default(),
                 RateLimitPolicy::default(),
+                SourceGuidance::default(),
             )
             .await
     });

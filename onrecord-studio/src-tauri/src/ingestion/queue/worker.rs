@@ -2,7 +2,7 @@
 
 use super::*;
 use super::{
-    crawl::{announce_host_stop, fetch_metadata_page},
+    crawl::{announce_host_stop, fetch_hosted_request, fetch_metadata_page},
     frontier::{decrement_atomic, refill_ingestion_frontier},
     objects::import_local_payload,
     payload::process_binary_payload,
@@ -418,6 +418,9 @@ async fn execute_task(context: &WorkerContext, task: IngestionTask) -> Result<()
     match task {
         IngestionTask::FetchMetadataPage { page, per_page, .. } => {
             fetch_metadata_page(context, page, per_page).await
+        }
+        IngestionTask::FetchHostedRequest { request, .. } => {
+            fetch_hosted_request(context, request).await
         }
         IngestionTask::DownloadBinaryPayload {
             request_id,

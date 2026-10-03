@@ -193,6 +193,33 @@ impl VectorIndex {
         self.model_status().await
     }
 
+    /// Unit-normalized embeddings for short texts, or `None` when the model is not installed.
+    /// An installed model is loaded on first use; a missing one is never downloaded from here,
+    /// because ingestion must not start a model download the operator did not ask for.
+    pub async fn embed_short_texts(
+        &self,
+        texts: Vec<String>,
+    ) -> Result<Option<Vec<Vec<f32>>>, AppError> {
+        if texts.is_empty() {
+            return Ok(Some(Vec::new()));
+        }
+        if !self.model_ready().await {
+            let (artifact_count, _) = artifact_manifest(&self.cache_dir)?;
+            if artifact_count == 0 {
+                return Ok(None);
+            }
+            self.initialize_model().await?;
+        }
+        let mut guard = self.model.lock().await;
+        let Some(model) = guard.as_mut() else {
+            return Ok(None);
+        };
+        let embeddings = model
+            .embed(texts, Some(64))
+            .map_err(|error| AppError::Storage(format!("Failed to embed texts: {error}")))?;
+        Ok(Some(embeddings.into_iter().map(normalize).collect()))
+    }
+
     pub async fn index_documents(
         &self,
         repository: &DuckDbRepository,
@@ -1160,5 +1187,90 @@ mod tests {
         assert_eq!(status.dimension, EMBEDDING_DIMENSION);
         assert!(status.artifact_count > 0);
         assert!(status.artifact_manifest_sha256.is_some());
+    }
+}
+
+#[cfg(test)]
+mod subject_relevance_calibration {
+    use super::*;
+
+    /// Prints bge-small cosine similarity for labelled real titles, to set the subject threshold.
+    /// Needs the installed model: `ONRECORD_MODEL_CACHE=<app data>/models cargo test --lib
+    /// subject_relevance_calibration -- --ignored --nocapture`.
+    #[tokio::test]
+    #[ignore = "needs the installed embedding model"]
+    async fn similarity_of_labelled_titles() {
+        let cache = std::env::var("ONRECORD_MODEL_CACHE").expect("ONRECORD_MODEL_CACHE");
+        let temp = tempfile::tempdir().unwrap();
+        let index = VectorIndex::open(&temp.path().join("v.db"), PathBuf::from(cache)).unwrap();
+        let cases: &[(&str, &[(&str, bool)])] = &[
+            (
+                "homelessness",
+                &[
+                    ("Homelessness Hub at UC San Diego", true),
+                    ("Eviction Study UCSD Panel 2024", true),
+                    ("Unsheltered point in time count 2024 report", true),
+                    ("Encampment abatement schedule", true),
+                    ("Safe sleeping site operations agreement", true),
+                    ("RV safe parking program expansion", true),
+                    ("Housing", true),
+                    ("Parking revenue trends", false),
+                    ("911 Calls", false),
+                    ("Budget visualizations", false),
+                    ("Transit Stops GTFS", false),
+                    ("get it done requests closed 2025", false),
+                    ("Local Businesses", false),
+                    ("Indian Housing Block Grant Program", false),
+                    ("FY27 Estimate Cover Letter", false),
+                    ("cpp minutes 260318", false),
+                    ("Opportunity Zones News", false),
+                ],
+            ),
+            (
+                "police use of force",
+                &[
+                    ("RIPA police stop data", true),
+                    ("Use of force incidents dataset", true),
+                    ("Officer involved shootings 2023", true),
+                    ("Commission on Police Practices minutes", true),
+                    ("Body worn camera policy", true),
+                    ("Homelessness Hub at UC San Diego", false),
+                    ("Parking revenue trends", false),
+                    ("Budget visualizations", false),
+                    ("Indian Housing Block Grant Program", false),
+                    ("Transit Stops GTFS", false),
+                    ("Local Businesses", false),
+                ],
+            ),
+        ];
+        for (subject, titles) in cases {
+            let mut texts = vec![format!(
+                "Represent this sentence for searching relevant passages: {subject}"
+            )];
+            texts.extend(titles.iter().map(|(title, _)| title.to_string()));
+            let vectors = index
+                .embed_short_texts(texts)
+                .await
+                .unwrap()
+                .expect("model installed");
+            let mut scored: Vec<(f32, &str, bool)> = titles
+                .iter()
+                .zip(&vectors[1..])
+                .map(|((title, relevant), vector)| {
+                    (
+                        vector.iter().zip(&vectors[0]).map(|(a, b)| a * b).sum(),
+                        *title,
+                        *relevant,
+                    )
+                })
+                .collect();
+            scored.sort_by(|a, b| b.0.total_cmp(&a.0));
+            for (score, title, relevant) in scored {
+                eprintln!(
+                    "{subject}\t{score:.3}\t{}\t{title}",
+                    if relevant { "REL" } else { "---" }
+                );
+            }
+        }
     }
 }

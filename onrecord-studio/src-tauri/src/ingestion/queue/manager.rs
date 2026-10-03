@@ -6,7 +6,7 @@ use super::{
     frontier::{
         enqueue_task_resilient, pool_seed_tasks, refill_ingestion_frontier, resume_initial_tasks,
     },
-    guidance::{validate_crawl_policy, validate_page_parameters},
+    guidance::{validate_crawl_policy, validate_page_parameters, validate_source_guidance},
     worker::{cancel_and_join_workers, worker_loop},
 };
 
@@ -40,7 +40,12 @@ impl QueueManager {
             parser_semaphore: Arc::new(Semaphore::new(MAXIMUM_CPU_PARSERS)),
             ocr_semaphore: Arc::new(Semaphore::new(MAXIMUM_CONCURRENT_OCR)),
             parser_memory: Arc::new(Semaphore::new(PARSER_MEMORY_PERMITS as usize)),
+            relevance_model: std::sync::OnceLock::new(),
         })
+    }
+
+    pub fn set_relevance_model(&self, model: crate::storage::vector::VectorIndex) {
+        let _ = self.relevance_model.set(model);
     }
 
     pub fn progress_sender(&self) -> mpsc::Sender<IngestionProgress> {
@@ -84,8 +89,14 @@ impl QueueManager {
         portal_url: &str,
         window: MetadataPageWindow,
         rate_limit_policy: RateLimitPolicy,
+        subject: Option<String>,
     ) -> Result<PortalSyncStart, AppError> {
         validate_page_parameters(window.start_page, window.page_size)?;
+        let guidance = SourceGuidance {
+            subject,
+            ..SourceGuidance::default()
+        };
+        validate_source_guidance(&guidance)?;
         let portal = self.client.discover_portal(portal_url).await?;
         let _ = self
             .progress_sender
@@ -97,16 +108,29 @@ impl QueueManager {
         // window, so a resume seeds the slice they chose instead of silently reverting to 1 and
         // 50. The registration is written first because the recipe row has a foreign key to it;
         // this mirrors what the public-source path does with a non-default crawl recipe.
-        if window != MetadataPageWindow::default() {
+        if window != MetadataPageWindow::default() || guidance != SourceGuidance::default() {
             self.repository
                 .insert_or_update_portal_registration(&portal)
                 .await?;
+        }
+        if window != MetadataPageWindow::default() {
             self.repository
                 .save_source_metadata_page_window(&portal, portal_url, window)
                 .await?;
         }
+        // Saved so a resume searches for the same subject rather than the whole portal.
+        if guidance != SourceGuidance::default() {
+            self.repository
+                .save_source_connector_recipe(
+                    &portal,
+                    portal_url,
+                    &CrawlPolicy::default(),
+                    &guidance,
+                )
+                .await?;
+        }
         let sync_run_id = self
-            .start_verified_portal(portal.clone(), window, rate_limit_policy)
+            .start_verified_portal(portal.clone(), window, rate_limit_policy, guidance)
             .await?;
         Ok(PortalSyncStart {
             portal,
@@ -119,6 +143,7 @@ impl QueueManager {
         portal: PortalRegistration,
         window: MetadataPageWindow,
         rate_limit_policy: RateLimitPolicy,
+        guidance: SourceGuidance,
     ) -> Result<String, AppError> {
         validate_page_parameters(window.start_page, window.page_size)?;
         let portal_key = portal.portal_key.clone();
@@ -131,7 +156,7 @@ impl QueueManager {
                 per_page: window.page_size,
             }],
             CrawlPolicy::default(),
-            SourceGuidance::default(),
+            guidance,
             PoolSeedPolicy::OperatorRequested,
         )
         .await
@@ -416,9 +441,13 @@ impl QueueManager {
             .store(WORKERS_PER_PORTAL, Ordering::Release);
         let receiver = Arc::new(Mutex::new(receiver));
         let compiled_guidance = CompiledGuidancePatterns::compile(&guidance);
+        let subject =
+            relevance::SubjectMatcher::new(guidance.subject.as_deref(), self.relevance_model.get())
+                .await;
         let crawl = Arc::new(CrawlState {
             policy: crawl_policy,
             guidance,
+            subject,
             compiled_guidance,
             visited_urls: Mutex::new(HashSet::new()),
             resource_urls: Mutex::new(HashSet::new()),

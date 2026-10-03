@@ -11,7 +11,7 @@
 //!   time, with no zone given anywhere in the API.
 
 use chrono::{Datelike, FixedOffset, NaiveDate, NaiveDateTime, TimeZone, Weekday};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
@@ -32,8 +32,9 @@ pub(crate) const MAXIMUM_TIMELINE_PAGES: usize = 20;
 const JAVASCRIPT_SAFE_MASK: u64 = (1 << 53) - 1;
 const TITLE_CHARACTERS: usize = 140;
 
-#[derive(Debug, Deserialize)]
-pub(crate) struct ListedRequest {
+/// A listing row, also persisted as the payload of the task that reads its details.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListedRequest {
     pub id: String,
     #[serde(default)]
     request_state: Option<String>,
@@ -44,7 +45,7 @@ pub(crate) struct ListedRequest {
 }
 
 #[derive(Debug)]
-pub(crate) struct ListedPage {
+pub struct ListedPage {
     pub requests: Vec<ListedRequest>,
     pub meta: PaginationMeta,
 }

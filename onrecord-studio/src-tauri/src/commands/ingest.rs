@@ -77,7 +77,14 @@ pub async fn start_data_source(
     let rate_limit_policy = rate_limit_policy.unwrap_or_default();
     let metadata_page_window = metadata_page_window.unwrap_or_default();
     match manager
-        .discover_and_start(url, metadata_page_window, rate_limit_policy)
+        .discover_and_start(
+            url,
+            metadata_page_window,
+            rate_limit_policy,
+            guidance
+                .as_ref()
+                .and_then(|guidance| guidance.subject.clone()),
+        )
         .await
     {
         Ok(start) => Ok(SourceIngestionStart {

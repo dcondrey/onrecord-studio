@@ -10,6 +10,7 @@ mod objects;
 mod payload;
 mod progress;
 mod recheck;
+mod relevance;
 mod resources;
 mod structured;
 #[cfg(test)]
@@ -132,6 +133,11 @@ pub enum IngestionTask {
         subdomain: String,
         page: usize,
         per_page: usize,
+    },
+    /// One request a hosted NextRequest listing named; see `crawl::fetch_hosted_request`.
+    FetchHostedRequest {
+        subdomain: String,
+        request: crate::ingestion::hosted_nextrequest::ListedRequest,
     },
     DownloadBinaryPayload {
         subdomain: String,
@@ -286,6 +292,7 @@ impl IngestionTask {
     fn portal_key(&self) -> &str {
         match self {
             Self::FetchMetadataPage { subdomain, .. }
+            | Self::FetchHostedRequest { subdomain, .. }
             | Self::DownloadBinaryPayload { subdomain, .. }
             | Self::CrawlPublicResource { subdomain, .. }
             | Self::CrawlWordPressGoogleDrive { subdomain, .. }
@@ -300,6 +307,9 @@ impl IngestionTask {
             Self::FetchMetadataPage {
                 subdomain, page, ..
             } => format!("{subdomain}-page-{page}"),
+            Self::FetchHostedRequest { subdomain, request } => {
+                format!("{subdomain}-request-{}", request.id)
+            }
             Self::DownloadBinaryPayload {
                 subdomain,
                 document,
@@ -367,7 +377,9 @@ impl IngestionTask {
             Self::CrawlWordPressGoogleDrive { connector, .. } => Some(&connector.endpoint),
             Self::CrawlArcGisLayer { layer_url, .. } => Some(layer_url),
             Self::FetchDataCatalogPage { endpoint, .. } => Some(&endpoint.api_url),
-            Self::FetchMetadataPage { .. } | Self::ImportLocalPayload { .. } => None,
+            Self::FetchMetadataPage { .. }
+            | Self::FetchHostedRequest { .. }
+            | Self::ImportLocalPayload { .. } => None,
         }
     }
 }
@@ -375,6 +387,8 @@ impl IngestionTask {
 struct CrawlState {
     policy: CrawlPolicy,
     guidance: SourceGuidance,
+    /// Built from `guidance.subject` when the pool starts; `None` collects everything in scope.
+    subject: Option<relevance::SubjectMatcher>,
     visited_urls: Mutex<HashSet<String>>,
     resource_urls: Mutex<HashSet<String>>,
     /// One site path, one crawl node. See `claim_crawl_path`.
@@ -606,6 +620,8 @@ pub struct QueueManager {
     parser_semaphore: Arc<Semaphore>,
     ocr_semaphore: Arc<Semaphore>,
     parser_memory: Arc<Semaphore>,
+    /// The on-device embedding model, when the app has one, for judging subject relevance.
+    relevance_model: std::sync::OnceLock<crate::storage::vector::VectorIndex>,
 }
 
 enum ExtractedDocument {

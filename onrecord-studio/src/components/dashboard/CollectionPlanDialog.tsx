@@ -4,7 +4,7 @@ import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { CollectionPlanSource } from '../../types';
 import DialogBackdrop from '../ui/DialogBackdrop';
-import { openSourceConnector } from './sourceEvents';
+import { guidanceForSubject } from '../../utils/sourceGuidance';
 
 /** The subject most of the plan's sources were last collected for, to start the field from. */
 export function lastSubject(sources: readonly CollectionPlanSource[]): string {
@@ -34,8 +34,13 @@ export default function CollectionPlanDialog() {
   const [subject, setSubject] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [newUrl, setNewUrl] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [added, setAdded] = useState<string[]>([]);
+  const [addError, setAddError] = useState<string | null>(null);
   const planGate = useLatestRequestGate();
   const startGate = useLatestRequestGate();
+  const addGate = useLatestRequestGate();
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -56,8 +61,9 @@ export default function CollectionPlanDialog() {
 
   const close = useCallback(() => {
     startGate.invalidate();
+    addGate.invalidate();
     setOpen(false);
-  }, [startGate]);
+  }, [addGate, startGate]);
 
   const toggle = (portalKey: string) =>
     setSelected((current) => {
@@ -84,9 +90,29 @@ export default function CollectionPlanDialog() {
       });
   };
 
+  // A source added here starts at once, scoped to the subject typed above.
   const addSource = () => {
-    close();
-    openSourceConnector();
+    const url = newUrl.trim();
+    if (!url) return;
+    const token = addGate.begin();
+    const trimmedSubject = subject.trim();
+    setAdding(true);
+    setAddError(null);
+    invokeCommand('start_data_source', {
+      url,
+      guidance: trimmedSubject ? guidanceForSubject(trimmedSubject) : null,
+    })
+      .then(({ source }) => {
+        if (!addGate.isCurrent(token)) return;
+        setAdding(false);
+        setNewUrl('');
+        setAdded((current) => [...current, source.displayName]);
+      })
+      .catch((reason) => {
+        if (!addGate.isCurrent(token)) return;
+        setAdding(false);
+        setAddError(formatNativeError(reason));
+      });
   };
 
   const unfinishedCount = useMemo(() => sources?.filter((source) => source.hasUnfinishedWork).length ?? 0, [sources]);
@@ -136,14 +162,30 @@ export default function CollectionPlanDialog() {
                 </li>
               ))}
             </ul>
-            <button type="button" onClick={addSource} className="focus-ring mt-2 rounded px-2 py-1 text-label text-accent">
-              Add another source…
-            </button>
+            <div className="mt-3">
+              <label className="block text-label font-medium text-fg-secondary">
+                Add a source
+                <div className="mt-1.5 flex gap-2">
+                  <input
+                    type="url"
+                    value={newUrl}
+                    onChange={(event) => setNewUrl(event.target.value)}
+                    placeholder="https://city.nextrequest.com or a public records page"
+                    className="focus-ring h-10 min-w-0 flex-1 rounded-xl border border-control bg-canvas px-3 text-label text-fg"
+                  />
+                  <button type="button" onClick={addSource} disabled={adding || !newUrl.trim()} className="secondary-action focus-ring shrink-0 rounded-lg border px-3 py-2 text-label leading-4 text-fg-secondary disabled:opacity-50">
+                    {adding ? 'Adding…' : 'Add and collect'}
+                  </button>
+                </div>
+              </label>
+              {added.length > 0 && <p role="status" className="mt-1 text-label text-success">Collecting from {added.join(', ')}.</p>}
+              {addError && <p role="alert" className="mt-1 text-label leading-4 text-danger">{addError}</p>}
+            </div>
           </fieldset>
           {error && <p role="alert" className="text-label leading-4 text-danger">{error}</p>}
         </div>
         <div className="flex justify-end gap-2 border-t border-line p-4">
-          <button type="button" onClick={close} className="secondary-action focus-ring rounded-lg border px-3 py-2 text-label leading-4 text-fg-secondary">Not now</button>
+          <button type="button" onClick={close} className="secondary-action focus-ring rounded-lg border px-3 py-2 text-label leading-4 text-fg-secondary">{added.length > 0 ? "Done" : "Not now"}</button>
           <button
             type="button"
             onClick={start}

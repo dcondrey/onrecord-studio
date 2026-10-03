@@ -18,6 +18,7 @@ vi.mock('../ipc', () => ({
     bridge.calls.push({ command, args });
     if (command === 'get_collection_plan') return Promise.resolve({ sources: bridge.sources });
     if (command === 'start_collection') return Promise.resolve([]);
+    if (command === 'start_data_source') return Promise.resolve({ source: { displayName: 'City records' } });
     return Promise.resolve(null);
   },
 }));
@@ -48,7 +49,7 @@ describe('CollectionPlanDialog', () => {
     expect(bridge.calls.map((call) => call.command)).toEqual(['get_collection_plan']);
     const boxes = screen.getAllByRole('checkbox') as HTMLInputElement[];
     expect(boxes.map((box) => box.checked)).toEqual([true, false]);
-    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('encampments');
+    expect((screen.getAllByRole('textbox')[0] as HTMLInputElement).value).toBe('encampments');
   });
 
   it('starts exactly the chosen sources for the typed subject', async () => {
@@ -56,13 +57,28 @@ describe('CollectionPlanDialog', () => {
     render(<CollectionPlanDialog />);
     await screen.findByText('What should this session collect?');
     fireEvent.click(screen.getAllByRole('checkbox')[1]);
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: '  police overtime ' } });
+    fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: '  police overtime ' } });
     fireEvent.click(screen.getByRole('button', { name: /Start collecting from 2 sources/ }));
     await waitFor(() => expect(screen.queryByText('What should this session collect?')).toBeNull());
     expect(bridge.calls.at(-1)).toEqual({
       command: 'start_collection',
       args: { sourceKeys: ['city', 'county'], subject: 'police overtime' },
     });
+  });
+
+  it('starts an added source scoped to the typed subject', async () => {
+    bridge.sources = [source('city', false)];
+    render(<CollectionPlanDialog />);
+    await screen.findByText('What should this session collect?');
+    const [subjectField, urlField] = screen.getAllByRole('textbox');
+    fireEvent.change(subjectField, { target: { value: 'encampment' } });
+    fireEvent.change(urlField, { target: { value: 'https://city.nextrequest.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add and collect' }));
+    await screen.findByText('Collecting from City records.');
+    const call = bridge.calls.at(-1) as { command: string; args: { url: string; guidance: { subject: string } } };
+    expect(call.command).toBe('start_data_source');
+    expect(call.args.url).toBe('https://city.nextrequest.com');
+    expect(call.args.guidance.subject).toBe('encampment');
   });
 
   it('stays closed when there are no saved sources', async () => {
