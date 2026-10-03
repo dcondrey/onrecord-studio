@@ -17,6 +17,8 @@ use super::{
     },
 };
 
+/// The values `request_keyword_signals.keyword`'s CHECK admits in `0001_initial_schema.sql`.
+const STORED_KEYWORD_SIGNALS: [&str; 3] = ["sweep", "encampment", "eviction"];
 impl DuckDbRepository {
     pub async fn insert_or_update_document(
         &self,
@@ -372,7 +374,13 @@ impl DuckDbRepository {
                         "Failed to refresh request keyword signals: {error}"
                     ))
                 })?;
-                for (keyword, match_count) in keyword_counts {
+                // `request_keyword_signals.keyword` carries a CHECK that DuckDB cannot widen on an
+                // existing database, and a keyword outside it aborted the whole request's insert.
+                // Only the signals the column admits are stored; the request itself always is.
+                for (keyword, match_count) in keyword_counts
+                    .into_iter()
+                    .filter(|(keyword, _)| STORED_KEYWORD_SIGNALS.contains(&keyword.as_str()))
+                {
                     let match_count = i64::try_from(match_count).map_err(|_| {
                         AppError::Storage(
                             "Request keyword count exceeds SQLite capacity".to_string(),

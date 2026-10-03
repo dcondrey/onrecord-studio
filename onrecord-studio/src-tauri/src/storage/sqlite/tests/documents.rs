@@ -528,3 +528,45 @@ async fn vector_source_pages_visit_every_document_once_in_key_order() {
         ]
     );
 }
+
+/// The keyword extractor names "property storage", which the signal column's CHECK does not
+/// admit and DuckDB cannot widen on an existing database. Measured on a live San Diego
+/// collection: the insert failed and the whole request was lost. The request must be stored,
+/// with the signals the column admits.
+#[tokio::test]
+async fn a_keyword_the_signal_column_does_not_admit_does_not_lose_the_request() {
+    let repository = repository_with_document().await;
+    let request = PublicRequest {
+        id: 77,
+        rpid: Some("22-1629".to_string()),
+        title: Some("Encampment property storage records".to_string()),
+        description: None,
+        status: "closed".to_string(),
+        current_status_id: None,
+        created_at: "2022-03-01T09:00:00-08:00".to_string(),
+        updated_at: "2022-03-01T09:00:00-08:00".to_string(),
+        closed_at: None,
+        due_date: None,
+        determination_at: None,
+        determination_source: None,
+        neighborhood_block: None,
+        statutory_extension: None,
+        documents: Vec::new(),
+        agency: None,
+        category: None,
+        timeline_anomalies: Vec::new(),
+    };
+    repository
+        .insert_or_update_request(PORTAL_SUBDOMAIN, &request)
+        .await
+        .expect("the request must be stored");
+    let connection = repository.conn.lock().await;
+    let keywords: Vec<String> = connection
+        .prepare("SELECT keyword FROM request_keyword_signals WHERE request_id = 77")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(keywords, ["encampment"]);
+}
