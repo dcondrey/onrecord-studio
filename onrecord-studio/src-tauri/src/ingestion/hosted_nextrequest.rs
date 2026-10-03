@@ -16,6 +16,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use crate::error::AppError;
+use crate::storage::sqlite::{ReleaseEvent, RELEASED, RELEASED_TO_REQUESTER};
 use crate::types::nextrequest::AgencyMetadata;
 use crate::types::{DocumentMetadata, PaginationMeta, PublicRequest};
 
@@ -58,6 +59,9 @@ pub(crate) struct RequestTimeline {
     /// The text of the closing event: the agency's response, such as "No responsive documents
     /// The City of San Diego has no responsive documents." Present only when `closed_at` is.
     pub closure_notice: Option<String>,
+    /// Every "Document(s) Released" event, oldest first. Each records an upload the portal shows;
+    /// none of them is the agency's determination.
+    pub releases: Vec<ReleaseEvent>,
 }
 
 pub(crate) fn is_listing(value: &Value) -> bool {
@@ -122,6 +126,8 @@ struct TimelinePage {
 #[derive(Deserialize)]
 struct TimelineEntry {
     #[serde(default)]
+    timeline_id: Option<i64>,
+    #[serde(default)]
     timeline_name: Option<String>,
     #[serde(default)]
     timeline_byline: Option<String>,
@@ -129,8 +135,9 @@ struct TimelineEntry {
     timeline_display_text: Option<String>,
 }
 
-/// The earliest "Request Opened" and the latest "Request Closed" event. A request reopened after
-/// its last closure is open, so a closure followed by a reopening is not reported as closed.
+/// The earliest "Request Opened" and the latest "Request Closed" event, and every release event. A
+/// request reopened after its last closure is open, so a closure followed by a reopening is not
+/// reported as closed.
 pub(crate) fn decode_timeline(value: &Value) -> Result<RequestTimeline, AppError> {
     let page: TimelinePage = serde_json::from_value(value.clone()).map_err(|error| {
         AppError::DataParsing(format!("Failed to decode a NextRequest timeline: {error}"))
@@ -139,11 +146,29 @@ pub(crate) fn decode_timeline(value: &Value) -> Result<RequestTimeline, AppError
     let mut closed: Option<NaiveDateTime> = None;
     let mut reopened: Option<NaiveDateTime> = None;
     let mut notice: Option<String> = None;
+    let mut releases: Vec<(NaiveDateTime, ReleaseEvent)> = Vec::new();
     for entry in page.timeline {
-        let Some(at) = entry.timeline_byline.as_deref().and_then(parse_byline) else {
+        let Some(byline) = entry.timeline_byline.as_deref() else {
+            continue;
+        };
+        let Some(at) = parse_byline(byline) else {
             continue;
         };
         match entry.timeline_name.as_deref().map(str::trim) {
+            Some(name @ (RELEASED | RELEASED_TO_REQUESTER)) => releases.push((
+                at,
+                ReleaseEvent {
+                    timeline_event_id: entry.timeline_id,
+                    event_name: name.to_string(),
+                    released_at: pacific_rfc3339(at),
+                    listed_file_names: entry
+                        .timeline_display_text
+                        .as_deref()
+                        .map(listed_lines)
+                        .unwrap_or_default(),
+                    source_byline: byline.to_string(),
+                },
+            )),
             Some("Request Opened") => opened = Some(opened.map_or(at, |seen| seen.min(at))),
             Some("Request Closed") => {
                 if closed.is_none_or(|seen| at >= seen) {
@@ -156,7 +181,9 @@ pub(crate) fn decode_timeline(value: &Value) -> Result<RequestTimeline, AppError
         }
     }
     let closed = closed.filter(|closed| reopened.is_none_or(|reopened| reopened < *closed));
+    releases.sort_by_key(|(at, event)| (*at, event.timeline_event_id));
     Ok(RequestTimeline {
+        releases: releases.into_iter().map(|(_, event)| event).collect(),
         opened_at: opened.map(pacific_rfc3339),
         closure_notice: closed.and(notice).filter(|notice| !notice.is_empty()),
         closed_at: closed.map(pacific_rfc3339),
@@ -185,6 +212,17 @@ fn plain_text(html: &str) -> String {
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+/// A release event's display text lists one file name per `<br>`-separated line.
+fn listed_lines(html: &str) -> Vec<String> {
+    html.replace("<br />", "\n")
+        .replace("<br/>", "\n")
+        .replace("<br>", "\n")
+        .lines()
+        .map(plain_text)
+        .filter(|line| !line.is_empty())
+        .collect()
 }
 
 /// `"August  8, 2024, 11:48am by the requester"` as a local wall-clock time.
@@ -435,6 +473,45 @@ mod tests {
         );
     }
 
+    /// Entries as sandiego.nextrequest.com returned them for 20-2226 on 2026-10-03, newest first.
+    #[test]
+    fn release_bylines_become_dated_events_oldest_first_with_their_listed_files() {
+        let value = json!({"timeline": [
+            {"timeline_id": 23996285, "timeline_name": "Document(s) Released",
+             "timeline_display_text": "Responsive 20-2226 (Set 12)_Redacted.pdf<br>Responsive 20-2226 (Set 13)_Redacted.pdf<br>",
+             "timeline_byline": "September  7, 2022,  7:14am by Angela Laurita, Public Records Administration Manager (Staff)"},
+            {"timeline_id": 23756405, "timeline_name": "Department Assignment",
+             "timeline_byline": "August 25, 2022,  5:14pm by Angela Laurita (Staff)"},
+            {"timeline_id": 1, "timeline_name": "Document(s) Released to Requester",
+             "timeline_display_text": null,
+             "timeline_byline": "December 26, 2020,  4:49pm by Stephanie Sanchez (Staff)"}
+        ]});
+        let releases = decode_timeline(&value).unwrap().releases;
+        assert_eq!(
+            releases,
+            vec![
+                ReleaseEvent {
+                    timeline_event_id: Some(1),
+                    event_name: RELEASED_TO_REQUESTER.to_string(),
+                    released_at: "2020-12-26T16:49:00-08:00".to_string(),
+                    listed_file_names: Vec::new(),
+                    source_byline: "December 26, 2020,  4:49pm by Stephanie Sanchez (Staff)"
+                        .to_string(),
+                },
+                ReleaseEvent {
+                    timeline_event_id: Some(23996285),
+                    event_name: RELEASED.to_string(),
+                    released_at: "2022-09-07T07:14:00-07:00".to_string(),
+                    listed_file_names: vec![
+                        "Responsive 20-2226 (Set 12)_Redacted.pdf".to_string(),
+                        "Responsive 20-2226 (Set 13)_Redacted.pdf".to_string(),
+                    ],
+                    source_byline: "September  7, 2022,  7:14am by Angela Laurita, Public Records Administration Manager (Staff)".to_string(),
+                },
+            ]
+        );
+    }
+
     #[test]
     fn a_request_reopened_after_its_last_closure_is_not_closed() {
         let value = json!({"timeline": [
@@ -487,6 +564,7 @@ mod tests {
             closure_notice: Some(
                 "Request withdrawn The requestor has withdrawn this request.".into(),
             ),
+            releases: Vec::new(),
         };
         assert_eq!(
             to_public_request(listed, timeline, Vec::new())

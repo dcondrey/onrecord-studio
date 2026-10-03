@@ -223,6 +223,11 @@ export const PLAIN_FINDING_TEXT: Record<FindingKind, PlainText> = {
     notShown: 'It does not show which release was correct. A later release may apply an exemption the earlier one did not.',
     next: 'Compare the cited passages in both copies, then ask the agency why they differ.',
   },
+  ROLLING_PRODUCTION: {
+    observed: 'The portal shows records for this request released on several separate dates, spread over months.',
+    notShown: 'It does not show that a deadline was missed. The requester may have agreed to installments or changed the request.',
+    next: "Read the request's correspondence for a production schedule or a change of scope.",
+  },
 };
 
 export const PLAIN_VERIFICATION_TEXT: Record<VerificationState, PlainText> = {

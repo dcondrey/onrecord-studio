@@ -787,6 +787,30 @@ CREATE TABLE IF NOT EXISTS document_source_checks (
 CREATE INDEX IF NOT EXISTS idx_document_source_checks_document
     ON document_source_checks(portal_subdomain, document_id);
 
+-- One row per release event a portal's request timeline records ("Document(s) Released", or
+-- "... to Requester" when only the requester was shown it), oldest first by `event_ordinal`.
+-- `released_at` is the byline's wall-clock time at the offset it is recorded at; it is when the
+-- portal shows an upload, not the agency's determination, and nothing derives `determination_at`
+-- from it. `listed_document_count` is the number of file names the event lists, NULL when it lists
+-- none (not a count of zero). The relation to `requests` is logical (DuckDB refuses updates of a
+-- parent row a physical key references) and is checked by `verify_logical_relations`. A new
+-- table, so its constraints hold on an upgraded database as well.
+CREATE TABLE IF NOT EXISTS request_release_events (
+    portal_subdomain TEXT NOT NULL,
+    request_id BIGINT NOT NULL,
+    event_ordinal BIGINT NOT NULL CHECK (event_ordinal >= 0),
+    timeline_event_id BIGINT,
+    event_name TEXT NOT NULL
+        CHECK (event_name IN ('Document(s) Released', 'Document(s) Released to Requester')),
+    released_at TEXT NOT NULL,
+    listed_document_count BIGINT
+        CHECK (listed_document_count IS NULL OR listed_document_count > 0),
+    listed_file_names TEXT,
+    source_byline TEXT NOT NULL,
+    CHECK ((listed_document_count IS NULL) = (listed_file_names IS NULL)),
+    PRIMARY KEY (portal_subdomain, request_id, event_ordinal)
+);
+
 -- The rule version each stored derivation was computed under. A rule change bumps the version in
 -- code, and startup recomputes what the old rule stored instead of leaving its findings standing.
 CREATE TABLE IF NOT EXISTS analysis_rule_versions (

@@ -9,6 +9,7 @@ use crate::ingestion::host_policy::{
 };
 use crate::ingestion::hosted_nextrequest;
 use crate::integrity::{digest_hex, sha256_hex};
+use crate::storage::sqlite::ReleaseEvent;
 use crate::types::{
     NextRequestResponse, PaginationMeta, PortalApiLayout, PortalRegistration, PublicRequest,
     SourceKind,
@@ -1027,13 +1028,13 @@ impl ApiClient {
         hosted_nextrequest::decode_listing(&listing, page)
     }
 
-    /// A listed request with its opening/closing dates and public documents, and the text of the
-    /// agency's closing response when the request is closed.
+    /// A listed request with its opening/closing dates and public documents, the text of the
+    /// agency's closing response when the request is closed, and the timeline's release events.
     pub async fn fetch_hosted_request(
         &self,
         portal: &PortalRegistration,
         request: hosted_nextrequest::ListedRequest,
-    ) -> Result<(PublicRequest, Option<String>), AppError> {
+    ) -> Result<(PublicRequest, Option<String>, Vec<ReleaseEvent>), AppError> {
         if !hosted_nextrequest::is_safe_request_identifier(&request.id) {
             return Err(AppError::DataParsing(format!(
                 "NextRequest listed a request identifier '{}' that cannot be addressed",
@@ -1068,7 +1069,7 @@ impl ApiClient {
                 break;
             }
         }
-        let timeline =
+        let mut timeline =
             hosted_nextrequest::decode_timeline(&serde_json::json!({ "timeline": entries }))?;
         let fallback_created_at = timeline.opened_at.clone().unwrap_or_default();
         let documents_url = origin
@@ -1104,9 +1105,11 @@ impl ApiClient {
             }
         }
         let closure_notice = timeline.closure_notice.clone();
+        let releases = std::mem::take(&mut timeline.releases);
         Ok((
             hosted_nextrequest::to_public_request(request, timeline, documents)?,
             closure_notice,
+            releases,
         ))
     }
 
@@ -4730,7 +4733,7 @@ mod hosted_nextrequest_live {
         let mut documents = 0;
         let mut read = 0;
         for listed_request in listed.requests.into_iter().take(15) {
-            let (request, _) = client
+            let (request, _, _) = client
                 .fetch_hosted_request(&portal, listed_request)
                 .await
                 .expect("a listed request must be read");

@@ -266,3 +266,18 @@ The finding states that two releases made different redaction decisions about th
 * The tables are `Record`s over `FindingKind` and `VerificationState`, so a new variant fails `tsc` until it has text. `scripts/check-help-coverage.mjs` fails on the same omission, and on a key with an empty field, without a build.
 * `src/tests/plainLanguage.test.tsx` rejects accusatory wording for every kind, rejects wording of violation or breach for a kind or state that is not a legal claim, and requires the `LatencyOutlier` explanation to say it is a comparison with peers.
 * An evidence gap is an untested route. It is never explained as a finding and never as evidence of compliance or non-compliance.
+
+## 15. Rolling Productions
+
+`analysis/detectors/rolling_production.rs`; findings carry the kind `ROLLING_PRODUCTION`. Release events are stored in `request_release_events` (`storage/sqlite/release_events.rs`).
+
+### A. What is stored
+Every `Document(s) Released` and `Document(s) Released to Requester` event on a hosted NextRequest timeline (`ingestion/hosted_nextrequest.rs::decode_timeline`) becomes one row: the byline exactly as given, its wall-clock time at the US Pacific offset in force that day (the same conversion the opened and closed dates use), the portal's event id, and the file names the event lists, one per `<br>` line. The count of listed names is NULL when the event lists none: an event without a list is not a release of zero documents. A re-crawl replaces the request's rows. A timeline longer than `MAXIMUM_TIMELINE_PAGES` is read in part, so a stored history is a lower bound.
+
+### B. What fires
+An installment is a calendar date, in the portal's time, with at least one release event; several uploads on one day count once. A request with at least 3 installments whose first and last are more than 90 days apart yields one finding listing every installment date and the files listed on it.
+
+The thresholds were measured on 142 sandiego.nextrequest.com requests matching "encampment" (timelines read 2026-10-03): 126 have a release event, 24 have two or more, 23 on two or more dates. Spans of the multi-date requests, longest first: 810, 558, 524, 479, 283, 184, 172, 160, 132, 74, 68, 47, 44, 34, 32, 28, 27, 21, 13, 12, 12, 7, 7 days. Two dates are most often a release and one supplement (25-1161: two dates, 160 days, does not fire); the 90-day threshold sits in the gap between 74 and 132, so a day's drift does not move a request across it. With both thresholds, 8 of the 142 requests fire (20-2226: 27 dates over 810 days, from 30 release events).
+
+### C. What a finding does and does not claim
+The finding restates recorded dates: the request's records were released on N separate dates over D days. It is a pattern signal (`is_legal_claim` false) with confidence unassessed, since nothing is inferred to score. It does not say a deadline was missed: records may be produced in stages, and the requester may have agreed to a schedule or changed the request. No release date is used as `determination_at`; the timeline does not record a determination.
