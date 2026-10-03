@@ -453,6 +453,32 @@ const STOPWORDS: &[&str] = &[
     "information",
     "requests",
     "request",
+    // Records-request boilerplate. On a live San Diego collection these made up most of a
+    // request's topic words ("pursuant to the California Public Records Act, I ask to obtain a
+    // copy of every ..."), so no other document could share all of them.
+    "pursuant",
+    "california",
+    "public",
+    "act",
+    "obtain",
+    "copy",
+    "copies",
+    "every",
+    "following",
+    "time",
+    "period",
+    "present",
+    "date",
+    "latest",
+    "available",
+    "narrow",
+    "search",
+    "filed",
+    "against",
+    "including",
+    "requesting",
+    "requested",
+    "seeking",
 ];
 
 // ----- Tests ---------------------------------------------------------------------------------
