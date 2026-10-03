@@ -237,7 +237,16 @@ pub fn scan_redaction_spans(text: &str) -> Vec<RedactionSpan> {
     // Long runs of block characters (█▓■). 3+ consecutive.
     scan_char_runs(text, &['█', '▓', '■'], 3, &mut spans);
     // Long runs of underscore or X (5+ — shorter runs are common in unrelated content).
-    scan_char_runs(text, &['_'], 5, &mut spans);
+    // A run after a label ("By: ____", "Print Name: ____", "Date: ____") is a blank form field.
+    // On a live San Diego collection every underscore "redaction" found was one: the signature
+    // block of an executed agreement.
+    let mut underscores = Vec::new();
+    scan_char_runs(text, &['_'], 5, &mut underscores);
+    spans.extend(
+        underscores
+            .into_iter()
+            .filter(|span| text[..span.start].trim_end().chars().next_back() != Some(':')),
+    );
     scan_char_runs(text, &['X', 'x'], 5, &mut spans);
     // De-duplicate overlapping spans; keep the earliest start with the widest end.
     spans.sort_by_key(|s| (s.start, std::cmp::Reverse(s.end)));
@@ -849,6 +858,14 @@ mod tests {
         assert!(spans
             .iter()
             .all(|span| span.start > text.find("Name").unwrap()));
+    }
+
+    #[test]
+    fn a_labelled_blank_is_a_form_field_not_a_redaction() {
+        let text = "By: _______________ Print Name: ____________ Title: __________ Paid to ________ today.";
+        let spans = scan_redaction_spans(text);
+        assert_eq!(spans.len(), 1);
+        assert!(text[..spans[0].start].ends_with("Paid to "));
     }
 
     #[test]
