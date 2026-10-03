@@ -35,6 +35,7 @@ pub mod sqlite;
 #[cfg(test)]
 pub(crate) mod sqlite_snapshot;
 pub mod standing_queries;
+pub mod storage_rewrite;
 pub(crate) mod tabular;
 pub mod vector;
 
@@ -49,7 +50,8 @@ pub use duckdb::DuckDbWorkspace;
 /// A file this creates is written at [`DUCKDB_STORAGE_VERSION`]. The library default is v0.10.2,
 /// under which DuckDB never compresses long text: measured on a real installation, 365 MB of
 /// extracted text stored `Uncompressed` there and ZSTD at 89 MB under v1.5.0. An existing file
-/// keeps the version in its header; this setting does not upgrade it.
+/// keeps the version in its header; this setting does not upgrade it. [`storage_rewrite`] does,
+/// once, at startup.
 pub(crate) fn open_duckdb(
     path: Option<&std::path::Path>,
 ) -> ::duckdb::Result<::duckdb::Connection> {

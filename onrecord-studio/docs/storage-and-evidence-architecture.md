@@ -500,9 +500,25 @@ that the account holding it was uncompromised.
   library default for a new file, under which this column stays `Uncompressed`. The same 90 rows
   written to a file at storage `v1.5.0` store as `ZSTD`, 365.7 MB to 89.4 MB, with no codec of our
   own. `storage::open_duckdb` now creates every file at `v1.5.0`. A file keeps the version in its
-  header, so an existing installation stays at `v0.10.2` until rewritten; `COPY FROM DATABASE`
-  cannot do that rewrite, because it copies tables out of foreign-key order and fails on the real
-  core (`analytical_rows` before `analytical_snapshots`). Research snapshots are still written at
+  header; `COPY FROM DATABASE` cannot rewrite it, because it copies tables out of foreign-key order
+  and fails on the real core (`analytical_rows` before `analytical_snapshots`) and corpus.
+  Implemented 2026-10-03 as `storage::storage_rewrite`, run at startup before any connection opens
+  the core or corpus. It recreates sequences (at their live counters), tables in foreign-key order,
+  rows, indexes and views from the old file's own catalog SQL, so stored types (`BIGINT` from the
+  legacy import stays `BIGINT`), defaults and constraints carry over exactly; it refuses a file
+  holding other schemas, types or macros rather than dropping them. Before the swap it requires
+  identical catalog SQL for every object and, per table, equal row count and
+  `sum(hash(row))` digest. The swap hard-links the original as `<file>.storage-rewrite.bak` and
+  renames the copy over it, so the opened path always names a complete database; the backup is
+  deleted once a later launch completes startup. It needs free space of twice the file and is
+  never fatal: any failure leaves the original in place and retries next launch. Measured on a copy
+  of the real installation (release build): core 5,322,321,920 to 1,594,372,096 bytes (-70%) in
+  28.5 s, 4,282,452 rows in 86 tables, `documents_fts.extracted_text` now `ZSTD`, and the startup
+  migrations and every `initialize_*` ran on the result; corpus 1,120,940,032 to 814,755,840 bytes
+  (-27%) in 12.6 s, 3,093,891 rows in 12 tables, and `CorpusIndex::open` accepted it. The corpus is
+  rewritten rather than rebuilt: a `CORPUS_SCHEMA_VERSION` bump would re-chunk every document and
+  route an imported registry through best-effort recovery for no schema change. The vector index
+  (12 KB, no long text) is not rewritten. Research snapshots are still written at
   `v0.10.2` so a recipient's older DuckDB can open them; they carry digests, not text. Whether
   `lance` addresses the same gap was not evaluated. `async-duckdb` does not: it changes
   connection/query concurrency, not on-disk column compression.

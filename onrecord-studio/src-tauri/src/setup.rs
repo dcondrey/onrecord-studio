@@ -12,6 +12,9 @@ use crate::storage::legacy_import::{
     classify_core_database, migrate_legacy_sqlite_core, CoreDatabaseKind,
 };
 use crate::storage::sqlite::DuckDbRepository;
+use crate::storage::storage_rewrite::{
+    remove_retained_backup, rewrite_to_current_storage, StorageRewrite,
+};
 use crate::storage::vector::VectorIndex;
 use std::path::Path;
 use tauri::{App, Emitter, Manager, Runtime};
@@ -68,6 +71,11 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
         }
         CoreDatabaseKind::DuckDb | CoreDatabaseKind::Missing => None,
     };
+    // Must precede every connection to these files: the rewrite swaps each one underneath its path.
+    // The vector index is left alone: it holds no long text and was 12 KB on the measured
+    // installation, so there is nothing for compression to recover.
+    let rewritten_storage =
+        [&core_db_file, &corpus_db_file].map(|path| (path.clone(), rewrite_storage_version(path)));
 
     // 3. Initialize the DuckDB core repository and run structural tracking migrations.
     let repository = DuckDbRepository::new(&core_db_file)?;
@@ -86,6 +94,17 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
     // an unguarded startup failure did for the corpus index before (see storage/corpus.rs).
     if let Err(error) = tauri::async_runtime::block_on(repository.checkpoint()) {
         eprintln!("Startup checkpoint failed (continuing without it): {error}");
+    }
+    // Startup has now succeeded on files an earlier launch rewrote, so their originals can go.
+    for (path, rewritten_this_launch) in &rewritten_storage {
+        if *rewritten_this_launch {
+            continue;
+        }
+        match remove_retained_backup(path) {
+            Ok(true) => eprintln!("Removed the pre-rewrite backup of '{}'.", path.display()),
+            Ok(false) => {}
+            Err(error) => eprintln!("Failed to remove a pre-rewrite backup: {error}"),
+        }
     }
 
     // Both analytics nodes read through live sibling connections to the repository's DuckDB
@@ -293,6 +312,35 @@ fn start_corpus_reconciliation<R: Runtime>(
             }),
         );
     });
+}
+
+/// Rewrites a database left at an older DuckDB storage version, returning whether it did.
+///
+/// Never fatal: every failure leaves the original in place and fully usable, only uncompressed,
+/// and the next launch tries again.
+fn rewrite_storage_version(path: &Path) -> bool {
+    match rewrite_to_current_storage(path) {
+        Ok(StorageRewrite::Rewritten(report)) => {
+            eprintln!(
+                "Rewrote '{}' from storage {} in {:.1}s: {} -> {} bytes, {} rows in {} tables \
+                 verified; original retained at '{}' until the next launch.",
+                path.display(),
+                report.previous_storage,
+                report.elapsed.as_secs_f64(),
+                report.bytes_before,
+                report.bytes_after,
+                report.total_rows(),
+                report.tables.len(),
+                report.backup_path.display()
+            );
+            true
+        }
+        Ok(StorageRewrite::NotNeeded) => false,
+        Err(error) => {
+            eprintln!("Storage rewrite skipped (continuing on the original): {error}");
+            false
+        }
+    }
 }
 
 fn create_runtime_directory(path: &Path) -> Result<(), AppError> {
