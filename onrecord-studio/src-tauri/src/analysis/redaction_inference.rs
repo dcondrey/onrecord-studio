@@ -216,11 +216,7 @@ pub fn scan_redaction_spans(text: &str) -> Vec<RedactionSpan> {
     let bytes = text.as_bytes();
     let mut i = 0;
     while i < bytes.len() {
-        // A stamp stands alone. Attached to a section number (`983.301(b)(6)`, `8(b)(6)`) the
-        // same shape is a legal citation, which HUD notices and statutes are full of.
-        let cites_a_section = i > 0
-            && (bytes[i - 1].is_ascii_alphanumeric() || matches!(bytes[i - 1], b')' | b'.' | b'-'));
-        if bytes[i] == b'(' && i + 4 < bytes.len() && !cites_a_section {
+        if bytes[i] == b'(' && i + 4 < bytes.len() && !cites_a_section(bytes, i) {
             // Look for `(b)(N)` or `(b)(N)(X)` shape.
             let rest = &text[i..];
             if let Some(match_end) = match_foia_exemption(rest) {
@@ -287,6 +283,22 @@ fn scan_char_runs(text: &str, targets: &[char], min_run: usize, out: &mut Vec<Re
             i += 1;
         }
     }
+}
+
+/// A stamp stands alone. After a section number (`983.301(b)(6)`, `570.503 (b)(7)`) the same
+/// shape is a legal citation, which HUD notices and statutes are full of; "Phone (b)(6)" is a stamp.
+fn cites_a_section(bytes: &[u8], open: usize) -> bool {
+    let Some(&adjacent) = open.checked_sub(1).and_then(|index| bytes.get(index)) else {
+        return false;
+    };
+    if adjacent.is_ascii_alphanumeric() || matches!(adjacent, b')' | b'.' | b'-') {
+        return true;
+    }
+    bytes[..open]
+        .iter()
+        .rev()
+        .find(|byte| !byte.is_ascii_whitespace())
+        .is_some_and(|byte| byte.is_ascii_digit() || *byte == b')')
 }
 
 fn match_foia_exemption(rest: &str) -> Option<usize> {
@@ -848,7 +860,7 @@ mod tests {
 
     #[test]
     fn a_section_citation_is_not_a_redaction_stamp() {
-        let text = "PBV limits in 24 CFR § 983.301(b)(6) apply. Name: (b)(6) Phone: (b)(7)(C)";
+        let text = "PBV limits in 24 CFR § 983.301(b)(6) and 570.503 (b)(7) apply. Name: (b)(6) Phone: (b)(7)(C)";
         let spans = scan_redaction_spans(text);
         let marked: Vec<&str> = spans
             .iter()

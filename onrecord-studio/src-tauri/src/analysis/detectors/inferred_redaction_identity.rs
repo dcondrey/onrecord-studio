@@ -65,7 +65,14 @@ pub async fn run(repository: &DuckDbRepository) -> Result<Vec<Finding>, AppError
             Ok(text) => text,
             Err(_) => continue,
         };
-        let spans = scan_redaction_spans(&text);
+        // Only an explicit mark (a [REDACTED] label, an exemption stamp, black boxes) may raise
+        // an automatic finding. In released contracts and forms, underscore and X runs are blank
+        // fields: on a live San Diego collection every such "redaction" was a signature or
+        // address line.
+        let spans: Vec<_> = scan_redaction_spans(&text)
+            .into_iter()
+            .filter(|span| is_explicit_mark(&text[span.start..span.end]))
+            .collect();
         if spans.is_empty() {
             continue;
         }
@@ -89,7 +96,12 @@ pub async fn run(repository: &DuckDbRepository) -> Result<Vec<Finding>, AppError
                 Err(_) => continue,
             };
             let candidates = candidates_not_printed_elsewhere(&text, span, report.candidates);
-            if let Some(finding) = build_finding(&target, span, &candidates) {
+            if let Some(mut finding) = build_finding(&target, span, &candidates) {
+                // Spans are byte offsets; a citation counts characters.
+                if let Some(citation) = finding.citations.first_mut() {
+                    citation.character_start = Some(text[..span.start].chars().count() as i64);
+                    citation.character_end = Some(text[..span.end].chars().count() as i64);
+                }
                 findings.push(finding);
                 per_doc += 1;
             }
@@ -157,6 +169,10 @@ async fn load_targets(repository: &DuckDbRepository) -> Result<Vec<SweepTarget>,
             Ok(out)
         })
         .await
+}
+
+fn is_explicit_mark(marked: &str) -> bool {
+    !marked.chars().all(|c| matches!(c, '_' | 'X' | 'x'))
 }
 
 /// A document does not redact a value it prints in the clear, so a candidate that appears in the
@@ -410,5 +426,14 @@ mod tests {
     #[test]
     fn empty_candidates_yields_no_finding() {
         assert!(build_finding(&target(), RedactionSpan { start: 10, end: 20 }, &[]).is_none());
+    }
+
+    #[test]
+    fn blank_fields_are_not_explicit_redaction_marks() {
+        assert!(!is_explicit_mark("_______________"));
+        assert!(!is_explicit_mark("XXXXXXX"));
+        assert!(is_explicit_mark("[REDACTED]"));
+        assert!(is_explicit_mark("(b)(6)"));
+        assert!(is_explicit_mark("\u{2588}\u{2588}\u{2588}"));
     }
 }
