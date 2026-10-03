@@ -30,9 +30,15 @@ pub const DEFAULT_HOST_INTERVAL: Duration = Duration::from_millis(400);
 pub const MAXIMUM_HOST_INTERVAL: Duration = Duration::from_secs(30);
 /// Bounds a `Retry-After` a host can name; longer than this stops the host instead of sleeping.
 pub const MAXIMUM_RETRY_AFTER: Duration = Duration::from_secs(120);
-/// How many HTTP 429 responses a host may issue before the run stops talking to it. Below this
-/// the client backs off and retries, which is what `Retry-After` asks for.
-pub const THROTTLE_STRIKES_BEFORE_STOP: u32 = 3;
+/// How many consecutive HTTP 429 responses a host may issue before the run stops talking to it.
+/// Below this the client backs off and retries, which is what `Retry-After` asks for. A success
+/// resets the count: a long collection against a rate-limited portal meets 429 many times, and
+/// counting them over the whole run stopped every such collection partway.
+pub const THROTTLE_STRIKES_BEFORE_STOP: u32 = 5;
+/// The first back-off after a 429 that names no `Retry-After`, doubling per consecutive strike.
+/// Measured against sandiego.nextrequest.com on 2026-10-02: 20 requests in 12 s drew a 429 with no
+/// `Retry-After`, and the host answered again 5 s later.
+pub const THROTTLE_BACKOFF_FLOOR: Duration = Duration::from_secs(5);
 /// robots.txt is a text file; anything larger is not one.
 pub const MAXIMUM_ROBOTS_BYTES: usize = 512 * 1024;
 
@@ -326,6 +332,8 @@ struct HostState {
     next_allowed: Option<Instant>,
     requests_spent: usize,
     throttle_strikes: u32,
+    /// Pacing learned from this host's 429s, which every later request to it keeps.
+    throttled_interval: Option<Duration>,
     stop: Option<HostStopReason>,
     /// URLs the operator pointed the application at, or endpoints a platform adapter identified
     /// as the publisher's own documented API. Robots path exclusions govern link-following
@@ -343,6 +351,7 @@ impl HostState {
             next_allowed: None,
             requests_spent: 0,
             throttle_strikes: 0,
+            throttled_interval: None,
             stop: None,
             user_directed: HashSet::new(),
         }
@@ -521,6 +530,9 @@ impl HostGovernor {
                 }
                 let now = Instant::now();
                 let ready = state.next_allowed.unwrap_or(now).max(now);
+                let interval = state
+                    .throttled_interval
+                    .map_or(interval, |learned| learned.max(interval));
                 state.next_allowed = Some(ready + interval);
                 Ok(ready.saturating_duration_since(now))
             })
@@ -581,13 +593,23 @@ impl HostGovernor {
                     }
                     // A host that throttles has told us our pacing is wrong, so widen the
                     // interval for every subsequent request rather than only this one.
+                    state.throttled_interval = Some(
+                        (state.throttled_interval.unwrap_or(self.minimum_interval) * 2)
+                            .min(MAXIMUM_HOST_INTERVAL),
+                    );
                     let backoff = retry_after
-                        .unwrap_or(DEFAULT_HOST_INTERVAL * (1 << state.throttle_strikes.min(6)))
+                        .unwrap_or(
+                            THROTTLE_BACKOFF_FLOOR * (1 << (state.throttle_strikes - 1).min(5)),
+                        )
                         .min(MAXIMUM_RETRY_AFTER);
                     let now = Instant::now();
                     state.next_allowed = Some(state.next_allowed.unwrap_or(now).max(now) + backoff);
                     Some(backoff)
                 })
+            }
+            200..=299 => {
+                self.with_host(&host, |state| state.throttle_strikes = 0);
+                None
             }
             _ => None,
         }
@@ -752,11 +774,12 @@ mod tests {
     fn throttling_backs_off_before_it_stops_the_host() {
         let governor = HostGovernor::default();
         let target = url("https://example.gov/a");
-        assert!(governor
-            .record_status(&target, 429, Some(Duration::from_secs(4)))
-            .is_some());
-        assert!(governor.admits(&target, None).is_ok());
-        governor.record_status(&target, 429, Some(Duration::from_secs(4)));
+        for _ in 1..THROTTLE_STRIKES_BEFORE_STOP {
+            assert!(governor
+                .record_status(&target, 429, Some(Duration::from_secs(4)))
+                .is_some());
+            assert!(governor.admits(&target, None).is_ok());
+        }
         assert_eq!(
             governor.record_status(&target, 429, Some(Duration::from_secs(4))),
             None
@@ -764,10 +787,45 @@ mod tests {
         assert!(matches!(
             governor.admits(&target, None).unwrap_err(),
             RequestRefusal::HostStopped {
-                reason: HostStopReason::Throttled { strikes: 3 },
+                reason: HostStopReason::Throttled {
+                    strikes: THROTTLE_STRIKES_BEFORE_STOP
+                },
                 ..
             }
         ));
+    }
+
+    /// A portal that rate-limits a long collection answers 429 many times over the run. Only an
+    /// unbroken run of them may stop the host, and a back-off without `Retry-After` must outlast
+    /// the measured recovery window rather than retry into it.
+    #[test]
+    fn only_consecutive_throttles_stop_a_host_and_back_off_outlasts_recovery() {
+        let governor = HostGovernor::default();
+        let target = url("https://example.gov/a");
+        assert_eq!(
+            governor.record_status(&target, 429, None),
+            Some(THROTTLE_BACKOFF_FLOOR)
+        );
+        for _ in 0..(THROTTLE_STRIKES_BEFORE_STOP * 3) {
+            governor.record_status(&target, 200, None);
+            assert!(governor.record_status(&target, 429, None).is_some());
+        }
+        assert!(governor.admits(&target, None).is_ok());
+    }
+
+    #[tokio::test]
+    async fn a_throttled_host_keeps_its_wider_pacing() {
+        let governor = HostGovernor::new(1, 100, Duration::from_millis(10));
+        let target = url("https://example.gov/a");
+        governor.record_status(&target, 429, Some(Duration::ZERO));
+        governor.record_status(&target, 200, None);
+        drop(governor.reserve(&target, None).await.unwrap());
+        let started = Instant::now();
+        drop(governor.reserve(&target, None).await.unwrap());
+        assert!(
+            started.elapsed() >= Duration::from_millis(20),
+            "the doubled interval must still apply after the host recovered"
+        );
     }
 
     #[test]
