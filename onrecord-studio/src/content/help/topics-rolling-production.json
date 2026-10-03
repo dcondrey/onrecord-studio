@@ -1,0 +1,48 @@
+[
+  {
+    "id": "finding-rolling-production",
+    "title": "Released in installments",
+    "group": "Finding kinds",
+    "keywords": [
+      "rolling",
+      "installments",
+      "production",
+      "released",
+      "timeline",
+      "partial release",
+      "release dates"
+    ],
+    "summary": "The portal's timeline for one request records documents released on three or more separate dates spanning more than 90 days.",
+    "sections": [
+      {
+        "heading": "What it shows",
+        "paragraphs": [
+          "Each \"Document(s) Released\" event on a NextRequest timeline (including releases shown only to the requester) is stored with its recorded time, the file names it lists, and the byline it came from. An installment is a calendar date, in the portal's own time, on which at least one release is recorded; several uploads on one day count once. The finding lists every installment date and how many files each listed."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "That any deadline was missed. Records may be produced in stages, a requester may agree to a schedule, or a request may be narrowed or added to. The release dates are never used as the agency's determination date, and the timeline does not record why the release was spread out.",
+          "A release event that lists no file names is shown as \"no files listed\", not as zero documents."
+        ]
+      },
+      {
+        "heading": "Why three dates and 90 days",
+        "paragraphs": [
+          "Measured on 142 San Diego requests about encampments: two release dates are usually one release and one supplement, and the span of multi-date releases jumps from 74 days or less to 132 days or more. The thresholds sit inside that gap."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is not assessed: the finding restates recorded dates and infers nothing to score."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": ["ROLLING_PRODUCTION"],
+    "commandGroups": [],
+    "related": ["legal-vs-pattern", "findings-inbox"]
+  }
+]

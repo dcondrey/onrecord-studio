@@ -144,7 +144,9 @@ impl DraftFamily {
             // Dataset aggregates with no portal or document to address a request to.
             | FindingKind::DepartmentSpendingYearOverYear
             | FindingKind::OvertimeAboveAdoptedLine
-            | FindingKind::FundActualAboveAdopted => Self::NoDraft,
+            | FindingKind::FundActualAboveAdopted
+            // A description of how a release was spread out; it identifies no gap to ask about.
+            | FindingKind::RollingProduction => Self::NoDraft,
         }
     }
 }
@@ -389,7 +391,7 @@ mod tests {
     use super::*;
     use crate::analysis::finding::{FindingSeverity, FindingSubject};
 
-    pub(crate) fn all_kinds() -> [FindingKind; 25] {
+    pub(crate) fn all_kinds() -> [FindingKind; 26] {
         use FindingKind::*;
         [
             HeldBackResponse,
@@ -417,6 +419,7 @@ mod tests {
             EncampmentNoticeShortfall,
             EncampmentNoticeStatedShortfall,
             RedactionInconsistentAcrossReleases,
+            RollingProduction,
         ]
     }
 

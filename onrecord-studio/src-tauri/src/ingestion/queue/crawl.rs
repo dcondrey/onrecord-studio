@@ -467,7 +467,7 @@ pub(super) async fn fetch_hosted_request(
     request: hosted_nextrequest::ListedRequest,
 ) -> Result<(), AppError> {
     context.limiter.acquire(&context.portal.portal_key).await?;
-    let (mut record, closure_notice) = context
+    let (mut record, closure_notice, releases) = context
         .client
         .fetch_hosted_request(&context.portal, request)
         .await?;
@@ -475,6 +475,10 @@ pub(super) async fn fetch_hosted_request(
     context
         .repository
         .insert_or_update_request(&context.portal.portal_key, &record)
+        .await?;
+    context
+        .repository
+        .replace_release_events(&context.portal.portal_key, record.id, releases)
         .await?;
     context
         .statistics

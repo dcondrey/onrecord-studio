@@ -230,6 +230,10 @@ pub enum FindingKind {
     /// by the words on either side. A comparison of two releases' redaction decisions; which was
     /// right is not decided.
     RedactionInconsistentAcrossReleases,
+    /// A request whose portal timeline records documents released on several separate dates
+    /// spread over months. Describes how the release was spread out; it is not a finding that any
+    /// deadline was missed, and the release dates are never the agency's determination.
+    RollingProduction,
 }
 
 impl FindingKind {
@@ -275,6 +279,7 @@ impl FindingKind {
             Self::EncampmentNoticeShortfall => "ENCAMPMENT_NOTICE_SHORTFALL",
             Self::EncampmentNoticeStatedShortfall => "ENCAMPMENT_NOTICE_STATED_SHORTFALL",
             Self::RedactionInconsistentAcrossReleases => "REDACTION_INCONSISTENT_ACROSS_RELEASES",
+            Self::RollingProduction => "ROLLING_PRODUCTION",
         }
     }
 
@@ -320,6 +325,7 @@ impl FindingKind {
             Self::EncampmentNoticeShortfall,
             Self::EncampmentNoticeStatedShortfall,
             Self::RedactionInconsistentAcrossReleases,
+            Self::RollingProduction,
         ]
         .into_iter()
         .find(|candidate| candidate.as_str() == value)
@@ -417,6 +423,9 @@ impl FindingKind {
             Self::EncampmentNoticeStatedShortfall => false,
             // Two releases disagreeing about a passage is a pattern signal; neither is judged.
             Self::RedactionInconsistentAcrossReleases => false,
+            // A count of recorded release dates. Producing records in installments breaks no
+            // rule this kind evaluates.
+            Self::RollingProduction => false,
         }
     }
 }

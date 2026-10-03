@@ -954,5 +954,10 @@ The detectors now produce 0 findings on this corpus. Next, in order:
 2. Rolling productions: 24/140 requests released in installments, 6 over 180 days (20-2226: 30
    releases over 809 days). Needs release events stored per request (timeline "Document(s)
    Released" bylines); a pattern finding, not a legal claim; never derive `determination_at`.
+   **Done 2026-10-03:** timeline release events stored in `request_release_events`;
+   `ROLLING_PRODUCTION` fires at ≥3 release dates spanning >90 days (analysis_methods.md §15).
+   Re-measured from the live timelines: 24/142 have two or more release events (the 30 for 20-2226
+   include 9 "Released to Requester"), 8 fire. Not yet confirmed by an `ONRECORD_EVAL_REUSE` run
+   over a re-collected database.
 3. Disposition counts (87 released, 33 redacted/withheld in part, 3 withheld, 13 no records,
    3 withdrawn) per department as a descriptive surface, not a finding.

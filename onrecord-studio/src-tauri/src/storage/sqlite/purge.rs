@@ -232,7 +232,7 @@ impl DuckDbRepository {
         let mut requests_removed = 0u64;
         // Innermost first. DuckDB implements no cascading foreign-key actions, so every one of
         // these is a relation the schema declares and this function has to honour by hand. The
-        // ordering is not cosmetic: `verify_logical_relations` audits eleven of these relations at
+        // ordering is not cosmetic: `verify_logical_relations` audits twelve of these relations at
         // startup and refuses to open a core database with orphans, so a table missed here does
         // not corrupt quietly, it makes the next launch fail.
         for (table, statement) in [
@@ -298,6 +298,10 @@ impl DuckDbRepository {
             (
                 "request_keyword_signals",
                 "DELETE FROM request_keyword_signals WHERE portal_subdomain = ?1",
+            ),
+            (
+                "request_release_events",
+                "DELETE FROM request_release_events WHERE portal_subdomain = ?1",
             ),
             (
                 "document_integrity_flags",
@@ -441,7 +445,7 @@ fn retire_fk_parent_rows(
 ///
 /// DuckDB implements no cascading foreign-key actions, so this ordering is the schema's foreign-key
 /// ordering reversed and it has to be maintained by hand. It is also what keeps the next launch
-/// working: `verify_logical_relations` audits eleven of these relations and refuses to open a core
+/// working: `verify_logical_relations` audits twelve of these relations and refuses to open a core
 /// database containing orphans, so a table missed here does not produce quiet inconsistency, it
 /// makes the application unlaunchable.
 ///

@@ -27,6 +27,7 @@ mod legal;
 mod migrations;
 mod provenance;
 mod purge;
+mod release_events;
 mod search;
 mod source_checks;
 mod sources;

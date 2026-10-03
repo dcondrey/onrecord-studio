@@ -10,6 +10,7 @@ mod migrations;
 mod policy;
 mod provenance;
 mod purge;
+mod release_events;
 mod search;
 mod source_checks;
 mod sources;
@@ -56,6 +57,9 @@ use crate::types::{
 };
 
 pub(crate) use analytical::{analytical_query_provenance, ANALYTICAL_PARSER_VERSION};
+pub use release_events::{
+    ReleaseEvent, RequestReleaseHistory, StoredRelease, RELEASED, RELEASED_TO_REQUESTER,
+};
 pub(crate) use search::request_search_filters;
 pub use source_checks::{SourceCheckObservation, SourceRecheckTarget};
 

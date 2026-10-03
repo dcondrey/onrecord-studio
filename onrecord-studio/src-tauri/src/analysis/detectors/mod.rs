@@ -41,6 +41,7 @@ mod public_documents;
 pub mod redaction_inconsistency;
 pub mod regenerated_response;
 pub mod response_time_claim;
+pub mod rolling_production;
 pub mod spending_cases;
 mod text_shared;
 
@@ -155,6 +156,7 @@ pub async fn refresh_all_findings(
     run_detector!(repository, summary, run_started, practice_departure);
     run_detector!(repository, summary, run_started, budget_line_comparison);
     run_detector!(repository, summary, run_started, encampment_notice);
+    run_detector!(repository, summary, run_started, rolling_production);
     // Last: correlates the settled output of every detector above.
     run_detector!(repository, summary, run_started, correlated_findings);
 
