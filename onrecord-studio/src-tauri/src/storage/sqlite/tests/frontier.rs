@@ -276,7 +276,10 @@ async fn a_queued_task_is_neither_reclaimed_nor_charged_until_a_worker_starts_it
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(lease, None, "an in-flight lease must not expire within its run");
+        assert_eq!(
+            lease, None,
+            "an in-flight lease must not expire within its run"
+        );
         repository.recover_interrupted_source_keys().await.unwrap();
         run = format!("run-{launch}");
         repository

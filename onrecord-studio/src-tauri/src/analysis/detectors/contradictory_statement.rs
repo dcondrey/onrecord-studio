@@ -465,8 +465,16 @@ mod tests {
         // Two unrelated agencies both numbering an award "123" is not a contradiction: the IDs
         // are only unique within one agency's own numbering.
         let documents = vec![
-            doc("city-a", 1, "Grant 123 in the amount of $100,000 was awarded this year."),
-            doc("city-b", 2, "Grant 123 in the amount of $1.00 was awarded this year."),
+            doc(
+                "city-a",
+                1,
+                "Grant 123 in the amount of $100,000 was awarded this year.",
+            ),
+            doc(
+                "city-b",
+                2,
+                "Grant 123 in the amount of $1.00 was awarded this year.",
+            ),
         ];
         assert!(build_findings(documents).is_empty());
     }
@@ -474,8 +482,16 @@ mod tests {
     #[test]
     fn same_award_id_in_the_same_portal_still_fires() {
         let documents = vec![
-            doc("city-a", 1, "Grant 123 in the amount of $100,000 was awarded this year."),
-            doc("city-a", 2, "Grant 123 in the amount of $1.00 was awarded this year."),
+            doc(
+                "city-a",
+                1,
+                "Grant 123 in the amount of $100,000 was awarded this year.",
+            ),
+            doc(
+                "city-a",
+                2,
+                "Grant 123 in the amount of $1.00 was awarded this year.",
+            ),
         ];
         let findings = build_findings(documents);
         assert_eq!(findings.len(), 1);

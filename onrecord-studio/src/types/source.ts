@@ -46,6 +46,26 @@ export interface SourceGuidance {
    * which links are followed, only which payloads are fetched.
    */
   restrictDownloadsToSourceHost?: boolean;
+  /**
+   * What the operator is collecting for. A NextRequest portal is searched for it; a crawl
+   * downloads only files whose link, address or page title names it. Absent collects everything.
+   */
+  subject?: string | null;
+}
+
+export interface CollectionPlanSource {
+  portalKey: string;
+  displayName: string;
+  canonicalUrl: string;
+  sourceKind: SourceKind;
+  /** The last session queued work here that never ran. */
+  hasUnfinishedWork: boolean;
+  /** The subject this source was last collected for; `null` collected everything in scope. */
+  subject: string | null;
+}
+
+export interface CollectionPlan {
+  sources: CollectionPlanSource[];
 }
 
 export interface DiscoveredSourceLink {

@@ -60,9 +60,9 @@ pub use nextrequest::{
     PublicRequest,
 };
 pub use portal::{
-    DocumentPurge, FrontierExclusionCount, PortalApiLayout, PortalRegistration,
-    PortalRuntimeSnapshot, PortalSyncStart, RateLimitPolicy, SavedSource, SourceKind,
-    SourceLifecycleState, SourcePurge, SourcePurgePreview, SourceRemoval, StoppedHost,
+    CollectionPlan, CollectionPlanSource, DocumentPurge, FrontierExclusionCount, PortalApiLayout,
+    PortalRegistration, PortalRuntimeSnapshot, PortalSyncStart, RateLimitPolicy, SavedSource,
+    SourceKind, SourceLifecycleState, SourcePurge, SourcePurgePreview, SourceRemoval, StoppedHost,
 };
 pub use research::*;
 pub use semantic::{

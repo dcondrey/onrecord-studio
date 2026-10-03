@@ -77,6 +77,8 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::ingest::purge_document,
         commands::ingest::list_portal_runtimes,
         commands::ingest::list_saved_portals,
+        commands::ingest::get_collection_plan,
+        commands::ingest::start_collection,
         commands::ingest::preview_data_source,
         commands::ingest::start_data_source,
         commands::ingest::ingest_local_files,

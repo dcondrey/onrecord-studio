@@ -5,10 +5,11 @@ use super::{
     frontier::enqueue_tasks_resilient,
     guidance::{
         guidance_allows_url, guidance_explicitly_allows_host, is_supported_external_data_platform,
-        source_host_matches, validate_page_parameters,
+        source_host_matches, subject_terms, texts_match_subject, validate_page_parameters,
     },
     worker::send_progress,
 };
+use crate::ingestion::hosted_nextrequest;
 
 /// Claims the site path a crawl node occupies, refusing a second URL that reaches the same path
 /// with a different query string, except the known San Diego policy category/page keys.
@@ -290,16 +291,36 @@ pub(super) async fn fetch_metadata_page(
         },
     )
     .await;
+    let subject = context.crawl.guidance.subject.as_deref();
     let response = context
         .client
-        .fetch_requests(&context.portal, page, per_page)
+        .fetch_requests(&context.portal, page, per_page, subject)
         .await?;
     let record_count = response.requests.len();
-    let processed_requests = u64::try_from(record_count).map_err(|error| {
+    // Hosted NextRequest already searched for the subject server-side; any other request API is
+    // filtered here on what each request says it is about.
+    let searched_server_side =
+        context.portal.api_layout.page_parameter == hosted_nextrequest::PAGE_PARAMETER;
+    let terms = subject_terms(subject);
+    let requests: Vec<_> = response
+        .requests
+        .into_iter()
+        .filter(|record| {
+            searched_server_side
+                || texts_match_subject(
+                    &terms,
+                    &[
+                        record.title.as_deref().unwrap_or_default(),
+                        record.description.as_deref().unwrap_or_default(),
+                    ],
+                )
+        })
+        .collect();
+    let processed_requests = u64::try_from(requests.len()).map_err(|error| {
         AppError::Internal(format!("Request page count cannot be represented: {error}"))
     })?;
     let mut discovered_tasks = Vec::new();
-    for mut record in response.requests {
+    for mut record in requests {
         record.compute_timeline_anomalies()?;
         context
             .repository

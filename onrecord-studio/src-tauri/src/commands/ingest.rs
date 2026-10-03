@@ -10,10 +10,10 @@ use crate::storage::corpus::CorpusIndex;
 use crate::storage::sqlite::{DuckDbRepository, SourceConnectorRecipe};
 use crate::storage::vector::VectorIndex;
 use crate::types::{
-    CrawlPolicy, DocumentPurge, MetadataPageWindow, PastedContentInput, PortalRuntimeSnapshot,
-    RateLimitPolicy, SavedSource, SourceCheck, SourceDiscoveryPreview, SourceGuidance,
-    SourceIngestionStart, SourceKind, SourceLifecycleState, SourcePurge, SourcePurgePreview,
-    SourceRecheckSummary, SourceRemoval,
+    CollectionPlan, CollectionPlanSource, CrawlPolicy, DocumentPurge, MetadataPageWindow,
+    PastedContentInput, PortalRuntimeSnapshot, RateLimitPolicy, SavedSource, SourceCheck,
+    SourceDiscoveryPreview, SourceGuidance, SourceIngestionStart, SourceKind, SourceLifecycleState,
+    SourcePurge, SourcePurgePreview, SourceRecheckSummary, SourceRemoval,
 };
 use std::path::Path;
 use std::sync::Arc;
@@ -36,9 +36,9 @@ async fn report_startup_recovery_failure(
         .err();
     let error_msg = match persistence_error {
         Some(persistence_error) => format!(
-            "Startup recovery failed during {stage}: {error}. The failure could not be persisted: {persistence_error}"
+            "Could not start collecting during {stage}: {error}. The failure could not be persisted: {persistence_error}"
         ),
-        None => format!("Startup recovery failed during {stage}: {error}"),
+        None => format!("Could not start collecting during {stage}: {error}"),
     };
     let _ = progress_sender
         .send(IngestionProgress::TaskFailed {
@@ -364,7 +364,6 @@ pub async fn initialize_queue_runtime<R: Runtime, P: AsRef<Path>>(
     let client = ApiClient::new(HttpClientConfig::default())?;
     let limiter = RateLimiter::new(5)?;
     let (progress_sender, mut progress_receiver) = mpsc::channel::<IngestionProgress>(2_048);
-    let recovery_progress_sender = progress_sender.clone();
     let recovery_repository = repository.clone();
     let manager = Arc::new(QueueManager::new(
         client,
@@ -382,27 +381,137 @@ pub async fn initialize_queue_runtime<R: Runtime, P: AsRef<Path>>(
             );
         }
     });
-    // A failure to enumerate durable work is a startup failure, not an empty queue. Waiting here
-    // makes setup surface the error instead of presenting an apparently healthy workspace.
-    let interrupted_keys = recovery_repository
+    // Interrupted runs are closed out here, but nothing is resumed: the operator chooses which
+    // sources to collect from, and for what, through `start_collection`.
+    recovery_repository
         .recover_interrupted_source_keys()
         .await?;
-    let sources = if interrupted_keys.is_empty() {
-        Vec::new()
-    } else {
-        recovery_repository.list_portal_registrations().await?
-    };
-    let recovery_manager = Arc::clone(&manager);
+    Ok(manager)
+}
+
+/// The sources the operator can collect from, which of them the last session left unfinished, and
+/// the subject each was last collected for.
+#[tauri::command]
+pub async fn get_collection_plan(
+    repository: State<'_, DuckDbRepository>,
+) -> Result<CollectionPlan, AppError> {
+    let unfinished = repository.sources_with_unfinished_work().await?;
+    let mut sources = Vec::new();
+    for saved in repository.list_portal_registrations().await? {
+        if saved.lifecycle_state == SourceLifecycleState::Removed {
+            continue;
+        }
+        let subject = repository
+            .load_source_connector_recipe_for_source(&saved.registration)
+            .await?
+            .and_then(|recipe| recipe.guidance.subject);
+        sources.push(CollectionPlanSource {
+            has_unfinished_work: unfinished.contains(&saved.registration.portal_key),
+            portal_key: saved.registration.portal_key,
+            display_name: saved.registration.display_name,
+            canonical_url: saved.registration.canonical_url,
+            source_kind: saved.registration.source_kind,
+            subject,
+        });
+    }
+    Ok(CollectionPlan { sources })
+}
+
+/// Collects from the chosen sources, each for `subject` (`None` collects everything in scope).
+/// The subject is saved with each source, so a later resume keeps it. Sources start in the
+/// background as queue capacity allows; a source that cannot start is marked with the reason.
+#[tauri::command]
+pub async fn start_collection(
+    source_keys: Vec<String>,
+    subject: Option<String>,
+    repository: State<'_, DuckDbRepository>,
+    manager: State<'_, Arc<QueueManager>>,
+) -> Result<Vec<String>, AppError> {
+    if source_keys.is_empty() || source_keys.len() > MAXIMUM_COLLECTION_SOURCES {
+        return Err(AppError::DataParsing(format!(
+            "Choose between 1 and {MAXIMUM_COLLECTION_SOURCES} sources to collect from"
+        )));
+    }
+    let subject = subject
+        .map(|subject| subject.trim().to_string())
+        .filter(|subject| !subject.is_empty());
+    crate::ingestion::queue::validate_source_guidance(&SourceGuidance {
+        subject: subject.clone(),
+        ..SourceGuidance::default()
+    })?;
+    let saved = repository.list_portal_registrations().await?;
+    let mut chosen = Vec::new();
+    for key in &source_keys {
+        let key = validate_portal_key(key)?;
+        let source = saved
+            .iter()
+            .find(|saved| saved.registration.portal_key == key)
+            .ok_or_else(|| {
+                AppError::DataParsing(format!("No saved source is registered as '{key}'"))
+            })?;
+        let recipe = repository
+            .load_source_connector_recipe_for_source(&source.registration)
+            .await?;
+        let (crawl_policy, mut guidance) = match &recipe {
+            Some(recipe) => (recipe.crawl_policy.clone(), recipe.guidance.clone()),
+            None => (CrawlPolicy::default(), SourceGuidance::default()),
+        };
+        guidance.subject = subject.clone();
+        repository
+            .save_source_connector_recipe(
+                &source.registration,
+                &source.registration.canonical_url,
+                &crawl_policy,
+                &guidance,
+            )
+            .await?;
+        repository
+            .set_source_lifecycle_state(key, SourceLifecycleState::Active)
+            .await?;
+        chosen.push(key.to_string());
+    }
+    let manager = Arc::clone(&manager);
+    let repository = repository.inner().clone();
+    let keys = chosen.clone();
     tokio::spawn(async move {
-        for source_key in interrupted_keys {
-            let Some(source) = sources
-                .iter()
-                .find(|saved| saved.registration.portal_key == source_key)
-                .map(|saved| saved.registration.clone())
-            else {
+        resume_sources(manager, repository, keys).await;
+    });
+    Ok(chosen)
+}
+
+const MAXIMUM_COLLECTION_SOURCES: usize = 100;
+
+async fn resume_sources(
+    manager: Arc<QueueManager>,
+    repository: DuckDbRepository,
+    keys: Vec<String>,
+) {
+    let progress_sender = manager.progress_sender();
+    let sources = match repository.list_portal_registrations().await {
+        Ok(sources) => sources,
+        Err(error) => {
+            for source_key in &keys {
                 report_startup_recovery_failure(
-                    &recovery_repository,
-                    &recovery_progress_sender,
+                    &repository,
+                    &progress_sender,
+                    source_key,
+                    "registration lookup",
+                    AppError::Storage(error.to_string()),
+                )
+                .await;
+            }
+            return;
+        }
+    };
+    for source_key in keys {
+        let Some(source) = sources
+            .iter()
+            .find(|saved| saved.registration.portal_key == source_key)
+            .map(|saved| saved.registration.clone())
+        else {
+            report_startup_recovery_failure(
+                    &repository,
+                    &progress_sender,
                     &source_key,
                     "registration lookup",
                     AppError::DataParsing(format!(
@@ -410,81 +519,79 @@ pub async fn initialize_queue_runtime<R: Runtime, P: AsRef<Path>>(
                     )),
                 )
                 .await;
+            continue;
+        };
+        let saved_recipe = match repository
+            .load_source_connector_recipe_for_source(&source)
+            .await
+        {
+            Ok(recipe) => recipe,
+            Err(error) => {
+                report_startup_recovery_failure(
+                    &repository,
+                    &progress_sender,
+                    &source_key,
+                    "connector recipe loading",
+                    error,
+                )
+                .await;
                 continue;
-            };
-            let saved_recipe = match recovery_repository
-                .load_source_connector_recipe_for_source(&source)
+            }
+        };
+        let (crawl_policy, guidance, metadata_page_window) = match saved_recipe {
+            Some(recipe) => (
+                recipe.crawl_policy,
+                recipe.guidance,
+                recipe.metadata_page_window,
+            ),
+            None => (CrawlPolicy::default(), SourceGuidance::default(), None),
+        };
+        let mut capacity_attempts = 0_usize;
+        loop {
+            match manager
+                .resume_registered_source(
+                    source.clone(),
+                    crawl_policy.clone(),
+                    guidance.clone(),
+                    metadata_page_window,
+                )
                 .await
             {
-                Ok(recipe) => recipe,
-                Err(error) => {
-                    report_startup_recovery_failure(
-                        &recovery_repository,
-                        &recovery_progress_sender,
-                        &source_key,
-                        "connector recipe loading",
-                        error,
-                    )
-                    .await;
-                    continue;
-                }
-            };
-            let (crawl_policy, guidance, metadata_page_window) = match saved_recipe {
-                Some(recipe) => (
-                    recipe.crawl_policy,
-                    recipe.guidance,
-                    recipe.metadata_page_window,
-                ),
-                None => (CrawlPolicy::default(), SourceGuidance::default(), None),
-            };
-            let mut capacity_attempts = 0_usize;
-            loop {
-                match recovery_manager
-                    .resume_registered_source(
-                        source.clone(),
-                        crawl_policy.clone(),
-                        guidance.clone(),
-                        metadata_page_window,
-                    )
-                    .await
-                {
-                    Ok(_) => break,
-                    Err(AppError::PortalCapacity(_)) => {
-                        if recovery_manager.is_source_running(&source.portal_key).await {
-                            break;
-                        }
-                        capacity_attempts = capacity_attempts.saturating_add(1);
-                        if capacity_attempts >= STARTUP_RECOVERY_CAPACITY_ATTEMPTS {
-                            report_startup_recovery_failure(
-                                &recovery_repository,
-                                &recovery_progress_sender,
-                                &source_key,
-                                "queue capacity waiting",
-                                AppError::PortalCapacity(format!(
-                                    "No queue slot became available after {} seconds",
-                                    STARTUP_RECOVERY_CAPACITY_DELAY.as_secs()
-                                        * STARTUP_RECOVERY_CAPACITY_ATTEMPTS as u64
-                                )),
-                            )
-                            .await;
-                            break;
-                        }
-                        tokio::time::sleep(STARTUP_RECOVERY_CAPACITY_DELAY).await;
+                Ok(_) => break,
+                Err(AppError::PortalCapacity(_)) => {
+                    if manager.is_source_running(&source.portal_key).await {
+                        break;
                     }
-                    Err(error) => {
+                    capacity_attempts = capacity_attempts.saturating_add(1);
+                    if capacity_attempts >= STARTUP_RECOVERY_CAPACITY_ATTEMPTS {
                         report_startup_recovery_failure(
-                            &recovery_repository,
-                            &recovery_progress_sender,
+                            &repository,
+                            &progress_sender,
                             &source_key,
-                            "source resume",
-                            error,
+                            "queue capacity waiting",
+                            AppError::PortalCapacity(format!(
+                                "No queue slot became available after {} seconds",
+                                STARTUP_RECOVERY_CAPACITY_DELAY.as_secs()
+                                    * STARTUP_RECOVERY_CAPACITY_ATTEMPTS as u64
+                            )),
                         )
                         .await;
                         break;
                     }
+                    tokio::time::sleep(STARTUP_RECOVERY_CAPACITY_DELAY).await;
+                }
+                Err(error) => {
+                    report_startup_recovery_failure(
+                        &repository,
+                        &progress_sender,
+                        &source_key,
+                        "source resume",
+                        error,
+                    )
+                    .await;
+                    break;
                 }
             }
         }
-    });
-    Ok(manager)
+    }
 }

@@ -60,6 +60,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{mpsc, watch, Mutex, RwLock, Semaphore};
 use uuid::Uuid;
 
+pub(crate) use guidance::validate_source_guidance;
 use intake::stable_source_identifier;
 pub(crate) use objects::remove_released_evidence_files;
 pub use progress::{ingestion_telemetry_envelope, IngestionProgress, IngestionTelemetryEnvelope};

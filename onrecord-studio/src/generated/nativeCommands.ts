@@ -27,6 +27,8 @@ export interface NativeCommandMap {
   purge_document: { args: { sourceKey: string; documentId: number }; result: Types.DocumentPurge };
   list_portal_runtimes: { args: NoArgs; result: Types.PortalRuntimeSnapshot[] };
   list_saved_portals: { args: NoArgs; result: Types.SavedSource[] };
+  get_collection_plan: { args: NoArgs; result: Types.CollectionPlan };
+  start_collection: { args: { sourceKeys: string[]; subject?: string | null }; result: string[] };
   preview_data_source: { args: { url: string; guidance?: Types.SourceGuidance | null }; result: Types.SourceDiscoveryPreview };
   start_data_source: { args: { url: string; crawlPolicy?: Types.CrawlPolicy | null; guidance?: Types.SourceGuidance | null; rateLimitPolicy?: Types.RateLimitPolicy | null; metadataPageWindow?: Types.MetadataPageWindow | null }; result: Types.SourceIngestionStart };
   ingest_local_files: { args: { paths: string[] }; result: Types.SourceIngestionStart };

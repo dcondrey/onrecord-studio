@@ -35,7 +35,46 @@ pub(super) fn validate_crawl_policy(policy: &CrawlPolicy) -> Result<(), AppError
     Ok(())
 }
 
-pub(super) fn validate_source_guidance(guidance: &SourceGuidance) -> Result<(), AppError> {
+const MAXIMUM_SUBJECT_LENGTH: usize = 200;
+
+/// The words a collection subject must find, lower-cased with stopwords dropped. A trailing plural
+/// `s` is removed so "encampments" also finds "encampment"; matching is by substring.
+pub(super) fn subject_terms(subject: Option<&str>) -> Vec<String> {
+    let Some(subject) = subject else {
+        return Vec::new();
+    };
+    crate::analysis::assertion_index::extract_topic_tokens(subject, "")
+        .into_iter()
+        .map(|term| match term.strip_suffix('s') {
+            Some(stem) if stem.len() >= 4 && !stem.ends_with('s') => stem.to_string(),
+            _ => term,
+        })
+        .collect()
+}
+
+/// Every subject term appears somewhere in `texts`. No terms means no subject: everything matches.
+pub(super) fn texts_match_subject(terms: &[String], texts: &[&str]) -> bool {
+    if terms.is_empty() {
+        return true;
+    }
+    let haystack = texts.join(" ").to_lowercase();
+    terms.iter().all(|term| haystack.contains(term.as_str()))
+}
+
+pub(crate) fn validate_source_guidance(guidance: &SourceGuidance) -> Result<(), AppError> {
+    if let Some(subject) = guidance.subject.as_deref() {
+        if subject.trim().is_empty() || subject.len() > MAXIMUM_SUBJECT_LENGTH {
+            return Err(AppError::DataParsing(format!(
+                "A collection subject must contain between 1 and {MAXIMUM_SUBJECT_LENGTH} characters"
+            )));
+        }
+        if subject_terms(Some(subject)).is_empty() {
+            return Err(AppError::DataParsing(
+                "A collection subject needs at least one searchable word of three or more letters"
+                    .to_string(),
+            ));
+        }
+    }
     if guidance.additional_seed_urls.len() > 100
         || guidance.allowed_hostnames.len() > 100
         || guidance.include_url_prefixes.len() > 100

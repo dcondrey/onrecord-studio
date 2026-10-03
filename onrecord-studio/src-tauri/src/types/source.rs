@@ -97,6 +97,11 @@ pub struct SourceGuidance {
     /// followed -- only which payloads are fetched.
     #[serde(default)]
     pub restrict_downloads_to_source_host: bool,
+    /// What the operator is collecting for. When set, a NextRequest portal is searched for it
+    /// server-side, and a crawl downloads only files whose link, address or containing page title
+    /// names it. Pages are still walked to find those files. `None` collects everything in scope.
+    #[serde(default)]
+    pub subject: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

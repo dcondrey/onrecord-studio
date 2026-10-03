@@ -7,7 +7,10 @@ use super::{
         reserve_paginated_page, reserve_resource, standard_document_task,
     },
     frontier::{enqueue_task_resilient, enqueue_tasks_resilient},
-    guidance::{describe_discovery_origin, download_host_allowed, guidance_allows_url},
+    guidance::{
+        describe_discovery_origin, download_host_allowed, guidance_allows_url, subject_terms,
+        texts_match_subject,
+    },
     intake::{discovered_file_name, source_file_name, stable_source_identifier},
     objects::{release_object_link, store_inline_payload},
     structured::{
@@ -63,7 +66,19 @@ pub(super) async fn process_public_resource(
                     )
                     .await?;
             }
-            let request_id = ensure_crawl_request(context, &inspection).await?;
+            // With a subject, a page that never names it is walked for links but not kept, and a
+            // file is fetched only when its link, address or page title names it.
+            let subject = subject_terms(context.crawl.guidance.subject.as_deref());
+            let page_title_on_subject = texts_match_subject(&subject, &[&inspection.title]);
+            let page_on_subject = page_title_on_subject
+                || inspection.body.as_deref().is_some_and(|body| {
+                    texts_match_subject(&subject, &[&String::from_utf8_lossy(body)])
+                });
+            let request_id = if page_on_subject {
+                Some(ensure_crawl_request(context, &inspection).await?)
+            } else {
+                None
+            };
             let mut discovered_tasks = Vec::new();
             for companion_url in arcgis_item_companion_urls(&inspection.final_url) {
                 if let Some(task) =
@@ -87,16 +102,18 @@ pub(super) async fn process_public_resource(
                         discovered_tasks.push(task);
                     }
                 }
-                if let Some(task) = prepare_html_page_document(
-                    context,
-                    &inspection,
-                    request_id,
-                    body,
-                    PayloadDepth::discovered(depth, 0),
-                )
-                .await?
-                {
-                    discovered_tasks.push(task);
+                if let Some(request_id) = request_id {
+                    if let Some(task) = prepare_html_page_document(
+                        context,
+                        &inspection,
+                        request_id,
+                        body,
+                        PayloadDepth::discovered(depth, 0),
+                    )
+                    .await?
+                    {
+                        discovered_tasks.push(task);
+                    }
                 }
             }
             for connector in inspection.embedded_connectors.iter().cloned() {
@@ -139,6 +156,14 @@ pub(super) async fn process_public_resource(
                     }
                 }
                 if link.download_candidate {
+                    let Some(request_id) = request_id else {
+                        continue;
+                    };
+                    if !page_title_on_subject
+                        && !texts_match_subject(&subject, &[&link.label, &link.url])
+                    {
+                        continue;
+                    }
                     if let Some(task) = prepare_discovered_download(
                         context,
                         &PublicResourceInspection {
@@ -308,6 +333,8 @@ pub(super) async fn process_data_catalog_page(
     )
     .await?;
     let mut tasks = Vec::new();
+    let subject = subject_terms(context.crawl.guidance.subject.as_deref());
+    let mut outside_subject = 0_u64;
     for download in &page.downloads {
         if let Err(exclusion) = guidance_allows_url(
             &context.crawl.guidance,
@@ -316,6 +343,10 @@ pub(super) async fn process_data_catalog_page(
             download.byte_count,
         ) {
             record_frontier_exclusion(context, &exclusion).await;
+            continue;
+        }
+        if !texts_match_subject(&subject, &[&download.label, &download.url]) {
+            outside_subject += 1;
             continue;
         }
         let inspection = PublicResourceInspection {
@@ -353,6 +384,15 @@ pub(super) async fn process_data_catalog_page(
             .await
             .entry(reason.clone())
             .or_insert(0) += *count;
+    }
+    if outside_subject > 0 {
+        *context
+            .crawl
+            .frontier_exclusions
+            .lock()
+            .await
+            .entry("catalog-asset-outside-collection-subject".to_string())
+            .or_insert(0) += outside_subject;
     }
     if page.foreign_domain_assets > 0 {
         *context

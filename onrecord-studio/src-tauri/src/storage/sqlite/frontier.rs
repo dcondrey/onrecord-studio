@@ -195,7 +195,7 @@ impl DuckDbRepository {
         stage: &str,
         error: &AppError,
     ) -> Result<(), AppError> {
-        let message = format!("Startup recovery failed during {stage}: {error}");
+        let message = format!("Could not start collecting during {stage}: {error}");
         let source_key = source_key.to_string();
         self.query_connection("Record source recovery failure", move |conn| {
             let updated = conn
@@ -308,76 +308,76 @@ impl DuckDbRepository {
         let run_id = run_id.to_string();
         let source_key = source_key.to_string();
         self.query_connection("Claim ingestion frontier task", move |conn| {
-        execute_transaction(conn, "ingestion frontier claim", |transaction| {
-            transaction
-                .execute(
-                    "UPDATE ingestion_task_frontier
+            execute_transaction(conn, "ingestion frontier claim", |transaction| {
+                transaction
+                    .execute(
+                        "UPDATE ingestion_task_frontier
                      SET status = 'PENDING', lease_expires_at = NULL,
                          updated_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
                      WHERE run_id = ?1 AND source_key = ?2 AND status = 'LEASED'
                        AND lease_expires_at <= strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')",
-                    params![run_id, source_key],
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!(
-                        "Failed to recover expired ingestion frontier leases: {error}"
-                    ))
-                })?;
-            let candidate = transaction
-                .query_row(
-                    "SELECT frontier_id, payload_json, executions
+                        params![run_id, source_key],
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!(
+                            "Failed to recover expired ingestion frontier leases: {error}"
+                        ))
+                    })?;
+                let candidate = transaction
+                    .query_row(
+                        "SELECT frontier_id, payload_json, executions
                      FROM ingestion_task_frontier
                      WHERE run_id = ?1 AND source_key = ?2 AND status = 'PENDING'
                      ORDER BY frontier_id ASC
                      LIMIT 1",
-                    params![run_id, source_key],
-                    |row| {
-                        Ok((
-                            row.get::<_, i64>(0)?,
-                            row.get::<_, String>(1)?,
-                            row.get::<_, u64>(2)?,
+                        params![run_id, source_key],
+                        |row| {
+                            Ok((
+                                row.get::<_, i64>(0)?,
+                                row.get::<_, String>(1)?,
+                                row.get::<_, u64>(2)?,
+                            ))
+                        },
+                    )
+                    .optional()
+                    .map_err(|error| {
+                        AppError::Storage(format!(
+                            "Failed to select an ingestion frontier task: {error}"
                         ))
-                    },
-                )
-                .optional()
-                .map_err(|error| {
-                    AppError::Storage(format!(
-                        "Failed to select an ingestion frontier task: {error}"
-                    ))
-                })?;
-            let Some((frontier_id, payload_json, attempts)) = candidate else {
-                return Ok(None);
-            };
-            // A claimed row waits in a dispatcher holding up to PORTAL_QUEUE_CAPACITY tasks for
-            // two workers, often far longer than any fixed lease. It is held by this live run
-            // until acknowledged or deferred, so it carries no expiry: a timed lease re-claimed
-            // queued rows as duplicates and charged each re-claim as an attempt, abandoning
-            // hundreds of tasks that never ran. A crashed run's rows are recovered by adoption,
-            // and attempts are charged when a worker starts the task.
-            let claimed = transaction
-                .execute(
-                    "UPDATE ingestion_task_frontier
+                    })?;
+                let Some((frontier_id, payload_json, attempts)) = candidate else {
+                    return Ok(None);
+                };
+                // A claimed row waits in a dispatcher holding up to PORTAL_QUEUE_CAPACITY tasks for
+                // two workers, often far longer than any fixed lease. It is held by this live run
+                // until acknowledged or deferred, so it carries no expiry: a timed lease re-claimed
+                // queued rows as duplicates and charged each re-claim as an attempt, abandoning
+                // hundreds of tasks that never ran. A crashed run's rows are recovered by adoption,
+                // and attempts are charged when a worker starts the task.
+                let claimed = transaction
+                    .execute(
+                        "UPDATE ingestion_task_frontier
                      SET status = 'LEASED', lease_expires_at = NULL,
                          updated_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
                      WHERE frontier_id = ?1 AND status = 'PENDING'",
-                    params![frontier_id],
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!(
-                        "Failed to lease an ingestion frontier task: {error}"
-                    ))
-                })?;
-            if claimed != 1 {
-                return Err(AppError::Storage(format!(
-                    "Ingestion frontier task {frontier_id} changed while being claimed"
-                )));
-            }
-            Ok(Some(ClaimedIngestionTask {
-                frontier_id,
-                payload_json,
-                attempts,
-            }))
-        })
+                        params![frontier_id],
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!(
+                            "Failed to lease an ingestion frontier task: {error}"
+                        ))
+                    })?;
+                if claimed != 1 {
+                    return Err(AppError::Storage(format!(
+                        "Ingestion frontier task {frontier_id} changed while being claimed"
+                    )));
+                }
+                Ok(Some(ClaimedIngestionTask {
+                    frontier_id,
+                    payload_json,
+                    attempts,
+                }))
+            })
         })
         .await
     }
@@ -459,6 +459,35 @@ impl DuckDbRepository {
                 )));
             }
             Ok(())
+        })
+        .await
+    }
+
+    /// Active sources whose queued work outlived the run that queued it. Read only; the operator
+    /// chooses which of them to resume.
+    pub async fn sources_with_unfinished_work(&self) -> Result<Vec<String>, AppError> {
+        self.query_connection("List sources with unfinished work", |conn| {
+            let mut statement = conn
+                .prepare(
+                    "SELECT DISTINCT frontier.source_key
+                     FROM ingestion_task_frontier frontier
+                     JOIN portals ON portals.subdomain = frontier.source_key
+                     WHERE COALESCE(portals.lifecycle_state, 'ACTIVE') = 'ACTIVE'
+                     ORDER BY 1",
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to prepare unfinished-work scan: {error}"))
+                })?;
+            let keys = statement
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to scan unfinished work: {error}"))
+                })?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to read unfinished work: {error}"))
+                })?;
+            Ok(keys)
         })
         .await
     }

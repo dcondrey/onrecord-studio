@@ -43,6 +43,10 @@ impl QueueManager {
         })
     }
 
+    pub fn progress_sender(&self) -> mpsc::Sender<IngestionProgress> {
+        self.progress_sender.clone()
+    }
+
     /// The current concurrent-portal cap. Defaults to `DEFAULT_MAXIMUM_ACTIVE_PORTALS`.
     pub fn max_active_portals(&self) -> usize {
         self.max_active_portals.load(Ordering::Acquire)

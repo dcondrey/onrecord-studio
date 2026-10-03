@@ -76,7 +76,7 @@ pub struct PortalRegistration {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum SourceLifecycleState {
-    /// Synchronizes now and resumes on the next launch.
+    /// Synchronizes when started, and is offered for resumption when the app opens.
     #[default]
     Active,
     /// Halted by the operator. The frontier is kept so a resume continues rather than restarts.
@@ -122,6 +122,25 @@ pub struct SavedSource {
     /// can be emitted before the webview has attached its event listener.
     pub health_status: String,
     pub last_error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CollectionPlanSource {
+    pub portal_key: String,
+    pub display_name: String,
+    pub canonical_url: String,
+    pub source_kind: SourceKind,
+    /// The last session queued work here that never ran.
+    pub has_unfinished_work: bool,
+    /// The subject this source was last collected for; `None` collected everything in scope.
+    pub subject: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CollectionPlan {
+    pub sources: Vec<CollectionPlanSource>,
 }
 
 /// What withdrawing a source actually discarded, and what it kept.

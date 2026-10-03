@@ -648,7 +648,10 @@ async fn document_failures_alone_do_not_flag_the_source_for_attention() {
         .await
         .unwrap();
     for (target, error) in [
-        ("scan.pdf", AppError::DataParsing("OCR_OUTPUT_EMPTY".to_string())),
+        (
+            "scan.pdf",
+            AppError::DataParsing("OCR_OUTPUT_EMPTY".to_string()),
+        ),
         ("gone", AppError::PortalDiscovery("HTTP 404".to_string())),
     ] {
         repository
@@ -719,7 +722,9 @@ async fn document_failures_alone_do_not_flag_the_source_for_attention() {
         .unwrap();
     assert_eq!(health, "degraded");
     assert!(
-        last_error.as_deref().is_some_and(|reason| reason.contains("OCR_OUTPUT_EMPTY")),
+        last_error
+            .as_deref()
+            .is_some_and(|reason| reason.contains("OCR_OUTPUT_EMPTY")),
         "a source flagged for attention must say why, got {last_error:?}"
     );
 }

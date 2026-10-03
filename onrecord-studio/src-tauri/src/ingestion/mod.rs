@@ -3,6 +3,7 @@
 pub(crate) mod backoff;
 pub mod client;
 pub mod host_policy;
+pub(crate) mod hosted_nextrequest;
 pub mod limiter;
 pub mod queue;
 pub mod source_catalog;
