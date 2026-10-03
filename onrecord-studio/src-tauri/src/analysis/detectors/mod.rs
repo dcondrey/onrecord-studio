@@ -10,7 +10,11 @@
 //! it to `refresh_all_findings`. The slug is what `clear_stale_findings` uses to sweep this
 //! detector's superseded rows without touching other detectors' output.
 
-use crate::{error::AppError, storage::DuckDbRepository};
+use crate::{
+    analysis::finding::Finding,
+    error::AppError,
+    storage::{vector::VectorIndex, DuckDbRepository},
+};
 
 pub mod absence_of_records;
 pub mod boilerplate_denial;
@@ -46,50 +50,85 @@ pub mod spending_cases;
 mod text_shared;
 
 /// Summary returned by [`refresh_all_findings`].
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct RefreshSummary {
     pub detectors_run: usize,
     pub detectors_failed: usize,
     pub findings_recorded: usize,
     pub stale_cleared: usize,
+    /// Detectors that could not perform their test this run; their earlier findings are kept.
+    pub not_run: Vec<DetectorNotRun>,
 }
 
-/// Runs one detector, records its findings, and sweeps its superseded rows. A detector that errs
-/// is counted as failed and its stale rows are left alone, since an absent result is not proof
-/// the finding no longer holds.
+#[derive(Debug, Clone)]
+pub struct DetectorNotRun {
+    pub detector: &'static str,
+    pub reason: String,
+}
+
+/// Records one detector's findings and sweeps its superseded rows. A detector that errs is
+/// counted as failed and its stale rows are left alone, since an absent result is not proof the
+/// finding no longer holds.
+async fn record_detector_run(
+    repository: &DuckDbRepository,
+    summary: &mut RefreshSummary,
+    run_started: chrono::DateTime<chrono::Utc>,
+    slug: &'static str,
+    findings: Result<Vec<Finding>, AppError>,
+) {
+    let outcome: Result<(usize, usize), AppError> = async {
+        let findings = findings?;
+        let recorded = if findings.is_empty() {
+            0
+        } else {
+            repository.record_findings(findings).await?
+        };
+        let cleared = repository
+            .clear_stale_findings(slug.to_string(), run_started)
+            .await?;
+        Ok((recorded, cleared))
+    }
+    .await;
+    match outcome {
+        Ok((recorded, cleared)) => {
+            summary.findings_recorded += recorded;
+            summary.stale_cleared += cleared;
+        }
+        Err(error) => {
+            summary.detectors_failed += 1;
+            eprintln!("detector {slug} failed: {error}");
+        }
+    }
+}
+
 macro_rules! run_detector {
     ($repository:expr, $summary:expr, $run_started:expr, $module:ident) => {{
         $summary.detectors_run += 1;
-        let outcome: Result<(usize, usize), AppError> = async {
-            let findings = $module::run($repository).await?;
-            let recorded = if findings.is_empty() {
-                0
-            } else {
-                $repository.record_findings(findings).await?
-            };
-            let cleared = $repository
-                .clear_stale_findings($module::SLUG.to_string(), $run_started)
-                .await?;
-            Ok((recorded, cleared))
-        }
+        let findings = $module::run($repository).await;
+        record_detector_run(
+            $repository,
+            &mut $summary,
+            $run_started,
+            $module::SLUG,
+            findings,
+        )
         .await;
-        match outcome {
-            Ok((recorded, cleared)) => {
-                $summary.findings_recorded += recorded;
-                $summary.stale_cleared += cleared;
-            }
-            Err(error) => {
-                $summary.detectors_failed += 1;
-                eprintln!("detector {} failed: {error}", $module::SLUG);
-            }
-        }
     }};
+}
+
+/// [`refresh_all_findings_with_embeddings`] without the semantic index, so detectors that need
+/// it report not-run.
+pub async fn refresh_all_findings(
+    repository: &DuckDbRepository,
+) -> Result<RefreshSummary, AppError> {
+    refresh_all_findings_with_embeddings(repository, None).await
 }
 
 /// Runs every registered detector against the repository, upserts their findings, and clears
 /// stale rows each detector no longer emits (from before this run started).
-pub async fn refresh_all_findings(
+pub async fn refresh_all_findings_with_embeddings(
     repository: &DuckDbRepository,
+    semantic: Option<&VectorIndex>,
 ) -> Result<RefreshSummary, AppError> {
     let run_started = chrono::Utc::now();
     let mut summary = RefreshSummary::default();
@@ -98,7 +137,32 @@ pub async fn refresh_all_findings(
     run_detector!(repository, summary, run_started, just_in_time_compliance);
     run_detector!(repository, summary, run_started, extension_abuse);
     run_detector!(repository, summary, run_started, contradictory_statement);
-    run_detector!(repository, summary, run_started, no_records_contradicted);
+    summary.detectors_run += 1;
+    let findings = match no_records_contradicted::run(repository, semantic).await {
+        Ok(no_records_contradicted::Outcome::NotRun(reason)) => {
+            eprintln!(
+                "detector {} not run: {reason}",
+                no_records_contradicted::SLUG
+            );
+            summary.not_run.push(DetectorNotRun {
+                detector: no_records_contradicted::SLUG,
+                reason,
+            });
+            None
+        }
+        Ok(no_records_contradicted::Outcome::Ran(findings)) => Some(Ok(findings)),
+        Err(error) => Some(Err(error)),
+    };
+    if let Some(findings) = findings {
+        record_detector_run(
+            repository,
+            &mut summary,
+            run_started,
+            no_records_contradicted::SLUG,
+            findings,
+        )
+        .await;
+    }
     run_detector!(repository, summary, run_started, absence_of_records);
     run_detector!(repository, summary, run_started, differential_treatment);
     run_detector!(repository, summary, run_started, metadata_vs_content);

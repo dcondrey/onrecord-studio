@@ -49,6 +49,18 @@ pub struct VectorSourceDocument {
     pub text: String,
 }
 
+/// A document's best-matching chunk against a query: cosine of unit vectors, and where in the
+/// document's extracted text that chunk lies.
+#[derive(Debug, Clone)]
+pub struct DocumentSimilarity {
+    pub request_id: u64,
+    pub document_id: u64,
+    pub cosine: f32,
+    pub character_start: i64,
+    pub character_end: i64,
+    pub excerpt: String,
+}
+
 struct SkipCheckFields {
     portal_key: String,
     document_id: u64,
@@ -468,6 +480,89 @@ impl VectorIndex {
             })
             .await?;
         Ok(results)
+    }
+
+    /// Each embedded document of `portal_key` with its single most similar chunk to `query`,
+    /// most similar first. `None` when no embedding model is installed; an installed one is
+    /// loaded, never downloaded. Unlike [`Self::semantic_search`] this keeps one row per document
+    /// in one pass, so a large corpus costs a linear scan rather than a chunk-level dedupe.
+    pub async fn nearest_documents(
+        &self,
+        query: &str,
+        portal_key: &str,
+        limit: usize,
+    ) -> Result<Option<Vec<DocumentSimilarity>>, AppError> {
+        let Some(mut embeddings) = self.embed_short_texts(vec![query.to_string()]).await? else {
+            return Ok(None);
+        };
+        let query_embedding = embeddings.pop().ok_or_else(|| {
+            AppError::Storage("Embedding model returned no query vector".to_string())
+        })?;
+        let portal_key = portal_key.to_string();
+        self.query_connection("Nearest documents", move |connection| {
+            let mut statement = connection
+                .prepare(
+                    "SELECT request_id, document_id, character_start, character_end, excerpt, vector
+                     FROM embedding_chunks
+                     WHERE model_id = ?1 AND model_revision = ?2 AND portal_key = ?3",
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to prepare nearest documents: {error}"))
+                })?;
+            let rows = statement
+                .query_map(
+                    params![EMBEDDING_MODEL_ID, EMBEDDING_MODEL_REVISION, portal_key],
+                    |row| {
+                        Ok((
+                            row.get::<_, u64>(0)?,
+                            row.get::<_, u64>(1)?,
+                            row.get::<_, i64>(2)?,
+                            row.get::<_, i64>(3)?,
+                            row.get::<_, String>(4)?,
+                            row.get::<_, Vec<u8>>(5)?,
+                        ))
+                    },
+                )
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to run nearest documents: {error}"))
+                })?;
+            let mut best: std::collections::HashMap<u64, DocumentSimilarity> =
+                std::collections::HashMap::new();
+            for row in rows {
+                let (request_id, document_id, start, end, excerpt, blob) =
+                    row.map_err(|error| {
+                        AppError::Storage(format!("Failed to read nearest document: {error}"))
+                    })?;
+                let cosine = dot(&query_embedding, &decode_vector(&blob)?);
+                if best
+                    .get(&document_id)
+                    .is_some_and(|held| held.cosine >= cosine)
+                {
+                    continue;
+                }
+                best.insert(
+                    document_id,
+                    DocumentSimilarity {
+                        request_id,
+                        document_id,
+                        cosine,
+                        character_start: start,
+                        character_end: end,
+                        excerpt,
+                    },
+                );
+            }
+            let mut ranked: Vec<DocumentSimilarity> = best.into_values().collect();
+            ranked.sort_by(|left, right| {
+                right
+                    .cosine
+                    .total_cmp(&left.cosine)
+                    .then(left.document_id.cmp(&right.document_id))
+            });
+            ranked.truncate(limit);
+            Ok(Some(ranked))
+        })
+        .await
     }
 
     async fn index_documents_inner(

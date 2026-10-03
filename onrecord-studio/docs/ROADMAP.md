@@ -958,11 +958,34 @@ produced was false and has been fixed away (form blanks read as redactions, sect
 FOIA stamps, police service-request stats as records response times, keyword-collided award IDs).
 The detectors now produce 0 findings on this corpus. Next, in order:
 
-1. `no_records_contradicted` by meaning, not word overlap. 13/140 requests closed "No responsive
-   documents" (closure notices are stored as documents). Word overlap matched them to unrelated
-   releases under every token rule tried (all-8, 75%, extra stopwords); match the denied request's
-   text to releases with the on-device embedding model, and require the release to predate the
-   denial's closure.
+1. `no_records_contradicted` by meaning, not word overlap. **Built 2026-10-03; produces 0
+   findings on this corpus, by measurement.** 13/140 requests closed "No responsive documents"
+   (closure notices are stored as documents). Word overlap matched them to unrelated releases
+   under every token rule tried (all-8, 75%, extra stopwords), and is gone. The embedding model
+   now only proposes candidates (closest-chunk cosine of each release against the denied
+   request's description); a finding needs the release public, from another request with the
+   same `agency_id`, and dated strictly before the denial's `closed_at`. Without an installed
+   model or an embedded corpus the detector reports not-run and keeps its earlier findings
+   (`RefreshSummary::not_run`). Method: `docs/analysis_methods.md` §16.
+   Measured with the detector's ignored `measure_on_a_live_collection` (env `ONRECORD_EVAL_DIR`,
+   `ONRECORD_EMBEDDING_CACHE`) on a copy of the eval-encampment-2 database: 660 documents, 99,083
+   chunks embedded; all 13 denials loaded; the top-8 cosines per denial (104 values) were identical
+   on two runs. Hand-judged, none of the 104 is a contradiction except possibly one. Generic
+   homelessness email dumps (20-2226, 22-854) dominate every list at 0.62–0.85, and the highest
+   cosine overall, 0.8531, is a COVID-email set against 22-3123 (a COVID-swab HR request). Two
+   candidates passed every deterministic check, and both were judged false: 24-952 SDPD citation
+   data against 26-6188 (0.7732, outside its date range), and an SDPD encampment-fire log against
+   24-4110, which concerns UCSD protest arrests (0.7499). `SIMILARITY_THRESHOLD` is therefore pinned at 0.86, above every judged
+   non-contradiction. It is a precision floor, and recall is unmeasured.
+   The one plausible lead is missed: ESD released a Caltrans Delegated Maintenance Agreement to
+   25-10478 on 2026-01-14, the day before Purchasing & Contracting closed 25-10350…10354 with
+   "no responsive documents". It scored 0.8018 against 25-10350 (5th, below four email dumps) and
+   is a different `agency_id`. Request-to-request similarity was also measured and did not separate
+   it either: 25-10478 scored only 0.6592 against 25-10397, while PRA-boilerplate requests score
+   0.96 against each other. Open: (a) whether a closure that says "The City of San Diego has no
+   responsive documents" should be tested city-wide rather than per department; (b) a recall
+   signal that a generic document cannot win on length, for example cosine relative to the
+   document's median cosine across all denials, measured against this lead.
 2. Rolling productions: 24/140 requests released in installments, 6 over 180 days (20-2226: 30
    releases over 809 days). Needs release events stored per request (timeline "Document(s)
    Released" bylines); a pattern finding, not a legal claim; never derive `determination_at`.
