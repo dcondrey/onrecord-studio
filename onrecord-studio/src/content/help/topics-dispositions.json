@@ -27,7 +27,7 @@
       {
         "heading": "How a request is counted",
         "paragraphs": [
-          "Each request is counted once, from the closure notice its portal published (NextRequest portals publish one when a request closes). The first rule whose words appear in the notice decides:"
+          "Each request is counted once, from the closure notice stored for it: the text of the closing event, collected from hosted NextRequest portals. The first rule whose words appear in the notice decides:"
         ],
         "items": [
           "Withdrawn: \"request withdrawn\" or \"withdrawn this request\", or a request already stored as withdrawn.",
@@ -40,7 +40,7 @@
       {
         "heading": "Absence is counted, not guessed",
         "items": [
-          "Disposition not recorded: no closure notice is stored for the request. It is still open, or it closed without one.",
+          "Disposition not recorded: no closure notice is stored for the request. It is still open, its portal's closing text was not collected (only hosted NextRequest portals are read for it, and only by syncs since that was added), or it closed without one. This says nothing about how the agency answered.",
           "Notice not classified: a notice is stored but no rule matches its wording, or its text has not been extracted yet. Another portal's wording lands here until a rule names it."
         ]
       },

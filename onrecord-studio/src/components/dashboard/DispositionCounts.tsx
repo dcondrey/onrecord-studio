@@ -64,7 +64,7 @@ export default function DispositionCounts({ portalSubdomain }: { portalSubdomain
         <h3 className="text-sm font-semibold text-fg">Dispositions by department</h3>
         <MethodNote label="How dispositions are counted">
           <p>
-            Each request is counted once, from the closure notice its portal published, by the first rule its
+            Each request is counted once, from the closure notice stored for it, by the first rule its
             words match: <strong>Withdrawn</strong> (“request withdrawn”, “withdrawn this request”, or a request
             stored as withdrawn); <strong>No responsive records</strong> (“no responsive documents” or “no
             responsive records”); <strong>Withheld</strong> (“not released”, or “any documents responsive to the
@@ -73,7 +73,9 @@ export default function DispositionCounts({ portalSubdomain }: { portalSubdomain
           </p>
           <p className="mt-1.5">
             <strong>Disposition not recorded</strong> means no closure notice is stored for the request: it is still
-            open, or it closed without one. <strong>Notice not classified</strong> means a notice is stored but no
+            open, its portal’s closing text was not collected (only hosted NextRequest portals are read for it, and
+            only by syncs since that was added), or it closed without one. It says nothing about how the agency
+            answered. <strong>Notice not classified</strong> means a notice is stored but no
             rule matches its wording, or its text has not been extracted. Neither is counted as any disposition.
             Every share is of the department’s requests in scope, these two included. A department with fewer
             than {SMALL_DEPARTMENT_REQUESTS} requests is marked small, because one request moves its shares by a
