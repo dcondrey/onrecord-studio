@@ -30,7 +30,7 @@ use crate::{
 use chrono::Utc;
 use std::collections::HashMap;
 
-use super::public_documents::load_public_documents;
+use super::public_documents::{load_public_documents, PublicDocument};
 
 pub const SLUG: &str = "contradictory_statement";
 
@@ -56,10 +56,23 @@ struct SourcedAssertion {
 
 pub async fn run(repository: &DuckDbRepository) -> Result<Vec<Finding>, AppError> {
     let documents = load_public_documents(repository, MAX_DOCUMENTS).await?;
-    let mut by_group: HashMap<(String, AssertionPredicate), Vec<SourcedAssertion>> = HashMap::new();
+    Ok(build_findings(documents))
+}
+
+fn build_findings(documents: Vec<PublicDocument>) -> Vec<Finding> {
+    // Keyed on portal too: an ID like "Grant 123" or "PO 100" is only unique within one agency's
+    // own numbering. Two different agencies' portals reusing the same short ID are not the same
+    // subject, and grouping across portals produced false "contradictions" between unrelated
+    // awards that merely shared an ID string.
+    let mut by_group: HashMap<(String, String, AssertionPredicate), Vec<SourcedAssertion>> =
+        HashMap::new();
     for document in documents {
         for assertion in extract_assertions(&document.text) {
-            let key = (assertion.subject.clone(), assertion.predicate);
+            let key = (
+                document.portal_key.clone(),
+                assertion.subject.clone(),
+                assertion.predicate,
+            );
             let sourced = SourcedAssertion {
                 portal_key: document.portal_key.clone(),
                 document_id: document.document_id,
@@ -75,7 +88,7 @@ pub async fn run(repository: &DuckDbRepository) -> Result<Vec<Finding>, AppError
     }
 
     let mut findings = Vec::new();
-    for ((subject, predicate), rows) in by_group {
+    for ((_portal_key, subject, predicate), rows) in by_group {
         if rows.len() < 2 {
             continue;
         }
@@ -118,7 +131,7 @@ pub async fn run(repository: &DuckDbRepository) -> Result<Vec<Finding>, AppError
             .then_with(|| b.confidence.rank_weight().cmp(&a.confidence.rank_weight()))
     });
     findings.truncate(MAX_FINDINGS);
-    Ok(findings)
+    findings
 }
 
 /// A rough "is this document authoritative" heuristic. A contradiction between two authoritative
@@ -434,6 +447,39 @@ mod tests {
         )
         .expect("must fire");
         assert_eq!(finding.severity, FindingSeverity::Notable);
+    }
+
+    fn doc(portal: &str, id: i64, text: &str) -> PublicDocument {
+        PublicDocument {
+            portal_key: portal.to_string(),
+            document_id: id,
+            request_id: id,
+            file_name: Some(format!("doc-{id}.pdf")),
+            created_at: "2026-01-01".to_string(),
+            text: text.to_string(),
+        }
+    }
+
+    #[test]
+    fn same_award_id_in_different_portals_is_not_the_same_subject() {
+        // Two unrelated agencies both numbering an award "123" is not a contradiction: the IDs
+        // are only unique within one agency's own numbering.
+        let documents = vec![
+            doc("city-a", 1, "Grant 123 in the amount of $100,000 was awarded this year."),
+            doc("city-b", 2, "Grant 123 in the amount of $1.00 was awarded this year."),
+        ];
+        assert!(build_findings(documents).is_empty());
+    }
+
+    #[test]
+    fn same_award_id_in_the_same_portal_still_fires() {
+        let documents = vec![
+            doc("city-a", 1, "Grant 123 in the amount of $100,000 was awarded this year."),
+            doc("city-a", 2, "Grant 123 in the amount of $1.00 was awarded this year."),
+        ];
+        let findings = build_findings(documents);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].kind, FindingKind::ContradictoryStatement);
     }
 
     #[test]

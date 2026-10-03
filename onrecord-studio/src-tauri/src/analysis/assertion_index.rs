@@ -279,7 +279,11 @@ pub fn extract_assertions(text: &str) -> Vec<Assertion> {
         };
         let kind = canonical_subject(kind_match.as_str());
         let id = id_match.as_str().trim();
-        if id.len() < 2 {
+        // AMOUNT_RE is (?i), so its identifier class also matches a plain word ("grant totaling
+        // $X" captures "totaling" as the id). A real contract/grant/PO number always contains a
+        // digit; requiring one rejects that false identifier instead of treating two unrelated
+        // awards described the same way as the same subject.
+        if id.len() < 2 || !id.bytes().any(|b| b.is_ascii_digit()) {
             continue;
         }
         let amount_text = amount_match.as_str().replace(',', "");
@@ -541,6 +545,22 @@ mod tests {
         assert!(amounts
             .iter()
             .any(|a| a.subject == "invoice::inv-7" && a.value == AssertionValue::Cents(4_738_219)));
+    }
+
+    #[test]
+    fn amount_does_not_capture_a_generic_word_as_an_identifier() {
+        // Two unrelated grants both phrased "grant totaling $X" must not collide on the fake
+        // identifier "totaling" picked up by AMOUNT_RE's case-insensitive id class.
+        let text = "The grant totaling $100,000 was approved.";
+        let amounts: Vec<_> = extract_assertions(text)
+            .into_iter()
+            .filter(|a| a.predicate == AssertionPredicate::Amount)
+            .collect();
+        assert!(
+            amounts.is_empty(),
+            "must not emit an amount assertion without a real digit-bearing identifier: {:?}",
+            amounts
+        );
     }
 
     #[test]
