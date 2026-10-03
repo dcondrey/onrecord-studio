@@ -516,19 +516,42 @@ impl DuckDbRepository {
                     )));
                 }
                 // A cancelled run was stopped by the operator (pause, removal) or by a failed start,
-                // so it says nothing about the source's health and leaves it as it was.
+                // so it says nothing about the source's health and leaves it as it was. A run that
+                // collected documents and whose only failures were individual items (unreadable
+                // file, dead link) is healthy; those failures are counted per run. One that
+                // collected nothing is not, and says why: item failures never write `last_error`,
+                // so the run's latest failure is the reason shown.
                 transaction
                     .execute(
                         "UPDATE portals SET
                         last_synced_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'),
-                        health_status = CASE ?2
-                            WHEN 'COMPLETED' THEN 'verified'
-                            WHEN 'CANCELLED' THEN health_status
+                        health_status = CASE
+                            WHEN ?2 = 'CANCELLED' THEN health_status
+                            WHEN ?2 = 'COMPLETED' THEN 'verified'
+                            WHEN ?4 > 0 AND NOT EXISTS (
+                                SELECT 1 FROM source_ingestion_failures
+                                WHERE run_id = ?3 AND repairable = 0
+                            ) THEN 'verified'
                             ELSE 'degraded'
                         END,
-                        last_error = CASE WHEN ?2 = 'COMPLETED' THEN NULL ELSE last_error END
+                        last_error = CASE
+                            WHEN ?2 = 'CANCELLED' THEN last_error
+                            WHEN ?2 = 'COMPLETED' THEN NULL
+                            WHEN EXISTS (
+                                SELECT 1 FROM source_ingestion_failures
+                                WHERE run_id = ?3 AND repairable = 0
+                            ) THEN last_error
+                            WHEN ?4 > 0 THEN NULL
+                            ELSE COALESCE((
+                                SELECT 'No documents were collected. Latest failure: ' || error_message
+                                FROM source_ingestion_failures
+                                WHERE run_id = ?3
+                                ORDER BY last_occurred_at DESC
+                                LIMIT 1
+                            ), last_error)
+                        END
                      WHERE subdomain = ?1",
-                        params![portal_key, status],
+                        params![portal_key, status, run_id, documents_processed],
                     )
                     .map_err(|error| {
                         AppError::Storage(format!("Failed to update portal sync time: {error}"))

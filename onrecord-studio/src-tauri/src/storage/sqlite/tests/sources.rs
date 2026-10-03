@@ -601,6 +601,17 @@ async fn a_cancelled_sync_run_leaves_source_health_as_it_was() {
             .begin_portal_sync_run(run_id, PORTAL_SUBDOMAIN)
             .await
             .expect("sync run should begin");
+        if status == "COMPLETED_WITH_ERRORS" {
+            repository
+                .record_source_task_failure(
+                    run_id,
+                    PORTAL_SUBDOMAIN,
+                    "listing",
+                    &AppError::PortalSecurity("host answered HTTP 403".to_string()),
+                )
+                .await
+                .expect("a source-level failure should record");
+        }
         repository
             .finish_portal_sync_run(PortalSyncRunFinalization {
                 run_id,
@@ -624,4 +635,91 @@ async fn a_cancelled_sync_run_leaves_source_health_as_it_was() {
         observed.push(health);
     }
     assert_eq!(observed, ["verified", "verified", "degraded", "degraded"]);
+}
+
+/// One unreadable document or dead link is that item's failure. Flagging the whole source for
+/// attention over it showed a badge whose only reason was a single file, on every source with
+/// any such file. The failure is still recorded for the run.
+#[tokio::test]
+async fn document_failures_alone_do_not_flag_the_source_for_attention() {
+    let repository = repository_with_document().await;
+    repository
+        .begin_portal_sync_run("run-items", PORTAL_SUBDOMAIN)
+        .await
+        .unwrap();
+    for (target, error) in [
+        ("scan.pdf", AppError::DataParsing("OCR_OUTPUT_EMPTY".to_string())),
+        ("gone", AppError::PortalDiscovery("HTTP 404".to_string())),
+    ] {
+        repository
+            .record_source_task_failure("run-items", PORTAL_SUBDOMAIN, target, &error)
+            .await
+            .unwrap();
+    }
+    repository
+        .finish_portal_sync_run(PortalSyncRunFinalization {
+            run_id: "run-items",
+            portal_key: PORTAL_SUBDOMAIN,
+            status: "COMPLETED_WITH_ERRORS",
+            pages_processed: 1,
+            requests_processed: 1,
+            documents_processed: 3,
+            failures: 2,
+        })
+        .await
+        .unwrap();
+    let connection = repository.conn.lock().await;
+    let (health, last_error, recorded): (String, Option<String>, i64) = connection
+        .query_row(
+            "SELECT health_status, last_error,
+                    (SELECT COUNT(*) FROM source_ingestion_failures WHERE run_id = 'run-items')
+             FROM portals WHERE subdomain = ?1",
+            params![PORTAL_SUBDOMAIN],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .unwrap();
+    assert_eq!(health, "verified");
+    assert_eq!(last_error, None);
+    assert_eq!(recorded, 2, "item failures are still recorded for the run");
+    drop(connection);
+
+    // The same failures with nothing collected are not a healthy source, and the reason shows.
+    repository
+        .begin_portal_sync_run("run-nothing", PORTAL_SUBDOMAIN)
+        .await
+        .unwrap();
+    repository
+        .record_source_task_failure(
+            "run-nothing",
+            PORTAL_SUBDOMAIN,
+            "scan.pdf",
+            &AppError::DataParsing("OCR_OUTPUT_EMPTY".to_string()),
+        )
+        .await
+        .unwrap();
+    repository
+        .finish_portal_sync_run(PortalSyncRunFinalization {
+            run_id: "run-nothing",
+            portal_key: PORTAL_SUBDOMAIN,
+            status: "COMPLETED_WITH_ERRORS",
+            pages_processed: 1,
+            requests_processed: 1,
+            documents_processed: 0,
+            failures: 1,
+        })
+        .await
+        .unwrap();
+    let connection = repository.conn.lock().await;
+    let (health, last_error): (String, Option<String>) = connection
+        .query_row(
+            "SELECT health_status, last_error FROM portals WHERE subdomain = ?1",
+            params![PORTAL_SUBDOMAIN],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(health, "degraded");
+    assert!(
+        last_error.as_deref().is_some_and(|reason| reason.contains("OCR_OUTPUT_EMPTY")),
+        "a source flagged for attention must say why, got {last_error:?}"
+    );
 }

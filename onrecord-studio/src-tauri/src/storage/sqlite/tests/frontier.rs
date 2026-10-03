@@ -1,4 +1,5 @@
 use super::*;
+use crate::ingestion::queue::MAXIMUM_DURABLE_TASK_ATTEMPTS;
 
 /// Every other test here opens a fresh database, so nothing about an upgraded one is covered.
 /// This one writes the rows an older build would have left behind.
@@ -232,6 +233,157 @@ async fn durable_frontier_leases_and_acknowledges_tasks_exactly_once() {
         .await
         .expect("empty frontier claim should succeed")
         .is_none());
+}
+
+/// A claimed row can wait in the dispatcher far longer than any fixed lease. It must stay held
+/// by its live run rather than be re-claimed as a duplicate, and only a started execution may
+/// count toward abandonment: a row merely queued when the app quit, five launches running, is
+/// still a row that never ran.
+#[tokio::test]
+async fn a_queued_task_is_neither_reclaimed_nor_charged_until_a_worker_starts_it() {
+    let repository = repository_with_document().await;
+    let mut run = String::from("run-0");
+    repository
+        .begin_portal_sync_run(&run, PORTAL_SUBDOMAIN)
+        .await
+        .unwrap();
+    repository
+        .persist_ingestion_frontier_task(&run, PORTAL_SUBDOMAIN, "queued", "{}")
+        .await
+        .unwrap();
+    for launch in 1..=5 {
+        let claimed = repository
+            .claim_ingestion_frontier_task(&run, PORTAL_SUBDOMAIN)
+            .await
+            .unwrap()
+            .expect("the queued task must be claimable");
+        assert_eq!(claimed.attempts, 0, "a claim is not an attempt");
+        assert!(
+            repository
+                .claim_ingestion_frontier_task(&run, PORTAL_SUBDOMAIN)
+                .await
+                .unwrap()
+                .is_none(),
+            "a held task must not be claimed twice in its run"
+        );
+        let lease: Option<String> = repository
+            .conn
+            .lock()
+            .await
+            .query_row(
+                "SELECT lease_expires_at FROM ingestion_task_frontier WHERE target_id = 'queued'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(lease, None, "an in-flight lease must not expire within its run");
+        repository.recover_interrupted_source_keys().await.unwrap();
+        run = format!("run-{launch}");
+        repository
+            .begin_portal_sync_run(&run, PORTAL_SUBDOMAIN)
+            .await
+            .unwrap();
+        repository
+            .adopt_orphaned_frontier_tasks(PORTAL_SUBDOMAIN, &run)
+            .await
+            .unwrap();
+    }
+    let claimed = repository
+        .claim_ingestion_frontier_task(&run, PORTAL_SUBDOMAIN)
+        .await
+        .unwrap()
+        .expect("the task survives relaunches it never ran in");
+    assert_eq!(
+        repository
+            .start_ingestion_frontier_task(claimed.frontier_id)
+            .await
+            .unwrap(),
+        1,
+        "the first started execution is attempt 1"
+    );
+}
+
+/// An older build charged an attempt per claim and wrote those counts to `attempts`. A row it left
+/// at the abandonment cap had never necessarily run, so after the upgrade it must be executed,
+/// not abandoned on its first claim.
+#[tokio::test]
+async fn claim_counts_left_by_an_older_build_do_not_abandon_tasks_after_upgrade() {
+    let repository = DuckDbRepository::new(Path::new(":memory:")).expect("DuckDB core must open");
+    {
+        let connection = repository.conn.lock().await;
+        connection
+            .execute_batch(
+                "CREATE SEQUENCE ingestion_frontier_seq START 1;
+                 CREATE TABLE ingestion_task_frontier (
+                    frontier_id BIGINT PRIMARY KEY DEFAULT nextval('ingestion_frontier_seq'),
+                    run_id TEXT NOT NULL,
+                    source_key TEXT NOT NULL,
+                    target_id TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'PENDING',
+                    attempts BIGINT NOT NULL DEFAULT 0,
+                    lease_expires_at TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE (run_id, target_id)
+                 );",
+            )
+            .expect("the pre-upgrade frontier shape must be creatable");
+        connection
+            .execute(
+                "INSERT INTO ingestion_task_frontier
+                    (run_id, source_key, target_id, payload_json, status, attempts,
+                     lease_expires_at, created_at, updated_at)
+                 VALUES ('run-old', ?1, 'queued-four-launches', '{}', 'LEASED', ?2,
+                         '2026-10-03T00:17:04.921552Z', '2026-10-03T00:00:00Z',
+                         '2026-10-03T00:07:04Z')",
+                params![
+                    PORTAL_SUBDOMAIN,
+                    i64::try_from(MAXIMUM_DURABLE_TASK_ATTEMPTS).unwrap()
+                ],
+            )
+            .expect("an inflated legacy row must insert");
+    }
+    repository
+        .run_migrations(MIGRATION)
+        .await
+        .expect("the upgrade path must add the execution counter to a populated table");
+    {
+        let connection = repository.conn.lock().await;
+        connection
+            .execute(
+                "INSERT INTO portals (subdomain, display_name, base_url, requests_endpoint)
+                 VALUES (?1, 'Test Portal', 'https://example.test', '/api/requests')",
+                params![PORTAL_SUBDOMAIN],
+            )
+            .expect("the source must insert");
+        connection
+            .execute(
+                "INSERT INTO portal_sync_runs (run_id, portal_subdomain, started_at, status)
+                 VALUES ('run-old', ?1, '2026-10-02T22:59:18Z', 'RUNNING')",
+                params![PORTAL_SUBDOMAIN],
+            )
+            .expect("the run the old build left RUNNING must insert");
+    }
+    repository.recover_interrupted_source_keys().await.unwrap();
+    repository
+        .begin_portal_sync_run("run-new", PORTAL_SUBDOMAIN)
+        .await
+        .unwrap();
+    repository
+        .adopt_orphaned_frontier_tasks(PORTAL_SUBDOMAIN, "run-new")
+        .await
+        .unwrap();
+    let claimed = repository
+        .claim_ingestion_frontier_task("run-new", PORTAL_SUBDOMAIN)
+        .await
+        .unwrap()
+        .expect("the legacy row must be adopted and claimable");
+    assert!(
+        claimed.attempts < MAXIMUM_DURABLE_TASK_ATTEMPTS,
+        "a row the old build only queued must reach a worker, got {} executions",
+        claimed.attempts
+    );
 }
 
 #[tokio::test]

@@ -106,7 +106,9 @@ CREATE TABLE IF NOT EXISTS ingestion_task_frontier (
     target_id TEXT NOT NULL,
     payload_json TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'LEASED')),
-    attempts BIGINT NOT NULL DEFAULT 0,
+    -- Started executions, not claims. Older builds counted claims in `attempts`, which a
+    -- legacy table may still carry; nothing reads it.
+    executions BIGINT NOT NULL DEFAULT 0,
     lease_expires_at TEXT,
     created_at TEXT NOT NULL DEFAULT strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'),
     updated_at TEXT NOT NULL DEFAULT strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'),

@@ -119,7 +119,7 @@ const MAXIMUM_STRUCTURED_DISCOVERY_LINKS: usize = 100_000;
 
 const ARCGIS_FEATURE_PAGE_SIZE: usize = 500;
 
-const MAXIMUM_DURABLE_TASK_ATTEMPTS: u64 = 4;
+pub(crate) const MAXIMUM_DURABLE_TASK_ATTEMPTS: u64 = 4;
 
 // Scheduler admission counters, durable task attempts, and retry eligibility persist in DuckDB.
 // Channel position is rebuilt from monotonically increasing frontier identifiers after restart.

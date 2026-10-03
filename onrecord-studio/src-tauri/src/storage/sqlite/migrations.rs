@@ -113,6 +113,15 @@ impl DuckDbRepository {
             "crawl_pages_started",
             "BIGINT DEFAULT 0",
         )?;
+        // Older builds charged an attempt per claim, so a row queued across a few launches reached
+        // the abandonment cap without ever running. Those counts measured nothing about the task,
+        // so the replacement counter starts every existing row at zero executions.
+        ensure_column(
+            conn,
+            "ingestion_task_frontier",
+            "executions",
+            "BIGINT DEFAULT 0",
+        )?;
         ensure_column(
             conn,
             "portal_sync_runs",

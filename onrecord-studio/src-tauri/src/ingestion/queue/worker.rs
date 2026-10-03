@@ -38,8 +38,19 @@ pub(super) async fn worker_loop(
         let target_id = scheduled.task.target_id();
         let target_url = scheduled.task.target_url().map(str::to_string);
         let frontier_id = scheduled.frontier_id;
-        let frontier_attempt = scheduled.frontier_attempt;
-        let mut result = execute_task(&context, scheduled.task).await;
+        let mut frontier_attempt = scheduled.frontier_attempt;
+        let started = match frontier_id {
+            Some(frontier_id) => context
+                .repository
+                .start_ingestion_frontier_task(frontier_id)
+                .await
+                .map(|attempt| frontier_attempt = attempt),
+            None => Ok(()),
+        };
+        let mut result = match started {
+            Ok(()) => execute_task(&context, scheduled.task).await,
+            Err(error) => Err(error),
+        };
         let retry_delay =
             frontier_id
                 .zip(result.as_ref().err())

@@ -161,6 +161,11 @@ impl DuckDbRepository {
                             "Failed to record source ingestion failure: {database_error}"
                         ))
                     })?;
+                // One unreadable document or dead link is that item's failure, recorded above; it
+                // must not flag the whole source as needing attention.
+                if repairable {
+                    return Ok(());
+                }
                 transaction
                     .execute(
                         "UPDATE portals
@@ -320,7 +325,7 @@ impl DuckDbRepository {
                 })?;
             let candidate = transaction
                 .query_row(
-                    "SELECT frontier_id, payload_json, attempts
+                    "SELECT frontier_id, payload_json, executions
                      FROM ingestion_task_frontier
                      WHERE run_id = ?1 AND source_key = ?2 AND status = 'PENDING'
                      ORDER BY frontier_id ASC
@@ -343,11 +348,16 @@ impl DuckDbRepository {
             let Some((frontier_id, payload_json, attempts)) = candidate else {
                 return Ok(None);
             };
+            // A claimed row waits in a dispatcher holding up to PORTAL_QUEUE_CAPACITY tasks for
+            // two workers, often far longer than any fixed lease. It is held by this live run
+            // until acknowledged or deferred, so it carries no expiry: a timed lease re-claimed
+            // queued rows as duplicates and charged each re-claim as an attempt, abandoning
+            // hundreds of tasks that never ran. A crashed run's rows are recovered by adoption,
+            // and attempts are charged when a worker starts the task.
             let claimed = transaction
                 .execute(
                     "UPDATE ingestion_task_frontier
-                     SET status = 'LEASED', attempts = attempts + 1,
-                         lease_expires_at = strftime(now()::TIMESTAMP + INTERVAL 10 MINUTE, '%Y-%m-%dT%H:%M:%S.%fZ'),
+                     SET status = 'LEASED', lease_expires_at = NULL,
                          updated_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
                      WHERE frontier_id = ?1 AND status = 'PENDING'",
                     params![frontier_id],
@@ -365,9 +375,37 @@ impl DuckDbRepository {
             Ok(Some(ClaimedIngestionTask {
                 frontier_id,
                 payload_json,
-                attempts: attempts.saturating_add(1),
+                attempts,
             }))
         })
+        })
+        .await
+    }
+
+    /// Charges one attempt as a worker begins executing a claimed task, returning the attempt
+    /// number this execution is.
+    pub async fn start_ingestion_frontier_task(&self, frontier_id: i64) -> Result<u64, AppError> {
+        self.query_connection("Start ingestion frontier task", move |conn| {
+            conn.query_row(
+                "UPDATE ingestion_task_frontier
+                 SET executions = executions + 1,
+                     updated_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
+                 WHERE frontier_id = ?1 AND status = 'LEASED'
+                 RETURNING executions",
+                params![frontier_id],
+                |row| row.get::<_, u64>(0),
+            )
+            .optional()
+            .map_err(|error| {
+                AppError::Storage(format!(
+                    "Failed to start ingestion frontier task {frontier_id}: {error}"
+                ))
+            })?
+            .ok_or_else(|| {
+                AppError::Storage(format!(
+                    "Ingestion frontier task {frontier_id} was missing when its worker started"
+                ))
+            })
         })
         .await
     }
@@ -544,12 +582,12 @@ impl DuckDbRepository {
                      SET run_id = ?1, status = 'PENDING', lease_expires_at = NULL,
                          -- An operator stop interrupted a lease on purpose; only interruptions
                          -- nobody chose count toward abandoning the task.
-                         attempts = CASE
+                         executions = CASE
                              WHEN status = 'LEASED' AND run_id IN (
                                  SELECT run_id FROM portal_sync_runs
                                  WHERE portal_subdomain = ?2 AND status = 'CANCELLED'
-                             ) THEN greatest(attempts - 1, 0)
-                             ELSE attempts
+                             ) THEN greatest(executions - 1, 0)
+                             ELSE executions
                          END,
                          updated_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
                      WHERE source_key = ?2

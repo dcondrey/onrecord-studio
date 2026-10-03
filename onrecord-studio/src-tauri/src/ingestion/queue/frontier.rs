@@ -113,10 +113,10 @@ pub(super) async fn refill_ingestion_frontier(context: &WorkerContext) -> Result
                 claimed.frontier_id, context.portal.portal_key
             )));
         }
-        // Retries scheduled in-process stop at the cap, so a lease beyond it means every earlier
-        // attempt was interrupted, typically because processing the task ended the process.
-        // Leasing it again would repeat that on every launch.
-        if claimed.attempts > MAXIMUM_DURABLE_TASK_ATTEMPTS {
+        // Attempts count started executions, and retries scheduled in-process stop at the cap, so
+        // a row still here at the cap means its last execution was interrupted, typically because
+        // processing the task ended the process. Running it again would repeat that every launch.
+        if claimed.attempts >= MAXIMUM_DURABLE_TASK_ATTEMPTS {
             context
                 .repository
                 .complete_ingestion_frontier_task(claimed.frontier_id)
@@ -124,7 +124,7 @@ pub(super) async fn refill_ingestion_frontier(context: &WorkerContext) -> Result
             decrement_atomic(&context.statistics.queued_tasks);
             let error = AppError::Internal(format!(
                 "Ingestion task was interrupted on {} consecutive attempts and was abandoned",
-                claimed.attempts - 1
+                claimed.attempts
             ));
             context
                 .statistics

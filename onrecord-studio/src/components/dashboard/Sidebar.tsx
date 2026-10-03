@@ -202,6 +202,11 @@ export default function Sidebar() {
                   {!isCollapsed && paused && <span className="shrink-0 rounded-md bg-warning/10 px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wide text-warning">Paused</span>}
                   {!isCollapsed && degraded && <span className="shrink-0 rounded-md bg-danger/10 px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wide text-danger">Attention</span>}
                 </div>
+                {!isCollapsed && selected && degraded && (
+                  <p role="status" className="mt-1 pl-9 text-label leading-4 text-danger [overflow-wrap:anywhere]">
+                    {lastError ?? 'The last sync did not finish cleanly, and no error was recorded.'}
+                  </p>
+                )}
                 {!isCollapsed && runtime && totalTasks > 0 && (
                   <div className="mt-1 pl-9">
                     <div className="numeric-value text-label text-muted">
