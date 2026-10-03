@@ -29,3 +29,26 @@ Researched and fetched 2026-10-03. Detail files: `city-open-data.md`, `homelessn
 | Sub-recipient admin vs direct cost | Award PDFs | Contract budgets by line item |
 | NPD saturation / overtime | Calls for service (daily, beat-level); budget PDFs | NPD deployment hours; overtime by event |
 | CPRA delay and exemptions | NextRequest timelines and closure notices (collected by the app) | — |
+
+## Analyses run against the data (2026-10-03)
+
+Ordinance text: SDMC Ch. 6 Art. 3 Div. 4 (https://docs.sandiego.gov/municode/MuniCodeChapter06/Ch06Art03Division04.pdf).
+63.0404(a) public property generally; (c) prohibited areas "at all times regardless of shelter":
+(c)(1) within two blocks of a K-12 school and (c)(2) of a shelter, (c)(4) transit hubs/trolley platforms
+or tracks, (c)(5) City-Manager-designated parks — each only where signs are posted; (c)(3) open space,
+waterways and banks. 63.0405(b): no criminal citation under 63.0404(a) between 9:00 p.m. and 5:30 a.m.
+or when no shelter is reasonably available. 63.0406(a): written notice of clean-up at least 24 hours ahead.
+
+- **63.0405(b) night-hours rule — no violation found.** SDPD "ArrestsCites" log released in request
+  25-9260 (document 55556769, 153,862 rows, 2023-06-28 to 2025-06-27, columns activityType, activityDate
+  with time, violationSection, address, beat): 29 citations and 5 arrests under 63.0404(A), none between
+  21:00 and 05:30. One night-time citation is coded "63.0404" without a subsection. (c) accounts for 359
+  citations/arrests in the same log.
+- **63.0404(c) locations — inconclusive without designations.** 374 geocoded NIBRS (c) incidents
+  (2023-08 to 2025): 130 within 1,320 ft of a school (SANDAG Schools layer) or MTS station (GTFS
+  location_type 1); 105 beyond 2,640 ft of both, concentrated in Balboa Park (El Prado, Park Blvd),
+  Mission Bay (Ingraham St, Sea World Dr) and Golden Hill — plausibly (c)(3)/(c)(5). Testing them needs
+  the City Manager's (c)(5) park designations and the ordinance sign locations (City Auditor OCA-26-07
+  Appendix B lists sign locations as a City dataset) — request both.
+- NIBRS `occured_on` is a date only; `approved_on` is report approval time, not incident time, so
+  time-of-day tests must use the ArrestsCites log.
