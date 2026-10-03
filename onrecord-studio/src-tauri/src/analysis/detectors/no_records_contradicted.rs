@@ -185,7 +185,14 @@ pub async fn run(
             "the on-device embedding model is not installed".into(),
         ));
     }
-    if index.index_status(0).await?.indexed_document_count == 0 {
+    let status = index.index_status(0).await?;
+    if status.running {
+        return Ok(Outcome::NotRun(
+            "the semantic index is being rebuilt; releases not yet embedded cannot be tested"
+                .into(),
+        ));
+    }
+    if status.indexed_document_count == 0 {
         return Ok(Outcome::NotRun(
             "no document has been embedded; build the semantic index first".into(),
         ));
