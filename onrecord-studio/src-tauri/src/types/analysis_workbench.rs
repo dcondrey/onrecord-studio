@@ -162,6 +162,7 @@ pub struct NearestFeature {
 pub enum CityDataset {
     NibrsOffenses,
     GetItDoneEncampments,
+    GetItDoneOpen,
     Schools,
     TransitStops,
 }

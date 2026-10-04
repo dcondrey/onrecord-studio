@@ -39,6 +39,7 @@ const datasetKinds: AnalyticalDatasetKind[] = [
 const cityDatasets: { value: CityDataset; label: string }[] = [
   { value: 'NIBRS_OFFENSES', label: 'SDPD NIBRS offenses (by year)' },
   { value: 'GET_IT_DONE_ENCAMPMENTS', label: 'Get It Done encampment reports (closed, by year)' },
+  { value: 'GET_IT_DONE_OPEN', label: 'Get It Done open reports (all services, today)' },
   { value: 'SCHOOLS', label: 'SANDAG schools' },
   { value: 'TRANSIT_STOPS', label: 'SANDAG transit stops (GTFS)' },
 ];

@@ -216,3 +216,77 @@ async fn automatic_startup_queries_run_on_real_imported_rows() {
         }
     }
 }
+
+#[tokio::test]
+async fn service_report_checks_run_on_real_imported_rows() {
+    let fixture: Value =
+        serde_json::from_str(include_str!("fixtures/service-accountability.json")).unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let db = DuckDbRepository::new(temp.path().join("service.db")).unwrap();
+    db.run_migrations(include_str!("../migrations/0001_initial_schema.sql"))
+        .await
+        .unwrap();
+    let path = temp.path().join("service.csv");
+    std::fs::write(&path, fixture["csv"].as_str().unwrap()).unwrap();
+    let input: AnalyticalImportRequest = serde_json::from_value(json!({ "datasetKind":"REGIONAL_DATA", "displayName":"Service fixture", "localPath":path, "sourceUri":"https://example.test/service.csv", "partialDataset":true })).unwrap();
+    let imported = db.import_analytical_csv(input).await.unwrap();
+    let number = |result: &SqlQueryResult, row: usize, name: &str| -> f64 {
+        let value = cell(result, row, name);
+        value
+            .as_f64()
+            .or_else(|| value.as_str().and_then(|text| text.parse().ok()))
+            .unwrap_or_else(|| panic!("{name} is not numeric: {value}"))
+    };
+    for query in fixture["queries"].as_array().unwrap() {
+        let id = query["id"].as_str().unwrap();
+        let sql = query["sql"]
+            .as_str()
+            .unwrap()
+            .replace("analysis_fixture", &imported.table_name);
+        let result = db
+            .execute_restricted_sql(&sql, 100)
+            .await
+            .unwrap_or_else(|e| panic!("{id}: {e}"));
+        match id {
+            "service_backlog" => {
+                // The five referred reports have no close date but are not an open backlog.
+                assert_eq!(result.row_count, 1);
+                assert_eq!(
+                    cell(&result, 0, "category"),
+                    &json!("Street Light Maintenance")
+                );
+                assert_eq!(number(&result, 0, "all_open_reports"), 12.0);
+                assert_eq!(number(&result, 0, "all_open_over_one_year"), 12.0);
+                assert_eq!(cell(&result, 0, "earliest_opened"), &json!("2024-01-10"));
+            }
+            "service_wait_area:council_district" => {
+                assert_eq!(result.row_count, 1);
+                assert_eq!(cell(&result, 0, "area"), &json!("3"));
+                assert_eq!(number(&result, 0, "median_days"), 40.0);
+                assert_eq!(number(&result, 0, "all_median_days"), 5.0);
+            }
+            "service_wait_area:comm_plan_name" => {
+                // "GAMMA" and "Gamma" are one community; apart, neither reaches 30 reports.
+                assert_eq!(result.row_count, 1);
+                assert_eq!(cell(&result, 0, "area"), &json!("GAMMA"));
+                assert_eq!(number(&result, 0, "closed_reports"), 30.0);
+            }
+            "service_backlog_area:council_district" | "service_backlog_area:comm_plan_name" => {
+                assert_eq!(result.row_count, 0, "{id}: one area has open reports")
+            }
+            "service_repeat_places" => {
+                assert_eq!(result.row_count, 1);
+                assert_eq!(cell(&result, 0, "place"), &json!("1 Main St"));
+                assert_eq!(number(&result, 0, "open_reports"), 12.0);
+            }
+            "service_referred" => {
+                // A -999 age is an unrecorded age, not a reason to drop the report.
+                assert_eq!(result.row_count, 1);
+                assert_eq!(cell(&result, 0, "category"), &json!("Other"));
+                assert_eq!(number(&result, 0, "referred_reports"), 5.0);
+                assert_eq!(number(&result, 0, "all_reports"), 107.0);
+            }
+            _ => panic!("Unverified query {id}"),
+        }
+    }
+}

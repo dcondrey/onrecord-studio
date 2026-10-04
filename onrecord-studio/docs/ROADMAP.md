@@ -1002,3 +1002,40 @@ The detectors now produce 0 findings on this corpus. Next, in order:
    unclassified, 0 unrecorded. The earlier 87/33 figures came from a different run. Rules are
    measured only against San Diego's wording; other NextRequest portals' notices will show as
    not classified until a rule names them.
+
+## Leads from service-report tables (2026-10-04)
+
+Decision: "What stands out" shows leads about the subject of the records; facts about a table
+(latest period, record shares, gaps, repairs) are folded beneath them. An earlier pass that added
+Pearson correlations, IQR outlier counts and percent-change "spikes" to the feed was reverted:
+they describe the table, the correlation SQL did not parse, and an unused cross-join "proximity"
+module was quadratic. Method: `docs/analysis_methods.md` §17.
+
+Measured on the owner's library (Get It Done open file retrieved 2026-09-14; read-only DuckDB CLI
+against the app database, same SQL the app generates):
+- 42,322 of 83,032 open reports with a service type are older than a year. Sidewalk Repair Issue
+  11,929 of 14,690 (earliest 2016-05-22); Street Light Maintenance 8,046 of 14,358; ROW
+  Maintenance 6,166 of 10,564.
+- Open street-light reports: median 881 days old in Peninsula and 867 in Pacific Beach, against
+  462 across all areas. Peninsula street lights also closed slower than the all-area median in
+  each of the closed-2016, 2017 and 2018 files (37 vs 23, 85 vs 27, 88 vs 40 days).
+- 78 open street-light reports name Mission Bay Bike Path (earliest 2021-09-22); 26 name 9711
+  Oviedo Way (earliest 2022-04-28).
+- Referred with no outcome in the table: 56,979 of 139,362 reports in closed-2017, 39,537 of
+  169,591 in closed-2018.
+
+"Fetch and import" now offers the citywide open file (`GET_IT_DONE_OPEN`, 31 MB, republished
+daily). Next, in order:
+1. Backlog change between two copies of the same source: the count is built (compares the
+   earliest and latest retrieval of one source URI). Not yet built: which reports left the open
+   file without a close record (an anti-join on the report id across the two copies). Unverified:
+   that a re-fetch through the app keeps the earlier snapshot (import keys a snapshot by content,
+   read from `storage/sqlite/analytical.rs`, not exercised).
+2. Join a lead to the council agenda and budget: the department that owns a service, its adopted
+   line (`budget_lines.rs`), and upcoming meeting items (`analysis_methods.md` §11), so a lead
+   offers a drafted public comment.
+3. Store service leads as findings so Story Desk ranks them with document findings. Needs a
+   FindingKind on both sides of the IPC contract and a help topic.
+4. The same role-based checks for code-enforcement cases and permits (opened, closed, type, area).
+5. Full Get It Done closed years exceed the 96 MB import limit; only Encampment rows are kept.
+   Area comparisons for other services need a per-service subset or a streamed aggregate.

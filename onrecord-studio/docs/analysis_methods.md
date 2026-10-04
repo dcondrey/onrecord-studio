@@ -300,3 +300,23 @@ Without an installed embedding model, or with no embedded document, the detector
 
 ### E. What a finding does and does not claim
 The finding states that the agency had already released a document, before closing the request with a denial, whose text is near the request's own at the stated cosine, and cites the closest passage with its character range. Cosine measures closeness of subject and wording, not responsiveness, so the finding carries no confidence score (`Unassessed`) and is a pattern signal (`is_legal_claim` false). It does not show the search was inadequate: the release may fall outside what was asked.
+
+## 17. Service-Report Leads
+
+`src/utils/serviceAccountability.ts`, run by automatic discovery through the restricted SQL boundary and shown under What stands out. Verified natively by `tests/data_discovery.rs::service_report_checks_run_on_real_imported_rows`.
+
+### A. Which tables are read
+A table is treated as service reports when its columns include, by the publisher's own names, a service type (`service_name`, `request_type`, …), a close date (`date_closed`, …) and either an opened date or a recorded age (`case_age_days`, …). A status column, a place column and up to two area columns (a district and a community) are used when present. Other tables get no service checks.
+
+### B. What is counted
+* **Open** means no close date and, where a status exists, a status that does not name a referral. **Closed** means a close date and no referral. Referred reports are counted apart: they often carry no close date and have left the table rather than stayed open in it.
+* **Age** is the publisher's recorded age when the table has one, otherwise the days from the opened date to the close date, or to the snapshot's retrieval date for an open report. A negative recorded age (the publisher's -999) is an unrecorded age: the report is still counted, its age is not.
+* **Backlog**: open reports per service, how many are older than 365 days, and the earliest opened date. Reported at 25 or more reports older than a year.
+* **Areas**: the median age of open reports, and the median days to close, per service and area against the median for that service across all areas. An area is listed with at least 30 reports, at least three areas reporting, and a median at least 1.5 times the all-area median (and, for closure, at least seven days slower). Area names are compared without regard to letter case, because publishers change case between years.
+* **Repeated places**: ten or more open reports with the same service and the same recorded place text, the oldest open more than 90 days.
+* **Referrals**: per service, reports whose status names a referral; reported where a service has at least 100, making up at least a quarter of its reports.
+* **Recurring**: a service and area listed as slower to close in three or more imported tables.
+* **Backlog change**: when the same source URI was imported on two retrieval dates, the count of open reports older than a year in the earliest and latest copies, with the three services that moved most. A report leaves an open file when it is closed or referred; the comparison does not say which.
+
+### C. What a lead does and does not claim
+A lead is a count of the publisher's records and carries no legal claim; it is not stored as a finding. An open report does not prove the problem persists, since the table records no inspections or work. A difference between areas can reflect what was reported as well as how it was handled. Several reports at one place can describe one fault, and a street name without a number can cover many blocks. Tables are compared as imported and can overlap. Every threshold above is a display threshold stated in the lead's method line.

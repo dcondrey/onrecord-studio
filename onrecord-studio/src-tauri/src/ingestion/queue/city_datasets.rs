@@ -71,6 +71,19 @@ fn city_dataset_spec(
                 row_filter: Some(("service_name", "Encampment")),
             }
         }
+        CityDataset::GetItDoneOpen => {
+            unsplit("Get It Done open reports")?;
+            let file_name = "get_it_done_requests_open_datasd.csv";
+            CityDatasetSpec {
+                url: format!("https://seshat.datasd.org/get_it_done_reports/{file_name}"),
+                kind: AnalyticalDatasetKind::RegionalData,
+                display_name: "Get It Done open reports (all services)".into(),
+                file_name: file_name.into(),
+                // The publisher replaces this file daily; a snapshot is the backlog on one day.
+                partial: true,
+                row_filter: None,
+            }
+        }
         CityDataset::Schools => {
             unsplit("SANDAG schools")?;
             CityDatasetSpec {
@@ -236,6 +249,8 @@ mod tests {
         assert!(spec(CityDataset::NibrsOffenses, None).is_err());
         assert!(spec(CityDataset::GetItDoneEncampments, Some(2015)).is_err());
         assert!(spec(CityDataset::GetItDoneEncampments, Some(2016)).is_ok());
+        assert!(spec(CityDataset::GetItDoneOpen, Some(2025)).is_err());
+        assert!(spec(CityDataset::GetItDoneOpen, None).is_ok());
         assert!(spec(CityDataset::Schools, Some(2025)).is_err());
         assert!(spec(CityDataset::TransitStops, None).is_ok());
     }
@@ -274,6 +289,7 @@ mod live {
         for (dataset, year) in [
             (CityDataset::Schools, None),
             (CityDataset::TransitStops, None),
+            (CityDataset::GetItDoneOpen, None),
             (CityDataset::GetItDoneEncampments, Some(2025)),
         ] {
             let spec = city_dataset_spec(dataset, year, 2026).unwrap();
