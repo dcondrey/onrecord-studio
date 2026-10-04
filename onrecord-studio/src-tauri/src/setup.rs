@@ -6,6 +6,9 @@ use crate::commands::investigation::AppInvestigationPaths;
 use crate::error::AppError;
 use crate::ingestion::queue::{ingestion_telemetry_envelope, IngestionProgress};
 use crate::parsers::staging::is_managed_extraction_staging_name;
+use crate::startup::{
+    StartupNoticeKind, StartupPhase, StartupState, StartupStatus, STARTUP_STATUS_EVENT,
+};
 use crate::storage::corpus::{CorpusDocumentInput, CorpusIndex};
 use crate::storage::duckdb::DuckDbWorkspace;
 use crate::storage::legacy_import::{
@@ -16,16 +19,20 @@ use crate::storage::storage_rewrite::{
     remove_retained_backup, rewrite_to_current_storage, StorageRewrite,
 };
 use crate::storage::vector::VectorIndex;
-use std::path::Path;
-use tauri::{App, Emitter, Manager, Runtime};
+use std::path::{Path, PathBuf};
+use tauri::{App, AppHandle, Emitter, Manager, Runtime};
 #[cfg(target_os = "windows")]
 use window_vibrancy::apply_mica;
 #[cfg(target_os = "macos")]
 use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
 
-/// Provisions native assets and sets up local database tables prior to showing the interface.
+/// Provisions the app data directory, then prepares the databases on a background thread so the
+/// window is presented at once and shows startup progress instead of nothing.
+///
+/// Only [`StartupState`] is managed when this returns. Every other managed type is registered by
+/// [`initialize_runtime`] before the phase becomes `Ready`, and the frontend mounts the workspace,
+/// and so invokes any command needing that state, only after `Ready`.
 pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result<(), AppError> {
-    // 1. Resolve and provision explicit app data tracking slots in the home directory path
     let app_data_dir = app
         .path()
         .app_data_dir()
@@ -50,34 +57,114 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
         })?;
     }
     crate::integrity::relocate_legacy_signing_keys(&report_directory, &signing_key_directory)?;
+    app.manage(StartupState::load(&app_data_dir));
+
+    // Window material is applied here, on the main thread, as the platform requires.
+    if let Some(main_window) = app.get_webview_window("main") {
+        #[cfg(target_os = "macos")]
+        let _ = apply_vibrancy(&main_window, NSVisualEffectMaterial::Sidebar, None, None);
+
+        #[cfg(target_os = "windows")]
+        let _ = apply_mica(&main_window, None);
+    }
+
+    let handle = app.handle().clone();
+    // A plain OS thread: the initialization below calls `block_on`, which panics inside a tokio
+    // task.
+    std::thread::Builder::new()
+        .name("onrecord-startup".to_string())
+        .spawn(move || {
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                initialize_runtime(
+                    &handle,
+                    &app_data_dir,
+                    report_directory,
+                    signing_key_directory,
+                )
+            }));
+            let startup = handle.state::<StartupState>();
+            let status = match outcome {
+                Ok(Ok(())) => startup.enter(StartupPhase::Ready, None),
+                Ok(Err(error)) => startup.fail(error.to_string()),
+                Err(_) => startup.fail(
+                    "Startup stopped on an internal error before the records opened.".to_string(),
+                ),
+            };
+            publish_status(&handle, &status);
+        })
+        .map_err(|error| AppError::Storage(format!("Failed to start initialization: {error}")))?;
+    Ok(())
+}
+
+fn publish_status<R: Runtime>(app: &AppHandle<R>, status: &StartupStatus) {
+    let _ = app.emit(STARTUP_STATUS_EVENT, status);
+}
+
+fn initialize_runtime<R: Runtime>(
+    app: &AppHandle<R>,
+    app_data_dir: &Path,
+    report_directory: PathBuf,
+    signing_key_directory: PathBuf,
+) -> Result<(), AppError> {
+    let startup = app.state::<StartupState>();
     let core_db_file = app_data_dir.join("onrecord_studio_core.db");
     let corpus_db_file = app_data_dir.join("onrecord_studio_corpus.db");
     let vector_db_file = app_data_dir.join("onrecord_studio_vectors.db");
     let model_cache_dir = app_data_dir.join("models").join("embeddings");
     let initial_migration = include_str!("../migrations/0001_initial_schema.sql");
 
-    // 2. Upgrade a pre-DuckDB core before anything tries to open it. DuckDB cannot read a SQLite
+    // 1. Upgrade a pre-DuckDB core before anything tries to open it. DuckDB cannot read a SQLite
     // file, so without this an installation from an earlier release fails at startup with an
     // engine error and its corpus becomes unreachable.
-    let migration_report = match classify_core_database(&core_db_file)? {
+    match classify_core_database(&core_db_file)? {
         CoreDatabaseKind::LegacySqlite => {
-            Some(migrate_legacy_sqlite_core(&core_db_file, initial_migration)?)
+            let report = migrate_legacy_sqlite_core(&core_db_file, initial_migration)?;
+            let mut message = format!(
+                "Converted the database from an earlier release: {} rows across {} tables \
+                 copied. The original is kept at '{}'.",
+                report.total_rows(),
+                report.copied_tables.len(),
+                report.backup_path.display()
+            );
+            if !report.absent_from_legacy.is_empty() {
+                message.push_str(&format!(
+                    " Absent from the earlier file: {}.",
+                    report.absent_from_legacy.join(", ")
+                ));
+            }
+            if !report.dropped_from_legacy.is_empty() {
+                message.push_str(&format!(
+                    " Not carried over from the earlier file: {}.",
+                    report.dropped_from_legacy.join(", ")
+                ));
+            }
+            let status = startup.record_notice(
+                StartupNoticeKind::LegacyDatabaseMigrated,
+                &file_name(&core_db_file),
+                message,
+            );
+            publish_status(app, &status);
         }
         CoreDatabaseKind::Unrecognized => {
             return Err(AppError::Storage(format!(
-                "The file at '{}' is neither a DuckDB nor a SQLite database. Move it aside before                  starting OnRecord Studio; it will never be overwritten automatically.",
+                "The file at '{}' is neither a DuckDB nor a SQLite database. Move it aside before \
+                 starting OnRecord Studio; it will never be overwritten automatically.",
                 core_db_file.display()
             )))
         }
-        CoreDatabaseKind::DuckDb | CoreDatabaseKind::Missing => None,
-    };
+        CoreDatabaseKind::DuckDb | CoreDatabaseKind::Missing => {}
+    }
     // Must precede every connection to these files: the rewrite swaps each one underneath its path.
     // The vector index is left alone: it holds no long text and was 12 KB on the measured
     // installation, so there is nothing for compression to recover.
-    let rewritten_storage =
-        [&core_db_file, &corpus_db_file].map(|path| (path.clone(), rewrite_storage_version(path)));
+    let rewritten_storage = [&core_db_file, &corpus_db_file].map(|path| {
+        let status = startup.enter(StartupPhase::OptimizingStorage, Some(file_name(path)));
+        publish_status(app, &status);
+        (path.clone(), rewrite_storage_version(app, &startup, path))
+    });
+    publish_status(app, &startup.enter(StartupPhase::OpeningRecords, None));
 
-    // 3. Initialize the DuckDB core repository and run structural tracking migrations.
+    // 2. Initialize the DuckDB core repository and run structural tracking migrations.
     let repository = DuckDbRepository::new(&core_db_file)?;
     let corpus_index = CorpusIndex::open(&corpus_db_file)?;
     let vector_index = VectorIndex::open(&vector_db_file, model_cache_dir)?;
@@ -117,51 +204,35 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
         repository.analytics_connection(),
     )?);
 
-    // 4. Boot up the asynchronous queue workspace pipeline
-    let app_handle = app.handle().clone();
+    // 3. Boot up the asynchronous queue workspace pipeline
     let download_root = app_data_dir.join("documents");
     create_runtime_directory(&download_root)?;
     clear_abandoned_ingestion_staging(&download_root)?;
     clear_abandoned_extraction_staging(&download_root)?;
     let manager = tauri::async_runtime::block_on(initialize_queue_runtime(
-        app_handle.clone(),
+        app.clone(),
         repository.clone(),
         corpus_index.clone(),
         &download_root,
     ))?;
     manager.set_relevance_model(vector_index.clone());
-    if let Some(report) = migration_report {
-        let _ = app_handle.emit(
-            "ingestion-telemetry",
-            ingestion_telemetry_envelope(IngestionProgress::LegacyCoreDatabaseMigrated {
-                backup_path: report.backup_path.display().to_string(),
-                copied_tables: report.copied_tables.len() as u64,
-                copied_rows: report.total_rows(),
-                tables_absent_from_legacy: report.absent_from_legacy.clone(),
-                tables_dropped_from_legacy: report.dropped_from_legacy.clone(),
-            }),
-        );
-    }
-    start_search_token_backfill(repository.clone());
-    start_cpra_rule_recompute(repository.clone());
-    start_corpus_reconciliation(app_handle, repository.clone(), corpus_index.clone());
-    app.manage(repository);
-    app.manage(corpus_index);
+    app.manage(repository.clone());
+    app.manage(corpus_index.clone());
     app.manage(vector_index);
     app.manage(std::sync::Arc::new(crate::profile::ProfileStore::new(
-        &app_data_dir,
+        app_data_dir,
     )));
     app.manage(std::sync::Arc::new(crate::tracker::TrackerStore::new(
-        &app_data_dir,
+        app_data_dir,
     )));
     app.manage(std::sync::Arc::new(
-        crate::annotations::AnnotationStore::new(&app_data_dir),
+        crate::annotations::AnnotationStore::new(app_data_dir),
     ));
     app.manage(std::sync::Arc::new(
-        crate::collaboration::ContributorStore::new(&app_data_dir),
+        crate::collaboration::ContributorStore::new(app_data_dir),
     ));
     app.manage(std::sync::Arc::new(crate::resolution::LedgerStore::new(
-        &app_data_dir,
+        app_data_dir,
     )));
     app.manage(report_directory);
     app.manage(crate::integrity::SigningKeyDirectory(signing_key_directory));
@@ -169,17 +240,11 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
     app.manage(manager);
     app.manage(agency_engine);
     app.manage(correlation_engine);
-    crate::research::start_service(app.handle().clone());
-
-    // 5. Apply the native window material.
-    if let Some(main_window) = app.get_webview_window("main") {
-        #[cfg(target_os = "macos")]
-        let _ = apply_vibrancy(&main_window, NSVisualEffectMaterial::Sidebar, None, None);
-
-        #[cfg(target_os = "windows")]
-        let _ = apply_mica(&main_window, None);
-    }
-
+    // Started only after every type above is managed: the research service reads them.
+    start_search_token_backfill(repository.clone());
+    start_cpra_rule_recompute(repository.clone());
+    start_corpus_reconciliation(app.clone(), repository, corpus_index);
+    crate::research::start_service(app.clone());
     Ok(())
 }
 
@@ -317,30 +382,61 @@ fn start_corpus_reconciliation<R: Runtime>(
 /// Rewrites a database left at an older DuckDB storage version, returning whether it did.
 ///
 /// Never fatal: every failure leaves the original in place and fully usable, only uncompressed,
-/// and the next launch tries again.
-fn rewrite_storage_version(path: &Path) -> bool {
-    match rewrite_to_current_storage(path) {
-        Ok(StorageRewrite::Rewritten(report)) => {
-            eprintln!(
-                "Rewrote '{}' from storage {} in {:.1}s: {} -> {} bytes, {} rows in {} tables \
-                 verified; original retained at '{}' until the next launch.",
-                path.display(),
-                report.previous_storage,
+/// and the next launch tries again. Both outcomes become a notice; a current file records none.
+fn rewrite_storage_version<R: Runtime>(
+    app: &AppHandle<R>,
+    startup: &StartupState,
+    path: &Path,
+) -> bool {
+    let file = file_name(path);
+    let (kind, message, rewritten) = match rewrite_to_current_storage(path) {
+        Ok(StorageRewrite::NotNeeded) => return false,
+        Ok(StorageRewrite::Rewritten(report)) => (
+            StartupNoticeKind::StorageRewritten,
+            format!(
+                "Optimized into compressed storage in {:.1} s: {} before, {} after; {} rows in {} \
+                 tables verified identical. The original is kept at '{}' until the next launch.",
                 report.elapsed.as_secs_f64(),
-                report.bytes_before,
-                report.bytes_after,
+                human_bytes(report.bytes_before),
+                human_bytes(report.bytes_after),
                 report.total_rows(),
                 report.tables.len(),
                 report.backup_path.display()
-            );
-            true
-        }
-        Ok(StorageRewrite::NotNeeded) => false,
-        Err(error) => {
-            eprintln!("Storage rewrite skipped (continuing on the original): {error}");
-            false
-        }
+            ),
+            true,
+        ),
+        Err(error) => (
+            StartupNoticeKind::StorageNotRewritten,
+            format!(
+                "Not optimized; the file is unchanged and in use as before, and the next launch \
+                 tries again. {error}"
+            ),
+            false,
+        ),
+    };
+    eprintln!("{file}: {message}");
+    publish_status(app, &startup.record_notice(kind, &file, message));
+    rewritten
+}
+
+fn file_name(path: &Path) -> String {
+    path.file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.display().to_string())
+}
+
+fn human_bytes(bytes: u64) -> String {
+    const UNITS: [&str; 4] = ["KB", "MB", "GB", "TB"];
+    if bytes < 1024 {
+        return format!("{bytes} bytes");
     }
+    let mut value = bytes as f64 / 1024.0;
+    let mut unit = 0;
+    while value >= 1024.0 && unit + 1 < UNITS.len() {
+        value /= 1024.0;
+        unit += 1;
+    }
+    format!("{value:.1} {}", UNITS[unit])
 }
 
 fn create_runtime_directory(path: &Path) -> Result<(), AppError> {

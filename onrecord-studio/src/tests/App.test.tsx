@@ -38,6 +38,10 @@ const bridge = vi.hoisted(() => ({
 
 vi.mock('@tauri-apps/api/event', () => ({
   listen: (name: string, handler: (event: { payload: unknown }) => void) => {
+    if (name !== 'ingestion-telemetry') {
+      bridge.listeners.set(name, handler);
+      return Promise.resolve(() => bridge.listeners.delete(name));
+    }
     bridge.listenerAttempts += 1;
     if (bridge.listenerFailures > 0) {
       bridge.listenerFailures -= 1;
@@ -59,6 +63,9 @@ vi.mock('@tauri-apps/api/core', () => ({
     bridge.invoked.push(command);
     if (command === 'list_saved_portals' && bridge.failSavedPortals) {
       return Promise.reject(new Error('source catalog unavailable'));
+    }
+    if (command === 'get_startup_status') {
+      return Promise.resolve({ version: 2, phase: 'ready', file: null, phaseStartedAtMs: 0, error: null, notices: [] });
     }
     if (command === 'get_ocr_capability') {
       return Promise.resolve({
@@ -183,31 +190,6 @@ describe('App', () => {
     await waitFor(() => expect(useAppStore.getState().workspaceInitializationStatus).toBe('error'));
     expect(useAppStore.getState().workspaceInitializationError).toContain('source catalog unavailable');
     expect(useAppStore.getState().syncLogs.join('\n')).toContain('Workspace initialization failed');
-  });
-
-  // REGRESSION(ipc): this variant was absent from App's switch, so a legacy-database migration --
-  // the one event that reports evidence being copied between database files -- was dropped without
-  // a trace. The `default: assertNever(payload)` arm added alongside it makes any future backend
-  // variant a `tsc` error rather than another silent drop.
-  it('reports the legacy core database migration it used to drop', async () => {
-    render(<App />);
-    await waitFor(() => expect(bridge.listeners.has('ingestion-telemetry')).toBe(true));
-
-    deliver(
-      telemetry('1', 'legacyCoreDatabaseMigrated', {
-        backupPath: '/evidence/core.sqlite.backup',
-        copiedTables: 12,
-        copiedRows: 4096,
-        tablesAbsentFromLegacy: ['corpus_segments'],
-        tablesDroppedFromLegacy: ['scratch_notes'],
-      }),
-    );
-
-    const log = useAppStore.getState().syncLogs.join('\n');
-    expect(log).toContain('/evidence/core.sqlite.backup');
-    expect(log).toContain('4,096');
-    expect(log).toContain('corpus_segments');
-    expect(log).toContain('scratch_notes');
   });
 
   // The exhaustiveness guard is compile-time. At runtime it must stay inert: this callback runs

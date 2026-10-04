@@ -95,15 +95,6 @@ pub enum IngestionProgress {
         requests_spent: usize,
         reason: String,
     },
-    /// A pre-DuckDB core database was converted during startup. Emitted once, before the window
-    /// is shown, so the investigator learns where the retained original was kept.
-    LegacyCoreDatabaseMigrated {
-        backup_path: String,
-        copied_tables: u64,
-        copied_rows: u64,
-        tables_absent_from_legacy: Vec<String>,
-        tables_dropped_from_legacy: Vec<String>,
-    },
     CorpusReconciliationStarted {},
     CorpusReconciliationCompleted {
         indexed_documents: u64,

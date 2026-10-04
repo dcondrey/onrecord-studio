@@ -146,9 +146,11 @@ Two consequences worth stating outright:
   at 0 for the same logically continuing run. A progress bar computing
   `completed / (completed + queued)` reads wrong across a restart.
 
-Three telemetry variants carry **no `portalKey`**: `legacyCoreDatabaseMigrated`,
-`corpusReconciliationStarted`, and `corpusReconciliationCompleted`. They are app-scoped. A
-consumer that keys every event by portal drops them.
+Two telemetry variants carry **no `portalKey`**: `corpusReconciliationStarted` and
+`corpusReconciliationCompleted`. They are app-scoped. A consumer that keys every event by portal
+drops them. Startup outcomes (a legacy-database conversion, a storage rewrite or its refusal) are
+not telemetry: they occur before the webview listens, so they are pulled with
+`get_startup_status` and persisted until `acknowledge_startup_notices`.
 
 `documentId` and `bytesSaved` serialize as JSON numbers. Synthetic document identifiers are
 deliberately generated below 2^53 so they stay exactly representable in JavaScript, but

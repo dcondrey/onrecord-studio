@@ -42,6 +42,7 @@ vi.mock('@tauri-apps/api/core', () => ({
     if (command === 'get_request_statutory_extension') return null;
     if (command === 'get_affiliation_disclosure') return null;
     if (command === 'get_meeting_calendar') return { today: '2026-09-13', meetings: [], limitations: [] };
+    if (command === 'get_startup_status') return { version: 2, phase: 'ready', file: null, phaseStartedAtMs: 0, error: null, notices: [] };
     if (command === 'get_ocr_capability') return { engine: 'fixture', engineAvailable: false, engineVersion: null, languagePacks: [], languageProbeComplete: true, pdfRenderer: null, pdfRendererAvailable: false, pdfRendererVersion: null, imageOcrAvailable: false, pdfOcrAvailable: false, diagnostics: [] };
     if (command === 'start_data_source') return {
       source: { portalKey: 'sd-policies', displayName: 'SDPD policies', canonicalUrl: args.url, originUrl: 'https://www.sandiego.gov', apiLayout: {}, verifiedAt: '2026-09-13T00:00:00Z', sourceKind: 'WEB_CRAWL' },
@@ -79,7 +80,7 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 describe('San Diego research workflow', () => {
   it('selects a corrected budget PDF with its proposed status and single-document acquisition scope', async () => {
     render(<App />);
-    fireEvent.click(screen.getByText('Browse sources and add records'));
+    fireEvent.click(await screen.findByText('Browse sources and add records'));
     const desk = within(await screen.findByRole('region', { name: 'San Diego research desk' }));
     fireEvent.change(desk.getByLabelText('Evidence type'), { target: { value: 'Budget proposal' } });
     fireEvent.change(desk.getByLabelText('Find a regional source'), { target: { value: 'FY2026' } });
@@ -95,7 +96,7 @@ describe('San Diego research workflow', () => {
 
   it('stages the SDPD source and applies its scoped acquisition recipe when Add is clicked', async () => {
     render(<App />);
-    fireEvent.click(screen.getByText('Browse sources and add records'));
+    fireEvent.click(await screen.findByText('Browse sources and add records'));
     const description = await screen.findByText('Find the written policies, procedures, department orders, and training documents behind a police practice.');
     const card = description.closest('article')!;
     fireEvent.click(within(card).getByRole('button', { name: 'Choose source' }));

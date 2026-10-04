@@ -18,7 +18,6 @@ export type IngestionTelemetryEvent =
   | { type: 'taskRetryScheduled'; payload: { portalKey: string; targetId: string; attempt: number; delaySeconds: number; errorMsg: string } }
   | { type: 'sourceNeedsGuidance'; payload: { portalKey: string; sourceUrl: string; reason: string } }
   | { type: 'hostStopped'; payload: { portalKey: string; host: string; requestsSpent: number; reason: string } }
-  | { type: 'legacyCoreDatabaseMigrated'; payload: { backupPath: string; copiedTables: number; copiedRows: number; tablesAbsentFromLegacy: string[]; tablesDroppedFromLegacy: string[] } }
   | { type: 'corpusReconciliationStarted'; payload: Record<string, never> }
   | { type: 'corpusReconciliationCompleted'; payload: { indexedDocuments: number; skippedDocuments: number; failedDocuments: number; firstError: string | null } };
 

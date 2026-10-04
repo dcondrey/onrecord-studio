@@ -133,6 +133,8 @@ export interface NativeCommandMap {
   carve_document_version_history: { args: { documentId: number; portalKey: string }; result: Types.RecoveredVersionProfile };
   audit_document_residual_evidence: { args: { documentId: number; portalKey: string; includeHypotheses?: boolean | null }; result: Types.EvidenceBundle };
   get_ocr_capability: { args: NoArgs; result: Types.OcrCapability };
+  get_startup_status: { args: NoArgs; result: Types.StartupStatus };
+  acknowledge_startup_notices: { args: { ids: string[] }; result: Types.StartupStatus };
   refresh_findings: { args: NoArgs; result: Types.RefreshFindingsSummary };
   list_evidence_gaps: { args: NoArgs; result: Types.EvidenceGapView[] };
   list_document_claim_checks: { args: { documentId: number; portalKey: string }; result: Types.DocumentClaimChecks };

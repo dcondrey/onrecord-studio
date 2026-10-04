@@ -21,6 +21,7 @@ pub mod runtime;
 pub mod semantic;
 pub mod snapshot;
 pub mod standing_search;
+pub mod startup;
 pub(crate) mod validation;
 
 pub use analysis_workbench::{

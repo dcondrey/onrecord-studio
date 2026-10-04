@@ -21,6 +21,7 @@ pub mod report;
 pub mod research;
 pub mod resolution;
 pub mod setup;
+pub mod startup;
 pub mod storage;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
@@ -183,6 +184,8 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::investigation::carve_document_version_history,
         commands::investigation::audit_document_residual_evidence,
         commands::runtime::get_ocr_capability,
+        commands::startup::get_startup_status,
+        commands::startup::acknowledge_startup_notices,
         commands::findings::refresh_findings,
         commands::findings::list_evidence_gaps,
         commands::claim_checks::list_document_claim_checks,
