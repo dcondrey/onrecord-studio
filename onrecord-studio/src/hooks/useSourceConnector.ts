@@ -51,6 +51,7 @@ export function useSourceConnector() {
   const setPortalSyncState = useAppStore((state) => state.setPortalSyncState);
   const setActivePortal = useAppStore((state) => state.setActivePortal);
   const upsertPortal = useAppStore((state) => state.upsertPortal);
+  const setPortals = useAppStore((state) => state.setPortals);
   const setPortalLifecycleState = useAppStore((state) => state.setPortalLifecycleState);
   const removePortalFromWorkspace = useAppStore((state) => state.removePortal);
   const requestEvidenceRefresh = useAppStore((state) => state.requestEvidenceRefresh);
@@ -423,6 +424,22 @@ export function useSourceConnector() {
     }
   };
 
+  // Off unless chosen. The schedule runs only while the app is open, and the backend returns the
+  // saved sources, so what the control shows is what was stored.
+  const setRecheckSchedule = async (intervalDays: number | null) => {
+    const source = activePortal;
+    if (!source) return;
+    setError(null);
+    try {
+      setPortals(await invokeCommand('set_source_recheck_schedule', { sourceKey: source.portalKey, intervalDays }));
+      appendSyncLog(intervalDays === null
+        ? `${source.displayName}: scheduled source checks are off.`
+        : `${source.displayName}: while the app is open, collected documents are checked against the source every ${intervalDays === 1 ? 'day' : `${intervalDays} days`}.`);
+    } catch (reason) {
+      setError(formatNativeError(reason));
+    }
+  };
+
   const removeSource = async () => {
     // The source the confirmation was opened for, not whichever one is selected when it resolves.
     const source = pendingRemoval;
@@ -580,6 +597,8 @@ export function useSourceConnector() {
     resumeSync,
     recheckSource,
     activeIsRechecking: activePortal ? recheckingKeys.has(activePortal.portalKey) : false,
+    activeRecheckIntervalDays: activeSource?.recheckIntervalDays ?? null,
+    setRecheckSchedule,
     removeSource,
     purgeSource,
   };

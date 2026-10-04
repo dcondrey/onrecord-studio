@@ -107,6 +107,7 @@ function mountWith(registrations: PortalRegistration[], activePortalKey: string)
       lifecycleState: 'ACTIVE' as const,
       healthStatus: 'verified',
       lastError: null,
+      recheckIntervalDays: null,
     })),
     activePortalKey,
     syncingPortalKeys: [],

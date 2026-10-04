@@ -135,7 +135,7 @@ describe('AgencyComparison', () => {
     useAppStore.setState({
       agencyProfiles: [],
       analyticsRefreshRequests: 0,
-      portals: [{ registration: { portalKey: 'p', displayName: 'P', canonicalUrl: 'https://p.example', originUrl: 'https://p.example', apiLayout: { requestsEndpoint: '', requestsPointer: '', metadataPointer: null, pageParameter: '', pageSizeParameter: '' }, verifiedAt: '2026-01-01T00:00:00Z', sourceKind: 'NEXT_REQUEST' }, lifecycleState: 'ACTIVE', healthStatus: 'verified', lastError: null }],
+      portals: [{ registration: { portalKey: 'p', displayName: 'P', canonicalUrl: 'https://p.example', originUrl: 'https://p.example', apiLayout: { requestsEndpoint: '', requestsPointer: '', metadataPointer: null, pageParameter: '', pageSizeParameter: '' }, verifiedAt: '2026-01-01T00:00:00Z', sourceKind: 'NEXT_REQUEST' }, lifecycleState: 'ACTIVE', healthStatus: 'verified', lastError: null, recheckIntervalDays: null }],
     });
     render(<AgencyComparison />);
     expect(screen.getByRole('status').textContent).toMatch(/Agency profiles have not been computed/);

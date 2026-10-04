@@ -85,6 +85,7 @@ function mountWith(lifecycleState: SourceLifecycleState, syncing: boolean) {
       lifecycleState,
       healthStatus: 'verified',
       lastError: null,
+      recheckIntervalDays: null,
     }],
     activePortalKey: registration.portalKey,
     syncingPortalKeys: syncing ? [registration.portalKey] : [],

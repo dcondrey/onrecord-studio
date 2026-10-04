@@ -9,6 +9,9 @@ const pdfjs = vi.hoisted(() => ({ pages: new Map<number, { render: ReturnType<ty
 vi.mock('../ipc', () => ({ invokeCommand: invoke, formatNativeError: String }));
 vi.mock('pdfjs-dist/legacy/web/pdf_viewer.css', () => ({}));
 vi.mock('../components/documents/pdfjsLoader', () => ({
+  STANDARD_FONT_URL: '',
+  WASM_URL: '',
+  canvasScale: () => 1,
   loadPdfjs: async () => ({
     TextLayer: class {
       render = async () => {};

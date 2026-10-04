@@ -9,16 +9,44 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import DocumentViewer from '../components/documents/DocumentViewer';
 import type { EvidenceBundle } from '../types/investigation';
+import type { DocumentSourceHistory } from '../types';
 
 const bridge = vi.hoisted(() => ({
   bundles: new Map<number, EvidenceBundle>(),
   gates: new Map<number, Promise<void>>(),
+  historyGates: new Map<number, Promise<void>>(),
 }));
+
+function historyOf(documentId: number): DocumentSourceHistory {
+  return {
+    checks: [{
+      checkId: documentId,
+      runId: 'run',
+      portalKey: 'example',
+      documentId,
+      requestedUrl: `https://records.example.gov/document-${documentId}`,
+      checkedAt: '2026-10-02T00:00:00Z',
+      outcome: 'GONE',
+      httpStatus: 404,
+      collectedSha256: '1'.repeat(64),
+      observedSha256: null,
+      detail: null,
+      acquisitionId: null,
+      observedCopyRetained: false,
+    }],
+    acquisitions: [],
+  };
+}
 
 vi.mock('../ipc', () => ({
   invokeCommand: (command: string, args?: { documentId?: number }) => {
     if (command === 'verify_document_provenance') return Promise.resolve(null);
     if (command === 'get_document_entity_truncations') return Promise.resolve([]);
+    if (command === 'list_document_source_history') {
+      const documentId = args?.documentId ?? 0;
+      const gate = bridge.historyGates.get(documentId);
+      return gate ? gate.then(() => historyOf(documentId)) : Promise.resolve(historyOf(documentId));
+    }
     if (command === 'audit_document_residual_evidence') {
       const documentId = args?.documentId ?? 0;
       const answer = bridge.bundles.get(documentId) ?? { findings: [], warnings: [], coverageComplete: true };
@@ -53,6 +81,28 @@ afterEach(() => {
   cleanup();
   bridge.bundles.clear();
   bridge.gates.clear();
+  bridge.historyGates.clear();
+});
+
+describe('document source history', () => {
+  it('discards a source history that resolves after the viewer moved to another document', async () => {
+    let release = () => {};
+    bridge.historyGates.set(7, new Promise<void>((resolve) => { release = () => resolve(); }));
+
+    const view = render(viewer(7));
+    fireEvent.click(screen.getByRole('button', { name: 'Source history' }));
+    await screen.findByText('Loading source history…');
+
+    view.rerender(viewer(8));
+    fireEvent.click(screen.getByRole('button', { name: 'Source history' }));
+    await screen.findByText('https://records.example.gov/document-8');
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    // Document 7's fetch record must never be listed as document 8's.
+    expect(screen.queryByText('https://records.example.gov/document-7')).toBeNull();
+    expect(screen.getByText('https://records.example.gov/document-8')).toBeTruthy();
+  });
 });
 
 describe('document residual-evidence audit', () => {

@@ -2,7 +2,8 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useC2PA } from '../../hooks/useC2PA';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { invokeCommand } from '../../ipc';
-import type { DocumentClaimChecks, EvidenceBundle, ForensicFinding, ProvenanceConfidence, ProvenanceVerificationRecord, RecoveredVersionProfile } from '../../types';
+import type { DocumentClaimChecks, DocumentSourceHistory, EvidenceBundle, ForensicFinding, ProvenanceConfidence, ProvenanceVerificationRecord, RecoveredVersionProfile } from '../../types';
+import SourceHistoryPanel from './SourceHistoryPanel';
 import DocumentAnnotations, { type AnnotationAnchor, type PassageTarget } from './DocumentAnnotations';
 import { findPassageInText } from './annotationLogic';
 import { ANNOTATION_LIMITS } from '../../types';
@@ -64,6 +65,11 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
   const shareGate = useLatestRequestGate();
   const claimGate = useLatestRequestGate();
   const packGate = useLatestRequestGate();
+  const sourceHistoryGate = useLatestRequestGate();
+  const [showSourceHistory, setShowSourceHistory] = useState(false);
+  const [sourceHistory, setSourceHistory] = useState<DocumentSourceHistory | null>(null);
+  const [isLoadingSourceHistory, setIsLoadingSourceHistory] = useState(false);
+  const [sourceHistoryError, setSourceHistoryError] = useState<string | null>(null);
   const [packState, setPackState] = useState<'idle' | 'pending' | 'failed'>('idle');
   const [packError, setPackError] = useState<string | null>(null);
   const [truncatedEntityKinds, setTruncatedEntityKinds] = useState<string[]>([]);
@@ -117,7 +123,36 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
     setClaimChecks(null);
     setClaimChecksState('idle');
     setClaimChecksError(null);
-  }, [claimGate, documentId, historyGate, packGate, portalKey, recoveryGate, residualAuditGate, shareGate, truncationGate]);
+    sourceHistoryGate.invalidate();
+    setShowSourceHistory(false);
+    setSourceHistory(null);
+    setIsLoadingSourceHistory(false);
+    setSourceHistoryError(null);
+  }, [claimGate, documentId, historyGate, packGate, portalKey, recoveryGate, residualAuditGate, shareGate, sourceHistoryGate, truncationGate]);
+
+  // Checks and fetches of one document; a history read for A that resolves after the viewer moved
+  // to B would state A's fetch record as B's.
+  const toggleSourceHistory = async () => {
+    if (showSourceHistory) {
+      setShowSourceHistory(false);
+      return;
+    }
+    setShowSourceHistory(true);
+    const request = sourceHistoryGate.begin();
+    setIsLoadingSourceHistory(true);
+    setSourceHistoryError(null);
+    try {
+      const history = await invokeCommand('list_document_source_history', { sourceKey: portalKey, documentId });
+      if (!sourceHistoryGate.isCurrent(request)) return;
+      setSourceHistory(history);
+    } catch (reason) {
+      if (!sourceHistoryGate.isCurrent(request)) return;
+      setSourceHistory(null);
+      setSourceHistoryError(String(reason));
+    } finally {
+      if (sourceHistoryGate.isCurrent(request)) setIsLoadingSourceHistory(false);
+    }
+  };
 
   const downloadQueryPack = async () => {
     const request = packGate.begin();
@@ -370,6 +405,9 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
           <button type="button" onClick={() => void toggleVerificationHistory()} aria-expanded={showVerificationHistory} className="rounded-full border border-control px-2.5 py-1 text-caption font-medium text-muted transition hover:border-highlight/30 hover:text-highlight">
             {showVerificationHistory ? 'Hide verification log' : 'Verification log'}
           </button>
+          <button type="button" onClick={() => void toggleSourceHistory()} aria-expanded={showSourceHistory} className="rounded-full border border-control px-2.5 py-1 text-caption font-medium text-muted transition hover:border-highlight/30 hover:text-highlight">
+            {showSourceHistory ? 'Hide source history' : 'Source history'}
+          </button>
           {originalAvailable ? <ProvenanceShield isValidating={isValidating} result={manifestForActiveDocument} error={provenanceError} /> : <span className="text-caption text-warning">Original referenced · file verification unavailable</span>}
         </div>
       </div>
@@ -401,6 +439,7 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
         <ProvenanceGraphPanel graph={manifestForActiveDocument.claimGraph} />
       )}
       {showVerificationHistory && <VerificationHistoryPanel records={verificationHistory} isLoading={isLoadingHistory} error={historyError} />}
+      {showSourceHistory && <SourceHistoryPanel key={`${portalKey}:${documentId}`} documentId={documentId} portalKey={portalKey} history={sourceHistory} isLoading={isLoadingSourceHistory} error={sourceHistoryError} />}
       {(recoveryProfile || recoveryError) && <RevisionRecoveryPanel profile={recoveryProfile} error={recoveryError} />}
       {truncatedEntityKinds.length > 0 && (
         <p role="status" className="text-label leading-4 text-warning">

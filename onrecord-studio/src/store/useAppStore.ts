@@ -471,11 +471,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       const portals = state.portals.filter(
         (entry) => entry.registration.portalKey !== portal.portalKey,
       );
+      // The schedule is stored apart from the registration, which a re-verification does not touch.
+      const recheckIntervalDays = state.portals.find((entry) => entry.registration.portalKey === portal.portalKey)?.recheckIntervalDays ?? null;
       portals.push({
         registration: portal,
         lifecycleState: 'ACTIVE',
         healthStatus: 'verified',
         lastError: null,
+        recheckIntervalDays,
       });
       portals.sort((left, right) =>
         left.registration.displayName.localeCompare(right.registration.displayName),

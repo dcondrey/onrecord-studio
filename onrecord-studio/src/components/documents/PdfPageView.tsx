@@ -6,7 +6,7 @@ import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { ResolvedAnnotation } from '../../types';
 import { annotationButton as button } from './annotationStyles';
 import { KIND_LABELS, STATUS_LABELS } from './annotationLogic';
-import { loadPdfjs } from './pdfjsLoader';
+import { canvasScale, loadPdfjs, STANDARD_FONT_URL, WASM_URL } from './pdfjsLoader';
 import { pageViewBridge, pageViewKey, usePageViewState } from './pageViewBridge';
 import {
   cleanRegionText,
@@ -82,27 +82,6 @@ function digestBanner(header: OriginalHeader) {
  * keyed by document. The page and its text layer are discarded unless they are still the page the
  * reader is on when they finish.
  */
-/** Bundled under public/ so a PDF that names a standard font without embedding it draws with the right metrics offline. */
-const STANDARD_FONT_URL = '/pdfjs/standard_fonts/';
-/**
- * CCITT, JBIG2 and JPEG 2000 images (the encodings of scanned records) and ICC colour decode only
- * through these modules; without them pdf.js draws the page with the image silently missing. The
- * `_nowasm_fallback.js` files beside them cover a WebKit that refuses WebAssembly.
- */
-const WASM_URL = '/pdfjs/wasm/';
-/**
- * Backing-store pixel budget for one page. A tall MediaBox at zoom 3 on a Retina display asks
- * for billions of pixels, which WebKit answers with a blank canvas or a hung webview.
- */
-const MAXIMUM_CANVAS_PIXELS = 16_777_216;
-
-/** The device scale that keeps a page's backing store within the pixel budget. */
-export function canvasScale(width: number, height: number, devicePixelRatio: number): number {
-  const area = width * height;
-  if (area <= 0) return devicePixelRatio;
-  return Math.min(devicePixelRatio, Math.sqrt(MAXIMUM_CANVAS_PIXELS / area));
-}
-
 export default function PdfPageView({ portalKey, documentId, fileName }: { portalKey: string; documentId: number; fileName: string }) {
   const key = pageViewKey(portalKey, documentId);
   const bridge = usePageViewState(key);
