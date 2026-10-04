@@ -27,7 +27,15 @@ pub const EMBEDDING_CHUNKING_VERSION: &str = "onrecord-semantic-chunks-v1";
 const VECTOR_SCHEMA_VERSION: i64 = 1;
 const MAX_CHUNK_CHARS: usize = 1_600;
 const CHUNK_OVERLAP_CHARS: usize = 160;
+/// Passages per model call, taken consecutively from one document. Part of what a stored vector
+/// means: the quantized model's output for a passage depends on the other passages in its batch
+/// (measured on the live collection: 361 of 512 vectors change bits at batch size 1, 10 of 512 at
+/// 32), so changing this or batching across documents re-embeds the corpus differently. One
+/// batch's activations are all the model holds at a time.
 const EMBED_BATCH_SIZE: usize = 16;
+/// ONNX intra-op threads. Vectors are bit-identical at 2, 4 and 8 threads (measured); throughput
+/// doubles from 2 to 4 and stops rising past the 4 performance cores it was measured on.
+const MAX_INTRA_OP_THREADS: usize = 4;
 /// Documents read per page during a rebuild; each carries its full extracted text.
 const VECTOR_SOURCE_PAGE_SIZE: usize = 32;
 
@@ -75,6 +83,11 @@ struct SkipCheckFields {
 #[derive(Clone)]
 pub struct VectorIndex {
     connection: Arc<Mutex<Connection>>,
+    /// A second connection to the same database, used only by indexing. A document's chunks are
+    /// written in one transaction on it while the model embeds the next batch, so readers on
+    /// `connection` keep seeing the document's previous vectors until the replacement commits,
+    /// and are never blocked behind the model.
+    writer: Arc<Mutex<Connection>>,
     cache_dir: PathBuf,
     model: Arc<Mutex<Option<TextEmbedding>>>,
     running: Arc<AtomicBool>,
@@ -126,8 +139,12 @@ impl VectorIndex {
             .map_err(|error| {
                 AppError::Storage(format!("Failed to stamp vector schema: {error}"))
             })?;
+        let writer = connection.try_clone().map_err(|error| {
+            AppError::Storage(format!("Failed to open the vector index writer: {error}"))
+        })?;
         Ok(Self {
             connection: Arc::new(Mutex::new(connection)),
+            writer: Arc::new(Mutex::new(writer)),
             cache_dir,
             model: Arc::new(Mutex::new(None)),
             running: Arc::new(AtomicBool::new(false)),
@@ -146,12 +163,21 @@ impl VectorIndex {
         T: Send + 'static,
         F: FnOnce(&mut Connection) -> Result<T, AppError> + Send + 'static,
     {
-        let connection = Arc::clone(&self.connection);
-        spawn_with(operation, AppError::Internal, move || {
-            let mut connection = connection.blocking_lock();
-            query(&mut connection)
-        })
-        .await?
+        run_locked(Arc::clone(&self.connection), operation, query).await
+    }
+
+    /// [`Self::query_connection`] on the indexing writer. A purge runs here so it waits for a
+    /// document replacement in progress instead of conflicting with its open transaction.
+    async fn writer_connection<T, F>(
+        &self,
+        operation: &'static str,
+        write: F,
+    ) -> Result<T, AppError>
+    where
+        T: Send + 'static,
+        F: FnOnce(&mut Connection) -> Result<T, AppError> + Send + 'static,
+    {
+        run_locked(Arc::clone(&self.writer), operation, write).await
     }
 
     /// Whether a query can be embedded right now; the same condition [`Self::semantic_search`]
@@ -183,11 +209,19 @@ impl VectorIndex {
         let cache_dir = self.cache_dir.clone();
         let mut model = self.model.lock().await;
         if model.is_none() {
+            let threads = std::thread::available_parallelism()
+                .map_or(1, usize::from)
+                .min(MAX_INTRA_OP_THREADS);
+            // Only the CPU provider: vectors feed findings, so they must not depend on which
+            // accelerator a machine happens to offer. The arena is ONNX Runtime's default.
             let options = TextInitOptions::new(EmbeddingModel::BGESmallENV15Q)
                 .with_cache_dir(cache_dir)
                 .with_show_download_progress(true)
                 .with_max_length(512)
-                .with_intra_threads(2);
+                .with_execution_providers(vec![ort::ep::CPU::default()
+                    .with_arena_allocator(true)
+                    .build()])
+                .with_intra_threads(threads);
             match TextEmbedding::try_new(options) {
                 Ok(initialized) => {
                     *model = Some(initialized);
@@ -263,7 +297,7 @@ impl VectorIndex {
         let document_id = i64::try_from(document_id).map_err(|_| {
             AppError::DataParsing("Document identifier exceeds supported capacity".to_string())
         })?;
-        self.query_connection("Purge document embeddings", move |connection| {
+        self.writer_connection("Purge document embeddings", move |connection| {
             delete_embeddings(connection, &[(portal_key, document_id)])
         })
         .await
@@ -271,7 +305,7 @@ impl VectorIndex {
 
     /// Removes every embedding of a purged source. See [`Self::purge_document`].
     pub async fn purge_portal(&self, portal_key: String) -> Result<(), AppError> {
-        self.query_connection("Purge source embeddings", move |connection| {
+        self.writer_connection("Purge source embeddings", move |connection| {
             let transaction = connection.transaction().map_err(|error| {
                 AppError::Storage(format!("Failed to open an embedding purge: {error}"))
             })?;
@@ -349,137 +383,12 @@ impl VectorIndex {
             })?;
             normalize(first)
         };
-        let results = self
-            .query_connection("Semantic search", move |connection| {
-                let mut statement = connection
-                    .prepare(
-                        "SELECT stable_id, portal_key, request_id, document_id, file_name, title,
-                        agency_name, jurisdiction, document_type, publication_date,
-                        observation_date, effective_date, character_start, character_end,
-                        excerpt, vector
-                 FROM embedding_chunks
-                 WHERE model_id = ?1 AND model_revision = ?2
-                   AND (?3 IS NULL OR portal_key = ?3)
-                   AND (?4 IS NULL OR LOWER(agency_name) LIKE '%' || LOWER(?4) || '%')
-                   AND (?5 IS NULL OR LOWER(jurisdiction) = LOWER(?5))
-                   AND (?6 IS NULL OR LOWER(COALESCE(document_type, '')) = LOWER(?6))
-                 ORDER BY stable_id",
-                    )
-                    .map_err(|error| {
-                        AppError::Storage(format!("Failed to prepare semantic search: {error}"))
-                    })?;
-                let portal = filter
-                    .portal_key
-                    .clone()
-                    .filter(|value| !value.trim().is_empty());
-                let agency = filter
-                    .agency_name
-                    .clone()
-                    .filter(|value| !value.trim().is_empty());
-                let jurisdiction = filter
-                    .jurisdiction
-                    .clone()
-                    .filter(|value| !value.trim().is_empty());
-                let doc_type = filter
-                    .document_type
-                    .clone()
-                    .filter(|value| !value.trim().is_empty());
-                let rows = statement
-                    .query_map(
-                        params![
-                            EMBEDDING_MODEL_ID,
-                            EMBEDDING_MODEL_REVISION,
-                            portal,
-                            agency,
-                            jurisdiction,
-                            doc_type
-                        ],
-                        |row| {
-                            let blob: Vec<u8> = row.get(15)?;
-                            Ok((
-                                row.get::<_, String>(0)?,
-                                row.get::<_, String>(1)?,
-                                row.get::<_, u64>(2)?,
-                                row.get::<_, u64>(3)?,
-                                row.get::<_, String>(4)?,
-                                row.get::<_, String>(5)?,
-                                row.get::<_, String>(6)?,
-                                row.get::<_, String>(7)?,
-                                row.get::<_, Option<String>>(8)?,
-                                row.get::<_, Option<String>>(9)?,
-                                row.get::<_, Option<String>>(10)?,
-                                row.get::<_, Option<String>>(11)?,
-                                row.get::<_, i64>(12)?,
-                                row.get::<_, i64>(13)?,
-                                row.get::<_, String>(14)?,
-                                blob,
-                            ))
-                        },
-                    )
-                    .map_err(|error| {
-                        AppError::Storage(format!("Failed to execute semantic search: {error}"))
-                    })?;
-                let mut results = Vec::new();
-                for row in rows {
-                    let (
-                        stable_id,
-                        portal_key,
-                        request_id,
-                        document_id,
-                        file_name,
-                        title,
-                        agency_name,
-                        jurisdiction,
-                        document_type,
-                        publication_date,
-                        observation_date,
-                        effective_date,
-                        start,
-                        end,
-                        excerpt,
-                        blob,
-                    ) = row.map_err(|error| {
-                        AppError::Storage(format!("Failed to read semantic result: {error}"))
-                    })?;
-                    if !date_filter_matches(
-                        &publication_date,
-                        &observation_date,
-                        &effective_date,
-                        &filter,
-                    ) {
-                        continue;
-                    }
-                    let vector = decode_vector(&blob)?;
-                    let score = dot(&query_embedding, &vector);
-                    results.push(HybridSearchResult {
-                        stable_id,
-                        portal_key,
-                        request_id,
-                        document_id,
-                        file_name,
-                        title,
-                        agency_name,
-                        jurisdiction,
-                        document_type,
-                        publication_date,
-                        observation_date,
-                        effective_date,
-                        character_start: start.max(0) as usize,
-                        character_end: end.max(0) as usize,
-                        excerpt,
-                        lexical_rank: None,
-                        semantic_score: Some(score as f64),
-                        fused_score: score as f64,
-                        retrieval_status: "SEMANTIC_READY".to_string(),
-                    });
-                }
-                results.sort_by(|left, right| right.fused_score.total_cmp(&left.fused_score));
-                dedupe_results(&mut results);
-                results.truncate(limit);
-                Ok(results)
+        self.query_connection("Semantic search", move |connection| {
+            in_one_snapshot(connection, |connection| {
+                rank_passages(connection, &query_embedding, &filter, limit)
             })
-            .await?;
-        Ok(results)
+        })
+        .await
     }
 
     /// Each embedded document of `portal_key` with its single most similar chunk to `query`,
@@ -500,67 +409,9 @@ impl VectorIndex {
         })?;
         let portal_key = portal_key.to_string();
         self.query_connection("Nearest documents", move |connection| {
-            let mut statement = connection
-                .prepare(
-                    "SELECT request_id, document_id, character_start, character_end, excerpt, vector
-                     FROM embedding_chunks
-                     WHERE model_id = ?1 AND model_revision = ?2 AND portal_key = ?3",
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to prepare nearest documents: {error}"))
-                })?;
-            let rows = statement
-                .query_map(
-                    params![EMBEDDING_MODEL_ID, EMBEDDING_MODEL_REVISION, portal_key],
-                    |row| {
-                        Ok((
-                            row.get::<_, u64>(0)?,
-                            row.get::<_, u64>(1)?,
-                            row.get::<_, i64>(2)?,
-                            row.get::<_, i64>(3)?,
-                            row.get::<_, String>(4)?,
-                            row.get::<_, Vec<u8>>(5)?,
-                        ))
-                    },
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to run nearest documents: {error}"))
-                })?;
-            let mut best: std::collections::HashMap<u64, DocumentSimilarity> =
-                std::collections::HashMap::new();
-            for row in rows {
-                let (request_id, document_id, start, end, excerpt, blob) =
-                    row.map_err(|error| {
-                        AppError::Storage(format!("Failed to read nearest document: {error}"))
-                    })?;
-                let cosine = dot(&query_embedding, &decode_vector(&blob)?);
-                if best
-                    .get(&document_id)
-                    .is_some_and(|held| held.cosine >= cosine)
-                {
-                    continue;
-                }
-                best.insert(
-                    document_id,
-                    DocumentSimilarity {
-                        request_id,
-                        document_id,
-                        cosine,
-                        character_start: start,
-                        character_end: end,
-                        excerpt,
-                    },
-                );
-            }
-            let mut ranked: Vec<DocumentSimilarity> = best.into_values().collect();
-            ranked.sort_by(|left, right| {
-                right
-                    .cosine
-                    .total_cmp(&left.cosine)
-                    .then(left.document_id.cmp(&right.document_id))
-            });
-            ranked.truncate(limit);
-            Ok(Some(ranked))
+            in_one_snapshot(connection, |connection| {
+                rank_documents(connection, &query_embedding, &portal_key, limit).map(Some)
+            })
         })
         .await
     }
@@ -617,6 +468,10 @@ impl VectorIndex {
                         report.indexed_chunks += chunks;
                     }
                     Ok(IndexOneOutcome::Skipped) => report.skipped_documents += 1,
+                    Ok(IndexOneOutcome::Cancelled) => {
+                        report.cancelled = true;
+                        break 'pages;
+                    }
                     Err(error) => {
                         report.failed_documents += 1;
                         self.failed_documents.fetch_add(1, Ordering::SeqCst);
@@ -668,7 +523,6 @@ impl VectorIndex {
         &self,
         document: VectorSourceDocument,
     ) -> Result<IndexOneOutcome, AppError> {
-        let content_hash = document.extracted_text_sha256.clone();
         let skip_check = SkipCheckFields {
             portal_key: document.portal_key.clone(),
             document_id: document.document_id,
@@ -679,10 +533,9 @@ impl VectorIndex {
             observation_date: document.observation_date.clone(),
             effective_date: document.effective_date.clone(),
         };
-        let content_hash_for_check = content_hash.clone();
+        let content_hash = document.extracted_text_sha256.clone();
         let skipped = self
             .query_connection("Inspect embedding state", move |connection| {
-                let content_hash = content_hash_for_check;
                 let current = connection
                     .query_row(
                         "SELECT content_sha256 FROM embedding_document_state
@@ -702,10 +555,15 @@ impl VectorIndex {
                         AppError::Storage(format!("Failed to inspect embedding state: {error}"))
                     })?;
                 if current.as_deref() == Some(&content_hash) {
-                    // Source attribution may be corrected even when the extracted text is unchanged.
+                    // Source attribution may be corrected even when the extracted text is
+                    // unchanged; rows already carrying it are left alone so an unchanged corpus
+                    // re-indexes without rewriting every chunk.
                     connection.execute("UPDATE embedding_chunks SET jurisdiction = ?1, agency_name = ?2,
                     title = ?3, publication_date = ?4, observation_date = ?5, effective_date = ?6
-                    WHERE portal_key = ?7 AND document_id = ?8 AND model_id = ?9 AND model_revision = ?10",
+                    WHERE portal_key = ?7 AND document_id = ?8 AND model_id = ?9 AND model_revision = ?10
+                      AND (jurisdiction IS DISTINCT FROM ?1 OR agency_name IS DISTINCT FROM ?2
+                        OR title IS DISTINCT FROM ?3 OR publication_date IS DISTINCT FROM ?4
+                        OR observation_date IS DISTINCT FROM ?5 OR effective_date IS DISTINCT FROM ?6)",
                     params![skip_check.jurisdiction, skip_check.agency_name, skip_check.title,
                         skip_check.publication_date, skip_check.observation_date, skip_check.effective_date,
                         skip_check.portal_key, skip_check.document_id, EMBEDDING_MODEL_ID, EMBEDDING_MODEL_REVISION])
@@ -719,139 +577,25 @@ impl VectorIndex {
             return Ok(IndexOneOutcome::Skipped);
         }
 
-        let chunks = chunk_text(&document.text);
-        let texts = chunks
-            .iter()
-            .map(|chunk| chunk.text.clone())
-            .collect::<Vec<_>>();
-        let embeddings = {
-            let mut model = self.model.lock().await;
-            let model = model.as_mut().ok_or_else(|| {
-                AppError::Storage("Embedding model is not initialized".to_string())
-            })?;
-            model
-                .embed(texts, Some(EMBED_BATCH_SIZE))
-                .map_err(|error| {
+        let writer = Arc::clone(&self.writer);
+        let model = Arc::clone(&self.model);
+        let cancelled = Arc::clone(&self.cancelled);
+        spawn_with("Embed document", AppError::Internal, move || {
+            let mut writer = writer.blocking_lock();
+            store_document(&mut writer, &document, &cancelled, |texts| {
+                let mut model = model.blocking_lock();
+                let model = model.as_mut().ok_or_else(|| {
+                    AppError::Storage("Embedding model is not initialized".to_string())
+                })?;
+                model.embed(texts, Some(EMBED_BATCH_SIZE)).map_err(|error| {
                     AppError::Storage(format!(
                         "Failed to embed document {}/{}: {error}",
                         document.portal_key, document.document_id
                     ))
-                })?
-        };
-        if embeddings.len() != chunks.len() {
-            return Err(AppError::Storage(format!(
-                "Embedding model returned {} vectors for {} chunks",
-                embeddings.len(),
-                chunks.len()
-            )));
-        }
-
-        let chunk_count = self
-            .query_connection("Store document embeddings", move |connection| {
-                let tx = connection.transaction().map_err(|error| {
-                    AppError::Storage(format!("Failed to begin vector transaction: {error}"))
-                })?;
-                tx.execute(
-                    "DELETE FROM embedding_chunks
-             WHERE portal_key = ?1 AND document_id = ?2
-               AND model_id = ?3 AND model_revision = ?4",
-                    params![
-                        document.portal_key,
-                        document.document_id,
-                        EMBEDDING_MODEL_ID,
-                        EMBEDDING_MODEL_REVISION
-                    ],
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to replace old embeddings: {error}"))
-                })?;
-                for (chunk, vector) in chunks.iter().zip(embeddings) {
-                    let vector = encode_vector(&normalize(vector));
-                    let stable_id = format!(
-                        "{}:{}:{}:{}",
-                        document.portal_key,
-                        document.document_id,
-                        chunk.start,
-                        EMBEDDING_MODEL_REVISION
-                    );
-                    let chunk_hash = sha256_hex(chunk.text.as_bytes());
-                    tx.execute(
-                        "INSERT INTO embedding_chunks (
-                    stable_id, portal_key, request_id, document_id, file_name, title,
-                    agency_name, jurisdiction, document_type, publication_date, observation_date,
-                    effective_date, character_start, character_end, excerpt, content_sha256,
-                    chunk_sha256, model_id, model_revision, dimension, distance_metric,
-                    normalization, chunking_version, vector, indexed_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14,
-                           ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24,
-                           strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'))",
-                        params![
-                            stable_id,
-                            document.portal_key,
-                            document.request_id,
-                            document.document_id,
-                            document.file_name,
-                            document.title,
-                            document.agency_name,
-                            document.jurisdiction,
-                            document.document_type,
-                            document.publication_date,
-                            document.observation_date,
-                            document.effective_date,
-                            chunk.start as i64,
-                            chunk.end as i64,
-                            chunk.text,
-                            content_hash,
-                            chunk_hash,
-                            EMBEDDING_MODEL_ID,
-                            EMBEDDING_MODEL_REVISION,
-                            EMBEDDING_DIMENSION as i64,
-                            EMBEDDING_DISTANCE_METRIC,
-                            EMBEDDING_NORMALIZATION,
-                            EMBEDDING_CHUNKING_VERSION,
-                            vector,
-                        ],
-                    )
-                    .map_err(|error| {
-                        AppError::Storage(format!("Failed to store embedding chunk: {error}"))
-                    })?;
-                }
-                tx.execute(
-                    "INSERT INTO embedding_document_state (
-                portal_key, document_id, content_sha256, raw_file_sha256, model_id,
-                model_revision, dimension, distance_metric, normalization, chunking_version,
-                chunk_count, indexed_at
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11,
-                       strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'))
-             ON CONFLICT (portal_key, document_id, model_id, model_revision, chunking_version)
-             DO UPDATE SET content_sha256 = excluded.content_sha256,
-                           raw_file_sha256 = excluded.raw_file_sha256,
-                           chunk_count = excluded.chunk_count,
-                           indexed_at = excluded.indexed_at",
-                    params![
-                        document.portal_key,
-                        document.document_id,
-                        content_hash,
-                        document.raw_file_sha256,
-                        EMBEDDING_MODEL_ID,
-                        EMBEDDING_MODEL_REVISION,
-                        EMBEDDING_DIMENSION as i64,
-                        EMBEDDING_DISTANCE_METRIC,
-                        EMBEDDING_NORMALIZATION,
-                        EMBEDDING_CHUNKING_VERSION,
-                        chunks.len() as i64,
-                    ],
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!("Failed to store embedding document state: {error}"))
-                })?;
-                tx.commit().map_err(|error| {
-                    AppError::Storage(format!("Failed to commit vector transaction: {error}"))
-                })?;
-                Ok(chunks.len())
+                })
             })
-            .await?;
-        Ok(IndexOneOutcome::Indexed(chunk_count))
+        })
+        .await?
     }
 
     async fn record_model_manifest(&self) -> Result<(), AppError> {
@@ -889,58 +633,243 @@ impl VectorIndex {
     }
 }
 
+async fn run_locked<T, F>(
+    connection: Arc<Mutex<Connection>>,
+    operation: &'static str,
+    query: F,
+) -> Result<T, AppError>
+where
+    T: Send + 'static,
+    F: FnOnce(&mut Connection) -> Result<T, AppError> + Send + 'static,
+{
+    spawn_with(operation, AppError::Internal, move || {
+        let mut connection = connection.blocking_lock();
+        query(&mut connection)
+    })
+    .await?
+}
+
 enum IndexOneOutcome {
     Indexed(usize),
     Skipped,
+    /// Indexing was cancelled mid-document; its previous vectors, if any, are untouched.
+    Cancelled,
 }
 
-struct TextChunk {
-    start: usize,
-    end: usize,
-    text: String,
-}
-
-fn chunk_text(text: &str) -> Vec<TextChunk> {
-    if text.trim().is_empty() {
-        return Vec::new();
-    }
-    let chars = text
-        .char_indices()
-        .map(|(byte, _)| byte)
-        .chain(std::iter::once(text.len()))
-        .collect::<Vec<_>>();
-    let total = chars.len().saturating_sub(1);
-    let mut chunks = Vec::new();
-    let mut start_char = 0usize;
-    while start_char < total {
-        let mut end_char = (start_char + MAX_CHUNK_CHARS).min(total);
-        if end_char < total {
-            let search_start = start_char + (MAX_CHUNK_CHARS * 2 / 3);
-            if let Some(boundary) = (search_start..end_char).rev().find(|index| {
-                text[chars[*index]..chars[*index + 1]]
-                    .chars()
-                    .next()
-                    .is_some_and(|c| matches!(c, '.' | '\n' | ';'))
-            }) {
-                end_char = (boundary + 1).min(total);
-            }
+/// Replaces one document's chunks in a single transaction, embedding `EMBED_BATCH_SIZE`
+/// consecutive passages per `embed` call and appending them as they come, so neither the
+/// passages, their vectors nor the model's activations are held for the whole document. The
+/// transaction rolls back on error or cancellation, leaving any previous version in place.
+fn store_document(
+    connection: &mut Connection,
+    document: &VectorSourceDocument,
+    cancelled: &AtomicBool,
+    mut embed: impl FnMut(&[&str]) -> Result<Vec<Vec<f32>>, AppError>,
+) -> Result<IndexOneOutcome, AppError> {
+    let storage = |action: &str| {
+        let action = action.to_string();
+        move |error: duckdb::Error| AppError::Storage(format!("Failed to {action}: {error}"))
+    };
+    // DuckDB's now() is the transaction start, so every row of a document shared one timestamp.
+    let indexed_at = chrono::Utc::now()
+        .format("%Y-%m-%dT%H:%M:%S%.6fZ")
+        .to_string();
+    let transaction = connection
+        .transaction()
+        .map_err(storage("begin vector transaction"))?;
+    transaction
+        .execute(
+            "DELETE FROM embedding_chunks
+             WHERE portal_key = ?1 AND document_id = ?2
+               AND model_id = ?3 AND model_revision = ?4",
+            params![
+                document.portal_key,
+                document.document_id,
+                EMBEDDING_MODEL_ID,
+                EMBEDDING_MODEL_REVISION
+            ],
+        )
+        .map_err(storage("replace old embeddings"))?;
+    let mut appender = transaction
+        .appender("embedding_chunks")
+        .map_err(storage("open the embedding appender"))?;
+    let mut chunks = chunk_text(&document.text);
+    let mut batch = Vec::with_capacity(EMBED_BATCH_SIZE);
+    let mut chunk_count = 0_usize;
+    loop {
+        if cancelled.load(Ordering::SeqCst) {
+            return Ok(IndexOneOutcome::Cancelled);
         }
-        let start = chars[start_char];
-        let end = chars[end_char];
-        let excerpt = text[start..end].trim().to_string();
-        if !excerpt.is_empty() {
-            chunks.push(TextChunk {
-                start: start_char,
-                end: end_char,
-                text: excerpt,
-            });
-        }
-        if end_char == total {
+        batch.clear();
+        batch.extend(chunks.by_ref().take(EMBED_BATCH_SIZE));
+        if batch.is_empty() {
             break;
         }
-        start_char = end_char.saturating_sub(CHUNK_OVERLAP_CHARS);
+        let texts = batch.iter().map(|chunk| chunk.text).collect::<Vec<_>>();
+        let vectors = embed(&texts)?;
+        if vectors.len() != batch.len() {
+            return Err(AppError::Storage(format!(
+                "Embedding model returned {} vectors for {} chunks",
+                vectors.len(),
+                batch.len()
+            )));
+        }
+        for (chunk, vector) in batch.iter().zip(vectors) {
+            appender
+                .append_row(params![
+                    format!(
+                        "{}:{}:{}:{}",
+                        document.portal_key,
+                        document.document_id,
+                        chunk.start,
+                        EMBEDDING_MODEL_REVISION
+                    ),
+                    document.portal_key,
+                    document.request_id,
+                    document.document_id,
+                    document.file_name,
+                    document.title,
+                    document.agency_name,
+                    document.jurisdiction,
+                    document.document_type,
+                    document.publication_date,
+                    document.observation_date,
+                    document.effective_date,
+                    chunk.start as i64,
+                    chunk.end as i64,
+                    chunk.text,
+                    document.extracted_text_sha256,
+                    sha256_hex(chunk.text.as_bytes()),
+                    EMBEDDING_MODEL_ID,
+                    EMBEDDING_MODEL_REVISION,
+                    EMBEDDING_DIMENSION as i64,
+                    EMBEDDING_DISTANCE_METRIC,
+                    EMBEDDING_NORMALIZATION,
+                    EMBEDDING_CHUNKING_VERSION,
+                    encode_vector(&normalize(vector)),
+                    indexed_at,
+                ])
+                .map_err(storage("store embedding chunk"))?;
+        }
+        chunk_count += batch.len();
     }
-    chunks
+    appender
+        .flush()
+        .map_err(storage("store embedding chunks"))?;
+    drop(appender);
+    transaction
+        .execute(
+            "INSERT INTO embedding_document_state (
+                portal_key, document_id, content_sha256, raw_file_sha256, model_id,
+                model_revision, dimension, distance_metric, normalization, chunking_version,
+                chunk_count, indexed_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+             ON CONFLICT (portal_key, document_id, model_id, model_revision, chunking_version)
+             DO UPDATE SET content_sha256 = excluded.content_sha256,
+                           raw_file_sha256 = excluded.raw_file_sha256,
+                           chunk_count = excluded.chunk_count,
+                           indexed_at = excluded.indexed_at",
+            params![
+                document.portal_key,
+                document.document_id,
+                document.extracted_text_sha256,
+                document.raw_file_sha256,
+                EMBEDDING_MODEL_ID,
+                EMBEDDING_MODEL_REVISION,
+                EMBEDDING_DIMENSION as i64,
+                EMBEDDING_DISTANCE_METRIC,
+                EMBEDDING_NORMALIZATION,
+                EMBEDDING_CHUNKING_VERSION,
+                chunk_count as i64,
+                indexed_at,
+            ],
+        )
+        .map_err(storage("store embedding document state"))?;
+    transaction
+        .commit()
+        .map_err(storage("commit vector transaction"))?;
+    Ok(IndexOneOutcome::Indexed(chunk_count))
+}
+
+/// A passage of `EMBEDDING_CHUNKING_VERSION`: character (not byte) offsets into the document's
+/// extracted text, and the trimmed text between them.
+struct TextChunk<'a> {
+    start: usize,
+    end: usize,
+    text: &'a str,
+}
+
+/// The passages of `text`, produced lazily. Only one chunk's window of character offsets is
+/// held at a time, so chunking a document costs the same memory whatever its length. The
+/// boundaries are `onrecord-semantic-chunks-v1`'s: changing them without bumping
+/// `EMBEDDING_CHUNKING_VERSION` would leave stored offsets and `stable_id`s describing other text.
+fn chunk_text(text: &str) -> Chunks<'_> {
+    Chunks {
+        text,
+        start_char: 0,
+        start_byte: 0,
+        done: false,
+        window: Vec::with_capacity(MAX_CHUNK_CHARS + 1),
+    }
+}
+
+struct Chunks<'a> {
+    text: &'a str,
+    start_char: usize,
+    start_byte: usize,
+    done: bool,
+    /// `window[i]` is the byte offset of character `start_char + i`.
+    window: Vec<usize>,
+}
+
+impl<'a> Iterator for Chunks<'a> {
+    type Item = TextChunk<'a>;
+
+    fn next(&mut self) -> Option<TextChunk<'a>> {
+        let text = self.text;
+        while !self.done && self.start_byte < text.len() {
+            let start_byte = self.start_byte;
+            self.window.clear();
+            self.window.extend(
+                text[start_byte..]
+                    .char_indices()
+                    .take(MAX_CHUNK_CHARS + 1)
+                    .map(|(byte, _)| start_byte + byte),
+            );
+            let reaches_end = self.window.len() <= MAX_CHUNK_CHARS;
+            if reaches_end {
+                self.window.push(text.len());
+            }
+            let mut end = self.window.len() - 1;
+            if !reaches_end {
+                let window = &self.window;
+                if let Some(boundary) = (MAX_CHUNK_CHARS * 2 / 3..end).rev().find(|index| {
+                    matches!(
+                        text[window[*index]..].chars().next(),
+                        Some('.' | '\n' | ';')
+                    )
+                }) {
+                    end = boundary + 1;
+                }
+            }
+            let chunk = TextChunk {
+                start: self.start_char,
+                end: self.start_char + end,
+                text: text[self.window[0]..self.window[end]].trim(),
+            };
+            if reaches_end {
+                self.done = true;
+            } else {
+                let next = end - CHUNK_OVERLAP_CHARS;
+                self.start_byte = self.window[next];
+                self.start_char += next;
+            }
+            if !chunk.text.is_empty() {
+                return Some(chunk);
+            }
+        }
+        None
+    }
 }
 
 fn normalize(mut vector: Vec<f32>) -> Vec<f32> {
@@ -953,10 +882,6 @@ fn normalize(mut vector: Vec<f32>) -> Vec<f32> {
     vector
 }
 
-fn dot(left: &[f32], right: &[f32]) -> f32 {
-    left.iter().zip(right.iter()).map(|(a, b)| a * b).sum()
-}
-
 fn encode_vector(vector: &[f32]) -> Vec<u8> {
     let mut bytes = Vec::with_capacity(vector.len() * 4);
     for value in vector {
@@ -965,7 +890,27 @@ fn encode_vector(vector: &[f32]) -> Vec<u8> {
     bytes
 }
 
-fn decode_vector(bytes: &[u8]) -> Result<Vec<f32>, AppError> {
+/// Stored rows read per lookup of the passages a ranking kept.
+const DETAIL_LOOKUP_BATCH: usize = 256;
+
+/// Runs a ranking's scan and its follow-up lookups against one snapshot, so a document the
+/// indexing writer replaces in between cannot make the lookup miss a row the scan ranked.
+fn in_one_snapshot<T>(
+    connection: &mut Connection,
+    read: impl FnOnce(&Connection) -> Result<T, AppError>,
+) -> Result<T, AppError> {
+    let transaction = connection
+        .transaction()
+        .map_err(|error| AppError::Storage(format!("Failed to open a search snapshot: {error}")))?;
+    let result = read(&transaction)?;
+    transaction.commit().map_err(|error| {
+        AppError::Storage(format!("Failed to close a search snapshot: {error}"))
+    })?;
+    Ok(result)
+}
+
+/// Dot product of `query` with a stored vector, read in place from its encoding.
+fn dot_encoded(query: &[f32], bytes: &[u8]) -> Result<f32, AppError> {
     if bytes.len() != EMBEDDING_DIMENSION * 4 {
         return Err(AppError::Storage(format!(
             "Stored embedding has {} bytes; expected {}",
@@ -973,10 +918,304 @@ fn decode_vector(bytes: &[u8]) -> Result<Vec<f32>, AppError> {
             EMBEDDING_DIMENSION * 4
         )));
     }
-    Ok(bytes
-        .chunks_exact(4)
-        .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
-        .collect())
+    Ok(query
+        .iter()
+        .zip(bytes.chunks_exact(4))
+        .map(|(a, chunk)| a * f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+        .sum())
+}
+
+/// The `limit` passages most similar to `query_embedding` that pass `filter`, best first, ties
+/// by `stable_id`. A passage overlapping a better one of the same document is left out, and the
+/// scan stops once `limit` survive, so only those are read in full.
+fn rank_passages(
+    connection: &Connection,
+    query_embedding: &[f32],
+    filter: &HybridSearchFilter,
+    limit: usize,
+) -> Result<Vec<HybridSearchResult>, AppError> {
+    struct Candidate {
+        score: f32,
+        stable_id: String,
+        portal_key: String,
+        document_id: u64,
+        start: usize,
+        end: usize,
+    }
+    let storage = |action: &'static str| {
+        move |error: duckdb::Error| AppError::Storage(format!("Failed to {action}: {error}"))
+    };
+    let present = |value: &Option<String>| value.clone().filter(|value| !value.trim().is_empty());
+    let mut statement = connection
+        .prepare(
+            "SELECT stable_id, portal_key, document_id, character_start, character_end,
+                    publication_date, observation_date, effective_date, vector
+             FROM embedding_chunks
+             WHERE model_id = ?1 AND model_revision = ?2
+               AND (?3 IS NULL OR portal_key = ?3)
+               AND (?4 IS NULL OR LOWER(agency_name) LIKE '%' || LOWER(?4) || '%')
+               AND (?5 IS NULL OR LOWER(jurisdiction) = LOWER(?5))
+               AND (?6 IS NULL OR LOWER(COALESCE(document_type, '')) = LOWER(?6))",
+        )
+        .map_err(storage("prepare semantic search"))?;
+    let mut rows = statement
+        .query(params![
+            EMBEDDING_MODEL_ID,
+            EMBEDDING_MODEL_REVISION,
+            present(&filter.portal_key),
+            present(&filter.agency_name),
+            present(&filter.jurisdiction),
+            present(&filter.document_type)
+        ])
+        .map_err(storage("execute semantic search"))?;
+    let mut candidates = Vec::new();
+    while let Some(row) = rows.next().map_err(storage("read semantic result"))? {
+        let read = |row: &duckdb::Row<'_>| -> duckdb::Result<_> {
+            Ok((
+                row.get::<_, Option<String>>(5)?,
+                row.get::<_, Option<String>>(6)?,
+                row.get::<_, Option<String>>(7)?,
+            ))
+        };
+        let (publication, observation, effective) =
+            read(row).map_err(storage("read semantic result"))?;
+        if !date_filter_matches(&publication, &observation, &effective, filter) {
+            continue;
+        }
+        let blob = row
+            .get_ref(8)
+            .and_then(|value| value.as_blob().map_err(Into::into))
+            .map_err(storage("read semantic result"))?;
+        let score = dot_encoded(query_embedding, blob)?;
+        candidates.push(Candidate {
+            score,
+            stable_id: row.get(0).map_err(storage("read semantic result"))?,
+            portal_key: row.get(1).map_err(storage("read semantic result"))?,
+            document_id: row.get(2).map_err(storage("read semantic result"))?,
+            start: row
+                .get::<_, i64>(3)
+                .map_err(storage("read semantic result"))?
+                .max(0) as usize,
+            end: row
+                .get::<_, i64>(4)
+                .map_err(storage("read semantic result"))?
+                .max(0) as usize,
+        });
+    }
+    drop(rows);
+    candidates.sort_by(|left, right| {
+        right
+            .score
+            .total_cmp(&left.score)
+            .then_with(|| left.stable_id.cmp(&right.stable_id))
+    });
+    let mut kept: Vec<Candidate> = Vec::new();
+    for candidate in candidates {
+        if kept.len() >= limit {
+            break;
+        }
+        let overlaps = kept.iter().any(|prior| {
+            prior.portal_key == candidate.portal_key
+                && prior.document_id == candidate.document_id
+                && ranges_overlap(prior.start, prior.end, candidate.start, candidate.end)
+        });
+        if !overlaps {
+            kept.push(candidate);
+        }
+    }
+
+    let mut details = std::collections::HashMap::new();
+    for ids in kept.chunks(DETAIL_LOOKUP_BATCH) {
+        let placeholders = vec!["?"; ids.len()].join(", ");
+        let mut statement = connection
+            .prepare(&format!(
+                "SELECT stable_id, request_id, file_name, title, agency_name, jurisdiction,
+                        document_type, publication_date, observation_date, effective_date, excerpt
+                 FROM embedding_chunks WHERE stable_id IN ({placeholders})"
+            ))
+            .map_err(storage("prepare semantic result lookup"))?;
+        let rows = statement
+            .query_map(
+                duckdb::params_from_iter(ids.iter().map(|candidate| &candidate.stable_id)),
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        (
+                            row.get::<_, u64>(1)?,
+                            row.get::<_, String>(2)?,
+                            row.get::<_, String>(3)?,
+                            row.get::<_, String>(4)?,
+                            row.get::<_, String>(5)?,
+                            row.get::<_, Option<String>>(6)?,
+                            row.get::<_, Option<String>>(7)?,
+                            row.get::<_, Option<String>>(8)?,
+                            row.get::<_, Option<String>>(9)?,
+                            row.get::<_, String>(10)?,
+                        ),
+                    ))
+                },
+            )
+            .map_err(storage("look up semantic results"))?;
+        for row in rows {
+            let (stable_id, detail) = row.map_err(storage("read semantic result"))?;
+            details.insert(stable_id, detail);
+        }
+    }
+    kept.into_iter()
+        .map(|candidate| {
+            let (
+                request_id,
+                file_name,
+                title,
+                agency_name,
+                jurisdiction,
+                document_type,
+                publication_date,
+                observation_date,
+                effective_date,
+                excerpt,
+            ) = details.remove(&candidate.stable_id).ok_or_else(|| {
+                AppError::Storage(format!(
+                    "Semantic result {} disappeared during the search",
+                    candidate.stable_id
+                ))
+            })?;
+            Ok(HybridSearchResult {
+                stable_id: candidate.stable_id,
+                portal_key: candidate.portal_key,
+                request_id,
+                document_id: candidate.document_id,
+                file_name,
+                title,
+                agency_name,
+                jurisdiction,
+                document_type,
+                publication_date,
+                observation_date,
+                effective_date,
+                character_start: candidate.start,
+                character_end: candidate.end,
+                excerpt,
+                lexical_rank: None,
+                semantic_score: Some(candidate.score as f64),
+                fused_score: candidate.score as f64,
+                retrieval_status: "SEMANTIC_READY".to_string(),
+            })
+        })
+        .collect()
+}
+
+/// Each document of `portal_key` with its single chunk most similar to `query_embedding`, most
+/// similar first, ties by document id. Within a document, equal cosines keep the earliest chunk.
+/// Excerpts are read only for the documents returned.
+fn rank_documents(
+    connection: &Connection,
+    query_embedding: &[f32],
+    portal_key: &str,
+    limit: usize,
+) -> Result<Vec<DocumentSimilarity>, AppError> {
+    struct Best {
+        stable_id: String,
+        request_id: u64,
+        cosine: f32,
+        start: i64,
+        end: i64,
+    }
+    let storage = |action: &'static str| {
+        move |error: duckdb::Error| AppError::Storage(format!("Failed to {action}: {error}"))
+    };
+    let mut statement = connection
+        .prepare(
+            "SELECT stable_id, request_id, document_id, character_start, character_end, vector
+             FROM embedding_chunks
+             WHERE model_id = ?1 AND model_revision = ?2 AND portal_key = ?3",
+        )
+        .map_err(storage("prepare nearest documents"))?;
+    let mut rows = statement
+        .query(params![
+            EMBEDDING_MODEL_ID,
+            EMBEDDING_MODEL_REVISION,
+            portal_key
+        ])
+        .map_err(storage("run nearest documents"))?;
+    let mut best: std::collections::HashMap<u64, Best> = std::collections::HashMap::new();
+    while let Some(row) = rows.next().map_err(storage("read nearest document"))? {
+        let blob = row
+            .get_ref(5)
+            .and_then(|value| value.as_blob().map_err(Into::into))
+            .map_err(storage("read nearest document"))?;
+        let cosine = dot_encoded(query_embedding, blob)?;
+        let document_id: u64 = row.get(2).map_err(storage("read nearest document"))?;
+        let start: i64 = row.get(3).map_err(storage("read nearest document"))?;
+        if best
+            .get(&document_id)
+            .is_some_and(|held| match held.cosine.total_cmp(&cosine) {
+                std::cmp::Ordering::Greater => true,
+                std::cmp::Ordering::Equal => held.start <= start,
+                std::cmp::Ordering::Less => false,
+            })
+        {
+            continue;
+        }
+        best.insert(
+            document_id,
+            Best {
+                stable_id: row.get(0).map_err(storage("read nearest document"))?,
+                request_id: row.get(1).map_err(storage("read nearest document"))?,
+                cosine,
+                start,
+                end: row.get(4).map_err(storage("read nearest document"))?,
+            },
+        );
+    }
+    drop(rows);
+    let mut ranked: Vec<(u64, Best)> = best.into_iter().collect();
+    ranked.sort_by(|(left_id, left), (right_id, right)| {
+        right
+            .cosine
+            .total_cmp(&left.cosine)
+            .then(left_id.cmp(right_id))
+    });
+    ranked.truncate(limit);
+
+    let mut excerpts = std::collections::HashMap::new();
+    for ids in ranked.chunks(DETAIL_LOOKUP_BATCH) {
+        let placeholders = vec!["?"; ids.len()].join(", ");
+        let mut statement = connection
+            .prepare(&format!(
+                "SELECT stable_id, excerpt FROM embedding_chunks WHERE stable_id IN ({placeholders})"
+            ))
+            .map_err(storage("prepare excerpt lookup"))?;
+        let rows = statement
+            .query_map(
+                duckdb::params_from_iter(ids.iter().map(|(_, best)| &best.stable_id)),
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+            )
+            .map_err(storage("look up excerpts"))?;
+        for row in rows {
+            let (stable_id, excerpt) = row.map_err(storage("read excerpt"))?;
+            excerpts.insert(stable_id, excerpt);
+        }
+    }
+    ranked
+        .into_iter()
+        .map(|(document_id, best)| {
+            let excerpt = excerpts.remove(&best.stable_id).ok_or_else(|| {
+                AppError::Storage(format!(
+                    "Nearest chunk {} disappeared during the search",
+                    best.stable_id
+                ))
+            })?;
+            Ok(DocumentSimilarity {
+                request_id: best.request_id,
+                document_id,
+                cosine: best.cosine,
+                character_start: best.start,
+                character_end: best.end,
+                excerpt,
+            })
+        })
+        .collect()
 }
 
 fn artifact_manifest(cache_dir: &Path) -> Result<(usize, Option<String>), AppError> {
@@ -1051,27 +1290,6 @@ fn date_filter_matches(
         }
     }
     true
-}
-
-fn dedupe_results(results: &mut Vec<HybridSearchResult>) {
-    let mut retained: Vec<HybridSearchResult> = Vec::new();
-    'outer: for result in results.drain(..) {
-        for prior in &retained {
-            if prior.portal_key == result.portal_key
-                && prior.document_id == result.document_id
-                && ranges_overlap(
-                    prior.character_start,
-                    prior.character_end,
-                    result.character_start,
-                    result.character_end,
-                )
-            {
-                continue 'outer;
-            }
-        }
-        retained.push(result);
-    }
-    *results = retained;
 }
 
 fn ranges_overlap(a_start: usize, a_end: usize, b_start: usize, b_end: usize) -> bool {
@@ -1249,22 +1467,502 @@ mod tests {
         assert!(!status.installed && !status.ready);
     }
 
+    /// `onrecord-semantic-chunks-v1` as first shipped, materializing every character offset.
+    /// Stored offsets and `stable_id`s were produced by it, so the streaming chunker must
+    /// reproduce it exactly while `EMBEDDING_CHUNKING_VERSION` is unchanged.
+    fn semantic_chunks_v1(text: &str) -> Vec<(usize, usize, String)> {
+        if text.trim().is_empty() {
+            return Vec::new();
+        }
+        let chars = text
+            .char_indices()
+            .map(|(byte, _)| byte)
+            .chain(std::iter::once(text.len()))
+            .collect::<Vec<_>>();
+        let total = chars.len().saturating_sub(1);
+        let mut chunks = Vec::new();
+        let mut start_char = 0usize;
+        while start_char < total {
+            let mut end_char = (start_char + MAX_CHUNK_CHARS).min(total);
+            if end_char < total {
+                let search_start = start_char + (MAX_CHUNK_CHARS * 2 / 3);
+                if let Some(boundary) = (search_start..end_char).rev().find(|index| {
+                    text[chars[*index]..chars[*index + 1]]
+                        .chars()
+                        .next()
+                        .is_some_and(|c| matches!(c, '.' | '\n' | ';'))
+                }) {
+                    end_char = (boundary + 1).min(total);
+                }
+            }
+            let excerpt = text[chars[start_char]..chars[end_char]].trim().to_string();
+            if !excerpt.is_empty() {
+                chunks.push((start_char, end_char, excerpt));
+            }
+            if end_char == total {
+                break;
+            }
+            start_char = end_char.saturating_sub(CHUNK_OVERLAP_CHARS);
+        }
+        chunks
+    }
+
     #[test]
-    fn chunking_preserves_unicode_character_offsets() {
-        let text = "Policy αβγ.\nSDPD café surveillance report.";
-        let chunks = chunk_text(text);
-        assert_eq!(chunks.len(), 1);
-        assert_eq!(chunks[0].start, 0);
-        assert_eq!(chunks[0].end, text.chars().count());
-        assert!(chunks[0].text.contains("café"));
+    fn streaming_chunks_keep_semantic_chunks_v1_boundaries() {
+        let mut seed = 0x9e37_79b9_u32;
+        let mut next = move |bound: u32| {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            seed % bound
+        };
+        let pieces = [
+            "a", "record", " ", " ", "café", "名", "αβγ", ".", "\n", ";", "  ", "\n\n", "x",
+        ];
+        let mut texts = vec![
+            String::new(),
+            "   \n  ".to_string(),
+            "Policy αβγ.\nSDPD café surveillance report.".to_string(),
+            "é".repeat(MAX_CHUNK_CHARS),
+            "é".repeat(MAX_CHUNK_CHARS + 1),
+            "é".repeat(5 * MAX_CHUNK_CHARS + 7),
+            format!(
+                "{}{}{}",
+                "a".repeat(2_000),
+                " ".repeat(3_000),
+                "b".repeat(2_000)
+            ),
+        ];
+        for _ in 0..40 {
+            let length = next(12_000);
+            let mut text = String::new();
+            while text.chars().count() < length as usize {
+                let piece = pieces[next(pieces.len() as u32) as usize];
+                // Long boundary-free runs force cuts at the full window.
+                let repeat = if next(10) == 0 { 400 } else { 1 };
+                text.push_str(&piece.repeat(repeat));
+            }
+            texts.push(text);
+        }
+        for text in &texts {
+            let streamed = chunk_text(text)
+                .map(|chunk| (chunk.start, chunk.end, chunk.text.to_string()))
+                .collect::<Vec<_>>();
+            assert_eq!(streamed, semantic_chunks_v1(text));
+        }
+    }
+
+    fn test_document(document_id: u64, text: &str) -> VectorSourceDocument {
+        VectorSourceDocument {
+            portal_key: "portal".to_string(),
+            request_id: 7,
+            document_id,
+            file_name: "file.pdf".to_string(),
+            title: "title".to_string(),
+            agency_name: "agency".to_string(),
+            jurisdiction: "jurisdiction".to_string(),
+            document_type: None,
+            publication_date: None,
+            observation_date: None,
+            effective_date: None,
+            raw_file_sha256: "raw".to_string(),
+            extracted_text_sha256: sha256_hex(text.as_bytes()),
+            text: text.to_string(),
+        }
+    }
+
+    /// A vector that is a function of the passage text alone.
+    fn text_vector(text: &str) -> Vec<f32> {
+        let digest = sha2::Sha256::digest(text.as_bytes());
+        (0..EMBEDDING_DIMENSION)
+            .map(|index| f32::from(digest[index % digest.len()]) - 127.5)
+            .collect()
+    }
+
+    fn stored_chunks(
+        connection: &Connection,
+        document_id: u64,
+    ) -> Vec<(i64, i64, String, Vec<u8>)> {
+        connection
+            .prepare(
+                "SELECT character_start, character_end, excerpt, vector FROM embedding_chunks
+                 WHERE document_id = ?1 ORDER BY character_start",
+            )
+            .unwrap()
+            .query_map(params![document_id], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+            })
+            .unwrap()
+            .collect::<duckdb::Result<Vec<_>>>()
+            .unwrap()
+    }
+
+    /// The 11 GB build came from handing a whole document to one model call, which holds every
+    /// batch's activations until the call returns. However large the document, each call must
+    /// see at most one batch, and every passage must still be stored once, in order.
+    #[tokio::test]
+    async fn a_large_document_reaches_the_model_one_bounded_batch_at_a_time() {
+        let temp = tempfile::tempdir().unwrap();
+        let index =
+            VectorIndex::open(&temp.path().join("vectors.db"), temp.path().join("cache")).unwrap();
+        let paragraph = "Encampment abatement notice posted at the site; property stored.\n";
+        let text = paragraph.repeat(3_000_000 / paragraph.len());
+        let document = test_document(1, &text);
+        let mut calls = Vec::new();
+        let outcome = store_document(
+            &mut *index.writer.lock().await,
+            &document,
+            &AtomicBool::new(false),
+            |texts| {
+                calls.push(texts.len());
+                Ok(texts.iter().map(|text| text_vector(text)).collect())
+            },
+        )
+        .unwrap();
+
+        let expected = chunk_text(&text).collect::<Vec<_>>();
+        assert!(expected.len() > 1_000);
+        assert!(calls.iter().all(|&size| size <= EMBED_BATCH_SIZE));
+        assert_eq!(calls.iter().sum::<usize>(), expected.len());
+        assert!(matches!(outcome, IndexOneOutcome::Indexed(count) if count == expected.len()));
+        let connection = index.connection.lock().await;
+        let stored = stored_chunks(&connection, 1);
+        assert_eq!(stored.len(), expected.len());
+        for (row, chunk) in stored.iter().zip(&expected) {
+            assert_eq!((row.0, row.1), (chunk.start as i64, chunk.end as i64));
+            assert_eq!(row.2, chunk.text);
+            assert_eq!(row.3, encode_vector(&normalize(text_vector(chunk.text))));
+        }
+        let state_count: i64 = connection
+            .query_row(
+                "SELECT chunk_count FROM embedding_document_state WHERE document_id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(state_count as usize, expected.len());
+    }
+
+    /// Replacing a document is one transaction: an interrupted re-embed leaves the previous
+    /// version exactly as it was, and a completed one replaces it, including chunks whose
+    /// `stable_id` (same start offset) is reused by the new text.
+    #[tokio::test]
+    async fn an_interrupted_reembed_keeps_the_previous_version() {
+        let temp = tempfile::tempdir().unwrap();
+        let index =
+            VectorIndex::open(&temp.path().join("vectors.db"), temp.path().join("cache")).unwrap();
+        let embed = |texts: &[&str]| -> Result<Vec<Vec<f32>>, AppError> {
+            Ok(texts.iter().map(|text| text_vector(text)).collect())
+        };
+        let original = test_document(1, &"First version of the release.\n".repeat(2_000));
+        store_document(
+            &mut *index.writer.lock().await,
+            &original,
+            &AtomicBool::new(false),
+            embed,
+        )
+        .unwrap();
+        let before = stored_chunks(&*index.connection.lock().await, 1);
+        assert!(before.len() > 2 * EMBED_BATCH_SIZE);
+
+        let revised = test_document(1, &"Second version, re-extracted text.\n".repeat(2_000));
+        let cancelled = AtomicBool::new(false);
+        let mut calls = 0;
+        let outcome = store_document(
+            &mut *index.writer.lock().await,
+            &revised,
+            &cancelled,
+            |texts| {
+                calls += 1;
+                if calls == 2 {
+                    cancelled.store(true, Ordering::SeqCst);
+                }
+                embed(texts)
+            },
+        )
+        .unwrap();
+        assert!(matches!(outcome, IndexOneOutcome::Cancelled));
+        assert_eq!(stored_chunks(&*index.connection.lock().await, 1), before);
+
+        let failing = store_document(
+            &mut *index.writer.lock().await,
+            &revised,
+            &AtomicBool::new(false),
+            |_| Err(AppError::Storage("model failed".to_string())),
+        );
+        assert!(failing.is_err());
+        assert_eq!(stored_chunks(&*index.connection.lock().await, 1), before);
+
+        store_document(
+            &mut *index.writer.lock().await,
+            &revised,
+            &AtomicBool::new(false),
+            embed,
+        )
+        .unwrap();
+        let after = stored_chunks(&*index.connection.lock().await, 1);
+        let expected = chunk_text(&revised.text)
+            .map(|chunk| chunk.text.to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            after.iter().map(|row| row.2.clone()).collect::<Vec<_>>(),
+            expected
+        );
+        assert_eq!(after[0].0, before[0].0);
+    }
+
+    /// A purge arriving while the document is being re-embedded must wait for that replacement
+    /// and then remove it, rather than collide with its open transaction and fail, which would
+    /// leave the destroyed document's new excerpts searchable once the replacement commits.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_purge_during_reembedding_waits_and_then_removes_it() {
+        let temp = tempfile::tempdir().unwrap();
+        let index =
+            VectorIndex::open(&temp.path().join("vectors.db"), temp.path().join("cache")).unwrap();
+        let embed = |texts: &[&str]| -> Result<Vec<Vec<f32>>, AppError> {
+            Ok(texts.iter().map(|text| text_vector(text)).collect())
+        };
+        let original = test_document(1, &"Original release text.\n".repeat(200));
+        store_document(
+            &mut *index.writer.lock().await,
+            &original,
+            &AtomicBool::new(false),
+            embed,
+        )
+        .unwrap();
+
+        let (started, embedding) = std::sync::mpsc::channel();
+        let (release, released) = std::sync::mpsc::channel::<()>();
+        let writer = Arc::clone(&index.writer);
+        let replacing = tokio::task::spawn_blocking(move || {
+            let revised = test_document(1, &"Revised release text.\n".repeat(200));
+            store_document(
+                &mut writer.blocking_lock(),
+                &revised,
+                &AtomicBool::new(false),
+                |texts| {
+                    let _ = started.send(());
+                    let _ = released.recv();
+                    embed(texts)
+                },
+            )
+        });
+        tokio::task::spawn_blocking(move || embedding.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        let purging = tokio::spawn({
+            let index = index.clone();
+            async move { index.purge_document("portal".to_string(), 1).await }
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        assert!(!purging.is_finished());
+
+        drop(release);
+        replacing.await.unwrap().unwrap();
+        purging.await.unwrap().unwrap();
+        assert!(stored_chunks(&*index.connection.lock().await, 1).is_empty());
+    }
+
+    /// Re-indexing a document whose extracted text is unchanged embeds nothing (no model is
+    /// loaded here, so any embedding attempt would fail) and keeps its vectors, while a corrected
+    /// attribution still reaches its chunks.
+    #[tokio::test]
+    async fn reindexing_unchanged_text_embeds_nothing() {
+        let temp = tempfile::tempdir().unwrap();
+        let index =
+            VectorIndex::open(&temp.path().join("vectors.db"), temp.path().join("cache")).unwrap();
+        let document = test_document(1, &"Shelter capacity report.\n".repeat(300));
+        store_document(
+            &mut *index.writer.lock().await,
+            &document,
+            &AtomicBool::new(false),
+            |texts| Ok(texts.iter().map(|text| text_vector(text)).collect()),
+        )
+        .unwrap();
+        let before = stored_chunks(&*index.connection.lock().await, 1);
+
+        let outcome = index.index_one_document(document.clone()).await.unwrap();
+        assert!(matches!(outcome, IndexOneOutcome::Skipped));
+        let corrected = VectorSourceDocument {
+            title: "corrected title".to_string(),
+            ..document
+        };
+        let outcome = index.index_one_document(corrected).await.unwrap();
+        assert!(matches!(outcome, IndexOneOutcome::Skipped));
+
+        let connection = index.connection.lock().await;
+        assert_eq!(stored_chunks(&connection, 1), before);
+        let titles: Vec<String> = connection
+            .prepare("SELECT DISTINCT title FROM embedding_chunks")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<duckdb::Result<_>>()
+            .unwrap();
+        assert_eq!(titles, ["corrected title"]);
+    }
+
+    fn insert_chunk(
+        connection: &Connection,
+        document_id: u64,
+        start: i64,
+        end: i64,
+        vector: &[f32],
+    ) {
+        connection
+            .execute(
+                "INSERT INTO embedding_chunks (
+                    stable_id, portal_key, request_id, document_id, file_name, title,
+                    agency_name, jurisdiction, character_start, character_end, excerpt,
+                    content_sha256, chunk_sha256, model_id, model_revision, dimension,
+                    distance_metric, normalization, chunking_version, vector, indexed_at
+                 ) VALUES (?1, 'portal', 1, ?2, 'f', 't', 'a', 'j', ?3, ?4, ?5, 'c', 'h',
+                    ?6, ?7, 384, 'd', 'n', 'v', ?8, 'now')",
+                params![
+                    format!("portal:{document_id}:{start}:{EMBEDDING_MODEL_REVISION}"),
+                    document_id,
+                    start,
+                    end,
+                    format!("excerpt {document_id}@{start}"),
+                    EMBEDDING_MODEL_ID,
+                    EMBEDDING_MODEL_REVISION,
+                    encode_vector(vector),
+                ],
+            )
+            .unwrap();
+    }
+
+    /// The ranking scans once and reads only what it returns; its results must equal ranking
+    /// every passage, dropping overlaps, and then truncating, at every limit, including ties.
+    #[tokio::test]
+    async fn rankings_equal_the_exhaustive_definition() {
+        let temp = tempfile::tempdir().unwrap();
+        let index =
+            VectorIndex::open(&temp.path().join("vectors.db"), temp.path().join("cache")).unwrap();
+        let mut seed = 0x2545_f491_u32;
+        let mut next = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            seed
+        };
+        // Few distinct vectors, so equal scores are common within and across documents.
+        let palette = (0..6)
+            .map(|_| {
+                (0..EMBEDDING_DIMENSION)
+                    .map(|_| (next() % 7) as f32 - 3.0)
+                    .collect::<Vec<f32>>()
+            })
+            .collect::<Vec<_>>();
+        let mut rows = Vec::new();
+        {
+            let connection = index.connection.lock().await;
+            for document_id in 1..=5_u64 {
+                for step in 0..60_i64 {
+                    let start = step * 1_440;
+                    let end = start + 1_600;
+                    let vector = &palette[(next() % palette.len() as u32) as usize];
+                    insert_chunk(&connection, document_id, start, end, vector);
+                    rows.push((document_id, start, end, vector.clone()));
+                }
+            }
+        }
+        let query = (0..EMBEDDING_DIMENSION)
+            .map(|_| (next() % 5) as f32 - 2.0)
+            .collect::<Vec<f32>>();
+        let score = |vector: &[f32]| dot_encoded(&query, &encode_vector(vector)).unwrap();
+        let stable_id = |document_id: u64, start: i64| {
+            format!("portal:{document_id}:{start}:{EMBEDDING_MODEL_REVISION}")
+        };
+
+        let mut exhaustive = rows
+            .iter()
+            .map(|(document_id, start, end, vector)| {
+                (
+                    score(vector),
+                    stable_id(*document_id, *start),
+                    *document_id,
+                    *start,
+                    *end,
+                )
+            })
+            .collect::<Vec<_>>();
+        exhaustive.sort_by(|left, right| right.0.total_cmp(&left.0).then(left.1.cmp(&right.1)));
+        let mut deduped: Vec<(f32, String, u64, i64, i64)> = Vec::new();
+        for row in exhaustive {
+            if !deduped
+                .iter()
+                .any(|prior| prior.2 == row.2 && prior.3 < row.4 && row.3 < prior.4)
+            {
+                deduped.push(row);
+            }
+        }
+        let filter: HybridSearchFilter = serde_json::from_value(serde_json::json!({})).unwrap();
+        for limit in [0, 1, 3, 7, deduped.len(), deduped.len() + 5] {
+            let ranked = in_one_snapshot(&mut *index.connection.lock().await, |connection| {
+                rank_passages(connection, &query, &filter, limit)
+            })
+            .unwrap();
+            let expected = deduped.iter().take(limit).collect::<Vec<_>>();
+            assert_eq!(ranked.len(), expected.len());
+            for (result, row) in ranked.iter().zip(expected) {
+                assert_eq!(result.stable_id, row.1);
+                assert_eq!(result.semantic_score, Some(row.0 as f64));
+                assert_eq!(result.excerpt, format!("excerpt {}@{}", row.2, row.3));
+            }
+        }
+
+        let mut best: Vec<(u64, f32, i64)> = Vec::new();
+        for (document_id, start, _, vector) in &rows {
+            let cosine = score(vector);
+            match best.iter_mut().find(|held| held.0 == *document_id) {
+                Some(held) if cosine > held.1 || (cosine == held.1 && *start < held.2) => {
+                    *held = (*document_id, cosine, *start)
+                }
+                Some(_) => {}
+                None => best.push((*document_id, cosine, *start)),
+            }
+        }
+        best.sort_by(|left, right| right.1.total_cmp(&left.1).then(left.0.cmp(&right.0)));
+        for limit in [1, 3, usize::MAX] {
+            let ranked = in_one_snapshot(&mut *index.connection.lock().await, |connection| {
+                rank_documents(connection, &query, "portal", limit)
+            })
+            .unwrap();
+            let expected = best.iter().take(limit).collect::<Vec<_>>();
+            assert_eq!(
+                ranked
+                    .iter()
+                    .map(|document| (
+                        document.document_id,
+                        document.cosine,
+                        document.character_start
+                    ))
+                    .collect::<Vec<_>>(),
+                expected.into_iter().copied().collect::<Vec<_>>()
+            );
+            for document in &ranked {
+                assert_eq!(
+                    document.excerpt,
+                    format!(
+                        "excerpt {}@{}",
+                        document.document_id, document.character_start
+                    )
+                );
+            }
+        }
     }
 
     #[test]
     fn vector_codec_rejects_wrong_dimensions() {
-        let vector = vec![0.0_f32; EMBEDDING_DIMENSION];
+        let vector = vec![0.5_f32; EMBEDDING_DIMENSION];
         let encoded = encode_vector(&vector);
-        assert_eq!(decode_vector(&encoded).unwrap().len(), EMBEDDING_DIMENSION);
-        assert!(decode_vector(&encoded[..encoded.len() - 4]).is_err());
+        assert_eq!(
+            dot_encoded(&vector, &encoded).unwrap(),
+            0.25 * EMBEDDING_DIMENSION as f32
+        );
+        assert!(dot_encoded(&vector, &encoded[..encoded.len() - 4]).is_err());
     }
 
     #[tokio::test]
@@ -1282,6 +1980,159 @@ mod tests {
         assert_eq!(status.dimension, EMBEDDING_DIMENSION);
         assert!(status.artifact_count > 0);
         assert!(status.artifact_manifest_sha256.is_some());
+    }
+}
+
+#[cfg(test)]
+mod live_collection_measurement {
+    use super::*;
+    use std::io::Write;
+    use std::time::Instant;
+
+    const QUERIES: &[&str] = &[
+        "encampment abatement schedule",
+        "shelter bed capacity and occupancy",
+        "COVID-19 swab testing for city employees",
+        "Caltrans delegated maintenance agreement",
+        "police citations for illegal lodging",
+        "body worn camera footage request",
+        "safe sleeping site operations",
+        "homeless outreach team emails",
+        "fire at a homeless encampment",
+        "protest arrests at UC San Diego",
+        "unsafe camping ordinance enforcement",
+        "sidewalk cleanup and property storage notices",
+    ];
+
+    /// Builds the semantic index over a collected live database and records what it cost and
+    /// what it returns, so an indexing change is judged on real records: wall time and
+    /// passages/s for the build, then per-query latency and the top 20 of `semantic_search` and
+    /// `nearest_documents` for a fixed query set, written as JSON lines to `ONRECORD_TOPK_OUT`.
+    /// `ONRECORD_EVAL_DIR` holds `core.db`; the index is built beside it as `vectors.db` from the
+    /// installed model in `ONRECORD_EMBEDDING_CACHE`. Peak memory is read from the process, e.g.
+    /// `/usr/bin/time -l <test binary> --exact
+    /// storage::vector::live_collection_measurement::index_and_query_a_live_collection
+    /// --ignored --nocapture`.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    #[ignore = "needs a collected live database and an installed embedding model"]
+    async fn index_and_query_a_live_collection() {
+        let root = PathBuf::from(std::env::var("ONRECORD_EVAL_DIR").expect("ONRECORD_EVAL_DIR"));
+        let cache = PathBuf::from(
+            std::env::var("ONRECORD_EMBEDDING_CACHE").expect("ONRECORD_EMBEDDING_CACHE"),
+        );
+        let out = PathBuf::from(std::env::var("ONRECORD_TOPK_OUT").expect("ONRECORD_TOPK_OUT"));
+        let repository = DuckDbRepository::new(root.join("core.db")).unwrap();
+        let index = VectorIndex::open(&root.join("vectors.db"), cache).unwrap();
+        index.initialize_model().await.unwrap();
+
+        let started = Instant::now();
+        let report = index.index_documents(&repository, false).await.unwrap();
+        let seconds = started.elapsed().as_secs_f64();
+        eprintln!(
+            "index: {report:?} in {seconds:.1}s = {:.1} passages/s",
+            report.indexed_chunks as f64 / seconds
+        );
+
+        let portal_key = index
+            .connection
+            .lock()
+            .await
+            .query_row("SELECT MIN(portal_key) FROM embedding_chunks", [], |row| {
+                row.get::<_, String>(0)
+            })
+            .unwrap();
+        let mut file = fs::File::create(&out).unwrap();
+        for query in QUERIES {
+            let filter = serde_json::from_value(serde_json::json!({})).unwrap();
+            let started = Instant::now();
+            let passages = index.semantic_search(query, filter, 20).await.unwrap();
+            let passage_ms = started.elapsed().as_secs_f64() * 1000.0;
+            let started = Instant::now();
+            let documents = index
+                .nearest_documents(query, &portal_key, 20)
+                .await
+                .unwrap()
+                .unwrap();
+            let document_ms = started.elapsed().as_secs_f64() * 1000.0;
+            eprintln!("{query}: semantic_search {passage_ms:.0} ms, nearest_documents {document_ms:.0} ms");
+            let line = serde_json::json!({
+                "query": query,
+                "semantic_search": passages.iter().map(|result| serde_json::json!([
+                    result.stable_id, result.character_start, result.character_end,
+                    result.semantic_score.map(|score| (score as f32).to_bits()),
+                ])).collect::<Vec<_>>(),
+                "nearest_documents": documents.iter().map(|document| serde_json::json!([
+                    document.document_id, document.character_start, document.character_end,
+                    document.cosine.to_bits(),
+                ])).collect::<Vec<_>>(),
+            });
+            writeln!(file, "{line}").unwrap();
+        }
+    }
+
+    /// Embeds the first 512 passages of a live collection under different intra-op thread
+    /// counts and batch shapes and reports, per configuration, whether every vector is
+    /// bit-identical to the indexing configuration (2 threads, batches of 16) and its speed.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    #[ignore = "needs a collected live database and an installed embedding model"]
+    async fn embedding_reproducibility_across_threads_and_batches() {
+        let root = PathBuf::from(std::env::var("ONRECORD_EVAL_DIR").expect("ONRECORD_EVAL_DIR"));
+        let cache = PathBuf::from(
+            std::env::var("ONRECORD_EMBEDDING_CACHE").expect("ONRECORD_EMBEDDING_CACHE"),
+        );
+        let repository = DuckDbRepository::new(root.join("core.db")).unwrap();
+        let mut passages = Vec::new();
+        let mut after = None;
+        while passages.len() < 512 {
+            let page = repository
+                .list_vector_source_documents_page(after.take(), 8)
+                .await
+                .unwrap();
+            let Some(last) = page.last() else { break };
+            after = Some((last.portal_key.clone(), last.document_id));
+            for document in page {
+                passages.extend(chunk_text(&document.text).map(|chunk| chunk.text.to_string()));
+            }
+        }
+        passages.truncate(512);
+        let embed = |threads: usize, batch: usize| {
+            let mut model = TextEmbedding::try_new(
+                TextInitOptions::new(EmbeddingModel::BGESmallENV15Q)
+                    .with_cache_dir(cache.clone())
+                    .with_max_length(512)
+                    .with_intra_threads(threads),
+            )
+            .unwrap();
+            let started = Instant::now();
+            let mut vectors = Vec::new();
+            for group in passages.chunks(batch) {
+                vectors.extend(model.embed(group, Some(batch)).unwrap());
+            }
+            (vectors, started.elapsed().as_secs_f64())
+        };
+        let (reference, seconds) = embed(2, 16);
+        eprintln!(
+            "threads 2 batch 16: {:.1} passages/s",
+            passages.len() as f64 / seconds
+        );
+        for (threads, batch) in [(2, 16), (4, 16), (8, 16), (4, 32), (4, 1)] {
+            let (vectors, seconds) = embed(threads, batch);
+            let identical = vectors
+                .iter()
+                .zip(&reference)
+                .filter(|(left, right)| left == right)
+                .count();
+            let max_difference = vectors
+                .iter()
+                .zip(&reference)
+                .flat_map(|(left, right)| left.iter().zip(right).map(|(a, b)| (a - b).abs()))
+                .fold(0.0_f32, f32::max);
+            eprintln!(
+                "threads {threads} batch {batch}: {:.1} passages/s, {identical}/{} bit-identical, max |diff| {max_difference:e}",
+                passages.len() as f64 / seconds,
+                passages.len()
+            );
+        }
     }
 }
 

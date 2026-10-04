@@ -4561,6 +4561,7 @@ dependencies = [
  "lopdf",
  "msg_parser",
  "onrecord-studio-lib",
+ "ort",
  "outlook-pst",
  "png 0.18.1",
  "rand 0.8.8",
