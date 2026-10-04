@@ -195,6 +195,7 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::findings::count_findings,
         commands::findings::dismiss_finding,
         commands::findings::restore_finding,
+        commands::findings::record_service_leads,
         commands::topics::list_topic_packs,
         commands::starter_sets::list_starter_sets,
         commands::intent::run_intent_query,

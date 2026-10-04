@@ -1,7 +1,12 @@
 //! IPC commands for the autonomous findings inbox.
 
 use crate::{
-    analysis::{detectors, finding::Finding, gaps},
+    analysis::{
+        detectors,
+        finding::Finding,
+        gaps,
+        service_leads::{self, ServiceLeadInput, ServiceLeadsRecorded},
+    },
     error::AppError,
     storage::{findings::FindingsFilter, sqlite::DuckDbRepository, vector::VectorIndex},
 };
@@ -80,6 +85,20 @@ pub async fn restore_finding(
     repository: State<'_, DuckDbRepository>,
 ) -> Result<(), AppError> {
     repository.restore_finding(id).await
+}
+
+/// Stores the discovery feed's service-report leads as findings. `complete` is true only when
+/// every imported table was checked without error; otherwise earlier leads are left in place.
+#[tauri::command]
+pub async fn record_service_leads(
+    leads: Vec<ServiceLeadInput>,
+    complete: bool,
+    repository: State<'_, DuckDbRepository>,
+) -> Result<ServiceLeadsRecorded, AppError> {
+    let run_started = chrono::Utc::now();
+    let schema = repository.analytical_schema().await?;
+    let findings = service_leads::to_findings(&leads, &schema.datasets, run_started)?;
+    service_leads::store(&repository, findings, complete, run_started).await
 }
 
 #[cfg(test)]

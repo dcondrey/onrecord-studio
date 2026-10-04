@@ -234,6 +234,12 @@ pub enum FindingKind {
     /// spread over months. Describes how the release was spread out; it is not a finding that any
     /// deadline was missed, and the release dates are never the agency's determination.
     RollingProduction,
+    /// A count read from a publisher's service-report table (311-style reports): open reports
+    /// older than a year, an area slower than the others, a place reported repeatedly, referrals
+    /// with no outcome, or reports that left an open file between two copies. Counted by the
+    /// discovery feed's SQL and recorded as sent; a count of the publisher's rows, not a finding
+    /// that a duty was breached.
+    ServiceReportLead,
 }
 
 impl FindingKind {
@@ -280,6 +286,7 @@ impl FindingKind {
             Self::EncampmentNoticeStatedShortfall => "ENCAMPMENT_NOTICE_STATED_SHORTFALL",
             Self::RedactionInconsistentAcrossReleases => "REDACTION_INCONSISTENT_ACROSS_RELEASES",
             Self::RollingProduction => "ROLLING_PRODUCTION",
+            Self::ServiceReportLead => "SERVICE_REPORT_LEAD",
         }
     }
 
@@ -326,6 +333,7 @@ impl FindingKind {
             Self::EncampmentNoticeStatedShortfall,
             Self::RedactionInconsistentAcrossReleases,
             Self::RollingProduction,
+            Self::ServiceReportLead,
         ]
         .into_iter()
         .find(|candidate| candidate.as_str() == value)
@@ -426,6 +434,8 @@ impl FindingKind {
             // A count of recorded release dates. Producing records in installments breaks no
             // rule this kind evaluates.
             Self::RollingProduction => false,
+            // Counts of a publisher's rows. The table records no inspections, work or duty.
+            Self::ServiceReportLead => false,
         }
     }
 }

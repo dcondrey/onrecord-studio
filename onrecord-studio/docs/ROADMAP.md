@@ -1042,8 +1042,9 @@ daily). Next, in order:
 2. Join a lead to the council agenda and budget: the department that owns a service, its adopted
    line (`budget_lines.rs`), and upcoming meeting items (`analysis_methods.md` §11), so a lead
    offers a drafted public comment.
-3. Store service leads as findings so Story Desk ranks them with document findings. Needs a
-   FindingKind on both sides of the IPC contract and a help topic.
+3. Done 2026-10-04: service leads are stored as `SERVICE_REPORT_LEAD` findings
+   (`record_service_leads`, methods §17 E). They carry no portal agency, so agenda suggestions
+   (§11 "Stored finding subject") do not match them until item 2 names the owning department.
 4. The same role-based checks for code-enforcement cases and permits (opened, closed, type, area).
 5. Full Get It Done closed years exceed the 96 MB import limit; only Encampment rows are kept.
    Area comparisons for other services need a per-service subset or a streamed aggregate.

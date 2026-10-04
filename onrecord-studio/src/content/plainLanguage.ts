@@ -228,6 +228,11 @@ export const PLAIN_FINDING_TEXT: Record<FindingKind, PlainText> = {
     notShown: 'It does not show that a deadline was missed. The requester may have agreed to installments or changed the request.',
     next: "Read the request's correspondence for a production schedule or a change of scope.",
   },
+  SERVICE_REPORT_LEAD: {
+    observed: "A count from a publisher's table of service reports: reports still open, an area slower than the others, a place reported many times, or reports that left the open file.",
+    notShown: 'It does not show that a problem persists or that work was not done. The table records no inspections, repairs or crews.',
+    next: 'Ask the responsible department what explains the count, or request the work orders behind it.',
+  },
 };
 
 export const PLAIN_VERIFICATION_TEXT: Record<VerificationState, PlainText> = {

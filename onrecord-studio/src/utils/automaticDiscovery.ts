@@ -1,4 +1,4 @@
-import type { AnalyticalDatasetSummary, AnalyticalSchema, SqlQueryResult } from '../types';
+import type { AnalyticalDatasetSummary, AnalyticalSchema, ServiceLeadInput, SqlQueryResult } from '../types';
 import { buildDiscoveryPlan, discoveryDefaults, type DiscoveryQuery, type DiscoverySelection } from './dataDiscovery';
 import { backlogChangeLeads, recurringServiceLeads, serviceAccountabilityLeads, serviceAccountabilityQueries, serviceCompanions } from './serviceAccountability';
 
@@ -132,6 +132,17 @@ export function recurringObservations(schema: AnalyticalSchema, profiles: Record
     id: `${lead.snapshotId}:${lead.key}`, snapshotId: lead.snapshotId, kind: 'lead', priority: lead.priority,
     title: lead.title, detail: lead.detail, question: lead.question, query: lead.query,
   }));
+}
+
+/** Every lead to store as a finding. `complete` only when each imported table has been checked
+ * without error: a lead missing from an unfinished pass has not stopped holding. */
+export function storedLeads(schema: AnalyticalSchema, profiles: Record<string, AutomaticProfile>): { leads: ServiceLeadInput[]; complete: boolean } {
+  const observations = [...schema.datasets.flatMap((dataset) => profiles[dataset.snapshotId] ? profileObservations(schema, dataset, profiles[dataset.snapshotId]) : []),
+    ...recurringObservations(schema, profiles)].filter((item) => item.kind === 'lead' && item.query);
+  return {
+    leads: observations.map((item) => ({ key: item.id, snapshotId: item.snapshotId, title: item.title, detail: item.detail, question: item.question, method: item.query!.method })),
+    complete: schema.datasets.every((dataset) => profiles[dataset.snapshotId]?.results.every((entry) => !entry.error)),
+  };
 }
 
 export function rankObservations(observations: DiscoveryObservation[], limit = 8): DiscoveryObservation[] {

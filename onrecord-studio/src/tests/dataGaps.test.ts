@@ -99,3 +99,29 @@ describe('fetching a missing table', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('storing leads as findings', () => {
+  const controllers: DiscoveryController[] = [];
+  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-09-14T00:00:00Z')); });
+  afterEach(() => { controllers.splice(0).forEach((controller) => controller.stop()); vi.useRealTimers(); });
+
+  it('sends a changed set once, and calls it complete only when every table was checked without error', async () => {
+    const backlog = response(['category', 'open_reports', 'open_over_one_year', 'earliest_opened', 'all_open_reports', 'all_open_over_one_year'], [['Pothole', 40, 30, '2024-01-01', 40, 30]]);
+    let failed = false;
+    const record = vi.fn(async () => ({}));
+    const controller = new DiscoveryController({ schema: async () => catalog(table('first', open, '2026-09-13T00:00:00Z'), table('second', closed2026, '2026-09-13T00:00:00Z')),
+      candidates: async () => [], patterns: async () => [], record,
+      query: async (sql) => {
+        if (!sql.includes('service_backlog AS (')) return response(['column_name'], []);
+        if (sql.includes('analysis_second') && !failed) { failed = true; throw new Error('Temporary query failure'); }
+        return backlog;
+      } });
+    controllers.push(controller); controller.start();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(record).toHaveBeenCalledTimes(1);
+    expect(record).toHaveBeenLastCalledWith([expect.objectContaining({ key: 'first:service_backlog', snapshotId: 'first', title: '30 of 40 open reports have been open more than a year' })], false);
+    await vi.advanceTimersByTimeAsync(310_000);
+    expect(record).toHaveBeenCalledTimes(2);
+    expect(record).toHaveBeenLastCalledWith([expect.objectContaining({ snapshotId: 'first' }), expect.objectContaining({ snapshotId: 'second' })], true);
+  });
+});

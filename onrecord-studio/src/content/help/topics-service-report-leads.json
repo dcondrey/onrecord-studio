@@ -1,0 +1,51 @@
+[
+  {
+    "id": "finding-service-report-lead",
+    "title": "Service-report leads",
+    "group": "Finding kinds",
+    "keywords": [
+      "service reports",
+      "311",
+      "Get It Done",
+      "backlog",
+      "open reports",
+      "potholes",
+      "street lights",
+      "referred",
+      "lead"
+    ],
+    "summary": "A count read from a publisher's table of service reports, such as open reports older than a year or reports that left the open file between two copies.",
+    "sections": [
+      {
+        "heading": "What it shows",
+        "paragraphs": [
+          "When an imported table has a service type, a close date and an opened date or recorded age, the app counts its rows: reports still open and how many are older than a year, areas whose median age or time to close is well above the all-area median, places named by many open reports, services where many reports were referred elsewhere, and, when the same source was imported on two dates, the reports that left the open file and the new ones that arrived.",
+          "Each lead is stored as a finding with the method used, a question worth asking, and the table it was counted from, identified by its file digest and retrieval date."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "That a problem persists, that work was not done, or that any duty was breached. The table records no inspections, repairs or crews. A difference between areas can reflect what was reported as well as how it was handled. Several reports at one place can describe one fault.",
+          "A close date records that a report was closed, not what work was done."
+        ]
+      },
+      {
+        "heading": "When a lead goes away",
+        "paragraphs": [
+          "A lead is replaced when its counts change and removed when a full check of every imported table no longer produces it. While any table is still being checked, or a check failed, earlier leads are kept. A lead you dismissed stays dismissed."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is not assessed: the finding restates counts of the publisher's rows and infers nothing to score."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": ["SERVICE_REPORT_LEAD"],
+    "commandGroups": [],
+    "related": ["legal-vs-pattern", "findings-inbox"]
+  }
+]

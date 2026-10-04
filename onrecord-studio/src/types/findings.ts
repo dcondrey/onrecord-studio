@@ -52,7 +52,8 @@ export type FindingKind =
   | 'ENCAMPMENT_NOTICE_SHORTFALL'
   | 'ENCAMPMENT_NOTICE_STATED_SHORTFALL'
   | 'REDACTION_INCONSISTENT_ACROSS_RELEASES'
-  | 'ROLLING_PRODUCTION';
+  | 'ROLLING_PRODUCTION'
+  | 'SERVICE_REPORT_LEAD';
 
 /**
  * How a finding's confidence was derived. `UNASSESSED` distinguishes an unmeasured rung from a
@@ -120,6 +121,21 @@ export interface EvidenceGapView {
   request: string;
   status: GapStatus;
   sources: string[];
+}
+
+/** One discovery-feed lead sent to `record_service_leads`. Mirrors `analysis/service_leads.rs`. */
+export interface ServiceLeadInput {
+  key: string;
+  snapshotId: string;
+  title: string;
+  detail: string;
+  question: string;
+  method: string;
+}
+
+export interface ServiceLeadsRecorded {
+  findingsRecorded: number;
+  staleCleared: number;
 }
 
 export interface RefreshFindingsSummary {

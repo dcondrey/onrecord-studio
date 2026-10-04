@@ -145,6 +145,7 @@ impl DraftFamily {
             | FindingKind::DepartmentSpendingYearOverYear
             | FindingKind::OvertimeAboveAdoptedLine
             | FindingKind::FundActualAboveAdopted
+            | FindingKind::ServiceReportLead
             // A description of how a release was spread out; it identifies no gap to ask about.
             | FindingKind::RollingProduction => Self::NoDraft,
         }
