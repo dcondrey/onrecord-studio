@@ -184,6 +184,8 @@ export interface DeadlineAnalysis {
   extensionStatus: string;
   extensionReason: string | null;
   isViolation: boolean;
+  /** A violation no later than a lawful extension would allow, with none recorded. */
+  unrecordedExtensionCouldCover: boolean;
   anomalyMarkers: TimelineAnomalyMarker[];
   evidenceSummary: string;
 }

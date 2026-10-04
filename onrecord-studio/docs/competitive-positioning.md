@@ -49,8 +49,9 @@ and derives a `RequestFilingPlan` (determination date, elapsed days, follow-ups)
 statutory engine once a submission date is recorded; both are recomputed on every case save.
 `export_request_filing_record` signs that draft, its digest, and the plan as
 `onrecord-request-filing-record-v1`, and refuses a request with no recorded submission date.
-Transport remains deliberately absent, and the statute set is still the single CPRA
-determination clock.
+Transport remains deliberately absent. Updated 2026-10-03: the engine now carries declarative
+per-jurisdiction clocks (CPRA and federal FOIA, `analysis/statute.rs`, method in
+`docs/analysis_methods.md` §17); casework drafts remain CPRA requests.
 
 ## 2. Transcription: timestamped spans with absence semantics
 
@@ -118,7 +119,7 @@ live non-FtM entity layer already ships on the projection side, and it has grown
 `corpus_entity_mentions` carries character offsets and confidence
 (`src-tauri/src/storage/corpus.rs:2685-2753`), so the FtM layer is a migration target, not a
 green field. The basis-points pattern is real and CHECK-enforced 0-10000; the
-Rust function is `cpra_calendar_confidence_basis_points`, the column it feeds is
+Rust function is `statutory_clock_confidence_basis_points`, the column it feeds is
 `statutory_violations.confidence_basis_points`. One hard correction: the linked DuckDB cannot
 read parquet today. `src-tauri/Cargo.toml:36` enables only `features = ["bundled"]`, and the bundled
 build compiles the parquet extension only under the `parquet` feature. Enabling it is a Cargo

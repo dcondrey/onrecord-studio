@@ -41,7 +41,7 @@ pub struct ScheduledFollowUp {
 }
 
 /// The statutory standing of one filed records request, derived entirely from
-/// [`evaluate_statutory_compliance_with_determination_at`].
+/// [`evaluate_statutory_clock`] under the CPRA rule.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RequestFilingPlan {

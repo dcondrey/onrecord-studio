@@ -1013,15 +1013,20 @@ does:
   stops, each with a section and official URL. The SQL aggregate renders the rules as a
   `clock_rules` VALUES table and the calendars as a `statutory_days` table with running open-day
   ordinals; there is no CPRA-defaulting evaluator left (`evaluate_statutory_clock` takes a rule).
-- **Shipped: CPRA and federal FOIA only.** Verified 2026-10-03 against leginfo (Gov. Code
-  § 7922.535 as amended by AB 370, eff. 2026-01-01; Code Civ. Proc. §§ 12a, 135) and govinfo
-  (5 U.S.C. §§ 552(a)(6), 6103); OPM for the Sunday→Monday observance (Exec. Order 11582 § 3(a));
-  DOJ OIP for reading FOIA's 10-day routing allowance as working days. No other state was added:
-  none was verified against a primary source in this pass.
+- **Shipped: CPRA and federal FOIA only.** Primary sources checked 2026-10-03: leginfo (Gov. Code
+  § 7922.535 and its history, AB 370 bill page, AB 473 bill page, Code Civ. Proc. § 12a), govinfo
+  2023 U.S. Code (5 U.S.C. § 552(a)(6)(A)-(B), § 6103), archives.gov (Exec. Order 11582 § 3(a)),
+  justice.gov OIP (routing allowance read as working days). Secondary only: the former § 6253(c)
+  numbering. No other state was added: none was verified against a primary source in this pass.
 - **Leniency (later deadline wins).** FOIA's clock starts 10 working days after first receipt,
   because the record never shows receipt by the appropriate component; Juneteenth and Inauguration
   Day apply to every year and agency; every CPRA ground applies to every request.
 - **FOIA tolling is unrecorded,** so a FOIA finding never reaches 10000 bps (500 bps penalty).
+- **Extensions are rarely recorded** (NextRequest public timelines never carry the letters). A
+  violation with no extension recorded, measured to a date no later than the deadline the longest
+  lawful extension would set, is marked `unrecorded_extension_could_cover`: 800 bps penalty, said
+  in the evidence summary, and the CPRA appeal drafter refuses it. An overrun past that deadline
+  survives any unrecorded notice and is not penalized.
 - **Jurisdiction is the portal's** (`portals.statutory_jurisdiction`, nullable, no DEFAULT; `NONE`
   = stated none). NULL or `NONE` ⇒ not evaluated anywhere: no flag, no finding, open clock findings
   withdrawn, agency `Unaudited` with a NULL violation rate. Startup and portal registration fill

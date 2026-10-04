@@ -641,6 +641,9 @@ pub(super) fn statutory_clock_confidence_basis_points(
         crate::analysis::DeterminationBasis::ObservationWithoutRecordedActivity => 2_500,
     };
     let extension_penalty = match analysis.extension_status {
+        // None recorded, and a lawful one would cover the overrun: the finding rests on the
+        // absence of a notice, which no source here proves.
+        StatutoryExtensionStatus::NotInvoked if analysis.unrecorded_extension_could_cover => 800,
         // No extension date entered the evaluation, or the notice behind it was recorded.
         StatutoryExtensionStatus::NotInvoked | StatutoryExtensionStatus::Valid => 0,
         // An extension was claimed and its notice was never recorded, so the deadline the

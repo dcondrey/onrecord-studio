@@ -29,9 +29,11 @@ export default function MetricsGrid() {
     const requests = scoped.reduce((total, profile) => total + profile.totalRequestsProcessed, 0);
     const closed = scoped.reduce((total, profile) => total + profile.totalClosed, 0);
     const statutory = scoped.reduce((total, profile) => total + profile.statutoryViolationCount, 0);
+    // Requests measured against a statutory clock; a source naming no jurisdiction has none.
+    const evaluated = scoped.reduce((total, profile) => total + profile.statutoryEvaluatedCount, 0);
     const fastClosures = scoped.reduce((total, profile) => total + profile.suspiciousFastClosureCount, 0);
     const correlated = correlations.filter((value) => !activePortalKey || value.portalKey === activePortalKey).length;
-    return { requests, closed, statutory, fastClosures, correlations: correlated };
+    return { requests, closed, statutory, evaluated, fastClosures, correlations: correlated };
   }, [activePortalKey, correlations, profiles]);
 
   // Zeros here are indistinguishable from real zeros, and three of these four cards state a
@@ -51,11 +53,13 @@ export default function MetricsGrid() {
     },
     {
       label: 'Deadline exceptions',
-      value: unavailable ? '—' : values.statutory.toLocaleString(),
+      value: unavailable ? '—' : values.requests > 0 && values.evaluated === 0 ? 'Not evaluated' : values.statutory.toLocaleString(),
       detail: unavailable
         ? 'Analytics unavailable'
-        : values.requests > 0 ? `${formatPercent(values.statutory / values.requests)} of reviewed requests` : 'Statutory review is ready',
-      ratio: values.requests > 0 ? values.statutory / values.requests : 0,
+        : values.evaluated > 0
+          ? `${formatPercent(values.statutory / values.evaluated)} of ${values.evaluated.toLocaleString()} requests under a statutory clock`
+          : values.requests > 0 ? 'No source names a statutory jurisdiction' : 'Statutory review is ready',
+      ratio: values.evaluated > 0 ? values.statutory / values.evaluated : 0,
       accent: values.statutory > 0 ? 'text-warning' : 'text-fg-secondary',
       bar: 'bg-warning',
       icon: 'shield',

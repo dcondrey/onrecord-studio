@@ -182,9 +182,10 @@ function summarizePeriod(profiles: AgencyPerformanceProfile[]) {
   const requests = profiles.reduce((sum, profile) => sum + profile.totalRequestsProcessed, 0);
   const closed = profiles.reduce((sum, profile) => sum + profile.totalClosed, 0);
   const violations = profiles.reduce((sum, profile) => sum + profile.statutoryViolationCount, 0);
+  const evaluated = profiles.reduce((sum, profile) => sum + profile.statutoryEvaluatedCount, 0);
   const latencySamples = profiles.reduce((sum, profile) => sum + profile.validLatencySampleSize, 0);
   const latencyTotal = profiles.reduce((sum, profile) => sum + (profile.averageClosureDays ?? 0) * profile.validLatencySampleSize, 0);
-  return { requests, closureRate: requests ? closed / requests : null, violationRate: requests ? violations / requests : null, averageClosureDays: latencySamples ? latencyTotal / latencySamples : null };
+  return { requests, closureRate: requests ? closed / requests : null, violationRate: evaluated ? violations / evaluated : null, averageClosureDays: latencySamples ? latencyTotal / latencySamples : null };
 }
 
 function ComparisonMetric({ label, current, prior, percent = false, inverse = false, loading = false }: { label: string; current: number | null; prior: number | null; percent?: boolean; inverse?: boolean; loading?: boolean }) {

@@ -57,6 +57,13 @@ pub fn draft_statutory_deadline_appeal(
             analysis.determination_basis.as_str()
         )));
     }
+    if analysis.unrecorded_extension_could_cover {
+        return Err(ArtifactError::AppealNotSupported(
+            "no extension is recorded, and one the statute allows would cover this overrun; \
+             confirm that none was noticed before drafting"
+                .to_string(),
+        ));
+    }
     if !matches!(
         analysis.extension_status,
         StatutoryExtensionStatus::NotInvoked | StatutoryExtensionStatus::Valid
@@ -213,8 +220,9 @@ mod tests {
 
     #[test]
     fn a_sourced_late_determination_is_drafted_with_recorded_dates_only() {
+        // Past 26 March, the deadline the longest lawful extension would have set.
         let analysis = analyze(
-            Some(("2026-03-20T00:00:00Z", "portal event log")),
+            Some(("2026-03-30T00:00:00Z", "portal event log")),
             None,
             None,
         );
@@ -228,9 +236,9 @@ mod tests {
         .unwrap();
         let text = &artifact.generated_text;
         assert!(text.contains(CPRA_STATUTE_CITATION));
-        assert!(text.contains("2026-03-20T00:00:00+00:00"));
+        assert!(text.contains("2026-03-30T00:00:00+00:00"));
         assert!(text.contains("portal event log"));
-        assert!(text.contains("Calendar days from receipt to determination: 18"));
+        assert!(text.contains("Calendar days from receipt to determination: 28"));
         assert!(text.contains("computed from the received date, not a recorded date"));
         assert!(text.contains("City Clerk"));
         assert!(!text.contains('{'));
@@ -242,7 +250,7 @@ mod tests {
 
     #[test]
     fn a_missing_agency_name_is_a_placeholder_and_a_declared_unknown() {
-        let analysis = analyze(Some(("2026-03-20T00:00:00Z", "log")), None, None);
+        let analysis = analyze(Some(("2026-03-30T00:00:00Z", "log")), None, None);
         let artifact = draft_statutory_deadline_appeal(
             "sd",
             None,
@@ -265,6 +273,25 @@ mod tests {
                 "sd",
                 None,
                 &proxy,
+                "US-CA",
+                &DisclosureContext::unset()
+            ),
+            Err(ArtifactError::AppealNotSupported(_))
+        ));
+    }
+
+    /// Late by the initial deadline, but no later than a lawful extension would allow, with none
+    /// recorded: an unrecorded notice could make it timely, so no appeal is drafted.
+    #[test]
+    fn an_overrun_an_unrecorded_extension_could_cover_is_refused() {
+        let analysis = analyze(Some(("2026-03-20T00:00:00Z", "log")), None, None);
+        assert!(analysis.is_violation);
+        assert!(analysis.unrecorded_extension_could_cover);
+        assert!(matches!(
+            draft_statutory_deadline_appeal(
+                "sd",
+                None,
+                &analysis,
                 "US-CA",
                 &DisclosureContext::unset()
             ),

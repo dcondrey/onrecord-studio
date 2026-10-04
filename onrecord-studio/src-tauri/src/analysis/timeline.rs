@@ -52,6 +52,10 @@ pub struct StatutoryComplianceAnalysis {
     pub extension_status: StatutoryExtensionStatus,
     pub extension_reason: Option<String>,
     pub is_violation: bool,
+    /// A violation with no extension recorded, measured to a date no later than the deadline the
+    /// longest lawful extension would have set. A notice the record does not hold could make it
+    /// timely, so it rests on the absence of a record, not on a recorded fact.
+    pub unrecorded_extension_could_cover: bool,
     pub anomaly_markers: Vec<TimelineAnomalyMarker>,
     pub evidence_summary: String,
 }
@@ -190,6 +194,14 @@ pub fn evaluate_statutory_clock(
         .signed_duration_since(created_date)
         .num_days();
     let is_violation = calendar_days_elapsed > allowed_calendar_days;
+    // Sources rarely carry extension letters (a NextRequest public timeline never does), so "none
+    // recorded" is not "none given". An overrun past what the longest lawful extension allows
+    // survives any unrecorded notice; one inside it does not.
+    let lawful_extension_limit =
+        calendar.period_end(initial_deadline_date, rule.extension.maximum)?;
+    let unrecorded_extension_could_cover = is_violation
+        && extension_evaluation.status == StatutoryExtensionStatus::NotInvoked
+        && comparison_date <= lawful_extension_limit;
     let mut anomaly_markers = Vec::with_capacity(2);
     if extension_evaluation.status != StatutoryExtensionStatus::NotInvoked
         && extension_evaluation.status != StatutoryExtensionStatus::Valid
@@ -222,8 +234,15 @@ pub fn evaluate_statutory_clock(
     } else {
         String::new()
     };
+    let extension_clause = if unrecorded_extension_could_cover {
+        format!(
+            "; no extension is recorded, and one the statute allows (to {lawful_extension_limit}) would cover this overrun"
+        )
+    } else {
+        String::new()
+    };
     let evidence_summary = format!(
-        "Request {request_id}: {calendar_days_elapsed} calendar days from receipt to {milestone_label}{determination_source_clause}; effective deadline was {} under {} ({} {unit}){start_clause}, where {}; extension status {:?}.",
+        "Request {request_id}: {calendar_days_elapsed} calendar days from receipt to {milestone_label}{determination_source_clause}; effective deadline was {} under {} ({} {unit}){start_clause}, where {}; extension status {:?}{extension_clause}.",
         effective_deadline.to_rfc3339(),
         rule.initial_citation.section,
         rule.initial.days,
@@ -249,6 +268,7 @@ pub fn evaluate_statutory_clock(
         extension_status: extension_evaluation.status,
         extension_reason: extension.map(|value| value.reason.as_str().to_string()),
         is_violation,
+        unrecorded_extension_could_cover,
         anomaly_markers,
         evidence_summary,
     })
@@ -761,6 +781,48 @@ mod tests {
         );
         assert_eq!(result.calendar_days_elapsed, 11);
         assert!(result.is_violation);
+    }
+
+    /// With no extension recorded, a CPRA overrun of up to fourteen days past the carried deadline
+    /// could be covered by a notice the record does not hold; one past that cannot.
+    #[test]
+    fn an_overrun_inside_the_lawful_extension_window_is_marked_as_resting_on_absence() {
+        // Receipt 1 January 2026: initial deadline Monday 12 January, longest extension to the 26th.
+        for (determined, could_cover) in [
+            ("2026-01-13T09:00:00-08:00", true),
+            ("2026-01-26T09:00:00-08:00", true),
+            ("2026-01-27T09:00:00-08:00", false),
+        ] {
+            let result = cpra(
+                "2026-01-01T09:00:00-08:00",
+                DeterminationEvidence {
+                    determination_at: Some(determined),
+                    determination_source: Some("Closure notice"),
+                    ..DeterminationEvidence::default()
+                },
+                None,
+                determined,
+            );
+            assert!(result.is_violation, "{determined}");
+            assert_eq!(
+                result.unrecorded_extension_could_cover, could_cover,
+                "{determined}"
+            );
+        }
+        // A recorded extension, valid or not, is not an absence.
+        let defective = extension(
+            "2026-01-08T12:00:00-08:00",
+            "2026-01-27T12:00:00-08:00",
+            StatutoryExtensionReason::DataCompilation,
+        );
+        let result = cpra(
+            "2026-01-01T09:00:00-08:00",
+            activity("2026-01-20T12:00:00-08:00"),
+            Some(&defective),
+            "2026-01-20T12:00:00-08:00",
+        );
+        assert!(result.is_violation);
+        assert!(!result.unrecorded_extension_could_cover);
     }
 
     #[test]
