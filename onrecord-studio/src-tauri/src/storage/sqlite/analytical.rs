@@ -699,6 +699,11 @@ fn logical_type_for(kind: &AnalyticalDatasetKind, header: &str) -> &'static str 
             _ => "CATEGORY",
         };
     }
+    // CFS `DATE_TIME` is a Pacific wall-clock reading with no zone; stored zone-less so it is
+    // never asserted to be UTC.
+    if header.contains("date") && header.contains("time") {
+        return "LOCAL_TIMESTAMP";
+    }
     // NIBRS `approved_on` carries a wall-clock time: kept as recorded text, since a DATE refuses
     // every published row and a TIMESTAMP would stamp Pacific time as UTC.
     if header.contains("date") || header == "occured_on" {
@@ -728,6 +733,7 @@ fn duckdb_type(logical: &str) -> &'static str {
         "NUMBER" => "DECIMAL(38,10)",
         "DATE" => "DATE",
         "TIMESTAMP" => "TIMESTAMP",
+        "LOCAL_TIMESTAMP" => "TIMESTAMP",
         "DECIMAL" => "DECIMAL(18,2)",
         _ => "TEXT",
     }
@@ -750,6 +756,9 @@ fn normalize_csv_value(raw: &str, logical: &str) -> Result<serde_json::Value, St
         "DATE" => normalize_date(raw)
             .map(serde_json::Value::String)
             .ok_or_else(|| format!("could not parse date '{raw}'")),
+        "LOCAL_TIMESTAMP" => normalize_local_timestamp(raw)
+            .map(serde_json::Value::String)
+            .ok_or_else(|| format!("could not parse date and time '{raw}'")),
         "TIMESTAMP" => normalize_timestamp(raw)
             .map(serde_json::Value::String)
             .ok_or_else(|| format!("could not parse timestamp '{raw}'")),
@@ -771,6 +780,17 @@ fn normalize_date(raw: &str) -> Option<String> {
         .or_else(|_| chrono::NaiveDate::parse_from_str(raw, "%-m/%-d/%Y"))
         .map(|date| date.format("%Y-%m-%d").to_string())
         .ok()
+}
+
+fn normalize_local_timestamp(raw: &str) -> Option<String> {
+    [
+        "%Y-%m-%d %H:%M:%S%.f",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S%.f",
+    ]
+    .iter()
+    .find_map(|format| chrono::NaiveDateTime::parse_from_str(raw.trim(), format).ok())
+    .map(|at| at.format("%Y-%m-%d %H:%M:%S%.f").to_string())
 }
 
 fn normalize_timestamp(raw: &str) -> Option<String> {
@@ -1065,5 +1085,56 @@ mod semantic_analysis_tests {
             .unwrap();
         assert!(template.sql.contains("budget_cycle"));
         assert!(template.denominator.contains("budget cycle"));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Header and two rows as published in pd_calls_for_service_2025_datasd.csv.
+    const CALLS: &str = "\"INCIDENT_NUM\",\"DATE_TIME\",\"DAY_OF_WEEK\",\"ADDRESS_NUMBER_PRIMARY\",\"ADDRESS_DIR_PRIMARY\",\"ADDRESS_ROAD_PRIMARY\",\"ADDRESS_SFX_PRIMARY\",\"ADDRESS_DIR_INTERSECTING\",\"ADDRESS_ROAD_INTERSECTING\",\"ADDRESS_SFX_INTERSECTING\",\"CALL_TYPE\",\"DISPOSITION\",\"BEAT\",\"PRIORITY\"
+\"E25070031255\",\"2025-07-21 15:38:39.000\",2,\"0\",,\"HAZARD CENTER\",\"DR\",,\"FRAZEE\",,\"1183\",\"R\",\"315\",\"0\"
+\"E25070031348\",\"2025-07-21 16:53:49.000\",2,\"0\",,\"PARK\",\"BLV\",,\"BROADWAY\",,\"FOOT\",\"O\",\"521\",\"3\"
+";
+
+    #[tokio::test]
+    async fn published_calls_import_whole_with_their_recorded_wall_clock_time() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory
+            .path()
+            .join("pd_calls_for_service_2025_datasd.csv");
+        std::fs::write(&path, CALLS).unwrap();
+        let repo = DuckDbRepository::new(":memory:").unwrap();
+        repo.run_migrations(include_str!("../../../migrations/0001_initial_schema.sql"))
+            .await
+            .unwrap();
+        let result = repo
+            .import_analytical_csv(AnalyticalImportRequest {
+                dataset_kind: AnalyticalDatasetKind::CallsForService,
+                display_name: "calls".into(),
+                source_uri: None,
+                local_path: path.to_string_lossy().into_owned(),
+                observation_period_start: None,
+                observation_period_end: None,
+                partial_dataset: false,
+                worksheet: None,
+                source_file_name: None,
+                expected_source_sha256: None,
+                derived_subset: None,
+            })
+            .await
+            .unwrap();
+        assert_eq!((result.imported_rows, result.rejected_rows), (2, 0));
+        let times = repo
+            .execute_restricted_sql(
+                "SELECT CAST(date_time AS VARCHAR) AS t, CAST(date_trunc('month', date_time) AS VARCHAR) AS m FROM analysis_calls_for_service_latest ORDER BY t",
+                10,
+            )
+            .await
+            .unwrap();
+        let text = serde_json::to_string(&times.rows).unwrap();
+        assert!(text.contains("2025-07-21 15:38:39"), "{text}");
+        assert!(text.contains("2025-07-01"), "{text}");
     }
 }
