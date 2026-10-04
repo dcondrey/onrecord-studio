@@ -4,10 +4,10 @@
 //! tracker's events onto the evaluator's inputs and words the result. It adds no rule of its own.
 //! Suggestions never reach it: they live outside `ClaimedRequest::events`.
 
-use crate::analysis::statute::DeterminationBasis;
+use crate::analysis::statute::{DeterminationBasis, StatutoryClockRule, StatutoryJurisdiction};
 use crate::analysis::timeline::{
-    evaluate_statutory_compliance_with_determination_at, StatutoryComplianceAnalysis,
-    StatutoryExtensionStatus, CPRA_STATUTE_CITATION,
+    evaluate_statutory_clock, DeterminationEvidence, StatutoryComplianceAnalysis,
+    StatutoryExtensionStatus,
 };
 use crate::types::tracker::*;
 use crate::types::StatutoryExtensionRecord;
@@ -64,11 +64,12 @@ pub fn request_deadline(claim: &ClaimedRequest, now: DateTime<Utc>) -> RequestDe
             claim.suggestions.len()
         ));
     }
-    if claim.jurisdiction.as_deref() != Some(CALIFORNIA_CPRA_JURISDICTION) {
+    let Some(jurisdiction) = StatutoryJurisdiction::from_stored(claim.jurisdiction.as_deref())
+    else {
         let why = if claim.jurisdiction.is_some() {
-            "This app models only California CPRA deadlines"
+            "This app models only the California Public Records Act and federal FOIA"
         } else {
-            "No jurisdiction is set, and this app models only California CPRA deadlines"
+            "No jurisdiction is set, and no statute is assumed"
         };
         return no_analysis(
             claim,
@@ -77,11 +78,16 @@ pub fn request_deadline(claim: &ClaimedRequest, now: DateTime<Utc>) -> RequestDe
             &format!("No deadline model for this jurisdiction. {why}, so no deadline is computed."),
             notes,
         );
-    }
+    };
+    let rule = jurisdiction.rule();
+    let model = match jurisdiction {
+        StatutoryJurisdiction::CaliforniaCpra => DeadlineModel::CaliforniaCpra,
+        StatutoryJurisdiction::FederalFoia => DeadlineModel::FederalFoia,
+    };
     let Some(submitted) = earliest(of_kind(claim, TimelineEventKind::Submitted, None)) else {
         return no_analysis(
             claim,
-            DeadlineModel::CaliforniaCpra,
+            model,
             CountdownKind::NoSubmissionDate,
             "No submission date is recorded, so no deadline is computed.",
             notes,
@@ -90,7 +96,7 @@ pub fn request_deadline(claim: &ClaimedRequest, now: DateTime<Utc>) -> RequestDe
     let Some(created) = parsed(&submitted.occurred_at) else {
         return no_analysis(
             claim,
-            DeadlineModel::CaliforniaCpra,
+            model,
             CountdownKind::Unavailable,
             "The recorded submission date cannot be read.",
             notes,
@@ -101,7 +107,7 @@ pub fn request_deadline(claim: &ClaimedRequest, now: DateTime<Utc>) -> RequestDe
     if observed < created {
         return no_analysis(
             claim,
-            DeadlineModel::CaliforniaCpra,
+            model,
             CountdownKind::Unavailable,
             &format!(
                 "The submission date {} is in the future, so no deadline is computed.",
@@ -132,7 +138,7 @@ pub fn request_deadline(claim: &ClaimedRequest, now: DateTime<Utc>) -> RequestDe
         if parsed(&event.occurred_at).is_none_or(|date| date < created) {
             return no_analysis(
                 claim,
-                DeadlineModel::CaliforniaCpra,
+                model,
                 CountdownKind::Unavailable,
                 &format!(
                     "The determination dated {} is before the submission dated {}. Correct one of them.",
@@ -158,10 +164,11 @@ pub fn request_deadline(claim: &ClaimedRequest, now: DateTime<Utc>) -> RequestDe
         .is_some()
         && extension_event.is_none()
     {
-        notes.push(
-            "An extension notice is recorded without an expected determination date, so the initial 10-day deadline is shown."
-                .to_string(),
-        );
+        notes.push(format!(
+            "An extension notice is recorded without an expected determination date, so the initial deadline ({} {}) is shown.",
+            rule.initial.days,
+            rule.initial.kind.unit()
+        ));
     }
     let extension = extension_event.and_then(|event| {
         Some(StatutoryExtensionRecord {
@@ -190,13 +197,16 @@ pub fn request_deadline(claim: &ClaimedRequest, now: DateTime<Utc>) -> RequestDe
         Some(event) => (Some(event.occurred_at.as_str()), None, None),
         None => (None, None, None),
     };
-    let analysis = match evaluate_statutory_compliance_with_determination_at(
+    let analysis = match evaluate_statutory_clock(
+        rule,
         0,
         &submitted.occurred_at,
-        updated_at,
-        None,
-        determination_at,
-        determination_source,
+        DeterminationEvidence {
+            updated_at,
+            determination_at,
+            determination_source,
+            ..DeterminationEvidence::default()
+        },
         extension.as_ref(),
         &observed.to_rfc3339(),
     ) {
@@ -204,7 +214,7 @@ pub fn request_deadline(claim: &ClaimedRequest, now: DateTime<Utc>) -> RequestDe
         Err(error) => {
             return no_analysis(
                 claim,
-                DeadlineModel::CaliforniaCpra,
+                model,
                 CountdownKind::Unavailable,
                 &format!("The recorded dates cannot be evaluated together: {error}"),
                 notes,
@@ -220,7 +230,7 @@ pub fn request_deadline(claim: &ClaimedRequest, now: DateTime<Utc>) -> RequestDe
         ),
         other => notes.push(format!(
             "The extension notice does not meet the statute's conditions ({}), so the initial deadline is shown.",
-            extension_problem(other)
+            extension_problem(rule, other)
         )),
     }
     if determination.is_none()
@@ -240,7 +250,7 @@ pub fn request_deadline(claim: &ClaimedRequest, now: DateTime<Utc>) -> RequestDe
     let basis_statement = basis_statement(&analysis, basis, violation_asserted);
     RequestDeadline {
         claim_id: claim.id.clone(),
-        model: DeadlineModel::CaliforniaCpra,
+        model,
         determination_basis: Some(basis),
         violation_asserted,
         countdown,
@@ -251,19 +261,25 @@ pub fn request_deadline(claim: &ClaimedRequest, now: DateTime<Utc>) -> RequestDe
     }
 }
 
-fn extension_problem(status: StatutoryExtensionStatus) -> &'static str {
+fn extension_problem(rule: &StatutoryClockRule, status: StatutoryExtensionStatus) -> String {
     match status {
-        StatutoryExtensionStatus::NoticeBeforeReceipt => "the notice predates the request",
+        StatutoryExtensionStatus::NoticeBeforeReceipt => "the notice predates the request".into(),
         StatutoryExtensionStatus::NoticeAfterInitialDeadline => {
-            "the notice came after the initial 10 days"
+            "the notice came after the initial deadline".into()
         }
+        StatutoryExtensionStatus::GroundNotRecognized => format!(
+            "the stated reason is not a ground listed in {}",
+            rule.extension.citation.section
+        ),
         StatutoryExtensionStatus::ExpectedDateNotExtended => {
-            "the expected date is not later than the initial deadline"
+            "the expected date is not later than the initial deadline".into()
         }
-        StatutoryExtensionStatus::ExtensionExceedsFourteenDays => {
-            "the expected date is more than 14 days past the initial deadline"
-        }
-        _ => "unspecified",
+        StatutoryExtensionStatus::ExtensionExceedsMaximum => format!(
+            "the expected date is more than {} {} past the initial deadline",
+            rule.extension.maximum.days,
+            rule.extension.maximum.kind.unit()
+        ),
+        _ => "unspecified".into(),
     }
 }
 
@@ -305,7 +321,10 @@ fn basis_statement(
     match basis {
         DeterminationBasis::SourcedDeterminationEvent => {
             let verdict = if violation_asserted {
-                format!("This exceeds the allowed period: a violation of {CPRA_STATUTE_CITATION} is counted.")
+                format!(
+                    "This exceeds the allowed period: a violation of {} is counted.",
+                    analysis.statute_citation
+                )
             } else {
                 "This is within the allowed period.".to_string()
             };

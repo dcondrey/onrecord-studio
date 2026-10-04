@@ -582,3 +582,103 @@ async fn logical_relation_audit_names_orphans_without_modifying_them() {
         "the audit must never delete canonical evidence"
     );
 }
+
+/// A core from before statutory jurisdictions: `portals` lacks `statutory_jurisdiction`, with a
+/// child row referencing it (DuckDB constrains writes to a referenced parent), and
+/// `statutory_violations` lacks the clock columns. Opening it adds the columns with no value,
+/// fills a jurisdiction only for a host recognized as a California public agency, and leaves a
+/// stored finding's basis unrecorded rather than inventing one.
+#[tokio::test]
+async fn a_core_from_before_statutory_jurisdictions_opens_without_assuming_one() {
+    let repository = DuckDbRepository::new(Path::new(":memory:")).expect("DuckDB core must open");
+    {
+        let connection = repository.conn.lock().await;
+        connection
+            .execute_batch(
+                "CREATE TABLE portals (
+                    subdomain TEXT PRIMARY KEY,
+                    display_name TEXT NOT NULL,
+                    base_url TEXT NOT NULL
+                 );
+                 CREATE TABLE legacy_portal_children (
+                    portal_subdomain TEXT NOT NULL REFERENCES portals(subdomain)
+                 );
+                 CREATE TABLE statutory_violations (
+                    violation_id TEXT PRIMARY KEY,
+                    portal_subdomain TEXT NOT NULL,
+                    request_id BIGINT NOT NULL,
+                    matched_statute_id TEXT NOT NULL,
+                    matched_version_id TEXT NOT NULL,
+                    mandate_id TEXT,
+                    classification TEXT NOT NULL,
+                    calculated_variance_metric TEXT,
+                    variance_days BIGINT,
+                    confidence_basis_points BIGINT NOT NULL,
+                    evidence_summary TEXT NOT NULL,
+                    supporting_document_ids_json TEXT NOT NULL,
+                    missing_evidence_json TEXT NOT NULL,
+                    classifier_version TEXT NOT NULL,
+                    review_status TEXT NOT NULL DEFAULT 'OPEN',
+                    reviewed_at TEXT,
+                    reviewer_notes TEXT,
+                    first_detected_at TEXT NOT NULL,
+                    evaluated_at TEXT NOT NULL
+                 );
+                 INSERT INTO portals VALUES
+                    ('sandiego', 'City of San Diego', 'https://sandiego.nextrequest.com/'),
+                    ('seattle', 'Seattle', 'https://seattle.nextrequest.com/');
+                 INSERT INTO legacy_portal_children VALUES ('sandiego'), ('seattle');
+                 INSERT INTO statutory_violations (
+                    violation_id, portal_subdomain, request_id, matched_statute_id,
+                    matched_version_id, classification, confidence_basis_points,
+                    evidence_summary, supporting_document_ids_json, missing_evidence_json,
+                    classifier_version, first_detected_at, evaluated_at
+                 ) VALUES (
+                    'legacy-finding', 'sandiego', 1, 'CPRA_7922.535',
+                    'builtin-cpra-7922-535-2026', 'STATUTORY_LATENCY_VIOLATION', 9000,
+                    'legacy', '[]', '[]', 'cpra-calendar-v1',
+                    '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'
+                 );",
+            )
+            .expect("the pre-upgrade shape must be creatable");
+    }
+
+    repository
+        .run_migrations(MIGRATION)
+        .await
+        .expect("an older core must open");
+
+    assert_eq!(
+        repository
+            .portal_statutory_jurisdiction("sandiego")
+            .await
+            .unwrap(),
+        Some(Some("CA_CPRA".to_string()))
+    );
+    assert_eq!(
+        repository
+            .portal_statutory_jurisdiction("seattle")
+            .await
+            .unwrap(),
+        Some(None),
+        "a host on the same platform is not California by implication"
+    );
+    let connection = repository.conn.lock().await;
+    let stored: (Option<String>, Option<String>) = connection
+        .query_row(
+            "SELECT clock_rule_id, determination_basis FROM statutory_violations
+             WHERE violation_id = 'legacy-finding'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .expect("the pre-upgrade finding must remain readable");
+    assert_eq!(stored, (None, None));
+    let foia_authority: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM legal_statute_versions WHERE statute_id = 'FOIA_552_A_6'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(foia_authority, 1, "a FOIA finding needs its authority row");
+}

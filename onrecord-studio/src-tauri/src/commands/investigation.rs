@@ -1,3 +1,4 @@
+use crate::analysis::statute::{StatutoryClockRule, StatutoryJurisdiction, CLOCK_RULES};
 use crate::analysis::AnalyticsEngine;
 use crate::blocking::spawn as spawn_blocking;
 use crate::commands::validation::{
@@ -168,6 +169,40 @@ pub async fn get_request_statutory_extension(
     let portal_key = validate_portal_key(&portal_key)?;
     repository
         .load_statutory_extension(request_id, portal_key)
+        .await
+}
+
+/// Every modeled statutory determination clock, with the citation behind each of its parts.
+#[tauri::command]
+pub async fn list_statutory_clock_rules() -> Result<Vec<StatutoryClockRule>, AppError> {
+    Ok(CLOCK_RULES.iter().map(|rule| **rule).collect())
+}
+
+/// The statute a source's requests are measured under, as stored: a jurisdiction, `NONE` when
+/// the operator said none modeled applies, or `None` when nobody has said (and no clock runs).
+#[tauri::command]
+pub async fn get_source_statutory_jurisdiction(
+    portal_key: String,
+    repository: State<'_, DuckDbRepository>,
+) -> Result<Option<String>, AppError> {
+    let portal_key = validate_portal_key(&portal_key)?;
+    repository
+        .portal_statutory_jurisdiction(portal_key)
+        .await?
+        .ok_or_else(|| AppError::Storage(format!("Source '{portal_key}' is not registered")))
+}
+
+/// Records the statute governing a source (`None` states that none modeled applies) and
+/// re-evaluates the source's requests under it. Returns how many were re-evaluated.
+#[tauri::command]
+pub async fn set_source_statutory_jurisdiction(
+    portal_key: String,
+    jurisdiction: Option<StatutoryJurisdiction>,
+    repository: State<'_, DuckDbRepository>,
+) -> Result<usize, AppError> {
+    let portal_key = validate_portal_key(&portal_key)?;
+    repository
+        .set_portal_statutory_jurisdiction(portal_key, jurisdiction)
         .await
 }
 

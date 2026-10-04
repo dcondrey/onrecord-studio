@@ -12,8 +12,8 @@ use super::{
     policy::synchronize_policy_evidence_gaps,
     search::synchronize_fts_row,
     timeline::{
-        map_request_analytical_state, synchronize_cpra_finding, synchronize_timeline_audit,
-        upsert_statutory_extension,
+        map_request_analytical_state, statutory_context, synchronize_statutory_finding,
+        synchronize_timeline_audit, upsert_statutory_extension,
     },
 };
 
@@ -436,13 +436,51 @@ impl DuckDbRepository {
                     })?;
                 }
 
+                // The clock is the portal's: evaluated here, inside the write, where the portal's
+                // jurisdiction and the request's stored releases are read. A portal naming none
+                // has no clock, and any finding a former rule left is withdrawn.
+                let (jurisdiction, first_release_at) =
+                    statutory_context(tx, request.id, &subdomain)?;
+                let statutory_analysis = jurisdiction
+                    .map(|jurisdiction| {
+                        crate::analysis::evaluate_statutory_clock(
+                            jurisdiction.rule(),
+                            request.id,
+                            &request.created_at,
+                            crate::analysis::DeterminationEvidence {
+                                updated_at: Some(&request.updated_at),
+                                closed_at: request.closed_at.as_deref(),
+                                first_release_at: first_release_at.as_deref(),
+                                determination_at: request.determination_at.as_deref(),
+                                determination_source: request.determination_source.as_deref(),
+                            },
+                            request.statutory_extension.as_ref(),
+                            &chrono::Utc::now().to_rfc3339(),
+                        )
+                    })
+                    .transpose()?;
                 let audit_id = format!("auto-{}-{}", subdomain, request.id);
                 let mut timeline_flags = Vec::with_capacity(DERIVED_TIMELINE_FLAG_TYPES.len());
-                for anomaly_type in &request.timeline_anomalies {
+                let statutory_markers = statutory_analysis
+                    .iter()
+                    .flat_map(|analysis| analysis.anomaly_markers.iter())
+                    .map(|marker| marker.as_str());
+                // Statutory flags come only from the evaluation above, never from the record.
+                let statutory_flags = [
+                    TimelineAnomalyMarker::StatutoryLatencyViolation.as_str(),
+                    TimelineAnomalyMarker::StatutoryExtensionDefective.as_str(),
+                ];
+                for anomaly_type in request
+                    .timeline_anomalies
+                    .iter()
+                    .map(String::as_str)
+                    .filter(|flag| !statutory_flags.contains(flag))
+                    .chain(statutory_markers)
+                {
                     if let Some(known_flag) = DERIVED_TIMELINE_FLAG_TYPES
                         .iter()
                         .copied()
-                        .find(|known_flag| anomaly_type == known_flag)
+                        .find(|known_flag| anomaly_type == *known_flag)
                     {
                         if !timeline_flags.contains(&known_flag) {
                             timeline_flags.push(known_flag);
@@ -450,18 +488,12 @@ impl DuckDbRepository {
                     }
                 }
                 synchronize_timeline_audit(tx, &audit_id, request.id, &subdomain, &timeline_flags)?;
-                let statutory_analysis =
-                    crate::analysis::evaluate_statutory_compliance_with_determination_at(
-                        request.id,
-                        &request.created_at,
-                        Some(&request.updated_at),
-                        request.closed_at.as_deref(),
-                        request.determination_at.as_deref(),
-                        request.determination_source.as_deref(),
-                        request.statutory_extension.as_ref(),
-                        &chrono::Utc::now().to_rfc3339(),
-                    )?;
-                synchronize_cpra_finding(tx, request.id, &subdomain, &statutory_analysis)?;
+                synchronize_statutory_finding(
+                    tx,
+                    request.id,
+                    &subdomain,
+                    statutory_analysis.as_ref(),
+                )?;
                 Ok(())
             })
         })

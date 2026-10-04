@@ -213,6 +213,8 @@ struct LegalBriefRow {
     extension_expected_determination_at: Option<String>,
     extension_reason: Option<String>,
     extension_notice_source: Option<String>,
+    statutory_jurisdiction: Option<String>,
+    first_release_at: Option<String>,
 }
 
 struct RawLegalAuthoritySummary {
@@ -252,6 +254,8 @@ struct RawLegalFinding {
     review_status: String,
     first_detected_at: String,
     evaluated_at: String,
+    clock_rule_id: Option<String>,
+    determination_basis: Option<String>,
 }
 
 /// Complete terminal state produced by a successful document extraction task.
@@ -382,8 +386,40 @@ pub struct LegalBriefEvidence {
     pub determination_at: Option<String>,
     pub determination_source: Option<String>,
     pub extension: Option<StatutoryExtensionRecord>,
+    /// The portal's statutory jurisdiction; `None` when it names none, and then no clock applies.
+    pub statutory_jurisdiction: Option<crate::analysis::StatutoryJurisdiction>,
+    /// The earliest release event the portal timeline recorded for the request.
+    pub first_release_at: Option<String>,
     pub integrity_flags: Vec<String>,
     pub documents: Vec<EvidenceDocument>,
+}
+
+impl LegalBriefEvidence {
+    /// The request measured under its portal's rule, or `None` when the portal names no
+    /// jurisdiction: no rule is assumed.
+    pub fn evaluate_statutory_clock(
+        &self,
+        observation_at: &str,
+    ) -> Result<Option<crate::analysis::StatutoryComplianceAnalysis>, AppError> {
+        let Some(jurisdiction) = self.statutory_jurisdiction else {
+            return Ok(None);
+        };
+        crate::analysis::evaluate_statutory_clock(
+            jurisdiction.rule(),
+            self.request_id,
+            &self.created_at,
+            crate::analysis::DeterminationEvidence {
+                updated_at: Some(&self.updated_at),
+                closed_at: self.closed_at.as_deref(),
+                first_release_at: self.first_release_at.as_deref(),
+                determination_at: self.determination_at.as_deref(),
+                determination_source: self.determination_source.as_deref(),
+            },
+            self.extension.as_ref(),
+            observation_at,
+        )
+        .map(Some)
+    }
 }
 
 /// One extracted document yielded by the keyset-paginated corpus backfill reader.

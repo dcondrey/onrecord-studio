@@ -70,19 +70,26 @@ therefore rejects attachment outright.
 
 ## 4. Statutory compliance has one model
 
-`analysis::statute` is the single definition of CPRA determination timing. Two paths consume it:
+`analysis::statute` is the single definition of statutory determination timing: one declarative
+`StatutoryClockRule` per jurisdiction (CPRA, federal FOIA), each part cited to its section and an
+official URL. A source names its jurisdiction in `portals.statutory_jurisdiction`; NULL (nobody has
+said) and `NONE` (no modeled statute applies) evaluate no clock in either path, and nothing is
+assumed. Startup fills NULL only for hosts `ingestion::regional` attributes to a California public
+agency (CPRA) or a federal agency (FOIA). Two paths consume the rules:
 
 - `analysis::timeline` evaluates one request in Rust, for briefs and audit refresh.
 - `analysis::anomaly` evaluates every request at once inside DuckDB, for agency aggregates.
 
 The aggregate cannot call the Rust evaluator row by row without giving up vectorized execution, so
-its SQL is *generated* from `statute::sql`. Thresholds, the determination proxy, the
-extension-validity rule, and the calendar-day derivation each have exactly one definition.
-Each statutory last day is carried past Saturdays, Sundays and California judicial holidays to the
-next court day (Code Civ. Proc. §§ 12, 12a, 135), with `analysis::court_calendar` as the one holiday
-definition and its weekday holidays rendered into the SQL as a `court_holidays` CTE. Ambiguities
-resolve toward the later deadline, and days proclaimed ad hoc are not modeled. When the rule
-changes, `CPRA_RULE_VERSION` is bumped and startup recomputes every stored CPRA finding once.
+its SQL is *generated* from `statute::sql`: the rules become a `clock_rules` VALUES table joined
+through the portal's jurisdiction, and the holiday calendars a `statutory_days` table carrying a
+running count of open days, from which the n-th working day is a lookup. Thresholds, the
+determination proxy, the extension-validity rule, and the day counting each have exactly one
+definition. A CPRA last day is carried past Saturdays, Sundays and California judicial holidays to
+the next court day (Code Civ. Proc. §§ 12, 12a, 135; `analysis::court_calendar`); FOIA counts
+working days excluding the legal public holidays of 5 U.S.C. § 6103 (`analysis::federal_calendar`).
+Ambiguities resolve toward the later deadline, and days proclaimed ad hoc are not modeled. When a
+rule changes, `STATUTORY_RULE_VERSION` is bumped and startup recomputes every stored finding once.
 `statutory_verdicts_match_the_per_request_evaluator` drives both renderings from one table of cases
 and fails if either changes alone.
 
@@ -94,17 +101,24 @@ in Pacific and from 2 January in UTC, which is the difference between a violatio
 record. The parity test runs the aggregate under three session time zones and requires identical
 results.
 
-**The determination is a proxy.** The statute runs to the agency's determination, a distinct noticed
-event that no ingested portal models. Both paths substitute the earliest recorded activity at or
-after receipt (`updated_at`, else `closed_at`) and report which substitute they used in
-`StatutoryComplianceAnalysis::determination_basis`:
+**The determination is recorded, or labelled a proxy.** The statute runs to the agency's
+determination, a distinct noticed event. `requests.determination_at`/`determination_source` hold it
+where the source records one: on a hosted NextRequest portal, the first "Request Closed" event when
+no release precedes or accompanies it (a closure after a release ends production; the release
+already shows a determination). Otherwise both paths substitute the earliest recorded activity
+strictly after receipt (`updated_at`, `closed_at`, or the first `request_release_events` row; a
+timestamp equal to receipt is the receipt) and report which they used in
+`StatutoryComplianceAnalysis::determination_basis`, stored on the finding as
+`statutory_violations.determination_basis` beside `clock_rule_id`:
 
 | basis | meaning |
 |---|---|
+| `SOURCED_DETERMINATION_EVENT` | measured to a recorded determination with its source |
 | `EARLIEST_RECORDED_ACTIVITY_PROXY` | measured to recorded activity, which is an upper bound on when the agency acted, not evidence that the act was a determination |
 | `OBSERVATION_WITHOUT_RECORDED_ACTIVITY` | nothing recorded after receipt; the period is still running and the finding is provisional |
 
-Do not present a finding without reading the basis.
+Do not present a finding without reading the basis. An agency none of whose requests was
+evaluated reports `Unaudited` and a NULL violation rate, never `Compliant` or 0.
 
 **Two separate claims.** `AgencyPerformanceProfile::compliance_indicator` reports
 `StatutoryDeadlineExceeded` only when a statutory violation was counted, which is a legal

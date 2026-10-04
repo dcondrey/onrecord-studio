@@ -40,7 +40,14 @@ CREATE TABLE IF NOT EXISTS portals (
     source_kind TEXT NOT NULL DEFAULT 'NEXT_REQUEST',
     lifecycle_state TEXT NOT NULL DEFAULT 'ACTIVE'
         CHECK (lifecycle_state IN ('ACTIVE', 'PAUSED', 'REMOVED')),
-    created_at TEXT DEFAULT strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
+    created_at TEXT DEFAULT strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'),
+    -- The statute whose determination clock governs this source's requests ('CA_CPRA',
+    -- 'US_FOIA'), or 'NONE' when the operator says none modeled applies. NULL means nobody has
+    -- said, and a NULL source is never evaluated against any clock. No DEFAULT: absence is not
+    -- a jurisdiction.
+    statutory_jurisdiction TEXT
+        CHECK (statutory_jurisdiction IS NULL
+               OR statutory_jurisdiction IN ('CA_CPRA', 'US_FOIA', 'NONE'))
 );
 
 CREATE TABLE IF NOT EXISTS portal_sync_runs (
@@ -505,6 +512,11 @@ CREATE TABLE IF NOT EXISTS statutory_violations (
     reviewer_notes TEXT,
     first_detected_at TEXT NOT NULL,
     evaluated_at TEXT NOT NULL,
+    -- For a determination-clock finding: the rule it was measured under and what the
+    -- determination date was (recorded event, activity proxy, or observation). NULL on other
+    -- findings and on clock findings stored before these were recorded.
+    clock_rule_id TEXT,
+    determination_basis TEXT,
     FOREIGN KEY (request_id, portal_subdomain) REFERENCES requests(id, portal_subdomain),
     FOREIGN KEY (matched_statute_id) REFERENCES legal_statutes(statute_id),
     FOREIGN KEY (matched_version_id) REFERENCES legal_statute_versions(version_id),
@@ -555,6 +567,52 @@ WHERE statute_id = 'CPRA_7922.535'
   AND NOT EXISTS (
     SELECT 1 FROM legal_provisions_fts
     WHERE provision_id = 'builtin-cpra-7922-535-provision'
+);
+
+-- The federal FOIA determination clock (`analysis::statute::FOIA_DETERMINATION_RULE`) stores its
+-- findings against this row, as the CPRA clock does against the one above.
+INSERT OR IGNORE INTO legal_statutes (
+    statute_id, jurisdiction, statute_citation, title, authority_kind, full_text,
+    mandated_deadline_days, canonical_source_uri, current_version_id, content_sha256,
+    effective_from, effective_to, imported_at, updated_at
+) VALUES (
+    'FOIA_552_A_6', 'United States', '5 U.S.C. § 552(a)(6)(A)(i)',
+    'Federal Freedom of Information Act determination timing', 'OTHER',
+    'Determination timing authority for federal Freedom of Information Act requests (5 U.S.C. § 552(a)(6)(A)-(B)); consult the official current text at the recorded source URL.',
+    NULL, 'https://www.govinfo.gov/content/pkg/USCODE-2023-title5/html/USCODE-2023-title5-partI-chap5-subchapII-sec552.htm',
+    'builtin-foia-552-a-6-2026', 'e64c4298db099b8ab84727f2ce117430a07d6c222f241b92913434d473dc4eb2',
+    NULL, NULL, strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'), strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
+);
+
+INSERT OR IGNORE INTO legal_statute_versions (
+    version_id, statute_id, full_text, content_sha256, effective_from, effective_to, source_uri, imported_at
+) SELECT
+    current_version_id, statute_id, full_text, content_sha256, effective_from, effective_to,
+    canonical_source_uri, imported_at
+FROM legal_statutes
+WHERE statute_id = 'FOIA_552_A_6';
+
+INSERT OR IGNORE INTO legal_provisions (
+    provision_id, version_id, statute_id, ordinal, heading_level, heading_path, title,
+    provision_text, token_count, content_sha256
+)
+SELECT
+    'builtin-foia-552-a-6-provision', current_version_id, statute_id,
+    0, 1, title, title, full_text, 22, content_sha256
+FROM legal_statutes
+WHERE statute_id = 'FOIA_552_A_6';
+
+INSERT INTO legal_provisions_fts (
+    provision_id, version_id, statute_id, title, heading_path, provision_text
+)
+SELECT
+    'builtin-foia-552-a-6-provision', current_version_id, statute_id,
+    title, title, full_text
+FROM legal_statutes
+WHERE statute_id = 'FOIA_552_A_6'
+  AND NOT EXISTS (
+    SELECT 1 FROM legal_provisions_fts
+    WHERE provision_id = 'builtin-foia-552-a-6-provision'
 );
 
 -- ----------------------------------------------------------------------------

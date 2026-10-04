@@ -403,7 +403,13 @@ impl DuckDbRepository {
                     requests.determination_at, requests.determination_source,
                     statutory_extensions.notice_at,
                     statutory_extensions.expected_determination_at,
-                    statutory_extensions.reason, statutory_extensions.notice_source
+                    statutory_extensions.reason, statutory_extensions.notice_source,
+                    portals.statutory_jurisdiction,
+                    (SELECT arg_min(releases.released_at,
+                                    TRY_CAST(releases.released_at AS TIMESTAMPTZ))
+                     FROM request_release_events AS releases
+                     WHERE releases.portal_subdomain = requests.portal_subdomain
+                       AND releases.request_id = requests.id)
                  FROM requests
                  INNER JOIN portals ON portals.subdomain = requests.portal_subdomain
                  LEFT JOIN agencies
@@ -503,6 +509,10 @@ impl DuckDbRepository {
                 determination_at: row.determination_at,
                 determination_source: row.determination_source,
                 extension,
+                statutory_jurisdiction: crate::analysis::StatutoryJurisdiction::from_stored(
+                    row.statutory_jurisdiction.as_deref(),
+                ),
+                first_release_at: row.first_release_at,
                 integrity_flags,
                 documents,
             })
@@ -584,6 +594,8 @@ fn map_legal_brief_row(row: &Row<'_>) -> duckdb::Result<LegalBriefRow> {
         extension_expected_determination_at: row.get(15)?,
         extension_reason: row.get(16)?,
         extension_notice_source: row.get(17)?,
+        statutory_jurisdiction: row.get(18)?,
+        first_release_at: row.get(19)?,
     })
 }
 

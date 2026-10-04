@@ -19,8 +19,8 @@ use crate::{
     analysis::{
         finding::{FindingCitation, FindingKind},
         intent::{self, ParsedIntent, MAX_UTTERANCE_CHARS},
-        statute::{DeterminationBasis, RECOGNIZED_EXTENSION_REASONS},
-        timeline::{evaluate_statutory_compliance_with_determination_at, StatutoryExtensionStatus},
+        statute::{DeterminationBasis, StatutoryJurisdiction, RECOGNIZED_EXTENSION_REASONS},
+        timeline::{evaluate_statutory_clock, DeterminationEvidence, StatutoryExtensionStatus},
     },
     error::AppError,
     ingestion::regional::source_jurisdiction,
@@ -467,6 +467,8 @@ struct RequestRecord {
     determination_at: Option<String>,
     determination_source: Option<String>,
     extension: Option<(String, String, String, String)>,
+    jurisdiction: Option<String>,
+    first_release_at: Option<String>,
 }
 
 fn extension_phrase(status: StatutoryExtensionStatus) -> &'static str {
@@ -480,8 +482,11 @@ fn extension_phrase(status: StatutoryExtensionStatus) -> &'static str {
         StatutoryExtensionStatus::ExpectedDateNotExtended => {
             "the extension's expected date does not extend the deadline"
         }
-        StatutoryExtensionStatus::ExtensionExceedsFourteenDays => {
-            "the extension exceeds the 14-day maximum"
+        StatutoryExtensionStatus::GroundNotRecognized => {
+            "the extension's stated ground is not one the governing statute recognizes"
+        }
+        StatutoryExtensionStatus::ExtensionExceedsMaximum => {
+            "the extension exceeds the governing statute's maximum"
         }
         StatutoryExtensionStatus::MissingNoticeSource => {
             "the extension has no recorded notice source"
@@ -507,7 +512,10 @@ async fn deadline_answer(
                     "SELECT r.portal_subdomain, p.display_name, r.title, a.name,
                             r.created_at, r.updated_at, r.closed_at, r.determination_at,
                             r.determination_source, e.notice_at, e.expected_determination_at,
-                            e.reason, e.notice_source
+                            e.reason, e.notice_source, p.statutory_jurisdiction,
+                            (SELECT arg_min(v.released_at, TRY_CAST(v.released_at AS TIMESTAMPTZ))
+                             FROM request_release_events v
+                             WHERE v.portal_subdomain = r.portal_subdomain AND v.request_id = r.id)
                      FROM requests r
                      LEFT JOIN agencies a
                        ON a.id = r.agency_id AND a.portal_subdomain = r.portal_subdomain
@@ -544,6 +552,8 @@ async fn deadline_answer(
                             determination_at: row.get(7)?,
                             determination_source: row.get(8)?,
                             extension,
+                            jurisdiction: row.get(13)?,
+                            first_release_at: row.get(14)?,
                         })
                     },
                 )
@@ -623,13 +633,26 @@ fn evaluate_request(
                 })
         })
         .transpose()?;
-    let evaluation = evaluate_statutory_compliance_with_determination_at(
+    let Some(jurisdiction) = StatutoryJurisdiction::from_stored(record.jurisdiction.as_deref())
+    else {
+        answer.status = IntentStatus::Unavailable;
+        answer.summary = format!(
+            "Request {request_id} is not evaluated against a statutory deadline: its source names \
+             no statutory jurisdiction, and no statute is assumed."
+        );
+        return Ok(());
+    };
+    let evaluation = evaluate_statutory_clock(
+        jurisdiction.rule(),
         request_id,
         &record.created_at,
-        Some(&record.updated_at),
-        record.closed_at.as_deref(),
-        record.determination_at.as_deref(),
-        record.determination_source.as_deref(),
+        DeterminationEvidence {
+            updated_at: Some(&record.updated_at),
+            closed_at: record.closed_at.as_deref(),
+            first_release_at: record.first_release_at.as_deref(),
+            determination_at: record.determination_at.as_deref(),
+            determination_source: record.determination_source.as_deref(),
+        },
         extension.as_ref(),
         &Utc::now().to_rfc3339(),
     );
@@ -648,7 +671,7 @@ fn evaluate_request(
         ),
         DeterminationBasis::EarliestRecordedActivityProxy => (
             EvidenceBasis::StatutoryActivityProxy,
-            "the earliest recorded portal activity, which stands in for the determination",
+            "the earliest recorded activity (a proxy: no determination is recorded)",
         ),
         DeterminationBasis::ObservationWithoutRecordedActivity => (
             EvidenceBasis::StatutoryProvisionalObservation,
@@ -1655,7 +1678,11 @@ mod tests {
         let repo = repository().await;
         run(
             &repo,
-            "INSERT INTO portals (subdomain, display_name, base_url) VALUES ('a', 'A', 'https://a.example.org');
+            "INSERT INTO portals (subdomain, display_name, base_url, statutory_jurisdiction)
+               VALUES ('a', 'A', 'https://a.example.org', 'CA_CPRA'),
+                      ('n', 'N', 'https://n.example.org', NULL);
+             INSERT INTO requests (id, portal_subdomain, title, status, created_at, updated_at)
+               VALUES (4, 'n', 'no jurisdiction', 'closed', '2026-01-01T00:00:00Z', '2026-03-01T00:00:00Z');
              INSERT INTO requests (id, portal_subdomain, title, status, created_at, updated_at, determination_at, determination_source)
                VALUES (1, 'a', 'sourced ok', 'closed', '2026-01-01T00:00:00Z', '2026-01-03T00:00:00Z', '2026-01-04T00:00:00Z', 'notice letter');
              INSERT INTO requests (id, portal_subdomain, title, status, created_at, updated_at)
@@ -1680,11 +1707,7 @@ mod tests {
         let proxy = ask(&repo, "why did request 2 miss its deadline", 10).await;
         assert_eq!(proxy.rows[0].basis, EvidenceBasis::StatutoryActivityProxy);
         assert!(proxy.summary.contains("exceeded"), "{}", proxy.summary);
-        assert!(
-            proxy.summary.contains("stands in for the determination"),
-            "{}",
-            proxy.summary
-        );
+        assert!(proxy.summary.contains("a proxy"), "{}", proxy.summary);
 
         let provisional = ask(&repo, "why did request 3 miss its deadline", 10).await;
         assert_eq!(
@@ -1697,6 +1720,18 @@ mod tests {
             provisional.summary
         );
 
+        // A source naming no jurisdiction gets no clock, not CPRA by default.
+        let unevaluated = ask(&repo, "why did request 4 miss its deadline", 10).await;
+        assert_eq!(unevaluated.status, IntentStatus::Unavailable);
+        assert!(unevaluated.rows.is_empty());
+        assert!(
+            unevaluated
+                .summary
+                .contains("names no statutory jurisdiction"),
+            "{}",
+            unevaluated.summary
+        );
+
         let missing = ask(&repo, "why did request 99 miss its deadline", 10).await;
         assert_eq!(missing.status, IntentStatus::NoMatch);
     }
@@ -1706,8 +1741,9 @@ mod tests {
         let repo = repository().await;
         run(
             &repo,
-            "INSERT INTO portals (subdomain, display_name, base_url) VALUES
-               ('a', 'A', 'https://a.example.org'), ('b', 'B', 'https://b.example.org');
+            "INSERT INTO portals (subdomain, display_name, base_url, statutory_jurisdiction) VALUES
+               ('a', 'A', 'https://a.example.org', 'CA_CPRA'),
+               ('b', 'B', 'https://b.example.org', 'CA_CPRA');
              INSERT INTO requests (id, portal_subdomain, title, status, created_at, updated_at) VALUES
                (5, 'a', 'first', 'closed', '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z'),
                (5, 'b', 'second', 'closed', '2026-01-01T00:00:00Z', '2026-03-02T00:00:00Z');"

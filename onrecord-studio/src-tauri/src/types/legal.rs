@@ -138,6 +138,12 @@ pub struct LegalComplianceFinding {
     pub review_status: String,
     pub first_detected_at: String,
     pub evaluated_at: String,
+    /// For a determination-clock finding, the `StatutoryClockRule::id` it was measured under.
+    /// `None` on other findings, and on clock findings stored before this was recorded.
+    pub clock_rule_id: Option<String>,
+    /// For a determination-clock finding, whether the determination date was recorded or a proxy.
+    /// `None` when not recorded on the finding, which is not any basis.
+    pub determination_basis: Option<crate::analysis::DeterminationBasis>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

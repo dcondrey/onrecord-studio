@@ -154,22 +154,8 @@ impl PublicRequest {
                 .map(|marker| marker.as_str().to_string()),
         );
 
-        let statutory = crate::analysis::evaluate_statutory_compliance_with_determination_at(
-            self.id,
-            &self.created_at,
-            Some(&self.updated_at),
-            self.closed_at.as_deref(),
-            self.determination_at.as_deref(),
-            self.determination_source.as_deref(),
-            self.statutory_extension.as_ref(),
-            &chrono::Utc::now().to_rfc3339(),
-        )?;
-        anomalies.extend(
-            statutory
-                .anomaly_markers
-                .into_iter()
-                .map(|marker| marker.as_str().to_string()),
-        );
+        // Statutory markers are not computed here: the clock depends on the portal's
+        // jurisdiction, which the repository evaluates when it stores the request.
         anomalies.sort();
         anomalies.dedup();
         self.timeline_anomalies = anomalies;

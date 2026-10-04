@@ -269,6 +269,76 @@ The finding states that two releases made different redaction decisions about th
 * `src/tests/plainLanguage.test.tsx` rejects accusatory wording for every kind, rejects wording of violation or breach for a kind or state that is not a legal claim, and requires the `LatencyOutlier` explanation to say it is a comparison with peers.
 * An evidence gap is an untested route. It is never explained as a finding and never as evidence of compliance or non-compliance.
 
+## 15. Rolling Productions
+
+`analysis/detectors/rolling_production.rs`; findings carry the kind `ROLLING_PRODUCTION`. Release events are stored in `request_release_events` (`storage/sqlite/release_events.rs`).
+
+### A. What is stored
+Every `Document(s) Released` and `Document(s) Released to Requester` event on a hosted NextRequest timeline (`ingestion/hosted_nextrequest.rs::decode_timeline`) becomes one row: the byline exactly as given, its wall-clock time at the US Pacific offset in force that day (the same conversion the opened and closed dates use), the portal's event id, and the file names the event lists, one per `<br>` line. The count of listed names is NULL when the event lists none: an event without a list is not a release of zero documents. A re-crawl replaces the request's rows. A timeline longer than `MAXIMUM_TIMELINE_PAGES` is read in part, so a stored history is a lower bound.
+
+### B. What fires
+An installment is a calendar date, in the portal's time, with at least one release event; several uploads on one day count once. A request with at least 3 installments whose first and last are more than 90 days apart yields one finding listing every installment date and the files listed on it.
+
+The thresholds were measured on 142 sandiego.nextrequest.com requests matching "encampment" (timelines read 2026-10-03): 126 have a release event, 24 have two or more, 23 on two or more dates. Spans of the multi-date requests, longest first: 810, 558, 524, 479, 283, 184, 172, 160, 132, 74, 68, 47, 44, 34, 32, 28, 27, 21, 13, 12, 12, 7, 7 days. Two dates are most often a release and one supplement (25-1161: two dates, 160 days, does not fire); the 90-day threshold sits in the gap between 74 and 132, so a day's drift does not move a request across it. With both thresholds, 8 of the 142 requests fire (20-2226: 27 dates over 810 days, from 30 release events).
+
+### C. What a finding does and does not claim
+The finding restates recorded dates: the request's records were released on N separate dates over D days. It is a pattern signal (`is_legal_claim` false) with confidence unassessed, since nothing is inferred to score. It does not say a deadline was missed: records may be produced in stages, and the requester may have agreed to a schedule or changed the request. No release date is used as `determination_at`; the first release enters the determination clock only as the activity proxy (§ 17).
+
+## 16. Denials Checked Against Earlier Releases
+
+`analysis/detectors/no_records_contradicted.rs`; findings carry the kind `NO_RECORDS_CONTRADICTED_BY_RELEASE`.
+
+### A. Which denials are tested
+A public document whose text states a plain denial ("no responsive records", "no responsive documents", "no records exist", "unable to locate any records", ...; the shared `extract_denial` pattern) on a request with a stated description or title. A denial limited to a year or fiscal year within 120 characters of the phrase is not tested: a release from outside that scope does not contradict it.
+
+### B. Candidate recall
+The on-device embedding model (`bge-small-en-v1.5`, unit vectors) scores every embedded document of the same portal by the cosine of its closest chunk against the denied request's description (the title only when there is no description; NextRequest titles are a truncated copy of it). The model proposes candidates and decides nothing.
+
+### C. Deterministic checks
+A candidate is cited only when all hold: cosine at or above `SIMILARITY_THRESHOLD`; public; same portal; a different request; that request was assigned the same `agency_id` as the denying request (exact id: a multi-department assignment is its own agency id and is not matched, and a request with no recorded agency matches nothing); its `created_at` is strictly before the denying request's `closed_at`, both parsed as RFC 3339 instants (an unparseable or absent date fails the check); and its own text is not a denial. `SIMILARITY_THRESHOLD` is 0.86: on the San Diego collection the highest cosine of any release judged not to contradict its denial was 0.8531 (see ROADMAP, "Findings on real collections"). It is a precision floor; recall is unmeasured.
+
+### D. Not run
+Without an installed embedding model, or with no embedded document, the detector reports not-run with the reason (`RefreshSummary::not_run`) and leaves its earlier findings in place. It never falls back to word overlap, which matched every San Diego denial to unrelated releases. The benchmark harness and `live_evaluation` run without the semantic index and so report this detector as not run.
+
+### E. What a finding does and does not claim
+The finding states that the agency had already released a document, before closing the request with a denial, whose text is near the request's own at the stated cosine, and cites the closest passage with its character range. Cosine measures closeness of subject and wording, not responsiveness, so the finding carries no confidence score (`Unassessed`) and is a pattern signal (`is_legal_claim` false). It does not show the search was inadequate: the release may fall outside what was asked.
+
+## 17. Statutory Determination Clocks
+
+`analysis/statute.rs` (rules, SQL rendering), `analysis/timeline.rs` (per-request evaluator), `analysis/anomaly.rs` (per-agency aggregate), `storage/sqlite/timeline.rs` (stored findings). Findings carry the timeline flag `STATUTORY_LATENCY_VIOLATION` and are stored in `statutory_violations` against the rule's `legal_statutes` row.
+
+### A. Which clock applies
+Each source names its jurisdiction in `portals.statutory_jurisdiction`: `CA_CPRA`, `US_FOIA`, or `NONE`. A source with NULL (nobody has said) or `NONE` is not evaluated: no deadline, no finding, no flag, and an agency with no evaluated request reports `Unaudited` with a NULL violation rate. Startup fills a NULL only for a host `ingestion/regional.rs` attributes to a California public agency (CPRA) or a federal agency (FOIA); another city's portal on the same platform gets nothing. The Legal compliance panel shows and changes the choice; a change re-evaluates every request of the source and withdraws findings stored under the previous rule (`RESOLVED_BY_NEW_EVIDENCE`).
+
+### B. The rules
+Every part of a rule cites a section and an official URL (`StatutoryClockRule`).
+
+| | CPRA (`CA_CPRA_DETERMINATION`) | FOIA (`US_FOIA_DETERMINATION`) |
+|---|---|---|
+| Starts | receipt (Gov. Code § 7922.535(a)) | receipt by the appropriate component, at most 10 working days after first receipt (5 U.S.C. § 552(a)(6)(A), flush text); started at that latest point, since the record shows first receipt only |
+| Period | 10 calendar days | 20 working days (§ 552(a)(6)(A)(i)) |
+| Closed days | Saturdays, Sundays, California judicial holidays; a last day on one carries to the next court day (Code Civ. Proc. §§ 12, 12a, 135) | Saturdays, Sundays, legal public holidays of 5 U.S.C. § 6103 with their observed days (Saturday → Friday, § 6103(b); Sunday → Monday, Exec. Order 11582 § 3(a)); Inauguration Day included |
+| Extension | one written notice, at most 14 calendar days past the carried initial deadline, six grounds (§ 7922.535(b)-(c)) | one written notice, at most 10 working days, three grounds (§ 552(a)(6)(B)(i), (iii)) |
+| Stops | the agency's determination | the agency's determination; tolling under § 552(a)(6)(A)(ii)(I)-(II) is not recorded by any source |
+
+Verified against leginfo.legislature.ca.gov (Gov. Code § 7922.535 as amended by Stats. 2025, ch. 34, AB 370, effective 2026-01-01; Code Civ. Proc. §§ 12a, 135) and govinfo.gov (5 U.S.C. §§ 552, 6103) on 2026-10-03. LENIENCY: every uncertainty resolves toward a later deadline, which can only withhold a violation: the FOIA routing allowance is always taken (DOJ OIP reads it as working days), Juneteenth and the CPRA cyberattack ground apply to every year, and a weekend holiday also closes its observed weekday. Requests before 2023 fell under former Gov. Code § 6253(c), recodified without substantive change by AB 473.
+
+### C. What the period is measured to
+1. A recorded determination: `requests.determination_at` with a non-blank `determination_source`. On a hosted NextRequest portal this is the timeline's first "Request Closed" event when no release precedes or accompanies it, and not a withdrawal; the source names the event id and byline. Measured (sandiego 23-1500: closed "No responsive documents" on day 5, nothing released). A closure after a release is not a determination (sandiego 25-1161: released February 2025, closed December 2025).
+2. Otherwise the earliest recorded activity strictly after receipt: `updated_at`, `closed_at`, or the first release event. A proxy: a release shows the determination came no later; an unrelated update may predate it. A timestamp equal to receipt is the receipt itself.
+3. Otherwise the observation date, read in the receipt's offset. Provisional: the period is still running.
+
+Absence of a recorded determination is never taken as one. Day counts are calendar days between recorded-offset dates; a violation is a measured date after the effective deadline.
+
+### D. Confidence
+`statutory_clock_confidence_basis_points`: 10000 minus the uncertainty (recorded determination 0, proxy 1000, observation 2500; extension claimed without a source 1200, contested 600; a rule with unrecorded clock stops, FOIA, 500), plus relief up to half the uncertainty for an overrun of up to 30 days. 10000 is reached only when every date input was recorded under a rule with no unrecorded stops.
+
+### E. Parity
+`statutory_verdicts_match_the_per_request_evaluator` drives both paths from one case table (deadline day −1/0/+1 for each rule, weekends, holidays, extensions at and past the maximum, a CPRA-only ground under FOIA, a release proxy, a recorded determination, activity at the receipt instant, no jurisdiction, `NONE`) under three session time zones, comparing both the evaluated count and the violation count.
+
+### F. What a finding does and does not claim
+A finding states that the measured date fell after the effective deadline under the named rule, and says whether that date was a recorded determination, a proxy, or the observation date. It is not a judicial conclusion. Old databases carry no recorded closure determination until a re-crawl writes one, so their findings rest on the proxy until then.
+
 ---
 
 ## Appendix: Eval-Set Scorecards

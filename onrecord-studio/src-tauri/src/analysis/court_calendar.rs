@@ -79,7 +79,7 @@ fn is_modeled(date: NaiveDate) -> bool {
     (FIRST_MODELED_YEAR..=LAST_MODELED_YEAR).contains(&date.year())
 }
 
-fn is_closed(date: NaiveDate) -> bool {
+pub(crate) fn is_closed(date: NaiveDate) -> bool {
     matches!(date.weekday(), Weekday::Sat | Weekday::Sun)
         || holidays_of_year(date.year()).contains(&date)
         || holidays_of_year(date.year() + 1).contains(&date)

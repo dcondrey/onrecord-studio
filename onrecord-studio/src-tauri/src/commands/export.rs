@@ -1,4 +1,4 @@
-use crate::analysis::StatutoryComplianceAnalysis;
+use crate::analysis::{DeterminationBasis, StatutoryComplianceAnalysis};
 use crate::commands::validation::{
     optional_text, portal_key as validate_portal_key, MAXIMUM_PATH_BYTES,
 };
@@ -133,7 +133,11 @@ struct PackagedLegalFinding {
     evaluated_at: RecordedInstant,
 }
 
-const TEMPLATE_VARIABLES: [&str; 25] = [
+const TEMPLATE_VARIABLES: [&str; 29] = [
+    "STATUTORY_RULE",
+    "RELIEF_STATUTE",
+    "CLOCK_RULE",
+    "DETERMINATION_BASIS",
     "GENERATED_AT",
     "AGENCY_NAME",
     "PORTAL_NAME",
@@ -177,21 +181,12 @@ pub async fn export_legal_brief(
     let evidence = repository
         .load_legal_brief_evidence(request_id, portal_key)
         .await?;
-    let compliance = crate::analysis::evaluate_statutory_compliance_with_determination_at(
-        request_id,
-        &evidence.created_at,
-        Some(&evidence.updated_at),
-        evidence.closed_at.as_deref(),
-        evidence.determination_at.as_deref(),
-        evidence.determination_source.as_deref(),
-        evidence.extension.as_ref(),
-        &chrono::Utc::now().to_rfc3339(),
-    )?;
+    let compliance = evidence.evaluate_statutory_clock(&chrono::Utc::now().to_rfc3339())?;
     let legal_findings = repository
         .list_request_legal_findings(request_id, portal_key)
         .await?;
     let legal_authorities = load_referenced_legal_authorities(&repository, &legal_findings).await?;
-    let markers = reportable_markers(&evidence, &compliance);
+    let markers = reportable_markers(&evidence, compliance.as_ref());
     if markers.is_empty() {
         return Err(AppError::Export(format!(
             "Request {}/{request_id} has no statutory-latency or fast-closure finding",
@@ -201,7 +196,7 @@ pub async fn export_legal_brief(
     let generated_at = chrono::Utc::now().to_rfc3339();
     let report = render_report(
         &evidence,
-        &compliance,
+        compliance.as_ref(),
         &markers,
         &legal_findings,
         author_name
@@ -788,7 +783,7 @@ struct EmittedVerifiers {
 
 fn reportable_markers(
     evidence: &LegalBriefEvidence,
-    compliance: &StatutoryComplianceAnalysis,
+    compliance: Option<&StatutoryComplianceAnalysis>,
 ) -> Vec<String> {
     let allowed = [
         TimelineAnomalyMarker::StatutoryLatencyViolation.as_str(),
@@ -801,10 +796,18 @@ fn reportable_markers(
         .filter(|marker| allowed.contains(&marker.as_str()))
         .cloned()
         .collect::<Vec<_>>();
+    // A source without a jurisdiction has no clock, so no statutory flag stored before that was
+    // known may be reported either.
+    if compliance.is_none() {
+        markers.retain(|marker| {
+            marker != TimelineAnomalyMarker::StatutoryLatencyViolation.as_str()
+                && marker != TimelineAnomalyMarker::StatutoryExtensionDefective.as_str()
+        });
+    }
     markers.extend(
         compliance
-            .anomaly_markers
             .iter()
+            .flat_map(|compliance| compliance.anomaly_markers.iter())
             .map(|marker| marker.as_str().to_string()),
     );
     markers.sort();
@@ -814,7 +817,7 @@ fn reportable_markers(
 
 fn render_report(
     evidence: &LegalBriefEvidence,
-    compliance: &StatutoryComplianceAnalysis,
+    compliance: Option<&StatutoryComplianceAnalysis>,
     markers: &[String],
     legal_findings: &[LegalComplianceFinding],
     author_name: &str,
@@ -836,10 +839,12 @@ fn render_report(
     for marker in markers {
         finding_lines.push(format!("- `{marker}`"));
     }
-    finding_lines.push(format!(
-        "- {}",
-        markdown_inline(&compliance.evidence_summary)?
-    ));
+    if let Some(compliance) = compliance {
+        finding_lines.push(format!(
+            "- {}",
+            markdown_inline(&compliance.evidence_summary)?
+        ));
+    }
     for finding in legal_findings
         .iter()
         .filter(|finding| matches!(finding.review_status.as_str(), "OPEN" | "CONFIRMED"))
@@ -875,47 +880,94 @@ fn render_report(
         "CLOSED_AT",
         markdown_inline(evidence.closed_at.as_deref().unwrap_or("Not recorded"))?,
     );
+    const NOT_EVALUATED: &str =
+        "Not evaluated: the source names no statutory jurisdiction, so no clock applies";
+    let rule = compliance.map(|compliance| compliance.jurisdiction.rule());
+    values.insert(
+        "STATUTORY_RULE",
+        markdown_inline(&rule.map(|rule| rule.statement()).unwrap_or_else(|| {
+            "No statutory determination clock is evaluated for this source: it names no \
+             statutory jurisdiction, so this draft states no deadline."
+                .to_string()
+        }))?,
+    );
+    values.insert(
+        "RELIEF_STATUTE",
+        markdown_inline(rule.map_or("applicable law", |rule| rule.act_name))?,
+    );
+    values.insert(
+        "CLOCK_RULE",
+        markdown_inline(
+            &rule
+                .map(|rule| format!("{} ({})", rule.title, rule.initial_citation.section))
+                .unwrap_or_else(|| NOT_EVALUATED.to_string()),
+        )?,
+    );
+    let field = |value: Option<&str>, absent: &str| -> Result<String, AppError> {
+        markdown_inline(value.unwrap_or(absent))
+    };
     values.insert(
         "INITIAL_DEADLINE_AT",
-        markdown_inline(&compliance.initial_deadline_at)?,
+        field(
+            compliance.map(|compliance| compliance.initial_deadline_at.as_str()),
+            NOT_EVALUATED,
+        )?,
     );
     values.insert(
         "EFFECTIVE_DEADLINE_AT",
-        markdown_inline(&compliance.effective_deadline_at)?,
+        field(
+            compliance.map(|compliance| compliance.effective_deadline_at.as_str()),
+            NOT_EVALUATED,
+        )?,
     );
     values.insert(
         "DETERMINATION_AT",
-        markdown_inline(
-            compliance
-                .determination_at
-                .as_deref()
-                .unwrap_or("No qualifying milestone recorded"),
+        field(
+            compliance.and_then(|compliance| compliance.determination_at.as_deref()),
+            "No qualifying milestone recorded",
+        )?,
+    );
+    values.insert(
+        "DETERMINATION_BASIS",
+        field(
+            compliance.map(|compliance| match compliance.determination_basis {
+                DeterminationBasis::SourcedDeterminationEvent => "Recorded determination event",
+                DeterminationBasis::EarliestRecordedActivityProxy => {
+                    "Proxy: the earliest recorded activity, not a recorded determination"
+                }
+                DeterminationBasis::ObservationWithoutRecordedActivity => {
+                    "None recorded: measured to the observation date"
+                }
+            }),
+            NOT_EVALUATED,
         )?,
     );
     values.insert(
         "DETERMINATION_SOURCE",
-        markdown_inline(
-            compliance
-                .determination_source
-                .as_deref()
-                .unwrap_or("No sourced determination event recorded"),
+        field(
+            compliance.and_then(|compliance| compliance.determination_source.as_deref()),
+            "No sourced determination event recorded",
         )?,
     );
     values.insert(
         "CALENDAR_DAYS_ELAPSED",
-        compliance.calendar_days_elapsed.to_string(),
+        compliance.map_or_else(
+            || NOT_EVALUATED.to_string(),
+            |compliance| compliance.calendar_days_elapsed.to_string(),
+        ),
     );
     values.insert(
         "EXTENSION_STATUS",
-        markdown_inline(&format!("{:?}", compliance.extension_status))?,
+        markdown_inline(&compliance.map_or_else(
+            || NOT_EVALUATED.to_string(),
+            |compliance| format!("{:?}", compliance.extension_status),
+        ))?,
     );
     values.insert(
         "EXTENSION_REASON",
-        markdown_inline(
-            compliance
-                .extension_reason
-                .as_deref()
-                .unwrap_or("No statutory extension recorded"),
+        field(
+            compliance.and_then(|compliance| compliance.extension_reason.as_deref()),
+            "No statutory extension recorded",
         )?,
     );
     values.insert("EXTENSION_SOURCE", markdown_inline(extension_source)?);

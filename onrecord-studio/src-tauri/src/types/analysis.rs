@@ -57,8 +57,12 @@ pub struct AgencyPerformanceProfile {
     pub performance_z_score: Option<f64>,
     pub compliance_indicator: VerificationState,
     pub anomaly_count: usize,
+    /// Requests measured against a statutory clock. A request whose source names no
+    /// jurisdiction is not, and counts toward neither this nor the violations.
+    pub statutory_evaluated_count: usize,
     pub statutory_violation_count: usize,
-    pub statutory_violation_rate: f64,
+    /// Violations over evaluated requests; `None` when none was evaluated, never 0.0 for that.
+    pub statutory_violation_rate: Option<f64>,
     pub suspicious_fast_closure_count: usize,
     pub total_documents_released: usize,
     pub keyword_frequency_map: HashMap<String, usize>,

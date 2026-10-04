@@ -3,6 +3,7 @@
 pub mod anomaly;
 pub mod cluster;
 pub mod court_calendar;
+pub mod federal_calendar;
 pub mod reconstruction;
 pub mod request_compiler;
 pub mod series_gaps;
@@ -16,12 +17,12 @@ pub use cluster::{
     RedactionDensityMetric, RedactionMatchEvidence, RedactionPatternKind, TextLayerRedactionMetric,
     HEAVY_REDACTION_DENSITY_THRESHOLD,
 };
-pub use statute::DeterminationBasis;
+pub use statute::{DeterminationBasis, StatutoryJurisdiction};
 pub use timeline::{
     calculate_operational_latency_for_status, detect_fast_drop_for_status,
-    evaluate_statutory_compliance_at, evaluate_statutory_compliance_with_determination_at,
-    StatutoryComplianceAnalysis, StatutoryExtensionStatus, CPRA_INITIAL_DETERMINATION_DAYS,
-    CPRA_MAXIMUM_EXTENSION_DAYS, CPRA_STATUTE_CITATION, SUSPICIOUS_CLOSURE_THRESHOLD_SECONDS,
+    evaluate_statutory_clock, DeterminationEvidence, StatutoryComplianceAnalysis,
+    StatutoryExtensionStatus, CPRA_INITIAL_DETERMINATION_DAYS, CPRA_MAXIMUM_EXTENSION_DAYS,
+    CPRA_STATUTE_CITATION, SUSPICIOUS_CLOSURE_THRESHOLD_SECONDS,
 };
 
 pub mod review;

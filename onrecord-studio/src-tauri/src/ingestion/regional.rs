@@ -252,6 +252,42 @@ pub(crate) fn source_jurisdiction(source: &str) -> &'static str {
     "Unclassified source"
 }
 
+/// Publisher labels above that name a public agency subject to the California Public Records Act
+/// (cities, counties, special districts, school districts, the state, UC and CSU campuses).
+/// Catalogs, news, research, regional organizations and unclassified hosts are absent on purpose.
+const CALIFORNIA_PUBLIC_AGENCY_LABELS: &[&str] = &[
+    "City of San Diego",
+    "San Diego County",
+    "San Diego County Sheriff",
+    "San Diego County District Attorney",
+    "San Diego Housing Commission",
+    "SANDAG / SanGIS",
+    "California",
+    "San Diego Metropolitan Transit System",
+    "City of Escondido",
+    "San Diego Unified School District",
+    "Poway Unified School District",
+    "San Diego County Office of Education",
+    "UC San Diego",
+    "San Diego State University",
+    "San Diego Air Pollution Control District",
+];
+
+/// The statutory jurisdiction a source's recognized publisher implies, or `None` when the host is
+/// not one this file attributes to a public agency. Never inferred from a hosting platform alone.
+pub(crate) fn inferred_statutory_jurisdiction(
+    source: &str,
+) -> Option<crate::analysis::StatutoryJurisdiction> {
+    let label = source_jurisdiction(source);
+    if CALIFORNIA_PUBLIC_AGENCY_LABELS.contains(&label) {
+        Some(crate::analysis::StatutoryJurisdiction::CaliforniaCpra)
+    } else if label == "United States" {
+        Some(crate::analysis::StatutoryJurisdiction::FederalFoia)
+    } else {
+        None
+    }
+}
+
 pub(crate) fn is_publication_site(url: &Url) -> bool {
     matches!(
         url.host_str()
@@ -850,6 +886,22 @@ mod tests {
         )
         .is_err());
     }
+    #[test]
+    fn only_a_recognized_public_agency_host_implies_a_statutory_jurisdiction() {
+        use crate::analysis::StatutoryJurisdiction::{CaliforniaCpra, FederalFoia};
+        for (url, expected) in [
+            ("https://sandiego.nextrequest.com", Some(CaliforniaCpra)),
+            ("https://data.transportation.gov", Some(FederalFoia)),
+            // Another city's portal on the same platform is not California by implication.
+            ("https://seattle.nextrequest.com", None),
+            ("https://catalog.data.gov/dataset/example", None),
+            ("https://voiceofsandiego.org/story", None),
+            ("https://example.gov", None),
+        ] {
+            assert_eq!(inferred_statutory_jurisdiction(url), expected, "{url}");
+        }
+    }
+
     #[test]
     fn expanded_sources_keep_publisher_roles_and_selected_federal_datasets() {
         for (url, jurisdiction) in [

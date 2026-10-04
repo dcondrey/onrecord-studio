@@ -12,7 +12,7 @@ Re: Public-records request {{REQUEST_REFERENCE}} — {{REQUEST_TITLE}}
 
 This evidence-backed draft provides notice of apparent procedural defects identified in the public portal record for the request above. It requests immediate written confirmation of the agency's determination, the reasons for that determination, the estimated production date for disclosable records, preservation of all responsive records and portal event logs, and prompt correction of any inaccurate public timeline metadata.
 
-California Government Code § 7922.535 requires an agency to determine within 10 days of receipt whether a request seeks disclosable records and promptly notify the requester of that determination and its reasons. A longer determination period requires timely written notice based on an enumerated unusual circumstance, must identify the reason and expected dispatch date, and may not extend the determination deadline by more than 14 days. Official code text: https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=GOV&sectionNum=7922.535.
+{{STATUTORY_RULE}}
 
 ## Request evidence
 
@@ -27,7 +27,9 @@ California Government Code § 7922.535 requires an agency to determine within 10
 | Closed | {{CLOSED_AT}} |
 | Initial determination deadline | {{INITIAL_DEADLINE_AT}} |
 | Effective determination deadline | {{EFFECTIVE_DEADLINE_AT}} |
+| Statutory clock rule | {{CLOCK_RULE}} |
 | Recorded determination milestone | {{DETERMINATION_AT}} |
+| Determination basis | {{DETERMINATION_BASIS}} |
 | Determination source | {{DETERMINATION_SOURCE}} |
 | Calendar days elapsed | {{CALENDAR_DAYS_ELAPSED}} |
 | Extension status | {{EXTENSION_STATUS}} |
@@ -50,7 +52,7 @@ California Government Code § 7922.535 requires an agency to determine within 10
 
 Please preserve the request record, message history, status-transition log, extension notice, responsive-document inventory, original uploaded files, checksums, and all audit or access logs associated with this matter. Please provide a written response identifying any portal timestamp that does not represent a determination or disclosure event and the source record supporting that correction.
 
-Absent prompt correction or compliance, the requester reserves all rights to seek appropriate judicial relief under the California Public Records Act. Nothing in this draft waives any right, remedy, claim, deadline, or argument.
+Absent prompt correction or compliance, the requester reserves all rights to seek appropriate judicial relief under {{RELIEF_STATUTE}}. Nothing in this draft waives any right, remedy, claim, deadline, or argument.
 
 ## Evidence qualification
 

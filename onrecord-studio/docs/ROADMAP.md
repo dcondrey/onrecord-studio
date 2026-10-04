@@ -1002,3 +1002,51 @@ The detectors now produce 0 findings on this corpus. Next, in order:
    unclassified, 0 unrecorded. The earlier 87/33 figures came from a different run. Rules are
    measured only against San Diego's wording; other NextRequest portals' notices will show as
    not classified until a rule names them.
+
+## Statutory determination clocks (decided 2026-10-03)
+
+Method: `docs/analysis_methods.md` §17. Decisions taken, with the reason each one goes the way it
+does:
+
+- **Rules are data.** One `StatutoryClockRule` per jurisdiction in `analysis/statute.rs`: start
+  event, period and day kind, holiday calendar, extension maximum and grounds, unrecorded clock
+  stops, each with a section and official URL. The SQL aggregate renders the rules as a
+  `clock_rules` VALUES table and the calendars as a `statutory_days` table with running open-day
+  ordinals; there is no CPRA-defaulting evaluator left (`evaluate_statutory_clock` takes a rule).
+- **Shipped: CPRA and federal FOIA only.** Verified 2026-10-03 against leginfo (Gov. Code
+  § 7922.535 as amended by AB 370, eff. 2026-01-01; Code Civ. Proc. §§ 12a, 135) and govinfo
+  (5 U.S.C. §§ 552(a)(6), 6103); OPM for the Sunday→Monday observance (Exec. Order 11582 § 3(a));
+  DOJ OIP for reading FOIA's 10-day routing allowance as working days. No other state was added:
+  none was verified against a primary source in this pass.
+- **Leniency (later deadline wins).** FOIA's clock starts 10 working days after first receipt,
+  because the record never shows receipt by the appropriate component; Juneteenth and Inauguration
+  Day apply to every year and agency; every CPRA ground applies to every request.
+- **FOIA tolling is unrecorded,** so a FOIA finding never reaches 10000 bps (500 bps penalty).
+- **Jurisdiction is the portal's** (`portals.statutory_jurisdiction`, nullable, no DEFAULT; `NONE`
+  = stated none). NULL or `NONE` ⇒ not evaluated anywhere: no flag, no finding, open clock findings
+  withdrawn, agency `Unaudited` with a NULL violation rate. Startup and portal registration fill
+  NULL only for hosts `ingestion/regional.rs` attributes to a California public agency (CPRA) or a
+  federal agency (FOIA). Before this, every portal was implicitly CPRA.
+- **Recorded determination:** hosted NextRequest's first "Request Closed" event, only when no
+  release precedes or accompanies it and it is not a withdrawal (measured on sandiego: 23-1500 is a
+  determination; 25-1161 and 24-5408 closed after releases and are not). Written to
+  `requests.determination_at`/`determination_source` at ingestion. The public timeline omits
+  requester-only messages; the source text says so.
+- **Releases are a proxy, not a determination:** the first `request_release_events` row joins
+  `updated_at`/`closed_at` in the earliest-activity proxy. Activity equal to the receipt instant is
+  not activity (hosted portals set `updated_at = created_at` on open requests, which used to make
+  every open hosted request "determined at receipt").
+- **Extension notices** only move the deadline; never a determination.
+- **Casework drafts stay CPRA** (`request_compiler` compiles a CPRA request); the appeal template
+  refuses a non-CPRA rule.
+- `STATUTORY_RULE_VERSION` = 3 (rule key `statutory_clock`) recomputes every stored finding once.
+
+Open:
+
+- Databases collected before this pass have no recorded closure determination until a re-crawl;
+  their findings rest on the labelled proxy. A stored closure-notice document is not used to
+  backfill, because it carries the *latest* closure.
+- The project `CLAUDE.md` (untracked, main checkout) still names
+  `cpra_calendar_confidence_basis_points`; it is now `statutory_clock_confidence_basis_points`.
+- Requester-only portal messages (extension letters, 10-day letters) are not ingested; when they
+  are, they are the better determination and extension evidence.

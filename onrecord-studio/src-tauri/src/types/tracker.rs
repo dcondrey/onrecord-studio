@@ -24,8 +24,9 @@ pub const MAXIMUM_SUBJECT_EXCERPT_CHARACTERS: usize = 120;
 pub const MAXIMUM_MATCHED_SENTENCE_BYTES: usize = 500;
 pub const MAXIMUM_EXCERPT_BYTES: usize = 900;
 pub const MAXIMUM_IMPORT_PATHS: usize = 20;
-/// The jurisdiction value the app has a deadline model for.
+/// The jurisdiction values the app has a deadline model for, as `StatutoryJurisdiction` stores them.
 pub const CALIFORNIA_CPRA_JURISDICTION: &str = "CA_CPRA";
+pub const FEDERAL_FOIA_JURISDICTION: &str = "US_FOIA";
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -244,6 +245,7 @@ pub struct EmailImportReport {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum DeadlineModel {
     CaliforniaCpra,
+    FederalFoia,
     NoModel,
 }
 

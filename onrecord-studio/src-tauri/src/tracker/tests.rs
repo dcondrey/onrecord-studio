@@ -409,6 +409,36 @@ fn the_countdown_crosses_zero_without_calling_the_provisional_period_a_violation
     assert!(passed.basis_statement.contains("provisional"));
 }
 
+/// A federal request is counted in working days from the latest start FOIA allows, not by the
+/// CPRA calendar: 14 January is day 13 of CPRA's count but well inside FOIA's.
+#[test]
+fn a_foia_request_is_counted_under_the_foia_rule() {
+    let mut document = TrackerDocument::default();
+    let id = claim_request(
+        &mut document,
+        ClaimRequestInput {
+            jurisdiction: Some(FEDERAL_FOIA_JURISDICTION.to_string()),
+            ..claim_input("26-114")
+        },
+        &[],
+        NOW,
+    )
+    .unwrap()
+    .id;
+    add(
+        &mut document,
+        &id,
+        TimelineEventKind::Submitted,
+        "2026-01-02T00:00:00Z",
+    );
+    let deadline = request_deadline(&document.claims[0], at("2026-01-15"));
+    assert_eq!(deadline.model, DeadlineModel::FederalFoia);
+    assert_eq!(deadline.countdown.kind, CountdownKind::DaysRemaining);
+    let analysis = deadline.analysis.expect("a FOIA request is evaluated");
+    assert_eq!(analysis.rule_id, "US_FOIA_DETERMINATION");
+    assert!(!analysis.is_violation);
+}
+
 #[test]
 fn absence_is_stated_never_defaulted() {
     let mut document = TrackerDocument::default();

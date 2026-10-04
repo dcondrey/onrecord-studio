@@ -1,15 +1,15 @@
 //! Compiles a casework records request into a CPRA request scoped to the records that identified
 //! it, and schedules its follow-ups from the statutory engine.
 //!
-//! Two rules bound everything here. The only statute modeled is the CPRA determination clock in
-//! [`crate::analysis::statute`], so a draft cites that and names the Act otherwise; no other
+//! Two rules bound everything here. The draft is a CPRA request, so the clock is the CPRA rule in
+//! [`crate::analysis::statute`] and a draft cites that and names the Act otherwise; no other
 //! citation is invented. And no clock exists until a filing date is recorded: a request with no
 //! recorded submission has no [`RequestFilingPlan`] at all rather than a plan reading zero days.
 
 use crate::analysis::court_calendar::COURT_CALENDAR_BASIS;
-use crate::analysis::statute::DeterminationBasis;
+use crate::analysis::statute::{DeterminationBasis, CPRA_DETERMINATION_RULE};
 use crate::analysis::timeline::{
-    evaluate_statutory_compliance_with_determination_at, StatutoryComplianceAnalysis,
+    evaluate_statutory_clock, DeterminationEvidence, StatutoryComplianceAnalysis,
     CPRA_INITIAL_DETERMINATION_DAYS, CPRA_MAXIMUM_EXTENSION_DAYS, CPRA_STATUTE_CITATION,
 };
 use crate::error::AppError;
@@ -147,8 +147,8 @@ pub fn compile_cpra_request(scope: &RequestScope<'_>) -> String {
 /// Evaluates the filed request against the modeled clock and schedules its follow-ups.
 ///
 /// `filed_on` and `responses_on` are the request's own `YYYY-MM-DD` dates; they are widened to
-/// instants at the start of the day in UTC because that is the whole precision the records carry,
-/// and the engine measures in calendar days.
+/// instants at the start (filing) and end (responses) of the day in UTC because that is the whole
+/// precision the records carry, and the engine measures in calendar days.
 ///
 /// `position` labels the engine's own evidence summary only. A casework request is keyed by a
 /// string id the engine has no numeric form for, and nothing here reproduces that summary.
@@ -164,16 +164,17 @@ pub fn plan_filing(
         .map(|value| value.trim())
         .filter(|value| !value.is_empty())
         .min()
-        .map(day_start);
-    let analysis = evaluate_statutory_compliance_with_determination_at(
+        .map(day_end);
+    let analysis = evaluate_statutory_clock(
+        &CPRA_DETERMINATION_RULE,
         position,
         &day_start(filed_on),
-        earliest_response.as_deref(),
-        None,
         // A recorded production is an upper bound on when the agency acted, not a noticed
         // determination, so it enters as the activity proxy and never as a sourced determination.
-        None,
-        None,
+        DeterminationEvidence {
+            updated_at: earliest_response.as_deref(),
+            ..DeterminationEvidence::default()
+        },
         None,
         observed_at,
     )?;
@@ -182,6 +183,12 @@ pub fn plan_filing(
 
 fn day_start(date: &str) -> String {
     format!("{}T00:00:00Z", date.trim())
+}
+
+/// A production is known to its day only. Placing it at the day's end keeps one on the filing day
+/// after the filing instant, so it counts as activity after receipt; the day is unchanged.
+fn day_end(date: &str) -> String {
+    format!("{}T23:59:59Z", date.trim())
 }
 
 fn calendar_date(instant: &str) -> String {

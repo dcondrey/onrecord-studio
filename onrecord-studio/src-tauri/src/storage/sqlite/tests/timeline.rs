@@ -286,13 +286,17 @@ async fn a_cpra_finding_built_from_recorded_dates_is_stored_at_certainty() {
 
     // Receipt and a sourced determination event 46 calendar days later, well past the 10-day
     // determination deadline, with no extension claimed.
-    let analysis = crate::analysis::evaluate_statutory_compliance_with_determination_at(
+    let analysis = crate::analysis::evaluate_statutory_clock(
+        &crate::analysis::statute::CPRA_DETERMINATION_RULE,
         REQUEST_ID as u64,
         "2026-01-05T09:00:00Z",
-        Some("2026-02-20T09:00:00Z"),
-        Some("2026-02-20T09:00:00Z"),
-        Some("2026-02-20T09:00:00Z"),
-        Some("portal determination event"),
+        crate::analysis::DeterminationEvidence {
+            updated_at: Some("2026-02-20T09:00:00Z"),
+            closed_at: Some("2026-02-20T09:00:00Z"),
+            first_release_at: None,
+            determination_at: Some("2026-02-20T09:00:00Z"),
+            determination_source: Some("portal determination event"),
+        },
         None,
         "2026-03-01T00:00:00Z",
     )
@@ -309,7 +313,7 @@ async fn a_cpra_finding_built_from_recorded_dates_is_stored_at_certainty() {
 
     let variance_days = analysis.calendar_days_elapsed - analysis.allowed_calendar_days;
     assert_eq!(
-        cpra_calendar_confidence_basis_points(&analysis, variance_days),
+        statutory_clock_confidence_basis_points(&analysis, variance_days),
         10_000
     );
 }
@@ -323,11 +327,11 @@ async fn a_cpra_finding_resting_on_an_unobserved_date_is_stored_below_certainty(
 
     // Nothing was recorded at or after receipt, so the period was measured to "now" and is
     // still running.
-    let inferred = crate::analysis::evaluate_statutory_compliance_at(
+    let inferred = crate::analysis::evaluate_statutory_clock(
+        &crate::analysis::statute::CPRA_DETERMINATION_RULE,
         REQUEST_ID as u64,
         "2026-01-05T09:00:00Z",
-        None,
-        None,
+        crate::analysis::DeterminationEvidence::default(),
         None,
         "2026-02-20T09:00:00Z",
     )
@@ -339,7 +343,7 @@ async fn a_cpra_finding_resting_on_an_unobserved_date_is_stored_below_certainty(
     );
 
     let variance_days = inferred.calendar_days_elapsed - inferred.allowed_calendar_days;
-    let inferred_confidence = cpra_calendar_confidence_basis_points(&inferred, variance_days);
+    let inferred_confidence = statutory_clock_confidence_basis_points(&inferred, variance_days);
     assert!(
         inferred_confidence < 10_000,
         "an inferred determination date must not be stored at certainty, got {inferred_confidence}"
@@ -354,8 +358,164 @@ async fn a_cpra_finding_resting_on_an_unobserved_date_is_stored_below_certainty(
     unsourced_extension.determination_basis = DeterminationBasis::EarliestRecordedActivityProxy;
     unsourced_extension.extension_status = StatutoryExtensionStatus::MissingNoticeSource;
     assert_eq!(
-        cpra_calendar_confidence_basis_points(&unsourced_extension, variance_days),
+        statutory_clock_confidence_basis_points(&unsourced_extension, variance_days),
         8_900
+    );
+
+    // FOIA lets tolling stop the clock, and no source here records it, so even a recorded
+    // determination under that rule cannot reach certainty.
+    let mut foia = inferred.clone();
+    foia.jurisdiction = crate::analysis::StatutoryJurisdiction::FederalFoia;
+    foia.determination_basis = DeterminationBasis::SourcedDeterminationEvent;
+    foia.extension_status = StatutoryExtensionStatus::NotInvoked;
+    assert_eq!(statutory_clock_confidence_basis_points(&foia, 0), 9_500);
+}
+
+async fn statutory_findings(
+    repository: &DuckDbRepository,
+) -> Vec<(String, String, Option<String>)> {
+    let connection = repository.conn.lock().await;
+    connection
+        .prepare(
+            "SELECT matched_statute_id, review_status, determination_basis
+             FROM statutory_violations
+             WHERE portal_subdomain = ?1 AND request_id = ?2
+             ORDER BY matched_statute_id",
+        )
+        .unwrap()
+        .query_map(params![PORTAL_SUBDOMAIN, REQUEST_ID], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })
+        .unwrap()
+        .collect::<duckdb::Result<Vec<_>>>()
+        .unwrap()
+}
+
+/// A source that names no jurisdiction gets no clock: not CPRA by default. Clearing the
+/// jurisdiction of a source with a standing finding withdraws it, and switching to FOIA re-measures
+/// the same dates under FOIA, withdrawing the CPRA finding rather than leaving both standing.
+#[tokio::test]
+async fn the_clock_follows_the_source_jurisdiction_and_none_means_not_evaluated() {
+    let repository = repository_with_document().await;
+    repository
+        .conn
+        .lock()
+        .await
+        .execute(
+            "UPDATE requests SET created_at = ?1, updated_at = ?2, closed_at = ?2,
+             status = 'closed' WHERE id = ?3",
+            // Determination proxy 20 calendar days out: late under CPRA (10 days), timely under
+            // FOIA (ten working days to start, then twenty).
+            params!["2026-08-03T09:00:00Z", "2026-08-23T09:00:00Z", REQUEST_ID],
+        )
+        .unwrap();
+    let cpra_flags = repository
+        .refresh_request_timeline_audit(REQUEST_ID as u64, PORTAL_SUBDOMAIN)
+        .await
+        .unwrap();
+    assert!(cpra_flags
+        .iter()
+        .any(|flag| flag == "STATUTORY_LATENCY_VIOLATION"));
+    assert_eq!(
+        statutory_findings(&repository).await,
+        vec![(
+            "CPRA_7922.535".to_string(),
+            "OPEN".to_string(),
+            Some("EARLIEST_RECORDED_ACTIVITY_PROXY".to_string())
+        )]
+    );
+
+    repository
+        .set_portal_statutory_jurisdiction(PORTAL_SUBDOMAIN, None)
+        .await
+        .unwrap();
+    let unevaluated = repository
+        .refresh_request_timeline_audit(REQUEST_ID as u64, PORTAL_SUBDOMAIN)
+        .await
+        .unwrap();
+    assert!(
+        !unevaluated
+            .iter()
+            .any(|flag| flag.starts_with("STATUTORY_")),
+        "{unevaluated:?}"
+    );
+    assert_eq!(
+        statutory_findings(&repository).await[0].1,
+        "RESOLVED_BY_NEW_EVIDENCE"
+    );
+    assert_eq!(
+        repository
+            .portal_statutory_jurisdiction(PORTAL_SUBDOMAIN)
+            .await
+            .unwrap(),
+        Some(Some("NONE".to_string()))
+    );
+
+    repository
+        .set_portal_statutory_jurisdiction(
+            PORTAL_SUBDOMAIN,
+            Some(crate::analysis::StatutoryJurisdiction::FederalFoia),
+        )
+        .await
+        .unwrap();
+    let evidence = repository
+        .load_legal_brief_evidence(REQUEST_ID as u64, PORTAL_SUBDOMAIN)
+        .await
+        .unwrap();
+    let foia = evidence
+        .evaluate_statutory_clock("2026-09-30T00:00:00Z")
+        .unwrap()
+        .expect("a FOIA source is evaluated");
+    assert_eq!(foia.rule_id, "US_FOIA_DETERMINATION");
+    assert!(!foia.is_violation);
+    assert_eq!(
+        statutory_findings(&repository).await[0].1,
+        "RESOLVED_BY_NEW_EVIDENCE"
+    );
+}
+
+/// The earliest release recorded on the portal timeline bounds the determination even when the
+/// request's own activity stamps are later.
+#[tokio::test]
+async fn a_recorded_release_enters_the_determination_proxy() {
+    let repository = repository_with_document().await;
+    {
+        let connection = repository.conn.lock().await;
+        connection
+            .execute(
+                "UPDATE requests SET created_at = ?1, updated_at = ?2, closed_at = ?2,
+                 status = 'closed' WHERE id = ?3",
+                params![
+                    "2026-08-03T09:00:00-07:00",
+                    "2026-09-30T09:00:00-07:00",
+                    REQUEST_ID
+                ],
+            )
+            .unwrap();
+    }
+    repository
+        .replace_release_events(
+            PORTAL_SUBDOMAIN,
+            REQUEST_ID as u64,
+            vec![crate::storage::sqlite::ReleaseEvent {
+                timeline_event_id: Some(5),
+                event_name: crate::storage::sqlite::RELEASED.to_string(),
+                released_at: "2026-08-07T10:00:00-07:00".to_string(),
+                listed_file_names: vec!["records.pdf".to_string()],
+                source_byline: "August 7, 2026, 10:00am by Staff".to_string(),
+            }],
+        )
+        .await
+        .unwrap();
+    let flags = repository
+        .refresh_request_timeline_audit(REQUEST_ID as u64, PORTAL_SUBDOMAIN)
+        .await
+        .unwrap();
+    assert!(
+        !flags
+            .iter()
+            .any(|flag| flag == "STATUTORY_LATENCY_VIOLATION"),
+        "{flags:?}"
     );
 }
 

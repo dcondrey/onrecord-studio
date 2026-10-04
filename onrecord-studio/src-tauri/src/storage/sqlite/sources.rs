@@ -52,9 +52,87 @@ impl DuckDbRepository {
             .map_err(|error| {
                 AppError::Storage(format!("Failed to provision portal partition: {error}"))
             })?;
-            Ok(())
+            infer_statutory_jurisdictions(conn)
         })
         .await
+    }
+
+    /// The statutory jurisdiction a source's requests are evaluated under: `Some(None)` when the
+    /// operator stated that no modeled statute applies or nobody has said, `None` when the source
+    /// is not registered.
+    pub async fn portal_statutory_jurisdiction(
+        &self,
+        portal_key: &str,
+    ) -> Result<Option<Option<String>>, AppError> {
+        let portal_key = portal_key.to_string();
+        self.query_connection("Read portal statutory jurisdiction", move |conn| {
+            conn.query_row(
+                "SELECT statutory_jurisdiction FROM portals WHERE subdomain = ?1",
+                params![portal_key],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .optional()
+            .map_err(|error| {
+                AppError::Storage(format!(
+                    "Failed to read the statutory jurisdiction: {error}"
+                ))
+            })
+        })
+        .await
+    }
+
+    /// Records which statute governs a source, or [`NO_STATUTORY_JURISDICTION`] for none, then
+    /// re-evaluates every request of the source under it so no finding of the previous rule stands.
+    pub async fn set_portal_statutory_jurisdiction(
+        &self,
+        portal_key: &str,
+        jurisdiction: Option<crate::analysis::StatutoryJurisdiction>,
+    ) -> Result<usize, AppError> {
+        let stored = jurisdiction
+            .map(crate::analysis::StatutoryJurisdiction::as_str)
+            .unwrap_or(crate::analysis::statute::NO_STATUTORY_JURISDICTION);
+        let portal_key_owned = portal_key.to_string();
+        let request_ids = self
+            .query_connection("Set portal statutory jurisdiction", move |conn| {
+                let updated = conn
+                    .execute(
+                        "UPDATE portals SET statutory_jurisdiction = ?2 WHERE subdomain = ?1",
+                        params![portal_key_owned, stored],
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!(
+                            "Failed to record the statutory jurisdiction: {error}"
+                        ))
+                    })?;
+                if updated == 0 {
+                    return Err(AppError::Storage(format!(
+                        "Source '{portal_key_owned}' is not registered"
+                    )));
+                }
+                let mut statement = conn
+                    .prepare("SELECT id FROM requests WHERE portal_subdomain = ?1 ORDER BY id")
+                    .map_err(|error| AppError::Storage(error.to_string()))?;
+                let ids = statement
+                    .query_map(params![portal_key_owned], |row| row.get::<_, u64>(0))
+                    .map_err(|error| AppError::Storage(error.to_string()))?
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|error| AppError::Storage(error.to_string()))?;
+                Ok(ids)
+            })
+            .await?;
+        // A request whose dates cannot be evaluated is skipped, as it is on sync; the count says
+        // how many were re-evaluated.
+        let mut refreshed = 0;
+        for request_id in request_ids {
+            if self
+                .refresh_request_timeline_audit(request_id, portal_key)
+                .await
+                .is_ok()
+            {
+                refreshed += 1;
+            }
+        }
+        Ok(refreshed)
     }
 
     pub async fn begin_portal_sync_run(
@@ -772,6 +850,40 @@ impl RecipeOwnRow {
 /// Normalization fills in a missing scheme and drops a fragment. It does not resolve redirects,
 /// which is exactly why this value is stored beside `root_url` rather than in place of it: the
 /// final URL is not knowable until the fetch, and `start_data_source` reads the recipe before it.
+/// Fills a NULL `statutory_jurisdiction` from the source's recognized publisher, where
+/// `ingestion::regional` attributes its host to a public agency. A stated value, `NONE` included,
+/// is never replaced, and an unrecognized host stays NULL and unevaluated.
+pub(super) fn infer_statutory_jurisdictions(conn: &Connection) -> Result<(), AppError> {
+    let storage =
+        |error: duckdb::Error| AppError::Storage(format!("Failed to infer jurisdictions: {error}"));
+    let unset = {
+        let mut statement = conn
+            .prepare("SELECT subdomain, base_url FROM portals WHERE statutory_jurisdiction IS NULL")
+            .map_err(storage)?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
+            .map_err(storage)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(storage)?;
+        rows
+    };
+    for (subdomain, base_url) in unset {
+        if let Some(jurisdiction) =
+            crate::ingestion::regional::inferred_statutory_jurisdiction(&base_url)
+        {
+            conn.execute(
+                "UPDATE portals SET statutory_jurisdiction = ?2
+                 WHERE subdomain = ?1 AND statutory_jurisdiction IS NULL",
+                params![subdomain, jurisdiction.as_str()],
+            )
+            .map_err(storage)?;
+        }
+    }
+    Ok(())
+}
+
 pub(super) fn normalized_submitted_url(value: &str) -> String {
     let trimmed = value.trim();
     normalize_submitted_url(trimmed)

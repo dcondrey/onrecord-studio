@@ -480,6 +480,12 @@ pub(super) async fn fetch_hosted_request(
         .repository
         .replace_release_events(&context.portal.portal_key, record.id, releases)
         .await?;
+    // The request was evaluated when it was stored, before its releases were; a first release
+    // bounds the determination, so the clock is measured again with them.
+    context
+        .repository
+        .refresh_request_timeline_audit(record.id, &context.portal.portal_key)
+        .await?;
     context
         .statistics
         .requests_processed

@@ -117,6 +117,9 @@ export interface NativeCommandMap {
   get_cross_agency_correlations: { args: { portalKey?: string | null; minimumComplaints?: number | null; resultLimit?: number | null; windowHours?: number | null }; result: Types.CrossAgencyCorrelation[] };
   import_auxiliary_events: { args: { portalKey?: string | null; sourceKind: Types.AuxiliaryStreamKind; displayName: string; sourceUri?: string | null; events: Types.AuxiliaryEventInput[] }; result: Types.AuxiliaryImportResult };
   register_statutory_extension: { args: { requestId: number; portalKey: string; extension: Types.StatutoryExtensionRecord }; result: string[] };
+  list_statutory_clock_rules: { args: NoArgs; result: Types.StatutoryClockRule[] };
+  get_source_statutory_jurisdiction: { args: { portalKey: string }; result: string | null };
+  set_source_statutory_jurisdiction: { args: { portalKey: string; jurisdiction?: Types.StatutoryJurisdiction | null }; result: number };
   get_request_statutory_extension: { args: { requestId: number; portalKey: string }; result: Types.StatutoryExtensionRecord | null };
   import_legal_authority: { args: { input: Types.LegalAuthorityImport }; result: Types.LegalAuthorityImportResult };
   list_legal_authorities: { args: NoArgs; result: Types.LegalAuthoritySummary[] };

@@ -1,4 +1,5 @@
-//! Request timeline audits, statutory extensions, CPRA findings, and cross-agency alerts.
+//! Request timeline audits, statutory extensions, determination-clock findings, and cross-agency
+//! alerts.
 
 use super::*;
 use super::{
@@ -99,20 +100,15 @@ impl DuckDbRepository {
             &evidence.created_at,
             evidence.closed_at.as_deref(),
         )?;
-        let statutory = crate::analysis::evaluate_statutory_compliance_with_determination_at(
-            request_id,
-            &evidence.created_at,
-            Some(&evidence.updated_at),
-            evidence.closed_at.as_deref(),
-            evidence.determination_at.as_deref(),
-            evidence.determination_source.as_deref(),
-            evidence.extension.as_ref(),
-            &chrono::Utc::now().to_rfc3339(),
-        )?;
+        let statutory = evidence.evaluate_statutory_clock(&chrono::Utc::now().to_rfc3339())?;
         let mut flags = operational
             .anomaly_markers
             .into_iter()
-            .chain(statutory.anomaly_markers.iter().copied())
+            .chain(
+                statutory
+                    .iter()
+                    .flat_map(|analysis| analysis.anomaly_markers.iter().copied()),
+            )
             .map(|marker| marker.as_str().to_string())
             .collect::<Vec<_>>();
         let created =
@@ -143,22 +139,22 @@ impl DuckDbRepository {
                     &portal_key_owned,
                     &known_flags,
                 )?;
-                synchronize_cpra_finding(tx, request_id, &portal_key_owned, &statutory)
+                synchronize_statutory_finding(tx, request_id, &portal_key_owned, statutory.as_ref())
             })
         })
         .await?;
         Ok(flags)
     }
 
-    /// Recomputes every stored CPRA finding once after the deadline rule changes, so findings the
+    /// Recomputes every stored statutory clock finding once after a rule changes, so findings the
     /// old rule produced do not keep standing until each request happens to sync again. A request
     /// whose dates cannot be evaluated is skipped, as it would be on sync; the version is recorded
     /// only after every request was attempted, so an interrupted pass resumes on the next launch.
     pub async fn recompute_cpra_findings_for_rule_change(&self) -> Result<usize, AppError> {
-        const RULE_KEY: &str = "cpra_deadline";
-        let current = crate::analysis::statute::CPRA_RULE_VERSION;
+        const RULE_KEY: &str = "statutory_clock";
+        let current = crate::analysis::statute::STATUTORY_RULE_VERSION;
         let stale_requests = self
-            .query_connection("Find requests under an older CPRA rule", move |conn| {
+            .query_connection("Find requests under an older statutory rule", move |conn| {
                 let recorded = conn
                     .query_row(
                         "SELECT version FROM analysis_rule_versions WHERE rule_key = ?1",
@@ -198,7 +194,7 @@ impl DuckDbRepository {
                 recomputed += 1;
             }
         }
-        self.query_connection("Record the CPRA rule version", move |conn| {
+        self.query_connection("Record the statutory rule version", move |conn| {
             conn.execute(
                 "INSERT INTO analysis_rule_versions (rule_key, version) VALUES (?1, ?2)
                  ON CONFLICT (rule_key) DO UPDATE SET version = excluded.version",
@@ -577,15 +573,54 @@ pub(super) fn map_request_analytical_state(
     })
 }
 
-/// Grades a CPRA calendar finding by what the evaluation actually observed.
+/// The portal's statutory jurisdiction and the request's earliest recorded release, read inside
+/// the caller's transaction.
+pub(super) fn statutory_context(
+    connection: &Connection,
+    request_id: u64,
+    portal_key: &str,
+) -> Result<
+    (
+        Option<crate::analysis::StatutoryJurisdiction>,
+        Option<String>,
+    ),
+    AppError,
+> {
+    let (jurisdiction, first_release_at) = connection
+        .query_row(
+            "SELECT
+                (SELECT statutory_jurisdiction FROM portals WHERE subdomain = ?2),
+                (SELECT arg_min(released_at, TRY_CAST(released_at AS TIMESTAMPTZ))
+                 FROM request_release_events
+                 WHERE portal_subdomain = ?2 AND request_id = ?1)",
+            params![request_id, portal_key],
+            |row| {
+                Ok((
+                    row.get::<_, Option<String>>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                ))
+            },
+        )
+        .map_err(|error| {
+            AppError::Storage(format!("Failed to read the statutory context: {error}"))
+        })?;
+    Ok((
+        crate::analysis::StatutoryJurisdiction::from_stored(jurisdiction.as_deref()),
+        first_release_at,
+    ))
+}
+
+/// Grades a statutory clock finding by what the evaluation actually observed.
 ///
 /// The finding rests on two dates. Receipt is always recorded. The determination is a sourced
-/// determination event, a generic portal-activity proxy, or the observation instant. Where an
-/// extension moved the deadline, its notice is either recorded or claimed without a source.
+/// determination event, a generic activity proxy, or the observation instant. Where an extension
+/// moved the deadline, its notice is either recorded or claimed without a source. Where the rule
+/// lets events no source here records stop the clock (FOIA tolling), the deadline itself rests on
+/// an input nothing observed.
 ///
 /// ```text
 /// confidence = 10000 - uncertainty + margin_relief
-/// uncertainty   = determination_penalty + extension_penalty
+/// uncertainty   = determination_penalty + extension_penalty + unrecorded_stop_penalty
 /// margin_relief = uncertainty / 2 * min(variance_days, 30) / 30
 /// ```
 ///
@@ -594,7 +629,7 @@ pub(super) fn map_request_analytical_state(
 /// it, which keeps every other case strictly below 10000. Its shape reflects that a one-day
 /// overrun turns on the exact instants while a month-long one survives any plausible correction
 /// to them, so a long overrun recovers most of what the unobserved input cost.
-pub(super) fn cpra_calendar_confidence_basis_points(
+pub(super) fn statutory_clock_confidence_basis_points(
     analysis: &crate::analysis::StatutoryComplianceAnalysis,
     variance_days: i64,
 ) -> i64 {
@@ -611,63 +646,98 @@ pub(super) fn cpra_calendar_confidence_basis_points(
         // An extension was claimed and its notice was never recorded, so the deadline the
         // overrun is measured against rests on an input nothing observed.
         StatutoryExtensionStatus::MissingNoticeSource => 1_200,
-        // The notice was recorded but contradicts the record around it. The dates exist; which
-        // deadline they establish is contested.
+        // The notice was recorded but contradicts the record around it or the rule. The dates
+        // exist; which deadline they establish is contested.
         StatutoryExtensionStatus::NoticeBeforeReceipt
         | StatutoryExtensionStatus::NoticeAfterInitialDeadline
+        | StatutoryExtensionStatus::GroundNotRecognized
         | StatutoryExtensionStatus::ExpectedDateNotExtended
-        | StatutoryExtensionStatus::ExtensionExceedsFourteenDays => 600,
+        | StatutoryExtensionStatus::ExtensionExceedsMaximum => 600,
     };
-    let uncertainty = determination_penalty + extension_penalty;
+    let unrecorded_stop_penalty = if analysis
+        .jurisdiction
+        .rule()
+        .unrecorded_clock_stops
+        .is_some()
+    {
+        500
+    } else {
+        0
+    };
+    let uncertainty = determination_penalty + extension_penalty + unrecorded_stop_penalty;
     let margin_days = variance_days.clamp(0, 30);
     let margin_relief = uncertainty / 2 * margin_days / 30;
     10_000 - uncertainty + margin_relief
 }
 
-pub(super) fn synchronize_cpra_finding(
+/// Stores, updates or withdraws the request's determination-clock finding.
+///
+/// `None` means the portal names no jurisdiction, so no clock applies: any open clock finding of
+/// the request is withdrawn, as is one stored under a different rule than `analysis`'s.
+pub(super) fn synchronize_statutory_finding(
     tx: &Transaction<'_>,
     request_id: u64,
     portal_key: &str,
-    analysis: &crate::analysis::StatutoryComplianceAnalysis,
+    analysis: Option<&crate::analysis::StatutoryComplianceAnalysis>,
 ) -> Result<(), AppError> {
+    let clock_statutes = crate::analysis::statute::CLOCK_RULES
+        .iter()
+        .map(|rule| format!("'{}'", rule.statute_id))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let kept_statute = analysis
+        .filter(|analysis| analysis.is_violation)
+        .map(|analysis| analysis.jurisdiction.rule().statute_id);
+    tx.execute(
+        &format!(
+            "UPDATE statutory_violations
+             SET review_status = 'RESOLVED_BY_NEW_EVIDENCE',
+                 evaluated_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
+             WHERE portal_subdomain = ?1 AND request_id = ?2
+               AND classification = ?3 AND mandate_id IS NULL
+               AND matched_statute_id IN ({clock_statutes})
+               AND review_status = 'OPEN'
+               AND (CAST(?4 AS VARCHAR) IS NULL OR matched_statute_id <> ?4)"
+        ),
+        params![
+            portal_key,
+            request_id,
+            FLAG_STATUTORY_LATENCY_VIOLATION,
+            kept_statute
+        ],
+    )
+    .map_err(|error| {
+        AppError::Storage(format!(
+            "Failed to resolve the statutory timeline finding: {error}"
+        ))
+    })?;
+    let Some(analysis) = analysis.filter(|analysis| analysis.is_violation) else {
+        return Ok(());
+    };
+    let rule = analysis.jurisdiction.rule();
     let version_id = tx
         .query_row(
-            "SELECT current_version_id
-             FROM legal_statutes
-             WHERE statute_id = 'CPRA_7922.535'",
-            [],
+            "SELECT current_version_id FROM legal_statutes WHERE statute_id = ?1",
+            params![rule.statute_id],
             |row| row.get::<_, String>(0),
         )
         .map_err(|error| {
             AppError::Storage(format!(
-                "Failed to resolve the CPRA authority version: {error}"
+                "Failed to resolve the {} authority version: {error}",
+                rule.statute_id
             ))
         })?;
+    // The identity predates FOIA; keeping its shape keeps every stored CPRA finding's id.
     let identity = format!(
-        "{portal_key}\0{request_id}\0CPRA_7922.535\0{}",
-        FLAG_STATUTORY_LATENCY_VIOLATION
+        "{portal_key}\0{request_id}\0{}\0{}",
+        rule.statute_id, FLAG_STATUTORY_LATENCY_VIOLATION
     );
     let digest = sha256_hex(identity.as_bytes());
     let violation_id = format!("cpra-latency-{}", &digest[..32]);
-    if !analysis.is_violation {
-        tx.execute(
-            "UPDATE statutory_violations
-             SET review_status = 'RESOLVED_BY_NEW_EVIDENCE',
-                 evaluated_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
-             WHERE violation_id = ?1 AND review_status = 'OPEN'",
-            params![violation_id],
-        )
-        .map_err(|error| {
-            AppError::Storage(format!(
-                "Failed to resolve the CPRA timeline finding: {error}"
-            ))
-        })?;
-        return Ok(());
-    }
     let variance_days = analysis
         .calendar_days_elapsed
         .checked_sub(analysis.allowed_calendar_days)
-        .ok_or_else(|| AppError::Compliance("CPRA deadline variance overflowed".to_string()))?;
+        .ok_or_else(|| AppError::Compliance("Deadline variance overflowed".to_string()))?;
     let variance_metric =
         format!("Exceeded the effective determination deadline by {variance_days} calendar days");
     tx.execute(
@@ -676,12 +746,14 @@ pub(super) fn synchronize_cpra_finding(
             matched_version_id, mandate_id, classification,
             calculated_variance_metric, variance_days, confidence_basis_points,
             evidence_summary, supporting_document_ids_json, missing_evidence_json,
-            classifier_version, review_status, first_detected_at, evaluated_at
+            classifier_version, review_status, first_detected_at, evaluated_at,
+            clock_rule_id, determination_basis
          ) VALUES (
-            ?1, ?2, ?3, 'CPRA_7922.535', ?4, NULL, ?5, ?6, ?7, ?9,
-            ?8, '[]', '[]', 'cpra-calendar-v1', 'OPEN',
+            ?1, ?2, ?3, ?10, ?4, NULL, ?5, ?6, ?7, ?9,
+            ?8, '[]', '[]', ?11, 'OPEN',
             strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'),
-            strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
+            strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'),
+            ?12, ?13
          )
          ON CONFLICT(violation_id) DO UPDATE SET
             matched_version_id = excluded.matched_version_id,
@@ -690,6 +762,8 @@ pub(super) fn synchronize_cpra_finding(
             confidence_basis_points = excluded.confidence_basis_points,
             evidence_summary = excluded.evidence_summary,
             classifier_version = excluded.classifier_version,
+            clock_rule_id = excluded.clock_rule_id,
+            determination_basis = excluded.determination_basis,
             review_status = CASE
                 WHEN statutory_violations.review_status IN ('CONFIRMED', 'DISMISSED')
                 THEN statutory_violations.review_status
@@ -705,12 +779,19 @@ pub(super) fn synchronize_cpra_finding(
             variance_metric,
             variance_days,
             analysis.evidence_summary,
-            cpra_calendar_confidence_basis_points(analysis, variance_days),
+            statutory_clock_confidence_basis_points(analysis, variance_days),
+            rule.statute_id,
+            format!(
+                "statutory-clock-v{}",
+                crate::analysis::statute::STATUTORY_RULE_VERSION
+            ),
+            rule.id,
+            analysis.determination_basis.as_str(),
         ],
     )
     .map_err(|error| {
         AppError::Storage(format!(
-            "Failed to persist the CPRA timeline finding: {error}"
+            "Failed to persist the statutory timeline finding: {error}"
         ))
     })?;
     Ok(())

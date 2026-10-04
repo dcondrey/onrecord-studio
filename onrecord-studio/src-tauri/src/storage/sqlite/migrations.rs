@@ -197,6 +197,12 @@ impl DuckDbRepository {
         ensure_column(conn, "requests", "neighborhood_block", "TEXT")?;
         ensure_column(conn, "requests", "determination_at", "TEXT")?;
         ensure_column(conn, "requests", "determination_source", "TEXT")?;
+        // Nullable with no DEFAULT: NULL is "nobody has said", which evaluates no clock. A DEFAULT
+        // of any jurisdiction would put every pre-existing source under that statute.
+        ensure_column(conn, "portals", "statutory_jurisdiction", "TEXT")?;
+        ensure_column(conn, "statutory_violations", "clock_rule_id", "TEXT")?;
+        ensure_column(conn, "statutory_violations", "determination_basis", "TEXT")?;
+        super::sources::infer_statutory_jurisdictions(conn)?;
         // Nullable on purpose — NULL means "no attribution recorded" and reads differently from a
         // filled string. The differential-treatment detector runs and emits nothing when no rows
         // carry attribution; population of this field belongs to ingestion adapters that can

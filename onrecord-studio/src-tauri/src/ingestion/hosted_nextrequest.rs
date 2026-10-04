@@ -31,6 +31,8 @@ pub(crate) const MAXIMUM_DOCUMENT_PAGES: usize = 20;
 pub(crate) const MAXIMUM_TIMELINE_PAGES: usize = 20;
 
 const JAVASCRIPT_SAFE_MASK: u64 = (1 << 53) - 1;
+/// How a requester's withdrawal reads in the closing event's text.
+const WITHDRAWAL_NOTICE_PREFIX: &str = "Request withdrawn";
 const TITLE_CHARACTERS: usize = 140;
 
 /// A listing row, also persisted as the payload of the task that reads its details.
@@ -62,6 +64,24 @@ pub(crate) struct RequestTimeline {
     /// Every "Document(s) Released" event, oldest first. Each records an upload the portal shows;
     /// none of them is the agency's determination.
     pub releases: Vec<ReleaseEvent>,
+    /// The agency's determination, where the timeline records one: see [`RecordedDetermination`].
+    pub determination: Option<RecordedDetermination>,
+}
+
+/// The first "Request Closed" event, taken as the agency's determination only when nothing it
+/// could have followed is recorded: no release precedes or accompanies it, and it is not a
+/// requester's withdrawal.
+///
+/// A closure that follows a release is not: the release shows the agency had already determined
+/// that disclosable records exist, so that closure is the end of production, not the
+/// determination (sandiego.nextrequest.com 25-1161 released in February 2025 and closed in
+/// December). The earliest closure is used because a request closed, reopened and closed again
+/// was answered at the first. The public timeline does not show messages only the requester sees,
+/// which the source text says.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RecordedDetermination {
+    pub at: String,
+    pub source: String,
 }
 
 pub(crate) fn is_listing(value: &Value) -> bool {
@@ -147,6 +167,7 @@ pub(crate) fn decode_timeline(value: &Value) -> Result<RequestTimeline, AppError
     let mut reopened: Option<NaiveDateTime> = None;
     let mut notice: Option<String> = None;
     let mut releases: Vec<(NaiveDateTime, ReleaseEvent)> = Vec::new();
+    let mut first_closure: Option<(NaiveDateTime, Option<i64>, String, Option<String>)> = None;
     for entry in page.timeline {
         let Some(byline) = entry.timeline_byline.as_deref() else {
             continue;
@@ -171,6 +192,14 @@ pub(crate) fn decode_timeline(value: &Value) -> Result<RequestTimeline, AppError
             )),
             Some("Request Opened") => opened = Some(opened.map_or(at, |seen| seen.min(at))),
             Some("Request Closed") => {
+                if first_closure.as_ref().is_none_or(|(seen, ..)| at < *seen) {
+                    first_closure = Some((
+                        at,
+                        entry.timeline_id,
+                        byline.to_string(),
+                        entry.timeline_display_text.as_deref().map(plain_text),
+                    ));
+                }
                 if closed.is_none_or(|seen| at >= seen) {
                     closed = Some(at);
                     notice = entry.timeline_display_text.as_deref().map(plain_text);
@@ -182,7 +211,25 @@ pub(crate) fn decode_timeline(value: &Value) -> Result<RequestTimeline, AppError
     }
     let closed = closed.filter(|closed| reopened.is_none_or(|reopened| reopened < *closed));
     releases.sort_by_key(|(at, event)| (*at, event.timeline_event_id));
+    let first_release = releases.first().map(|(at, _)| *at);
+    let determination = first_closure
+        .filter(|(at, ..)| first_release.is_none_or(|released| released > *at))
+        .filter(|(.., text)| {
+            !text
+                .as_deref()
+                .is_some_and(|text| text.starts_with(WITHDRAWAL_NOTICE_PREFIX))
+        })
+        .map(|(at, id, byline, _)| RecordedDetermination {
+            at: pacific_rfc3339(at),
+            source: format!(
+                "NextRequest public timeline: first \"Request Closed\" event{}, \"{}\"; no release \
+                 precedes it (messages visible only to the requester are not read)",
+                id.map(|id| format!(" #{id}")).unwrap_or_default(),
+                byline.split_whitespace().collect::<Vec<_>>().join(" ")
+            ),
+        });
     Ok(RequestTimeline {
+        determination,
         releases: releases.into_iter().map(|(_, event)| event).collect(),
         opened_at: opened.map(pacific_rfc3339),
         closure_notice: closed.and(notice).filter(|notice| !notice.is_empty()),
@@ -354,7 +401,7 @@ pub(crate) fn to_public_request(
     let withdrawn = timeline
         .closure_notice
         .as_deref()
-        .is_some_and(|notice| notice.starts_with("Request withdrawn"));
+        .is_some_and(|notice| notice.starts_with(WITHDRAWAL_NOTICE_PREFIX));
     let status = listed
         .request_state
         .as_deref()
@@ -405,8 +452,13 @@ pub(crate) fn to_public_request(
         created_at,
         closed_at: timeline.closed_at,
         due_date: None,
-        determination_at: None,
-        determination_source: None,
+        determination_at: timeline
+            .determination
+            .as_ref()
+            .map(|determination| determination.at.clone()),
+        determination_source: timeline
+            .determination
+            .map(|determination| determination.source),
         neighborhood_block: None,
         statutory_extension: None,
         documents,
@@ -512,6 +564,66 @@ mod tests {
         );
     }
 
+    /// Shapes measured on sandiego.nextrequest.com on 2026-10-03: 23-1500 closed with "No
+    /// responsive documents" and nothing released; 24-5408 released on 16 August and closed on
+    /// 29 August 2024.
+    #[test]
+    fn only_a_first_closure_with_no_earlier_release_is_the_recorded_determination() {
+        let no_records = json!({"timeline": [
+            {"timeline_id": 30416541, "timeline_name": "Request Closed",
+             "timeline_byline": "March 27, 2023,  8:37am by G (Staff)",
+             "timeline_display_text": "<p>No responsive documents</p>"},
+            {"timeline_name": "Request Opened", "timeline_byline": "March 22, 2023,  7:45pm by the requester"}
+        ]});
+        let determination = decode_timeline(&no_records).unwrap().determination.unwrap();
+        assert_eq!(determination.at, "2023-03-27T08:37:00-07:00");
+        assert!(determination.source.contains("#30416541"));
+        assert!(determination
+            .source
+            .contains("March 27, 2023, 8:37am by G (Staff)"));
+
+        let released_first = json!({"timeline": [
+            {"timeline_name": "Request Closed", "timeline_byline": "August 29, 2024,  2:01pm by A (Staff)"},
+            {"timeline_name": "Document(s) Released", "timeline_byline": "August 16, 2024,  2:51pm by A (Staff)"},
+            {"timeline_name": "Request Opened", "timeline_byline": "August  8, 2024, 11:48am by the requester"}
+        ]});
+        assert_eq!(
+            decode_timeline(&released_first).unwrap().determination,
+            None
+        );
+
+        // A release in the same minute as the closure was uploaded with it, not after it.
+        let released_with = json!({"timeline": [
+            {"timeline_name": "Request Closed", "timeline_byline": "August 29, 2024,  2:01pm by A (Staff)"},
+            {"timeline_name": "Document(s) Released", "timeline_byline": "August 29, 2024,  2:01pm by A (Staff)"},
+            {"timeline_name": "Request Opened", "timeline_byline": "August  8, 2024, 11:48am by the requester"}
+        ]});
+        assert_eq!(decode_timeline(&released_with).unwrap().determination, None);
+
+        let withdrawn = json!({"timeline": [
+            {"timeline_name": "Request Closed", "timeline_byline": "March 5, 2024, 9:00am",
+             "timeline_display_text": "<p>Request withdrawn by the requester</p>"},
+            {"timeline_name": "Request Opened", "timeline_byline": "March 1, 2024, 9:00am"}
+        ]});
+        assert_eq!(decode_timeline(&withdrawn).unwrap().determination, None);
+
+        // Closed, reopened, closed again: the request was answered at the first closure.
+        let reclosed = json!({"timeline": [
+            {"timeline_name": "Request Closed", "timeline_byline": "March 20, 2024, 9:00am"},
+            {"timeline_name": "Request Reopened", "timeline_byline": "March 9, 2024, 9:00am"},
+            {"timeline_name": "Request Closed", "timeline_byline": "March 5, 2024, 9:00am"},
+            {"timeline_name": "Request Opened", "timeline_byline": "March 1, 2024, 9:00am"}
+        ]});
+        assert_eq!(
+            decode_timeline(&reclosed)
+                .unwrap()
+                .determination
+                .unwrap()
+                .at,
+            "2024-03-05T09:00:00-08:00"
+        );
+    }
+
     #[test]
     fn a_request_reopened_after_its_last_closure_is_not_closed() {
         let value = json!({"timeline": [
@@ -565,6 +677,7 @@ mod tests {
                 "Request withdrawn The requestor has withdrawn this request.".into(),
             ),
             releases: Vec::new(),
+            determination: None,
         };
         assert_eq!(
             to_public_request(listed, timeline, Vec::new())

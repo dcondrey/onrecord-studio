@@ -14,8 +14,14 @@ use std::sync::{Arc, Mutex, MutexGuard};
 const SECONDS_PER_DAY: f64 = 86_400.0;
 pub const STATUTORY_DEADLINE_Z_SCORE: f64 = 2.0;
 #[cfg(test)]
-const ANALYTICS_SQLITE_TABLES: [&str; 4] =
-    ["requests", "agencies", "documents", "statutory_extensions"];
+const ANALYTICS_SQLITE_TABLES: [&str; 6] = [
+    "requests",
+    "agencies",
+    "documents",
+    "statutory_extensions",
+    "portals",
+    "request_release_events",
+];
 
 #[cfg(test)]
 const SQLITE_LAYOUT_PROBE_QUERY: &str = r#"
@@ -37,8 +43,15 @@ FROM (
         statutory_extensions.notice_at,
         statutory_extensions.expected_determination_at,
         statutory_extensions.reason,
-        statutory_extensions.notice_source
+        statutory_extensions.notice_source,
+        portals.statutory_jurisdiction,
+        releases.released_at
     FROM {db}requests AS requests
+    LEFT JOIN {db}portals AS portals
+      ON portals.subdomain = requests.portal_subdomain
+    LEFT JOIN {db}request_release_events AS releases
+      ON releases.request_id = requests.id
+     AND releases.portal_subdomain = requests.portal_subdomain
     LEFT JOIN {db}agencies AS agencies
       ON agencies.id = requests.agency_id
      AND agencies.portal_subdomain = requests.portal_subdomain
@@ -54,8 +67,9 @@ FROM (
 
 /// Per-agency aggregate over every request, rendered from `analysis::statute`.
 ///
-/// Only the aggregation belongs to this module. The determination proxy, the extension-validity
-/// rule, the calendar-day derivation, and every threshold are rendered from `statute::sql`, which
+/// Only the aggregation belongs to this module. The per-jurisdiction rules, the determination
+/// proxy, the extension-validity rule, the day counting, and every threshold are rendered from
+/// `statute::sql`, which
 /// is the same model `analysis::timeline` evaluates one request at a time. The two therefore
 /// cannot drift apart without failing `statutory_verdicts_match_the_per_request_evaluator`.
 ///
@@ -64,7 +78,12 @@ FROM (
 /// ordering use the `TIMESTAMPTZ`-derived instants, while every day count uses the recorded-offset
 /// date, because the statute counts days in the offset the agency wrote down.
 const AGENCY_PERFORMANCE_QUERY_TEMPLATE: &str = r#"
-WITH {court_holidays_cte},
+WITH statutory_span AS (
+    SELECT MIN({calendar_date(created_at)}) AS first_day,
+           MAX({calendar_date(created_at)}) AS last_day
+    FROM {db}requests
+),
+{statutory_ctes},
 parsed AS (
     SELECT
         requests.id,
@@ -72,14 +91,17 @@ parsed AS (
         requests.agency_id,
         LOWER(TRIM(requests.status)) AS normalized_status,
         requests.closed_at,
+        portals.statutory_jurisdiction,
         CAST(TRY_CAST(requests.created_at AS TIMESTAMPTZ) AS TIMESTAMP) AS created_timestamp,
         CAST(TRY_CAST(requests.updated_at AS TIMESTAMPTZ) AS TIMESTAMP) AS updated_timestamp,
         CAST(TRY_CAST(requests.closed_at AS TIMESTAMPTZ) AS TIMESTAMP) AS closed_timestamp,
+        CAST(TRY_CAST(releases.first_release_at AS TIMESTAMPTZ) AS TIMESTAMP) AS release_timestamp,
         CAST(TRY_CAST(requests.determination_at AS TIMESTAMPTZ) AS TIMESTAMP) AS determination_timestamp,
         {calendar_date(requests.created_at)} AS created_date,
         {recorded_wall_clock(requests.created_at)} AS created_local_timestamp,
         {calendar_date(requests.updated_at)} AS updated_date,
         {calendar_date(requests.closed_at)} AS closed_date,
+        {calendar_date(releases.first_release_at)} AS release_date,
         {calendar_date(requests.determination_at)} AS explicit_determination_date,
         requests.determination_source,
         CAST(TRY_CAST(statutory_extensions.notice_at AS TIMESTAMPTZ) AS TIMESTAMP) AS extension_notice_timestamp,
@@ -88,6 +110,16 @@ parsed AS (
         statutory_extensions.reason AS extension_reason,
         statutory_extensions.notice_source AS extension_notice_source
     FROM {db}requests AS requests
+    LEFT JOIN {db}portals AS portals
+      ON portals.subdomain = requests.portal_subdomain
+    LEFT JOIN (
+        SELECT portal_subdomain, request_id,
+               arg_min(released_at, TRY_CAST(released_at AS TIMESTAMPTZ)) AS first_release_at
+        FROM {db}request_release_events
+        GROUP BY portal_subdomain, request_id
+    ) AS releases
+      ON releases.request_id = requests.id
+     AND releases.portal_subdomain = requests.portal_subdomain
     LEFT JOIN {db}statutory_extensions AS statutory_extensions
       ON statutory_extensions.request_id = requests.id
      AND statutory_extensions.portal_subdomain = requests.portal_subdomain
@@ -95,12 +127,24 @@ parsed AS (
       AND (?2 = '' OR TRY_CAST(requests.created_at AS TIMESTAMPTZ) >= TRY_CAST(?2 AS TIMESTAMPTZ))
       AND (?3 = '' OR TRY_CAST(requests.created_at AS TIMESTAMPTZ) < TRY_CAST(?3 AS TIMESTAMPTZ))
 ),
-milestones AS (
+ruled AS (
+    SELECT parsed.*, clock_rules.*
+    FROM parsed
+    LEFT JOIN clock_rules
+      ON clock_rules.rule_jurisdiction = parsed.statutory_jurisdiction
+),
+started AS (
     SELECT
         *,
         {determination_calendar_date} AS determination_date,
+        {clock_start_date} AS clock_start_date
+    FROM ruled
+),
+milestones AS (
+    SELECT
+        *,
         {initial_deadline_date} AS initial_deadline_date
-    FROM parsed
+    FROM started
 ),
 extended AS (
     SELECT
@@ -139,6 +183,9 @@ request_counts AS (
                 OR closed_timestamp < created_timestamp
               )
         ) AS excluded_invalid_lifetime_count,
+        COUNT(*) FILTER (
+            WHERE {statutory_evaluated_predicate}
+        ) AS statutory_evaluated_count,
         COUNT(*) FILTER (
             WHERE {statutory_violation_predicate}
         ) AS statutory_violation_count,
@@ -209,9 +256,12 @@ SELECT
         ELSE NULL
     END AS performance_z_score,
     COALESCE(agency_latency.latency_anomaly_count, 0),
+    request_counts.statutory_evaluated_count,
     request_counts.statutory_violation_count,
+    -- Over the requests a clock was evaluated for; NULL when none was, since a source naming no
+    -- jurisdiction has no rate to report, not a rate of zero.
     CAST(request_counts.statutory_violation_count AS DOUBLE)
-        / NULLIF(CAST(request_counts.total_requests AS DOUBLE), 0.0),
+        / NULLIF(CAST(request_counts.statutory_evaluated_count AS DOUBLE), 0.0),
     request_counts.suspicious_fast_closure_count,
     COALESCE(released_documents.total_documents_released, 0)
 FROM request_counts
@@ -282,8 +332,10 @@ struct RawAgencyPerformanceProfile {
     /// `None` when the agency has no valid closure sample, or the population has no spread.
     performance_z_score: Option<f64>,
     anomaly_count: i64,
+    statutory_evaluated_count: i64,
     statutory_violation_count: i64,
-    statutory_violation_rate: f64,
+    /// `None` when no request of the agency was evaluated against a clock.
+    statutory_violation_rate: Option<f64>,
     suspicious_fast_closure_count: i64,
     total_documents_released: i64,
 }
@@ -439,10 +491,11 @@ fn query_agency_performance_profiles(
                     global_stddev_closure_days: row.get(9)?,
                     performance_z_score: row.get(10)?,
                     anomaly_count: row.get(11)?,
-                    statutory_violation_count: row.get(12)?,
-                    statutory_violation_rate: row.get(13)?,
-                    suspicious_fast_closure_count: row.get(14)?,
-                    total_documents_released: row.get(15)?,
+                    statutory_evaluated_count: row.get(12)?,
+                    statutory_violation_count: row.get(13)?,
+                    statutory_violation_rate: row.get(14)?,
+                    suspicious_fast_closure_count: row.get(15)?,
+                    total_documents_released: row.get(16)?,
                 })
             },
         )
@@ -599,10 +652,7 @@ fn convert_raw_profile(
         ("global mean", raw.global_mean_closure_days),
         ("global standard deviation", raw.global_stddev_closure_days),
         ("performance Z-score", raw.performance_z_score),
-        (
-            "statutory violation rate",
-            Some(raw.statutory_violation_rate),
-        ),
+        ("statutory violation rate", raw.statutory_violation_rate),
     ] {
         if let Some(value) = value {
             if !value.is_finite() {
@@ -612,6 +662,8 @@ fn convert_raw_profile(
             }
         }
     }
+    let statutory_evaluated_count =
+        count(raw.statutory_evaluated_count, "statutory evaluated count")?;
     let statutory_violation_count =
         count(raw.statutory_violation_count, "statutory violation count")?;
     // Two different claims, kept apart. `statutory_violation_count > 0` is a legal conclusion
@@ -628,6 +680,10 @@ fn convert_raw_profile(
         .is_some_and(|score| score >= STATUTORY_DEADLINE_Z_SCORE)
     {
         VerificationState::LatencyOutlier
+    } else if statutory_evaluated_count == 0 {
+        // No request was measured against any clock (its source names no jurisdiction), so
+        // nothing here supports "compliant". Absence of an evaluation is not a clean result.
+        VerificationState::Unaudited
     } else {
         VerificationState::Compliant
     };
@@ -650,6 +706,7 @@ fn convert_raw_profile(
         performance_z_score: raw.performance_z_score,
         compliance_indicator,
         anomaly_count: count(raw.anomaly_count, "latency anomaly count")?,
+        statutory_evaluated_count,
         statutory_violation_count,
         statutory_violation_rate: raw.statutory_violation_rate,
         suspicious_fast_closure_count: count(
@@ -725,8 +782,8 @@ fn lock_analytics_state(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analysis::statute::DeterminationBasis;
-    use crate::analysis::timeline::evaluate_statutory_compliance_at;
+    use crate::analysis::statute::StatutoryJurisdiction;
+    use crate::analysis::timeline::{evaluate_statutory_clock, DeterminationEvidence};
     use crate::types::{StatutoryExtensionReason, StatutoryExtensionRecord};
 
     fn connection() -> Connection {
@@ -749,6 +806,11 @@ mod tests {
                     request_id BIGINT, portal_subdomain VARCHAR, notice_at VARCHAR,
                     expected_determination_at VARCHAR, reason VARCHAR, notice_source VARCHAR
                 );
+                CREATE TABLE db.portals (subdomain VARCHAR, statutory_jurisdiction VARCHAR);
+                CREATE TABLE db.request_release_events (
+                    portal_subdomain VARCHAR, request_id BIGINT, released_at VARCHAR
+                );
+                INSERT INTO db.portals VALUES ('city', 'CA_CPRA');
                 INSERT INTO db.agencies VALUES (1, 'city', 'Routine'), (2, 'city', 'Slow');
                 INSERT INTO db.requests
                 SELECT i, 'city', 1, 'Routine', 'encampment sweeping', 'closed',
@@ -783,6 +845,10 @@ mod tests {
                  CREATE TABLE statutory_extensions (
                     request_id INTEGER, portal_subdomain TEXT, notice_at TEXT,
                     expected_determination_at TEXT, reason TEXT, notice_source TEXT
+                 );
+                 CREATE TABLE portals (subdomain TEXT, statutory_jurisdiction TEXT);
+                 CREATE TABLE request_release_events (
+                    portal_subdomain TEXT, request_id INTEGER, released_at TEXT
                  );",
             )
             .unwrap();
@@ -850,139 +916,263 @@ mod tests {
     /// One request the parity fixture drives through both statutory implementations.
     struct ParityCase {
         label: &'static str,
+        /// The portal's stored `statutory_jurisdiction`.
+        jurisdiction: Option<&'static str>,
         created_at: &'static str,
         updated_at: &'static str,
         status: &'static str,
         closed_at: Option<&'static str>,
+        first_release_at: Option<&'static str>,
+        determination: Option<(&'static str, &'static str)>,
         extension: Option<StatutoryExtensionRecord>,
         violation: bool,
     }
 
+    impl ParityCase {
+        fn cpra(label: &'static str, created_at: &'static str, updated_at: &'static str) -> Self {
+            Self {
+                label,
+                jurisdiction: Some("CA_CPRA"),
+                created_at,
+                updated_at,
+                status: "open",
+                closed_at: None,
+                first_release_at: None,
+                determination: None,
+                extension: None,
+                violation: false,
+            }
+        }
+
+        /// Receipt Monday 2 March 2026; under FOIA the clock starts 16 March and the twentieth
+        /// working day after it is Monday 13 April.
+        fn foia(label: &'static str, updated_at: &'static str) -> Self {
+            Self {
+                jurisdiction: Some("US_FOIA"),
+                ..Self::cpra(label, "2026-03-02T09:00:00-05:00", updated_at)
+            }
+        }
+
+        fn closed(mut self, closed_at: &'static str) -> Self {
+            self.status = "closed";
+            self.closed_at = Some(closed_at);
+            self
+        }
+
+        fn extended(mut self, extension: StatutoryExtensionRecord) -> Self {
+            self.extension = Some(extension);
+            self
+        }
+
+        fn violation(mut self) -> Self {
+            self.violation = true;
+            self
+        }
+    }
+
+    fn extension(
+        notice_at: &str,
+        expected: &str,
+        reason: StatutoryExtensionReason,
+        source: &str,
+    ) -> StatutoryExtensionRecord {
+        StatutoryExtensionRecord {
+            notice_at: notice_at.to_string(),
+            expected_determination_at: expected.to_string(),
+            reason,
+            notice_source: source.to_string(),
+        }
+    }
+
     fn parity_cases() -> Vec<ParityCase> {
         vec![
+            ParityCase::cpra(
+                "utc timely determination",
+                "2024-01-01T00:00:00Z",
+                "2024-01-05T00:00:00Z",
+            )
+            .closed("2024-01-11T00:00:00Z"),
+            ParityCase::cpra(
+                "utc late determination",
+                "2024-01-01T00:00:00Z",
+                "2024-01-20T00:00:00Z",
+            )
+            .closed("2024-04-10T00:00:00Z")
+            .violation(),
+            ParityCase::cpra(
+                "tenth calendar day is still timely",
+                "2026-01-01T00:01:00-08:00",
+                "2026-01-11T23:59:00-08:00",
+            ),
+            // Receipt late on 2 March Pacific is 3 March in UTC. Converting to a session time
+            // zone before counting days would clear this agency at ten days; counting in the
+            // recorded offset reports the eleventh day it actually took.
+            ParityCase::cpra(
+                "near-midnight receipt in a western offset",
+                "2026-03-02T23:00:00-08:00",
+                "2026-03-13T10:00:00-08:00",
+            )
+            .violation(),
+            ParityCase::cpra(
+                "valid written extension",
+                "2026-01-01T09:00:00-08:00",
+                "2026-01-20T12:00:00-08:00",
+            )
+            .closed("2026-01-20T12:00:00-08:00")
+            .extended(extension(
+                "2026-01-08T12:00:00-08:00",
+                "2026-01-20T12:00:00-08:00",
+                StatutoryExtensionReason::VoluminousRecords,
+                "Portal message 17",
+            )),
+            ParityCase::cpra(
+                "extension beyond fourteen days is defective",
+                "2026-01-01T09:00:00-08:00",
+                "2026-01-20T12:00:00-08:00",
+            )
+            .closed("2026-01-20T12:00:00-08:00")
+            .extended(extension(
+                "2026-01-08T12:00:00-08:00",
+                "2026-01-27T12:00:00-08:00",
+                StatutoryExtensionReason::DataCompilation,
+                "Portal notice",
+            ))
+            .violation(),
+            // A legacy row: the command path rejects a blank notice source, but a database
+            // written before that check still has to be evaluated the same way by both paths.
+            ParityCase::cpra(
+                "extension without a notice source is defective",
+                "2026-01-01T09:00:00-08:00",
+                "2026-01-20T12:00:00-08:00",
+            )
+            .closed("2026-01-20T12:00:00-08:00")
+            .extended(extension(
+                "2026-01-08T12:00:00-08:00",
+                "2026-01-20T12:00:00-08:00",
+                StatutoryExtensionReason::InteragencyConsultation,
+                "   ",
+            ))
+            .violation(),
+            ParityCase::cpra(
+                "tenth day on a Saturday carries to Monday",
+                "2026-03-04T09:00:00-08:00",
+                "2026-03-16T16:00:00-07:00",
+            ),
+            ParityCase::cpra(
+                "the Tuesday after a carried deadline is late",
+                "2026-03-04T09:00:00-08:00",
+                "2026-03-17T09:00:00-07:00",
+            )
+            .violation(),
+            ParityCase::cpra(
+                "tenth day on Thanksgiving carries past the weekend",
+                "2025-11-17T09:00:00-08:00",
+                "2025-12-01T16:00:00-08:00",
+            ),
+            ParityCase::cpra(
+                "extension noticed on the carried initial deadline is timely",
+                "2026-03-04T09:00:00-08:00",
+                "2026-03-25T12:00:00-07:00",
+            )
+            .closed("2026-03-25T12:00:00-07:00")
+            .extended(extension(
+                "2026-03-16T12:00:00-07:00",
+                "2026-03-25T12:00:00-07:00",
+                StatutoryExtensionReason::VoluminousRecords,
+                "Portal message 18",
+            )),
             ParityCase {
-                label: "utc timely determination",
-                created_at: "2024-01-01T00:00:00Z",
-                updated_at: "2024-01-05T00:00:00Z",
-                status: "closed",
-                closed_at: Some("2024-01-11T00:00:00Z"),
-                extension: None,
-                violation: false,
+                first_release_at: Some("2026-01-06T09:00:00-08:00"),
+                ..ParityCase::cpra(
+                    "a first release bounds the determination before a late closure",
+                    "2026-01-01T09:00:00-08:00",
+                    "2026-02-10T09:00:00-08:00",
+                )
+                .closed("2026-02-10T09:00:00-08:00")
             },
             ParityCase {
-                label: "utc late determination",
-                created_at: "2024-01-01T00:00:00Z",
-                updated_at: "2024-01-20T00:00:00Z",
-                status: "closed",
-                closed_at: Some("2024-04-10T00:00:00Z"),
-                extension: None,
-                violation: true,
+                determination: Some(("2026-01-09T15:30:00-08:00", "Closure notice, event 7")),
+                ..ParityCase::cpra(
+                    "a recorded determination outranks later activity",
+                    "2026-01-01T09:00:00-08:00",
+                    "2026-02-10T09:00:00-08:00",
+                )
+            },
+            // An update at the receipt instant is the receipt itself. Both clocks then measure to
+            // their observation date, long past this deadline.
+            ParityCase::cpra(
+                "activity at the receipt instant is not activity",
+                "2024-01-01T09:00:00-08:00",
+                "2024-01-01T09:00:00-08:00",
+            )
+            .violation(),
+            ParityCase::foia("foia day before the deadline", "2026-04-12T16:00:00-04:00"),
+            ParityCase::foia("foia deadline day", "2026-04-13T16:00:00-04:00"),
+            ParityCase::foia("foia day after the deadline", "2026-04-14T09:00:00-04:00")
+                .violation(),
+            // Memorial Day and Juneteenth move the twentieth working day to Wednesday 24 June.
+            ParityCase {
+                created_at: "2026-05-11T09:00:00-04:00",
+                ..ParityCase::foia(
+                    "foia federal holidays are skipped",
+                    "2026-06-24T16:00:00-04:00",
+                )
             },
             ParityCase {
-                label: "tenth calendar day is still timely",
-                created_at: "2026-01-01T00:01:00-08:00",
-                updated_at: "2026-01-11T23:59:00-08:00",
-                status: "open",
-                closed_at: None,
-                extension: None,
-                violation: false,
+                created_at: "2026-05-11T09:00:00-04:00",
+                ..ParityCase::foia(
+                    "foia the working day after a holiday-shifted deadline",
+                    "2026-06-25T09:00:00-04:00",
+                )
+                .violation()
+            },
+            ParityCase::foia(
+                "foia ten-working-day extension",
+                "2026-04-27T15:00:00-04:00",
+            )
+            .extended(extension(
+                "2026-04-08T12:00:00-04:00",
+                "2026-04-27T12:00:00-04:00",
+                StatutoryExtensionReason::VoluminousRecords,
+                "Agency letter",
+            )),
+            ParityCase::foia(
+                "foia extension one day too long",
+                "2026-04-27T15:00:00-04:00",
+            )
+            .extended(extension(
+                "2026-04-08T12:00:00-04:00",
+                "2026-04-28T12:00:00-04:00",
+                StatutoryExtensionReason::VoluminousRecords,
+                "Agency letter",
+            ))
+            .violation(),
+            ParityCase::foia(
+                "foia extension on a CPRA-only ground",
+                "2026-04-27T15:00:00-04:00",
+            )
+            .extended(extension(
+                "2026-04-08T12:00:00-04:00",
+                "2026-04-27T12:00:00-04:00",
+                StatutoryExtensionReason::DataCompilation,
+                "Agency letter",
+            ))
+            .violation(),
+            ParityCase {
+                jurisdiction: None,
+                ..ParityCase::cpra(
+                    "a source naming no jurisdiction is not evaluated",
+                    "2024-01-01T00:00:00Z",
+                    "2024-04-10T00:00:00Z",
+                )
             },
             ParityCase {
-                // Receipt late on 2 March Pacific is 3 March in UTC. Converting to a session
-                // time zone before counting days would clear this agency at ten days; counting in
-                // the recorded offset reports the eleventh day it actually took.
-                label: "near-midnight receipt in a western offset",
-                created_at: "2026-03-02T23:00:00-08:00",
-                updated_at: "2026-03-13T10:00:00-08:00",
-                status: "open",
-                closed_at: None,
-                extension: None,
-                violation: true,
-            },
-            ParityCase {
-                label: "valid written extension",
-                created_at: "2026-01-01T09:00:00-08:00",
-                updated_at: "2026-01-20T12:00:00-08:00",
-                status: "closed",
-                closed_at: Some("2026-01-20T12:00:00-08:00"),
-                extension: Some(StatutoryExtensionRecord {
-                    notice_at: "2026-01-08T12:00:00-08:00".to_string(),
-                    expected_determination_at: "2026-01-20T12:00:00-08:00".to_string(),
-                    reason: StatutoryExtensionReason::VoluminousRecords,
-                    notice_source: "Portal message 17".to_string(),
-                }),
-                violation: false,
-            },
-            ParityCase {
-                label: "extension beyond fourteen days is defective",
-                created_at: "2026-01-01T09:00:00-08:00",
-                updated_at: "2026-01-20T12:00:00-08:00",
-                status: "closed",
-                closed_at: Some("2026-01-20T12:00:00-08:00"),
-                extension: Some(StatutoryExtensionRecord {
-                    notice_at: "2026-01-08T12:00:00-08:00".to_string(),
-                    expected_determination_at: "2026-01-27T12:00:00-08:00".to_string(),
-                    reason: StatutoryExtensionReason::DataCompilation,
-                    notice_source: "Portal notice".to_string(),
-                }),
-                violation: true,
-            },
-            ParityCase {
-                // A legacy row: the command path rejects a blank notice source, but a database
-                // written before that check still has to be evaluated the same way by both paths.
-                label: "extension without a notice source is defective",
-                created_at: "2026-01-01T09:00:00-08:00",
-                updated_at: "2026-01-20T12:00:00-08:00",
-                status: "closed",
-                closed_at: Some("2026-01-20T12:00:00-08:00"),
-                extension: Some(StatutoryExtensionRecord {
-                    notice_at: "2026-01-08T12:00:00-08:00".to_string(),
-                    expected_determination_at: "2026-01-20T12:00:00-08:00".to_string(),
-                    reason: StatutoryExtensionReason::InteragencyConsultation,
-                    notice_source: "   ".to_string(),
-                }),
-                violation: true,
-            },
-            ParityCase {
-                label: "tenth day on a Saturday carries to Monday",
-                created_at: "2026-03-04T09:00:00-08:00",
-                updated_at: "2026-03-16T16:00:00-07:00",
-                status: "open",
-                closed_at: None,
-                extension: None,
-                violation: false,
-            },
-            ParityCase {
-                label: "the Tuesday after a carried deadline is late",
-                created_at: "2026-03-04T09:00:00-08:00",
-                updated_at: "2026-03-17T09:00:00-07:00",
-                status: "open",
-                closed_at: None,
-                extension: None,
-                violation: true,
-            },
-            ParityCase {
-                label: "tenth day on Thanksgiving carries past the weekend",
-                created_at: "2025-11-17T09:00:00-08:00",
-                updated_at: "2025-12-01T16:00:00-08:00",
-                status: "open",
-                closed_at: None,
-                extension: None,
-                violation: false,
-            },
-            ParityCase {
-                label: "extension noticed on the carried initial deadline is timely",
-                created_at: "2026-03-04T09:00:00-08:00",
-                updated_at: "2026-03-25T12:00:00-07:00",
-                status: "closed",
-                closed_at: Some("2026-03-25T12:00:00-07:00"),
-                extension: Some(StatutoryExtensionRecord {
-                    notice_at: "2026-03-16T12:00:00-07:00".to_string(),
-                    expected_determination_at: "2026-03-25T12:00:00-07:00".to_string(),
-                    reason: StatutoryExtensionReason::VoluminousRecords,
-                    notice_source: "Portal message 18".to_string(),
-                }),
-                violation: false,
+                jurisdiction: Some("NONE"),
+                ..ParityCase::cpra(
+                    "a source stated to have no modeled statute is not evaluated",
+                    "2024-01-01T00:00:00Z",
+                    "2024-04-10T00:00:00Z",
+                )
             },
         ]
     }
@@ -995,7 +1185,13 @@ mod tests {
     /// prefix instead. These zones straddle the boundary in both directions.
     const PARITY_SESSION_TIME_ZONES: [&str; 3] = ["UTC", "America/Los_Angeles", "Australia/Sydney"];
 
-    fn parity_connection(cases: &[ParityCase]) -> Connection {
+    fn sql_text(value: Option<&str>) -> String {
+        value
+            .map(|value| format!("'{value}'"))
+            .unwrap_or_else(|| "NULL".to_string())
+    }
+
+    fn parity_connection(case: &ParityCase) -> Connection {
         let connection = Connection::open_in_memory().unwrap();
         connection
             .execute_batch(
@@ -1015,73 +1211,87 @@ mod tests {
                     request_id BIGINT, portal_subdomain VARCHAR, notice_at VARCHAR,
                     expected_determination_at VARCHAR, reason VARCHAR, notice_source VARCHAR
                 );
+                CREATE TABLE db.portals (subdomain VARCHAR, statutory_jurisdiction VARCHAR);
+                CREATE TABLE db.request_release_events (
+                    portal_subdomain VARCHAR, request_id BIGINT, released_at VARCHAR
+                );
                 INSERT INTO db.agencies VALUES (1, 'city', 'Parity');
                 "#,
             )
             .unwrap();
-        for (index, case) in cases.iter().enumerate() {
-            let request_id = index as i64 + 1;
-            let closed = case
-                .closed_at
-                .map(|value| format!("'{value}'"))
-                .unwrap_or_else(|| "NULL".to_string());
+        connection
+            .execute_batch(&format!(
+                "INSERT INTO db.portals VALUES ('city', {});
+                 INSERT INTO db.requests VALUES (1, 'city', 1, '{}', '', '{}', '{}', '{}', {}, {}, {});",
+                sql_text(case.jurisdiction),
+                case.label,
+                case.status,
+                case.created_at,
+                case.updated_at,
+                sql_text(case.closed_at),
+                sql_text(case.determination.map(|(at, _)| at)),
+                sql_text(case.determination.map(|(_, source)| source)),
+            ))
+            .unwrap();
+        if let Some(released_at) = case.first_release_at {
             connection
                 .execute_batch(&format!(
-                    "INSERT INTO db.requests VALUES ({request_id}, 'city', 1, '{}', '', '{}', '{}', '{}', {closed}, NULL, NULL);",
-                    case.label, case.status, case.created_at, case.updated_at
+                    "INSERT INTO db.request_release_events VALUES ('city', 1, '{released_at}');"
                 ))
                 .unwrap();
-            if let Some(extension) = &case.extension {
-                connection
-                    .execute_batch(&format!(
-                        "INSERT INTO db.statutory_extensions VALUES ({request_id}, 'city', '{}', '{}', '{}', '{}');",
-                        extension.notice_at,
-                        extension.expected_determination_at,
-                        extension.reason.as_str(),
-                        extension.notice_source
-                    ))
-                    .unwrap();
-            }
+        }
+        if let Some(extension) = &case.extension {
+            connection
+                .execute_batch(&format!(
+                    "INSERT INTO db.statutory_extensions VALUES (1, 'city', '{}', '{}', '{}', '{}');",
+                    extension.notice_at,
+                    extension.expected_determination_at,
+                    extension.reason.as_str(),
+                    extension.notice_source
+                ))
+                .unwrap();
         }
         connection
     }
 
-    /// The aggregate SQL and the per-request Rust evaluator must reach the same verdict.
+    /// The aggregate SQL and the per-request Rust evaluator must reach the same verdict, and must
+    /// agree on whether a request was evaluated at all.
     ///
     /// Both sides are driven from one table of cases, so this fails when either implementation
     /// changes alone. Hard-coding the expected count twice would only document today's answer.
     #[test]
     fn statutory_verdicts_match_the_per_request_evaluator() {
         let cases = parity_cases();
-        let observation_at = "2026-06-01T00:00:00Z";
+        let observation_at = "2026-09-01T00:00:00Z";
         let rust_verdicts = cases
             .iter()
-            .enumerate()
-            .map(|(index, case)| {
-                let analysis = evaluate_statutory_compliance_at(
-                    index as u64 + 1,
+            .map(|case| {
+                let Some(jurisdiction) = StatutoryJurisdiction::from_stored(case.jurisdiction)
+                else {
+                    return (case.label, false, false);
+                };
+                let analysis = evaluate_statutory_clock(
+                    jurisdiction.rule(),
+                    1,
                     case.created_at,
-                    Some(case.updated_at),
-                    case.closed_at,
+                    DeterminationEvidence {
+                        updated_at: Some(case.updated_at),
+                        closed_at: case.closed_at,
+                        first_release_at: case.first_release_at,
+                        determination_at: case.determination.map(|(at, _)| at),
+                        determination_source: case.determination.map(|(_, source)| source),
+                    },
                     case.extension.as_ref(),
                     observation_at,
                 )
                 .unwrap_or_else(|error| {
                     panic!("case '{}' failed to evaluate: {error}", case.label)
                 });
-                // Every case records activity after receipt, so neither path falls back to "now"
-                // and the comparison stays deterministic.
-                assert_eq!(
-                    analysis.determination_basis,
-                    DeterminationBasis::EarliestRecordedActivityProxy,
-                    "case '{}' must measure to recorded activity",
-                    case.label
-                );
-                (case.label, analysis.is_violation)
+                (case.label, true, analysis.is_violation)
             })
             .collect::<Vec<_>>();
 
-        for (case, (label, is_violation)) in cases.iter().zip(&rust_verdicts) {
+        for (case, (label, _, is_violation)) in cases.iter().zip(&rust_verdicts) {
             assert_eq!(
                 *is_violation, case.violation,
                 "case '{label}': the per-request evaluator reached the wrong verdict"
@@ -1090,8 +1300,8 @@ mod tests {
 
         let mut applied_time_zones = Vec::new();
         for time_zone in PARITY_SESSION_TIME_ZONES {
-            for (case, (label, is_violation)) in cases.iter().zip(&rust_verdicts) {
-                let connection = parity_connection(std::slice::from_ref(case));
+            for (case, (label, evaluated, is_violation)) in cases.iter().zip(&rust_verdicts) {
+                let connection = parity_connection(case);
                 // A build without the ICU extension cannot change session time zone at all.
                 // Record which zones were exercised rather than reporting untested zones as
                 // passing.
@@ -1111,8 +1321,11 @@ mod tests {
                 .unwrap();
                 assert_eq!(profiles.len(), 1);
                 assert_eq!(
-                    profiles[0].statutory_violation_count,
-                    usize::from(*is_violation),
+                    (
+                        profiles[0].statutory_evaluated_count,
+                        profiles[0].statutory_violation_count
+                    ),
+                    (usize::from(*evaluated), usize::from(*is_violation)),
                     "case '{label}' under session time zone '{time_zone}': the aggregate \
                      disagreed with the per-request evaluator"
                 );
@@ -1122,6 +1335,34 @@ mod tests {
             applied_time_zones.len() >= 2,
             "the day-count rule must be proven independent of the session time zone, but only \
              {applied_time_zones:?} could be applied"
+        );
+    }
+
+    /// An agency whose source names no jurisdiction was never measured, so it is neither
+    /// compliant nor at a zero violation rate.
+    #[test]
+    fn an_unevaluated_agency_is_unaudited_not_compliant() {
+        let case = ParityCase {
+            jurisdiction: None,
+            ..ParityCase::cpra(
+                "no jurisdiction",
+                "2024-01-01T00:00:00Z",
+                "2024-04-10T00:00:00Z",
+            )
+        };
+        let profiles = query_agency_performance_profiles(
+            &parity_connection(&case),
+            90.0,
+            "",
+            "",
+            AnalyticsSource::ForeignSqlite.table_prefix(),
+        )
+        .unwrap();
+        assert_eq!(profiles[0].statutory_evaluated_count, 0);
+        assert_eq!(profiles[0].statutory_violation_rate, None);
+        assert_eq!(
+            profiles[0].compliance_indicator,
+            VerificationState::Unaudited
         );
     }
 
@@ -1177,6 +1418,11 @@ mod tests {
                     request_id BIGINT, portal_subdomain VARCHAR, notice_at VARCHAR,
                     expected_determination_at VARCHAR, reason VARCHAR, notice_source VARCHAR
                 );
+                CREATE TABLE db.portals (subdomain VARCHAR, statutory_jurisdiction VARCHAR);
+                CREATE TABLE db.request_release_events (
+                    portal_subdomain VARCHAR, request_id BIGINT, released_at VARCHAR
+                );
+                INSERT INTO db.portals VALUES ('city', 'CA_CPRA');
                 INSERT INTO db.agencies VALUES (1, 'city', 'Peers'), (2, 'city', 'Slow but lawful');
                 -- Peer agency: determination and closure both well inside the deadline.
                 INSERT INTO db.requests

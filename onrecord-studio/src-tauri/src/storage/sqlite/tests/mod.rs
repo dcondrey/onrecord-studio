@@ -13,7 +13,7 @@ use super::{
     integrity::{compute_extracted_text_sha256, validate_entropy_metadata},
     migrations::verify_logical_relations,
     sources::{normalized_submitted_url, publisher_pattern_for_url},
-    timeline::cpra_calendar_confidence_basis_points,
+    timeline::statutory_clock_confidence_basis_points,
     DocumentDownloadFinalization, DocumentExtractionFinalization, DuckDbRepository,
     IngestionSchedulerCounts, PortalSyncRunFinalization, ProvenanceEvidenceFile,
     SourceLifecycleState, SQL_UTC_NOW,
@@ -94,8 +94,10 @@ async fn file_repository_with_document(path: &Path) -> DuckDbRepository {
         let connection = repository.conn.lock().await;
         connection
             .execute(
-                "INSERT INTO portals (subdomain, display_name, base_url)
-                 VALUES (?1, ?2, ?3)",
+                // The fixture's requests are evaluated under the CPRA clock; a source names its
+                // jurisdiction explicitly, since none is inferred for an unrecognized host.
+                "INSERT INTO portals (subdomain, display_name, base_url, statutory_jurisdiction)
+                 VALUES (?1, ?2, ?3, 'CA_CPRA')",
                 params![PORTAL_SUBDOMAIN, "Test Portal", "https://example.test"],
             )
             .expect("portal fixture must insert");

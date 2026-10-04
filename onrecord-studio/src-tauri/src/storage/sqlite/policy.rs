@@ -60,7 +60,9 @@ impl DuckDbRepository {
                     statutory_violations.missing_evidence_json,
                     statutory_violations.review_status,
                     statutory_violations.first_detected_at,
-                    statutory_violations.evaluated_at
+                    statutory_violations.evaluated_at,
+                    statutory_violations.clock_rule_id,
+                    statutory_violations.determination_basis
                  FROM statutory_violations
                  INNER JOIN legal_statutes
                     ON legal_statutes.statute_id = statutory_violations.matched_statute_id
@@ -198,6 +200,8 @@ fn map_legal_finding_row(row: &Row<'_>) -> duckdb::Result<RawLegalFinding> {
         review_status: row.get(16)?,
         first_detected_at: row.get(17)?,
         evaluated_at: row.get(18)?,
+        clock_rule_id: row.get(19)?,
+        determination_basis: row.get(20)?,
     })
 }
 
@@ -254,6 +258,12 @@ fn convert_legal_finding(row: RawLegalFinding) -> Result<LegalComplianceFinding,
         review_status: row.review_status,
         first_detected_at: row.first_detected_at,
         evaluated_at: row.evaluated_at,
+        clock_rule_id: row.clock_rule_id,
+        // An unrecognized stored value reads as unrecorded rather than as some basis.
+        determination_basis: row
+            .determination_basis
+            .as_deref()
+            .and_then(crate::analysis::DeterminationBasis::from_stored),
     })
 }
 

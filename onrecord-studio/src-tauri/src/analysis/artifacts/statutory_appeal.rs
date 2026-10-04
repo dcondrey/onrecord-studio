@@ -16,11 +16,8 @@ use crate::profile::DisclosureContext;
 use crate::{
     analysis::{
         finding::{FindingConfidence, FindingSubject},
-        statute::{DeterminationBasis, CPRA_STATUTE_CITATION},
-        timeline::{
-            evaluate_statutory_compliance_with_determination_at, StatutoryComplianceAnalysis,
-            StatutoryExtensionStatus,
-        },
+        statute::{DeterminationBasis, StatutoryJurisdiction, CPRA_STATUTE_CITATION},
+        timeline::{StatutoryComplianceAnalysis, StatutoryExtensionStatus},
     },
     error::AppError,
     storage::DuckDbRepository,
@@ -41,6 +38,12 @@ pub fn draft_statutory_deadline_appeal(
     if jurisdiction != JURISDICTION {
         return Err(ArtifactError::AppealNotSupported(format!(
             "no statute is registered for jurisdiction {jurisdiction}"
+        )));
+    }
+    if analysis.jurisdiction != StatutoryJurisdiction::CaliforniaCpra {
+        return Err(ArtifactError::AppealNotSupported(format!(
+            "the request was measured under {}; this template drafts a CPRA appeal",
+            analysis.rule_id
         )));
     }
     if !analysis.is_violation {
@@ -157,16 +160,17 @@ pub async fn draft_for_request(
     let evidence = repository
         .load_legal_brief_evidence(request_id, portal_key)
         .await?;
-    let analysis = evaluate_statutory_compliance_with_determination_at(
-        request_id,
-        &evidence.created_at,
-        Some(&evidence.updated_at),
-        evidence.closed_at.as_deref(),
-        evidence.determination_at.as_deref(),
-        evidence.determination_source.as_deref(),
-        evidence.extension.as_ref(),
-        &Utc::now().to_rfc3339(),
-    )?;
+    let analysis = evidence
+        .evaluate_statutory_clock(&Utc::now().to_rfc3339())?
+        .ok_or_else(|| {
+            AppError::Analysis(
+                ArtifactError::AppealNotSupported(
+                    "the source names no statutory jurisdiction, so no deadline applies"
+                        .to_string(),
+                )
+                .to_string(),
+            )
+        })?;
     let agency = repository
         .agency_label_for_request(portal_key, request_id)
         .await?;
@@ -190,13 +194,17 @@ mod tests {
         closed: Option<&str>,
         extension: Option<&StatutoryExtensionRecord>,
     ) -> StatutoryComplianceAnalysis {
-        evaluate_statutory_compliance_with_determination_at(
+        crate::analysis::evaluate_statutory_clock(
+            &crate::analysis::statute::CPRA_DETERMINATION_RULE,
             7,
             "2026-03-02T00:00:00Z",
-            Some("2026-03-30T00:00:00Z"),
-            closed,
-            determination.map(|(at, _)| at),
-            determination.map(|(_, source)| source),
+            crate::analysis::DeterminationEvidence {
+                updated_at: Some("2026-03-30T00:00:00Z"),
+                closed_at: closed,
+                first_release_at: None,
+                determination_at: determination.map(|(at, _)| at),
+                determination_source: determination.map(|(_, source)| source),
+            },
             extension,
             "2026-04-30T00:00:00Z",
         )
