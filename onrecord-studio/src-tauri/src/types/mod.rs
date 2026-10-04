@@ -23,7 +23,10 @@ pub use analysis::{AgencyPerformanceProfile, AnalysisConfig};
 pub use analysis_workbench::{
     AnalyticalColumnSummary, AnalyticalDatasetKind, AnalyticalDatasetSummary,
     AnalyticalImportCandidate, AnalyticalImportRequest, AnalyticalImportResult, AnalyticalSchema,
-    SqlExportResult, SqlQueryResult, SqlTemplate,
+    CityDataset, DerivedSubset, EncampmentIncidentDistance, EncampmentLocationObservation,
+    EncampmentOrdinanceReport, LocationSectionCount, NearestFeature, NightHoursObservation,
+    NightHoursSectionCount, ObservationSource, RecordedActivity, SqlExportResult, SqlQueryResult,
+    SqlTemplate,
 };
 pub use audit::{StateTransitionLog, TimelineAnomalyMarker, VerificationState};
 pub use c2pa::{

@@ -44,11 +44,24 @@ or when no shelter is reasonably available. 63.0406(a): written notice of clean-
   with time, violationSection, address, beat): 29 citations and 5 arrests under 63.0404(A), none between
   21:00 and 05:30. One night-time citation is coded "63.0404" without a subsection. (c) accounts for 359
   citations/arrests in the same log.
+  A later release extends this: "CPRA26-6187_Arrests_2025-June2026_SDPD.xlsx" (sandiego.nextrequest.com
+  document 67231643, SHA-256 f81590df…c66; 118,550 charge rows, 76,291 CITATION and 42,259 ARREST,
+  2025-01-01 00:02 to 2026-06-22 23:48, same columns plus Command). 63.0404 activities: 14 (A), 251 (C),
+  3 coded "63.0404" alone, and none between 21:00 and 05:30; one (C) arrest is recorded at exactly 05:30
+  (activity 2504585401, 1600 El Prado). NIBRS 2025 alone (154 offenses after de-duplicating `nibrs_uniq`):
+  (c) 42 within 1,320 ft of a school or MTS/NCTD station, 56 at 1,320–2,640 ft, 45 beyond, 1 not geocoded;
+  (a) 3 / 4 / 3. The app's report and an independent script agree on every count.
 - **63.0404(c) locations — inconclusive without designations.** 374 geocoded NIBRS (c) incidents
   (2023-08 to 2025): 130 within 1,320 ft of a school (SANDAG Schools layer) or MTS station (GTFS
   location_type 1); 105 beyond 2,640 ft of both, concentrated in Balboa Park (El Prado, Park Blvd),
   Mission Bay (Ingraham St, Sea World Dr) and Golden Hill — plausibly (c)(3)/(c)(5). Testing them needs
   the City Manager's (c)(5) park designations and the ordinance sign locations (City Auditor OCA-26-07
   Appendix B lists sign locations as a City dataset) — request both.
+- In the app: Analysis → Analytical Import → "Fetch and import" downloads NIBRS offenses or Get It Done
+  encampment reports for a year, SANDAG schools, or SANDAG transit stops (Get It Done 2025 is 128 MB,
+  over the 96 MB table limit, so only `service_name = 'Encampment'` rows are kept and the publisher
+  file's SHA-256 is stored in the snapshot's validation summary). "Encampment ordinance observations"
+  runs both checks above over whatever is imported. Calls for service are not offered: a full year
+  (2025: 466,980 rows x 14 columns) exceeds the 6,000,000-cell import limit.
 - NIBRS `occured_on` is a date only; `approved_on` is report approval time, not incident time, so
   time-of-day tests must use the ArrestsCites log.

@@ -44,6 +44,126 @@ pub struct AnalyticalImportRequest {
     pub source_file_name: Option<String>,
     #[serde(default)]
     pub expected_source_sha256: Option<String>,
+    /// Set only by the app when the imported file is a filtered subset of a publisher's file.
+    #[serde(skip)]
+    pub derived_subset: Option<DerivedSubset>,
+}
+
+/// Which publisher file a filtered import came from, so the snapshot's own digest (of the subset)
+/// is never mistaken for the digest of what the publisher released.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DerivedSubset {
+    pub publisher_sha256: String,
+    pub publisher_rows: usize,
+    pub filter: String,
+}
+
+/// What imported tables show about SDMC 63.0404/63.0405 enforcement. Observations only: none of
+/// these fields asserts that a citation was unlawful. `None` means the inputs were not imported,
+/// which is distinct from a count of zero.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct EncampmentOrdinanceReport {
+    pub night_hours: Option<NightHoursObservation>,
+    pub locations: Option<EncampmentLocationObservation>,
+    pub not_measured: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ObservationSource {
+    pub snapshot_id: String,
+    pub display_name: String,
+    pub source_sha256: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct NightHoursObservation {
+    pub sources: Vec<ObservationSource>,
+    /// Earliest and latest activity of any section in the imported logs, as recorded.
+    pub first_activity: Option<String>,
+    pub last_activity: Option<String>,
+    pub sections: Vec<NightHoursSectionCount>,
+    /// Activities inside the window or exactly on one of its endpoints.
+    pub listed_activities: Vec<RecordedActivity>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct NightHoursSectionCount {
+    pub section: String,
+    pub activity_type: String,
+    pub activities: usize,
+    pub inside_window: usize,
+    pub at_window_boundary: usize,
+    pub outside_window: usize,
+    pub time_not_recorded: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordedActivity {
+    pub activity_number: String,
+    pub activity_type: String,
+    pub section: String,
+    pub recorded_at: String,
+    pub at_window_boundary: bool,
+    pub location: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct EncampmentLocationObservation {
+    pub incident_sources: Vec<ObservationSource>,
+    pub school_source: Option<ObservationSource>,
+    pub station_source: Option<ObservationSource>,
+    pub sections: Vec<LocationSectionCount>,
+    pub incidents: Vec<EncampmentIncidentDistance>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LocationSectionCount {
+    pub section: String,
+    pub offenses: usize,
+    pub distinct_cases: usize,
+    pub not_geocoded: usize,
+    /// `None` unless both the school and the station layer were imported.
+    pub within_near_band: Option<usize>,
+    pub within_far_band: Option<usize>,
+    pub beyond_far_band: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct EncampmentIncidentDistance {
+    pub case_number: String,
+    pub occurred_on: Option<String>,
+    pub section: String,
+    pub block_address: String,
+    pub latitude: Option<f64>,
+    pub longitude: Option<f64>,
+    pub nearest_school: Option<NearestFeature>,
+    pub nearest_station: Option<NearestFeature>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NearestFeature {
+    pub name: String,
+    pub distance_feet: f64,
+}
+
+/// A published City table the app fetches by name. The frontend names one and, where the publisher
+/// splits by year, a year; it never supplies a URL.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum CityDataset {
+    NibrsOffenses,
+    GetItDoneEncampments,
+    Schools,
+    TransitStops,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

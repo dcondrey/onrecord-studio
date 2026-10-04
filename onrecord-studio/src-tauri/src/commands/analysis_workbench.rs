@@ -2,11 +2,13 @@ use crate::commands::validation::{
     required_text, validate_filesystem_target_path, validate_import_source_path, validate_text,
 };
 use crate::error::AppError;
+use crate::ingestion::queue::QueueManager;
 use crate::storage::sqlite::DuckDbRepository;
 use crate::types::{
     AnalyticalImportCandidate, AnalyticalImportRequest, AnalyticalImportResult, AnalyticalSchema,
-    SqlExportResult, SqlQueryResult,
+    CityDataset, EncampmentOrdinanceReport, SqlExportResult, SqlQueryResult,
 };
+use std::sync::Arc;
 use tauri::State;
 
 #[tauri::command]
@@ -50,6 +52,22 @@ pub async fn import_analytical_dataset(
         }
     }
     repository.import_analytical_csv(input).await
+}
+
+#[tauri::command]
+pub async fn fetch_city_dataset(
+    dataset: CityDataset,
+    year: Option<u16>,
+    manager: State<'_, Arc<QueueManager>>,
+) -> Result<AnalyticalImportResult, AppError> {
+    manager.fetch_city_dataset(dataset, year).await
+}
+
+#[tauri::command]
+pub async fn get_encampment_ordinance_report(
+    repository: State<'_, DuckDbRepository>,
+) -> Result<EncampmentOrdinanceReport, AppError> {
+    repository.encampment_ordinance_report().await
 }
 
 #[tauri::command]

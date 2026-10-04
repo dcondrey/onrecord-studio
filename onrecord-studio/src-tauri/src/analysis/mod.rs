@@ -52,6 +52,7 @@ pub mod spending_rules;
 pub(crate) mod phrase_match;
 
 pub mod dispositions;
+pub mod encampment_ordinance;
 
 pub mod intent;
 
