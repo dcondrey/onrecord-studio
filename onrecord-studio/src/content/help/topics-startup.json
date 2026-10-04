@@ -1,0 +1,85 @@
+[
+  {
+    "id": "startup-maintenance",
+    "title": "Optimizing storage at startup",
+    "group": "Data handling",
+    "keywords": [
+      "startup",
+      "launch",
+      "optimizing storage",
+      "one time",
+      "slow start",
+      "compressed storage",
+      "disk space",
+      "free space",
+      "startup maintenance"
+    ],
+    "summary": "On the first launch after an update, a database from an earlier version may be rewritten once into compressed storage before your records open. The window shows which file and how long it has taken.",
+    "sections": [
+      {
+        "heading": "What you see",
+        "paragraphs": [
+          "\"Opening your records…\" while the databases open. When a file needs the rewrite, the screen changes to \"Optimizing storage (one time)…\" with the file's name and the elapsed time. A file that is already current is only checked, which takes a moment, and the one-time message is not shown for it.",
+          "On a large archive the rewrite takes about a minute. Your records open as soon as it finishes."
+        ]
+      },
+      {
+        "heading": "What it does",
+        "paragraphs": [
+          "The records database and the search index are copied, table by table, into the current storage format, which compresses long text. Every table's row count and content are verified identical in the copy before the copy replaces the original. The original is kept until the next launch opens successfully, then removed.",
+          "Quitting during the rewrite is safe: the original is not changed until the verified copy replaces it, and the next launch starts the rewrite over."
+        ]
+      },
+      {
+        "heading": "When it is not done",
+        "paragraphs": [
+          "The rewrite needs free space of about twice the file's size. With less, or if anything in the copy fails verification, the file is left exactly as it was and stays fully usable, only uncompressed. The next launch tries again.",
+          "Each outcome, done or not done with the reason, is shown once in a Startup maintenance notice and written to the Activity log. The notice stays, across launches, until you dismiss it."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": ["startup"],
+    "related": []
+  },
+  {
+    "id": "checks-not-run",
+    "title": "Checks that did not run",
+    "group": "Findings",
+    "keywords": [
+      "did not run",
+      "not run",
+      "skipped check",
+      "embedding model",
+      "semantic index",
+      "no findings",
+      "detector"
+    ],
+    "summary": "A check that cannot perform its test is named, with the reason, after each analysis run. Its silence is not a result: no findings from it means it did not look, not that it found nothing.",
+    "sections": [
+      {
+        "heading": "Where it appears",
+        "paragraphs": [
+          "After analysis runs, from an ingest or the Refresh button, the Findings inbox and the post-ingest brief show \"N checks did not run\" with each check's name and why."
+        ]
+      },
+      {
+        "heading": "Why a check does not run",
+        "items": [
+          "No-records denial vs. earlier releases compares a denial with the agency's earlier releases by meaning. It needs the on-device embedding model installed and the semantic index built; while the index is being rebuilt, releases not yet embedded cannot be tested, so the check waits for the next run."
+        ]
+      },
+      {
+        "heading": "What happens to its earlier findings",
+        "paragraphs": [
+          "They are kept. A run that could not test a finding is not evidence that the finding no longer holds."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [],
+    "related": ["findings-inbox", "legal-vs-pattern"]
+  }
+]

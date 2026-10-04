@@ -9,6 +9,7 @@ import {
 import type {
   AgencyPerformanceProfile,
   CrossAgencyCorrelation,
+  DetectorNotRunView,
   LegalAuthoritySummary,
   LegalComplianceFinding,
   OcrCapability,
@@ -34,7 +35,12 @@ export interface IngestionMetrics {
   bytesTransferred: number;
 }
 
-export type WorkspaceView = 'overview' | 'story' | 'patterns' | 'analysis' | 'evidence' | 'activity' | 'briefing' | 'meetings' | 'compare';
+/** What the latest detector sweep reported. `failed` names no checks, so none are claimed. */
+export type FindingsRefreshOutcome =
+  | { status: 'completed'; notRun: DetectorNotRunView[] }
+  | { status: 'failed' };
+
+export type WorkspaceView ='overview' | 'story' | 'patterns' | 'analysis' | 'evidence' | 'activity' | 'briefing' | 'meetings' | 'compare';
 export type EvidenceMode = 'records' | 'timeline';
 export type AppTheme = ThemePreference;
 export type AppMotion = MotionPreference;
@@ -179,6 +185,9 @@ interface AppState {
    * inbox picks up the latest sweep without a race against the ingest hook.
    */
   findingsRefreshRequests: number;
+  /** Outcome of the most recently started detector sweep; null until one settles. */
+  findingsRefreshOutcome: FindingsRefreshOutcome | null;
+  findingsRefreshSequence: number;
   legalAuthorities: LegalAuthoritySummary[];
   activeLegalFindings: LegalComplianceFinding[];
   legalDataUpdatedAt: string | null;
@@ -281,6 +290,9 @@ interface AppState {
   requestAnalyticsRefresh: () => void;
   requestEvidenceRefresh: () => void;
   requestFindingsRefresh: () => void;
+  beginFindingsRefresh: () => number;
+  /** Ignored unless `sequence` is the latest begun, so a slower earlier sweep never overwrites. */
+  settleFindingsRefresh: (sequence: number, outcome: FindingsRefreshOutcome) => void;
   setLegalAuthorities: (authorities: LegalAuthoritySummary[]) => void;
   setActiveLegalFindings: (findings: LegalComplianceFinding[]) => void;
   setSearchFilters: (
@@ -354,6 +366,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   analyticsRefreshRequests: 0,
   evidenceRefreshRequests: 0,
   findingsRefreshRequests: 0,
+  findingsRefreshOutcome: null,
+  findingsRefreshSequence: 0,
   legalAuthorities: [],
   activeLegalFindings: [],
   legalDataUpdatedAt: null,
@@ -606,6 +620,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => ({ evidenceRefreshRequests: state.evidenceRefreshRequests + 1 })),
   requestFindingsRefresh: () =>
     set((state) => ({ findingsRefreshRequests: state.findingsRefreshRequests + 1 })),
+  beginFindingsRefresh: () => {
+    const sequence = get().findingsRefreshSequence + 1;
+    set({ findingsRefreshSequence: sequence });
+    return sequence;
+  },
+  settleFindingsRefresh: (sequence, findingsRefreshOutcome) => {
+    if (get().findingsRefreshSequence !== sequence) return;
+    set({ findingsRefreshOutcome });
+  },
   setLegalAuthorities: (legalAuthorities) =>
     set({
       legalAuthorities: [...legalAuthorities].sort((left, right) =>

@@ -11,6 +11,8 @@ import CollectionPlanDialog from './components/dashboard/CollectionPlanDialog';
 import Inspector from './components/objects/Inspector';
 import { useAppStore } from './store/useAppStore';
 import { invokeCommand } from './ipc';
+import { runFindingsRefresh } from './utils/findingsRefresh';
+import StartupGate from './components/startup/StartupGate';
 import type { IngestionTelemetry } from './types';
 import { shouldReportFailure, type ReportedFailure } from './utils/repeatedFailure';
 import { resolveTheme, THEME_STORAGE_KEY } from './utils/theme';
@@ -36,7 +38,9 @@ export default function App() {
     <ErrorBoundary label="OnRecord Studio" fullScreen>
       <LicenseProvider>
         <LicenseSwitch>
-          <LicensedWorkspace />
+          <StartupGate>
+            <LicensedWorkspace />
+          </StartupGate>
         </LicenseSwitch>
       </LicenseProvider>
     </ErrorBoundary>
@@ -332,7 +336,7 @@ function LicensedWorkspace() {
           void refreshAnalytics();
           // Autonomous: run all detectors against the corpus now that new records have landed,
           // and bump the inbox counter so `FindingsInbox` re-reads the ranked list.
-          void invokeCommand('refresh_findings', {})
+          void runFindingsRefresh()
             .catch((error: unknown) => {
               appendSyncLog(`Findings refresh failed: ${String(error)}`);
             })
@@ -371,11 +375,6 @@ function LicensedWorkspace() {
         case 'corpusReconciliationCompleted':
           appendSyncLog(
             `Corpus index ready: ${payload.payload.indexedDocuments.toLocaleString()} rebuilt, ${payload.payload.skippedDocuments.toLocaleString()} current, ${payload.payload.failedDocuments.toLocaleString()} failed${payload.payload.firstError ? ` — ${payload.payload.firstError}` : ''}.`,
-          );
-          break;
-        case 'legacyCoreDatabaseMigrated':
-          appendSyncLog(
-            `Legacy core database migrated: ${payload.payload.copiedRows.toLocaleString()} rows across ${payload.payload.copiedTables.toLocaleString()} tables copied, backup retained at ${payload.payload.backupPath}${payload.payload.tablesAbsentFromLegacy.length > 0 ? `; absent from the legacy file: ${payload.payload.tablesAbsentFromLegacy.join(', ')}` : ''}${payload.payload.tablesDroppedFromLegacy.length > 0 ? `; dropped from the legacy file: ${payload.payload.tablesDroppedFromLegacy.join(', ')}` : ''}.`,
           );
           break;
         default:

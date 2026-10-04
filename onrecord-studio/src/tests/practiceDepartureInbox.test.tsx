@@ -54,6 +54,7 @@ vi.mock('@tauri-apps/api/core', () => ({
         detectorsRun: 1,
         findingsRecorded: 0,
         staleCleared: 0,
+        notRun: [],
       });
     }
     if (command === 'dismiss_finding') {

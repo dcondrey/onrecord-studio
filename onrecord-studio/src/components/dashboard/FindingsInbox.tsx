@@ -10,6 +10,8 @@ import type { Finding, FindingCitation, FindingSeverity } from '../../types';
 import { FindingEvidence } from '../ui/EvidenceBasis';
 import ArtifactDrafts from './ArtifactDrafts';
 import EvidenceGaps from './EvidenceGaps';
+import ChecksNotRunNotice from './ChecksNotRunNotice';
+import { runFindingsRefresh } from '../../utils/findingsRefresh';
 import EvidencePacketExport from './EvidencePacketExport';
 
 import ShareableBundleExport from './ShareableBundleExport';
@@ -46,6 +48,9 @@ export default function FindingsInbox() {
   const [lastDismissed, setLastDismissed] = useState<{ finding: Finding; index: number } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const checksSkipped = useAppStore(
+    (state) => state.findingsRefreshOutcome?.status === 'completed' && state.findingsRefreshOutcome.notRun.length > 0,
+  );
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [hasMore, setHasMore] = useState(false);
   const [severityFilter, setSeverityFilter] = useState<FindingSeverity | null>(null);
@@ -115,7 +120,7 @@ export default function FindingsInbox() {
     setIsRefreshing(true);
     setActionError(null);
     try {
-      await invokeCommand('refresh_findings', {});
+      await runFindingsRefresh();
     } catch (reason) {
       // The list reload below clears only `loadError`, so a failed sweep stays on screen next to
       // the rows the previous sweep produced.
@@ -358,6 +363,7 @@ export default function FindingsInbox() {
           {actionError.message}
         </div>
       )}
+      <ChecksNotRunNotice />
 
       {isLoading && findings.length === 0 ? (
         <div role="status" className="text-label text-muted">
@@ -366,7 +372,9 @@ export default function FindingsInbox() {
       ) : lensEnabled && !hasConfirmedSubject ? null : findings.length === 0 && loadError ? null : findings.length === 0 ? (
         <div className="rounded-xl border border-dashed border-line bg-canvas/40 p-4 text-center">
           <p className="text-label font-medium text-fg-secondary">
-            No findings surfaced yet.
+            {checksSkipped
+              ? 'No findings from the checks that ran; the checks named above did not run.'
+              : 'No findings surfaced yet.'}
           </p>
           <p className="mt-1 text-caption leading-relaxed text-muted">
             Add a data source or press Refresh — analysis runs automatically after ingest.

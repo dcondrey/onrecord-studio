@@ -8,12 +8,23 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RefreshFindingsSummary {
+    /// Detectors invoked, including those listed in `not_run`.
     pub detectors_run: usize,
     pub findings_recorded: usize,
     pub stale_cleared: usize,
+    /// Checks that could not perform their test; a zero finding count says nothing about them.
+    pub not_run: Vec<DetectorNotRunView>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DetectorNotRunView {
+    pub detector: String,
+    pub detector_name: String,
+    pub reason: String,
 }
 
 #[tauri::command]
@@ -27,7 +38,32 @@ pub async fn refresh_findings(
         detectors_run: summary.detectors_run,
         findings_recorded: summary.findings_recorded,
         stale_cleared: summary.stale_cleared,
+        not_run: summary
+            .not_run
+            .into_iter()
+            .map(|skipped| DetectorNotRunView {
+                detector: skipped.detector.to_string(),
+                detector_name: detector_display_name(skipped.detector),
+                reason: skipped.reason,
+            })
+            .collect(),
     })
+}
+
+fn detector_display_name(slug: &str) -> String {
+    match slug {
+        detectors::no_records_contradicted::SLUG => {
+            "No-records denial vs. earlier releases".to_string()
+        }
+        other => {
+            let spaced = other.replace('_', " ");
+            let mut characters = spaced.chars();
+            match characters.next() {
+                Some(first) => first.to_uppercase().chain(characters).collect(),
+                None => spaced,
+            }
+        }
+    }
 }
 
 /// Routes the corpus identified but cannot yet test, each with where its acquisition stands.

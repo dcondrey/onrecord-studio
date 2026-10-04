@@ -54,6 +54,7 @@ vi.mock('@tauri-apps/api/core', () => ({
         detectorsRun: 1,
         findingsRecorded: 0,
         staleCleared: 0,
+        notRun: [],
       });
     }
     if (command === 'dismiss_finding') {
@@ -65,6 +66,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 }));
 
 import FindingsInbox from '../components/dashboard/FindingsInbox';
+import { runFindingsRefresh } from '../utils/findingsRefresh';
 import { useAppStore } from '../store/useAppStore';
 import { useProfileLensStore } from '../store/useProfileLensStore';
 import type { Finding } from '../types';
@@ -119,10 +121,60 @@ describe('FindingsInbox', () => {
     bridge.refreshRejects = false;
     bridge.dismissRejects = false;
     bridge.override = {};
+    useAppStore.setState({ findingsRefreshOutcome: null, findingsRefreshSequence: 0 });
   });
 
   afterEach(() => {
     cleanup();
+  });
+
+  it('names a check that did not run instead of reporting no findings', async () => {
+    bridge.override.refresh_findings = () =>
+      Promise.resolve({
+        detectorsRun: 2,
+        findingsRecorded: 0,
+        staleCleared: 0,
+        notRun: [
+          {
+            detector: 'no_records_contradicted',
+            detectorName: 'No-records denial vs. earlier releases',
+            reason: 'the on-device embedding model is not installed',
+          },
+        ],
+      });
+    await act(async () => {
+      render(<FindingsInbox />);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /refresh findings/i }));
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/1 check did not run/)).toBeTruthy();
+    });
+    expect(screen.getByText(/No-records denial vs\. earlier releases: the on-device embedding model is not installed/)).toBeTruthy();
+    expect(screen.queryByText(/no findings surfaced yet/i)).toBeNull();
+  });
+
+  // Identity: the post-ingest sweep and the Refresh button can overlap. The sweep started last is
+  // the one whose not-run list describes the corpus now; an earlier one settling late must not
+  // replace it.
+  it('keeps the not-run list of the sweep started last when an earlier one settles later', async () => {
+    const earlier = deferred<unknown>();
+    const later = deferred<unknown>();
+    const pending = [earlier, later];
+    bridge.override.refresh_findings = () => pending.shift()!.promise;
+    const first = runFindingsRefresh();
+    const second = runFindingsRefresh();
+    later.resolve({ detectorsRun: 1, findingsRecorded: 0, staleCleared: 0, notRun: [] });
+    await second;
+    earlier.resolve({
+      detectorsRun: 1,
+      findingsRecorded: 0,
+      staleCleared: 0,
+      notRun: [{ detector: 'no_records_contradicted', detectorName: 'Stale', reason: 'stale' }],
+    });
+    await first;
+    expect(useAppStore.getState().findingsRefreshOutcome).toEqual({ status: 'completed', notRun: [] });
   });
 
   it('does not report "no local profile" while the disclosure is still loading', async () => {

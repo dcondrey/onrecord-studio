@@ -4,6 +4,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { ShapeGlyph, type GlyphShape } from '../ui/shapeGlyph';
 import { FindingEvidence } from '../ui/EvidenceBasis';
+import ChecksNotRunNotice from './ChecksNotRunNotice';
 import type { Finding, FindingCitation, FindingSeverity } from '../../types';
 
 /**
@@ -34,6 +35,8 @@ export default function PostIngestBrief() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const gate = useLatestRequestGate();
+  const refreshOutcome = useAppStore((state) => state.findingsRefreshOutcome);
+  const notRun = refreshOutcome?.status === 'completed' ? refreshOutcome.notRun : [];
 
   useEffect(() => {
     if (open) {
@@ -112,9 +115,11 @@ export default function PostIngestBrief() {
             <h2 id="post-ingest-brief-title" className="mt-1 text-[14px] font-semibold text-fg">
               {error !== null && notable.length === 0
                 ? 'Ingest complete. The new findings could not be read.'
-                : notable.length === 0
-                  ? 'Ingest complete. Nothing notable surfaced in the new data.'
-                  : `${notable.length} new finding${notable.length === 1 ? '' : 's'} from this ingest`}
+                : notable.length === 0 && notRun.length > 0
+                  ? `Ingest complete. Nothing surfaced from the checks that ran; ${notRun.length} did not run.`
+                  : notable.length === 0
+                    ? 'Ingest complete. Nothing notable surfaced in the new data.'
+                    : `${notable.length} new finding${notable.length === 1 ? '' : 's'} from this ingest`}
             </h2>
             {error && (
               <p role="alert" className="mt-1 text-caption text-danger">
@@ -130,6 +135,7 @@ export default function PostIngestBrief() {
             Dismiss
           </button>
         </header>
+        <ChecksNotRunNotice />
         {isLoading && notable.length === 0 ? (
           <p role="status" className="text-label text-muted">
             Reading detector output…

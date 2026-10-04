@@ -721,6 +721,48 @@ cargo build of a tree a concurrent session is mid-edit in. Notes for whoever bui
   `data-platform`) or the styling drops. Theme can be read from `localStorage` (`onrecord-theme`),
   which is shared across windows by origin; `set_app_theme` is a core API and is not needed.
 
+### Startup runs off the main thread behind a startup screen (decided 2026-10-03)
+
+The storage rewrite blocked the setup hook ~40 s on a 5.3 GB core, so no window appeared and its
+outcome reached only stderr. Decisions:
+
+- `setup.rs` keeps directories, signing keys, vibrancy and `StartupState` on the main thread and
+  moves classify/legacy-migrate → rewrite (core, corpus) → repository init → every `app.manage` →
+  background services onto a plain OS thread (`block_on` is illegal inside a tokio task). `Ready` is
+  set only after the last `manage`; `StartupGate` mounts the workspace only at `Ready`, so no command
+  needing unregistered state is invoked. The rewrite still precedes every connection to its file.
+- A setup error that used to abort the process (e.g. an unrecognized core file) is now the
+  `failed` phase with the message on screen. A panic in the thread is caught into `failed` too.
+- Status is **pulled** (`get_startup_status`, 1 s poll) with `startup-status` events as a hint;
+  each change bumps a monotonic `version` and the gate applies only newer versions (guard test in
+  `startupGate.test.tsx`). Elapsed time derives from the backend's `phaseStartedAtMs`.
+- "One time" is not claimed on every launch: `rewrite_to_current_storage` returns `NotNeeded` at
+  once on a current file and no public probe says in advance whether it will rewrite, so the screen
+  reads "Checking storage format…" and switches to "Optimizing storage (one time)…" only after the
+  call has run 1 s.
+- Outcomes (rewritten, not rewritten with the verbatim reason, legacy SQLite conversion) are
+  `StartupNotice`s persisted to `startup-notices.json` before the next step can fail, shown in a
+  dismissible notice and logged to the Activity log once per page session; dismissal
+  (`acknowledge_startup_notices`) removes them. A repeated refusal replaces, not appends. The
+  refusal is not string-classified as "disk space": the message already states the reason.
+- `IngestionProgress::LegacyCoreDatabaseMigrated` was removed: it was emitted before any listener
+  existed (and now before the workspace mounts), so it never arrived. Its content is a notice.
+
+Detector sweeps return `notRun` (slug, readable name, reason). Both callers go through
+`runFindingsRefresh`, which records the outcome behind a store sequence so an earlier sweep
+settling late never replaces the latest; a failed sweep clears the list rather than keeping the
+previous run's. The inbox and post-ingest brief say "N checks did not run", and neither says
+"nothing surfaced" without that qualification.
+
+Verified: the startup screen ("Optimizing storage (one time)…", file, elapsed) and the notice and
+not-run strip rendered from the real components in Chrome with a stubbed IPC bridge; the gate's
+ordering, version guard and once-only logging by vitest; notice persistence by a Rust unit test.
+Unverified: a native launch. The debug binary started with `HOME` pointed at a scratch directory
+holding an outdated (`v1.0.0+`) 122 MB core produced no output and created nothing there in 25 s
+(the real app-data dir was untouched), so the background-thread sequence has not been observed in
+a running app. Check: launch a dev build against a scratch app-data dir containing an outdated core
+and confirm the screen, the `startup-notices.json` write, and the transition to the workspace.
+
 ## Query system
 
 - [x] Define `QueryAst`, filters, issues, and source modes.

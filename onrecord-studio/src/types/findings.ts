@@ -123,9 +123,18 @@ export interface EvidenceGapView {
 }
 
 export interface RefreshFindingsSummary {
+  /** Detectors invoked, including those listed in `notRun`. */
   detectorsRun: number;
   findingsRecorded: number;
   staleCleared: number;
+  /** Checks that could not perform their test; a zero finding count says nothing about them. */
+  notRun: DetectorNotRunView[];
+}
+
+export interface DetectorNotRunView {
+  detector: string;
+  detectorName: string;
+  reason: string;
 }
 
 /**
