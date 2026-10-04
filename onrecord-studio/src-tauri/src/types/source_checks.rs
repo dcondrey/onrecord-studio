@@ -49,6 +49,40 @@ pub struct SourceCheck {
     pub collected_sha256: String,
     pub observed_sha256: Option<String>,
     pub detail: Option<String>,
+    /// The acquisition this check's received bytes appended. `None`: no bytes arrived, or the
+    /// check predates the link.
+    pub acquisition_id: Option<u64>,
+    /// Whether the different bytes this check received are kept in the evidence store. `false`
+    /// on a DIFFERENT_BYTES check means they were not kept, never that they matched.
+    pub observed_copy_retained: bool,
+}
+
+/// One row of `document_acquisitions`: a network fetch that received a document's bytes.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentAcquisition {
+    pub acquisition_id: u64,
+    pub sync_run_id: Option<String>,
+    pub requested_url: String,
+    pub resolved_url: String,
+    pub http_status: u16,
+    pub content_type: Option<String>,
+    pub raw_file_sha256: String,
+    pub file_size: u64,
+    /// The digest the document held when this fetch began; `None` on its first fetch.
+    pub previous_raw_file_sha256: Option<String>,
+    /// Local clock at receipt; not a trusted timestamp.
+    pub retrieved_at: String,
+    /// The source check that made this fetch, when one did.
+    pub source_check_id: Option<u64>,
+}
+
+/// Everything recorded about fetching one document, newest first in each list.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentSourceHistory {
+    pub checks: Vec<SourceCheck>,
+    pub acquisitions: Vec<DocumentAcquisition>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

@@ -105,6 +105,22 @@ impl DuckDbRepository {
             "metadata_page_window_json",
             "TEXT",
         )?;
+        // NULL is "no schedule", which is what every source saved before this column had.
+        ensure_column(
+            conn,
+            "source_connector_recipes",
+            "recheck_interval_days",
+            "BIGINT",
+        )?;
+        // No DEFAULT: an earlier check neither linked its acquisition nor kept its bytes, and NULL
+        // is how the schema says so.
+        ensure_column(conn, "document_source_checks", "acquisition_id", "BIGINT")?;
+        ensure_column(
+            conn,
+            "document_source_checks",
+            "observed_object_path",
+            "TEXT",
+        )?;
         // These admission counters bound an interrupted crawl across process restarts. Older runs
         // predate durable counting, so zero is the only evidence-backed backfill available.
         ensure_column(

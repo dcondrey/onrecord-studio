@@ -37,10 +37,10 @@ pub use export::{
     verify_evidence_package,
 };
 pub use ingest::{
-    ingest_local_files, ingest_pasted_content, list_portal_runtimes, list_saved_portals,
-    list_source_checks, pause_source_sync, preview_data_source, preview_source_purge,
-    purge_document, purge_source, recheck_source, remove_source, resume_source_sync,
-    start_data_source,
+    ingest_local_files, ingest_pasted_content, list_document_source_history, list_portal_runtimes,
+    list_saved_portals, list_source_checks, pause_source_sync, preview_data_source,
+    preview_source_purge, purge_document, purge_source, recheck_source, remove_source,
+    resume_source_sync, set_source_recheck_schedule, start_data_source,
 };
 pub use investigation::{
     audit_document_residual_evidence, carve_document_version_history,

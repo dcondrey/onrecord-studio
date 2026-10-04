@@ -10,10 +10,10 @@ use crate::storage::corpus::CorpusIndex;
 use crate::storage::sqlite::{DuckDbRepository, SourceConnectorRecipe};
 use crate::storage::vector::VectorIndex;
 use crate::types::{
-    CollectionPlan, CollectionPlanSource, CrawlPolicy, DocumentPurge, MetadataPageWindow,
-    PastedContentInput, PortalRuntimeSnapshot, RateLimitPolicy, SavedSource, SourceCheck,
-    SourceDiscoveryPreview, SourceGuidance, SourceIngestionStart, SourceKind, SourceLifecycleState,
-    SourcePurge, SourcePurgePreview, SourceRecheckSummary, SourceRemoval,
+    CollectionPlan, CollectionPlanSource, CrawlPolicy, DocumentPurge, DocumentSourceHistory,
+    MetadataPageWindow, PastedContentInput, PortalRuntimeSnapshot, RateLimitPolicy, SavedSource,
+    SourceCheck, SourceDiscoveryPreview, SourceGuidance, SourceIngestionStart, SourceKind,
+    SourceLifecycleState, SourcePurge, SourcePurgePreview, SourceRecheckSummary, SourceRemoval,
 };
 use std::path::Path;
 use std::sync::Arc;
@@ -183,6 +183,42 @@ pub async fn list_source_checks(
     repository
         .list_source_checks(source_key, document_id, limit as usize)
         .await
+}
+
+/// One document's source checks and acquisitions, newest first.
+#[tauri::command]
+pub async fn list_document_source_history(
+    source_key: String,
+    document_id: u64,
+    repository: State<'_, DuckDbRepository>,
+) -> Result<DocumentSourceHistory, AppError> {
+    let source_key = validate_portal_key(&source_key)?;
+    repository
+        .document_source_history(source_key, document_id)
+        .await
+}
+
+/// Sets how often, in days, the app checks a source while it is open; `None` turns it off.
+/// Returns the saved sources so the caller shows what was stored.
+#[tauri::command]
+pub async fn set_source_recheck_schedule(
+    source_key: String,
+    interval_days: Option<u32>,
+    repository: State<'_, DuckDbRepository>,
+) -> Result<Vec<SavedSource>, AppError> {
+    let source_key = validate_portal_key(&source_key)?;
+    let source = repository
+        .list_portal_registrations()
+        .await?
+        .into_iter()
+        .find(|saved| saved.registration.portal_key == source_key)
+        .ok_or_else(|| {
+            AppError::DataParsing(format!("No saved source is registered as '{source_key}'"))
+        })?;
+    repository
+        .save_source_recheck_interval(&source.registration, interval_days)
+        .await?;
+    repository.list_portal_registrations().await
 }
 
 /// Restarts a paused source along the same path startup recovery uses, so a resume inherits the

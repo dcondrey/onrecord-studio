@@ -3,6 +3,10 @@
 use super::connection::execute_transaction;
 use super::*;
 
+/// Mirrors the CHECK on `source_connector_recipes.recheck_interval_days`, which an upgraded
+/// database lacks.
+pub const MAXIMUM_RECHECK_INTERVAL_DAYS: u32 = 365;
+
 impl DuckDbRepository {
     pub async fn insert_or_update_portal_registration(
         &self,
@@ -259,6 +263,74 @@ impl DuckDbRepository {
                     )
                     .map_err(|error| {
                         AppError::Storage(format!("Failed to save metadata page window: {error}"))
+                    })?;
+                Ok(())
+            })
+        })
+        .await
+    }
+
+    /// Records how often, in days, a source is checked on a schedule; `None` turns it off.
+    ///
+    /// Its own writer for the reason the page-window writer gives: on conflict it touches only
+    /// this column, so a stored crawl policy, guidance, or window is left as it was. A source with
+    /// no recipe row gets one carrying the default policy and guidance, which
+    /// [`SourceConnectorRecipe::carries_guidance`] reads as no saved guidance.
+    pub async fn save_source_recheck_interval(
+        &self,
+        portal: &PortalRegistration,
+        interval_days: Option<u32>,
+    ) -> Result<(), AppError> {
+        if interval_days.is_some_and(|days| !(1..=MAXIMUM_RECHECK_INTERVAL_DAYS).contains(&days)) {
+            return Err(AppError::DataParsing(format!(
+                "A source check schedule is between 1 and {MAXIMUM_RECHECK_INTERVAL_DAYS} days"
+            )));
+        }
+        let source_key = portal.portal_key.clone();
+        let root_url = portal.canonical_url.clone();
+        let crawl_policy_json =
+            serde_json::to_string(&CrawlPolicy::default()).map_err(|error| {
+                AppError::DataParsing(format!("Failed to encode source crawl policy: {error}"))
+            })?;
+        let guidance_json = serde_json::to_string(&SourceGuidance::default()).map_err(|error| {
+            AppError::DataParsing(format!("Failed to encode source repair guidance: {error}"))
+        })?;
+        let publisher_pattern = publisher_pattern_for_url(&root_url);
+        let interval_days = interval_days.map(i64::from);
+        self.query_connection("Save source check schedule", move |conn| {
+            execute_transaction(conn, "source check schedule", |transaction| {
+                transaction
+                    .execute(
+                        "DELETE FROM source_connector_recipes
+                     WHERE root_url = ?1 AND source_key <> ?2",
+                        params![root_url, source_key],
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!(
+                            "Failed to clear a superseded source connector recipe: {error}"
+                        ))
+                    })?;
+                transaction
+                    .execute(
+                        "INSERT INTO source_connector_recipes (
+                source_key, root_url, recipe_version, publisher_pattern, reuse_approved,
+                crawl_policy_json, guidance_json, recheck_interval_days, updated_at
+             ) VALUES (?1, ?2, 2, ?3, 0, ?4, ?5, ?6,
+                       strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'))
+             ON CONFLICT(source_key) DO UPDATE SET
+                recheck_interval_days = excluded.recheck_interval_days,
+                updated_at = excluded.updated_at",
+                        params![
+                            source_key,
+                            root_url,
+                            publisher_pattern,
+                            crawl_policy_json,
+                            guidance_json,
+                            interval_days
+                        ],
+                    )
+                    .map_err(|error| {
+                        AppError::Storage(format!("Failed to save source check schedule: {error}"))
                     })?;
                 Ok(())
             })
@@ -682,7 +754,9 @@ impl DuckDbRepository {
                     requests_pointer, metadata_pointer, page_parameter, page_size_parameter,
                     COALESCE(verified_at, created_at), source_kind,
                     COALESCE(lifecycle_state, 'ACTIVE'),
-                    COALESCE(health_status, 'verified'), last_error
+                    COALESCE(health_status, 'verified'), last_error,
+                    (SELECT recipes.recheck_interval_days FROM source_connector_recipes recipes
+                     WHERE recipes.source_key = portals.subdomain)
                  FROM portals
                  WHERE requests_endpoint <> ''
                    AND COALESCE(lifecycle_state, 'ACTIVE') <> 'REMOVED'
@@ -716,6 +790,9 @@ impl DuckDbRepository {
                         ),
                         health_status: row.get(12)?,
                         last_error: row.get(13)?,
+                        recheck_interval_days: row
+                            .get::<_, Option<i64>>(14)?
+                            .and_then(|days| u32::try_from(days).ok()),
                     })
                 })
                 .map_err(|error| AppError::Storage(format!("Failed to query portals: {error}")))?;

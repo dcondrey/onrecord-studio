@@ -1062,6 +1062,8 @@ pub fn start_service<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         tick.tick().await;
         let mut analyzed_corpus: Option<String> = None;
+        let mut recheck_schedule =
+            crate::ingestion::queue::RecheckSchedule::new(chrono::Utc::now());
         loop {
             tick.tick().await;
             if app
@@ -1083,6 +1085,17 @@ pub fn start_service<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
             if let Err(e) = collect_one(&repository, &manager).await {
                 let _ = repository
                     .research_phase("Collection needs attention", Some(e.to_string()))
+                    .await;
+            }
+            if let Err(error) = recheck_schedule
+                .start_due(&manager, chrono::Utc::now())
+                .await
+            {
+                let _ = repository
+                    .research_phase(
+                        "Scheduled source check needs attention",
+                        Some(error.to_string()),
+                    )
                     .await;
             }
             let vector_index = app

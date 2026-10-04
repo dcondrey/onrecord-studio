@@ -78,6 +78,10 @@ CREATE TABLE IF NOT EXISTS source_connector_recipes (
     -- built-in window could not be told apart from an operator who chose it. NULL says the
     -- operator never set one, which is what resolves to the built-in window at start and resume.
     metadata_page_window_json TEXT,
+    -- The operator's opt-in "check this source every N days". NULL is off, the default: a source
+    -- is never re-fetched on a schedule nobody chose.
+    recheck_interval_days BIGINT
+        CHECK (recheck_interval_days IS NULL OR recheck_interval_days BETWEEN 1 AND 365),
     updated_at TEXT NOT NULL DEFAULT strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'),
     FOREIGN KEY (source_key) REFERENCES portals(subdomain)
 );
@@ -766,7 +770,14 @@ CREATE INDEX IF NOT EXISTS idx_document_acquisitions_document
 -- digest is not a claim of alteration: a soft 404 page or a redesign changes it too); GONE means
 -- the source answered 404 or 410; UNREACHABLE means this check got no answer about the record
 -- (network, server error, refusal) and says nothing about it. A document with no row was not
--- checked. A new table, so its constraints hold on an upgraded database as well.
+-- checked. The table's original constraints hold on an upgraded database as well; the two later
+-- columns' CHECKs hold on a fresh one only, since DuckDB cannot add a constrained column.
+-- `acquisition_id` is the `document_acquisitions` row this check's received bytes appended. NULL
+-- when no bytes arrived, or on a check recorded before the column existed.
+-- `observed_object_path` is the content-addressed object holding a DIFFERENT_BYTES fetch's bytes;
+-- purge releases it only when no document and no other check references the same object. NULL means
+-- the bytes were not kept: no different bytes arrived, compact retention was on, or the check
+-- predates retention. It never means the bytes were the same.
 CREATE TABLE IF NOT EXISTS document_source_checks (
     check_id BIGINT PRIMARY KEY DEFAULT nextval('document_source_check_seq'),
     run_id TEXT NOT NULL,
@@ -780,6 +791,9 @@ CREATE TABLE IF NOT EXISTS document_source_checks (
     collected_sha256 TEXT NOT NULL CHECK (length(collected_sha256) = 64),
     observed_sha256 TEXT CHECK (observed_sha256 IS NULL OR length(observed_sha256) = 64),
     detail TEXT,
+    acquisition_id BIGINT CHECK (acquisition_id IS NULL OR observed_sha256 IS NOT NULL),
+    observed_object_path TEXT
+        CHECK (observed_object_path IS NULL OR outcome = 'DIFFERENT_BYTES'),
     CHECK ((outcome IN ('SAME_BYTES', 'DIFFERENT_BYTES')) = (observed_sha256 IS NOT NULL)),
     CHECK ((outcome = 'SAME_BYTES') = (observed_sha256 IS NOT DISTINCT FROM collected_sha256)),
     CHECK (outcome <> 'GONE' OR (http_status IS NOT NULL AND http_status IN (404, 410)))

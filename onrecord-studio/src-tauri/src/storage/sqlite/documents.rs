@@ -183,6 +183,7 @@ impl DuckDbRepository {
                 file_size,
                 &acquisition,
             )
+            .map(|_| ())
         })
         .await
     }
@@ -1056,10 +1057,10 @@ pub(super) fn insert_document_acquisition(
     raw_file_sha256: &str,
     file_size: i64,
     acquisition: &crate::ingestion::client::AcquisitionRecord,
-) -> Result<(), AppError> {
+) -> Result<i64, AppError> {
     let redirect_chain_json = serde_json::to_string(&acquisition.redirect_chain)
         .map_err(|error| AppError::Internal(format!("Redirect chain encoding: {error}")))?;
-    conn.execute(
+    conn.query_row(
         "INSERT INTO document_acquisitions (
             portal_subdomain, document_id, sync_run_id, requested_url, resolved_url,
             redirect_chain_json, http_status, content_type, etag, last_modified,
@@ -1068,7 +1069,8 @@ pub(super) fn insert_document_acquisition(
             ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12,
             (SELECT raw_file_sha256 FROM documents WHERE id = ?2 AND portal_subdomain = ?1),
             ?13
-         )",
+         )
+         RETURNING acquisition_id",
         params![
             portal_subdomain,
             document_id,
@@ -1084,9 +1086,7 @@ pub(super) fn insert_document_acquisition(
             file_size,
             acquisition.retrieved_at,
         ],
+        |row| row.get(0),
     )
-    .map_err(|error| {
-        AppError::Storage(format!("Failed to record document acquisition: {error}"))
-    })?;
-    Ok(())
+    .map_err(|error| AppError::Storage(format!("Failed to record document acquisition: {error}")))
 }

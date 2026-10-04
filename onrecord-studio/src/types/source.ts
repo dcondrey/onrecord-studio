@@ -116,6 +116,32 @@ export interface SourceCheck {
   collectedSha256: string;
   observedSha256: string | null;
   detail: string | null;
+  /** The acquisition this check's received bytes appended; null when none arrived or the check predates the link. */
+  acquisitionId: number | null;
+  /** False on a DIFFERENT_BYTES check means its bytes were not kept, never that they matched. */
+  observedCopyRetained: boolean;
+}
+
+/** One network fetch that received a document's bytes. */
+export interface DocumentAcquisition {
+  acquisitionId: number;
+  syncRunId: string | null;
+  requestedUrl: string;
+  resolvedUrl: string;
+  httpStatus: number;
+  contentType: string | null;
+  rawFileSha256: string;
+  fileSize: number;
+  /** The digest the document held when this fetch began; null on its first fetch. */
+  previousRawFileSha256: string | null;
+  retrievedAt: string;
+  /** The source check that made this fetch, when one did. */
+  sourceCheckId: number | null;
+}
+
+export interface DocumentSourceHistory {
+  checks: SourceCheck[];
+  acquisitions: DocumentAcquisition[];
 }
 
 export interface SourceRecheckSummary {

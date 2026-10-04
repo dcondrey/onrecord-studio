@@ -21,6 +21,8 @@ export interface NativeCommandMap {
   resume_source_sync: { args: { sourceKey: string }; result: Types.SourceIngestionStart };
   recheck_source: { args: { sourceKey: string; maxDocuments: number }; result: Types.SourceRecheckSummary };
   list_source_checks: { args: { sourceKey: string; documentId?: number | null; limit: number }; result: Types.SourceCheck[] };
+  list_document_source_history: { args: { sourceKey: string; documentId: number }; result: Types.DocumentSourceHistory };
+  set_source_recheck_schedule: { args: { sourceKey: string; intervalDays?: number | null }; result: Types.SavedSource[] };
   remove_source: { args: { sourceKey: string }; result: Types.SourceRemoval };
   preview_source_purge: { args: { sourceKey: string }; result: Types.SourcePurgePreview };
   purge_source: { args: { sourceKey: string }; result: Types.SourcePurge };
@@ -190,6 +192,7 @@ export interface NativeCommandMap {
   import_annotation_packet: { args: { payload: string; packetSha256: string }; result: Types.AnnotationImportResult };
   resolve_page_regions: { args: { portalKey: string; documentId: number; originalSha256: string; pageCount: number }; result: Types.ResolvedPageRegion[] };
   read_document_original: { args: { documentId: number; portalKey: string }; result: ArrayBuffer };
+  read_source_check_copy: { args: { documentId: number; portalKey: string; checkId: number }; result: ArrayBuffer };
   list_claimed_requests: { args: NoArgs; result: Types.ClaimedRequest[] };
   claim_request: { args: { input: Types.ClaimRequestInput }; result: Types.ClaimedRequest };
   update_claimed_request: { args: { input: Types.UpdateClaimedRequestInput }; result: Types.ClaimedRequest };

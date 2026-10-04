@@ -65,6 +65,7 @@ pub(crate) use guidance::validate_source_guidance;
 use intake::stable_source_identifier;
 pub(crate) use objects::remove_released_evidence_files;
 pub use progress::{ingestion_telemetry_envelope, IngestionProgress, IngestionTelemetryEnvelope};
+pub use recheck::RecheckSchedule;
 pub(crate) use structured::arcgis_hub_companion_urls;
 
 // The concurrent-portal ceiling is a runtime setting (`QueueManager::max_active_portals`),

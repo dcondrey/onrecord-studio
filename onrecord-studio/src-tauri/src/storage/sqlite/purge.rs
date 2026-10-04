@@ -19,6 +19,8 @@ impl DuckDbRepository {
     /// the document was already finalized and was left in place, and callers must not count that
     /// as a refusal. `provenance_manifests` needs no matching guard: its foreign key to
     /// `documents` already makes DuckDB refuse the delete outright if a manifest was recorded.
+    /// A document a source check kept bytes for is left in place too: this path unlinks no
+    /// files, so deleting that check would strand its object where no purge can find it.
     pub async fn delete_unextracted_document(
         &self,
         subdomain: &str,
@@ -40,6 +42,12 @@ impl DuckDbRepository {
                          SELECT 1 FROM documents_fts
                          WHERE documents_fts.document_id = documents.id
                            AND documents_fts.portal_subdomain = documents.portal_subdomain
+                       )
+                       AND NOT EXISTS (
+                         SELECT 1 FROM document_source_checks
+                         WHERE document_source_checks.document_id = documents.id
+                           AND document_source_checks.portal_subdomain = documents.portal_subdomain
+                           AND document_source_checks.observed_object_path IS NOT NULL
                        )",
                         params![document_id, subdomain],
                     )
@@ -124,8 +132,9 @@ impl DuckDbRepository {
     /// the same database. A confirmation dialog that names a count the purge does not honour is a
     /// false statement about evidence, so the counts are not allowed to drift silently.
     ///
-    /// The evidence-file count is the number of documents holding a `local_path`, which is what
-    /// the purge collects and unlinks. It is reported separately from the document count because
+    /// The evidence-file count is the number of distinct files the source's documents and its
+    /// source checks' kept copies reference and no other source does, which is what the purge
+    /// collects and unlinks. It is reported separately from the document count because
     /// a document whose bytes were never retained still exists as a record.
     pub async fn preview_source_purge(
         &self,
@@ -151,13 +160,24 @@ impl DuckDbRepository {
                 )?,
                 request_count: count("SELECT COUNT(*) FROM requests WHERE portal_subdomain = ?1")?,
                 evidence_file_count: count(
-                    "SELECT COUNT(DISTINCT d.local_path) FROM documents d
-                     WHERE d.portal_subdomain = ?1 AND d.local_path IS NOT NULL
-                       AND NOT EXISTS (
-                           SELECT 1 FROM documents other
-                           WHERE other.local_path = d.local_path
-                             AND other.portal_subdomain <> ?1
-                       )",
+                    "WITH candidates(path) AS (
+                         SELECT local_path FROM documents
+                         WHERE portal_subdomain = ?1 AND local_path IS NOT NULL
+                         UNION
+                         SELECT observed_object_path FROM document_source_checks
+                         WHERE portal_subdomain = ?1 AND observed_object_path IS NOT NULL
+                     )
+                     SELECT COUNT(*) FROM candidates
+                     WHERE NOT EXISTS (
+                         SELECT 1 FROM documents other
+                         WHERE other.local_path = candidates.path
+                           AND other.portal_subdomain <> ?1
+                     )
+                     AND NOT EXISTS (
+                         SELECT 1 FROM document_source_checks other
+                         WHERE other.observed_object_path = candidates.path
+                           AND other.portal_subdomain <> ?1
+                     )",
                 )?,
             })
         })
@@ -196,6 +216,9 @@ impl DuckDbRepository {
                          UNION
                          SELECT pending_path FROM data_retention_receipts
                          WHERE portal_key = ?1 AND state IN ('PREPARED', 'REFERENCED')
+                         UNION
+                         SELECT observed_object_path FROM document_source_checks
+                         WHERE portal_subdomain = ?1 AND observed_object_path IS NOT NULL
                      )
                      SELECT path FROM candidates
                      WHERE NOT EXISTS (
@@ -207,6 +230,11 @@ impl DuckDbRepository {
                          WHERE other.pending_path = candidates.path
                            AND other.portal_key <> ?1
                            AND other.state IN ('PREPARED', 'REFERENCED')
+                     )
+                     AND NOT EXISTS (
+                         SELECT 1 FROM document_source_checks other
+                         WHERE other.observed_object_path = candidates.path
+                           AND other.portal_subdomain <> ?1
                      )",
                 )
                 .map_err(|error| {
@@ -477,6 +505,11 @@ fn purge_document_rows(
                    WHERE other.pending_path = d.local_path
                      AND NOT (other.document_id = ?1 AND other.portal_key = ?2)
                      AND other.state IN ('PREPARED', 'REFERENCED')
+               )
+               AND NOT EXISTS (
+                   SELECT 1 FROM document_source_checks other
+                   WHERE other.observed_object_path = d.local_path
+                     AND NOT (other.document_id = ?1 AND other.portal_subdomain = ?2)
                )",
             params![stored_id, subdomain],
             |row| row.get::<_, Option<String>>(0),
@@ -489,7 +522,7 @@ fn purge_document_rows(
         })?
         .flatten();
 
-    let additional_local_paths = {
+    let mut additional_local_paths = {
         let mut query = transaction.prepare("SELECT pending_path FROM data_retention_receipts WHERE portal_key = ?1 AND document_id = ?2 AND state IN ('PREPARED', 'REFERENCED')").map_err(|e| AppError::Storage(e.to_string()))?;
         query
             .query_map(params![subdomain, stored_id], |row| row.get::<_, String>(0))
@@ -497,6 +530,49 @@ fn purge_document_rows(
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| AppError::Storage(e.to_string()))?
     };
+    // Bytes a source check kept for this document, released only when no other document, receipt,
+    // or other document's check holds the same content-addressed object.
+    let check_object_paths = {
+        let mut query = transaction
+            .prepare(
+                "SELECT DISTINCT c.observed_object_path FROM document_source_checks c
+                 WHERE c.document_id = ?1 AND c.portal_subdomain = ?2
+                   AND c.observed_object_path IS NOT NULL
+                   AND NOT EXISTS (
+                       SELECT 1 FROM documents other
+                       WHERE other.local_path = c.observed_object_path
+                         AND NOT (other.id = ?1 AND other.portal_subdomain = ?2)
+                   )
+                   AND NOT EXISTS (
+                       SELECT 1 FROM data_retention_receipts other
+                       WHERE other.pending_path = c.observed_object_path
+                         AND NOT (other.document_id = ?1 AND other.portal_key = ?2)
+                         AND other.state IN ('PREPARED', 'REFERENCED')
+                   )
+                   AND NOT EXISTS (
+                       SELECT 1 FROM document_source_checks other
+                       WHERE other.observed_object_path = c.observed_object_path
+                         AND NOT (other.document_id = ?1 AND other.portal_subdomain = ?2)
+                   )",
+            )
+            .map_err(|error| {
+                AppError::Storage(format!("Failed to prepare check object lookup: {error}"))
+            })?;
+        query
+            .query_map(params![stored_id, subdomain], |row| row.get::<_, String>(0))
+            .map_err(|error| {
+                AppError::Storage(format!("Failed to read check object paths: {error}"))
+            })?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| {
+                AppError::Storage(format!("Failed to decode a check object path: {error}"))
+            })?
+    };
+    for path in check_object_paths {
+        if local_path.as_deref() != Some(path.as_str()) && !additional_local_paths.contains(&path) {
+            additional_local_paths.push(path);
+        }
+    }
     let request_id = transaction
         .query_row(
             "SELECT request_id FROM documents WHERE id = ?1 AND portal_subdomain = ?2",

@@ -59,6 +59,8 @@ export interface SavedSource {
   /** Durable health survives startup events emitted before the webview listener is ready. */
   healthStatus: string;
   lastError: string | null;
+  /** "Check this source every N days"; null is off, the default. */
+  recheckIntervalDays: number | null;
 }
 
 export interface OcrCapability {

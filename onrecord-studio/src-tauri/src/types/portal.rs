@@ -122,6 +122,8 @@ pub struct SavedSource {
     /// can be emitted before the webview has attached its event listener.
     pub health_status: String,
     pub last_error: Option<String>,
+    /// The operator's "check this source every N days"; `None` is off, the default.
+    pub recheck_interval_days: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

@@ -142,6 +142,30 @@ pub async fn read_document_original(
     Ok(Response::new(frame(original)?))
 }
 
+/// The bytes one source check received and kept, read through the same store gate and digest
+/// comparison as the original, against the digest that check observed.
+#[tauri::command]
+pub async fn read_source_check_copy(
+    document_id: u64,
+    portal_key: String,
+    check_id: u64,
+    repository: State<'_, DuckDbRepository>,
+    paths: State<'_, AppInvestigationPaths>,
+) -> Result<Response, AppError> {
+    let portal_key = validate_portal_key(&portal_key)?;
+    let (stored_path, observed_sha256) = repository
+        .source_check_copy(portal_key, document_id, check_id)
+        .await?;
+    let copy = load_original(
+        stored_path,
+        &paths.document_root,
+        MAXIMUM_ORIGINAL_BYTES,
+        Some(observed_sha256),
+    )
+    .await?;
+    Ok(Response::new(frame(copy)?))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

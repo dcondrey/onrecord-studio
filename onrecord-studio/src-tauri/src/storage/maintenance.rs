@@ -263,6 +263,7 @@ impl DuckDbRepository {
                         AND d.retention_eligible_at >= ?1 AND LENGTH(d.raw_file_sha256) = 64
                         AND p.lifecycle_state = 'ACTIVE' AND p.source_kind NOT IN ('LOCAL_FILE', 'PASTED_CONTENT')
                         AND (SELECT COUNT(*) FROM documents other WHERE other.local_path = d.local_path) = 1
+                        AND NOT EXISTS (SELECT 1 FROM document_source_checks c WHERE c.observed_object_path = d.local_path)
                         AND (regexp_matches(lower(d.file_name), '\\.(pdf|html|htm|txt|md|rtf|docx|pptx|odt|odp)$') OR (regexp_matches(lower(d.file_name), '\\.(csv|tsv|json|jsonl|ndjson|geojson)$') AND EXISTS (
                             SELECT 1 FROM analytical_snapshots s WHERE s.source_sha256 = d.raw_file_sha256 AND s.source_uri = d.download_url AND s.rejected_rows = 0 AND s.imported_rows > 0 AND COALESCE(json_extract_string(s.validation_summary_json, '$.sourceDeclaresPartial'), 'true') = 'false')))
                         AND NOT EXISTS (SELECT 1 FROM data_maintenance_jobs j WHERE j.job_key = 'compact:' || d.portal_subdomain || ':' || CAST(d.id AS VARCHAR) || ':' || d.raw_file_sha256 AND j.next_attempt_at > ?2)
