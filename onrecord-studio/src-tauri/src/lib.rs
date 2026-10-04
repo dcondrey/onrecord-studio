@@ -21,6 +21,7 @@ pub mod report;
 pub mod research;
 pub mod resolution;
 pub mod setup;
+pub mod spans;
 pub mod storage;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
@@ -193,6 +194,7 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::findings::count_findings,
         commands::findings::dismiss_finding,
         commands::findings::restore_finding,
+        commands::findings::resolve_finding_citations,
         commands::topics::list_topic_packs,
         commands::starter_sets::list_starter_sets,
         commands::intent::run_intent_query,

@@ -47,7 +47,7 @@ impl DuckDbRepository {
                         AppError::Internal(format!("Failed to discard refused document: {error}"))
                     })?;
                 if removed > 0 {
-                    for table in ["document_acquisitions", "document_source_checks"] {
+                    for table in ["document_acquisitions", "document_source_checks", "spans"] {
                         transaction
                             .execute(
                                 &format!(
@@ -232,7 +232,7 @@ impl DuckDbRepository {
         let mut requests_removed = 0u64;
         // Innermost first. DuckDB implements no cascading foreign-key actions, so every one of
         // these is a relation the schema declares and this function has to honour by hand. The
-        // ordering is not cosmetic: `verify_logical_relations` audits twelve of these relations at
+        // ordering is not cosmetic: `verify_logical_relations` audits thirteen of these relations at
         // startup and refuses to open a core database with orphans, so a table missed here does
         // not corrupt quietly, it makes the next launch fail.
         for (table, statement) in [
@@ -245,6 +245,7 @@ impl DuckDbRepository {
                 "document_source_checks",
                 "DELETE FROM document_source_checks WHERE portal_subdomain = ?1",
             ),
+            ("spans", "DELETE FROM spans WHERE portal_subdomain = ?1"),
             ("data_maintenance_jobs", "DELETE FROM data_maintenance_jobs WHERE job_key = 'refresh:' || ?1 OR starts_with(job_key, 'import:' || ?1 || ':') OR starts_with(job_key, 'compact:' || ?1 || ':')"),
             (
                 "provenance_assertions",
@@ -362,6 +363,7 @@ impl DuckDbRepository {
             }
         }
 
+        super::spans::delete_orphaned_finding_spans(&transaction)?;
         transaction.commit().map_err(|error| {
             AppError::Storage(format!("Failed to commit a source purge: {error}"))
         })?;
@@ -445,7 +447,7 @@ fn retire_fk_parent_rows(
 ///
 /// DuckDB implements no cascading foreign-key actions, so this ordering is the schema's foreign-key
 /// ordering reversed and it has to be maintained by hand. It is also what keeps the next launch
-/// working: `verify_logical_relations` audits twelve of these relations and refuses to open a core
+/// working: `verify_logical_relations` audits thirteen of these relations and refuses to open a core
 /// database containing orphans, so a table missed here does not produce quiet inconsistency, it
 /// makes the application unlaunchable.
 ///
@@ -524,6 +526,10 @@ fn purge_document_rows(
             "document_source_checks",
             "DELETE FROM document_source_checks WHERE document_id = ?1 AND portal_subdomain = ?2",
         ),
+        (
+            "spans",
+            "DELETE FROM spans WHERE document_id = ?1 AND portal_subdomain = ?2",
+        ),
         ("data_maintenance_jobs", "DELETE FROM data_maintenance_jobs WHERE starts_with(job_key, 'import:' || ?2 || ':' || CAST(?1 AS VARCHAR) || ':') OR starts_with(job_key, 'compact:' || ?2 || ':' || CAST(?1 AS VARCHAR) || ':')"),
         (
             "provenance_assertions",
@@ -575,6 +581,7 @@ fn purge_document_rows(
         }
     }
 
+    super::spans::delete_orphaned_finding_spans(transaction)?;
     if let Some(request_id) = request_id {
         resynchronize_request_density_flags(transaction, request_id, subdomain)?;
     }

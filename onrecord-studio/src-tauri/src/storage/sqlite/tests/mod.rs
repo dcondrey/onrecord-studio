@@ -31,6 +31,7 @@ mod release_events;
 mod search;
 mod source_checks;
 mod sources;
+mod spans;
 mod timeline;
 
 const MIGRATION: &str = include_str!("../../../../migrations/0001_initial_schema.sql");
