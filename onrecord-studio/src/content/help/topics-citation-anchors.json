@@ -1,0 +1,56 @@
+[
+  {
+    "id": "citation-anchors",
+    "title": "Cited passages: in place, moved, not found",
+    "group": "Concepts",
+    "summary": "How a finding's cited passage is checked against the document's current text, and what each result means.",
+    "keywords": [
+      "citation",
+      "passage",
+      "anchor",
+      "span",
+      "moved",
+      "not found",
+      "in place",
+      "re-extraction",
+      "OCR",
+      "drifted",
+      "stale",
+      "why we believe this"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "A citation names a range of characters in a document's extracted text. Text can be extracted again, by a better OCR pass or a re-ingest of a revised release, and the same character range can then hold different words. So when a finding is recorded, each cited range is stored with the words it held, up to 48 characters on either side, and a digest of the whole extracted text at that moment.",
+          "Opening Why we believe this checks every cited passage against the document's text as it is now. The check is never saved back: a citation keeps the range it was recorded with, and the result is shown next to it."
+        ]
+      },
+      {
+        "heading": "What each result means",
+        "items": [
+          "Passage in place: the cited words are at the recorded range. It also says whether the document's text is unchanged since the citation, was extracted again (the words stayed put), or whether that was not recorded.",
+          "Passage moved: the text changed and the cited words were found exactly once elsewhere, first with their surrounding words and then alone. The new range is shown, and opening the document marks the words there.",
+          "Passage not found: the cited words are gone, or now appear more than once so which one was cited cannot be told. Opening the document marks nothing rather than marking whatever now occupies the old range.",
+          "Passage cannot be checked: the document has no extracted text to check against.",
+          "Position not verifiable: the citation was never anchored, because its range did not contain the finding's quoted words when it was recorded, the document had no text then, or it was recorded before anchoring existed and carried no quote to check it by. Opening the document still goes to the recorded range, which is unchecked."
+        ]
+      },
+      {
+        "heading": "Citations recorded before anchoring",
+        "paragraphs": [
+          "Findings recorded by an earlier version were anchored once when this version first opened the database, and only where the recorded range still held the finding's quoted words. Which version of the text those findings were computed against was not recorded, so they never claim the text is unchanged."
+        ]
+      },
+      {
+        "heading": "Annotations",
+        "paragraphs": [
+          "Your own annotations are checked by the same search and report the same three outcomes in their own words: Anchored, Re-anchored, Orphaned."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": ["findings"],
+    "related": ["findings-inbox", "annotations-depth", "evidence-ladder"]
+  }
+]

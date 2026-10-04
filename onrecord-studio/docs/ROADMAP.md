@@ -662,6 +662,64 @@ adapter per acquisition family, and the binding constraint there is that the dur
 persists `IngestionTask` as JSON: an adapter split must keep **one** task enum and move only
 behavior into adapters, or in-flight rows need migrating.
 
+### Citation spans: build step 1 (decided and built 2026-10-03)
+
+The span primitive from `docs/investigative-workbench-architecture.md` section 1, applied first to
+finding citations. Decisions, each with its evidence:
+
+- **Storage.** Core-DB `spans` table in `migrations/0001_initial_schema.sql` (never the corpus DB,
+  which `replace_outdated_corpus_index` may delete). Position (`start_offset`/`end_offset`,
+  code points), quote (`exact_text`, 48-char `prefix_text`/`suffix_text`), and
+  `text_projection_sha256`. `origin_kind` has no CHECK because DuckDB cannot alter one and new
+  origins (codes, links, canvas cards) are coming; code validates it. Span id = first 32 hex of
+  sha256(origin kind, finding id, citation ordinal), so a re-record replaces the slot.
+- **One write path.** Every detector's findings go through `record_findings`, so citation spans are
+  anchored there, in the same transaction (`storage/sqlite/spans.rs::anchor_finding_citations`).
+  No detector changed. `exact_text` is the projection's own characters over the cited range, never
+  the detector's `quote`: detectors truncate quotes (`take(240)`, `QUOTE_CHARACTERS`) or record none
+  (`contradictory_statement`, `inferred_redaction_identity`). When a quote is present the range must
+  contain it, else no span: offsets computed against other text never anchor on the wrong words.
+  DuckDB `substr`/`length` count code points like Rust `chars`; the storage test cites a range past
+  `é` and an emoji to prove it.
+- **Re-record re-anchors.** A detector re-run computes offsets against the text it just read, so its
+  citation is a new observation and replaces the span. Without a re-run the stored anchor stands
+  and resolution reports drift; nothing writes a resolution back.
+- **Resolver.** `src-tauri/src/spans.rs::resolve_span`. Exact text at the stored position is
+  `Intact` (with `Unchanged`/`Changed`/`NotCompared` for the projection digest); otherwise the
+  existing annotation search (`reanchor`, moved from `annotation_anchor.rs` so there is one):
+  quote with context found once, then quote alone found once, is `Drifted` with the new range;
+  none or several is `Stale` (`Missing`/`Ambiguous`); no text is `Stale(TextUnavailable)`.
+  Citations without a span report `Unanchored` (`NoRange`/`NotAnchored`), a distinct state.
+- **Backfill.** Runs once at migration (`analysis_rule_versions` key `finding_citation_spans`).
+  Only citations carrying a quote that their range still contains get a span, with
+  `text_projection_sha256` NULL: the text the detector read then is unknown, so no "unchanged" is
+  claimed. Measured on a copy of the real core DB (2026-10-03): 4 findings, 18 citations, 12 with
+  a valid in-bounds range and 0 with a quote, 6 with no range. So all 18 read `Unanchored` after
+  upgrade, which is true; they re-anchor when their detectors next run.
+- **Annotations stay in `annotations.json`.** The task asked to move them into spans. Not done:
+  annotations already carry the full envelope (quote, prefix/suffix, offset, text digest), already
+  resolve through the same `reanchor`, already render Anchored/Re-anchored/Orphaned with reasons,
+  and travel in signed packets whose `AnchorState` wire enum is part of the signature. Copying their
+  anchors into DuckDB would create a second source of truth across a JSON file and a database with
+  no shared transaction. Moving the annotation store into the core DB is its own migration (packets,
+  codebook, reviewer, import) and belongs with QDA (build step 5).
+- **Purge and audit.** `spans` is in `purge_document_rows`, `purge_source`, and
+  `delete_unextracted_document`; `verify_logical_relations` audits `spans -> documents` (13
+  relations). Finding-origin spans whose finding is gone are deleted in the same transaction by
+  `clear_stale_findings` and both purges.
+- **UI.** `resolve_finding_citations` is read lazily when "Why we believe this" opens
+  (`EvidenceTrace` with `findingId`, gated by `useLatestRequestGate` and keyed on finding plus
+  citation set). Each citation shows "Passage in place", "Passage moved" (with the new range),
+  "Passage not found", "Passage cannot be checked", or "Position not verifiable". Opening the
+  source passes the resolved range (moved) or none (stale), so the inspector and viewer never
+  mark words the citation did not cite. Help: `topics-citation-anchors.json`.
+
+Not covered, with the exact gap: a detector that reads text v1 while re-extraction commits v2
+before `record_findings` anchors a quote-less citation against v2 (quote-bearing ones are caught by
+the guard); closing it needs detectors to pass the digest they read. Citation surfaces outside
+`EvidenceTrace` (briefing auto-draft offsets, `DraftedArtifactView`, `IntentAnswerView`,
+`LeadDossier`, report packets) still show recorded ranges unresolved.
+
 ### Window shape: detached document windows, not tabs (decided 2026-08-25)
 
 The question was what "different tabs which open different frontend windows" should mean. Four
