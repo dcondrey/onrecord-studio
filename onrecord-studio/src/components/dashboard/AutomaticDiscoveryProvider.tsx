@@ -13,6 +13,7 @@ export function AutomaticDiscoveryProvider({ children }: { children: ReactNode }
       patternKinds: ['EXACT_DUPLICATE', 'NEAR_DUPLICATE', 'SHARED_ENTITY', 'SHARED_STATUTE'], requiredTerms: [] } }),
     maintain: () => invokeCommand('run_data_maintenance', {}),
     query: (sql) => invokeCommand('run_analytical_sql', { sql, limit: 100 }),
+    fetch: (request) => invokeCommand('fetch_city_dataset', request),
   }, () => document.visibilityState !== 'hidden'));
   useEffect(() => {
     controller.start();

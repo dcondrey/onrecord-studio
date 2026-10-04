@@ -40,6 +40,7 @@ const cityDatasets: { value: CityDataset; label: string }[] = [
   { value: 'NIBRS_OFFENSES', label: 'SDPD NIBRS offenses (by year)' },
   { value: 'GET_IT_DONE_ENCAMPMENTS', label: 'Get It Done encampment reports (closed, by year)' },
   { value: 'GET_IT_DONE_OPEN', label: 'Get It Done open reports (all services, today)' },
+  { value: 'GET_IT_DONE_OUTCOMES', label: 'Get It Done closed reports (those seen open, by year)' },
   { value: 'SCHOOLS', label: 'SANDAG schools' },
   { value: 'TRANSIT_STOPS', label: 'SANDAG transit stops (GTFS)' },
 ];
@@ -76,7 +77,7 @@ export default function AnalysisWorkbench() {
   const [importResult, setImportResult] = useState<AnalyticalImportResult | null>(null);
   const [cityDataset, setCityDataset] = useState<CityDataset>('NIBRS_OFFENSES');
   const [cityYear, setCityYear] = useState(String(new Date().getFullYear() - 1));
-  const cityDatasetIsYearly = cityDataset === 'NIBRS_OFFENSES' || cityDataset === 'GET_IT_DONE_ENCAMPMENTS';
+  const cityDatasetIsYearly = cityDataset !== 'GET_IT_DONE_OPEN' && cityDataset !== 'SCHOOLS' && cityDataset !== 'TRANSIT_STOPS';
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // `sqlResult` is written asynchronously from two independent paths: the automatic-discovery
@@ -272,7 +273,7 @@ export default function AnalysisWorkbench() {
               </button>
             </div>
             <div className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-2 border-t border-line pt-3">
-              <p className="text-label leading-relaxed text-muted">Fetch a published City or SANDAG table directly. Get It Done keeps only closed reports whose service is Encampment; the snapshot records the publisher file’s digest beside the subset’s.</p>
+              <p className="text-label leading-relaxed text-muted">Fetch a published City or SANDAG table directly. A Get It Done closed-year file is larger than one import: it is kept either for the Encampment service or for the reports already seen in an imported open copy, and the snapshot records the publisher file’s digest beside the subset’s.</p>
               <div className="flex gap-2">
                 <select aria-label="City dataset" value={cityDataset} onChange={(event) => setCityDataset(event.target.value as CityDataset)} className="analysis-input min-w-0 flex-1">
                   {cityDatasets.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}

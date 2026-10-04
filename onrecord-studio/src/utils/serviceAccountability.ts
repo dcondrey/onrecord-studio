@@ -9,6 +9,7 @@ export interface ServiceRequestRoles {
   age: string | null;
   status: string | null;
   place: string | null;
+  id: string | null;
   areas: string[];
 }
 export interface ServiceLead {
@@ -27,6 +28,7 @@ const roleNames = {
   age: ['case_age_days', 'age_days', 'days_open'],
   status: ['status', 'case_status', 'request_status'],
   place: ['street_address', 'incident_address', 'address', 'location'],
+  id: ['service_request_id', 'request_id', 'case_id', 'case_number', 'sr_number', 'ticket_id'],
 };
 const districtNames = ['council_district', 'district', 'supervisor_district', 'ward'];
 const communityNames = ['comm_plan_name', 'community', 'community_plan', 'neighborhood', 'zipcode', 'zip_code', 'zip'];
@@ -42,6 +44,8 @@ const REPEAT_PLACE_DAYS = 90;
 const REFERRED_MINIMUM_REPORTS = 100;
 /** A slower area is called recurring when this many imported tables list it. */
 const RECURRING_TABLES = 3;
+/** Tables searched for what became of a report that left an open file. */
+const OUTCOME_TABLES = 8;
 
 export function serviceRequestRoles(columns: AnalyticalColumnSummary[]): ServiceRequestRoles | null {
   const names = new Set(columns.map((column) => column.columnName));
@@ -51,34 +55,99 @@ export function serviceRequestRoles(columns: AnalyticalColumnSummary[]): Service
   const opened = first(roleNames.opened);
   const age = first(roleNames.age);
   if (!category || !closed || (!opened && !age)) return null;
-  return { category, closed, opened, age, status: first(roleNames.status), place: first(roleNames.place),
+  return { category, closed, opened, age, status: first(roleNames.status), place: first(roleNames.place), id: first(roleNames.id),
     areas: [first(districtNames), first(communityNames)].filter((name): name is string => name !== null) };
 }
 
 const text = (name: string) => `NULLIF(TRIM(CAST(${quoteIdentifier(name)} AS VARCHAR)), '')`;
 const instant = (name: string) => `TRY_CAST(CAST(${quoteIdentifier(name)} AS VARCHAR) AS TIMESTAMP)`;
 
-export function serviceAccountabilityQueries(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary): DiscoveryQuery[] {
-  const roles = serviceRequestRoles(schema.columns.filter((column) => column.tableName === dataset.tableName));
-  if (!roles) return [];
+const day = (dataset: AnalyticalDatasetSummary) => dataset.retrievedAt.slice(0, 10).replace(/[^0-9-]/g, '');
+const rolesOf = (schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary) => serviceRequestRoles(schema.columns.filter((column) => column.tableName === dataset.tableName));
+// Publishers mark an unknown age with a negative sentinel (-999); that is absence, not an age.
+const ageBasis = (roles: ServiceRequestRoles, dataset: AnalyticalDatasetSummary) => roles.age ? `Age is the publisher's ${roles.age} value as of this export; a negative value is treated as not recorded.`
+  : `Age is counted from ${roles.opened} to ${roles.closed}, or to the retrieval date ${day(dataset)} for a report with no close date.`;
+
+/** One row per report, in the roles every service check reads. */
+function reportRows(roles: ServiceRequestRoles, dataset: AnalyticalDatasetSummary, area: string | null): string {
   const closedAt = text(roles.closed);
   // A referred report often has no close date; it left this table rather than staying open in it.
   const referred = roles.status ? `COALESCE(CONTAINS(LOWER(CAST(${quoteIdentifier(roles.status)} AS VARCHAR)), 'refer'), FALSE)` : 'FALSE';
-  const retrieved = `CAST('${dataset.retrievedAt.slice(0, 10).replace(/[^0-9-]/g, '')}' AS TIMESTAMP)`;
   const days = roles.age ? `TRY_CAST(${quoteIdentifier(roles.age)} AS DOUBLE)`
-    : `CAST(DATE_DIFF('day', ${instant(roles.opened!)}, COALESCE(${instant(roles.closed)}, ${retrieved})) AS DOUBLE)`;
-  // Publishers mark an unknown age with a negative sentinel (-999); that is absence, not an age.
-  const ageBasis = roles.age ? `Age is the publisher's ${roles.age} value as of this export; a negative value is treated as not recorded.`
-    : `Age is counted from ${roles.opened} to ${roles.closed}, or to the retrieval date ${dataset.retrievedAt.slice(0, 10)} for a report with no close date.`;
-  const scope = (area: string | null) => `WITH service_scope AS (
- SELECT ${text(roles.category)} AS category, ${area ? `UPPER(${text(area)})` : 'NULL'} AS area, ${roles.place ? text(roles.place) : 'NULL'} AS place,
+    : `CAST(DATE_DIFF('day', ${instant(roles.opened!)}, COALESCE(${instant(roles.closed)}, CAST('${day(dataset)}' AS TIMESTAMP))) AS DOUBLE)`;
+  return `SELECT ${roles.id ? text(roles.id) : 'NULL'} AS report_id, ${text(roles.category)} AS category, ${area ? `UPPER(${text(area)})` : 'NULL'} AS area, ${roles.place ? text(roles.place) : 'NULL'} AS place,
   ${roles.opened ? instant(roles.opened) : 'NULL'} AS opened_at, ${closedAt} IS NULL AND NOT ${referred} AS unresolved,
   ${closedAt} IS NOT NULL AND NOT ${referred} AS resolved, ${referred} AS referred, CASE WHEN ${days} >= 0 THEN ${days} END AS age_days
- FROM ${quoteIdentifier(dataset.tableName)}
+ FROM ${quoteIdentifier(dataset.tableName)}`;
+}
+
+/** The tables a copy of a source is read against: the earliest earlier copy of the same source,
+ * and other service-report tables retrieved since then that can record what became of a report. */
+export function serviceCompanions(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary): { earlier: AnalyticalDatasetSummary; outcomes: AnalyticalDatasetSummary[] } | null {
+  if (!dataset.sourceUri || !rolesOf(schema, dataset)?.id) return null;
+  const identified = schema.datasets.filter((other) => other.snapshotId !== dataset.snapshotId && rolesOf(schema, other)?.id);
+  const earlier = identified.filter((other) => other.sourceUri === dataset.sourceUri && day(other) < day(dataset))
+    .sort((a, b) => a.retrievedAt.localeCompare(b.retrievedAt) || a.snapshotId.localeCompare(b.snapshotId))[0];
+  if (!earlier) return null;
+  const outcomes = identified.filter((other) => other.sourceUri !== dataset.sourceUri && day(other) >= day(earlier))
+    .sort((a, b) => b.retrievedAt.localeCompare(a.retrievedAt) || a.snapshotId.localeCompare(b.snapshotId)).slice(0, OUTCOME_TABLES);
+  return { earlier, outcomes };
+}
+
+function movementQuery(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary): DiscoveryQuery | null {
+  const companions = serviceCompanions(schema, dataset);
+  if (!companions) return null;
+  const rows = (table: AnalyticalDatasetSummary) => reportRows(rolesOf(schema, table)!, table, null);
+  const { earlier, outcomes } = companions;
+  return {
+    id: 'service_movement', title: 'Reports that left the open file, and new ones',
+    method: `Reports open in the copy retrieved ${day(earlier)} that are not open in the copy retrieved ${day(dataset)}, and reports open in the later copy that were not open in the earlier one, matched on the publisher's ${rolesOf(schema, dataset)!.id}. What became of a report that left is read from the later copy${outcomes.length ? ` and ${outcomes.map((table) => table.displayName).join(', ')}` : ''}: a close date, a referral, or no record in any of them. A close date records that a report was closed, not what work was done.`,
+    sql: `WITH earlier_reports AS (
+ ${rows(earlier)}
+), later_reports AS (
+ ${rows(dataset)}
+), earlier_open AS (SELECT * FROM earlier_reports WHERE unresolved AND category IS NOT NULL AND report_id IS NOT NULL
+), later_open AS (SELECT * FROM later_reports WHERE unresolved AND category IS NOT NULL AND report_id IS NOT NULL
+), outcome_rows AS (
+ SELECT report_id, resolved, referred FROM later_reports${outcomes.map((table) => `
+ UNION ALL SELECT report_id, resolved, referred FROM (
+ ${rows(table)}
+ )`).join('')}
+), outcome_records AS (
+ SELECT report_id, BOOL_OR(resolved) AS resolved, BOOL_OR(referred) AS referred FROM outcome_rows WHERE report_id IS NOT NULL AND (resolved OR referred) GROUP BY report_id
+), service_left AS (
+ SELECT category, COUNT(*) AS left_reports, COUNT(*) FILTER (WHERE age_days > ${STALE_DAYS}) AS left_over_one_year,
+  COUNT(*) FILTER (WHERE outcome_records.resolved) AS closed_on_record,
+  COUNT(*) FILTER (WHERE outcome_records.referred AND NOT outcome_records.resolved) AS referred_on_record,
+  COUNT(*) FILTER (WHERE outcome_records.report_id IS NULL) AS no_outcome_record
+ FROM earlier_open LEFT JOIN outcome_records ON outcome_records.report_id = earlier_open.report_id
+ WHERE NOT EXISTS (SELECT 1 FROM later_open WHERE later_open.report_id = earlier_open.report_id) GROUP BY category
+), service_arrived AS (
+ SELECT category, COUNT(*) AS arrived_reports FROM later_open
+ WHERE NOT EXISTS (SELECT 1 FROM earlier_open WHERE earlier_open.report_id = later_open.report_id) GROUP BY category
+), service_movement AS (
+ SELECT COALESCE(service_left.category, service_arrived.category) AS category, COALESCE(left_reports, 0) AS left_reports,
+  COALESCE(left_over_one_year, 0) AS left_over_one_year, COALESCE(closed_on_record, 0) AS closed_on_record,
+  COALESCE(referred_on_record, 0) AS referred_on_record, COALESCE(no_outcome_record, 0) AS no_outcome_record, COALESCE(arrived_reports, 0) AS arrived_reports
+ FROM service_left FULL JOIN service_arrived ON service_left.category = service_arrived.category
+)
+SELECT *, SUM(left_reports) OVER () AS all_left_reports, SUM(left_over_one_year) OVER () AS all_left_over_one_year,
+ SUM(closed_on_record) OVER () AS all_closed_on_record, SUM(referred_on_record) OVER () AS all_referred_on_record,
+ SUM(no_outcome_record) OVER () AS all_no_outcome_record, SUM(arrived_reports) OVER () AS all_arrived_reports, ${outcomes.length} AS outcome_tables
+FROM service_movement ORDER BY left_reports DESC, arrived_reports DESC, category`,
+  };
+}
+
+export function serviceAccountabilityQueries(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary): DiscoveryQuery[] {
+  const roles = rolesOf(schema, dataset);
+  if (!roles) return [];
+  const basis = ageBasis(roles, dataset);
+  const scope = (area: string | null) => `WITH service_scope AS (
+ ${reportRows(roles, dataset, area)}
 ), service_reports AS (SELECT * FROM service_scope WHERE category IS NOT NULL)`;
   const queries: DiscoveryQuery[] = [{
     id: 'service_backlog', title: 'Reports still open, by service',
-    method: `Reports with no ${roles.closed} value${roles.status ? ` and a ${roles.status} that is not a referral` : ''}, grouped by ${roles.category}. ${ageBasis} A report counts as open more than a year when its age exceeds ${STALE_DAYS} days. Totals cover every service, not only the rows shown.`,
+    method: `Reports with no ${roles.closed} value${roles.status ? ` and a ${roles.status} that is not a referral` : ''}, grouped by ${roles.category}. ${basis} A report counts as open more than a year when its age exceeds ${STALE_DAYS} days. Totals cover every service, not only the rows shown.`,
     sql: `${scope(null)}, service_backlog AS (
  SELECT category, COUNT(*) AS open_reports, MEDIAN(age_days) AS median_age_days,
   COUNT(*) FILTER (WHERE age_days > ${STALE_DAYS}) AS open_over_one_year, MAX(age_days) AS oldest_age_days, CAST(MIN(opened_at) AS DATE) AS earliest_opened
@@ -99,13 +168,13 @@ FROM service_area JOIN service_all_areas ON service_area.category = service_all_
   for (const area of roles.areas) {
     queries.push({
       id: `service_backlog_area:${area}`, title: `Open reports older in some areas (${area})`,
-      method: `Median age of open reports per ${roles.category} and ${area}, against the median for that service across all areas. An area is listed with at least ${AREA_MINIMUM_REPORTS} open reports, at least three areas reporting, and a median at least ${AREA_MEDIAN_RATIO} times the all-area median. ${ageBasis}`,
+      method: `Median age of open reports per ${roles.category} and ${area}, against the median for that service across all areas. An area is listed with at least ${AREA_MINIMUM_REPORTS} open reports, at least three areas reporting, and a median at least ${AREA_MEDIAN_RATIO} times the all-area median. ${basis}`,
       sql: `${byArea(area, 'unresolved', 'open_reports')}
 WHERE open_reports >= ${AREA_MINIMUM_REPORTS} AND areas >= 3 AND all_median_days >= 30 AND median_days >= ${AREA_MEDIAN_RATIO} * all_median_days
 ORDER BY over_one_year DESC, open_reports DESC, service_area.category, area`,
     }, {
       id: `service_wait_area:${area}`, title: `Slower closure in some areas (${area})`,
-      method: `Median days to close per ${roles.category} and ${area}, for reports with a ${roles.closed} value that were not referred, against the median for that service across all areas. An area is listed with at least ${AREA_MINIMUM_REPORTS} closed reports, at least three areas reporting, a median at least ${AREA_MEDIAN_RATIO} times the all-area median, and at least seven days slower. ${ageBasis}`,
+      method: `Median days to close per ${roles.category} and ${area}, for reports with a ${roles.closed} value that were not referred, against the median for that service across all areas. An area is listed with at least ${AREA_MINIMUM_REPORTS} closed reports, at least three areas reporting, a median at least ${AREA_MEDIAN_RATIO} times the all-area median, and at least seven days slower. ${basis}`,
       sql: `${byArea(area, 'resolved', 'closed_reports')}
 WHERE closed_reports >= ${AREA_MINIMUM_REPORTS} AND areas >= 3 AND all_median_days >= 1 AND median_days >= ${AREA_MEDIAN_RATIO} * all_median_days AND median_days - all_median_days >= 7
 ORDER BY closed_reports * (median_days - all_median_days) DESC, service_area.category, area`,
@@ -132,6 +201,8 @@ HAVING COUNT(*) >= ${REPEAT_PLACE_REPORTS} AND MAX(age_days) > ${REPEAT_PLACE_DA
 )
 SELECT * FROM service_referral_totals WHERE referred_reports > 0 ORDER BY referred_reports DESC, category`,
   });
+  const movement = movementQuery(schema, dataset);
+  if (movement) queries.push(movement);
   return queries;
 }
 
@@ -222,19 +293,44 @@ export function recurringServiceLeads(tables: { snapshotId: string; displayName:
     }));
 }
 
+function movementLead(movement: { query: DiscoveryQuery; result?: SqlQueryResult } | undefined, earlierDay: string, laterDay: string): ServiceLead | null {
+  if (!movement?.result?.rows.length) return null;
+  const rows = records(movement.result);
+  const total = (name: string) => count(rows[0][name]) ?? 0;
+  const left = total('all_left_reports'); const arrived = total('all_arrived_reports');
+  if (left + arrived === 0) return null;
+  const stale = total('all_left_over_one_year'); const unrecorded = total('all_no_outcome_record');
+  // With no table that could hold a close record, "no record" is an unanswered question, not a count.
+  const searched = total('outcome_tables') > 0 || unrecorded < left;
+  const services = rows.filter((row) => (count(row.left_reports) ?? 0) > 0).slice(0, 3).map((row) =>
+    `${String(row.category)}: ${shown(count(row.left_reports)!)} left (${shown(count(row.left_over_one_year) ?? 0)} open more than a year), ${shown(count(row.arrived_reports) ?? 0)} arrived.`);
+  const outcome = left === 0 ? '' : searched
+    ? `Of those that left, ${shown(total('all_closed_on_record'))} have a close date and ${shown(total('all_referred_on_record'))} were referred in the imported tables; ${shown(unrecorded)} have no close or referral record in any of them. `
+    : 'This source lists open reports only, so whether they were closed or referred is not in it; the publisher’s closed-reports table would say. ';
+  return { key: 'service_movement', priority: 99, query: movement.query,
+    title: `${shown(left)} reports left the open file and ${shown(arrived)} new ones arrived between ${earlierDay} and ${laterDay}`,
+    detail: `${outcome}${shown(stale)} of those that left had been open more than a year. ${services.join(' ')} A close date records that a report was closed, not what work was done.`,
+    question: searched && unrecorded > 0 ? `What became of the ${shown(unrecorded)} reports that left the open file with no close or referral record?`
+      : arrived > left ? 'New reports outnumbered the ones that left. Does the department’s staffing plan or budget request address the difference?'
+        : `Were the ${shown(stale)} long-open reports repaired, or closed without work? A records request for the work orders would show it.`,
+  };
+}
+
 /** The same published source imported on two dates: how its open backlog moved between them. */
 export function backlogChangeLeads(tables: { snapshotId: string; sourceUri: string | null; retrievedAt: string; results: { query: DiscoveryQuery; result?: SqlQueryResult }[] }[]): (ServiceLead & { snapshotId: string })[] {
-  const bySource = new Map<string, { snapshotId: string; day: string; query: DiscoveryQuery; rows: Record<string, unknown>[] }[]>();
+  const bySource = new Map<string, { snapshotId: string; day: string; query: DiscoveryQuery; rows: Record<string, unknown>[]; movement?: { query: DiscoveryQuery; result?: SqlQueryResult } }[]>();
   for (const table of tables) {
     const backlog = table.results.find((entry) => entry.query.id === 'service_backlog');
     if (!table.sourceUri || !backlog?.result?.rows.length) continue;
-    bySource.set(table.sourceUri, [...(bySource.get(table.sourceUri) ?? []), { snapshotId: table.snapshotId, day: table.retrievedAt.slice(0, 10), query: backlog.query, rows: records(backlog.result) }]);
+    bySource.set(table.sourceUri, [...(bySource.get(table.sourceUri) ?? []), { snapshotId: table.snapshotId, day: table.retrievedAt.slice(0, 10), query: backlog.query, rows: records(backlog.result), movement: table.results.find((entry) => entry.query.id === 'service_movement') }]);
   }
   const leads: (ServiceLead & { snapshotId: string })[] = [];
   for (const snapshots of bySource.values()) {
     const ordered = [...snapshots].sort((a, b) => a.day.localeCompare(b.day));
     const earlier = ordered[0]; const later = ordered[ordered.length - 1];
     if (earlier.day === later.day) continue;
+    const lead = movementLead(later.movement, earlier.day, later.day);
+    if (lead) leads.push({ ...lead, snapshotId: later.snapshotId });
     const before = count(earlier.rows[0].all_open_over_one_year); const after = count(later.rows[0].all_open_over_one_year);
     const openBefore = count(earlier.rows[0].all_open_reports); const openAfter = count(later.rows[0].all_open_reports);
     if (before === null || after === null || openBefore === null || openAfter === null || before === after) continue;

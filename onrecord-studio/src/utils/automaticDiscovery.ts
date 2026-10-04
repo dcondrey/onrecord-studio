@@ -1,6 +1,6 @@
 import type { AnalyticalDatasetSummary, AnalyticalSchema, SqlQueryResult } from '../types';
 import { buildDiscoveryPlan, discoveryDefaults, type DiscoveryQuery, type DiscoverySelection } from './dataDiscovery';
-import { backlogChangeLeads, recurringServiceLeads, serviceAccountabilityLeads, serviceAccountabilityQueries } from './serviceAccountability';
+import { backlogChangeLeads, recurringServiceLeads, serviceAccountabilityLeads, serviceAccountabilityQueries, serviceCompanions } from './serviceAccountability';
 
 export interface DiscoveryObservation {
   id: string;
@@ -31,7 +31,10 @@ const display = (value: unknown) => value == null ? 'missing values' : String(va
 const records = (result: SqlQueryResult) => result.rows.map((row) => Object.fromEntries(result.columns.map((name, i) => [name, row[i]])));
 
 export function snapshotFingerprint(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary): string {
-  return JSON.stringify([dataset, schema.columns.filter((column) => column.tableName === dataset.tableName)]);
+  // A check that reads other tables is stale once those tables change, not only this one.
+  const companions = serviceCompanions(schema, dataset);
+  return JSON.stringify([dataset, schema.columns.filter((column) => column.tableName === dataset.tableName),
+    companions ? [companions.earlier, ...companions.outcomes].map((table) => table.snapshotId) : []]);
 }
 
 export function automaticProfileQuery(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary): DiscoveryQuery {

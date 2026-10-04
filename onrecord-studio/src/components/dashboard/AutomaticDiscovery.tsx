@@ -24,6 +24,8 @@ export default function AutomaticDiscovery() {
   // Byte-identical extracted text is a corpus/ingestion fact (the same document released more
   // than once), not an observation about the investigation's subject; it stays off this feed.
   const standoutPatterns = state.patterns.filter((pattern) => pattern.kind !== 'EXACT_DUPLICATE');
+  const gaps = controller.gaps();
+  const automatic = Boolean(state.maintenance?.policy.enabled && state.maintenance.policy.autoRefresh);
   const profileErrors = Object.values(state.profiles).flatMap((profile) => profile.results.filter((entry) => entry.error));
   const stage = (url: string) => { store.getState().setPortalUrlDraft(url); focusSourceComposer(); };
   const openAnalysis = () => store.getState().setWorkspaceView('analysis');
@@ -60,6 +62,12 @@ export default function AutomaticDiscovery() {
         <button type="button" className="analysis-button mt-2" onClick={() => { const actions = store.getState(); actions.setActivePortal(null); actions.setPatternEvidenceSelection({ patternId: pattern.patternId, portalKey: pattern.evidence[0]?.portalKey ?? null, documentId: pattern.evidence[0]?.documentId ?? null, characterStart: pattern.evidence[0]?.characterStart ?? null }); actions.setWorkspaceView('patterns'); }}>Inspect document evidence</button>
       </article>)}
     </div>
+    {gaps.map((gap) => { const status = state.gapStatus[gap.key]; return <p key={gap.key} role="status" className="rounded-xl border border-line p-3 text-label leading-4 text-fg-secondary">
+      <span className="font-semibold text-fg">Missing data: {gap.title}.</span> {gap.detail}{' '}
+      {status === 'fetching' ? 'Fetching it now…' : status === 'fetched' ? 'Fetched; the checks are running again.' : <>
+        {status && <span className="text-warning">The last attempt failed: {status}. </span>}
+        {automatic && !status ? 'It will be fetched automatically. ' : ''}<button type="button" className="text-accent underline" onClick={() => controller.fill(gap.key)}>Fetch it now</button></>}
+    </p>; })}
     {leads.length > 6 && <button type="button" className="analysis-button" onClick={() => setShowAll((value) => !value)}>{showAll ? 'Show fewer observations' : 'Show more observations'}</button>}
     {state.candidates.length > 0 && <p className="text-label leading-4 text-fg-secondary">{state.candidates.length} acquired tables are available for analysis. <button type="button" className="text-accent underline" onClick={openAnalysis}>Review acquired tables</button></p>}
     {!datasets.length && !standoutPatterns.length && <div className="grid gap-3 text-label leading-4 sm:grid-cols-2">

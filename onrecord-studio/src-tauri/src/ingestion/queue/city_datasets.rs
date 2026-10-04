@@ -8,6 +8,22 @@ use crate::types::{
 };
 use chrono::Datelike;
 
+const GET_IT_DONE_OPEN_URI: &str =
+    "https://seshat.datasd.org/get_it_done_reports/get_it_done_requests_open_datasd.csv";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RowFilter {
+    Equals {
+        column: &'static str,
+        value: &'static str,
+    },
+    /// Keeps a row whose `column` value appears in that column of an imported copy of `source_uri`.
+    SeenIn {
+        column: &'static str,
+        source_uri: &'static str,
+    },
+}
+
 #[derive(Debug, PartialEq, Eq)]
 struct CityDatasetSpec {
     url: String,
@@ -15,7 +31,7 @@ struct CityDatasetSpec {
     display_name: String,
     file_name: String,
     partial: bool,
-    row_filter: Option<(&'static str, &'static str)>,
+    row_filter: Option<RowFilter>,
 }
 
 /// The URL is always built here from a fixed template; years outside the publisher's series are
@@ -68,17 +84,36 @@ fn city_dataset_spec(
                 ),
                 file_name,
                 partial: true,
-                row_filter: Some(("service_name", "Encampment")),
+                row_filter: Some(RowFilter::Equals {
+                    column: "service_name",
+                    value: "Encampment",
+                }),
+            }
+        }
+        CityDataset::GetItDoneOutcomes => {
+            let year = yearly(2016, "Get It Done closed reports")?;
+            let file_name = format!("get_it_done_requests_closed_{year}_datasd.csv");
+            CityDatasetSpec {
+                url: format!("https://seshat.datasd.org/get_it_done_reports/{file_name}"),
+                kind: AnalyticalDatasetKind::RegionalData,
+                display_name: format!(
+                    "Get It Done closed reports {year}, reports seen in an imported open copy"
+                ),
+                file_name,
+                partial: true,
+                row_filter: Some(RowFilter::SeenIn {
+                    column: "service_request_id",
+                    source_uri: GET_IT_DONE_OPEN_URI,
+                }),
             }
         }
         CityDataset::GetItDoneOpen => {
             unsplit("Get It Done open reports")?;
-            let file_name = "get_it_done_requests_open_datasd.csv";
             CityDatasetSpec {
-                url: format!("https://seshat.datasd.org/get_it_done_reports/{file_name}"),
+                url: GET_IT_DONE_OPEN_URI.into(),
                 kind: AnalyticalDatasetKind::RegionalData,
                 display_name: "Get It Done open reports (all services)".into(),
-                file_name: file_name.into(),
+                file_name: "get_it_done_requests_open_datasd.csv".into(),
                 // The publisher replaces this file daily; a snapshot is the backlog on one day.
                 partial: true,
                 row_filter: None,
@@ -109,13 +144,13 @@ fn city_dataset_spec(
     })
 }
 
-/// Copies the header and every record whose `column` equals `value` exactly. Returns the
+/// Copies the header and every record whose `column` value satisfies `keep`. Returns the
 /// publisher's record count. Field values are copied byte for byte; only quoting may change.
 fn keep_matching_rows(
     source: &Path,
     destination: &Path,
     column: &str,
-    value: &str,
+    keep: impl Fn(&[u8]) -> bool,
 ) -> Result<usize, AppError> {
     let csv_error = |error: csv::Error| AppError::DataParsing(format!("Publisher CSV: {error}"));
     let mut reader = csv::ReaderBuilder::new()
@@ -139,7 +174,7 @@ fn keep_matching_rows(
     let mut publisher_rows = 0;
     while reader.read_byte_record(&mut record).map_err(csv_error)? {
         publisher_rows += 1;
-        if record.get(index) == Some(value.as_bytes()) {
+        if record.get(index).is_some_and(&keep) {
             writer.write_byte_record(&record).map_err(csv_error)?;
         }
     }
@@ -158,6 +193,26 @@ impl QueueManager {
         year: Option<u16>,
     ) -> Result<AnalyticalImportResult, AppError> {
         let spec = city_dataset_spec(dataset, year, Utc::now().year())?;
+        // Read before downloading: without an open copy there is nothing to keep.
+        let seen = match spec.row_filter {
+            Some(RowFilter::SeenIn { column, source_uri }) => {
+                let seen = self
+                    .repository
+                    .imported_column_values(source_uri.into(), column.into())
+                    .await?;
+                if seen.is_empty() {
+                    return Err(AppError::DataParsing(format!(
+                        "{} keeps the reports seen in an open copy; import Get It Done open reports first",
+                        spec.display_name
+                    )));
+                }
+                seen
+            }
+            _ => Default::default(),
+        };
+        self.repository
+            .check_retained_file_budget(&self.download_root)
+            .await?;
         let url = reqwest::Url::parse(&spec.url)
             .map_err(|error| AppError::Internal(format!("City dataset URL: {error}")))?;
         let staging = self.download_root.join(".staging");
@@ -179,11 +234,35 @@ impl QueueManager {
             objects::commit_staged_object(&self.download_root, &staged, &downloaded.sha256).await?;
         let (local_path, sha256, derived_subset) = match spec.row_filter {
             None => (published, downloaded.sha256, None),
-            Some((column, value)) => {
+            Some(row_filter) => {
+                let (column, description) = match row_filter {
+                    RowFilter::Equals { column, value } => {
+                        (column, format!("{column} = '{value}'"))
+                    }
+                    RowFilter::SeenIn { column, source_uri } => (
+                        column,
+                        format!(
+                            "{column} is one of {} values in imported copies of {source_uri}",
+                            seen.len()
+                        ),
+                    ),
+                };
                 let subset = staging.join(format!(".city.{}.partial", Uuid::new_v4()));
                 let target = subset.clone();
                 let filtered = spawn_blocking("Filter City dataset", move || {
-                    let rows = keep_matching_rows(&published, &target, column, value)?;
+                    let rows = match row_filter {
+                        RowFilter::Equals { value, .. } => {
+                            keep_matching_rows(&published, &target, column, |field| {
+                                field == value.as_bytes()
+                            })
+                        }
+                        RowFilter::SeenIn { .. } => {
+                            keep_matching_rows(&published, &target, column, |field| {
+                                std::str::from_utf8(field)
+                                    .is_ok_and(|text| seen.contains(text.trim()))
+                            })
+                        }
+                    }?;
                     let digest = crate::integrity::sha256_file(&target).map_err(|error| {
                         AppError::Storage(format!("Failed to hash filtered rows: {error}"))
                     })?;
@@ -203,7 +282,7 @@ impl QueueManager {
                 let subset = DerivedSubset {
                     publisher_sha256: downloaded.sha256,
                     publisher_rows,
-                    filter: format!("{column} = '{value}'"),
+                    filter: description,
                 };
                 (path, digest, Some(subset))
             }
@@ -249,6 +328,13 @@ mod tests {
         assert!(spec(CityDataset::NibrsOffenses, None).is_err());
         assert!(spec(CityDataset::GetItDoneEncampments, Some(2015)).is_err());
         assert!(spec(CityDataset::GetItDoneEncampments, Some(2016)).is_ok());
+        assert!(spec(CityDataset::GetItDoneOutcomes, None).is_err());
+        assert_eq!(
+            spec(CityDataset::GetItDoneOutcomes, Some(2026))
+                .unwrap()
+                .url,
+            "https://seshat.datasd.org/get_it_done_reports/get_it_done_requests_closed_2026_datasd.csv"
+        );
         assert!(spec(CityDataset::GetItDoneOpen, Some(2025)).is_err());
         assert!(spec(CityDataset::GetItDoneOpen, None).is_ok());
         assert!(spec(CityDataset::Schools, Some(2025)).is_err());
@@ -265,13 +351,16 @@ mod tests {
             "id,service_name,note\n1,Encampment,\"a, quoted\"\n2,Encampment Cleanup,x\n3,encampment,y\n4,Encampment,\n",
         )
         .unwrap();
-        let rows = keep_matching_rows(&source, &target, "service_name", "Encampment").unwrap();
+        let rows = keep_matching_rows(&source, &target, "service_name", |field| {
+            field == b"Encampment"
+        })
+        .unwrap();
         assert_eq!(rows, 4);
         assert_eq!(
             std::fs::read_to_string(&target).unwrap(),
             "id,service_name,note\n1,Encampment,\"a, quoted\"\n4,Encampment,\n"
         );
-        let missing = keep_matching_rows(&source, &target, "service", "Encampment");
+        let missing = keep_matching_rows(&source, &target, "service", |_| true);
         assert!(missing.is_err());
     }
 }
@@ -302,9 +391,11 @@ mod live {
                 "{}: {} bytes, {}",
                 spec.file_name, downloaded.byte_count, downloaded.sha256
             );
-            if let Some((column, value)) = spec.row_filter {
+            if let Some(RowFilter::Equals { column, value }) = spec.row_filter {
                 let subset = directory.path().join("subset.csv");
-                let rows = keep_matching_rows(&path, &subset, column, value).unwrap();
+                let rows =
+                    keep_matching_rows(&path, &subset, column, |field| field == value.as_bytes())
+                        .unwrap();
                 let kept = csv::Reader::from_path(&subset).unwrap().records().count();
                 println!("{column} = {value}: kept {kept} of {rows}");
             }

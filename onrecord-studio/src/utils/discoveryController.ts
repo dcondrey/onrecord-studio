@@ -1,5 +1,6 @@
 import type { AnalyticalImportCandidate, AnalyticalSchema, CorpusPattern, DataMaintenanceStatus, SqlQueryResult } from '../types';
 import { automaticFollowups, automaticProfileQuery, snapshotFingerprint, type AutomaticProfile } from './automaticDiscovery';
+import { dataGaps, type DataGap } from './dataGaps';
 
 export interface DiscoveryTransport {
   schema(): Promise<AnalyticalSchema>;
@@ -7,6 +8,7 @@ export interface DiscoveryTransport {
   patterns(): Promise<CorpusPattern[]>;
   query(sql: string): Promise<SqlQueryResult>;
   maintain?(): Promise<DataMaintenanceStatus>;
+  fetch?(request: DataGap['fetch']): Promise<unknown>;
 }
 export interface AutomaticDiscoveryState {
   schema: AnalyticalSchema | null;
@@ -17,6 +19,8 @@ export interface AutomaticDiscoveryState {
   activeSnapshot: string | null;
   checkedAt: string | null;
   maintenance: DataMaintenanceStatus | null;
+  /** Per gap key: `fetching`, `fetched`, or the error of the last attempt. */
+  gapStatus: Record<string, string>;
   paused: boolean;
   inspection: { sql: string; sequence: number } | null;
 }
@@ -26,7 +30,7 @@ export interface AutomaticDiscoveryState {
  * A failed check backs off for five minutes; it cannot starve other snapshots.
  */
 export class DiscoveryController {
-  state: AutomaticDiscoveryState = { schema: null, candidates: [], patterns: [], profiles: {}, errors: {}, activeSnapshot: null, checkedAt: null, maintenance: null, paused: false, inspection: null };
+  state: AutomaticDiscoveryState = { schema: null, candidates: [], patterns: [], profiles: {}, errors: {}, activeSnapshot: null, checkedAt: null, maintenance: null, gapStatus: {}, paused: false, inspection: null };
   private listeners = new Set<() => void>();
   private timer: ReturnType<typeof setTimeout> | undefined;
   private generation = 0;
@@ -38,6 +42,8 @@ export class DiscoveryController {
   private holds = 0;
   private failures = new Map<string, number>();
   private secondaryInFlight = new Set<'candidates' | 'patterns'>();
+  private gapRetryAt = new Map<string, number>();
+  private requestedGaps = new Set<string>();
   private pending: { snapshotId: string; fingerprint: string; queries: ReturnType<typeof automaticFollowups> } | null = null;
 
   constructor(private transport: DiscoveryTransport, private visible: () => boolean = () => true, private now: () => number = Date.now) { this.maintainedAt = this.now() - 55_000; }
@@ -55,6 +61,17 @@ export class DiscoveryController {
   }
   refresh = () => { this.forceRefresh = true; this.schedule(0); };
   setMaintenance = (maintenance: DataMaintenanceStatus) => { this.publish({ maintenance }); this.maintainedAt = this.now() - 55_000; this.schedule(0); };
+  /** Fetch one missing table now, whether or not automatic upkeep is on. */
+  fill = (key: string) => { this.requestedGaps.add(key); this.schedule(0); };
+  gaps = (): DataGap[] => this.state.schema ? dataGaps(this.state.schema, this.state.profiles, new Date(this.now()).toISOString()) : [];
+  /** Missing tables are fetched one at a time, automatically only under the owner's upkeep policy. */
+  private nextGap(): DataGap | undefined {
+    if (!this.transport.fetch) return undefined;
+    const policy = this.state.maintenance?.policy;
+    const automatic = Boolean(policy?.enabled && policy.autoRefresh);
+    return this.gaps().find((gap) => !['fetching', 'fetched'].includes(this.state.gapStatus[gap.key])
+      && (this.requestedGaps.has(gap.key) || (automatic && this.now() >= (this.gapRetryAt.get(gap.key) ?? 0))));
+  }
   inspect = (sql: string) => this.publish({ inspection: { sql, sequence: (this.state.inspection?.sequence ?? 0) + 1 } });
   hold = () => {
     this.holds += 1; this.publish({ paused: true });
@@ -145,7 +162,20 @@ export class DiscoveryController {
           this.publish({ profiles: Object.fromEntries(Object.entries(this.state.profiles).filter(([, profile]) => profile.fingerprint !== key)) });
         }
         const dataset = schema.datasets.find((item) => !this.state.profiles[item.snapshotId] && this.now() >= (this.failures.get(snapshotFingerprint(schema, item)) ?? 0));
-        if (!dataset) { nextDelay = 5000; this.publish({ activeSnapshot: null }); return; }
+        if (!dataset) {
+          this.publish({ activeSnapshot: null });
+          const gap = this.nextGap();
+          if (!gap) { nextDelay = 5000; return; }
+          this.requestedGaps.delete(gap.key);
+          this.publish({ gapStatus: { ...this.state.gapStatus, [gap.key]: 'fetching' } });
+          // Recorded even if the controller stopped meanwhile: the outcome is keyed by its own gap,
+          // and a restart that forgot it would download the same file twice.
+          const outcome = await this.transport.fetch!(gap.fetch).then(() => 'fetched', (reason) => String(reason));
+          if (outcome !== 'fetched') this.gapRetryAt.set(gap.key, this.now() + 21_600_000);
+          else this.forceRefresh = true;
+          this.publish({ gapStatus: { ...this.state.gapStatus, [gap.key]: outcome } });
+          return;
+        }
         const fingerprint = snapshotFingerprint(schema, dataset);
         let query;
         try {

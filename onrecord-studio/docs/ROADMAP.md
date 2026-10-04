@@ -1026,11 +1026,19 @@ against the app database, same SQL the app generates):
 
 "Fetch and import" now offers the citywide open file (`GET_IT_DONE_OPEN`, 31 MB, republished
 daily). Next, in order:
-1. Backlog change between two copies of the same source: the count is built (compares the
-   earliest and latest retrieval of one source URI). Not yet built: which reports left the open
-   file without a close record (an anti-join on the report id across the two copies). Unverified:
-   that a re-fetch through the app keeps the earlier snapshot (import keys a snapshot by content,
-   read from `storage/sqlite/analytical.rs`, not exercised).
+1. Done 2026-10-04: reports that left the open file between two copies, and new arrivals, per
+   service, with their close or referral record (`service_movement`). A second import of one
+   source URI keeps the earlier snapshot (exercised in `tests/data_discovery.rs`). Measured with
+   the app's SQL on the 2026-09-14 copy against the file published 2026-10-04 and the closed-2026
+   file: 8,016 reports with a service type left and 8,939 arrived; of those that left, 7,832 have
+   a close date, 184 were referred, none lacks a record; 657 had been open more than a year (ROW
+   Maintenance 170, Street Light Maintenance 95). Closures of long-open reports are spread across
+   days (at most 78 on one day), not a bulk close-out.
+   Decision (owner, 2026-10-04): when the imported tables cannot answer a lead's question, the
+   app fetches the table that can. Built for Get It Done (`src/utils/dataGaps.ts`, methods §17 C):
+   a newer open copy after seven days, and the closed-reports year filtered to reports seen open.
+   Not built: seeking a source for a gap outside that registry (searching the source catalogs in
+   `src/utils/*Sources.ts` or the publisher's dataset index by the missing role).
 2. Join a lead to the council agenda and budget: the department that owns a service, its adopted
    line (`budget_lines.rs`), and upcoming meeting items (`analysis_methods.md` §11), so a lead
    offers a drafted public comment.

@@ -60,7 +60,8 @@ or when no shelter is reasonably available. 63.0406(a): written notice of clean-
 - In the app: Analysis → Analytical Import → "Fetch and import" downloads NIBRS offenses or Get It Done
   encampment reports for a year, SANDAG schools, or SANDAG transit stops (Get It Done 2025 is 128 MB,
   over the 96 MB table limit, so only `service_name = 'Encampment'` rows are kept and the publisher
-  file's SHA-256 is stored in the snapshot's validation summary). "Encampment ordinance observations"
+  file's SHA-256 is stored in the snapshot's validation summary; "closed reports (those seen open)"
+  keeps instead the rows whose `service_request_id` appears in an imported open copy). "Encampment ordinance observations"
   runs both checks above over whatever is imported. Calls for service are not offered: a full year
   (2025: 466,980 rows x 14 columns) exceeds the 6,000,000-cell import limit.
 - NIBRS `occured_on` is a date only; `approved_on` is report approval time, not incident time, so

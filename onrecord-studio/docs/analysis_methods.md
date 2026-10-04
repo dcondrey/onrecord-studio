@@ -303,7 +303,7 @@ The finding states that the agency had already released a document, before closi
 
 ## 17. Service-Report Leads
 
-`src/utils/serviceAccountability.ts`, run by automatic discovery through the restricted SQL boundary and shown under What stands out. Verified natively by `tests/data_discovery.rs::service_report_checks_run_on_real_imported_rows`.
+`src/utils/serviceAccountability.ts`, run by automatic discovery through the restricted SQL boundary and shown under What stands out. Verified natively by `tests/data_discovery.rs::service_report_checks_run_on_real_imported_rows`, which imports two copies of one source and a closed-reports table.
 
 ### A. Which tables are read
 A table is treated as service reports when its columns include, by the publisher's own names, a service type (`service_name`, `request_type`, …), a close date (`date_closed`, …) and either an opened date or a recorded age (`case_age_days`, …). A status column, a place column and up to two area columns (a district and a community) are used when present. Other tables get no service checks.
@@ -317,6 +317,12 @@ A table is treated as service reports when its columns include, by the publisher
 * **Referrals**: per service, reports whose status names a referral; reported where a service has at least 100, making up at least a quarter of its reports.
 * **Recurring**: a service and area listed as slower to close in three or more imported tables.
 * **Backlog change**: when the same source URI was imported on two retrieval dates, the count of open reports older than a year in the earliest and latest copies, with the three services that moved most. A report leaves an open file when it is closed or referred; the comparison does not say which.
+* **Movement**: for the same two copies, where both have a report id (`service_request_id`, …): reports open in the earliest copy and not open in the latest (left), and reports open in the latest and not open in the earliest (arrived), per service. What became of a report that left is read from the latest copy and from up to eight other service-report tables with a report id retrieved on or after the earliest copy's date: a close date, a referral without a close date, or no record in any of them. When no table could hold such a record the lead says the outcome is not in the source, rather than reporting a count of "no record".
 
-### C. What a lead does and does not claim
+### C. Tables the app fetches for itself
+`src/utils/dataGaps.ts` names a published table that would answer what the imported ones cannot, and `DiscoveryController` fetches it through `fetch_city_dataset`: one at a time, after every table is profiled, automatically only when Data upkeep is enabled with Recheck sources on (otherwise on "Fetch it now"), with a six-hour wait after a failure and the managed-file budget checked before the download. Two gaps are recognized, both for Get It Done:
+* the latest copy of the open-reports file is seven or more days old: fetch the file again, which becomes a second copy (a different file is a new snapshot; the earlier one is kept);
+* reports that left the open file have no close or referral record: fetch the closed-reports file for each year between the two copies (`GET_IT_DONE_OUTCOMES`). That file exceeds the import limit, so only rows whose `service_request_id` appears in an imported open copy are kept; the snapshot records the publisher file's digest and the filter. An Encampment-only subset, or a closed file retrieved before the latest open copy, does not close the gap.
+
+### D. What a lead does and does not claim
 A lead is a count of the publisher's records and carries no legal claim; it is not stored as a finding. An open report does not prove the problem persists, since the table records no inspections or work. A difference between areas can reflect what was reported as well as how it was handled. Several reports at one place can describe one fault, and a street name without a number can cover many blocks. Tables are compared as imported and can overlap. Every threshold above is a display threshold stated in the lead's method line.

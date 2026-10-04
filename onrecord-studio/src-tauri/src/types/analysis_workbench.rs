@@ -163,6 +163,8 @@ pub enum CityDataset {
     NibrsOffenses,
     GetItDoneEncampments,
     GetItDoneOpen,
+    /// A closed-year file, kept only for reports already seen in an imported open copy.
+    GetItDoneOutcomes,
     Schools,
     TransitStops,
 }

@@ -375,6 +375,48 @@ impl DuckDbRepository {
         }).await
     }
 
+    /// The distinct non-empty values of `column` across every imported copy of `source_uri`.
+    pub async fn imported_column_values(
+        &self,
+        source_uri: String,
+        column: String,
+    ) -> Result<std::collections::HashSet<String>, AppError> {
+        self.query_connection("Imported column values", move |conn| {
+            let storage = |error: duckdb::Error| {
+                AppError::Storage(format!("Failed to read imported column values: {error}"))
+            };
+            let tables = conn
+                .prepare(
+                    "SELECT s.table_name FROM analytical_snapshots s
+                     JOIN analytical_columns c ON c.snapshot_id = s.snapshot_id
+                     WHERE s.source_uri = ?1 AND c.column_name = ?2",
+                )
+                .map_err(storage)?
+                .query_map(params![source_uri, column], |row| row.get::<_, String>(0))
+                .map_err(storage)?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(storage)?;
+            let mut values = std::collections::HashSet::new();
+            for table in tables {
+                let column = quote_ident(&column);
+                let mut statement = conn
+                    .prepare(&format!(
+                        "SELECT DISTINCT TRIM(CAST({column} AS VARCHAR)) FROM {} WHERE NULLIF(TRIM(CAST({column} AS VARCHAR)), '') IS NOT NULL",
+                        quote_ident(&table)
+                    ))
+                    .map_err(storage)?;
+                for value in statement
+                    .query_map([], |row| row.get::<_, String>(0))
+                    .map_err(storage)?
+                {
+                    values.insert(value.map_err(storage)?);
+                }
+            }
+            Ok(values)
+        })
+        .await
+    }
+
     pub async fn analytical_schema(&self) -> Result<AnalyticalSchema, AppError> {
         self.query_connection("Analytical schema", move |conn| {
             let mut datasets_stmt = conn.prepare(

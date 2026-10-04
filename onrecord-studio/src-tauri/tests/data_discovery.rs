@@ -226,10 +226,39 @@ async fn service_report_checks_run_on_real_imported_rows() {
     db.run_migrations(include_str!("../migrations/0001_initial_schema.sql"))
         .await
         .unwrap();
-    let path = temp.path().join("service.csv");
-    std::fs::write(&path, fixture["csv"].as_str().unwrap()).unwrap();
-    let input: AnalyticalImportRequest = serde_json::from_value(json!({ "datasetKind":"REGIONAL_DATA", "displayName":"Service fixture", "localPath":path, "sourceUri":"https://example.test/service.csv", "partialDataset":true })).unwrap();
-    let imported = db.import_analytical_csv(input).await.unwrap();
+    let mut tables = Vec::new();
+    for (csv, uri) in [
+        ("earlierCsv", "https://example.test/service.csv"),
+        ("csv", "https://example.test/service.csv"),
+        ("closedCsv", "https://example.test/closed.csv"),
+    ] {
+        let path = temp.path().join(format!("{csv}.csv"));
+        std::fs::write(&path, fixture[csv].as_str().unwrap()).unwrap();
+        let input: AnalyticalImportRequest = serde_json::from_value(json!({ "datasetKind":"REGIONAL_DATA", "displayName":"Service fixture", "localPath":path, "sourceUri":uri, "partialDataset":true })).unwrap();
+        tables.push(db.import_analytical_csv(input).await.unwrap().table_name);
+    }
+    // A later copy of one source is a second table; it does not replace the earlier copy.
+    assert_ne!(tables[0], tables[1]);
+    let copies = db.analytical_schema().await.unwrap().datasets;
+    assert_eq!(
+        copies
+            .iter()
+            .filter(
+                |dataset| dataset.source_uri.as_deref() == Some("https://example.test/service.csv")
+            )
+            .count(),
+        2
+    );
+    let seen = db
+        .imported_column_values(
+            "https://example.test/service.csv".into(),
+            "service_request_id".into(),
+        )
+        .await
+        .unwrap();
+    // 107 reports in the later copy plus the five that appear only in the earlier one.
+    assert_eq!(seen.len(), 112);
+    assert!(seen.contains("205") && !seen.contains("900"));
     let number = |result: &SqlQueryResult, row: usize, name: &str| -> f64 {
         let value = cell(result, row, name);
         value
@@ -242,7 +271,9 @@ async fn service_report_checks_run_on_real_imported_rows() {
         let sql = query["sql"]
             .as_str()
             .unwrap()
-            .replace("analysis_fixture", &imported.table_name);
+            .replace("analysis_earlier_fixture", &tables[0])
+            .replace("analysis_closed_fixture", &tables[2])
+            .replace("analysis_fixture", &tables[1]);
         let result = db
             .execute_restricted_sql(&sql, 100)
             .await
@@ -285,6 +316,25 @@ async fn service_report_checks_run_on_real_imported_rows() {
                 assert_eq!(cell(&result, 0, "category"), &json!("Other"));
                 assert_eq!(number(&result, 0, "referred_reports"), 5.0);
                 assert_eq!(number(&result, 0, "all_reports"), 107.0);
+            }
+            "service_movement" => {
+                // Report 1 is closed in the later copy itself; 205 is in no imported table.
+                assert_eq!(result.row_count, 3);
+                assert_eq!(cell(&result, 0, "category"), &json!("Pothole"));
+                assert_eq!(number(&result, 0, "left_reports"), 5.0);
+                assert_eq!(number(&result, 0, "left_over_one_year"), 3.0);
+                assert_eq!(number(&result, 0, "closed_on_record"), 4.0);
+                assert_eq!(number(&result, 0, "referred_on_record"), 1.0);
+                assert_eq!(cell(&result, 1, "category"), &json!("Graffiti"));
+                assert_eq!(number(&result, 1, "no_outcome_record"), 1.0);
+                assert_eq!(
+                    cell(&result, 2, "category"),
+                    &json!("Street Light Maintenance")
+                );
+                assert_eq!(number(&result, 2, "arrived_reports"), 2.0);
+                assert_eq!(number(&result, 0, "all_left_reports"), 6.0);
+                assert_eq!(number(&result, 0, "all_no_outcome_record"), 1.0);
+                assert_eq!(number(&result, 0, "all_arrived_reports"), 2.0);
             }
             _ => panic!("Unverified query {id}"),
         }
