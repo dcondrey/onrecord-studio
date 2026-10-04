@@ -47,8 +47,17 @@ const COLUMNS: readonly ColumnDefinition[] = [
     label: 'Z-score',
     format: (p) => (p.performanceZScore === null ? 'not computed' : p.performanceZScore.toFixed(2)),
   },
-  { key: 'statutoryViolationCount', label: 'Statutory violations', format: (p) => p.statutoryViolationCount.toLocaleString() },
-  { key: 'statutoryViolationRate', label: 'Violation rate', format: (p) => `${(p.statutoryViolationRate * 100).toFixed(1)}%` },
+  {
+    key: 'statutoryViolationCount',
+    label: 'Statutory violations',
+    // No request of the agency was measured against a clock: its source names no jurisdiction.
+    format: (p) => (p.statutoryEvaluatedCount === 0 ? 'not evaluated' : p.statutoryViolationCount.toLocaleString()),
+  },
+  {
+    key: 'statutoryViolationRate',
+    label: 'Violation rate',
+    format: (p) => (p.statutoryViolationRate === null ? 'not evaluated' : `${(p.statutoryViolationRate * 100).toFixed(1)}%`),
+  },
   { key: 'suspiciousFastClosureCount', label: 'Suspiciously fast closures', format: (p) => p.suspiciousFastClosureCount.toLocaleString() },
   { key: 'totalRequestsProcessed', label: 'Requests processed', format: (p) => p.totalRequestsProcessed.toLocaleString() },
   { key: 'totalDocumentsReleased', label: 'Documents released', format: (p) => p.totalDocumentsReleased.toLocaleString() },

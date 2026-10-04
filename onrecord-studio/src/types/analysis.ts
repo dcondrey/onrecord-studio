@@ -18,12 +18,17 @@ export interface AgencyPerformanceProfile {
   globalStddevClosureDays: number | null;
   /** `null` when there is no closure sample, or the population has no spread. Never 0.0. */
   performanceZScore: number | null;
-  // Narrower than VerificationState: `convert_raw_profile` produces only these three.
+  // Narrower than VerificationState: `convert_raw_profile` produces only these four.
   // 'LatencyOutlier' means slower than peers by a wide margin; it is not a statutory finding.
-  complianceIndicator: 'Compliant' | 'LatencyOutlier' | 'StatutoryDeadlineExceeded';
+  // 'Unaudited' means no request was measured against a statutory clock (the source names no
+  // jurisdiction), which is not 'Compliant'.
+  complianceIndicator: 'Compliant' | 'LatencyOutlier' | 'StatutoryDeadlineExceeded' | 'Unaudited';
   anomalyCount: number;
+  /** Requests measured against a statutory clock; a source naming no jurisdiction has none. */
+  statutoryEvaluatedCount: number;
   statutoryViolationCount: number;
-  statutoryViolationRate: number;
+  /** Over evaluated requests. `null` when none was evaluated, never 0 for that case. */
+  statutoryViolationRate: number | null;
   suspiciousFastClosureCount: number;
   totalDocumentsReleased: number;
   keywordFrequencyMap: Record<string, number>;

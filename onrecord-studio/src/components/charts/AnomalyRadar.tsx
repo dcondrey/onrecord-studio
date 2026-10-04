@@ -73,9 +73,11 @@ export default function AnomalyRadar() {
       grouped.set(profile.portalSubdomain, values);
     }
     const portalEntries = [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right));
+    // An agency no clock was evaluated for has no violation rate; it adds no statutory weight
+    // rather than a measured zero.
     const weight = (profile: AgencyPerformanceProfile) => weightMode === 'volume'
       ? Math.max(1, profile.totalRequestsProcessed)
-      : Math.max(0.01, profile.statutoryViolationRate + profile.suspiciousFastClosureCount / Math.max(1, profile.totalRequestsProcessed));
+      : Math.max(0.01, (profile.statutoryViolationRate ?? 0) + profile.suspiciousFastClosureCount / Math.max(1, profile.totalRequestsProcessed));
     const globalTotal = Math.max(
       Number.EPSILON,
       profiles.reduce((total, profile) => total + weight(profile), 0),
@@ -110,7 +112,7 @@ export default function AnomalyRadar() {
           const sweep = (weight(profile) / globalTotal) * Math.PI * 2;
           const severity = Math.min(
             1,
-            profile.statutoryViolationRate
+            (profile.statutoryViolationRate ?? 0)
               + profile.suspiciousFastClosureCount / Math.max(1, profile.totalRequestsProcessed),
           );
           const base = palette[portalIndex % palette.length];

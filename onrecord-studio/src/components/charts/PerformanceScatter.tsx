@@ -305,7 +305,8 @@ function severityFor(profile: AgencyPerformanceProfile) {
   // A null z-score is an absent measurement, so it raises nothing on its own. The statutory
   // signals beside it are counts and stand by themselves.
   const z = profile.performanceZScore;
-  if ((z !== null && z >= 2) || profile.statutoryViolationRate >= 0.25) return 'critical';
+  const rate = profile.statutoryViolationRate;
+  if ((z !== null && z >= 2) || (rate !== null && rate >= 0.25)) return 'critical';
   if ((z !== null && z >= 1) || profile.statutoryViolationCount > 0) return 'elevated';
   return 'typical';
 }

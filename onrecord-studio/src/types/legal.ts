@@ -99,6 +99,47 @@ export interface LegalComplianceFinding {
   reviewStatus: 'OPEN' | 'CONFIRMED' | 'DISMISSED' | 'RESOLVED_BY_NEW_EVIDENCE';
   firstDetectedAt: string;
   evaluatedAt: string;
+  /** The determination clock a timeline finding was measured under; `null` otherwise or when not recorded. */
+  clockRuleId: string | null;
+  /** Whether the determination date was recorded or a proxy; `null` when not recorded on the finding. */
+  determinationBasis: DeterminationBasis | null;
+}
+
+/** Mirrors `analysis::statute::StatutoryJurisdiction`. */
+export type StatutoryJurisdiction = 'CA_CPRA' | 'US_FOIA';
+
+/** Mirrors `analysis::statute::DeterminationBasis`. */
+export type DeterminationBasis =
+  | 'SOURCED_DETERMINATION_EVENT'
+  | 'EARLIEST_RECORDED_ACTIVITY_PROXY'
+  | 'OBSERVATION_WITHOUT_RECORDED_ACTIVITY';
+
+export interface StatuteCitation {
+  section: string;
+  url: string;
+}
+
+export interface StatutoryPeriod {
+  days: number;
+  kind: 'CALENDAR_CARRIED_PAST_CLOSED_DAYS' | 'WORKING_DAYS';
+}
+
+/** Mirrors `analysis::statute::StatutoryClockRule`: one jurisdiction's determination clock. */
+export interface StatutoryClockRule {
+  id: string;
+  jurisdiction: StatutoryJurisdiction;
+  title: string;
+  actName: string;
+  statuteId: string;
+  start: { event: string; latestAfterReceipt: StatutoryPeriod | null; citation: StatuteCitation };
+  stopEvent: string;
+  initial: StatutoryPeriod;
+  initialCitation: StatuteCitation;
+  calendar: 'CALIFORNIA_JUDICIAL' | 'FEDERAL_LEGAL_PUBLIC';
+  calendarCitation: StatuteCitation;
+  extension: { maximum: StatutoryPeriod; grounds: string[]; citation: StatuteCitation };
+  unrecordedClockStops: StatuteCitation | null;
+  notes: string[];
 }
 
 export interface LegalEvaluationResult {

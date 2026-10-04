@@ -3,7 +3,7 @@ import { open as chooseFiles } from '@tauri-apps/plugin-dialog';
 import { invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useDialogFocus } from '../licensing/useDialogFocus';
-import { CALIFORNIA_CPRA_JURISDICTION, TRACKER_LIMITS } from '../../types';
+import { CALIFORNIA_CPRA_JURISDICTION, FEDERAL_FOIA_JURISDICTION, TRACKER_LIMITS } from '../../types';
 import type {
   ClaimedRequest,
   RequestDeadline,
@@ -145,6 +145,7 @@ function ClaimForm({ portals, onSubmit, isBusy }: {
         <select className={field} value={jurisdiction} onChange={(event) => setJurisdiction(event.target.value)}>
           <option value="">Not set</option>
           <option value={CALIFORNIA_CPRA_JURISDICTION}>California (Public Records Act)</option>
+          <option value={FEDERAL_FOIA_JURISDICTION}>Federal agency (FOIA)</option>
           <option value="OTHER">Other (no deadline model)</option>
         </select>
       </label>
@@ -255,6 +256,13 @@ function Detail({ claim, deadline, tracker }: { claim: ClaimedRequest; deadline:
         {claim.title && <p>{claim.title}</p>}
         {deadline ? (
           <>
+            {deadline.analysis && (
+              <p className="mt-1 text-label text-muted" data-testid="deadline-rule">
+                Rule: {deadline.analysis.statuteCitation}
+                {deadline.analysis.clockStartedOn !== deadline.analysis.createdAt.slice(0, 10) &&
+                  `, clock taken to start ${deadline.analysis.clockStartedOn}`}
+              </p>
+            )}
             <p className="mt-1" data-testid="basis-statement">{deadline.basisStatement}</p>
             {deadline.notes.map((note) => (
               <p key={note} className="text-label text-muted">{note}</p>

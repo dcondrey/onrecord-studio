@@ -15,6 +15,7 @@ export const TRACKER_LIMITS = {
 
 /** The one jurisdiction value the app has a deadline model for. */
 export const CALIFORNIA_CPRA_JURISDICTION = 'CA_CPRA';
+export const FEDERAL_FOIA_JURISDICTION = 'US_FOIA';
 
 export type TimelineEventKind =
   | 'SUBMITTED'
@@ -144,7 +145,7 @@ export interface EmailImportReport {
   files: EmailImportFileResult[];
 }
 
-export type DeadlineModel = 'CALIFORNIA_CPRA' | 'NO_MODEL';
+export type DeadlineModel = 'CALIFORNIA_CPRA' | 'FEDERAL_FOIA' | 'NO_MODEL';
 
 export type CountdownKind =
   | 'DAYS_REMAINING'
@@ -167,8 +168,11 @@ export type DeadlineDeterminationBasis =
 /** The statutory evaluator's own object. Its `isViolation` is not a finding: read `violationAsserted`. */
 export interface DeadlineAnalysis {
   requestId: number;
+  ruleId: string;
+  jurisdiction: 'CA_CPRA' | 'US_FOIA';
   statuteCitation: string;
   createdAt: string;
+  clockStartedOn: string;
   determinationAt: string | null;
   determinationSource: string | null;
   determinationBasis: DeadlineDeterminationBasis;

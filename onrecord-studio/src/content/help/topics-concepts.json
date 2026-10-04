@@ -157,7 +157,7 @@
     "id": "statutory-deadlines",
     "title": "Statutory deadlines",
     "group": "Concepts",
-    "summary": "How the California Public Records Act clock is counted, and what each basis means.",
+    "summary": "How the CPRA and federal FOIA determination clocks are counted, which sources they apply to, and what each basis means.",
     "keywords": [
       "statutory",
       "deadline",
@@ -165,6 +165,10 @@
       "california",
       "public records act",
       "7922.535",
+      "foia",
+      "552",
+      "working days",
+      "jurisdiction",
       "extension",
       "determination",
       "calendar days",
@@ -181,20 +185,20 @@
     "sections": [
       {
         "paragraphs": [
-          "For California Public Records Act requests the app evaluates the statutory period under Government Code section 7922.535: 10 calendar days from receipt to determine whether the request seeks disclosable records. One written extension can add up to 14 calendar days. When a period's last day is a Saturday, Sunday or California judicial holiday, it ends on the next court day instead (Code of Civil Procedure sections 12, 12a and 135); days proclaimed ad hoc by the Governor or President are not modeled. This is a calculator over recorded dates. It is not legal advice, and other jurisdictions have no deadline model here."
+          "Each source names the statute its requests fall under, in the Legal compliance panel. A source that names none is not evaluated at all: no deadline, no finding, and no CPRA assumption. Sources the app recognizes as California public agencies start out under the CPRA, and recognized federal agencies under FOIA; you can change either.", "California Public Records Act (Government Code section 7922.535): 10 calendar days from receipt to determine whether the request seeks disclosable records. One written extension can add up to 14 calendar days. When a period's last day is a Saturday, Sunday or California judicial holiday, it ends on the next court day instead (Code of Civil Procedure sections 12, 12a and 135).", "Federal FOIA (5 U.S.C. section 552(a)(6)): 20 working days, excluding Saturdays, Sundays and the legal public holidays of 5 U.S.C. section 6103. The clock starts when the right part of the agency receives the request, at most 10 working days after first receipt; the record shows only first receipt, so the clock is started at that latest point. One written extension can add up to 10 working days, on one of three grounds. FOIA lets an agency pause the clock while it waits for information or fee clarification from the requester; nothing here records that, so a FOIA finding never reaches full confidence.", "Days proclaimed ad hoc are not modeled. This is a calculator over recorded dates. It is not legal advice."
         ]
       },
       {
         "heading": "Extensions",
         "paragraphs": [
-          "An extension counts only if the notice is dated after receipt and within the initial period, names its source, gives an expected response date, and stays within 14 additional days. The stated reason is one of six statutory grounds. A notice that fails any test is recorded, but the initial period still applies, and the evaluation says why."
+          "An extension counts only if the notice is dated after receipt and within the initial period, names its source, gives an expected response date, and stays within the statute's maximum (14 calendar days for the CPRA, 10 working days for FOIA). The stated reason must be one of that statute's grounds: six for the CPRA, three for FOIA. A notice that fails any test is recorded, but the initial period still applies, and the evaluation says why."
         ]
       },
       {
         "heading": "What the period is measured to",
         "items": [
-          "Sourced determination: a distinct determination date with a notice or source you or the record supplied. Measured.",
-          "Earliest recorded activity: a proxy, because activity is an upper bound and not evidence that a determination was made.",
+          "Recorded determination: a distinct determination date with its notice or source. On a NextRequest portal this is the first \"Request Closed\" event when no release came before it. Measured.",
+          "Earliest recorded activity: a proxy, because activity (an update, a closure, or the first release of records) is an upper bound and not evidence of when the determination was made.",
           "Observation only: nothing recorded after receipt, so the period is measured to now. The period is still running, and a lapse reported on this basis states only that the deadline has passed with no recorded response.",
           "Proxy and provisional results are labelled as such and never presented as a measured determination."
         ]

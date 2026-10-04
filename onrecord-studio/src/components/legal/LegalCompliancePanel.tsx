@@ -7,13 +7,21 @@ import type {
   LegalEvaluationResult,
   LegalFindingReviewStatus,
   RequestSearchResult,
+  StatutoryClockRule,
   StatutoryExtensionReason,
   StatutoryExtensionRecord,
 } from '../../types';
 import { cn } from '../../utils/cn';
+import {
+  ClockRuleSummary,
+  DeterminationBasisNote,
+  StatutoryClockSection,
+  type StoredJurisdiction,
+} from './StatutoryClock';
 
-/// Every reason the CPRA evaluator recognizes. A reason outside this list is not a narrower
-/// extension, it is one the statute does not grant, so the select cannot offer a free-text option.
+/// Every reason any modeled statute recognizes. The select narrows it to the source's rule; a
+/// reason outside the list is not a narrower extension, it is one the statute does not grant, so
+/// the select cannot offer a free-text option.
 const EXTENSION_REASONS: StatutoryExtensionReason[] = [
   'SEPARATE_FIELD_FACILITIES',
   'VOLUMINOUS_RECORDS',
@@ -105,6 +113,38 @@ export default function LegalCompliancePanel({
   const [extensionDraft, setExtensionDraft] = useState<ExtensionDraft>(EMPTY_DRAFT);
   const [extensionError, setExtensionError] = useState<string | null>(null);
   const [isSavingExtension, setIsSavingExtension] = useState(false);
+  // A third gate for the source's statutory clock, for the reason given on `extensionGate`.
+  const clockGate = useLatestRequestGate();
+  const [clockRules, setClockRules] = useState<StatutoryClockRule[] | null>(null);
+  const [jurisdiction, setJurisdiction] = useState<StoredJurisdiction | undefined>(undefined);
+  const [clockError, setClockError] = useState<string | null>(null);
+  const [isSavingClock, setIsSavingClock] = useState(false);
+
+  useEffect(() => {
+    const request = clockGate.begin();
+    setJurisdiction(undefined);
+    setClockError(null);
+    setIsSavingClock(false);
+    void Promise.all([
+      invokeCommand('list_statutory_clock_rules', {}),
+      invokeCommand('get_source_statutory_jurisdiction', { portalKey: record.portalKey }),
+    ])
+      .then(([rules, stored]) => {
+        if (!clockGate.isCurrent(request)) return;
+        setClockRules(rules);
+        setJurisdiction(
+          stored === 'CA_CPRA' || stored === 'US_FOIA' || stored === 'NONE' ? stored : null,
+        );
+      })
+      .catch((reason) => {
+        if (clockGate.isCurrent(request)) setClockError(String(reason));
+      });
+    return clockGate.invalidate;
+  }, [clockGate, record.portalKey]);
+  const clockRule = clockRules?.find((rule) => rule.jurisdiction === jurisdiction) ?? null;
+  const extensionReasons = clockRule
+    ? EXTENSION_REASONS.filter((reason) => clockRule.extension.grounds.includes(reason))
+    : EXTENSION_REASONS;
 
   useEffect(() => {
     const request = extensionGate.begin();
@@ -238,6 +278,26 @@ export default function LegalCompliancePanel({
     }
   };
 
+  const selectJurisdiction = async (value: 'CA_CPRA' | 'US_FOIA' | 'NONE') => {
+    const request = clockGate.begin();
+    setIsSavingClock(true);
+    setClockError(null);
+    try {
+      await invokeCommand('set_source_statutory_jurisdiction', {
+        portalKey: record.portalKey,
+        jurisdiction: value === 'NONE' ? null : value,
+      });
+      if (!clockGate.isCurrent(request)) return;
+      setJurisdiction(value);
+      // Every request of the source was re-measured under the new rule; reload this one's findings.
+      await evaluate();
+    } catch (reason) {
+      if (clockGate.isCurrent(request)) setClockError(String(reason));
+    } finally {
+      if (clockGate.isCurrent(request)) setIsSavingClock(false);
+    }
+  };
+
   const filterByFinding = (finding: LegalComplianceFinding) => {
     setSearchFilters(searchTerm, selectedAgencyId, selectedStatus, finding.classification);
   };
@@ -303,6 +363,14 @@ export default function LegalCompliancePanel({
           </button>
         </div>
       </div>
+
+      <StatutoryClockSection
+        rules={clockRules}
+        jurisdiction={jurisdiction}
+        loadError={clockError}
+        isSaving={isSavingClock}
+        onSelect={(value) => void selectJurisdiction(value)}
+      />
 
       <div className="border-b border-line px-3 py-2.5">
         <div className="flex items-start justify-between gap-3">
@@ -390,7 +458,7 @@ export default function LegalCompliancePanel({
                   }
                   className="mt-1.5 w-full rounded border border-control bg-canvas px-2 py-1.5 text-caption normal-case tracking-normal text-fg-secondary outline-none focus:border-highlight/30"
                 >
-                  {EXTENSION_REASONS.map((reason) => (
+                  {extensionReasons.map((reason) => (
                     <option key={reason} value={reason}>
                       {humanize(reason)}
                     </option>
@@ -486,6 +554,19 @@ export default function LegalCompliancePanel({
                 </span>
               </div>
               <div className="mt-1 text-caption text-muted">{finding.statuteCitation}</div>
+              {finding.clockRuleId && (
+                <>
+                  {(() => {
+                    const rule = clockRules?.find((candidate) => candidate.id === finding.clockRuleId);
+                    return rule ? (
+                      <ClockRuleSummary rule={rule} />
+                    ) : (
+                      <p className="mt-1 text-caption text-muted">Measured under rule {finding.clockRuleId}.</p>
+                    );
+                  })()}
+                  <DeterminationBasisNote basis={finding.determinationBasis} />
+                </>
+              )}
               <p className="mt-2 text-caption leading-relaxed text-muted">
                 {finding.evidenceSummary}
               </p>

@@ -124,6 +124,8 @@ describe('evidence error states', () => {
         reviewStatus: 'OPEN',
         firstDetectedAt: '2026-07-01T00:00:00Z',
         evaluatedAt: '2026-07-01T00:00:00Z',
+        clockRuleId: null,
+        determinationBasis: null,
       }],
     });
 

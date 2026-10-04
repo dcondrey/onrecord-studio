@@ -41,6 +41,7 @@ function profile(overrides: Partial<AgencyPerformanceProfile> & { agencyId: numb
     performanceZScore: 0,
     complianceIndicator: 'Compliant',
     anomalyCount: 0,
+    statutoryEvaluatedCount: 10,
     statutoryViolationCount: 0,
     statutoryViolationRate: 0,
     suspiciousFastClosureCount: 0,
