@@ -680,7 +680,13 @@ finding citations. Decisions, each with its evidence:
   (`contradictory_statement`, `inferred_redaction_identity`). When a quote is present the range must
   contain it, else no span: offsets computed against other text never anchor on the wrong words.
   DuckDB `substr`/`length` count code points like Rust `chars`; the storage test cites a range past
-  `é` and an emoji to prove it.
+  `é` and an emoji to prove it. Read (not run) for every quote-bearing constructor: each builds
+  its quote as a trimmed and/or truncated slice of the same text its offsets index
+  (`practice_departure` even asserts quote = slice in its tests; `response_time_claim`,
+  `spending_cases`, `encampment_notice`, `policy_violation`, `redaction_inconsistency`; and
+  `no_records_contradicted` via the trimmed chunk text in `storage/vector.rs`), so all should pass
+  the guard. Not yet measured on detector output; the check is the ignored `detector_benchmark`
+  run with `ONRECORD_BENCH_OUT`, then the quote-in-range count per detector.
 - **Re-record re-anchors.** A detector re-run computes offsets against the text it just read, so its
   citation is a new observation and replaces the span. Without a re-run the stored anchor stands
   and resolution reports drift; nothing writes a resolution back.
