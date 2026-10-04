@@ -3,6 +3,7 @@
 use crate::{
     analysis::{detectors, finding::Finding, gaps},
     error::AppError,
+    spans::FindingCitationAnchor,
     storage::{findings::FindingsFilter, sqlite::DuckDbRepository, vector::VectorIndex},
 };
 use serde::{Deserialize, Serialize};
@@ -80,6 +81,19 @@ pub async fn restore_finding(
     repository: State<'_, DuckDbRepository>,
 ) -> Result<(), AppError> {
     repository.restore_finding(id).await
+}
+
+/// Where each of a finding's citations stands against its document's text as it is now: intact,
+/// drifted to a new position, stale, or never anchored. Read-only; no anchor is rewritten.
+#[tauri::command]
+pub async fn resolve_finding_citations(
+    id: String,
+    repository: State<'_, DuckDbRepository>,
+) -> Result<Vec<FindingCitationAnchor>, AppError> {
+    repository
+        .resolve_finding_citations(id)
+        .await?
+        .ok_or_else(|| AppError::Storage("This finding is no longer recorded.".to_string()))
 }
 
 #[cfg(test)]

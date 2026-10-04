@@ -360,7 +360,10 @@ The span primitive is the load-bearing dependency: redaction production (6), tra
 anchoring (2), AI citation gating (5), and intercoder comparison (10) all sit on it. The
 workbench doc confirms the ordering: spans are build step 1
 (`docs/investigative-workbench-architecture.md:191`), preceded only by the step-0 purge path,
-and none of the later steps can migrate away from it. Note that this list extends the span's
+and none of the later steps can migrate away from it. Built (2026-10-03) for finding citations:
+the core-DB `spans` table, the Intact/Drifted/Stale resolver (`src-tauri/src/spans.rs`), and its
+rendering in "Why we believe this"; decisions and remaining gaps are in `docs/ROADMAP.md` under
+"Citation spans". Note that this list extends the span's
 client roster beyond what that doc commits to (its named dependents are coding, entity
 mentions, block linking, threading, and canvas); the extension is deliberate and this document
 is where it lives.

@@ -811,6 +811,37 @@ CREATE TABLE IF NOT EXISTS request_release_events (
     PRIMARY KEY (portal_subdomain, request_id, event_ordinal)
 );
 
+-- A span: a durable reference to a region of one document's extracted-text projection, carrying
+-- the W3C Web Annotation selector envelope. Position (`start_offset`/`end_offset`, characters),
+-- quote (`exact_text`, up to 48 characters of `prefix_text`/`suffix_text`), and the projection
+-- digest it was anchored against. `text_projection_sha256` is NULL when that digest is unknown
+-- (a span backfilled from a citation recorded before spans existed), never a stand-in value.
+-- Resolution (Intact/Drifted/Stale) is computed on read and never written back. `origin_kind`
+-- names what authored the span and is validated in code, so a new kind needs no table rebuild
+-- (DuckDB cannot alter a CHECK). Document-owned: the relation to `documents` is logical, purged
+-- with the document and audited by `verify_logical_relations`. Lives in the core database
+-- because it is authored, not re-derivable; the corpus index may be deleted on any version bump.
+CREATE TABLE IF NOT EXISTS spans (
+    span_id TEXT PRIMARY KEY CHECK (length(span_id) = 32),
+    origin_kind TEXT NOT NULL,
+    origin_id TEXT NOT NULL,
+    origin_ordinal BIGINT NOT NULL CHECK (origin_ordinal >= 0),
+    portal_subdomain TEXT NOT NULL,
+    document_id BIGINT NOT NULL,
+    start_offset BIGINT NOT NULL CHECK (start_offset >= 0),
+    end_offset BIGINT NOT NULL,
+    exact_text TEXT NOT NULL,
+    prefix_text TEXT NOT NULL CHECK (length(prefix_text) <= 48),
+    suffix_text TEXT NOT NULL CHECK (length(suffix_text) <= 48),
+    text_projection_sha256 TEXT
+        CHECK (text_projection_sha256 IS NULL OR length(text_projection_sha256) = 64),
+    anchored_at TEXT NOT NULL,
+    CHECK (end_offset > start_offset),
+    CHECK (length(exact_text) = end_offset - start_offset),
+    UNIQUE (origin_kind, origin_id, origin_ordinal)
+);
+CREATE INDEX IF NOT EXISTS idx_spans_document ON spans(portal_subdomain, document_id);
+
 -- The rule version each stored derivation was computed under. A rule change bumps the version in
 -- code, and startup recomputes what the old rule stored instead of leaving its findings standing.
 CREATE TABLE IF NOT EXISTS analysis_rule_versions (

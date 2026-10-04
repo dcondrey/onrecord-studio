@@ -172,7 +172,7 @@ function TopicFindingRow({ match }: { match: TopicFindingMatch }) {
         {finding.confidence.kind === 'MEASURED' && <ConfidenceMeter confidence={finding.confidence} />}
       </div>
       <div className="mt-1">
-        <EvidenceTrace label={finding.headline} explanation={finding.explanation} citations={finding.citations} />
+        <EvidenceTrace label={finding.headline} explanation={finding.explanation} citations={finding.citations} findingId={finding.id} />
       </div>
     </li>
   );

@@ -80,6 +80,32 @@ export interface FindingCitation {
   label: string | null;
 }
 
+/** Whether the text a span was anchored against is the text the document holds now. */
+export type ProjectionComparison = 'UNCHANGED' | 'CHANGED' | 'NOT_COMPARED';
+
+export type StaleReason = 'MISSING' | 'AMBIGUOUS' | 'TEXT_UNAVAILABLE';
+
+/** Where a stored span stands against the document's current text. Never written back. */
+export type SpanResolution =
+  | { state: 'INTACT'; start: number; end: number; projection: ProjectionComparison }
+  | { state: 'DRIFTED'; start: number; end: number }
+  | { state: 'STALE'; reason: StaleReason };
+
+export type UnanchoredReason = 'NO_RANGE' | 'NOT_ANCHORED';
+
+export type CitationAnchorState =
+  | { kind: 'ANCHORED'; spanId: string; resolution: SpanResolution }
+  | { kind: 'UNANCHORED'; reason: UnanchoredReason };
+
+/** One citation's standing, with the range it was resolved for. */
+export interface FindingCitationAnchor {
+  citationIndex: number;
+  documentId: number;
+  characterStart: number | null;
+  characterEnd: number | null;
+  anchor: CitationAnchorState;
+}
+
 export interface Finding {
   id: string;
   kind: FindingKind;

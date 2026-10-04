@@ -6,7 +6,10 @@
 //! [`DuckDbRepository::clear_stale_findings`]. Dismissals set `dismissed_at` and are preserved
 //! through re-runs (the upsert leaves `dismissed_at` untouched when a row already exists).
 
-use super::sqlite::DuckDbRepository;
+use super::sqlite::{
+    spans::{anchor_finding_citations, delete_orphaned_finding_spans},
+    DuckDbRepository,
+};
 use crate::{
     analysis::finding::{
         Finding, FindingCitation, FindingConfidence, FindingKind, FindingSeverity, FindingSubject,
@@ -103,6 +106,7 @@ impl DuckDbRepository {
         self.query_connection("Record findings", move |conn| {
             let tx = conn.transaction().map_err(storage)?;
             let mut written = 0_usize;
+            let anchored_at = Utc::now().to_rfc3339();
             for finding in findings {
                 let citations_json = serde_json::to_string(&finding.citations).map_err(storage)?;
                 let affected = tx
@@ -121,25 +125,26 @@ impl DuckDbRepository {
                             citations_json = EXCLUDED.citations_json,
                             last_seen_at = EXCLUDED.last_seen_at",
                         params![
-                            finding.id,
+                            &finding.id,
                             finding.kind.as_str(),
                             finding.severity.as_str(),
                             finding.confidence.stored_basis_points(),
-                            finding.subject.portal_key,
+                            &finding.subject.portal_key,
                             finding.subject.agency_id,
                             finding.subject.request_id,
                             finding.subject.document_id,
-                            finding.subject.entity_id,
-                            finding.headline,
-                            finding.explanation,
+                            &finding.subject.entity_id,
+                            &finding.headline,
+                            &finding.explanation,
                             citations_json,
                             finding.discovered_at.to_rfc3339(),
                             finding.last_seen_at.to_rfc3339(),
                             finding.dismissed_at.map(|t| t.to_rfc3339()),
-                            finding.source_detector,
+                            &finding.source_detector,
                         ],
                     )
                     .map_err(storage)?;
+                anchor_finding_citations(&tx, &finding.id, &finding.citations, &anchored_at)?;
                 written += affected;
             }
             tx.commit().map_err(storage)?;
@@ -400,7 +405,8 @@ impl DuckDbRepository {
         cutoff: DateTime<Utc>,
     ) -> Result<usize, AppError> {
         self.query_connection("Clear stale findings", move |conn| {
-            let affected = conn
+            let tx = conn.transaction().map_err(storage)?;
+            let affected = tx
                 .execute(
                     "DELETE FROM findings
                      WHERE source_detector = ?1
@@ -409,6 +415,8 @@ impl DuckDbRepository {
                     params![source_detector, cutoff.to_rfc3339()],
                 )
                 .map_err(storage)?;
+            delete_orphaned_finding_spans(&tx)?;
+            tx.commit().map_err(storage)?;
             Ok(affected)
         })
         .await

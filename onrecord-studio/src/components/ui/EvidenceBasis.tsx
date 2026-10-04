@@ -1,9 +1,12 @@
-import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { ShapeGlyph, type GlyphShape } from './shapeGlyph';
 import { cn } from '../../utils/cn';
+import { formatNativeError, invokeCommand } from '../../ipc';
+import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { isLegalClaimKind } from '../../types/findings';
 import { PLAIN_FINDING_TEXT } from '../../content/plainLanguage';
-import type { Finding, FindingCitation, FindingConfidence, FindingKind } from '../../types/findings';
+import { anchorForCitation, describeCitationAnchor, locateCitation, type CitationAnchorTone } from './citationAnchor';
+import type { Finding, FindingCitation, FindingCitationAnchor, FindingConfidence, FindingKind } from '../../types/findings';
 import type { EntityValidationGrade, RelationshipBasis, RelationshipKind } from '../../types/corpus';
 
 /**
@@ -216,10 +219,51 @@ function citationRange(citation: FindingCitation): string {
   return `characters ${citation.characterStart}–${citation.characterEnd}`;
 }
 
+const ANCHOR_TONE: Record<CitationAnchorTone, string> = {
+  intact: 'text-success',
+  drifted: 'text-warning',
+  stale: 'text-danger',
+  unchecked: 'text-fg-secondary',
+};
+
+type AnchorCheck =
+  | { status: 'pending' }
+  | { status: 'ready'; anchors: FindingCitationAnchor[] }
+  | { status: 'failed'; message: string };
+
+/**
+ * Where a finding's citations stand against their documents' current text, checked while the
+ * trace is open. A check started for one finding or citation set never lands on another.
+ */
+function useCitationAnchors(findingId: string | undefined, citations: FindingCitation[], enabled: boolean): AnchorCheck | null {
+  const gate = useLatestRequestGate();
+  const citationsKey = useMemo(() => JSON.stringify(citations), [citations]);
+  const key = enabled && findingId !== undefined && citations.length > 0 ? `${findingId}\u001f${citationsKey}` : null;
+  const [held, setHeld] = useState<{ key: string; check: AnchorCheck } | null>(null);
+
+  useEffect(() => {
+    if (key === null || findingId === undefined) return;
+    const token = gate.begin();
+    setHeld({ key, check: { status: 'pending' } });
+    invokeCommand('resolve_finding_citations', { id: findingId })
+      .then((anchors) => {
+        if (!gate.isCurrent(token)) return;
+        setHeld({ key, check: Array.isArray(anchors) ? { status: 'ready', anchors } : { status: 'failed', message: 'the check returned no answer' } });
+      })
+      .catch((reason: unknown) => { if (gate.isCurrent(token)) setHeld({ key, check: { status: 'failed', message: formatNativeError(reason) } }); });
+    return gate.invalidate;
+  }, [findingId, gate, key]);
+
+  if (key === null) return null;
+  return held !== null && held.key === key ? held.check : { status: 'pending' };
+}
+
 /**
  * Keyboard-operable disclosure (click, Enter, or Space; Escape closes) that lists why a claim is
  * believed. It expands in flow rather than floating, so it works at any zoom and without a
  * pointer. Each citation names its source document and offers a link when `onOpenSource` is given.
+ * With `findingId`, each cited passage is checked against its document's current text, and the
+ * link opens it where it now is; a passage that moved or was lost says so.
  */
 export function EvidenceTrace({
   label,
@@ -227,16 +271,19 @@ export function EvidenceTrace({
   citations,
   emptyNote = 'No citations recorded, so this claim has no source passage to trace to.',
   onOpenSource,
+  findingId,
 }: {
   label: string;
   explanation: string;
   citations: FindingCitation[];
   emptyNote?: string;
   onOpenSource?: (citation: FindingCitation) => void;
+  findingId?: string;
 }) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const check = useCitationAnchors(findingId, citations, open);
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Escape' || !open) return;
@@ -266,28 +313,43 @@ export function EvidenceTrace({
             <p className="mt-1 text-fg-secondary">{emptyNote}</p>
           ) : (
             <ol className="mt-1 flex flex-col gap-1.5" aria-label="Citations">
-              {citations.map((citation, index) => (
-                <li key={`${citation.portalKey}-${citation.documentId}-${index}`} className="rounded border border-line p-1.5">
-                  <div className="font-semibold text-fg">{citation.label ?? `Document ${citation.documentId}`}</div>
-                  <div className="text-muted">
-                    {citation.portalKey} · document {citation.documentId} · {citationRange(citation)}
-                  </div>
-                  {citation.quote === null ? (
-                    <div className="text-muted">No quote recorded.</div>
-                  ) : (
-                    <blockquote className="mt-0.5 border-l-2 border-line-strong pl-1.5 italic text-fg">{citation.quote}</blockquote>
-                  )}
-                  {onOpenSource && (
-                    <button
-                      type="button"
-                      onClick={() => onOpenSource(citation)}
-                      className="focus-ring mt-1 rounded border border-control px-1.5 py-0.5 font-semibold text-accent hover:border-accent/60"
-                    >
-                      Open source document {citation.documentId}
-                    </button>
-                  )}
-                </li>
-              ))}
+              {citations.map((citation, index) => {
+                const anchor = check?.status === 'ready' ? anchorForCitation(check.anchors, citation, index) : null;
+                const standing = anchor === null ? null : describeCitationAnchor(anchor);
+                return (
+                  <li key={`${citation.portalKey}-${citation.documentId}-${index}`} className="rounded border border-line p-1.5">
+                    <div className="font-semibold text-fg">{citation.label ?? `Document ${citation.documentId}`}</div>
+                    <div className="text-muted">
+                      {citation.portalKey} · document {citation.documentId} · {citationRange(citation)}
+                    </div>
+                    {citation.quote === null ? (
+                      <div className="text-muted">No quote recorded.</div>
+                    ) : (
+                      <blockquote className="mt-0.5 border-l-2 border-line-strong pl-1.5 italic text-fg">{citation.quote}</blockquote>
+                    )}
+                    {check?.status === 'pending' && citation.characterStart !== null && (
+                      <p className="mt-0.5 text-muted" aria-busy="true">Checking the passage against the document's current text.</p>
+                    )}
+                    {check?.status === 'failed' && (
+                      <p className="mt-0.5 text-warning">The passage could not be checked: {check.message}</p>
+                    )}
+                    {standing && (
+                      <p className="mt-0.5" data-anchor-state={standing.tone}>
+                        <span className={cn('font-semibold', ANCHOR_TONE[standing.tone])}>{standing.label}.</span> {standing.detail}
+                      </p>
+                    )}
+                    {onOpenSource && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenSource(locateCitation(citation, anchor))}
+                        className="focus-ring mt-1 rounded border border-control px-1.5 py-0.5 font-semibold text-accent hover:border-accent/60"
+                      >
+                        Open source document {citation.documentId}
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
             </ol>
           )}
         </div>
@@ -363,6 +425,7 @@ export function FindingEvidence({
         explanation={finding.explanation}
         citations={finding.citations}
         onOpenSource={onOpenSource}
+        findingId={finding.id}
       />
       <PlainLanguageDisclosure kind={finding.kind} label={finding.headline} />
     </div>

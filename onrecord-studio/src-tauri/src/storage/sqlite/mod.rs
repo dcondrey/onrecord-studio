@@ -14,6 +14,7 @@ mod release_events;
 mod search;
 mod source_checks;
 mod sources;
+pub(crate) mod spans;
 #[cfg(test)]
 mod tests;
 mod timeline;

@@ -22,6 +22,7 @@ import pageView from './topics-page-view.json';
 import navigation from './topics-navigation.json';
 import dispositions from './topics-dispositions.json';
 import rollingProduction from './topics-rolling-production.json';
+import citationAnchors from './topics-citation-anchors.json';
 
 export type HelpGroup =
   | 'Getting started'
@@ -95,6 +96,7 @@ const ALL_HELP_TOPICS = [
   ...navigation,
   ...dispositions,
   ...rollingProduction,
+  ...citationAnchors,
 ] as HelpTopic[];
 
 /**
