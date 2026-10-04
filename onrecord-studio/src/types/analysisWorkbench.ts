@@ -8,6 +8,8 @@ export type AnalyticalDatasetKind =
   | 'OPERATING_BUDGET'
   | 'BUDGET_DIMENSION';
 
+export type CityDataset = 'NIBRS_OFFENSES' | 'GET_IT_DONE_ENCAMPMENTS' | 'SCHOOLS' | 'TRANSIT_STOPS';
+
 export interface AnalyticalImportRequest {
   datasetKind: AnalyticalDatasetKind;
   displayName: string;
@@ -95,4 +97,77 @@ export interface SqlExportResult {
   outputPath: string;
   rowCount: number;
   sha256: string;
+}
+
+export interface ObservationSource {
+  snapshotId: string;
+  displayName: string;
+  sourceSha256: string;
+}
+
+export interface NightHoursSectionCount {
+  section: string;
+  activityType: string;
+  activities: number;
+  insideWindow: number;
+  atWindowBoundary: number;
+  outsideWindow: number;
+  timeNotRecorded: number;
+}
+
+export interface RecordedActivity {
+  activityNumber: string;
+  activityType: string;
+  section: string;
+  recordedAt: string;
+  atWindowBoundary: boolean;
+  location: string;
+}
+
+export interface NightHoursObservation {
+  sources: ObservationSource[];
+  firstActivity: string | null;
+  lastActivity: string | null;
+  sections: NightHoursSectionCount[];
+  listedActivities: RecordedActivity[];
+}
+
+export interface LocationSectionCount {
+  section: string;
+  offenses: number;
+  distinctCases: number;
+  notGeocoded: number;
+  withinNearBand: number | null;
+  withinFarBand: number | null;
+  beyondFarBand: number | null;
+}
+
+export interface NearestFeature {
+  name: string;
+  distanceFeet: number;
+}
+
+export interface EncampmentIncidentDistance {
+  caseNumber: string;
+  occurredOn: string | null;
+  section: string;
+  blockAddress: string;
+  latitude: number | null;
+  longitude: number | null;
+  nearestSchool: NearestFeature | null;
+  nearestStation: NearestFeature | null;
+}
+
+export interface EncampmentLocationObservation {
+  incidentSources: ObservationSource[];
+  schoolSource: ObservationSource | null;
+  stationSource: ObservationSource | null;
+  sections: LocationSectionCount[];
+  incidents: EncampmentIncidentDistance[];
+}
+
+export interface EncampmentOrdinanceReport {
+  nightHours: NightHoursObservation | null;
+  locations: EncampmentLocationObservation | null;
+  notMeasured: string[];
 }

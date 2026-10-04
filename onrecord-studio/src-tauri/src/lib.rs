@@ -97,6 +97,8 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::semantic::cancel_embedding_index,
         commands::semantic::hybrid_search,
         commands::analysis_workbench::import_analytical_dataset,
+        commands::analysis_workbench::fetch_city_dataset,
+        commands::analysis_workbench::get_encampment_ordinance_report,
         commands::analysis_workbench::list_analytical_import_candidates,
         commands::analysis_workbench::get_analytical_schema,
         commands::maintenance::get_data_maintenance_status,

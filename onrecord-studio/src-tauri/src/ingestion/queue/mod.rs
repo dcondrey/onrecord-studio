@@ -1,5 +1,6 @@
 //! Bounded, portal-isolated ingestion scheduling and document extraction.
 
+mod city_datasets;
 mod crawl;
 mod extraction;
 mod frontier;

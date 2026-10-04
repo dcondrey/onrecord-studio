@@ -1201,6 +1201,15 @@ impl ApiClient {
         destination: &Path,
     ) -> Result<DownloadedPayload, AppError> {
         let url = normalize_document_url(&portal.origin_url, download_url)?;
+        self.download_url_to_path(url, destination).await
+    }
+
+    /// Downloads an absolute URL the app itself names, with no portal origin to resolve against.
+    pub async fn download_url_to_path(
+        &self,
+        url: Url,
+        destination: &Path,
+    ) -> Result<DownloadedPayload, AppError> {
         validate_remote_url(&self.dns, &url).await?;
         self.execute_with_retries(&url, "Download", || async {
             let result = self

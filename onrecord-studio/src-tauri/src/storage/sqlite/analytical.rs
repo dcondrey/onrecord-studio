@@ -3,6 +3,15 @@
 use super::*;
 
 impl DuckDbRepository {
+    pub async fn encampment_ordinance_report(
+        &self,
+    ) -> Result<crate::types::EncampmentOrdinanceReport, AppError> {
+        self.query_connection("Encampment ordinance observations", |conn| {
+            crate::analysis::encampment_ordinance::report(conn)
+        })
+        .await
+    }
+
     pub async fn import_analytical_csv(
         &self,
         request: AnalyticalImportRequest,
@@ -216,6 +225,12 @@ impl DuckDbRepository {
             "warnings": schema_warnings,
             "nullCounts": columns.iter().enumerate().map(|(i, (_, alias, _))| (alias.clone(), null_counts[i])).collect::<std::collections::BTreeMap<_, _>>(),
             "notes": validation_notes_for(&dataset_kind),
+            "derivedSubset": request.derived_subset.as_ref().map(|subset| serde_json::json!({
+                "publisherSha256": subset.publisher_sha256,
+                "publisherRows": subset.publisher_rows,
+                "filter": subset.filter,
+                "note": "sourceSha256 is the digest of this filtered subset, not of the publisher's file.",
+            })),
         });
         let validation_summary_string = validation_summary.to_string();
         let rows_len = rows.len();
@@ -642,7 +657,9 @@ fn logical_type_for(kind: &AnalyticalDatasetKind, header: &str) -> &'static str 
             _ => "CATEGORY",
         };
     }
-    if header.contains("date") || matches!(header.as_str(), "occured_on" | "approved_on") {
+    // NIBRS `approved_on` carries a wall-clock time: kept as recorded text, since a DATE refuses
+    // every published row and a TIMESTAMP would stamp Pacific time as UTC.
+    if header.contains("date") || header == "occured_on" {
         return "DATE";
     }
     if header.contains("time") {

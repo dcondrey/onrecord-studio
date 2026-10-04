@@ -7,6 +7,7 @@ import type {
   AnalyticalImportCandidate,
   AnalyticalImportResult,
   AnalyticalSchema,
+  CityDataset,
   EmbeddingIndexReport,
   EmbeddingIndexStatus,
   EmbeddingModelStatus,
@@ -19,6 +20,7 @@ import Icon from '../ui/icons';
 import BudgetComparison from './BudgetComparison';
 import DataDiscovery from './DataDiscovery';
 import FacilityCoveragePanel from './FacilityCoveragePanel';
+import EncampmentOrdinancePanel from './EncampmentOrdinancePanel';
 import { useAppStore } from '../../store/useAppStore';
 import AutomaticDiscovery from './AutomaticDiscovery';
 import { useAutomaticDiscovery } from './AutomaticDiscoveryProvider';
@@ -32,6 +34,13 @@ const datasetKinds: AnalyticalDatasetKind[] = [
   'NIBRS_OFFENSES',
   'OPERATING_BUDGET',
   'BUDGET_DIMENSION',
+];
+
+const cityDatasets: { value: CityDataset; label: string }[] = [
+  { value: 'NIBRS_OFFENSES', label: 'SDPD NIBRS offenses (by year)' },
+  { value: 'GET_IT_DONE_ENCAMPMENTS', label: 'Get It Done encampment reports (closed, by year)' },
+  { value: 'SCHOOLS', label: 'SANDAG schools' },
+  { value: 'TRANSIT_STOPS', label: 'SANDAG transit stops (GTFS)' },
 ];
 
 export default function AnalysisWorkbench() {
@@ -64,6 +73,9 @@ export default function AnalysisWorkbench() {
   const [candidates, setCandidates] = useState<AnalyticalImportCandidate[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState<AnalyticalImportCandidate | null>(null);
   const [importResult, setImportResult] = useState<AnalyticalImportResult | null>(null);
+  const [cityDataset, setCityDataset] = useState<CityDataset>('NIBRS_OFFENSES');
+  const [cityYear, setCityYear] = useState(String(new Date().getFullYear() - 1));
+  const cityDatasetIsYearly = cityDataset === 'NIBRS_OFFENSES' || cityDataset === 'GET_IT_DONE_ENCAMPMENTS';
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // `sqlResult` is written asynchronously from two independent paths: the automatic-discovery
@@ -258,6 +270,21 @@ export default function AnalysisWorkbench() {
                 Import table
               </button>
             </div>
+            <div className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-2 border-t border-line pt-3">
+              <p className="text-label leading-relaxed text-muted">Fetch a published City or SANDAG table directly. Get It Done keeps only closed reports whose service is Encampment; the snapshot records the publisher file’s digest beside the subset’s.</p>
+              <div className="flex gap-2">
+                <select aria-label="City dataset" value={cityDataset} onChange={(event) => setCityDataset(event.target.value as CityDataset)} className="analysis-input min-w-0 flex-1">
+                  {cityDatasets.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
+                </select>
+                {cityDatasetIsYearly && <input aria-label="City dataset year" type="number" className="analysis-input w-24" value={cityYear} onChange={(event) => setCityYear(event.target.value)} />}
+              </div>
+              <button className="analysis-button w-fit" type="button" disabled={Boolean(status) || (cityDatasetIsYearly && !/^\d{4}$/.test(cityYear))} onClick={() => void run('Fetching City dataset', () => invokeCommand('fetch_city_dataset', {
+                dataset: cityDataset,
+                year: cityDatasetIsYearly ? Number(cityYear) : null,
+              }), setImportResult)}>
+                Fetch and import
+              </button>
+            </div>
             {importResult && (
               <div className="mt-2 text-label leading-4 text-muted" role="status">
                 <p>{importResult.importedRows.toLocaleString()} rows imported to {importResult.tableName}; {importResult.rejectedRows.toLocaleString()} rejected.{importResult.datasetKind !== 'REGIONAL_DATA' && ` ${importResult.duplicateKeyRows.toLocaleString()} duplicate keys.`}</p>
@@ -353,6 +380,8 @@ export default function AnalysisWorkbench() {
           {schema && <Panel title="Facility coverage" icon="database">
             <FacilityCoveragePanel schema={schema} />
           </Panel>}
+
+          <EncampmentOrdinancePanel />
 
           <Panel title="SQL Analysis" icon="database">
             <div className="grid gap-3 xl:grid-cols-[280px_minmax(0,1fr)]">

@@ -200,6 +200,7 @@ impl DuckDbRepository {
             worksheet: None,
             source_file_name: Some(candidate.file_name.clone()),
             expected_source_sha256: candidate.source_sha256,
+            derived_subset: None,
         };
         // The snapshot write and its origin receipt must commit or roll back together: a crash
         // between two separate transactions would leave a snapshot on disk that later
@@ -788,6 +789,7 @@ mod tests {
                     worksheet: None,
                     source_file_name: Some(format!("finance-{id}.csv")),
                     expected_source_sha256: Some(sha256_hex(bytes.as_bytes())),
+                    derived_subset: None,
                 })
                 .await
                 .unwrap();
