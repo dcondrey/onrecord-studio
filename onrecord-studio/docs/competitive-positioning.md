@@ -207,10 +207,14 @@ redirect chain, status, headers, SHA-256, size, the digest the document held, lo
 Check source re-fetches up to 100 collected documents of an active source per run, least recently
 checked first, through the governed client, and records each outcome in `document_source_checks`:
 same bytes, different bytes, gone (HTTP 404/410 only), or unreachable (says nothing about the
-record). The collected row is never repointed, and the re-fetched bytes are hashed and discarded.
-A watch's Source copies dimension reports a document whose latest informative check changed
-outcome since the baseline. Still missing: a schedule (checks are operator-started), and keeping
-the re-fetched bytes, which needs a referencing row so purge can release them.
+record). The collected row is never repointed. Different bytes are kept as a content-addressed
+object the check references, released by purge only when no document or other check holds it,
+and each document's Source history lists its fetches and checks newest first and opens a kept
+copy with its digest re-verified. A source can be checked every N days (opt-in, off by default)
+while the app is open, never at launch, never while paused or already being checked; each
+scheduled run then runs the watches, whose Source copies dimension reports a document whose
+latest informative check changed outcome since the baseline. Still missing: a check scheduled
+while the app is closed, and a diff view between the collected and kept copies.
 
 ## 8. Standing search: reproducible against a corpus version
 

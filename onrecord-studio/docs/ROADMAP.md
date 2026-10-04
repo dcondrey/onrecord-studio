@@ -1002,3 +1002,42 @@ The detectors now produce 0 findings on this corpus. Next, in order:
    unclassified, 0 unrecorded. The earlier 87/33 figures came from a different run. Rules are
    measured only against San Diego's wording; other NextRequest portals' notices will show as
    not classified until a rule names them.
+
+## Source checks: kept copies, history, schedule (decided 2026-10-03)
+
+Closes the two gaps `competitive-positioning.md` §7 named. Decisions:
+
+- **Kept copies.** A DIFFERENT_BYTES fetch is committed to the content-addressed store and
+  referenced by `document_source_checks.observed_object_path`; SAME_BYTES is already the
+  document's own object and is discarded. Not kept under REFERENCE_ONLY retention (the operator
+  chose not to keep originals). NULL means "not kept" (pre-upgrade check, compact retention, or
+  not different), never "same". `acquisition_id` links a check to the acquisition it appended so
+  the history lists each fetch once; NULL on pre-upgrade rows, which then show as a check plus a
+  separate fetch.
+- **Release.** Every release path counts check references both ways: `purge_document` (local path
+  and check copies), `purge_source` and its preview (same candidate set, so the count invariant
+  holds), and REFERENCE_ONLY compaction (a document file a check also references is not retired).
+  `delete_unextracted_document` leaves a document with a kept copy in place rather than strand the
+  object (that path unlinks nothing).
+- **Purge race.** `record_source_check` records nothing for a document purged mid-fetch (an
+  orphan check would fail the startup relation audit); the run then unlinks the object unless a
+  row references it.
+- **Viewer.** "Source history" in the document viewer (8th `useLatestRequestGate`; CLAUDE.md still
+  says 7). Kept copies open through `read_source_check_copy`, which reuses `load_original` (store
+  gate, size cap, digest check against the check's observed digest). PDFs render page by page
+  with pdf.js, text shows its first 200k characters, other formats show size and digest only. The
+  collected-document `PdfPageView` is not reused: its annotations belong to the collected bytes.
+- **Schedule.** `source_connector_recipes.recheck_interval_days` (NULL = off, 1–365), its own
+  writer touching only that column. Choices in the toolbar: off, daily, 7, 30 days. Driven by the
+  30 s tick in `research::start_service`, so it runs only while the app is open and licensed.
+  "Never at launch" is read as: no scheduled run within 10 minutes of the service starting, even
+  when overdue. Due = interval elapsed since the newest check of the source (any run) and since
+  this process last started a scheduled run of it, so a run that records nothing does not retry
+  every tick. Only ACTIVE non-local sources; the run re-reads lifecycle per document, so a pause
+  stops it. One run per source at a time via an in-process claim inside `recheck_source`, shared
+  with the toolbar button. After each scheduled run `check_watches(None)`; errors go to the
+  research phase line.
+- **Not done.** Kept copies count toward the managed-file budget only through the disk walk
+  (`check_retained_file_budget` sums `documents` sizes in SQL); the per-run byte cap and the
+  per-document budget check bound growth. A source whose page changes on every fetch keeps a new
+  copy per check until purge.

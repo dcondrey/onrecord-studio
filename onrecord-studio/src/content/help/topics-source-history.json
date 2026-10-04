@@ -1,0 +1,56 @@
+[
+  {
+    "id": "source-history",
+    "title": "Source history and kept copies",
+    "group": "Findings",
+    "keywords": [
+      "source history",
+      "source check",
+      "recheck",
+      "changed",
+      "removed",
+      "different bytes",
+      "kept copy",
+      "404",
+      "acquisition",
+      "fetch"
+    ],
+    "summary": "Every recorded fetch of one document from its source, newest first, and the copy kept when the source served different bytes.",
+    "sections": [
+      {
+        "heading": "Opening it",
+        "paragraphs": [
+          "In the document viewer, Source history lists what collection received for this document and what each Check source run observed. Each entry shows the local time it was recorded, the address fetched, and the SHA-256 digests compared."
+        ]
+      },
+      {
+        "heading": "What each entry says",
+        "items": [
+          "Collected or Fetched: the bytes a sync received, their size, HTTP status and digest, and whether they differ from the copy held before that fetch.",
+          "Same bytes: the address served a file with the collected copy's SHA-256.",
+          "Different bytes: the digest differs. A replaced file and an error page served in its place both do that, so it is not a finding that the record was altered.",
+          "Not found: the address answered HTTP 404 or 410. It does not say when or why the record was removed, or whether it moved.",
+          "No answer: the check got no answer about the record. It says nothing about whether the record is still there."
+        ]
+      },
+      {
+        "heading": "Kept copies",
+        "paragraphs": [
+          "When a check receives different bytes, they are kept in the evidence store beside the collected copy, which is never replaced. Open kept copy reads them back, checks their SHA-256 against what the check received, and shows a PDF's pages or a text file's beginning. Other formats are listed with their size and digest only.",
+          "A check with different bytes and no kept copy was recorded before copies were kept, or while compact retention was on. That means the bytes were not kept, not that they matched.",
+          "Deleting a document or its source deletes its kept copies, except a file another document or check still uses."
+        ]
+      },
+      {
+        "heading": "Checking on a schedule",
+        "paragraphs": [
+          "The schedule menu beside Check source checks the selected source every day, every 7 days or every 30 days. It is off until you choose it. A scheduled check runs only while the app is open and never in its first ten minutes after opening, skips a paused source, and never runs while another check of the same source is running. Each run checks up to 100 documents, least recently checked first, and then runs your watches, so a watch on Source copies reports the change without you running it."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [],
+    "related": ["sources", "document-viewer", "watchlists", "data-upkeep"]
+  }
+]
