@@ -1,0 +1,80 @@
+{
+  "csv": "\"Filing Date\",\"Filing Type\",\"Description\",\"Agency\",\"Official\"\n\"2026-01-05T08:00:00+00:00\",\"FPPC 803\",\"Behest Payments; Payee Information: A Club\",\"City of San Diego\",\"Official A\"\n\"2026-02-05T08:00:00+00:00\",\"FPPC 803\",\"Behest Payments; Payee Information: B Fund\",\"City of San Diego\",\"Official A\"\n\"2026-03-05T08:00:00+00:00\",\"FPPC 803\",\"Behest Payments; Payee Information: C Event\",\"City of San Diego\",\"Official A\"\n\"2026-08-28T07:00:00+00:00\",\"FPPC 803\",\"Behest Payments; Train Ticket\",\"City of San Diego\",\"Official A\"\n\"2026-07-01T07:00:00+00:00\",\"FPPC 803\",\"Behest Payments; Payee Information: D Club\",\"City of San Diego\",\"Official B\"\n\"2026-06-01T07:00:00+00:00\",\"FPPC 803\",\"Behest Payments; Payee Information: E Club\",\"City of San Diego\",\"\"\n\"2026-04-01T07:00:00+00:00\",\"FPPC 802; Not electronically filed.\",\"Ticket distribution\",\"City of San Diego\",\"\"\n\"\",\"FPPC 801\",\"Payments to Agency; a sports team\",\"City of San Diego\",\"\"\n",
+  "schema": {
+    "datasets": [
+      {
+        "snapshotId": "reports",
+        "datasetKind": "REGIONAL_DATA",
+        "displayName": "Agency report fixture",
+        "tableName": "analysis_agency_reports",
+        "importedRows": 8,
+        "rejectedRows": 0,
+        "sourceUri": null,
+        "sourceSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "retrievedAt": "2026-10-05T00:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}",
+        "unconvertedByColumn": {}
+      }
+    ],
+    "templates": [],
+    "columns": [
+      {
+        "tableName": "analysis_agency_reports",
+        "columnName": "filing_date",
+        "logicalType": "CATEGORY",
+        "originalName": "Filing Date",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_agency_reports",
+        "columnName": "filing_type",
+        "logicalType": "CATEGORY",
+        "originalName": "Filing Type",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_agency_reports",
+        "columnName": "description",
+        "logicalType": "CATEGORY",
+        "originalName": "Description",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_agency_reports",
+        "columnName": "agency",
+        "logicalType": "CATEGORY",
+        "originalName": "Agency",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_agency_reports",
+        "columnName": "official",
+        "logicalType": "CATEGORY",
+        "originalName": "Official",
+        "nullable": true,
+        "dictionary": null
+      }
+    ]
+  },
+  "queries": [
+    {
+      "id": "disclosure_reports_by_form",
+      "title": "Agency reports filed, by form",
+      "method": "Each row of Agency report fixture is one report an agency or official filed. The form is read from the first eight characters of the filing type, and the date from the first ten characters of the filing date. A behested payment is a payment made to a third party at an official's request; the report is the official's own disclosure.",
+      "sql": "WITH reports AS (\n SELECT SUBSTR(UPPER(TRIM(CAST(\"filing_type\" AS VARCHAR))), 1, 8) AS form,\n  TRY_CAST(SUBSTR(CAST(\"filing_date\" AS VARCHAR), 1, 10) AS DATE) AS filed_on,\n  NULLIF(TRIM(CAST(\"official\" AS VARCHAR)), '') AS official\n FROM \"analysis_agency_reports\"\n)\nSELECT form, COUNT(*) AS reports, COUNT(*) FILTER (WHERE filed_on IS NULL) AS undated,\n CAST(MIN(filed_on) AS VARCHAR) AS first_filed, CAST(MAX(filed_on) AS VARCHAR) AS last_filed\nFROM reports GROUP BY form ORDER BY reports DESC, form LIMIT 12"
+    },
+    {
+      "id": "disclosure_behested_by_official",
+      "title": "Behested payment reports, by the official named",
+      "method": "Each row of Agency report fixture is one report an agency or official filed. The form is read from the first eight characters of the filing type, and the date from the first ten characters of the filing date. A behested payment is a payment made to a third party at an official's request; the report is the official's own disclosure. A report that names no official is counted apart, never under a name.",
+      "sql": "WITH reports AS (\n SELECT SUBSTR(UPPER(TRIM(CAST(\"filing_type\" AS VARCHAR))), 1, 8) AS form,\n  TRY_CAST(SUBSTR(CAST(\"filing_date\" AS VARCHAR), 1, 10) AS DATE) AS filed_on,\n  NULLIF(TRIM(CAST(\"official\" AS VARCHAR)), '') AS official\n FROM \"analysis_agency_reports\"\n)\nSELECT official, COUNT(*) AS reports, CAST(MIN(filed_on) AS VARCHAR) AS first_filed, CAST(MAX(filed_on) AS VARCHAR) AS last_filed,\n SUM(COUNT(*)) OVER () AS all_reports, COUNT(*) FILTER (WHERE official IS NOT NULL) OVER () AS officials_named,\n SUM(COUNT(*)) FILTER (WHERE official IS NULL) OVER () AS unnamed_reports\nFROM reports WHERE form = 'FPPC 803' GROUP BY official ORDER BY reports DESC, official LIMIT 13"
+    }
+  ]
+}

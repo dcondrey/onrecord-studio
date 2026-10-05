@@ -1,0 +1,58 @@
+[
+  {
+    "id": "finding-disclosure-filing-lead",
+    "title": "Disclosure filing leads",
+    "group": "Finding kinds",
+    "keywords": [
+      "behested",
+      "behest",
+      "form 803",
+      "form 801",
+      "form 802",
+      "form 806",
+      "gift",
+      "ticket",
+      "disclosure",
+      "official",
+      "payment"
+    ],
+    "summary": "Counts from a city's export of agency reports: behested payment reports by the official named on them.",
+    "sections": [
+      {
+        "heading": "What it shows",
+        "paragraphs": [
+          "Cities publish the reports their agencies and officials file on four state forms: payments to the agency (Form 801), ticket distributions (Form 802), behested payments (Form 803) and paid appointments (Form 806). The filing portal offers the list as a file to download. When that file is imported as a table, the app counts the reports of each form and, for behested payments, the reports naming each official.",
+          "A behested payment is a payment made to a third party, often a charity or a public event, at an official's request. The official files the report. The lead names an official only with three or more reports, and counts reports that name no official apart."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "That a payment influenced a decision. The export gives a short description of each report and has no amount column; the payor, the payee and the amount are on the filed form.",
+          "How officials compare. A larger count can mean an office reports more completely, and the export covers only the dates chosen when it was downloaded."
+        ]
+      },
+      {
+        "heading": "Getting the file",
+        "paragraphs": [
+          "On the City of San Diego's filing portal, search agency reports for a date range and use the export button to download the list as CSV, then import it under Analysis. The app does not download from this portal by itself."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is not assessed: the finding restates counts of filed reports and infers nothing to score."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [
+      "DISCLOSURE_FILING_LEAD"
+    ],
+    "commandGroups": [],
+    "related": [
+      "legal-vs-pattern",
+      "findings-inbox"
+    ]
+  }
+]

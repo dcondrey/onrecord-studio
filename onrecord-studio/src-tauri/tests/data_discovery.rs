@@ -534,6 +534,70 @@ async fn abatement_logs_pair_one_notice_with_one_abatement_in_the_released_forma
 }
 
 #[tokio::test]
+async fn agency_report_export_counts_reports_by_form_and_by_named_official() {
+    let fixture: Value =
+        serde_json::from_str(include_str!("fixtures/disclosure-leads.json")).unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let db = DuckDbRepository::new(temp.path().join("reports.db")).unwrap();
+    db.run_migrations(include_str!("../migrations/0001_initial_schema.sql"))
+        .await
+        .unwrap();
+    let path = temp.path().join("agency_reports.csv");
+    std::fs::write(&path, fixture["csv"].as_str().unwrap()).unwrap();
+    let input: AnalyticalImportRequest = serde_json::from_value(json!({ "datasetKind":"REGIONAL_DATA", "displayName":"agency reports", "localPath":path, "partialDataset":true })).unwrap();
+    let imported = db.import_analytical_csv(input).await.unwrap();
+    assert_eq!((imported.imported_rows, imported.rejected_rows), (8, 0));
+    let count = |result: &SqlQueryResult, row: usize, name: &str| -> i64 {
+        let value = cell(result, row, name);
+        value
+            .as_i64()
+            .or_else(|| value.as_f64().map(|number| number as i64))
+            .or_else(|| value.as_str().and_then(|text| text.parse().ok()))
+            .unwrap_or_else(|| panic!("{name} is not a count: {value}"))
+    };
+    let mut results = Vec::new();
+    for query in fixture["queries"].as_array().unwrap() {
+        let sql = query["sql"]
+            .as_str()
+            .unwrap()
+            .replace("analysis_agency_reports", &imported.table_name);
+        results.push(db.execute_restricted_sql(&sql, 100).await.unwrap());
+    }
+    let forms: Vec<(String, i64, i64)> = (0..results[0].row_count)
+        .map(|row| {
+            (
+                cell(&results[0], row, "form").as_str().unwrap().to_string(),
+                count(&results[0], row, "reports"),
+                count(&results[0], row, "undated"),
+            )
+        })
+        .collect();
+    // The type "FPPC 802; Not electronically filed." is Form 802; the undated report is counted.
+    assert_eq!(
+        forms,
+        vec![
+            ("FPPC 803".to_string(), 6, 0),
+            ("FPPC 801".to_string(), 1, 1),
+            ("FPPC 802".to_string(), 1, 0),
+        ]
+    );
+    let officials = &results[1];
+    assert_eq!(officials.row_count, 3);
+    assert_eq!(cell(officials, 0, "official"), &json!("Official A"));
+    for (column, expected) in [
+        ("reports", 4),
+        ("all_reports", 6),
+        ("officials_named", 2),
+        // The report with an empty official cell is counted apart, under no name.
+        ("unnamed_reports", 1),
+    ] {
+        assert_eq!(count(officials, 0, column), expected, "{column}");
+    }
+    assert_eq!(cell(officials, 0, "first_filed"), &json!("2026-01-05"));
+    assert_eq!(cell(officials, 0, "last_filed"), &json!("2026-08-28"));
+}
+
+#[tokio::test]
 async fn charge_log_checks_count_arrests_and_citations_not_charge_rows() {
     let fixture: Value = serde_json::from_str(include_str!("fixtures/charge-leads.json")).unwrap();
     let temp = tempfile::tempdir().unwrap();

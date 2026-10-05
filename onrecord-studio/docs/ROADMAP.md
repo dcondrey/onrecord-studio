@@ -1313,6 +1313,14 @@ see the owner's feedback on agent cost): disclosure-portal reader and export imp
 after abatements in nearby places, a signed receipt for one document, and the data packs in
 `docs/data-packs.md`.
 
+Built 2026-10-05: a lead from the disclosure portal's agency-report export (methods §25,
+`disclosureLeads.ts`, `DISCLOSURE_FILING_LEAD`): reports per form, and behested payment reports
+per official named. Import only; the app makes no request to the portal. Verified on a fixture
+with the export's real headers and values. Not verified: a full export (the portal reported 1,333
+agency reports, 278 of them Form 803 through 2024, on 2026-10-04), and the lead in the running
+app. Not built: the user-started reader for the portal's API, and imports for statements of
+economic interests, campaign and lobbyist exports.
+
 ## Leads from service-report tables (2026-10-04)
 
 Decision: "What stands out" shows leads about the subject of the records; facts about a table

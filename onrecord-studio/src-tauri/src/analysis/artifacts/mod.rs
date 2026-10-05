@@ -159,6 +159,7 @@ impl DraftFamily {
             | FindingKind::PoliceStopLead
             | FindingKind::AbatementLogLead
             | FindingKind::ChargeLogLead
+            | FindingKind::DisclosureFilingLead
             | FindingKind::CapacityComparisonLead
             // A description of how a release was spread out; it identifies no gap to ask about.
             | FindingKind::RollingProduction

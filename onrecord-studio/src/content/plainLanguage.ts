@@ -243,6 +243,11 @@ export const PLAIN_FINDING_TEXT: Record<FindingKind, PlainText> = {
     notShown: 'It does not show that too little notice was given. The logs do not record the notice period that applied, whether anyone was present, or what was done with belongings.',
     next: "Ask the agency for its abatement procedure, the notices as posted and the stored-property log for the places listed.",
   },
+  DISCLOSURE_FILING_LEAD: {
+    observed: "A count from a city's export of agency reports: behested payment reports by the official named on them, and how many reports of each form the export holds.",
+    notShown: 'It does not show that a payment influenced anything. The export has no amount column, and the report is filed by the official named on it.',
+    next: 'Read the filed Form 803 for the payor and amount, then look for the same payor in council dockets and contract awards.',
+  },
   CHARGE_LOG_LEAD: {
     observed: "A count from a police department's released arrest and citation log: arrests and citations citing an encampment, encroachment, lodging or public urination section, and arrests on those sections alone.",
     notShown: 'It does not show that the people charged had no housing, or why they were charged. The log records the section, not whether shelter was offered or what became of the charge.',

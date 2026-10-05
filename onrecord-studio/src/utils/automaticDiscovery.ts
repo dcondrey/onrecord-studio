@@ -3,6 +3,7 @@ import { buildDiscoveryPlan, discoveryDefaults, quoteIdentifier, type DiscoveryQ
 import { abatementCompanion, abatementLeads, abatementQueries } from './abatementLeads';
 import { stopCompanions, stopLeads, stopQueries } from './stopLeads';
 import { chargeLeads, chargeQueries } from './chargeLeads';
+import { disclosureLeads, disclosureQueries } from './disclosureLeads';
 import { capacityCompanions, capacityLeads, capacityQueries } from './capacityLeads';
 import { spendingCompanion, spendingLeads, spendingQueries } from './spendingLeads';
 import { backlogChangeLeads, budgetTable, recurringServiceLeads, serviceAccountabilityLeads, serviceAccountabilityQueries, serviceCompanions, serviceRequestRoles } from './serviceAccountability';
@@ -68,7 +69,7 @@ export function automaticFollowups(schema: AnalyticalSchema, dataset: Analytical
   // One consistent counting unit, no inferred sums, rates, or cross-publisher joins.
   const plan = buildDiscoveryPlan(schema, selection);
   return [...plan.queries.filter((query) => (query.id === 'coverage' && selection.period) || (query.id === 'groups' && selection.dimension) || (query.id === 'changes' && selection.period)),
-    ...serviceAccountabilityQueries(schema, dataset), ...stopQueries(schema, dataset), ...abatementQueries(schema, dataset), ...chargeQueries(schema, dataset), ...capacityQueries(schema, dataset),
+    ...serviceAccountabilityQueries(schema, dataset), ...stopQueries(schema, dataset), ...abatementQueries(schema, dataset), ...disclosureQueries(schema, dataset), ...chargeQueries(schema, dataset), ...capacityQueries(schema, dataset),
     ...spendingQueries(schema, dataset)];
 }
 
@@ -101,7 +102,7 @@ export function profileObservations(schema: AnalyticalSchema, dataset: Analytica
     title: item.title, detail: item.detail, question: item.question, query: item.query,
   });
   const observations: DiscoveryObservation[] = [...serviceAccountabilityLeads(profile.results).map(lead('SERVICE_REPORTS')), ...stopLeads(profile.results).map(lead('POLICE_STOPS')),
-    ...abatementLeads(profile.results).map(lead('ABATEMENT_LOGS')), ...chargeLeads(profile.results).map(lead('CHARGE_LOGS')),
+    ...abatementLeads(profile.results).map(lead('ABATEMENT_LOGS')), ...chargeLeads(profile.results).map(lead('CHARGE_LOGS')), ...disclosureLeads(profile.results).map(lead('DISCLOSURE_FILINGS')),
     ...capacityLeads(profile.results).map(lead('CAPACITY_COMPARISON')), ...spendingLeads(profile.results).map(lead('SPENDING_RECORDS'))];
   const get = (id: string) => profile.results.find((entry) => entry.query.id === id);
   // A column's missing-value rate describes the source table's own completeness, not the subject

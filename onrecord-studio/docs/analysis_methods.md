@@ -486,6 +486,19 @@ Each figure is a sum from a published table. Adopted is the original appropriati
 ### F. Missing tables
 `dataGaps.ts` offers `OPERATING_ACTUALS` when a budget table is imported and no actuals table is.
 
+## 25. Disclosure Filing Leads
+
+`src/utils/disclosureLeads.ts`, run by automatic discovery and stored as `DISCLOSURE_FILING_LEAD` findings (§17 E). Verified natively by `tests/data_discovery.rs::agency_report_export_counts_reports_by_form_and_by_named_official`, which imports a file with the headers and values of the City of San Diego filing portal's agency-report export. The app does not download from that portal; the file is exported there and imported (`docs/data-sources/city-disclosure-filings.md`).
+
+### A. Which tables are read
+A table with `filing_date`, `filing_type`, `description`, `agency` and `official` columns: one row per report on FPPC Form 801, 802, 803 or 806.
+
+### B. What is counted
+The form is the first eight characters of the filing type in upper case, so a type carrying a note ("FPPC 802; Not electronically filed.") is counted under its form. The date is the first ten characters of the filing date. Counted: reports per form with the number undated and the first and last date; for Form 803, reports per official named, the number of officials named, and reports whose official cell is empty, which are counted apart and never under a name. A lead needs 10 Form 803 reports and names an official with 3 or more, at most five.
+
+### C. What a lead does and does not claim
+A behested payment report is the official's own disclosure of a payment made to a third party at the official's request. The export has a short description and no amount column; payor, payee and amount are on the filed form. A count of reports is not a finding about any decision, a larger count can reflect more complete reporting, and the export covers only the dates chosen when it was downloaded.
+
 ## 27. Meeting Posting Time and Agenda Revisions
 Shown in the Meetings view; neither produces a finding.
 

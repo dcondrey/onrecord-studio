@@ -256,6 +256,11 @@ pub enum FindingKind {
     /// The log records the charge, not housing status, so this is not a finding about who was
     /// charged or why.
     ChargeLogLead,
+    /// A count read from a city's agency-report export (FPPC Forms 801, 802, 803, 806): behested
+    /// payment reports by the official named. Counted by the discovery feed's SQL and recorded
+    /// as sent. A report is the official's own disclosure; a count of reports is not a finding
+    /// about any decision.
+    DisclosureFilingLead,
     /// Three counted series set side by side per fiscal year: a department's adopted operating
     /// expense, Encampment reports residents filed, and emergency shelter beds in the January
     /// inventory. Counted by the discovery feed's SQL and recorded as sent. A comparison between
@@ -323,6 +328,7 @@ impl FindingKind {
             Self::PoliceStopLead => "POLICE_STOP_LEAD",
             Self::AbatementLogLead => "ABATEMENT_LOG_LEAD",
             Self::ChargeLogLead => "CHARGE_LOG_LEAD",
+            Self::DisclosureFilingLead => "DISCLOSURE_FILING_LEAD",
             Self::CapacityComparisonLead => "CAPACITY_COMPARISON_LEAD",
             Self::ReleaseTimingConcentration => "RELEASE_TIMING_CONCENTRATION",
             Self::SpendingRecordLead => "SPENDING_RECORD_LEAD",
@@ -376,6 +382,7 @@ impl FindingKind {
             Self::PoliceStopLead,
             Self::AbatementLogLead,
             Self::ChargeLogLead,
+            Self::DisclosureFilingLead,
             Self::CapacityComparisonLead,
             Self::ReleaseTimingConcentration,
             Self::SpendingRecordLead,
@@ -488,6 +495,8 @@ impl FindingKind {
             Self::AbatementLogLead => false,
             // Counts of charges as the department recorded them.
             Self::ChargeLogLead => false,
+            // Counts of reports officials filed about themselves.
+            Self::DisclosureFilingLead => false,
             // Counts from three publishers beside each other; no rule is applied to them.
             Self::CapacityComparisonLead => false,
             // Two shares of counted upload times. When work is posted breaks no rule.
