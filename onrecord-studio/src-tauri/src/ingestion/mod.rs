@@ -7,6 +7,7 @@ pub(crate) mod hosted_nextrequest;
 pub mod limiter;
 #[cfg(test)]
 mod live_evaluation;
+pub mod meeting_bodies;
 pub mod queue;
 pub mod source_catalog;
 pub mod starter_sets;

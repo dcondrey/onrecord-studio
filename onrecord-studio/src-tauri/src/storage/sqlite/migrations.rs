@@ -44,6 +44,7 @@ impl DuckDbRepository {
         // NOT NULL and CHECK that `0001_initial_schema.sql` declares. Those stay there because
         // they are live protection on a fresh install; deleting them so the two paths match would
         // trade a real guarantee for symmetry.
+        ensure_column(conn, "document_acquisitions", "response_date", "TEXT")?;
         ensure_column(
             conn,
             "document_search_index_state",

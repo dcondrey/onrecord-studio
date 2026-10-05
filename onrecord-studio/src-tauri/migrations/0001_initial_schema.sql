@@ -758,7 +758,10 @@ CREATE TABLE IF NOT EXISTS document_acquisitions (
     raw_file_sha256 TEXT NOT NULL CHECK (length(raw_file_sha256) = 64),
     file_size BIGINT NOT NULL CHECK (file_size >= 0),
     previous_raw_file_sha256 TEXT,
-    retrieved_at TEXT NOT NULL
+    retrieved_at TEXT NOT NULL,
+    -- The response's Date header. NULL for fetches recorded before it was kept: no default,
+    -- because any default would read as a server time that was never observed.
+    response_date TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_document_acquisitions_document
     ON document_acquisitions(portal_subdomain, document_id);

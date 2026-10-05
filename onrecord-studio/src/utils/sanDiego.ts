@@ -3,6 +3,7 @@ import type { CrawlPolicy, SourceGuidance } from '../types';
 import { REGIONAL_SOURCES } from './regionalSources';
 import { HOUSING_SOURCES } from './housingSources';
 import { INVESTIGATION_SOURCES } from './investigationSources';
+import { MEETING_BODY_SOURCES } from './meetingBodySources';
 
 export interface SanDiegoSource {
   id: string;
@@ -34,15 +35,6 @@ const singlePage: CrawlPolicy = {
 // Current calendars keep the app useful after a particular meeting packet becomes historical.
 export const SAN_DIEGO_SOURCES: readonly SanDiegoSource[] = [
   {
-    id: 'sd-cpp-meetings',
-    label: 'CPP agendas and minutes',
-    url: `${city}/cpp/meetingsagendas`,
-    description: 'Prepare for Commission on Police Practices meetings using the posted agendas, packets, and minutes.',
-    coverage: 'The current calendar and its linked documents. Earlier years and video recordings are separate research.',
-    crawlPolicy: singlePage,
-    pagePrefixes: [`${city}/cpp/meetingsagendas`],
-  },
-  {
     id: 'sd-police-policies',
     label: 'SDPD policies and procedures',
     url: `${city}/police/data-transparency/policies-procedures`,
@@ -69,6 +61,7 @@ export const SAN_DIEGO_SOURCES: readonly SanDiegoSource[] = [
     crawlPolicy: { ...singlePage, maximumResources: 100 },
     pagePrefixes: [`${city}/city-clerk/officialdocs/legisdocs/brown-act`],
   },
+  ...MEETING_BODY_SOURCES,
   ...REGIONAL_SOURCES,
   ...HOUSING_SOURCES,
   ...INVESTIGATION_SOURCES,

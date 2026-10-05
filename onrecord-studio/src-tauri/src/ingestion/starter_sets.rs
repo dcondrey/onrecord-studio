@@ -4,7 +4,8 @@
 //! existing `start_data_source` path. Nothing here fetches anything, and listing a set starts no
 //! network activity. Every entry's `id` and `url` must equal a built-in San Diego source preset
 //! in `src/utils/sanDiego.ts`, so the crawl policy and guidance that preset carries apply when the
-//! entry is added; `src/tests/starterSets.test.ts` enforces that.
+//! entry is added; `src/tests/starterSets.test.tsx` enforces that. The boards and commissions set
+//! is not declared here: it is derived from the meeting-body registry (`meeting_bodies.rs`).
 //!
 //! An entry is listed only after its URL was fetched and confirmed to be what `what` says it is on
 //! `verified_as_of`. That date is a fact about one check, not a promise the page is still there:
@@ -16,7 +17,7 @@ use std::collections::HashSet;
 
 /// Bump when an entry is added, removed, or changes URL, so a stored reference to a set can tell
 /// that the set it named is no longer the same set.
-pub const STARTER_SET_REGISTRY_VERSION: u32 = 1;
+pub const STARTER_SET_REGISTRY_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -141,8 +142,8 @@ pub const STARTER_SETS: &[StarterSet] = &[
     },
     StarterSet {
         id: "council-and-commissions",
-        title: "Council and commission meetings",
-        summary: "Posted City Council agendas and the agenda archive, plus the Commission on Police Practices calendar.",
+        title: "City Council meetings",
+        summary: "Posted City Council agendas and the Council agenda archive. Boards, commissions and Council committees are in the City boards and commissions set.",
         entries: &[
             entry(
                 "sd-council-agendas",
@@ -160,15 +161,6 @@ pub const STARTER_SETS: &[StarterSet] = &[
                 "https://sandiego.hylandcloud.com/211agendaonlinecouncil",
                 "Searchable archive of Council agendas and packets (OnBase Agenda Online).",
                 "City of San Diego City Clerk",
-                None,
-            ),
-            entry(
-                "sd-cpp-meetings",
-                Source,
-                "Commission on Police Practices calendar",
-                "https://www.sandiego.gov/cpp/meetingsagendas",
-                "Commission meeting calendar with agendas, packets, and minutes.",
-                "City of San Diego Commission on Police Practices",
                 None,
             ),
         ],
@@ -277,12 +269,11 @@ pub const STARTER_SETS: &[StarterSet] = &[
     },
 ];
 
-/// Returns the registry. Reads static data only and never touches the network.
-pub fn starter_sets_report() -> StarterSetsReport {
-    StarterSetsReport {
-        registry_version: STARTER_SET_REGISTRY_VERSION,
-        sets: STARTER_SETS.to_vec(),
-    }
+/// The hand-declared sets followed by the meeting-body set derived from the shared registry.
+pub fn all_starter_sets() -> Vec<StarterSet> {
+    let mut sets = STARTER_SETS.to_vec();
+    sets.push(super::meeting_bodies::boards_starter_set());
+    sets
 }
 
 fn normalize_url(url: &str) -> String {
@@ -335,8 +326,9 @@ mod tests {
 
     #[test]
     fn shipped_registry_is_well_formed() {
-        validate_registry(STARTER_SETS).unwrap();
-        for set in STARTER_SETS {
+        let sets = all_starter_sets();
+        validate_registry(&sets).unwrap();
+        for set in &sets {
             for entry in set.entries {
                 assert!(reqwest::Url::parse(entry.url).is_ok(), "{} URL", entry.id);
                 assert!(

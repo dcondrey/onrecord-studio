@@ -226,6 +226,7 @@ fn test_acquisition() -> crate::ingestion::client::AcquisitionRecord {
         content_type: Some("application/pdf".to_string()),
         etag: None,
         last_modified: None,
+        response_date: None,
         retrieved_at: "2026-08-24T12:03:00.000000Z".to_string(),
     }
 }
