@@ -67,6 +67,13 @@ pub async fn remove_organisation_payment_mapping(
         .await
 }
 
+#[tauri::command]
+pub async fn list_organisation_payees(
+    repository: State<'_, DuckDbRepository>,
+) -> Result<Vec<OrganisationPayee>, AppError> {
+    repository.organisation_payees().await
+}
+
 /// Writes a table the view built (the checked-organisations CSV) to a path the user chose.
 #[tauri::command]
 pub async fn export_organisation_portfolio_csv(

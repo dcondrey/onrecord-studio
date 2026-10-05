@@ -563,6 +563,15 @@ mod tests {
             (lines[0].role.as_str(), lines[0].amount.as_deref()),
             ("payee table", Some("5.0000"))
         );
+        let payees = repo.organisation_payees().await.unwrap();
+        assert_eq!(
+            payees[0].vendor_value,
+            "Alpha Project for the Homeless, Inc."
+        );
+        assert_eq!(payees[0].rows, 2);
+        assert!(payees
+            .iter()
+            .any(|p| p.vendor_value == "Father Joes Villages" && p.dataset_names == ["grants"]));
         assert!(repo
             .remove_organisation_payment_mapping("grants")
             .await

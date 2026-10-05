@@ -748,8 +748,13 @@ absent value is labelled as absent ("no answer", "not read", "no lookup"); none 
 zero. Export CSV writes the same rows (`portfolioCsv`), absent values as empty cells, through
 `export_organisation_portfolio_csv` to a path chosen in the save dialog.
 
-A pasted list of EINs is checked sequentially in the view (one `check_organisation_filings`
-call at a time); a failure is listed and the rest continue.
+A pasted list of names or EINs (`organisationNames.ts`) is checked sequentially in the view (one
+`check_organisation_filings` call at a time); a failure is listed and the rest continue. A name
+is resolved through the ProPublica name search and taken without confirmation only when exactly
+one result's name equals it with letters and digits alone compared; any other case is the
+reader's choice among the first five results, or skipped. `organisation_payees` lists every
+distinct payee value of the searched payment tables (500 per table, most rows first) so the
+organisations the library pays can be looked up by the name the table uses.
 
 ### G. Failure of one source
 

@@ -79,6 +79,7 @@ export interface NativeCommandMap {
   save_organisation_payment_mapping: { args: { mapping: Types.OrganisationPaymentMapping }; result: Types.OrganisationPaymentMapping[] };
   remove_organisation_payment_mapping: { args: { snapshotId: string }; result: Types.OrganisationPaymentMapping[] };
   export_organisation_portfolio_csv: { args: { outputPath: string; content: string }; result: null };
+  list_organisation_payees: { args: NoArgs; result: Types.OrganisationPayee[] };
   get_casework_state: { args: NoArgs; result: Types.CaseworkState };
   get_case_scope: { args: { caseId: string }; result: Types.CaseScope };
   create_casework_case: { args: { reportId: string }; result: Types.CaseworkCase };

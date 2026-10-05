@@ -1471,7 +1471,8 @@ Measured by the ignored live check (`live_organisation_check`, EIN 33-0215585): 
 refetched no return and returned the same record.
 Also built the same day for that use: a payee-table mapping (any imported table's vendor, amount
 and fiscal-year columns) searched beside the spending-role tables, and a one-row-per-organisation
-portfolio table over everything checked, and a pasted list of EINs checked one after another.
+portfolio table over everything checked, and a pasted list of names or EINs (or the payees of the mapped payment tables) looked up and
+checked one after another; a name is taken on its own only on an exact match.
 Not built: returns from index years before 2024 (no archive named; would need every archive's
 directory for a year, about 150 MB); Forms 990-EZ, 990-PF and 990-T; Schedule R; single-audit finding text; saving the clearinghouse key (it is
 typed each session); payments matched by anything but vendor name; progress reporting during a check; watchlist or packet integration

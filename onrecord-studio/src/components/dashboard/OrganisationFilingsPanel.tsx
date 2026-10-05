@@ -7,12 +7,12 @@ import type {
 } from '../../types';
 import { save } from '@tauri-apps/plugin-dialog';
 import { portfolioCsv, portfolioRow, type PortfolioRow } from '../../utils/organisationPortfolio';
+import { isEin, normalisedName, parseOrganisationList } from '../../utils/organisationNames';
 
 const dollars = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const NOT_STATED = 'not stated';
 const answer = (value: boolean | null) => value === null ? 'The return carries no answer.' : `The return answers "${value ? 'Yes' : 'No'}".`;
 const period = (value: string) => value.length === 6 ? `${value.slice(0, 4)}-${value.slice(4)}` : value;
-const isEin = (value: string) => /^\d{2}-?\d{7}$/.test(value.trim());
 
 const SCHEDULE_L_PARTS: Record<ScheduleLPart, string> = {
   EXCESS_BENEFIT_TRANSACTION: 'Part I, excess benefit transactions',
@@ -141,35 +141,86 @@ function Record({ filings }: { filings: OrganisationFilings }) {
   </div>;
 }
 
-/** Checks several organisations one after another; each result is stored by the check itself, so
- * the portfolio is reloaded once at the end. */
+type Resolution = { entry: string; candidates: OrganisationMatch[]; chosen: OrganisationMatch | null };
+
+/** Checks several organisations one after another. Names are looked up first; a name is taken as
+ * resolved only when a match's name equals it letter for letter, otherwise the reader chooses. Each
+ * result is stored by the check itself, so the portfolio is reloaded once at the end. */
 function BatchCheck({ auditKey, onDone }: { auditKey: string; onDone: () => void }) {
   const [text, setText] = useState('');
+  const [resolutions, setResolutions] = useState<Resolution[] | undefined>(undefined);
   const [progress, setProgress] = useState<{ done: number; total: number; failed: string[] } | undefined>(undefined);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState<'' | 'payees' | 'lookup' | 'check'>('');
   const gate = useLatestRequestGate();
-  const eins = text.split(/[\s,;]+/).map((value) => value.trim()).filter(isEin);
+  const { eins, names } = parseOrganisationList(text);
+  const stale = resolutions !== undefined && resolutions.map((r) => r.entry).join('\n') !== names.join('\n');
+  const resolved = stale || !resolutions ? [] : resolutions.flatMap((r) => r.chosen ? [r.chosen.ein] : []);
+  const targets = [...new Set([...eins, ...resolved])];
+  const unresolved = stale ? names.length : (resolutions ?? []).filter((r) => !r.chosen).length;
+
+  const addPayees = () => {
+    const request = gate.begin();
+    setBusy('payees'); setError('');
+    invokeCommand('list_organisation_payees', {}).then((payees) => {
+      if (!gate.isCurrent(request)) return;
+      const held = new Set([...eins, ...names.map(normalisedName)]);
+      const added = payees.map((p) => p.vendorValue).filter((value) => !held.has(normalisedName(value)));
+      setText((current) => [current.trimEnd(), ...added].filter(Boolean).join('\n'));
+      if (!payees.length) setError('No payee is listed: map a payment table under "Tables searched for payments" first.');
+    }, (reason) => { if (gate.isCurrent(request)) setError(String(reason)); })
+      .finally(() => { if (gate.isCurrent(request)) setBusy(''); });
+  };
+  const lookUp = async () => {
+    const request = gate.begin();
+    setBusy('lookup'); setError('');
+    const found: Resolution[] = [];
+    for (const entry of names) {
+      try {
+        const candidates = (await invokeCommand('search_organisations', { query: entry })).slice(0, 5);
+        const exact = candidates.filter((c) => normalisedName(c.name) === normalisedName(entry));
+        found.push({ entry, candidates, chosen: exact.length === 1 ? exact[0] : null });
+      } catch (reason) { found.push({ entry, candidates: [], chosen: null }); setError(`${entry}: ${String(reason)}`); }
+      if (!gate.isCurrent(request)) return;
+      setResolutions([...found]);
+    }
+    setBusy('');
+  };
   const start = async () => {
     const request = gate.begin();
     const failed: string[] = [];
-    setProgress({ done: 0, total: eins.length, failed });
-    for (const [index, ein] of eins.entries()) {
-      try { await invokeCommand('check_organisation_filings', { ein: ein.replace('-', ''), auditKey: auditKey.trim() || null }); }
+    setBusy('check'); setProgress({ done: 0, total: targets.length, failed });
+    for (const [index, ein] of targets.entries()) {
+      try { await invokeCommand('check_organisation_filings', { ein, auditKey: auditKey.trim() || null }); }
       catch (reason) { failed.push(`${ein}: ${String(reason)}`); }
       if (!gate.isCurrent(request)) return;
-      setProgress({ done: index + 1, total: eins.length, failed: [...failed] });
+      setProgress({ done: index + 1, total: targets.length, failed: [...failed] });
     }
+    setBusy('');
     onDone();
   };
-  const running = progress !== undefined && progress.done < progress.total;
+  const choose = (entry: string, ein: string) => setResolutions((current) => current?.map((r) => r.entry === entry ? { ...r, chosen: r.candidates.find((c) => c.ein === ein) ?? null } : r));
   return <details className="rounded-lg border border-line-strong p-3">
     <summary className="text-label leading-4 text-accent">Check a list of organisations</summary>
     <form className="mt-2 space-y-2" onSubmit={(event) => { event.preventDefault(); void start(); }}>
-      <label className="block text-label leading-4 text-fg-secondary">EINs, one per line or separated by commas
-        <textarea className="analysis-input mt-1 block w-full" rows={3} value={text} onChange={(event) => setText(event.target.value)} placeholder={'33-0215585\n33-0492302'} /></label>
+      <label className="block text-label leading-4 text-fg-secondary">Organisation names or EINs, one per line
+        <textarea className="analysis-input mt-1 block w-full" rows={4} value={text} onChange={(event) => setText(event.target.value)} placeholder={'Alpha Project for the Homeless\n33-0492302'} /></label>
       <div className="flex flex-wrap items-center gap-3">
-        <button type="submit" className="analysis-button" disabled={running || eins.length === 0}>{running ? 'Checking' : `Check ${eins.length} ${eins.length === 1 ? 'organisation' : 'organisations'}`}</button>
+        <button type="button" className="analysis-button" disabled={busy !== ''} onClick={addPayees}>{busy === 'payees' ? 'Reading payees' : 'Add payees from your payment tables'}</button>
+        <button type="button" className="analysis-button" disabled={busy !== '' || names.length === 0} onClick={() => { void lookUp(); }}>{busy === 'lookup' ? 'Looking up' : `Look up ${names.length} ${names.length === 1 ? 'name' : 'names'}`}</button>
+        <button type="submit" className="analysis-button" disabled={busy !== '' || targets.length === 0}>{busy === 'check' ? 'Checking' : `Check ${targets.length} ${targets.length === 1 ? 'organisation' : 'organisations'}`}</button>
         {progress && <p role="status" className="text-label leading-4 text-muted">{progress.done} of {progress.total} checked{progress.failed.length ? `, ${progress.failed.length} failed` : ''}.</p>}
       </div>
+      {error && <p role="alert" className="text-label leading-4 text-warning">{error}</p>}
+      {names.length > 0 && (stale || !resolutions) && <p className="text-label leading-4 text-muted">{names.length} {names.length === 1 ? 'name needs' : 'names need'} looking up before they can be checked.</p>}
+      {resolutions && !stale && <ul aria-label="Name lookups" className="space-y-1 text-label leading-4">{resolutions.map((r) => <li key={r.entry} className="flex flex-wrap items-center gap-2">
+        <span className="text-fg-secondary">{r.entry}</span>
+        {r.chosen && normalisedName(r.chosen.name) === normalisedName(r.entry) && r.candidates.filter((c) => normalisedName(c.name) === normalisedName(r.entry)).length === 1
+          ? <span className="text-muted">→ {r.chosen.name}, EIN {r.chosen.ein}{[r.chosen.city, r.chosen.state].filter(Boolean).length ? ` (${[r.chosen.city, r.chosen.state].filter(Boolean).join(', ')})` : ''}</span>
+          : r.candidates.length === 0 ? <span className="text-warning">no match in ProPublica Nonprofit Explorer</span>
+          : <select aria-label={`Match for ${r.entry}`} className="analysis-input" value={r.chosen?.ein ?? ''} onChange={(e) => choose(r.entry, e.target.value)}><option value="">Choose the organisation, or skip</option>{r.candidates.map((c) => <option key={c.ein} value={c.ein}>{c.name}{[c.city, c.state].filter(Boolean).length ? ` (${[c.city, c.state].filter(Boolean).join(', ')})` : ''} · EIN {c.ein}</option>)}</select>}
+      </li>)}</ul>}
+      {resolutions && !stale && unresolved > 0 && <p className="text-label leading-4 text-muted">{unresolved} {unresolved === 1 ? 'name is' : 'names are'} not matched and will be skipped.</p>}
       {progress && progress.failed.length > 0 && <ul role="alert" className="list-disc pl-5 text-label leading-4 text-warning">{progress.failed.map((line) => <li key={line}>{line}</li>)}</ul>}
     </form>
   </details>;

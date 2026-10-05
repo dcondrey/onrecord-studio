@@ -65,21 +65,33 @@ describe('organisation filings', () => {
     expect(screen.getByText(/No single-audit lookup has run/)).toBeTruthy();
   });
 
-  it('checks a pasted list one organisation at a time, records a failure, and reloads the portfolio once', async () => {
+  it('looks names up, takes only a letter-for-letter match on its own, lets the reader choose the rest, then checks each once', async () => {
     const checked: string[] = [];
     let lists = 0;
-    bridge.invoke.mockImplementation((name: string, args: { ein?: string }) => {
+    const match = (ein: string, name: string) => ({ ein, name, city: 'San Diego', state: 'CA' });
+    bridge.invoke.mockImplementation((name: string, args: { ein?: string; query?: string }) => {
       if (name === 'list_organisation_checks') { lists += 1; return Promise.resolve([]); }
       if (name === 'list_organisation_payment_mappings') return Promise.resolve([]);
       if (name === 'get_analytical_schema') return Promise.resolve({ datasets: [], columns: [], templates: [] });
+      if (name === 'list_organisation_payees') return Promise.resolve([{ vendorValue: 'Alpha Project for the Homeless, Inc.', rows: 3, datasetNames: ['pay'] }, { vendorValue: 'Nobody Known', rows: 1, datasetNames: ['pay'] }]);
+      if (name === 'search_organisations') return Promise.resolve(args.query === 'Nobody Known' ? [] : [match('330215585', 'Alpha Project For The Homeless'), match('330580463', 'Alpha Project For The Homeless Anaheim Gardens')]);
       if (name === 'check_organisation_filings') { checked.push(args.ein!); return args.ein === '222222222' ? Promise.reject(new Error('index unread')) : Promise.resolve(filings(args.ein!, 'X')); }
       return Promise.resolve(null);
     });
     render(<OrganisationFilingsPanel />);
-    fireEvent.change(screen.getByLabelText(/EINs, one per line/), { target: { value: '33-1111111, not-an-ein\n222222222' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Check 2 organisations' }));
-    await screen.findByText(/2 of 2 checked, 1 failed/);
-    expect(checked).toEqual(['331111111', '222222222']);
+    fireEvent.change(screen.getByLabelText(/Organisation names or EINs/), { target: { value: '222222222\nALPHA PROJECT FOR THE HOMELESS' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add payees from your payment tables' }));
+    await screen.findByRole('button', { name: 'Look up 3 names' });
+    expect(screen.getByRole('button', { name: 'Check 1 organisation' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Look up 3 names' }));
+    const choice = await screen.findByLabelText('Match for Alpha Project for the Homeless, Inc.');
+    expect(screen.getByText('no match in ProPublica Nonprofit Explorer')).toBeTruthy();
+    expect(screen.getByText(/→ Alpha Project For The Homeless, EIN 330215585/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Check 2 organisations' })).toBeTruthy();
+    fireEvent.change(choice, { target: { value: '330580463' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Check 3 organisations' }));
+    await screen.findByText(/3 of 3 checked, 1 failed/);
+    expect(checked).toEqual(['222222222', '330215585', '330580463']);
     expect(screen.getByText(/222222222: Error: index unread/)).toBeTruthy();
     expect(lists).toBe(2);
   });

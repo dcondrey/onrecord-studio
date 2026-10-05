@@ -229,6 +229,15 @@ pub struct PublicMoneyLine {
     pub amount: Option<String>,
 }
 
+/// One distinct payee value in the library's mapped payment tables, as written there.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct OrganisationPayee {
+    pub vendor_value: String,
+    pub rows: u64,
+    pub dataset_names: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct IndexYearCheck {

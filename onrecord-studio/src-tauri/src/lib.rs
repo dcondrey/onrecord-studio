@@ -129,6 +129,7 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::organisations::save_organisation_payment_mapping,
         commands::organisations::remove_organisation_payment_mapping,
         commands::organisations::export_organisation_portfolio_csv,
+        commands::organisations::list_organisation_payees,
         commands::casework::get_casework_state,
         commands::casework::get_case_scope,
         commands::casework::create_casework_case,

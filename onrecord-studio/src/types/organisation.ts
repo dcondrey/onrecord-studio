@@ -181,3 +181,9 @@ export interface OrganisationPaymentMapping {
   amountColumn: string;
   fiscalYearColumn: string | null;
 }
+
+export interface OrganisationPayee {
+  vendorValue: string;
+  rows: number;
+  datasetNames: string[];
+}

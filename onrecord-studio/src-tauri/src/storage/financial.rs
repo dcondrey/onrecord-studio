@@ -879,7 +879,111 @@ fn validate_financial_sources(
 /// This also works before the financial panel has ever been opened on an upgraded database.
 const VENDOR_ROLES: &[&str] = &["contract", "amendment", "payment"];
 
+/// One table whose vendor and amount columns are searched for an organisation.
+struct PaymentSource {
+    role: String,
+    dataset: FinancialDataset,
+    vendor_column: String,
+    vendor: String,
+    amount: String,
+    fiscal_year: String,
+}
+
 impl DuckDbRepository {
+    async fn payment_sources(&self) -> Result<Vec<PaymentSource>, AppError> {
+        let workspace = self.financial_workspace().await?;
+        let mut sources = vec![];
+        for mapping in workspace.mappings.iter().filter(|m| {
+            VENDOR_ROLES.contains(&m.role.as_str())
+                && m.columns.contains_key("vendor_id")
+                && m.columns.contains_key("amount")
+        }) {
+            let Some(dataset) = workspace
+                .datasets
+                .iter()
+                .find(|d| d.snapshot_id == mapping.snapshot_id)
+            else {
+                continue;
+            };
+            sources.push(PaymentSource {
+                role: mapping.role.clone(),
+                dataset: dataset.clone(),
+                vendor_column: mapping.columns["vendor_id"].clone(),
+                vendor: expression(mapping, "vendor_id"),
+                amount: expression(mapping, "amount"),
+                fiscal_year: if mapping.columns.contains_key("fy") {
+                    expression(mapping, "fy")
+                } else {
+                    "NULL".into()
+                },
+            });
+        }
+        for mapping in self.organisation_payment_mappings().await? {
+            let Some(dataset) = workspace
+                .datasets
+                .iter()
+                .find(|d| d.snapshot_id == mapping.snapshot_id)
+            else {
+                continue;
+            };
+            sources.push(PaymentSource {
+                role: "payee table".into(),
+                dataset: dataset.clone(),
+                vendor_column: mapping.vendor_column.clone(),
+                vendor: format!(
+                    "NULLIF(trim(CAST({} AS VARCHAR)), '')",
+                    quote(&mapping.vendor_column)
+                ),
+                amount: format!(
+                    "TRY_CAST({} AS DECIMAL(28,4))",
+                    quote(&mapping.amount_column)
+                ),
+                fiscal_year: mapping
+                    .fiscal_year_column
+                    .as_ref()
+                    .map(|c| format!("NULLIF(trim(CAST({} AS VARCHAR)), '')", quote(c)))
+                    .unwrap_or_else(|| "NULL".into()),
+            });
+        }
+        Ok(sources)
+    }
+
+    /// Every distinct payee value in the searched tables with its row count, most rows first,
+    /// so the organisations the library pays can be looked up by name. At most 500 per table.
+    pub async fn organisation_payees(&self) -> Result<Vec<OrganisationPayee>, AppError> {
+        let mut by_value: BTreeMap<String, OrganisationPayee> = BTreeMap::new();
+        for source in self.payment_sources().await? {
+            let sql = format!(
+                "WITH mapped AS (SELECT {} AS vendor FROM {}) SELECT vendor, COUNT(*) AS source_rows FROM mapped WHERE vendor IS NOT NULL GROUP BY vendor ORDER BY source_rows DESC, vendor",
+                source.vendor,
+                quote(&source.dataset.table_name)
+            );
+            for row in self.execute_restricted_sql(&sql, 500).await?.rows {
+                let Some(vendor_value) = row.first().and_then(value_string) else {
+                    continue;
+                };
+                let rows = row.get(1).and_then(serde_json::Value::as_u64).unwrap_or(0);
+                let entry = by_value
+                    .entry(vendor_value.clone())
+                    .or_insert(OrganisationPayee {
+                        vendor_value,
+                        rows: 0,
+                        dataset_names: vec![],
+                    });
+                entry.rows += rows;
+                if !entry.dataset_names.contains(&source.dataset.name) {
+                    entry.dataset_names.push(source.dataset.name.clone());
+                }
+            }
+        }
+        let mut payees = by_value.into_values().collect::<Vec<_>>();
+        payees.sort_by(|a, b| {
+            b.rows
+                .cmp(&a.rows)
+                .then(a.vendor_value.cmp(&b.vendor_value))
+        });
+        Ok(payees)
+    }
     /// Rows of the mapped contract, amendment and payment tables whose vendor value contains the
     /// organisation's name, compared on letters and digits only. These tables carry no EIN, so
     /// the match is by name; each matched vendor value is returned as written for the reader to
@@ -902,65 +1006,18 @@ impl DuckDbRepository {
                 vec!["The organisation's name is too short to search vendor names for.".into()],
             ));
         }
-        let workspace = self.financial_workspace().await?;
         let mut lines = vec![];
         let mut notes = vec![];
         let mut searched = false;
-        // (role, dataset, vendor column name, vendor expr, amount expr, fiscal year expr)
-        let mut sources: Vec<(String, &FinancialDataset, String, String, String, String)> = vec![];
-        for mapping in workspace.mappings.iter().filter(|m| {
-            VENDOR_ROLES.contains(&m.role.as_str())
-                && m.columns.contains_key("vendor_id")
-                && m.columns.contains_key("amount")
-        }) {
-            let Some(dataset) = workspace
-                .datasets
-                .iter()
-                .find(|d| d.snapshot_id == mapping.snapshot_id)
-            else {
-                continue;
-            };
-            sources.push((
-                mapping.role.clone(),
+        for source in self.payment_sources().await? {
+            let PaymentSource {
+                role,
                 dataset,
-                mapping.columns["vendor_id"].clone(),
-                expression(mapping, "vendor_id"),
-                expression(mapping, "amount"),
-                if mapping.columns.contains_key("fy") {
-                    expression(mapping, "fy")
-                } else {
-                    "NULL".into()
-                },
-            ));
-        }
-        for mapping in self.organisation_payment_mappings().await? {
-            let Some(dataset) = workspace
-                .datasets
-                .iter()
-                .find(|d| d.snapshot_id == mapping.snapshot_id)
-            else {
-                continue;
-            };
-            sources.push((
-                "payee table".into(),
-                dataset,
-                mapping.vendor_column.clone(),
-                format!(
-                    "NULLIF(trim(CAST({} AS VARCHAR)), '')",
-                    quote(&mapping.vendor_column)
-                ),
-                format!(
-                    "TRY_CAST({} AS DECIMAL(28,4))",
-                    quote(&mapping.amount_column)
-                ),
-                mapping
-                    .fiscal_year_column
-                    .as_ref()
-                    .map(|c| format!("NULLIF(trim(CAST({} AS VARCHAR)), '')", quote(c)))
-                    .unwrap_or_else(|| "NULL".into()),
-            ));
-        }
-        for (role, dataset, vendor_column, vendor, amount, fiscal_year) in sources {
+                vendor_column,
+                vendor,
+                amount,
+                fiscal_year,
+            } = source;
             searched = true;
             let sql = format!(
                 "WITH mapped AS (SELECT {vendor} AS vendor, {fiscal_year} AS fy, {amount} AS amount FROM {}) SELECT vendor, CAST(fy AS VARCHAR) AS fy, COUNT(*) AS source_rows, CAST(CASE WHEN COUNT(*)=COUNT(amount) THEN SUM(amount) END AS VARCHAR) AS amount FROM mapped WHERE trim(regexp_replace(lower(vendor),'[^a-z0-9]+',' ','g')) LIKE {} GROUP BY vendor, fy ORDER BY fy, vendor",
