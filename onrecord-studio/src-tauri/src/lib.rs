@@ -243,6 +243,8 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::annotations::import_annotation_packet,
         commands::annotations::resolve_page_regions,
         commands::original_file::read_document_original,
+        commands::document_origin::describe_document_origin,
+        commands::document_origin::read_document_internal_metadata,
         commands::tracker::list_claimed_requests,
         commands::tracker::claim_request,
         commands::tracker::update_claimed_request,

@@ -19,6 +19,7 @@ vi.mock('../ipc', () => ({
   invokeCommand: (command: string, args?: { documentId?: number }) => {
     if (command === 'verify_document_provenance') return Promise.resolve(null);
     if (command === 'get_document_entity_truncations') return Promise.resolve([]);
+    if (command === 'describe_document_origin') return Promise.resolve({ origin: 'COLLECTED_FROM_SOURCE', heldRelation: null });
     if (command === 'audit_document_residual_evidence') {
       const documentId = args?.documentId ?? 0;
       const answer = bridge.bundles.get(documentId) ?? { findings: [], warnings: [], coverageComplete: true };

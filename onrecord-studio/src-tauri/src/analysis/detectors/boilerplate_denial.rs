@@ -127,6 +127,7 @@ async fn load_candidates(repository: &DuckDbRepository) -> Result<Vec<DenialCand
                         ON r.id = d.request_id
                        AND r.portal_subdomain = d.portal_subdomain
                      WHERE LOWER(TRIM(d.visibility)) = 'public'
+                       AND d.portal_subdomain NOT IN (SELECT subdomain FROM user_supplied_sources)
                        AND fts.extracted_text IS NOT NULL
                        AND LENGTH(fts.extracted_text) >= ?1
                      ORDER BY d.id DESC

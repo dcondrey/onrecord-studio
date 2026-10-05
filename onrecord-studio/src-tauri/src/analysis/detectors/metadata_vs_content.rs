@@ -115,6 +115,7 @@ async fn load_candidates(repository: &DuckDbRepository) -> Result<Vec<Candidate>
                        AND fts.portal_subdomain = d.portal_subdomain
                      WHERE d.local_path IS NOT NULL
                        AND LOWER(TRIM(d.visibility)) = 'public'
+                       AND d.portal_subdomain NOT IN (SELECT subdomain FROM user_supplied_sources)
                        AND LOWER(COALESCE(d.content_type, '')) LIKE 'application/pdf%'
                      ORDER BY d.updated_at DESC
                      LIMIT ?1",

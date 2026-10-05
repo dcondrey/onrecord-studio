@@ -1216,6 +1216,20 @@ detector itself on that collection (it is opened only by the CLI), and its file 
 collection has no `request_release_events` table and no request with a determination time, so the
 two older detectors do not run on it.
 
+Built 2026-10-04: a file or pasted text the user adds is no longer read as an agency release.
+`documents.visibility` stays `public` (it is the access gate for the viewer, search and table
+import, not a statement of origin); origin is answered from `portals.source_kind` through the
+`user_supplied_sources` view, which every detector query that selects documents without requiring
+an agency or a determination now excludes, and `absence_of_records` reads records releases only.
+No stored value changed. The document viewer labels such a file "Added by you. Not downloaded from
+an agency source", and `describe_document_origin` compares it with collected documents: same file
+SHA-256, same extracted text in a different file, and near-duplicate text from the existing corpus
+index, each either compared or not compared with the reason. `read_document_internal_metadata`
+shows the PDF Info/XMP or Office docProps fields, each a value or not recorded, stated as written
+by the file's maker and unverified. Not built: marking findings drawn from an imported table whose
+origin file was hand-added, and excluding hand-added files from redaction-inference corroboration
+(architecture doc section 5).
+
 ## Leads from service-report tables (2026-10-04)
 
 Decision: "What stands out" shows leads about the subject of the records; facts about a table

@@ -297,8 +297,27 @@ impl DuckDbRepository {
         let pending = count_pending_search_index_documents(conn)?;
         verify_logical_relations(conn)?;
         super::row_store::rebuild_row_view(conn)?;
+        create_user_supplied_sources_view(conn)?;
         Ok(pending)
     }
+}
+
+/// Sources whose documents the user added by hand. Created after the `source_kind` shim because a
+/// view binds its columns when it is created, so it cannot live in the base script, which runs
+/// against a `portals` table that may not have the column yet.
+fn create_user_supplied_sources_view(conn: &Connection) -> Result<(), AppError> {
+    let kinds = crate::types::SourceKind::USER_SUPPLIED
+        .map(|kind| format!("'{}'", kind.as_str()))
+        .join(", ");
+    conn.execute_batch(&format!(
+        "CREATE OR REPLACE VIEW user_supplied_sources AS
+         SELECT subdomain FROM portals WHERE source_kind IN ({kinds})"
+    ))
+    .map_err(|error| {
+        AppError::Storage(format!(
+            "Failed to define the user-supplied source view: {error}"
+        ))
+    })
 }
 
 fn map_legacy_legal_authority_row(row: &Row<'_>) -> duckdb::Result<LegacyLegalAuthorityRow> {

@@ -30,6 +30,15 @@ impl SourceKind {
         }
     }
 
+    /// Kinds whose documents the user put in by hand. Nothing was fetched from an agency, so such
+    /// a document is never evidence of what an agency released, withheld or said. The
+    /// `user_supplied_sources` view is generated from this list.
+    pub const USER_SUPPLIED: [Self; 2] = [Self::LocalFile, Self::PastedContent];
+
+    pub fn is_user_supplied(self) -> bool {
+        Self::USER_SUPPLIED.contains(&self)
+    }
+
     pub fn from_stored(value: &str) -> Self {
         match value {
             "WEB_CRAWL" => Self::WebCrawl,

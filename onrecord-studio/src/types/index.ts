@@ -6,6 +6,7 @@ export * from './investigation';
 export * from './legal';
 export * from './license';
 export * from './corpus';
+export * from './documentOrigin';
 export * from './source';
 export * from './sourceCatalog';
 export * from './semantic';

@@ -95,6 +95,7 @@ async fn load_scanned_documents(
                     // Only a records release is a set whose gaps mean anything. A crawled site's
                     // files are fetched by link and, under a collection subject, deliberately in
                     // part, so a missing number there is a file not collected, not one withheld.
+                    // Files the user added by hand are whatever the user chose to add.
                     "SELECT d.portal_subdomain, d.request_id, d.id, d.file_name, fts.extracted_text
                      FROM documents_fts fts
                      JOIN documents d
@@ -102,8 +103,7 @@ async fn load_scanned_documents(
                        AND d.portal_subdomain = fts.portal_subdomain
                      JOIN portals p ON p.subdomain = d.portal_subdomain
                      WHERE LOWER(TRIM(d.visibility)) = 'public'
-                       AND COALESCE(p.source_kind, 'NEXT_REQUEST')
-                           IN ('NEXT_REQUEST', 'LOCAL_FILE', 'PASTED_CONTENT')
+                       AND COALESCE(p.source_kind, 'NEXT_REQUEST') = 'NEXT_REQUEST'
                      ORDER BY d.request_id ASC, d.portal_subdomain ASC, d.id ASC
                      LIMIT ?1",
                 )

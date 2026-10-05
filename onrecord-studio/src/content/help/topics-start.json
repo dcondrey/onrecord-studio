@@ -103,6 +103,9 @@
     "group": "Getting started",
     "summary": "Register a public source, pause it, remove it, or delete it and its documents.",
     "keywords": [
+      "local file",
+      "added by you",
+      "internal metadata",
       "source",
       "url",
       "crawl",
@@ -136,6 +139,14 @@
         ]
       },
       {
+        "heading": "Files and text you add yourself",
+        "paragraphs": [
+          "A file you add or text you paste was not downloaded from an agency source, and the app cannot check where it came from. The document viewer labels it: Added by you, not downloaded from an agency source. It stays searchable, citable and available to table import, but it is not counted as an agency release. No finding about what an agency released, withheld, redacted or said is drawn from it.",
+          "Under the label the viewer compares the file with the documents collected from sources: exact copies (same file SHA-256, naming the source, request and file), the same extracted text in a file that is not an exact copy, and similar text from the similarity index. A match says your file matches a file a source served. It does not say your file is authentic, and no match does not say it is fabricated. A comparison that could not be made (no file hash recorded, no text extracted, or the file is not in the similarity index yet) reads not compared, never no match.",
+          "Internal metadata lists what the file records about itself. For a PDF: creator, producer, and creation and modification times from its Info dictionary and XMP. For docx, xlsx and pptx: the last-modified-by name, application, company, and created, modified and last-printed times. A field the file does not carry reads not recorded. These fields are written by whoever made the file and can be set to anything. The app reads them and verifies none of them."
+        ]
+      },
+      {
         "heading": "Remove versus delete",
         "items": [
           "Remove source stops synchronizing and takes the source off the list. Documents already ingested are kept and stay searchable and exportable.",
@@ -153,7 +164,8 @@
     "views": [],
     "findingKinds": [],
     "commandGroups": [
-      "ingest"
+      "ingest",
+      "document_origin"
     ],
     "related": [
       "view-activity",

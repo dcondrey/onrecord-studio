@@ -94,6 +94,7 @@ async fn load_msg_documents(repository: &DuckDbRepository) -> Result<Vec<MsgDocu
                      FROM documents d
                      WHERE d.local_path IS NOT NULL
                        AND LOWER(TRIM(d.visibility)) = 'public'
+                       AND d.portal_subdomain NOT IN (SELECT subdomain FROM user_supplied_sources)
                        AND (LOWER(COALESCE(d.content_type, '')) LIKE 'application/vnd.ms-outlook%'
                             OR LOWER(COALESCE(d.file_name, '')) LIKE '%.msg')
                      ORDER BY d.request_id

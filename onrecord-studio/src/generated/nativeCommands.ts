@@ -193,6 +193,8 @@ export interface NativeCommandMap {
   import_annotation_packet: { args: { payload: string; packetSha256: string }; result: Types.AnnotationImportResult };
   resolve_page_regions: { args: { portalKey: string; documentId: number; originalSha256: string; pageCount: number }; result: Types.ResolvedPageRegion[] };
   read_document_original: { args: { documentId: number; portalKey: string }; result: ArrayBuffer };
+  describe_document_origin: { args: { documentId: number; portalKey: string }; result: Types.DocumentOriginReport };
+  read_document_internal_metadata: { args: { documentId: number; portalKey: string }; result: Types.DocumentInternalMetadata };
   list_claimed_requests: { args: NoArgs; result: Types.ClaimedRequest[] };
   claim_request: { args: { input: Types.ClaimRequestInput }; result: Types.ClaimedRequest };
   update_claimed_request: { args: { input: Types.UpdateClaimedRequestInput }; result: Types.ClaimedRequest };
