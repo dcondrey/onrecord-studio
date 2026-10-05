@@ -1,9 +1,9 @@
 //! Service-report leads stored as findings.
 //!
 //! The counts come from the discovery feed's SQL (`src/utils/serviceAccountability.ts`), run
-//! through the restricted analytical SQL boundary. This side checks the snapshot each lead names
-//! against the catalog, writes the source line from the catalog's own record, and stores the
-//! lead with no confidence score: nothing here recounts the rows.
+//! through the restricted analytical SQL boundary. This side checks every snapshot a lead names
+//! against the catalog, writes each source line from the catalog's own record, appends the SQL as
+//! sent, and stores the lead with no confidence score: nothing here recounts the rows.
 
 use std::collections::HashMap;
 
@@ -25,6 +25,9 @@ const MAX_LEADS: usize = 200;
 const MAX_KEY_CHARS: usize = 400;
 const MAX_TITLE_CHARS: usize = 600;
 const MAX_TEXT_CHARS: usize = 6_000;
+/// A comparison across yearly files reads one table per year plus its companions.
+const MAX_SOURCE_TABLES: usize = 40;
+const MAX_SQL_CHARS: usize = 40_000;
 
 /// Which published records a lead was counted from; decides the finding kind it is stored as.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -34,6 +37,7 @@ pub enum LeadFamily {
     PoliceStops,
     AbatementLogs,
     ChargeLogs,
+    CapacityComparison,
 }
 
 impl LeadFamily {
@@ -43,6 +47,7 @@ impl LeadFamily {
             Self::PoliceStops => FindingKind::PoliceStopLead,
             Self::AbatementLogs => FindingKind::AbatementLogLead,
             Self::ChargeLogs => FindingKind::ChargeLogLead,
+            Self::CapacityComparison => FindingKind::CapacityComparisonLead,
         }
     }
 }
@@ -54,10 +59,14 @@ pub struct ServiceLeadInput {
     /// The feed's own identifier for the lead, stable while its evidence is.
     pub key: String,
     pub snapshot_id: String,
+    /// Every table the SQL read, `snapshot_id` first.
+    pub snapshot_ids: Vec<String>,
     pub title: String,
     pub detail: String,
     pub question: String,
     pub method: String,
+    /// The statement whose result the lead's figures were read from.
+    pub sql: String,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -77,6 +86,58 @@ fn bounded(name: &str, value: &str, limit: usize) -> Result<(), AppError> {
         )));
     }
     Ok(())
+}
+
+/// The tables a lead read, in the order sent: its own first, none twice, all still imported.
+fn sources<'a>(
+    lead: &ServiceLeadInput,
+    catalog: &HashMap<&str, &'a AnalyticalDatasetSummary>,
+) -> Result<Vec<&'a AnalyticalDatasetSummary>, AppError> {
+    if lead.snapshot_ids.len() > MAX_SOURCE_TABLES {
+        return Err(AppError::Analysis(format!(
+            "A service lead names {} tables; at most {MAX_SOURCE_TABLES} are cited.",
+            lead.snapshot_ids.len()
+        )));
+    }
+    if lead.snapshot_ids.first() != Some(&lead.snapshot_id) {
+        return Err(AppError::Analysis(
+            "A service lead does not list its own table first among the tables it read."
+                .to_string(),
+        ));
+    }
+    let mut listed = std::collections::HashSet::new();
+    lead.snapshot_ids
+        .iter()
+        .map(|snapshot_id| {
+            if !listed.insert(snapshot_id.as_str()) {
+                return Err(AppError::Analysis(
+                    "A service lead lists a table twice.".to_string(),
+                ));
+            }
+            catalog.get(snapshot_id.as_str()).copied().ok_or_else(|| {
+                AppError::Analysis(
+                    "A service lead names a table that is no longer imported.".to_string(),
+                )
+            })
+        })
+        .collect()
+}
+
+fn source_line(position: usize, dataset: &AnalyticalDatasetSummary) -> String {
+    format!(
+        "{}. '{}' ({}), retrieved {}, sha256 {}",
+        position + 1,
+        dataset.display_name,
+        dataset
+            .source_uri
+            .as_deref()
+            .unwrap_or("no source address recorded"),
+        dataset
+            .retrieved_at
+            .get(..10)
+            .unwrap_or(&dataset.retrieved_at),
+        dataset.source_sha256,
+    )
 }
 
 /// One finding per lead. A lead naming a snapshot the catalog does not hold is refused, along
@@ -104,11 +165,9 @@ pub fn to_findings(
             bounded("detail", &lead.detail, MAX_TEXT_CHARS)?;
             bounded("question", &lead.question, MAX_TEXT_CHARS)?;
             bounded("method", &lead.method, MAX_TEXT_CHARS)?;
-            let dataset = catalog.get(lead.snapshot_id.as_str()).ok_or_else(|| {
-                AppError::Analysis(
-                    "A service lead names a table that is no longer imported.".to_string(),
-                )
-            })?;
+            bounded("SQL", &lead.sql, MAX_SQL_CHARS)?;
+            let sources = sources(lead, &catalog)?;
+            let dataset = sources[0];
             let subject = FindingSubject::default();
             Ok(Finding {
                 id: finding_id(
@@ -129,16 +188,17 @@ pub fn to_findings(
                 subject,
                 headline: lead.title.trim().to_string(),
                 explanation: format!(
-                    "{} Method: {} Worth asking: {} Source: the dataset '{}' (sha256 {}), retrieved {}.",
+                    "{} Method: {} Worth asking: {}\n\nTables read:\n{}\n\nSQL:\n{}",
                     lead.detail.trim(),
                     lead.method.trim(),
                     lead.question.trim(),
-                    dataset.display_name,
-                    dataset
-                        .source_sha256
-                        .get(..16)
-                        .unwrap_or(&dataset.source_sha256),
-                    dataset.retrieved_at.get(..10).unwrap_or(&dataset.retrieved_at),
+                    sources
+                        .iter()
+                        .enumerate()
+                        .map(|(position, dataset)| source_line(position, dataset))
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                    lead.sql.trim(),
                 ),
                 citations: vec![],
                 discovered_at: now,
@@ -207,6 +267,8 @@ mod tests {
             },
             key: key.into(),
             snapshot_id: snapshot_id.into(),
+            snapshot_ids: vec![snapshot_id.into()],
+            sql: "SELECT category FROM service_backlog".into(),
             title: format!("{key}: 12 of 40 open reports have been open more than a year"),
             detail: "Street lights: 12 of 40.".into(),
             question: "Which department owns street lights?".into(),
@@ -270,5 +332,49 @@ mod tests {
         assert_eq!(stored(&repository).await, ["a"]);
 
         assert!(to_findings(&[lead("c:backlog", "c")], &datasets, last).is_err());
+    }
+
+    #[test]
+    fn a_lead_cites_every_table_it_read_and_its_sql_or_is_refused() {
+        let budget = AnalyticalDatasetSummary {
+            display_name: "City operating budget".into(),
+            source_uri: None,
+            source_sha256: "cd".repeat(32),
+            ..dataset("b")
+        };
+        let datasets = [dataset("a"), budget];
+        let reading = |snapshot_ids: &[&str]| ServiceLeadInput {
+            snapshot_ids: snapshot_ids.iter().map(|id| (*id).to_string()).collect(),
+            ..lead("a:backlog", "a")
+        };
+        let [finding] = &to_findings(&[reading(&["a", "b"])], &datasets, Utc::now()).unwrap()[..]
+        else {
+            panic!("one lead, one finding");
+        };
+        assert!(finding.explanation.ends_with(&format!(
+            "Tables read:\n1. 'Get It Done open reports' (https://example.test/open.csv), retrieved 2026-10-04, sha256 {}\n2. 'City operating budget' (no source address recorded), retrieved 2026-10-04, sha256 {}\n\nSQL:\nSELECT category FROM service_backlog",
+            "ab".repeat(32),
+            "cd".repeat(32)
+        )));
+        for refused in [
+            reading(&[]),
+            reading(&["b", "a"]),
+            reading(&["a", "a"]),
+            reading(&["a", "gone"]),
+            ServiceLeadInput {
+                sql: " ".into(),
+                ..reading(&["a"])
+            },
+        ] {
+            assert!(to_findings(&[refused], &datasets, Utc::now()).is_err());
+        }
+        let ids: Vec<String> = (0..=MAX_SOURCE_TABLES).map(|n| format!("t{n}")).collect();
+        let many: Vec<AnalyticalDatasetSummary> = ids.iter().map(|id| dataset(id)).collect();
+        let listing = |count: usize| ServiceLeadInput {
+            snapshot_ids: ids[..count].to_vec(),
+            ..lead("t0:backlog", "t0")
+        };
+        assert!(to_findings(&[listing(MAX_SOURCE_TABLES)], &many, Utc::now()).is_ok());
+        assert!(to_findings(&[listing(MAX_SOURCE_TABLES + 1)], &many, Utc::now()).is_err());
     }
 }

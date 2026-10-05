@@ -352,7 +352,7 @@ export function serviceAccountabilityLeads(results: { query: DiscoveryQuery; res
 
 /** The same service and area listed as slower to close in several imported tables (for example
  * one table per year). One table's difference can be chance; the same one recurring is a pattern. */
-export function recurringServiceLeads(tables: { snapshotId: string; displayName: string; results: { query: DiscoveryQuery; result?: SqlQueryResult }[] }[]): (ServiceLead & { snapshotId: string })[] {
+export function recurringServiceLeads(tables: { snapshotId: string; displayName: string; results: { query: DiscoveryQuery; result?: SqlQueryResult }[] }[]): (ServiceLead & { snapshotId: string; reads: string[] })[] {
   const seen = new Map<string, { area: string; category: string; place: string; hits: { snapshotId: string; displayName: string; median: number; overall: number; reports: number; query: DiscoveryQuery }[] }>();
   for (const table of tables) for (const { query, result } of table.results) {
     const [id, area] = query.id.split(':');
@@ -369,7 +369,7 @@ export function recurringServiceLeads(tables: { snapshotId: string; displayName:
   return [...seen.entries()].filter(([, entry]) => entry.hits.length >= RECURRING_TABLES)
     .sort(([a, x], [b, y]) => y.hits.length - x.hits.length || y.hits.reduce((sum, hit) => sum + hit.reports, 0) - x.hits.reduce((sum, hit) => sum + hit.reports, 0) || a.localeCompare(b))
     .slice(0, 3).map(([key, entry], index) => ({
-      snapshotId: entry.hits[0].snapshotId, key: `service_recurring:${key}`, priority: 99 - index, query: entry.hits[0].query,
+      snapshotId: entry.hits[0].snapshotId, reads: entry.hits.slice(1).map((hit) => hit.snapshotId), key: `service_recurring:${key}`, priority: 99 - index, query: entry.hits[0].query,
       title: `${entry.category} reports in ${entry.place} closed slower than the all-area median in ${entry.hits.length} imported tables`,
       detail: `${entry.hits.map((hit) => `${hit.displayName}: median ${shown(hit.median)} days against ${shown(hit.overall)} (${shown(hit.reports)} reports).`).join(' ')} Tables are compared as imported and can overlap in the reports they hold. The difference can reflect what was reported as well as how it was handled.`,
       question: `Has the responsible department explained why ${entry.category} takes longer in ${entry.place}, and has it been raised with the council office?`,
@@ -400,20 +400,20 @@ function movementLead(movement: { query: DiscoveryQuery; result?: SqlQueryResult
 }
 
 /** The same published source imported on two dates: how its open backlog moved between them. */
-export function backlogChangeLeads(tables: { snapshotId: string; sourceUri: string | null; retrievedAt: string; results: { query: DiscoveryQuery; result?: SqlQueryResult }[] }[]): (ServiceLead & { snapshotId: string })[] {
+export function backlogChangeLeads(tables: { snapshotId: string; sourceUri: string | null; retrievedAt: string; results: { query: DiscoveryQuery; result?: SqlQueryResult }[] }[]): (ServiceLead & { snapshotId: string; reads: string[] })[] {
   const bySource = new Map<string, { snapshotId: string; day: string; query: DiscoveryQuery; rows: Record<string, unknown>[]; movement?: { query: DiscoveryQuery; result?: SqlQueryResult } }[]>();
   for (const table of tables) {
     const backlog = table.results.find((entry) => entry.query.id === 'service_backlog');
     if (!table.sourceUri || !backlog?.result?.rows.length) continue;
     bySource.set(table.sourceUri, [...(bySource.get(table.sourceUri) ?? []), { snapshotId: table.snapshotId, day: table.retrievedAt.slice(0, 10), query: backlog.query, rows: records(backlog.result), movement: table.results.find((entry) => entry.query.id === 'service_movement') }]);
   }
-  const leads: (ServiceLead & { snapshotId: string })[] = [];
+  const leads: (ServiceLead & { snapshotId: string; reads: string[] })[] = [];
   for (const snapshots of bySource.values()) {
     const ordered = [...snapshots].sort((a, b) => a.day.localeCompare(b.day));
     const earlier = ordered[0]; const later = ordered[ordered.length - 1];
     if (earlier.day === later.day) continue;
     const lead = movementLead(later.movement, earlier.day, later.day);
-    if (lead) leads.push({ ...lead, snapshotId: later.snapshotId });
+    if (lead) leads.push({ ...lead, snapshotId: later.snapshotId, reads: [earlier.snapshotId] });
     const before = count(earlier.rows[0].all_open_over_one_year); const after = count(later.rows[0].all_open_over_one_year);
     const openBefore = count(earlier.rows[0].all_open_reports); const openAfter = count(later.rows[0].all_open_reports);
     if (before === null || after === null || openBefore === null || openAfter === null || before === after) continue;
@@ -421,7 +421,7 @@ export function backlogChangeLeads(tables: { snapshotId: string; sourceUri: stri
     const moved = later.rows.map((row) => ({ category: String(row.category), now: count(row.open_over_one_year) ?? 0, then: prior.get(String(row.category)) }))
       .filter((row): row is { category: string; now: number; then: number } => row.then !== undefined && row.then !== row.now)
       .sort((a, b) => Math.abs(b.now - b.then) - Math.abs(a.now - a.then) || a.category.localeCompare(b.category)).slice(0, 3);
-    leads.push({ snapshotId: later.snapshotId, key: `service_backlog_change:${earlier.snapshotId}`, priority: 99, query: later.query,
+    leads.push({ snapshotId: later.snapshotId, reads: [earlier.snapshotId], key: `service_backlog_change:${earlier.snapshotId}`, priority: 99, query: later.query,
       title: `Open reports older than a year ${after > before ? 'rose' : 'fell'} from ${shown(before)} to ${shown(after)} between ${earlier.day} and ${later.day}`,
       detail: `All open reports went from ${shown(openBefore)} to ${shown(openAfter)}. ${moved.map((row) => `${row.category}: ${shown(row.then)} to ${shown(row.now)}.`).join(' ')} The two dates are when each copy was retrieved. A report leaves the open file when it is closed or referred; this comparison does not say which.`,
       question: 'Which reports left the open file between these dates, and were they repaired or closed without work?',

@@ -238,6 +238,11 @@ export const PLAIN_FINDING_TEXT: Record<FindingKind, PlainText> = {
     notShown: 'It does not show that the people charged had no housing, or why they were charged. The log records the section, not whether shelter was offered or what became of the charge.',
     next: "Ask the department for the reports behind the arrests made on these sections alone, and the prosecutor for what became of the charges.",
   },
+  CAPACITY_COMPARISON_LEAD: {
+    observed: "Three counts set side by side for each fiscal year: the City department's adopted homelessness budget, Encampment reports residents filed, and emergency shelter beds in the January inventory.",
+    notShown: "It does not show why any of the three moved. The budget is one department's adopted amount, not all homelessness spending; the beds are emergency shelter only; the reports are complaints filed, not people.",
+    next: "Ask the department which programmes each year's adopted amount paid for, and the Housing Commission for its shelter agreements and occupancy in the same years.",
+  },
   POLICE_STOP_LEAD: {
     observed: "A count from a police department's published stop records: how often people an officer perceived as unhoused were stopped, arrested, cited or had property seized, and the recorded reasons.",
     notShown: "It does not show unequal treatment. Rates are not adjusted for where stops were made, and perception is the officer's entry.",

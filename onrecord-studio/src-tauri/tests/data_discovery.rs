@@ -606,6 +606,135 @@ async fn charge_log_checks_count_arrests_and_citations_not_charge_rows() {
     );
 }
 
+/// The shelter inventory as GeoJSON, the operating budget and the Get It Done open and closed-year
+/// files, each with the publisher's own header, read together by the comparison's SQL.
+#[tokio::test]
+async fn capacity_comparison_counts_each_series_per_fiscal_year_and_keeps_absence_apart() {
+    let fixture: Value =
+        serde_json::from_str(include_str!("fixtures/capacity-leads.json")).unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let db = DuckDbRepository::new(temp.path().join("capacity.db")).unwrap();
+    db.run_migrations(include_str!("../migrations/0001_initial_schema.sql"))
+        .await
+        .unwrap();
+    let mut sql = fixture["queries"][0]["sql"].as_str().unwrap().to_string();
+    let mut files = vec![
+        (
+            "shelter".to_string(),
+            "hic.geojson".to_string(),
+            &fixture["inventory"],
+        ),
+        (
+            "budget".to_string(),
+            "budget.csv".to_string(),
+            &fixture["budget"],
+        ),
+    ];
+    for (name, text) in fixture["reports"].as_object().unwrap() {
+        let snapshot = if name == "open" {
+            name.clone()
+        } else {
+            format!("closed_{name}")
+        };
+        files.push((snapshot, format!("reports_{name}.csv"), text));
+    }
+    for (snapshot, file_name, text) in files {
+        let path = temp.path().join(&file_name);
+        std::fs::write(&path, text.as_str().unwrap()).unwrap();
+        let input: AnalyticalImportRequest = serde_json::from_value(json!({ "datasetKind":"REGIONAL_DATA", "displayName":snapshot, "localPath":path, "sourceUri":format!("https://example.test/{file_name}"), "partialDataset":true })).unwrap();
+        let imported = db.import_analytical_csv(input).await.unwrap();
+        assert_eq!(imported.rejected_rows, 0, "{snapshot}");
+        sql = sql.replace(
+            &format!("\"analysis_{snapshot}\""),
+            &format!("\"{}\"", imported.table_name),
+        );
+    }
+    let result = db.execute_restricted_sql(&sql, 100).await.unwrap();
+    let number = |row: usize, name: &str| -> Option<i64> {
+        let value = cell(&result, row, name);
+        value
+            .as_i64()
+            .or_else(|| value.as_f64().map(|number| number as i64))
+            .or_else(|| value.as_str().and_then(|text| text.parse().ok()))
+    };
+    let rows: Vec<[Option<i64>; 9]> = (0..result.row_count)
+        .map(|row| {
+            [
+                "fiscal_year",
+                "adopted_rows",
+                "department_rows",
+                "adopted_expense",
+                "encampment_reports",
+                "year_round_beds",
+                "total_beds",
+                "shelter_projects",
+                "projects_without_year_round",
+            ]
+            .map(|name| number(row, name))
+        })
+        .collect();
+    assert_eq!(
+        rows,
+        vec![
+            // Adopted rows exist for fiscal 2023 and none names the department: no amount, not
+            // zero. Its reports are not counted because the 2022 closed file is not imported.
+            [
+                Some(2023),
+                Some(1),
+                Some(0),
+                None,
+                None,
+                Some(80),
+                Some(85),
+                Some(1),
+                Some(0)
+            ],
+            // Revenue and proposed lines are left out of 1,500. Three reports were filed from
+            // 1 July 2023 through 30 June 2024, the last at 23:50 on 30 June.
+            [
+                Some(2024),
+                Some(4),
+                Some(3),
+                Some(1500),
+                Some(3),
+                Some(150),
+                Some(170),
+                Some(2),
+                Some(0)
+            ],
+            // Report 9001 is in the open file and the 2025 closed file and is counted once;
+            // Homeless Outreach is another service. One project records no year-round count.
+            [
+                Some(2025),
+                Some(1),
+                Some(1),
+                Some(2000),
+                Some(4),
+                Some(120),
+                Some(170),
+                Some(2),
+                Some(1)
+            ],
+            // Fiscal 2026 rows carry no budget cycle, so no row is adopted.
+            [
+                Some(2026),
+                None,
+                None,
+                None,
+                Some(1),
+                Some(90),
+                Some(95),
+                Some(1),
+                Some(0)
+            ],
+        ]
+    );
+    assert_eq!(
+        cell(&result, 1, "departments"),
+        &json!("Homelessness Strategies & Solutions")
+    );
+}
+
 /// The two logs as the City released them (PRA 25-5806 notices, 26-772 abatements), read from a
 /// collection's object store the way Data upkeep reads them: no extension on disk, the format
 /// taken from the released file name.

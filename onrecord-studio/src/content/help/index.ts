@@ -26,6 +26,7 @@ import serviceReportLeads from './topics-service-report-leads.json';
 import policeStopLeads from './topics-police-stop-leads.json';
 import abatementLogLeads from './topics-abatement-log-leads.json';
 import chargeLogLeads from './topics-charge-log-leads.json';
+import capacityComparisonLeads from './topics-capacity-comparison-leads.json';
 
 export type HelpGroup =
   | 'Getting started'
@@ -103,6 +104,7 @@ const ALL_HELP_TOPICS = [
   ...policeStopLeads,
   ...abatementLogLeads,
   ...chargeLogLeads,
+  ...capacityComparisonLeads,
 ] as HelpTopic[];
 
 /**

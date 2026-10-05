@@ -347,6 +347,10 @@ pub fn falsification_for(kind: FindingKind) -> DossierFalsification {
             "The sections were charged against people who are housed, or alongside conduct the log does not record.",
             &["the arrest and citation reports for the activity numbers counted", "the prosecutor's filing decision and case outcome for each charge"],
         ),
+        FindingKind::CapacityComparisonLead => (
+            "The three series measure different things over different periods: the department's adopted amount is not all homelessness spending, and the bed count is one night each January.",
+            &["the department's adopted and actual expenditure by programme for the years compared", "the Housing Commission's shelter contracts and nightly occupancy reports for the same years"],
+        ),
         FindingKind::PoliceStopLead => (
             "The difference follows from why and where the stops were made, not from who was stopped.",
             &["the stop records broken down by reason for the stop, beat and assignment", "the department's property and evidence log for the items seized"],

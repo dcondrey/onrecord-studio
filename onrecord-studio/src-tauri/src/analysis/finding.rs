@@ -257,6 +257,11 @@ pub enum FindingKind {
     /// The log records the charge, not housing status, so this is not a finding about who was
     /// charged or why.
     ChargeLogLead,
+    /// Three counted series set side by side per fiscal year: a department's adopted operating
+    /// expense, Encampment reports residents filed, and emergency shelter beds in the January
+    /// inventory. Counted by the discovery feed's SQL and recorded as sent. A comparison between
+    /// sources, not a statement that one series moved another.
+    CapacityComparisonLead,
 }
 
 impl FindingKind {
@@ -307,6 +312,7 @@ impl FindingKind {
             Self::PoliceStopLead => "POLICE_STOP_LEAD",
             Self::AbatementLogLead => "ABATEMENT_LOG_LEAD",
             Self::ChargeLogLead => "CHARGE_LOG_LEAD",
+            Self::CapacityComparisonLead => "CAPACITY_COMPARISON_LEAD",
         }
     }
 
@@ -357,6 +363,7 @@ impl FindingKind {
             Self::PoliceStopLead,
             Self::AbatementLogLead,
             Self::ChargeLogLead,
+            Self::CapacityComparisonLead,
         ]
         .into_iter()
         .find(|candidate| candidate.as_str() == value)
@@ -466,6 +473,8 @@ impl FindingKind {
             Self::AbatementLogLead => false,
             // Counts of charges as the department recorded them.
             Self::ChargeLogLead => false,
+            // Counts from three publishers beside each other; no rule is applied to them.
+            Self::CapacityComparisonLead => false,
         }
     }
 }

@@ -1112,7 +1112,7 @@ default (opt-in only, and never submitted without the owner's confirmation).
 
 Audited 2026-10-04 (file references in the session's audit reports; the facts that shape the work):
 - A lead cites one snapshot and stores no citations, SHA-256 or SQL (`service_leads.rs`), so a
-  cross-table lead cannot cite its numbers yet.
+  cross-table lead cannot cite its numbers yet. (Fixed 2026-10-04, below.)
 - The operating budget file has no council-district or programme column, and no published City
   table gives budget or spending by district. District-level funding statements can only be
   checked against a document that states them.
@@ -1147,9 +1147,40 @@ Audited 2026-10-04 (file references in the session's audit reports; the facts th
   architecture doc's "no per-document retrieval time is stored" conflicts with
   `document_acquisitions.retrieved_at`.
 
+Built 2026-10-04: leads cite their tables. Each stored lead lists every table it read (its own
+first) with display name, source address, retrieval date and full SHA-256, then the SQL that
+produced it (`service_leads.rs`, methods §17 E). The Findings inbox shows the text as written and
+the dossier's Markdown export carries it. No citation rows or columns were added.
+
+Built 2026-10-04: budget, Encampment reports and shelter beds by fiscal year (methods §21;
+`SHELTER_INVENTORY` fetch, `capacityLeads.ts`, `CAPACITY_COMPARISON_LEAD`). Measured with the
+app's SQL in the DuckDB CLI on files retrieved 2026-10-04 (budget_operating_datasd.csv; Get It
+Done open and closed 2020 to 2026; HIC_ES_2014_2024, 719 rows, 384 for the City of San Diego):
+
+| fiscal year | adopted expense, Homelessness Strategies & Solutions | Encampment reports filed | year-round emergency shelter beds (all beds), January count |
+|---|---|---|---|
+| 2021 | 64,235,899 | 34,288 | 3,225 (3,239) |
+| 2022 | 18,071,824 | 47,364 | 2,434 (2,529) |
+| 2023 | 25,157,607 | 60,005 | 2,517 (2,632) |
+| 2024 | 44,007,454 | 69,987 | 2,476 (2,618) |
+| 2025 | 53,916,571 | 48,135 | 1,970 (2,124) |
+
+First to latest: budget down 16.1%, reports up 40.4%, year-round beds down 38.9%. In the 2025
+count 2 of 37 projects record no year-round count and 1 no total. Not compared: fiscal 2018 to
+2020 (no department with "homeless" in its name in the budget file) and fiscal 2026 (its budget
+rows carry no budget cycle; 43,758 reports, 2,055 year-round beds). Also measured: 335,087
+Encampment reports across the open and closed 2018 to 2026 files with no id repeated and none
+without a filing date; none sits in a closed file earlier than the year it was filed; closed 2016
+and 2017 hold no Encampment reports. The endpoints matter: the adopted amount fell from fiscal
+2021 to 2022 and rose each year after, so the lead lists every year. Not verified: the fetch and
+the lead in the running app (the native test imports fixture files with the publishers' headers,
+not the downloads); whether the fiscal 2021 amount includes one-time funds; HUD's CA-601 totals
+cover the whole county and were not compared.
+
 Order of work:
-1. Leads that cite several tables with snapshot, SHA-256 and SQL; shelter inventory fetch; a lead
-   setting homelessness budget, encampment reports and shelter beds side by side by year.
+1. Done 2026-10-04 (two paragraphs above): leads that cite several tables with snapshot, SHA-256
+   and SQL; shelter inventory fetch; a lead setting homelessness budget, encampment reports and
+   shelter beds side by side by year.
 2. Shared denial language: agency identity fix, agency names and passage offsets, paraphrase
    across agencies.
 3. Release timing against the portal's own distribution, weekends and court holidays.
