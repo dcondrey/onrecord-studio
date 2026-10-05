@@ -2588,19 +2588,23 @@ mod tests {
                 .unwrap()
                 .to_utc()
         };
+        let disclosure = DisclosureContext::unset();
         let draft = |day: &'static str| {
             draft_for_saved_casework_request(
                 &db,
                 case_id.clone(),
                 request_id.clone(),
                 None,
-                &DisclosureContext::unset(),
+                &disclosure,
                 at(day),
             )
         };
         // Nothing saved yet records a submission, so there is no date to count from.
         let unfiled = draft("2026-09-12").await.unwrap_err().to_string();
-        assert!(unfiled.contains("no submission date is recorded"), "{unfiled}");
+        assert!(
+            unfiled.contains("no submission date is recorded"),
+            "{unfiled}"
+        );
 
         case.requests[0].state = "SUBMITTED".into();
         case.requests[0].submitted_at = Some("2026-09-01".into());

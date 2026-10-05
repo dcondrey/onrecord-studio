@@ -411,7 +411,7 @@ mod tests {
     use super::*;
     use crate::analysis::finding::{FindingSeverity, FindingSubject};
 
-    pub(crate) fn all_kinds() -> [FindingKind; 27] {
+    pub(crate) fn all_kinds() -> [FindingKind; 28] {
         use FindingKind::*;
         [
             HeldBackResponse,
