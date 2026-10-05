@@ -280,9 +280,24 @@ fn build_report(
         "Coverage and zero-open minutes use only facilities whose daily hours were recorded and interpretable. A facility with unrecorded or unreadable hours may be open during a minute counted as having none open.".to_string(),
         "Hours are read as one daily schedule. Weekday-specific, seasonal and closure-notice schedules are not interpreted.".to_string(),
     ];
-    if dataset.partial_dataset || dataset.rejected_rows > 0 {
+    let unconverted = dataset.unconverted_in(
+        std::iter::once(mapping.name_column.as_str()).chain(
+            [
+                &mapping.id_column,
+                &mapping.address_column,
+                &mapping.latitude_column,
+                &mapping.longitude_column,
+                &mapping.hours_column,
+                &mapping.category_column,
+            ]
+            .into_iter()
+            .flatten()
+            .map(String::as_str),
+        ),
+    );
+    if dataset.partial_dataset || dataset.rejected_rows > 0 || unconverted > 0 {
         limitations.push(format!(
-            "This snapshot is partial or has {} rejected rows; counts cover imported rows only.",
+            "This snapshot is partial, has {} rejected rows, or has {unconverted} unconverted cells in mapped columns; counts cover imported, converted values only.",
             dataset.rejected_rows
         ));
     }
@@ -422,6 +437,45 @@ impl DuckDbRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unconverted_cells_limit_the_report_only_in_mapped_columns() {
+        let report = |column: &str| {
+            let dataset = AnalyticalDatasetSummary {
+                snapshot_id: "fac".into(),
+                dataset_kind: crate::types::AnalyticalDatasetKind::RegionalData,
+                display_name: "Restrooms".into(),
+                table_name: "analysis_fac".into(),
+                imported_rows: 1,
+                rejected_rows: 0,
+                source_uri: None,
+                source_sha256: "d".repeat(64),
+                retrieved_at: "2026-09-30".into(),
+                observation_period_start: None,
+                observation_period_end: None,
+                partial_dataset: false,
+                validation_summary: "{}".into(),
+                unconverted_by_column: [(column.to_string(), 2)].into(),
+            };
+            let mapping = FacilityCoverageMapping {
+                snapshot_id: "fac".into(),
+                name_column: "name".into(),
+                id_column: None,
+                address_column: None,
+                latitude_column: None,
+                longitude_column: None,
+                hours_column: Some("hours".into()),
+                category_column: None,
+                restroom_categories: vec![],
+                areas: vec![],
+            };
+            build_report(mapping, &dataset, Vec::new()).limitations
+        };
+        assert!(report("hours")
+            .iter()
+            .any(|l| l.contains("2 unconverted cells")));
+        assert!(!report("notes").iter().any(|l| l.contains("unconverted")));
+    }
 
     #[tokio::test]
     async fn imported_facility_list_is_summarized_per_user_area_from_recorded_rows_only() {

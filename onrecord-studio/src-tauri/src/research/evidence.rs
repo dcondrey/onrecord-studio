@@ -72,7 +72,7 @@ pub fn model_evidence<'a>(
 pub fn schema_context(schema: &AnalyticalSchema) -> Value {
     Value::Array(schema.datasets.iter().take(40).map(|d| json!({
         "snapshot":d.snapshot_id,"table":d.table_name,"name":d.display_name,"url":d.source_uri,
-        "sha256":d.source_sha256,"importedRows":d.imported_rows,"rejectedRows":d.rejected_rows,
+        "sha256":d.source_sha256,"importedRows":d.imported_rows,"rejectedRows":d.rejected_rows,"unconvertedCells":d.unconverted_cells(),
         "partial":d.partial_dataset,"period":[d.observation_period_start,d.observation_period_end],
         "retrieved":d.retrieved_at,
         "columns":schema.columns.iter().filter(|c| c.table_name == d.table_name).take(100).map(|c| json!([c.column_name,c.logical_type])).collect::<Vec<_>>()

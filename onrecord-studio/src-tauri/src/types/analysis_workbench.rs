@@ -191,6 +191,8 @@ pub struct AnalyticalImportResult {
     pub rejected_rows: usize,
     pub malformed_rows: usize,
     pub duplicate_key_rows: usize,
+    /// Cells kept as NULL because their text did not convert to the column's type.
+    pub unconverted_cells: usize,
     pub schema_warnings: Vec<String>,
     pub source_sha256: String,
 }
@@ -211,6 +213,24 @@ pub struct AnalyticalDatasetSummary {
     pub observation_period_end: Option<String>,
     pub partial_dataset: bool,
     pub validation_summary: String,
+    /// Cells stored as NULL because their text did not convert, per column alias. Snapshots from
+    /// before this was counted have none: that import rejected such rows instead.
+    #[serde(default)]
+    pub unconverted_by_column: std::collections::BTreeMap<String, usize>,
+}
+
+impl AnalyticalDatasetSummary {
+    pub fn unconverted_cells(&self) -> usize {
+        self.unconverted_by_column.values().sum()
+    }
+
+    /// Unconverted cells in the named columns, so a gate can ignore a column it never reads.
+    pub fn unconverted_in<'a>(&self, columns: impl IntoIterator<Item = &'a str>) -> usize {
+        columns
+            .into_iter()
+            .filter_map(|column| self.unconverted_by_column.get(column))
+            .sum()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

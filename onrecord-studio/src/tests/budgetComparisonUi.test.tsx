@@ -5,7 +5,7 @@ import BudgetComparison from '../components/dashboard/BudgetComparison';
 import type { AnalyticalSchema, AnalyticalDatasetSummary } from '../types';
 
 afterEach(cleanup);
-const dataset = (id: string): AnalyticalDatasetSummary => ({ snapshotId: id, tableName: `analysis_${id}`, datasetKind: 'REGIONAL_DATA', displayName: id, importedRows: 5, rejectedRows: 1, sourceUri: `https://example.test/${id}.csv`, sourceSha256: id.repeat(20), retrievedAt: '2026-09-13', observationPeriodStart: null, observationPeriodEnd: null, partialDataset: true, validationSummary: '{}' });
+const dataset = (id: string): AnalyticalDatasetSummary => ({ snapshotId: id, tableName: `analysis_${id}`, datasetKind: 'REGIONAL_DATA', displayName: id, importedRows: 5, rejectedRows: 1, sourceUri: `https://example.test/${id}.csv`, sourceSha256: id.repeat(20), retrievedAt: '2026-09-13', observationPeriodStart: null, observationPeriodEnd: null, partialDataset: true, validationSummary: '{}', unconvertedByColumn: {} });
 const schema: AnalyticalSchema = {
   datasets: [dataset('budget'), dataset('actuals')], templates: [],
   columns: ['budget', 'actuals'].flatMap(id => ['amount', 'report_fy', 'fund_number', 'funds_center_number', 'account_number', 'dept_name', ...(id === 'budget' ? ['budget_cycle'] : [])].map(columnName => ({ tableName: `analysis_${id}`, columnName, logicalType: columnName === 'amount' ? 'NUMBER' : 'CATEGORY', originalName: columnName, nullable: true, dictionary: null }))),

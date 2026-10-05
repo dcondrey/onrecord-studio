@@ -41,6 +41,8 @@ export interface AnalyticalImportResult {
   rejectedRows: number;
   malformedRows: number;
   duplicateKeyRows: number;
+  /** Cells stored as NULL because their text did not convert to the column's type. */
+  unconvertedCells: number;
   schemaWarnings: string[];
   sourceSha256: string;
 }
@@ -59,6 +61,8 @@ export interface AnalyticalDatasetSummary {
   observationPeriodEnd: string | null;
   partialDataset: boolean;
   validationSummary: string;
+  /** Per column alias; absent columns had none. */
+  unconvertedByColumn: Record<string, number>;
 }
 
 export interface AnalyticalColumnSummary {

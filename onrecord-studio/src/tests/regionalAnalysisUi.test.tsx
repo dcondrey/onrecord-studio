@@ -11,8 +11,8 @@ vi.mock('@tauri-apps/api/core', () => ({ invoke: async (name: string, args: Reco
   if (name === 'get_embedding_index_status') return { indexedChunkCount: 0, indexedDocumentCount: 0, pendingDocumentCount: 0 };
   if (name === 'get_analytical_schema') return { datasets: [], columns: [], templates: [] };
   if (name === 'list_analytical_import_candidates') return [{ documentId: 7, portalKey: 'county', fileName: 'health.csv', localPath: '/managed/objects/abc', sourceUri: 'https://example.test/health.csv', sourceSha256: 'a'.repeat(64) }];
-  if (name === 'import_analytical_dataset') return { importedRows: 12, rejectedRows: 1, malformedRows: 1, duplicateKeyRows: 0, tableName: 'analysis_regional_data_fixture', schemaWarnings: ['Source reports a partial export.'] };
-  if (name === 'fetch_city_dataset') return { importedRows: 981, rejectedRows: 0, malformedRows: 0, duplicateKeyRows: 0, tableName: 'analysis_regional_data_schools', schemaWarnings: [] };
+  if (name === 'import_analytical_dataset') return { importedRows: 12, rejectedRows: 1, malformedRows: 1, duplicateKeyRows: 0, unconvertedCells: 0, tableName: 'analysis_regional_data_fixture', schemaWarnings: ['Source reports a partial export.'] };
+  if (name === 'fetch_city_dataset') return { importedRows: 981, rejectedRows: 0, malformedRows: 0, duplicateKeyRows: 0, unconvertedCells: 0, tableName: 'analysis_regional_data_schools', schemaWarnings: [] };
   return null;
 } }));
 import AnalysisWorkbench from '../components/dashboard/AnalysisWorkbench';

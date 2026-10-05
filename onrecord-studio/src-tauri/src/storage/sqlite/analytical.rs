@@ -16,344 +16,21 @@ impl DuckDbRepository {
         &self,
         request: AnalyticalImportRequest,
     ) -> Result<AnalyticalImportResult, AppError> {
-        self.import_analytical_csv_recording_origin(request, None)
-            .await
+        self.import_analytical_table(request, None).await
     }
 
-    /// As [`Self::import_analytical_csv`], and when `automatic_origin` is given, also records the
-    /// `data_maintenance_origins` receipt for it inside the same transaction as the snapshot
-    /// write. The two have to commit or roll back together: a crash between two separate
-    /// transactions would leave a snapshot on disk with no origin receipt, which is exactly what
-    /// later maintenance and purge logic uses to tell an automatic import from an intentionally
-    /// partial manual one.
+    /// As [`Self::import_analytical_csv`], and also records the `data_maintenance_origins`
+    /// receipt in the same transaction as the snapshot write. The two have to commit or roll back
+    /// together: a crash between two separate transactions would leave a snapshot on disk with
+    /// no origin receipt, which is exactly what later maintenance and purge logic uses to tell an
+    /// automatic import from an intentionally partial manual one.
     pub(crate) async fn import_analytical_csv_recording_origin(
         &self,
         request: AnalyticalImportRequest,
         automatic_origin: Option<(String, u64)>,
     ) -> Result<AnalyticalImportResult, AppError> {
-        let dataset_kind = request.dataset_kind.clone();
-        let local_path = request.local_path.clone();
-        let worksheet = request.worksheet.clone();
-        let format_name = request
-            .source_file_name
-            .clone()
-            .unwrap_or_else(|| local_path.clone());
-        let (source_sha256, prepared) = tokio::task::spawn_blocking(move || {
-            let bytes = crate::parsers::source::read_regular_file(
-                std::path::Path::new(&local_path),
-                "ANALYTICAL",
-                crate::storage::tabular::MAX_SOURCE_BYTES,
-            )?;
-            let prepared =
-                crate::storage::tabular::prepare(&bytes, &format_name, worksheet.as_deref())?;
-            Ok::<_, AppError>((sha256_hex(&bytes), prepared))
-        })
-        .await
-        .map_err(|error| AppError::Internal(format!("Table preparation task failed: {error}")))??;
-        if request
-            .expected_source_sha256
-            .as_ref()
-            .is_some_and(|expected| !expected.eq_ignore_ascii_case(&source_sha256))
-        {
-            return Err(AppError::DataParsing(
-                "The acquired file no longer matches its recorded SHA-256; import stopped.".into(),
-            ));
-        }
-        // Equal bytes from different publishers or worksheets are distinct acquisitions.
-        let identity_hash = sha256_hex(
-            serde_json::json!([
-                ANALYTICAL_PARSER_VERSION,
-                source_sha256,
-                request.source_uri,
-                request.worksheet,
-                request.observation_period_start,
-                request.observation_period_end,
-                request.partial_dataset
-            ])
-            .to_string()
-            .as_bytes(),
-        );
-        let snapshot_id = format!(
-            "{}-{}",
-            dataset_kind.as_str().to_ascii_lowercase().replace('_', "-"),
-            &identity_hash[..24]
-        );
-        let table_name = format!(
-            "analysis_{}_{}",
-            dataset_kind.as_str().to_ascii_lowercase(),
-            &identity_hash[..24]
-        );
-        let latest_view_name = if dataset_kind == AnalyticalDatasetKind::RegionalData {
-            let source_identity = request.source_uri.as_deref().unwrap_or(&request.local_path);
-            let key = sha256_hex(
-                serde_json::json!([source_identity, request.worksheet])
-                    .to_string()
-                    .as_bytes(),
-            );
-            format!("analysis_regional_{}_latest", &key[..16])
-        } else {
-            format!(
-                "analysis_{}_latest",
-                dataset_kind.as_str().to_ascii_lowercase()
-            )
-        };
-        let headers = prepared.headers;
-        let mut aliases = std::collections::BTreeSet::new();
-        let columns = headers
-            .iter()
-            .enumerate()
-            .map(|(index, header)| {
-                let base = unique_column_alias(header, index, &headers);
-                let mut alias = base.clone();
-                let mut suffix = 2;
-                while !aliases.insert(alias.clone()) {
-                    alias = format!("{base}_{suffix}");
-                    suffix += 1;
-                }
-                let logical_type = if dataset_kind == AnalyticalDatasetKind::RegionalData {
-                    crate::storage::tabular::infer_type(header, index, &prepared.records)
-                } else {
-                    logical_type_for(&dataset_kind, header)
-                };
-                (header.clone(), alias, logical_type)
-            })
-            .collect::<Vec<_>>();
-        let create_columns = columns
-            .iter()
-            .map(|(_, alias, logical)| format!("{} {}", quote_ident(alias), duckdb_type(logical)))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let mut rows = Vec::new();
-        let mut malformed_rows = 0usize;
-        let mut rejected_rows = 0usize;
-        let mut repaired_trailing_rows = 0usize;
-        let mut repair_row_numbers = Vec::new();
-        let mut duplicate_key_rows = 0usize;
-        let mut seen_keys = std::collections::BTreeSet::new();
-        let mut null_counts = vec![0usize; columns.len()];
-        for (row_index, record) in prepared.records.into_iter().enumerate() {
-            let record = match record {
-                Ok(record) => record,
-                Err(error) => {
-                    malformed_rows += 1;
-                    rejected_rows += 1;
-                    rows.push((
-                        row_index + 1,
-                        Vec::new(),
-                        vec![format!("CSV row parse failed: {error}")],
-                        serde_json::Value::Null,
-                    ));
-                    continue;
-                }
-            };
-            // Position retains duplicate headers and surplus fields in malformed source rows.
-            // Keep common headers once in memory; restore them in each persisted row ledger.
-            let original = serde_json::json!(record.iter().collect::<Vec<_>>());
-            let mut values = Vec::with_capacity(columns.len());
-            let mut errors = Vec::new();
-            for (index, (_, _, logical)) in columns.iter().enumerate() {
-                let raw = record.get(index).unwrap_or("").trim();
-                match normalize_csv_value(raw, logical) {
-                    Ok(value) => {
-                        if value.is_null() {
-                            null_counts[index] += 1;
-                        }
-                        values.push(value);
-                    }
-                    Err(error) => {
-                        errors.push(format!("{}: {error}", headers[index]));
-                        values.push(serde_json::Value::Null);
-                    }
-                }
-            }
-            if record.len() > headers.len()
-                && record
-                    .iter()
-                    .skip(headers.len())
-                    .all(|cell| cell.trim().is_empty())
-            {
-                repaired_trailing_rows += 1;
-                if repair_row_numbers.len() < 1000 {
-                    repair_row_numbers.push(row_index + 1);
-                }
-            } else if record.len() != headers.len() {
-                errors.push(format!(
-                    "Expected {} fields, found {}",
-                    headers.len(),
-                    record.len()
-                ));
-            }
-            if let Some(key) = analytical_counting_key(&dataset_kind, &headers, &record) {
-                if !seen_keys.insert(key) {
-                    duplicate_key_rows += 1;
-                }
-            }
-            if !errors.is_empty() {
-                malformed_rows += 1;
-                rejected_rows += 1;
-            }
-            rows.push((row_index + 1, values, errors, original));
-        }
-
-        let display_name = request.display_name.clone();
-        let source_uri = request.source_uri.clone();
-        let local_path = request.local_path.clone();
-        let observation_start = request.observation_period_start.clone();
-        let observation_end = request.observation_period_end.clone();
-        let partial = request.partial_dataset || prepared.partial;
-        let mut schema_warnings = schema_warnings_for(&headers, &request.dataset_kind);
-        schema_warnings.extend(prepared.warnings);
-        if repaired_trailing_rows > 0 {
-            schema_warnings.push(format!("Format repair: ignored only empty surplus trailing fields in {repaired_trailing_rows} rows; all original field values remain in the row ledger."));
-        }
-        if prepared.partial {
-            schema_warnings.push(
-                "The source declares additional pages or worksheets; this snapshot is partial."
-                    .into(),
-            );
-        }
-        let columns_for_tx = columns.clone();
-        let validation_summary = serde_json::json!({
-            "malformedRows": malformed_rows,
-            "duplicateKeyRows": duplicate_key_rows,
-            "rejectedRows": rejected_rows,
-            "repairs": { "emptyTrailingFields": { "rowCount": repaired_trailing_rows, "rowNumbers": repair_row_numbers, "rowNumbersTruncated": repaired_trailing_rows > 1000 } },
-            "parserVersion": ANALYTICAL_PARSER_VERSION,
-            "sourceFormat": prepared.format,
-            "sourceDeclaresPartial": prepared.partial,
-            "worksheet": request.worksheet,
-            "warnings": schema_warnings,
-            "nullCounts": columns.iter().enumerate().map(|(i, (_, alias, _))| (alias.clone(), null_counts[i])).collect::<std::collections::BTreeMap<_, _>>(),
-            "notes": validation_notes_for(&dataset_kind),
-            "derivedSubset": request.derived_subset.as_ref().map(|subset| serde_json::json!({
-                "publisherSha256": subset.publisher_sha256,
-                "publisherRows": subset.publisher_rows,
-                "filter": subset.filter,
-                "note": "sourceSha256 is the digest of this filtered subset, not of the publisher's file.",
-            })),
-        });
-        let validation_summary_string = validation_summary.to_string();
-        let rows_len = rows.len();
-        let source_sha_for_tx = source_sha256.clone();
-        let snapshot_for_tx = snapshot_id.clone();
-        let table_for_tx = table_name.clone();
-        let latest_view_for_tx = latest_view_name.clone();
-        let origin_for_tx = automatic_origin;
-        self.query_connection("Analytical CSV import", move |conn| {
-            let tx = conn.transaction().map_err(|error| AppError::Storage(format!("Failed to begin analytical import: {error}")))?;
-            tx.execute(&format!("DROP TABLE IF EXISTS {}", quote_ident(&table_for_tx)), [])
-                .map_err(|error| AppError::Storage(format!("Failed to replace old analytical table: {error}")))?;
-            tx.execute(&format!("CREATE TABLE {} ({create_columns})", quote_ident(&table_for_tx)), [])
-                .map_err(|error| AppError::Storage(format!("Failed to create analytical table: {error}")))?;
-            let mut insert = tx.appender(&table_for_tx)
-                .map_err(|error| AppError::Storage(format!("Failed to prepare analytical row appender: {error}")))?;
-            for (_, values, errors, _) in &rows {
-                if !errors.is_empty() {
-                    continue;
-                }
-                let params = values.iter().map(json_to_sql_value).collect::<Vec<_>>();
-                insert.append_row(duckdb::appender_params_from_iter(params))
-                    .map_err(|error| AppError::Storage(format!("Failed to insert analytical row: {error}")))?;
-            }
-            insert.flush().map_err(|error| AppError::Storage(format!("Failed to flush analytical rows: {error}")))?;
-            drop(insert);
-            tx.execute(
-                &format!(
-                    "CREATE OR REPLACE VIEW {} AS SELECT * FROM {}",
-                    quote_ident(&latest_view_for_tx),
-                    quote_ident(&table_for_tx)
-                ),
-                [],
-            )
-            .map_err(|error| AppError::Storage(format!("Failed to refresh latest analytical view: {error}")))?;
-            tx.execute("DELETE FROM analytical_rows WHERE snapshot_id = ?1", params![snapshot_for_tx])
-                .map_err(|error| AppError::Storage(format!("Failed to clear analytical row ledger: {error}")))?;
-            tx.execute("DELETE FROM analytical_columns WHERE snapshot_id = ?1", params![snapshot_for_tx])
-                .map_err(|error| AppError::Storage(format!("Failed to clear analytical columns: {error}")))?;
-            tx.execute("DELETE FROM analytical_snapshots WHERE snapshot_id = ?1", params![snapshot_for_tx])
-                .map_err(|error| AppError::Storage(format!("Failed to clear analytical snapshot: {error}")))?;
-            tx.execute(
-                "INSERT INTO analytical_snapshots (
-                    snapshot_id, dataset_kind, display_name, table_name, source_uri, local_path,
-                    source_sha256, retrieved_at, observation_period_start, observation_period_end,
-                    partial_dataset, imported_rows, rejected_rows, malformed_rows,
-                    duplicate_key_rows, validation_summary_json
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7,
-                    strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'), ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
-                params![
-                    snapshot_for_tx,
-                    dataset_kind.as_str(),
-                    display_name,
-                    table_for_tx,
-                    source_uri,
-                    local_path,
-                    source_sha_for_tx,
-                    observation_start,
-                    observation_end,
-                    if partial { 1_i64 } else { 0_i64 },
-                    rows_len.saturating_sub(malformed_rows) as i64,
-                    rejected_rows as i64,
-                    malformed_rows as i64,
-                    duplicate_key_rows as i64,
-                    validation_summary_string,
-                ],
-            ).map_err(|error| AppError::Storage(format!("Failed to record analytical snapshot: {error}")))?;
-            for (ordinal, (original, alias, logical)) in columns_for_tx.iter().enumerate() {
-                tx.execute(
-                    "INSERT INTO analytical_columns (
-                        snapshot_id, table_name, column_name, original_name, logical_type,
-                        nullable, dictionary, ordinal
-                     ) VALUES (?1, ?2, ?3, ?4, ?5, 1, NULL, ?6)",
-                    params![snapshot_for_tx, table_for_tx, alias, original, logical, ordinal as i64],
-                ).map_err(|error| AppError::Storage(format!("Failed to record analytical column: {error}")))?;
-            }
-            let mut ledger = tx.appender("analytical_rows")
-                .map_err(|error| AppError::Storage(format!("Failed to open analytical row ledger: {error}")))?;
-            for (row_number, values, errors, original) in rows {
-                let normalized = serde_json::Value::Object(
-                    columns_for_tx.iter().zip(values)
-                        .map(|((_, alias, _), value)| (alias.clone(), value))
-                        .collect()
-                );
-                let payload = if original.is_null() { original.to_string() } else {
-                    serde_json::json!({"headers": headers, "values": original}).to_string()
-                };
-                let normalized_payload = normalized.to_string();
-                let errors_json = serde_json::Value::Array(errors.iter().cloned().map(serde_json::Value::String).collect()).to_string();
-                let row_hash = sha256_hex(format!("{payload}\n{normalized_payload}").as_bytes());
-                ledger.append_row(duckdb::params![
-                        &snapshot_for_tx,
-                        row_number as i64,
-                        row_hash,
-                        payload,
-                        normalized_payload,
-                        if errors.is_empty() { 0_i64 } else { 1_i64 },
-                        errors_json,
-                    ]).map_err(|error| AppError::Storage(format!("Failed to record analytical row ledger: {error}")))?;
-            }
-            ledger.flush().map_err(|error| AppError::Storage(format!("Failed to flush analytical row ledger: {error}")))?;
-            drop(ledger);
-            if let Some((portal_key, document_id)) = origin_for_tx.as_ref() {
-                tx.execute(
-                    "INSERT INTO data_maintenance_origins VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING",
-                    params![snapshot_for_tx, portal_key, document_id],
-                ).map_err(|error| AppError::Storage(format!("Failed to record the automatic-import origin receipt: {error}")))?;
-            }
-            tx.commit().map_err(|error| AppError::Storage(format!("Failed to commit analytical import: {error}")))?;
-            Ok(())
-        }).await?;
-        Ok(AnalyticalImportResult {
-            snapshot_id,
-            dataset_kind: request.dataset_kind.clone(),
-            display_name: request.display_name,
-            table_name,
-            imported_rows: rows_len.saturating_sub(malformed_rows),
-            rejected_rows,
-            malformed_rows,
-            duplicate_key_rows,
-            schema_warnings,
-            source_sha256,
-        })
+        self.import_analytical_table(request, automatic_origin)
+            .await
     }
 
     pub async fn analytical_import_candidates(
@@ -441,6 +118,7 @@ impl DuckDbRepository {
                     partial_dataset: row.get::<_, i64>(9)? != 0,
                     imported_rows: row.get::<_, i64>(10)?.max(0) as usize,
                     rejected_rows: row.get::<_, i64>(11)?.max(0) as usize,
+                    unconverted_by_column: unconverted_by_column(&row.get::<_, String>(12)?),
                     validation_summary: row.get(12)?,
                 })
             }).map_err(|error| AppError::Storage(format!("Failed to query analytical datasets: {error}")))?
@@ -643,11 +321,21 @@ impl DuckDbRepository {
     }
 }
 
+pub(crate) fn unconverted_by_column(
+    validation_summary: &str,
+) -> std::collections::BTreeMap<String, usize> {
+    serde_json::from_str::<serde_json::Value>(validation_summary)
+        .ok()
+        .and_then(|summary| summary.get("unconvertedByColumn").cloned())
+        .and_then(|counts| serde_json::from_value(counts).ok())
+        .unwrap_or_default()
+}
+
 pub(super) fn quote_ident(value: &str) -> String {
     format!("\"{}\"", value.replace('"', "\"\""))
 }
 
-fn unique_column_alias(header: &str, index: usize, headers: &[String]) -> String {
+pub(super) fn unique_column_alias(header: &str, index: usize, headers: &[String]) -> String {
     let mut alias = header
         .chars()
         .map(|ch| {
@@ -687,9 +375,9 @@ fn unique_column_alias(header: &str, index: usize, headers: &[String]) -> String
     }
 }
 
-pub(crate) const ANALYTICAL_PARSER_VERSION: &str = "regional-tables-v3";
+pub(crate) const ANALYTICAL_PARSER_VERSION: &str = "regional-tables-v4";
 
-fn logical_type_for(kind: &AnalyticalDatasetKind, header: &str) -> &'static str {
+pub(super) fn logical_type_for(kind: &AnalyticalDatasetKind, header: &str) -> &'static str {
     let header = header.to_ascii_lowercase();
     if matches!(kind, AnalyticalDatasetKind::OperatingBudget) {
         return match header.as_str() {
@@ -727,7 +415,7 @@ fn logical_type_for(kind: &AnalyticalDatasetKind, header: &str) -> &'static str 
     "CATEGORY"
 }
 
-fn duckdb_type(logical: &str) -> &'static str {
+pub(super) fn duckdb_type(logical: &str) -> &'static str {
     match logical {
         "INTEGER" => "BIGINT",
         "NUMBER" => "DECIMAL(38,10)",
@@ -739,7 +427,41 @@ fn duckdb_type(logical: &str) -> &'static str {
     }
 }
 
-fn normalize_csv_value(raw: &str, logical: &str) -> Result<serde_json::Value, String> {
+/// Which field of an `n/n/yyyy` date is the month, decided per column from its own values. When
+/// no field ever exceeds 12, or both do, the order is not decidable and slash dates stay
+/// unconverted: guessing would put a real date on the wrong day.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum DateOrder {
+    MonthFirst,
+    DayFirst,
+    Undetermined,
+}
+
+impl DateOrder {
+    pub(super) const ALL: [Self; 3] = [Self::MonthFirst, Self::DayFirst, Self::Undetermined];
+
+    pub(super) fn decided_by(first_over_12: bool, second_over_12: bool) -> Self {
+        match (first_over_12, second_over_12) {
+            (true, false) => Self::DayFirst,
+            (false, true) => Self::MonthFirst,
+            _ => Self::Undetermined,
+        }
+    }
+
+    pub(super) const fn as_str(self) -> &'static str {
+        match self {
+            Self::MonthFirst => "MONTH_FIRST",
+            Self::DayFirst => "DAY_FIRST",
+            Self::Undetermined => "UNDETERMINED",
+        }
+    }
+}
+
+pub(super) fn normalize_csv_value(
+    raw: &str,
+    logical: &str,
+    order: DateOrder,
+) -> Result<serde_json::Value, String> {
     if raw.is_empty() {
         return Ok(serde_json::Value::Null);
     }
@@ -753,13 +475,13 @@ fn normalize_csv_value(raw: &str, logical: &str) -> Result<serde_json::Value, St
             Ok(serde_json::Value::String(raw.to_string()))
         }
         "NUMBER" => Err(format!("could not parse exact decimal '{raw}'")),
-        "DATE" => normalize_date(raw)
+        "DATE" => normalize_date(raw, order)
             .map(serde_json::Value::String)
             .ok_or_else(|| format!("could not parse date '{raw}'")),
         "LOCAL_TIMESTAMP" => normalize_local_timestamp(raw)
             .map(serde_json::Value::String)
             .ok_or_else(|| format!("could not parse date and time '{raw}'")),
-        "TIMESTAMP" => normalize_timestamp(raw)
+        "TIMESTAMP" => normalize_timestamp(raw, order)
             .map(serde_json::Value::String)
             .ok_or_else(|| format!("could not parse timestamp '{raw}'")),
         "DECIMAL" => raw
@@ -774,12 +496,31 @@ fn normalize_csv_value(raw: &str, logical: &str) -> Result<serde_json::Value, St
     }
 }
 
-fn normalize_date(raw: &str) -> Option<String> {
-    chrono::NaiveDate::parse_from_str(raw, "%Y-%m-%d")
-        .or_else(|_| chrono::NaiveDate::parse_from_str(raw, "%m/%d/%Y"))
-        .or_else(|_| chrono::NaiveDate::parse_from_str(raw, "%-m/%-d/%Y"))
+fn normalize_date(raw: &str, order: DateOrder) -> Option<String> {
+    let slash: &[&str] = match order {
+        DateOrder::MonthFirst => &["%m/%d/%Y", "%-m/%-d/%Y"],
+        DateOrder::DayFirst => &["%d/%m/%Y", "%-d/%-m/%Y"],
+        DateOrder::Undetermined => &[],
+    };
+    std::iter::once("%Y-%m-%d")
+        .chain(slash.iter().copied())
+        .find_map(|format| chrono::NaiveDate::parse_from_str(raw, format).ok())
         .map(|date| date.format("%Y-%m-%d").to_string())
-        .ok()
+}
+
+/// The two leading numeric fields of a `n/n/yyyy` date, when `raw` is one.
+pub(super) fn slash_date_fields(raw: &str) -> Option<(u32, u32)> {
+    let mut parts = raw.split('/');
+    let (first, second, year) = (parts.next()?, parts.next()?, parts.next()?);
+    if parts.next().is_some()
+        || year.len() != 4
+        || !year.bytes().all(|b| b.is_ascii_digit())
+        || !(1..=2).contains(&first.len())
+        || !(1..=2).contains(&second.len())
+    {
+        return None;
+    }
+    Some((first.parse().ok()?, second.parse().ok()?))
 }
 
 fn normalize_local_timestamp(raw: &str) -> Option<String> {
@@ -793,19 +534,21 @@ fn normalize_local_timestamp(raw: &str) -> Option<String> {
     .map(|at| at.format("%Y-%m-%d %H:%M:%S%.f").to_string())
 }
 
-fn normalize_timestamp(raw: &str) -> Option<String> {
+/// A value that states its offset keeps it. One that does not is a wall-clock reading and is kept
+/// without a zone: appending `Z` would assert UTC for a time the publisher never placed in UTC.
+fn normalize_timestamp(raw: &str, order: DateOrder) -> Option<String> {
     chrono::DateTime::parse_from_rfc3339(raw)
         .map(|date| date.to_rfc3339())
         .ok()
         .or_else(|| {
             chrono::NaiveDateTime::parse_from_str(raw, "%Y-%m-%d %H:%M:%S")
-                .map(|date| format!("{}Z", date.format("%Y-%m-%dT%H:%M:%S")))
+                .map(|date| date.format("%Y-%m-%dT%H:%M:%S").to_string())
                 .ok()
         })
-        .or_else(|| normalize_date(raw).map(|date| format!("{date}T00:00:00Z")))
+        .or_else(|| normalize_date(raw, order).map(|date| format!("{date}T00:00:00")))
 }
 
-fn json_to_sql_value(value: &serde_json::Value) -> duckdb::types::Value {
+pub(super) fn json_to_sql_value(value: &serde_json::Value) -> duckdb::types::Value {
     match value {
         serde_json::Value::Null => duckdb::types::Value::Null,
         serde_json::Value::Number(number) => number
@@ -833,7 +576,7 @@ fn dataset_kind_from_str(value: &str) -> AnalyticalDatasetKind {
     }
 }
 
-fn analytical_counting_key(
+pub(super) fn analytical_counting_key(
     kind: &AnalyticalDatasetKind,
     headers: &[String],
     record: &csv::StringRecord,
@@ -860,7 +603,7 @@ fn analytical_counting_key(
     Some(parts.join("\u{1f}"))
 }
 
-fn validation_notes_for(kind: &AnalyticalDatasetKind) -> Vec<&'static str> {
+pub(super) fn validation_notes_for(kind: &AnalyticalDatasetKind) -> Vec<&'static str> {
     match kind {
         AnalyticalDatasetKind::RipaStops => vec![
             "RIPA UID/ID values can repeat across current and historical collections.",
@@ -884,7 +627,7 @@ fn validation_notes_for(kind: &AnalyticalDatasetKind) -> Vec<&'static str> {
     }
 }
 
-fn schema_warnings_for(headers: &[String], kind: &AnalyticalDatasetKind) -> Vec<String> {
+pub(super) fn schema_warnings_for(headers: &[String], kind: &AnalyticalDatasetKind) -> Vec<String> {
     let required: &[&str] = match kind {
         AnalyticalDatasetKind::RipaStops => &["UID", "ID", "PID", "STOPDATE"],
         AnalyticalDatasetKind::CallsForService => &["INCIDENT_NUM", "DATE_TIME", "CALL_TYPE"],

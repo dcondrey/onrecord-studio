@@ -79,6 +79,9 @@ export function buildDiscoveryPlan(schema: AnalyticalSchema, selection: Discover
   ];
   if (dataset.partialDataset) warnings.push('This snapshot is partial or its completeness has not been established. Results describe only the imported records.');
   if (dataset.rejectedRows) warnings.push(`${dataset.rejectedRows.toLocaleString()} rejected source rows are excluded from calculations.`);
+  const unconverted = [...new Set([selection.measure, selection.dimension, selection.period].filter((name): name is string => Boolean(name)))]
+    .reduce((total, name) => total + (dataset.unconvertedByColumn[name] ?? 0), 0);
+  if (unconverted) warnings.push(`${unconverted.toLocaleString()} source cells in the selected columns did not convert to their column type. They are missing here but not empty in the source; review them in the row ledger.`);
   if (selection.aggregation === 'sum') warnings.push('Sum adds reported values. Filter to one budget phase and compatible account class, unit, and population; exclude overlapping totals before interpreting it.');
   if (selection.aggregation === 'mean') warnings.push('Mean gives every nonmissing source row equal weight. It is not a population-weighted rate.');
   if (selection.periodMode === 'year_code' && selection.period) warnings.push('Year codes retain their source convention. Two-digit fiscal codes are not expanded to calendar years; do not mix two- and four-digit encodings.');

@@ -516,7 +516,7 @@ impl DuckDbRepository {
                         .filter(|c| c.table_name == d.table_name)
                         .map(|c| c.column_name.clone())
                         .collect(),
-                    partial: d.partial_dataset || d.rejected_rows > 0,
+                    partial: d.partial_dataset || d.rejected_rows > 0 || d.unconverted_cells() > 0,
                 })
                 .collect(),
             mappings,
@@ -638,9 +638,15 @@ impl DuckDbRepository {
                 let query_id = sha256_hex(sql.as_bytes());
                 queries.insert(query_id.clone(), sql.clone());
                 let result = self.execute_restricted_sql(&sql, cap).await?;
-                if result.truncated || dataset.partial_dataset || dataset.rejected_rows > 0 {
+                let unconverted =
+                    dataset.unconverted_in(mapping.columns.values().map(String::as_str));
+                if result.truncated
+                    || dataset.partial_dataset
+                    || dataset.rejected_rows > 0
+                    || unconverted > 0
+                {
                     incomplete.insert(role.clone());
-                    limitations.push(format!("{}: query truncated={}, source partial={}, rejected rows={}. Totals and comparisons requiring complete coverage are withheld; narrow the scope or obtain a complete export.",role,result.truncated,dataset.partial_dataset,dataset.rejected_rows));
+                    limitations.push(format!("{}: query truncated={}, source partial={}, rejected rows={}, unconverted cells in mapped columns={}. Totals and comparisons requiring complete coverage are withheld; narrow the scope or obtain a complete export.",role,result.truncated,dataset.partial_dataset,dataset.rejected_rows,unconverted));
                 }
                 for row in result.rows {
                     let id = sha256_hex(
@@ -740,12 +746,16 @@ impl DuckDbRepository {
             let mut role = budget_lines::RoleData {
                 dataset: dataset.display_name.clone(),
                 source_sha256: dataset.source_sha256.clone(),
-                incomplete: (dataset.partial_dataset || dataset.rejected_rows > 0).then(|| {
-                    format!(
-                        "the {} dataset '{}' is partial or has {} rejected rows",
-                        mapping.role, dataset.display_name, dataset.rejected_rows
-                    )
-                }),
+                incomplete: {
+                    let unconverted =
+                        dataset.unconverted_in(mapping.columns.values().map(String::as_str));
+                    (dataset.partial_dataset || dataset.rejected_rows > 0 || unconverted > 0).then(|| {
+                        format!(
+                            "the {} dataset '{}' is partial, has {} rejected rows, or has {} unconverted cells in mapped columns",
+                            mapping.role, dataset.display_name, dataset.rejected_rows, unconverted
+                        )
+                    })
+                },
                 department_mapped: mapping.columns.contains_key("department"),
                 labels: Err(format!(
                     "the {} dataset has no mapped account label, so no overtime line can be identified",
@@ -1133,6 +1143,37 @@ mod tests {
             .limitations
             .iter()
             .any(|l| l.starts_with("actual: the source has no mapped department column")));
+        assert!(report.reconciliation.iter().all(|r| r.actual.is_none()));
+    }
+    #[tokio::test]
+    async fn unconverted_cells_in_a_mapped_column_withhold_its_totals() {
+        let (_temp, repo) = repository().await;
+        let conn = repo.analytics_connection().await.unwrap();
+        install_city(&conn);
+        let workspace = repo.financial_workspace().await.unwrap();
+        let actual = workspace
+            .mappings
+            .iter()
+            .find(|m| m.role == "actual")
+            .unwrap();
+        let snapshot = actual.snapshot_id.clone();
+        let amount = actual.columns["amount"].clone();
+        conn.execute(
+            "UPDATE analytical_snapshots SET validation_summary_json = ?2 WHERE snapshot_id = ?1",
+            params![
+                snapshot,
+                serde_json::json!({"unconvertedByColumn": {amount: 4}}).to_string()
+            ],
+        )
+        .unwrap();
+        drop(conn);
+        let report = repo
+            .run_financial_investigation(workspace.default_scope)
+            .await
+            .unwrap();
+        assert!(report.limitations.iter().any(
+            |l| l.starts_with("actual:") && l.contains("unconverted cells in mapped columns=4")
+        ));
         assert!(report.reconciliation.iter().all(|r| r.actual.is_none()));
     }
     #[test]

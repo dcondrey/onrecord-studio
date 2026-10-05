@@ -18,6 +18,11 @@ describe('guided discovery query plans', () => {
     expect(discoveryDrilldown(plan, null)).toContain("'adopted'");
     expect(plan.warnings.join(' ')).toContain('partial');
   });
+  it('reports unconverted cells only for the columns the comparison reads', () => {
+    const dataset = { ...schema.datasets[0], unconvertedByColumn: { [selection.dimension]: 3, unrelated: 50 } };
+    const plan = buildDiscoveryPlan({ ...schema, datasets: [dataset] }, selection);
+    expect(plan.warnings.find((warning) => warning.includes('did not convert'))).toMatch(/^3 source cells/);
+  });
   it('rejects stale fields and text measures without coercing suppression markers', () => {
     expect(() => buildDiscoveryPlan(schema, { ...selection, measure: 'phase' })).toThrow('numeric');
     expect(() => buildDiscoveryPlan(schema, { ...selection, dimension: 'nonexistent' })).toThrow('not in this snapshot');

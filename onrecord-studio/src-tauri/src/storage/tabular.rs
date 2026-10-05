@@ -10,6 +10,9 @@ pub(crate) const MAX_SOURCE_BYTES: u64 = 96 * 1024 * 1024;
 const MAX_ROWS: usize = 750_000;
 const MAX_COLUMNS: usize = 512;
 const MAX_CELLS: usize = 6_000_000;
+/// Delimited text is streamed, so these bound disk use and import time, not memory.
+pub(crate) const MAX_STREAMED_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+const MAX_STREAMED_ROWS: usize = 20_000_000;
 
 pub(crate) struct PreparedTable {
     pub headers: Vec<String>,
@@ -142,6 +145,246 @@ pub(crate) fn prepare(
         table.warnings.push("Duplicate column headers were assigned distinct SQL names; raw rows are retained by column position.".into());
     }
     Ok(table)
+}
+
+/// How many leading bytes decide a file's format and delimiter.
+const SNIFF_BYTES: u64 = 1024 * 1024;
+
+/// A table to import. Delimited text is never held whole: it is read from disk once to profile
+/// and once to write, each read hashed, so its bound is the file size and row count rather than
+/// memory. Workbooks and JSON are parsed whole by their libraries and keep the in-memory caps,
+/// which are also what stop a small compressed workbook from describing an unbounded sheet.
+pub(crate) enum TableSource {
+    Delimited {
+        path: std::path::PathBuf,
+        delimiter: u8,
+        warnings: Vec<String>,
+    },
+    Loaded {
+        table: PreparedTable,
+        sha256: String,
+    },
+}
+
+/// What one complete read of a source found. `sha256` covers every byte read, so two reads that
+/// agree on it read the same file.
+pub(crate) struct SourceRead {
+    pub headers: Vec<String>,
+    pub sha256: String,
+    pub rows: usize,
+}
+
+impl TableSource {
+    pub(crate) fn open(
+        path: &std::path::Path,
+        name: &str,
+        worksheet: Option<&str>,
+    ) -> Result<Self, AppError> {
+        let extension = name
+            .rsplit('.')
+            .next()
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        let (file, opened) =
+            crate::parsers::source::open_regular_file(path, "ANALYTICAL", MAX_STREAMED_BYTES)?;
+        let mut sample = Vec::new();
+        std::io::Read::read_to_end(&mut std::io::Read::take(&file, SNIFF_BYTES), &mut sample)
+            .map_err(|error| AppError::Storage(format!("ANALYTICAL_READ_FAILED: {error}")))?;
+        crate::parsers::source::ensure_unchanged(&file, &opened, path, "ANALYTICAL")?;
+        let text = sample.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(&sample);
+        let first = text.iter().find(|b| !b.is_ascii_whitespace()).copied();
+        let delimited = !(matches!(
+            extension.as_str(),
+            "xlsx" | "xls" | "ods" | "jsonl" | "ndjson" | "json" | "geojson"
+        ) || sample.starts_with(b"PK\x03\x04")
+            || sample.starts_with(&[0xd0, 0xcf, 0x11, 0xe0])
+            || sample.starts_with(&[0xff, 0xfe])
+            || sample.starts_with(&[0xfe, 0xff])
+            || matches!(first, Some(b'{' | b'[')));
+        if !delimited {
+            let bytes =
+                crate::parsers::source::read_regular_file(path, "ANALYTICAL", MAX_SOURCE_BYTES)?;
+            return Ok(Self::Loaded {
+                sha256: crate::integrity::sha256_hex(&bytes),
+                table: prepare(&bytes, name, worksheet)?,
+            });
+        }
+        if first == Some(b'<') {
+            return Err(invalid("This is not a supported table export. Choose CSV, TSV, JSON, GeoJSON, XLSX, XLS, or ODS, rather than a webpage or PDF."));
+        }
+        // A record cut off by the end of the sample can only make an alternate dialect look less
+        // consistent, never more, so sniffing a prefix cannot select a wrong delimiter.
+        let delimiter = detect_delimiter(text, &extension)?;
+        let mut warnings = Vec::new();
+        if delimiter != if extension == "tsv" { b'\t' } else { b',' } {
+            warnings.push(format!(
+                "Format repair: detected {} delimiter using quote-aware record consistency.",
+                match delimiter {
+                    b'\t' => "tab",
+                    b';' => "semicolon",
+                    b'|' => "pipe",
+                    _ => "comma",
+                }
+            ));
+        }
+        Ok(Self::Delimited {
+            path: path.to_path_buf(),
+            delimiter,
+            warnings,
+        })
+    }
+
+    pub(crate) fn warnings(&self) -> &[String] {
+        match self {
+            Self::Delimited { warnings, .. } => warnings,
+            Self::Loaded { table, .. } => &table.warnings,
+        }
+    }
+
+    pub(crate) fn format(&self) -> &'static str {
+        match self {
+            Self::Delimited { delimiter, .. } if *delimiter == b'\t' => "TSV",
+            Self::Delimited { .. } => "CSV",
+            Self::Loaded { table, .. } => table.format,
+        }
+    }
+
+    pub(crate) fn declares_partial(&self) -> bool {
+        matches!(self, Self::Loaded { table, .. } if table.partial)
+    }
+
+    /// Passes every record in order with the header row and its zero-based index. A record the
+    /// parser cannot read is passed as its error and the read continues, as the row-level
+    /// validator expects.
+    pub(crate) fn read(
+        &self,
+        mut each: impl FnMut(&[String], usize, Result<&csv::StringRecord, &str>) -> Result<(), AppError>,
+    ) -> Result<SourceRead, AppError> {
+        match self {
+            Self::Loaded { table, sha256 } => {
+                for (index, record) in table.records.iter().enumerate() {
+                    each(
+                        &table.headers,
+                        index,
+                        record.as_ref().map_err(String::as_str),
+                    )?;
+                }
+                Ok(SourceRead {
+                    headers: table.headers.clone(),
+                    sha256: sha256.clone(),
+                    rows: table.records.len(),
+                })
+            }
+            Self::Delimited {
+                path, delimiter, ..
+            } => {
+                let (file, opened) = crate::parsers::source::open_regular_file(
+                    path,
+                    "ANALYTICAL",
+                    MAX_STREAMED_BYTES,
+                )?;
+                let mut hashing = HashingReader::new(&file);
+                let mut buffered = std::io::BufReader::with_capacity(256 * 1024, &mut hashing);
+                let starts_with_bom = std::io::BufRead::fill_buf(&mut buffered)
+                    .map_err(|error| AppError::Storage(format!("ANALYTICAL_READ_FAILED: {error}")))?
+                    .starts_with(&[0xef, 0xbb, 0xbf]);
+                if starts_with_bom {
+                    std::io::BufRead::consume(&mut buffered, 3);
+                }
+                let mut reader = csv::ReaderBuilder::new()
+                    .delimiter(*delimiter)
+                    .flexible(true)
+                    .from_reader(buffered);
+                let headers = reader
+                    .headers()
+                    .map_err(|e| invalid(format!("Table headers: {e}")))?
+                    .iter()
+                    .map(str::to_owned)
+                    .collect::<Vec<_>>();
+                check_headers(&headers)?;
+                let mut record = csv::StringRecord::new();
+                let mut rows = 0;
+                loop {
+                    match reader.read_record(&mut record) {
+                        Ok(false) => break,
+                        Ok(true) => {
+                            check_streamed_size(rows + 1)?;
+                            each(&headers, rows, Ok(&record))?;
+                        }
+                        Err(error) => {
+                            if matches!(error.kind(), csv::ErrorKind::Io(_)) {
+                                return Err(AppError::Storage(format!(
+                                    "ANALYTICAL_READ_FAILED: {error}"
+                                )));
+                            }
+                            check_streamed_size(rows + 1)?;
+                            each(&headers, rows, Err(&error.to_string()))?;
+                        }
+                    }
+                    rows += 1;
+                }
+                drop(reader);
+                if hashing.saw_nul {
+                    return Err(invalid("This is not a supported table export. Choose CSV, TSV, JSON, GeoJSON, XLSX, XLS, or ODS, rather than a webpage or PDF."));
+                }
+                crate::parsers::source::ensure_unchanged(&file, &opened, path, "ANALYTICAL")?;
+                Ok(SourceRead {
+                    headers,
+                    sha256: hashing.finish(),
+                    rows,
+                })
+            }
+        }
+    }
+}
+
+/// SHA-256 of every byte passed through, and whether any was NUL.
+struct HashingReader<R> {
+    inner: R,
+    digest: sha2::Sha256,
+    saw_nul: bool,
+}
+
+impl<R> HashingReader<R> {
+    fn new(inner: R) -> Self {
+        Self {
+            inner,
+            digest: <sha2::Sha256 as sha2::Digest>::new(),
+            saw_nul: false,
+        }
+    }
+
+    fn finish(self) -> String {
+        crate::integrity::digest_hex(sha2::Digest::finalize(self.digest))
+    }
+}
+
+impl<R: std::io::Read> std::io::Read for HashingReader<R> {
+    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+        let read = self.inner.read(buffer)?;
+        sha2::Digest::update(&mut self.digest, &buffer[..read]);
+        self.saw_nul |= buffer[..read].contains(&0);
+        Ok(read)
+    }
+}
+
+fn check_headers(headers: &[String]) -> Result<(), AppError> {
+    if headers.len() > MAX_COLUMNS {
+        return Err(invalid(format!(
+            "Analytical import supports up to {MAX_COLUMNS} columns."
+        )));
+    }
+    if headers.is_empty() || headers.iter().all(|h| h.trim().is_empty()) {
+        return Err(invalid("Table has no column headers"));
+    }
+    Ok(())
+}
+
+fn check_streamed_size(rows: usize) -> Result<(), AppError> {
+    if rows > MAX_STREAMED_ROWS {
+        return Err(invalid(format!("Delimited import supports up to {MAX_STREAMED_ROWS} rows. Split this export into smaller tables.")));
+    }
+    Ok(())
 }
 
 /// A declared/default dialect wins if plausible. Alternate dialects must have consistently
@@ -397,54 +640,68 @@ fn workbook(bytes: &[u8], worksheet: Option<&str>) -> Result<PreparedTable, AppE
     Ok(PreparedTable { headers, records, format: "Workbook", warnings: vec![format!("Imported worksheet '{name}'. Formula cells use the workbook’s cached values; formulas were not recalculated.")], partial: names.len() > 1 })
 }
 
-/// Inspect every nonempty value, so a late suppression token cannot silently become null.
-pub(crate) fn infer_type(
-    header: &str,
-    index: usize,
-    records: &[Result<csv::StringRecord, String>],
-) -> &'static str {
-    let name = header.to_ascii_lowercase();
-    if name == "id"
-        || name.ends_with("_id")
-        || name.ends_with("code")
-        || name.contains("fips")
-        || name.contains("geoid")
-        || name.contains("zip")
-        || name.contains("tract")
-        || name.ends_with("_number")
-    {
-        return "IDENTIFIER";
+/// What a column's values allow it to be typed as. Every nonempty value is observed, so a late
+/// suppression token cannot silently become null.
+#[derive(Debug, Clone)]
+pub(crate) struct TypeEvidence {
+    any: bool,
+    integer: bool,
+    number: bool,
+    date: bool,
+}
+
+impl Default for TypeEvidence {
+    fn default() -> Self {
+        Self {
+            any: false,
+            integer: true,
+            number: true,
+            date: true,
+        }
     }
-    let mut any = false;
-    let (mut integer, mut number, mut date) = (true, true, true);
-    for value in records
-        .iter()
-        .filter_map(|r| r.as_ref().ok())
-        .filter_map(|r| r.get(index))
-        .filter(|v| !v.trim().is_empty())
-    {
-        any = true;
+}
+
+impl TypeEvidence {
+    pub(crate) fn observe(&mut self, value: &str) {
         let value = value.trim();
+        if value.is_empty() {
+            return;
+        }
+        self.any = true;
         let significant = value.trim_start_matches(['-', '+']);
         let leading_zero = significant.starts_with('0')
             && significant
                 .as_bytes()
                 .get(1)
                 .is_some_and(u8::is_ascii_digit);
-        integer &= !leading_zero && value.parse::<i64>().is_ok();
-        number &= !leading_zero && exact_decimal(value);
-        date &= chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d").is_ok();
+        self.integer &= !leading_zero && value.parse::<i64>().is_ok();
+        self.number &= !leading_zero && exact_decimal(value);
+        self.date &= chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d").is_ok();
     }
-    if !any {
-        "CATEGORY"
-    } else if integer {
-        "INTEGER"
-    } else if number {
-        "NUMBER"
-    } else if date {
-        "DATE"
-    } else {
-        "CATEGORY"
+
+    pub(crate) fn inferred(&self, header: &str) -> &'static str {
+        let name = header.to_ascii_lowercase();
+        if name == "id"
+            || name.ends_with("_id")
+            || name.ends_with("code")
+            || name.contains("fips")
+            || name.contains("geoid")
+            || name.contains("zip")
+            || name.contains("tract")
+            || name.ends_with("_number")
+        {
+            "IDENTIFIER"
+        } else if !self.any {
+            "CATEGORY"
+        } else if self.integer {
+            "INTEGER"
+        } else if self.number {
+            "NUMBER"
+        } else if self.date {
+            "DATE"
+        } else {
+            "CATEGORY"
+        }
     }
 }
 
@@ -505,7 +762,13 @@ mod tests {
             .headers
             .iter()
             .enumerate()
-            .map(|(i, h)| infer_type(h, i, &table.records))
+            .map(|(i, h)| {
+                let mut evidence = TypeEvidence::default();
+                for record in table.records.iter().flatten() {
+                    evidence.observe(record.get(i).unwrap_or(""));
+                }
+                evidence.inferred(h)
+            })
             .collect::<Vec<_>>();
         assert_eq!(
             types,

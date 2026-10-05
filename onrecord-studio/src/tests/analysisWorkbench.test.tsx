@@ -234,6 +234,7 @@ describe('AnalysisWorkbench SQL result gating', () => {
       observationPeriodEnd: null,
       partialDataset: false,
       validationSummary: 'ok',
+      unconvertedByColumn: {},
     };
     bridge.invoke.mockImplementation(async (name: string, args?: { sql?: string }) => {
       switch (name) {

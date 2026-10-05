@@ -242,10 +242,31 @@ mod tests {
             assert!(
                 comparisons
                     .iter()
-                    .all(|c| matches!(&c.outcome, Outcome::Unreconciled { detail } if detail.contains("partial or has"))),
+                    .all(|c| matches!(&c.outcome, Outcome::Unreconciled { detail } if detail.contains("is partial, has"))),
                 "{comparisons:#?}"
             );
             assert!(run(&repo).await.unwrap().is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn unconverted_cells_withhold_a_number_only_when_a_mapped_column_holds_them() {
+        let budget = "(24,'200000','512013','Overtime','1','Police',100,'adopted')";
+        let actual = "(23,'200000','512013','Overtime','1','Police',100),(24,'200000','512013','Overtime','1','Police',1000)";
+        for (column, withheld) in [("amount", true), ("unmapped_note", false)] {
+            let (_temp, repo) = repository(budget, actual, (0, 0)).await;
+            let conn = repo.analytics_connection().await.unwrap();
+            conn.execute(
+                "UPDATE analytical_snapshots SET validation_summary_json = ?1 WHERE snapshot_id = 'actual'",
+                params![format!("{{\"unconvertedByColumn\":{{\"{column}\":1}}}}")],
+            )
+            .unwrap();
+            drop(conn);
+            let (_, comparisons) = sweep(&repo).await.unwrap();
+            let unreconciled = comparisons.iter().all(|c| {
+                matches!(&c.outcome, Outcome::Unreconciled { detail } if detail.contains("1 unconverted cells"))
+            });
+            assert_eq!(unreconciled, withheld, "{column}: {comparisons:#?}");
         }
     }
 

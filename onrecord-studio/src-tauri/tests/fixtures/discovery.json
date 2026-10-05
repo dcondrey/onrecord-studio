@@ -15,7 +15,8 @@
         "observationPeriodStart": null,
         "observationPeriodEnd": null,
         "partialDataset": true,
-        "validationSummary": "{}"
+        "validationSummary": "{}",
+        "unconvertedByColumn": {}
       }
     ],
     "columns": [

@@ -289,7 +289,7 @@ export default function AnalysisWorkbench() {
             </div>
             {importResult && (
               <div className="mt-2 text-label leading-4 text-muted" role="status">
-                <p>{importResult.importedRows.toLocaleString()} rows imported to {importResult.tableName}; {importResult.rejectedRows.toLocaleString()} rejected.{importResult.datasetKind !== 'REGIONAL_DATA' && ` ${importResult.duplicateKeyRows.toLocaleString()} duplicate keys.`}</p>
+                <p>{importResult.importedRows.toLocaleString()} rows imported to {importResult.tableName}; {importResult.rejectedRows.toLocaleString()} rejected.{importResult.unconvertedCells > 0 && ` ${importResult.unconvertedCells.toLocaleString()} cells did not convert and are kept as written in the row ledger.`}{importResult.datasetKind !== 'REGIONAL_DATA' && ` ${importResult.duplicateKeyRows.toLocaleString()} duplicate keys.`}</p>
                 {importResult.schemaWarnings.map((warning, index) => <p key={index} className="mt-1 text-warning">{warning}</p>)}
               </div>
             )}

@@ -83,6 +83,51 @@ pub(crate) fn read_regular_file(
     Ok(bytes)
 }
 
+/// Opens `path` for a read that may outlast this call, refusing what [`inspect_regular_file`]
+/// refuses. Pass the returned metadata to [`ensure_unchanged`] once the read is done.
+pub(crate) fn open_regular_file(
+    path: &Path,
+    format: &'static str,
+    maximum_bytes: u64,
+) -> Result<(File, Metadata), AppError> {
+    let inspected = inspect_regular_file(path, format, maximum_bytes)?;
+    let file = File::open(path).map_err(|error| {
+        AppError::Storage(format!(
+            "{format}_READ_FAILED: failed to open '{}': {error}",
+            path.display()
+        ))
+    })?;
+    let opened = file.metadata().map_err(|error| {
+        AppError::Storage(format!(
+            "{format}_INSPECTION_FAILED: failed to inspect opened source '{}': {error}",
+            path.display()
+        ))
+    })?;
+    if !opened.is_file() || !same_file_snapshot(&inspected, &opened) {
+        return Err(changed_while_reading(path, format));
+    }
+    Ok((file, opened))
+}
+
+pub(crate) fn ensure_unchanged(
+    file: &File,
+    opened: &Metadata,
+    path: &Path,
+    format: &'static str,
+) -> Result<(), AppError> {
+    let now = file.metadata().map_err(|error| {
+        AppError::Storage(format!(
+            "{format}_INSPECTION_FAILED: failed to re-inspect opened source '{}': {error}",
+            path.display()
+        ))
+    })?;
+    if same_file_snapshot(opened, &now) {
+        Ok(())
+    } else {
+        Err(changed_while_reading(path, format))
+    }
+}
+
 #[cfg(unix)]
 fn same_file_snapshot(left: &Metadata, right: &Metadata) -> bool {
     use std::os::unix::fs::MetadataExt;
