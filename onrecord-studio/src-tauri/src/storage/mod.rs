@@ -90,6 +90,8 @@ pub mod watchlists;
 
 pub mod findings;
 
+pub(crate) mod redaction_sweep;
+
 #[cfg(test)]
 mod tests {
     #[test]

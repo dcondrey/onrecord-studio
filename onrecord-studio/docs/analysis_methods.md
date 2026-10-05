@@ -511,6 +511,37 @@ A copy is read as its `Item N:` headings. An item's title runs from its heading 
 ### D. What is not compared
 A revised file published at the address of the original replaces the stored text when collected again (OnBase dockets, the Civil Service Commission agenda). The view reports how many fetches of the address returned different bytes and compares nothing, because the earlier text is not retained. A difference between copies is a difference between files and says nothing about why an agenda changed.
 
+## 30. Redaction Context Matched in Other Sources
+`analysis/detectors/inferred_redaction_identity.rs` (finding kind `REDACTION_CANDIDATE_INFERRED`), with bookkeeping in `storage/redaction_sweep.rs` and the anchor definition in `analysis/reconstruction.rs` (`AnchoredSpan`), which the on-demand reconstruction panel shares.
+
+### A. What is compared
+A redaction mark is a bracketed `[REDACTED]`, `[WITHHELD]` or `[EXEMPT]` label, an exemption stamp such as `(b)(6)` that does not follow a section number, or a run of three or more block characters, found in `documents_fts.extracted_text`. Runs of underscores or the letter X are blank form fields and are not compared. The anchors of a mark are up to five whitespace-separated words on each side within 160 bytes; a mark with fewer than three words on either side, or with another mark among those words, is not compared. The first 24 usable marks of a document are kept (`MAX_SPANS_PER_DOCUMENT`).
+
+A source matches when it holds the left anchor, then 1 to 160 characters on one line, then the right anchor, compared without regard to case or the amount of whitespace. The text must lie between the two anchors; the same words occurring nearby do not match. Text that is itself a mark, or that `mask_pii` recognises (a phone number, a street address, a card or labelled identifier), is never a match.
+
+### B. Imported tables
+A table row is read as one line: its original cells in column order, empty cells left out, joined by single spaces. Against a row, a mark is compared by the anchors on its own line of the document (again up to five words, at least three), because a row holds one line; a mark whose line is too short keeps its full anchors. The row matches when the line holds the left anchor, text and the right anchor in that order and the text lies inside one cell. The anchors may be the neighbouring cells of that row or part of the same cell. Text that runs across a cell boundary is refused: no single recorded value stands between the anchors. A number written differently in the two places ("48,200" and "48200.00") does not match.
+
+### C. What is withheld
+* Two different texts between the same anchors, in any sources, mark the wording as reused prose; the mark is not reported and is not compared again until its document changes.
+* Where the mark is a personal-privacy stamp (`(b)(6)`, `(b)(7)(C)`), its passage contains a lead-in such as "signed by" or "attention:", or the text found is two to five capitalised words that are not a public role title, the same text must stand between the anchors in two independent sources. Two documents with the same text digest, or two imports of one file, are one source. The earlier engine asked for two documents for a person; this asks for two independent ones and applies to anything shaped like a name.
+* A file the user added by hand is never read, as the redacted document or as a source.
+* At most 3 findings per document; at most 5 sources listed per finding, the rest counted.
+
+### D. Coverage and bounds
+Eligible documents are public, held under a collected source, with stored text of at most 2 MiB (`MAX_DOCUMENT_TEXT_BYTES`; a larger text is an export and is not read). Each is taken in once, in portal and id order, and identified by portal and id together. Runs are numbered. A document or table read in run *n* has been compared with every mark recorded up to run *n*, and is read again only when a newer mark exists. So a new source is compared with every old mark in the run that takes it in, and a new mark causes every older source to be read again over later runs.
+
+Per run (`SweepLimits`): 500 documents or 64 MiB of text taken in for the first time; 500 documents or 64 MiB read again, longest-waiting first; 8 tables and 400,000 table rows, a table in progress first. What a limit leaves stays recorded as not yet read and is done by later runs; a table stopped part-way resumes at the next row. A run happens when findings are refreshed (after ingestion, or on request), so coverage of a large corpus completes over several refreshes. Stored matches are reported on every run, so a finding stands until one of its documents or tables changes or leaves.
+
+All left anchors are searched in one pass of each text (Aho-Corasick over the lower-cased, whitespace-collapsed text); the pattern is run only for marks whose two anchors both occur.
+
+Measured: 2026-10-05, debug build, one run on a loaded machine (`table_scan_cost`): a run that took in 500 one-mark documents and read a 300,000-row, five-column imported table against those 500 marks took 12.7 s, row assembly by the `analytical_rows` view included. An optimised build is not measured. Reading documents on a real corpus is not measured.
+
+### E. What a finding does and does not claim
+A finding states that the words around a mark in one document also appear in a number of other sources with text where the mark is, and cites each: the document passage by character range in the stored text (the units `SUBSTRING` uses), a table by display name, recorded source address, retrieval date, SHA-256, row number and column. It does not print the text found and does not say what the redaction covers; its own wording says that reused wording in templates and amended versions produces the same match. Confidence is `Unassessed`: matching words are not a measured probability. Severity is Serious when two independent sources agree and Notable otherwise. It is a pattern signal (`is_legal_claim` false), and reports and bundles leave it out.
+
+The ranked engine in `analysis/redaction_inference.rs` (context of 120 characters each side, values drawn from a 400-character excerpt, ceilings of 9,500 basis points with the semantic model and 6,000 without) remains only behind the on-demand panel. It now searches every portal, labels each match with its portal, excludes the redacted document by portal and id, and never counts a hand-added file.
+
 ## 33. Follow-up Letter After a Deadline Passes With No Recorded Response
 
 Code: `analysis/artifacts/overdue_followup.rs` (letter), `analysis/artifacts/agency_record.rs` (paragraph and minimum), `storage/sqlite/agency_record.rs` (counts), command `draft_overdue_follow_up`, UI `OverdueFollowUp.tsx` in the casework panel.

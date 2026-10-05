@@ -243,7 +243,7 @@ export function topicBriefingProject(topic: TopicPackView, now = new Date()): Br
     ...createDefaultBriefingProject(now),
     title: `${topic.title}: findings briefing`,
     objective: `Findings whose subject is a request or document tagged "${topic.title}" by its own wording (${topic.cues.join(', ')}).` +
-      (withheld > 0 ? ` ${withheld} inferred-redaction finding${withheld === 1 ? ' is' : 's are'} left out: they are hypotheses about who a redaction hides, not facts.` : ''),
+      (withheld > 0 ? ` ${withheld} inferred-redaction finding${withheld === 1 ? ' is' : 's are'} left out: they are matches of the words around a redaction, not facts about what it covers.` : ''),
     evidence: exported.map((match) => topicFindingEvidence(match, now)),
     autoDrafted: true,
   };

@@ -75,6 +75,7 @@ impl DuckDbRepository {
                     FROM documents d JOIN documents_fts f ON d.id = f.document_id AND d.portal_subdomain = f.portal_subdomain
                     JOIN portals p ON p.subdomain = d.portal_subdomain
                     WHERE lower(trim(d.visibility)) = 'public' AND p.lifecycle_state <> 'REMOVED'
+                    AND d.portal_subdomain NOT IN (SELECT subdomain FROM user_supplied_sources)
                     AND d.extraction_status IN ('SEARCHABLE', 'SALVAGED') AND contains(lower(f.extracted_text), ?1)
                 ) SELECT id, portal_subdomain, title, download_url, digest, extraction,
                     substr(extracted_text, start_at + 1, 120000), start_at, length(extracted_text)
@@ -245,10 +246,14 @@ mod tests {
         let conn = repository.analytics_connection().await.unwrap();
         insert_document(&conn, 1, "city", " Public ", "SEARCHABLE", TARGET);
         insert_document(&conn, 2, "city", "public", "SEARCHABLE", PUBLIC_SOURCE);
+        // A file the user added by hand is not another release and is never compared.
+        conn.execute("INSERT INTO portals(subdomain,display_name,base_url,source_kind) VALUES ('source-local-1','upload.pdf','https://example.test','LOCAL_FILE')", []).unwrap();
+        conn.execute("INSERT INTO requests(id,portal_subdomain,title,status,created_at,updated_at) VALUES (42,'source-local-1','upload.pdf','imported','2026-09-26','2026-09-26')", []).unwrap();
         for (id, portal, visibility, status, value) in [
             (3, "city", "private", "SEARCHABLE", "33336789"),
             (4, "removed-city", "public", "SEARCHABLE", "44446789"),
             (5, "city", "public", "DEFERRED", "55556789"),
+            (6, "source-local-1", "public", "SEARCHABLE", "66666789"),
         ] {
             insert_document(
                 &conn,

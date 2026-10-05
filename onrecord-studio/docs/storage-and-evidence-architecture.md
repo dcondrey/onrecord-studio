@@ -80,6 +80,16 @@ FTS5 tables. `format_fts5_query` remains as an alias of the qualified name.
 Failures are reported without blocking startup, because a projection that is behind is a
 degradation and a core that will not open is an outage.
 
+**Redaction sweep** (`storage::redaction_sweep`, four `redaction_sweep_*` tables in the core).
+Which documents and imported tables the automatic redaction comparison has read, the words around
+each redaction mark, and where the same words were found with text between them. Runs are
+numbered: a source read in run *n* has been compared with every mark recorded in or before run
+*n*, so a source is read again exactly when a newer mark exists. Rows are dropped when their
+document or table is gone, changed, no longer public, or held under a hand-added source. A match
+row stores a SHA-256 of the text found between the anchors, never the text. The findings are
+rendered from these rows on every run; deleting all four tables loses nothing but work.
+`a_core_that_predates_the_sweep_tables_is_swept_after_the_upgrade` opens a core without them.
+
 ## 3. Where SQLite is still allowed
 
 Only at boundaries, never in the core:
@@ -308,7 +318,10 @@ whoever produced the file and are not verified by anything here.
 
 Not covered: findings computed from imported tables (`budget_line_comparison`,
 `claim_data_mismatch`, `spending_cases`) do not record whether the table's origin file was added
-by hand, and `redaction_inference` may count a hand-added file among its corroborating documents.
+by hand. The redaction comparisons never read a hand-added file as a source: the automatic sweep
+takes none in on either side, and the on-demand engines (`redaction_inference`, lexical and
+semantic, and `storage::reconstruction`) exclude them from the documents they compare against. An
+imported table is cited as an imported table with its recorded source address, never as a release.
 
 ## 6. Migration rules
 
