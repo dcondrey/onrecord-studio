@@ -1,6 +1,6 @@
 import type { AnalyticalDatasetSummary, AnalyticalSchema, CityDataset } from '../types';
 import type { AutomaticProfile } from './automaticDiscovery';
-import { serviceCompanions } from './serviceAccountability';
+import { budgetTable, serviceCompanions, staffGroupDepartments } from './serviceAccountability';
 
 /** A question the imported tables cannot answer, and the published table that would answer it. */
 export interface DataGap {
@@ -36,6 +36,14 @@ export function dataGaps(schema: AnalyticalSchema, profiles: Record<string, Auto
     key: `copy:${latest.snapshotId}`, snapshotId: latest.snapshotId, fetch: { dataset: 'GET_IT_DONE_OPEN', year: null },
     title: 'A newer copy of the open reports would show what changed',
     detail: `The open-reports file was last retrieved ${day(latest)}, and the publisher replaces it daily. A second copy shows which reports left and which arrived since then.`,
+  });
+  const backlog = result('service_backlog');
+  const group = backlog ? backlog.columns.indexOf('staff_group') : -1;
+  const owners = [...new Set((backlog?.rows ?? []).flatMap((row) => staffGroupDepartments(row[group]) ?? []))];
+  if (owners.length && !budgetTable(schema)) gaps.push({
+    key: `budget:${latest.snapshotId}`, snapshotId: latest.snapshotId, fetch: { dataset: 'OPERATING_BUDGET', year: null },
+    title: 'The operating budget would show what the responsible departments were given',
+    detail: `The open reports are handled by staff groups read as ${owners.join(', ')}. The City’s operating budget file lists each department’s adopted amounts by fiscal year.`,
   });
   const movement = result('service_movement');
   const earlier = serviceCompanions(schema, latest)?.earlier;

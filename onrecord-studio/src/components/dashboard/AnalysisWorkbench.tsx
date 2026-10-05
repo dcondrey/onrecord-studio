@@ -43,6 +43,7 @@ const cityDatasets: { value: CityDataset; label: string }[] = [
   { value: 'GET_IT_DONE_OUTCOMES', label: 'Get It Done closed reports (those seen open, by year)' },
   { value: 'SCHOOLS', label: 'SANDAG schools' },
   { value: 'TRANSIT_STOPS', label: 'SANDAG transit stops (GTFS)' },
+  { value: 'OPERATING_BUDGET', label: 'City operating budget (all years)' },
 ];
 
 export default function AnalysisWorkbench() {

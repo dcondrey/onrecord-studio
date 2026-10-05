@@ -10,6 +10,8 @@ export interface ServiceRequestRoles {
   status: string | null;
   place: string | null;
   id: string | null;
+  /** The publisher's name for the staff group that handles a report. */
+  group: string | null;
   areas: string[];
 }
 export interface ServiceLead {
@@ -29,7 +31,28 @@ const roleNames = {
   status: ['status', 'case_status', 'request_status'],
   place: ['street_address', 'incident_address', 'address', 'location'],
   id: ['service_request_id', 'request_id', 'case_id', 'case_number', 'sr_number', 'ticket_id'],
+  group: ['case_record_type', 'agency_responsible', 'responsible_department'],
 };
+/** Get It Done staff groups read as operating-budget departments. Only "Parks & Recreation" is
+ * the budget's own spelling; the rest expand the City's abbreviations, so a lead states the
+ * assignment as this app's reading. Groups left out (Parking, Traffic Engineering) are not
+ * assigned. Department names verified against budget_operating_datasd.csv, 2026-10-04. */
+const STAFF_GROUP_DEPARTMENTS: Record<string, string[]> = {
+  'tsw': ['Transportation', 'Stormwater'],
+  'tsw row': ['Transportation', 'Stormwater'],
+  'storm water code enforcement': ['Stormwater'],
+  'dsd': ['Development Services'],
+  'esd complaint/report': ['Environmental Services'],
+  'parks & recreation': ['Parks & Recreation'],
+  'neighborhood policing': ['Police'],
+};
+export const staffGroupDepartments = (group: unknown): string[] | null => typeof group === 'string' ? STAFF_GROUP_DEPARTMENTS[group.trim().toLowerCase()] ?? null : null;
+const BUDGET_COLUMNS = ['dept_name', 'report_fy', 'budget_cycle', 'amount', 'account_number'];
+/** The latest imported table with the operating budget's columns. */
+export function budgetTable(schema: AnalyticalSchema): AnalyticalDatasetSummary | null {
+  return schema.datasets.filter((dataset) => BUDGET_COLUMNS.every((name) => schema.columns.some((column) => column.tableName === dataset.tableName && column.columnName === name)))
+    .sort((a, b) => b.retrievedAt.localeCompare(a.retrievedAt) || a.snapshotId.localeCompare(b.snapshotId))[0] ?? null;
+}
 const districtNames = ['council_district', 'district', 'supervisor_district', 'ward'];
 const communityNames = ['comm_plan_name', 'community', 'community_plan', 'neighborhood', 'zipcode', 'zip_code', 'zip'];
 
@@ -55,7 +78,7 @@ export function serviceRequestRoles(columns: AnalyticalColumnSummary[]): Service
   const opened = first(roleNames.opened);
   const age = first(roleNames.age);
   if (!category || !closed || (!opened && !age)) return null;
-  return { category, closed, opened, age, status: first(roleNames.status), place: first(roleNames.place), id: first(roleNames.id),
+  return { category, closed, opened, age, status: first(roleNames.status), place: first(roleNames.place), id: first(roleNames.id), group: first(roleNames.group),
     areas: [first(districtNames), first(communityNames)].filter((name): name is string => name !== null) };
 }
 
@@ -75,7 +98,7 @@ function reportRows(roles: ServiceRequestRoles, dataset: AnalyticalDatasetSummar
   const referred = roles.status ? `COALESCE(CONTAINS(LOWER(CAST(${quoteIdentifier(roles.status)} AS VARCHAR)), 'refer'), FALSE)` : 'FALSE';
   const days = roles.age ? `TRY_CAST(${quoteIdentifier(roles.age)} AS DOUBLE)`
     : `CAST(DATE_DIFF('day', ${instant(roles.opened!)}, COALESCE(${instant(roles.closed)}, CAST('${day(dataset)}' AS TIMESTAMP))) AS DOUBLE)`;
-  return `SELECT ${roles.id ? text(roles.id) : 'NULL'} AS report_id, ${text(roles.category)} AS category, ${area ? `UPPER(${text(area)})` : 'NULL'} AS area, ${roles.place ? text(roles.place) : 'NULL'} AS place,
+  return `SELECT ${roles.id ? text(roles.id) : 'NULL'} AS report_id, ${text(roles.category)} AS category, ${area ? `UPPER(${text(area)})` : 'NULL'} AS area, ${roles.place ? text(roles.place) : 'NULL'} AS place, ${roles.group ? text(roles.group) : 'NULL'} AS staff_group,
   ${roles.opened ? instant(roles.opened) : 'NULL'} AS opened_at, ${closedAt} IS NULL AND NOT ${referred} AS unresolved,
   ${closedAt} IS NOT NULL AND NOT ${referred} AS resolved, ${referred} AS referred, CASE WHEN ${days} >= 0 THEN ${days} END AS age_days
  FROM ${quoteIdentifier(dataset.tableName)}`;
@@ -147,11 +170,17 @@ export function serviceAccountabilityQueries(schema: AnalyticalSchema, dataset: 
 ), service_reports AS (SELECT * FROM service_scope WHERE category IS NOT NULL)`;
   const queries: DiscoveryQuery[] = [{
     id: 'service_backlog', title: 'Reports still open, by service',
-    method: `Reports with no ${roles.closed} value${roles.status ? ` and a ${roles.status} that is not a referral` : ''}, grouped by ${roles.category}. ${basis} A report counts as open more than a year when its age exceeds ${STALE_DAYS} days. Totals cover every service, not only the rows shown.`,
-    sql: `${scope(null)}, service_backlog AS (
+    method: `Reports with no ${roles.closed} value${roles.status ? ` and a ${roles.status} that is not a referral` : ''}, grouped by ${roles.category}. ${basis} A report counts as open more than a year when its age exceeds ${STALE_DAYS} days. Totals cover every service, not only the rows shown.${roles.group ? ` The staff group is the publisher's ${roles.group} value, the one most open reports of a service carry, with how many carry it.` : ''}`,
+    sql: `${scope(null)}, service_open AS (
  SELECT category, COUNT(*) AS open_reports, MEDIAN(age_days) AS median_age_days,
   COUNT(*) FILTER (WHERE age_days > ${STALE_DAYS}) AS open_over_one_year, MAX(age_days) AS oldest_age_days, CAST(MIN(opened_at) AS DATE) AS earliest_opened
  FROM service_reports WHERE unresolved GROUP BY category
+), service_groups AS (
+ SELECT category, staff_group, COUNT(*) AS group_reports FROM service_reports WHERE unresolved AND staff_group IS NOT NULL GROUP BY category, staff_group
+), service_owner AS (
+ SELECT category, FIRST(staff_group ORDER BY group_reports DESC, staff_group) AS staff_group, MAX(group_reports) AS staff_group_reports FROM service_groups GROUP BY category
+), service_backlog AS (
+ SELECT service_open.*, staff_group, staff_group_reports FROM service_open LEFT JOIN service_owner ON service_owner.category = service_open.category
 )
 SELECT *, SUM(open_reports) OVER () AS all_open_reports, SUM(open_over_one_year) OVER () AS all_open_over_one_year
 FROM service_backlog ORDER BY open_over_one_year DESC, open_reports DESC, category`,
@@ -203,6 +232,22 @@ SELECT * FROM service_referral_totals WHERE referred_reports > 0 ORDER BY referr
   });
   const movement = movementQuery(schema, dataset);
   if (movement) queries.push(movement);
+  const budget = roles.group ? budgetTable(schema) : null;
+  if (budget) {
+    const departments = [...new Set(Object.values(STAFF_GROUP_DEPARTMENTS).flat())].map((name) => `'${name.toLowerCase().replace(/'/g, "''")}'`).join(', ');
+    queries.push({
+      id: 'service_budget', title: 'Adopted budget of the departments behind the backlog',
+      method: `Adopted operating expense per department and fiscal year from ${budget.displayName}, for the two latest fiscal years with rows marked adopted: the sum of amount where budget_cycle is adopted and account_number begins with 5 (the City's expense accounts; accounts beginning with 4 are revenue). A year whose rows carry no budget_cycle is not counted as adopted. A department's budget covers all its work, not one service.`,
+      sql: `WITH budget_lines AS (
+ SELECT ${text('dept_name')} AS department, TRY_CAST(CAST(${quoteIdentifier('report_fy')} AS VARCHAR) AS INTEGER) AS fiscal_year, TRY_CAST(${quoteIdentifier('amount')} AS DOUBLE) AS amount
+ FROM ${quoteIdentifier(budget.tableName)}
+ WHERE LOWER(TRIM(CAST(${quoteIdentifier('budget_cycle')} AS VARCHAR))) = 'adopted' AND CAST(${quoteIdentifier('account_number')} AS VARCHAR) LIKE '5%'
+), budget_years AS (SELECT DISTINCT fiscal_year FROM budget_lines WHERE fiscal_year IS NOT NULL ORDER BY fiscal_year DESC LIMIT 2)
+SELECT department, fiscal_year, SUM(amount) AS adopted_expense, COUNT(*) AS budget_rows, COUNT(*) FILTER (WHERE amount IS NULL) AS unreadable_amounts
+FROM budget_lines WHERE fiscal_year IN (SELECT fiscal_year FROM budget_years) AND LOWER(department) IN (${departments})
+GROUP BY department, fiscal_year ORDER BY department, fiscal_year DESC`,
+    });
+  }
   return queries;
 }
 
@@ -213,6 +258,39 @@ const count = (value: unknown): number | null => {
 };
 const shown = (value: number) => Math.round(value).toLocaleString('en-US');
 const records = (result: SqlQueryResult) => result.rows.map((row) => Object.fromEntries(result.columns.map((name, i) => [name, row[i]])));
+const money = (value: number) => Math.abs(value) >= 1_000_000 ? `$${(value / 1_000_000).toFixed(1)} million` : `$${shown(value)}`;
+const listed = (names: string[]) => names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)!}` : names[0];
+
+/** Who the publisher says handles the services named, and what the budget table adopts for them.
+ * `budget` is undefined when no budget table was read: that is said, never shown as an amount. */
+function ownership(rows: Record<string, unknown>[], budget: Record<string, unknown>[] | undefined): { text: string; departments: string[] } {
+  const groups = new Map<string, string[]>();
+  for (const row of rows) {
+    const carried = count(row.staff_group_reports); const open = count(row.open_reports);
+    // Named only when most of the service's open reports carry the group.
+    if (typeof row.staff_group !== 'string' || carried === null || open === null || 2 * carried <= open) continue;
+    groups.set(row.staff_group, [...(groups.get(row.staff_group) ?? []), `${String(row.category)} (${shown(carried)} of ${shown(open)} open reports)`]);
+  }
+  const sentences: string[] = []; const named = new Set<string>();
+  for (const [group, services] of groups) {
+    const departments = staffGroupDepartments(group);
+    if (!departments) { sentences.push(`The publisher lists ${listed(services)} under its staff group ${group}, which this app does not assign to a budget department.`); continue; }
+    departments.forEach((name) => named.add(name));
+    sentences.push(`The publisher lists ${listed(services)} under its staff group ${group}, read here as the ${listed(departments)} department${departments.length > 1 ? 's' : ''}.`);
+  }
+  if (!named.size) return { text: sentences.join(' '), departments: [] };
+  if (!budget) return { text: `${sentences.join(' ')} No operating budget table is imported, so no adopted amount is shown.`, departments: [...named] };
+  const lines = [...named].flatMap((name) => {
+    const years = budget.filter((row) => String(row.department).toLowerCase() === name.toLowerCase() && count(row.fiscal_year) !== null && count(row.adopted_expense) !== null && (count(row.unreadable_amounts) ?? 0) === 0)
+      .sort((a, b) => count(b.fiscal_year)! - count(a.fiscal_year)!);
+    return years.length ? [`${name} ${years.map((row) => `${money(count(row.adopted_expense)!)} in FY ${count(row.fiscal_year)!}`).join(', ')}`] : [];
+  });
+  const missing = [...named].filter((name) => !lines.some((line) => line.startsWith(`${name} `)));
+  return { departments: [...named], text: [...sentences,
+    ...(lines.length ? [`Adopted operating expense: ${lines.join('; ')}. A department's budget covers all its work, not these services alone.`] : []),
+    ...(missing.length ? [`The budget table has no readable adopted amount for ${listed(missing)}.`] : [])].join(' ') };
+}
+
 const areaLabel = (column: string, value: unknown) => /district|ward/.test(column) && /^\d+$/.test(String(value)) ? `${column.replace(/_/g, ' ')} ${String(value)}` : String(value);
 
 export function serviceAccountabilityLeads(results: { query: DiscoveryQuery; result?: SqlQueryResult }[]): ServiceLead[] {
@@ -227,10 +305,13 @@ export function serviceAccountabilityLeads(results: { query: DiscoveryQuery; res
       if (stale < 25) continue;
       const worst = rows.filter((row) => (count(row.open_over_one_year) ?? 0) > 0).slice(0, 3).map((row) =>
         `${String(row.category)}: ${shown(count(row.open_over_one_year)!)} of ${shown(count(row.open_reports) ?? 0)} open reports are older than a year${row.earliest_opened ? `, the earliest filed ${String(row.earliest_opened).slice(0, 10)}` : ''}.`);
+      const budget = results.find((entry) => entry.query.id === 'service_budget')?.result;
+      const owner = ownership(rows.filter((row) => (count(row.open_over_one_year) ?? 0) > 0).slice(0, 3), budget ? records(budget) : undefined);
       leads.push({ key: 'service_backlog', priority: 98, query,
         title: `${shown(stale)} of ${shown(open)} open reports have been open more than a year`,
-        detail: `${worst.join(' ')} An open report is not proof the problem persists: the table records no inspections or work done.`,
-        question: `Which department owns ${String(rows[0].category)}, and what do its budget and staffing say about this backlog?`,
+        detail: `${worst.join(' ')}${owner.text ? ` ${owner.text}` : ''} An open report is not proof the problem persists: the table records no inspections or work done.`,
+        question: owner.departments.length ? `What do the ${listed(owner.departments)} budget and staffing say about the ${String(rows[0].category)} backlog?`
+          : `Which department owns ${String(rows[0].category)}, and what do its budget and staffing say about this backlog?`,
       });
     } else if (id === 'service_backlog_area' || id === 'service_wait_area') {
       const open = id === 'service_backlog_area';

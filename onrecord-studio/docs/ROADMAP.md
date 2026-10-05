@@ -1039,9 +1039,16 @@ daily). Next, in order:
    a newer open copy after seven days, and the closed-reports year filtered to reports seen open.
    Not built: seeking a source for a gap outside that registry (searching the source catalogs in
    `src/utils/*Sources.ts` or the publisher's dataset index by the missing role).
-2. Join a lead to the council agenda and budget: the department that owns a service, its adopted
-   line (`budget_lines.rs`), and upcoming meeting items (`analysis_methods.md` §11), so a lead
-   offers a drafted public comment.
+2. Budget half done 2026-10-04: the backlog lead names the publisher's staff group, the budget
+   departments it is read as, and their adopted operating expense (methods §17 B "Owner and
+   budget"); a missing budget table is fetched as a gap. `case_record_type` proved to be a staff
+   group label, not a department code. Measured on the 2026-09-14 open file and the budget file
+   published 2026-10-04: Sidewalk Repair Issue 14,645 of 14,690, Street Light Maintenance 14,332
+   of 14,358 and ROW Maintenance 10,471 of 10,564 open reports are under TSW; adopted expense
+   Transportation 190.6 million (FY 25) and 172.8 million (FY 24), Stormwater 73.9 and 67.6.
+   Not built: the department total is not the service's line (the budget file has no program
+   below funds center; `budget_lines.rs` is not used), and agenda matching: `research::meetings`
+   matches findings by portal agency, and these findings name a department, not a portal agency.
 3. Done 2026-10-04: service leads are stored as `SERVICE_REPORT_LEAD` findings
    (`record_service_leads`, methods §17 E). They carry no portal agency, so agenda suggestions
    (§11 "Stored finding subject") do not match them until item 2 names the owning department.

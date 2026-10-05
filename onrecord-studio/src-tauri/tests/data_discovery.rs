@@ -237,6 +237,10 @@ async fn service_report_checks_run_on_real_imported_rows() {
         let input: AnalyticalImportRequest = serde_json::from_value(json!({ "datasetKind":"REGIONAL_DATA", "displayName":"Service fixture", "localPath":path, "sourceUri":uri, "partialDataset":true })).unwrap();
         tables.push(db.import_analytical_csv(input).await.unwrap().table_name);
     }
+    let budget_path = temp.path().join("budget.csv");
+    std::fs::write(&budget_path, fixture["budgetCsv"].as_str().unwrap()).unwrap();
+    let budget: AnalyticalImportRequest = serde_json::from_value(json!({ "datasetKind":"OPERATING_BUDGET", "displayName":"Budget fixture", "localPath":budget_path, "sourceUri":"https://example.test/budget.csv", "partialDataset":false })).unwrap();
+    let budget_table = db.import_analytical_csv(budget).await.unwrap().table_name;
     // A later copy of one source is a second table; it does not replace the earlier copy.
     assert_ne!(tables[0], tables[1]);
     let copies = db.analytical_schema().await.unwrap().datasets;
@@ -271,6 +275,7 @@ async fn service_report_checks_run_on_real_imported_rows() {
         let sql = query["sql"]
             .as_str()
             .unwrap()
+            .replace("analysis_budget_fixture", &budget_table)
             .replace("analysis_earlier_fixture", &tables[0])
             .replace("analysis_closed_fixture", &tables[2])
             .replace("analysis_fixture", &tables[1]);
@@ -289,6 +294,33 @@ async fn service_report_checks_run_on_real_imported_rows() {
                 assert_eq!(number(&result, 0, "all_open_reports"), 12.0);
                 assert_eq!(number(&result, 0, "all_open_over_one_year"), 12.0);
                 assert_eq!(cell(&result, 0, "earliest_opened"), &json!("2024-01-10"));
+                // One of the twelve sits under another staff group.
+                assert_eq!(cell(&result, 0, "staff_group"), &json!("TSW"));
+                assert_eq!(number(&result, 0, "staff_group_reports"), 11.0);
+            }
+            "service_budget" => {
+                // Revenue accounts, the proposed cycle, the year with no cycle and departments
+                // no staff group is read as are all left out.
+                let rows: Vec<(String, f64, f64)> = (0..result.row_count)
+                    .map(|row| {
+                        (
+                            cell(&result, row, "department")
+                                .as_str()
+                                .unwrap()
+                                .to_string(),
+                            number(&result, row, "fiscal_year"),
+                            number(&result, row, "adopted_expense"),
+                        )
+                    })
+                    .collect();
+                assert_eq!(
+                    rows,
+                    [
+                        ("Stormwater".to_string(), 25.0, 30.0),
+                        ("Transportation".to_string(), 25.0, 150.0),
+                        ("Transportation".to_string(), 24.0, 80.0),
+                    ]
+                );
             }
             "service_wait_area:council_district" => {
                 assert_eq!(result.row_count, 1);

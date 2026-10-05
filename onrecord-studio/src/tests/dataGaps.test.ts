@@ -41,6 +41,20 @@ describe('missing tables the app fetches for itself', () => {
   });
 });
 
+describe('the budget behind a backlog', () => {
+  it('asks for the operating budget only when a staff group is read as a department and no budget table is imported', () => {
+    const latest = table('latest', open, '2026-10-04T00:00:00Z');
+    const backlog = (group: string | null): Record<string, AutomaticProfile> => ({ latest: { fingerprint: 'f', checkedAt: 'now', results: [{ query: query('service_backlog'), result: response(['category', 'staff_group'], [['Pothole', group]]) }] } });
+    const keys = (schema: AnalyticalSchema, group: string | null) => dataGaps(schema, backlog(group), '2026-10-04T12:00:00Z').map((gap) => gap.key);
+    expect(keys(catalog(latest), 'TSW')).toEqual(['budget:latest']);
+    expect(keys(catalog(latest), 'Parking')).toEqual([]);
+    expect(keys(catalog(latest), null)).toEqual([]);
+    const withBudget = catalog(latest);
+    const budget = base.datasets.find((dataset) => dataset.snapshotId === 'budget')!;
+    expect(keys({ ...withBudget, datasets: [...withBudget.datasets, budget], columns: [...withBudget.columns, ...base.columns.filter((column) => column.tableName === budget.tableName)] }, 'TSW')).toEqual([]);
+  });
+});
+
 describe('fetching a missing table', () => {
   const upkeep = (autoRefresh: boolean): DataMaintenanceStatus => ({ policy: { enabled: true, autoImport: true, autoRefresh, refreshHours: 24, retentionMode: 'ORIGINALS', retainedFileBudgetBytes: 10 * 1024 ** 3 }, effectiveAt: '2026-09-14T00:00:00Z', retainedFileBytes: 0, referencedDocuments: 0, reclaimedFileBytes: 0, events: [] });
   const schema = catalog(table('first', open, '2026-09-01T17:00:00Z'));

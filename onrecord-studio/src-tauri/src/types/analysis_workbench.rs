@@ -167,6 +167,8 @@ pub enum CityDataset {
     GetItDoneOutcomes,
     Schools,
     TransitStops,
+    /// Every published year of the operating budget in one file.
+    OperatingBudget,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

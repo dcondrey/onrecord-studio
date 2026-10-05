@@ -1,6 +1,6 @@
 import type { AnalyticalDatasetSummary, AnalyticalSchema, ServiceLeadInput, SqlQueryResult } from '../types';
 import { buildDiscoveryPlan, discoveryDefaults, type DiscoveryQuery, type DiscoverySelection } from './dataDiscovery';
-import { backlogChangeLeads, recurringServiceLeads, serviceAccountabilityLeads, serviceAccountabilityQueries, serviceCompanions } from './serviceAccountability';
+import { backlogChangeLeads, budgetTable, recurringServiceLeads, serviceAccountabilityLeads, serviceAccountabilityQueries, serviceCompanions, serviceRequestRoles } from './serviceAccountability';
 
 export interface DiscoveryObservation {
   id: string;
@@ -33,8 +33,9 @@ const records = (result: SqlQueryResult) => result.rows.map((row) => Object.from
 export function snapshotFingerprint(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary): string {
   // A check that reads other tables is stale once those tables change, not only this one.
   const companions = serviceCompanions(schema, dataset);
-  return JSON.stringify([dataset, schema.columns.filter((column) => column.tableName === dataset.tableName),
-    companions ? [companions.earlier, ...companions.outcomes].map((table) => table.snapshotId) : []]);
+  const columns = schema.columns.filter((column) => column.tableName === dataset.tableName);
+  return JSON.stringify([dataset, columns, companions ? [companions.earlier, ...companions.outcomes].map((table) => table.snapshotId) : [],
+    serviceRequestRoles(columns)?.group ? budgetTable(schema)?.snapshotId ?? null : null]);
 }
 
 export function automaticProfileQuery(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary): DiscoveryQuery {
