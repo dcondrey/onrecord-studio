@@ -1240,6 +1240,34 @@ by the file's maker and unverified. Not built: marking findings drawn from an im
 origin file was hand-added, and excluding hand-added files from redaction-inference corroboration
 (architecture doc section 5).
 
+Built (meeting bodies, posting time, agenda copies; methods section 27): one registry,
+`src/content/meetingBodies.json`, read by both the Rust starter set
+(`ingestion/meeting_bodies.rs`, set `city-boards-and-commissions`) and the source catalogue
+(`src/utils/meetingBodySources.ts`): 37 bodies, 16 with a verified date in the set, 21 from the
+City roster offered singly and marked as not opened. The OnBase adapters accept the committee
+application (`211agendaonlinecomm`) and the SDHC attachment rule covers the Housing Authority
+page. `document_acquisitions` gained `response_date` (the response `Date` header, NULL for
+earlier fetches). The Meetings view shows each file's `Last-Modified` as "posted (per the file's
+Last-Modified header)" or not recorded with the reason, the time to a stated meeting start, a
+count of agenda files under 72 hours with no conclusion, and item differences between copies of
+one agenda held at different addresses. No new command and no new finding kind.
+Verified with plain requests on 2026-10-05: the index pages of the Homelessness Revenue Account
+Citizens Oversight Committee, Privacy Advisory Board and Planning Commission link agenda PDFs
+inside `<main>` under `/sites/default/files/`, which the City preset's rules collect; a committee
+meeting page declares the same `ViewAgenda` template as the Council application; sandiego.gov
+PDFs carry a `Last-Modified` days older than `Date`, while sandiego.gov HTML and OnBase pages
+carry one 0 to 2 seconds before `Date`. Not verified: any collection run in the app; the 21
+roster addresses; item links and attachment downloads on the committee application (the one
+agenda read was an adjournment with no items); whether SDHC attachment pages send a usable
+`Last-Modified`; how each board words its agenda heading, on which body recognition depends.
+Not built: comparison of copies published at one address (OnBase dockets, the Civil Service
+Commission's fixed agenda file). Re-collection rewrites the one `documents` row and its text, and
+a re-check discards the new bytes, so the earlier text is gone; this needs the re-check or
+watchlist storage to keep the earlier extracted text per (document, raw SHA-256). Also not built:
+SDHC upload times from `wp-json`, the Commission on the Status of Women, Franchise Compliance
+Review Committee, Otay Mesa EIFD authority and community planning groups, SDCERS, and a yearly
+roll-over of the Ethics Commission's per-year index address.
+
 Round one merged and gated 2026-10-05 (main at 02366f6: fmt, clippy, 1,328 lib tests, 8
 data-discovery tests, tsc, eslint, 645 frontend tests, IPC and help checks all exit 0): order
 items 1 to 4 above. Nothing in round one has been checked in the running app.

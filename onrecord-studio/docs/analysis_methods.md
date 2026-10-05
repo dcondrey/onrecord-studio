@@ -455,3 +455,28 @@ Groups were identical wherever both passes ran. 16,000 passages is the most 2,00
 
 ### E. What a finding does and does not claim
 A finding states how many passages in how many documents share wording, names the agencies, and cites up to 12 passages (one per agency first) with the character range of each in `documents_fts.extracted_text`, the units `SUBSTRING` uses. Every finding's text says that shared wording is not evidence that agencies coordinated and does not show that any request was not reviewed individually: standard wording, a common template or a quoted statute all produce it. All three kinds are pattern signals (`is_legal_claim` false).
+
+## 27. Meeting Posting Time and Agenda Revisions
+Shown in the Meetings view; neither produces a finding.
+
+### A. Posting time
+The time is the `Last-Modified` header stored with the first fetch (`document_acquisitions`) that delivered the bytes the app holds. A re-check that received other bytes describes a copy the app did not keep and is not used. The header is the server's statement about the file, not when the public could first read it.
+
+It is shown as not recorded, with the reason, when:
+* no fetch of the held bytes is recorded, the header is absent, or it is not an HTTP date;
+* the host is `sandiego.hylandcloud.com`, measured 2026-10-04 and 2026-10-05 to answer every page with the request time;
+* the header is not at least 5 seconds earlier than the response's own `Date` header (generated pages on sandiego.gov and OnBase stamp `Last-Modified` 0 to 2 seconds before `Date`);
+* the fetch predates storage of the response `Date` and the header is not at least one hour earlier than the local fetch time, since a local clock can be wrong.
+
+### B. Time before the meeting
+Computed for an agenda file only when its posting time is recorded, the meeting has one heading date, and an agenda heading states a start time directly after that date ("…, 2026, AT 10:00 AM"); agendas of one meeting stating different times yield none. The stated start is read as US Pacific time by the federal rule (daylight time from 02:00 on the second Sunday of March to 02:00 on the first Sunday of November), and only for publishers the source table classifies as a San Diego or State agency. The result is whole minutes, floored, and is negative when the header is later than the start.
+
+The view counts agenda files with both times whose result is at least 0 and under 4,320 minutes ("posted less than 72 hours before the meeting, per the file's Last-Modified header"), and separately those below 0. Exactly 72 hours is not counted. No notice requirement is evaluated: which rule applies to a meeting, and whether posting a file on a website satisfied it, are not facts a header carries.
+
+### C. Agenda copies
+Copies are the agenda documents with extracted text grouped into one meeting (same publisher meeting identifier, or same source, body and heading date). They are ordered by posting time when every copy has one, otherwise by collection order, and the view states which. At most the 6 latest are compared, each with the next.
+
+A copy is read as its `Item N:` headings. An item's title runs from its heading to the first of "Council District", "Proposed Actions" or "Recommendation", or to the next heading, whitespace collapsed, first 300 characters. Its text is everything up to the next heading. By item number: present only in the later copy is added; only in the earlier, removed; in both with different titles, reworded; in both with equal titles and different text, text changed. The last item's text is never compared and its title only when a marker ends it; a number occurring twice in a copy is not compared. These are listed as not compared.
+
+### D. What is not compared
+A revised file published at the address of the original replaces the stored text when collected again (OnBase dockets, the Civil Service Commission agenda). The view reports how many fetches of the address returned different bytes and compares nothing, because the earlier text is not retained. A difference between copies is a difference between files and says nothing about why an agenda changed.
