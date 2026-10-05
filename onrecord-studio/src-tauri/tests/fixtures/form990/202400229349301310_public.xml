@@ -1,0 +1,734 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Return xmlns="http://www.irs.gov/efile" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.irs.gov/efile" returnVersion="2022v5.0">
+  <ReturnHeader binaryAttachmentCnt="0">
+    <ReturnTs>2024-01-22T13:44:05-06:00</ReturnTs>
+    <TaxPeriodEndDt>2023-06-30</TaxPeriodEndDt>
+    <PreparerFirmGrp>
+      <PreparerFirmEIN>450250958</PreparerFirmEIN>
+      <PreparerFirmName>
+        <BusinessNameLine1Txt>EIDE BAILLY LLP</BusinessNameLine1Txt>
+      </PreparerFirmName>
+      <PreparerUSAddress>
+        <AddressLine1Txt>2950 E HARMONY RD STE 290</AddressLine1Txt>
+        <CityNm>FORT COLLINS</CityNm>
+        <StateAbbreviationCd>CO</StateAbbreviationCd>
+        <ZIPCd>805283429</ZIPCd>
+      </PreparerUSAddress>
+    </PreparerFirmGrp>
+    <ReturnTypeCd>990</ReturnTypeCd>
+    <TaxPeriodBeginDt>2022-07-01</TaxPeriodBeginDt>
+    <Filer>
+      <EIN>320620949</EIN>
+      <BusinessName>
+        <BusinessNameLine1Txt>COLORADO CHRISTIAN ACADEMY</BusinessNameLine1Txt>
+      </BusinessName>
+      <BusinessNameControlTxt>COLO</BusinessNameControlTxt>
+      <PhoneNum>7206720086</PhoneNum>
+      <USAddress>
+        <AddressLine1Txt>333 INVERNESS DR SOUTH</AddressLine1Txt>
+        <CityNm>ENGLEWOOD</CityNm>
+        <StateAbbreviationCd>CO</StateAbbreviationCd>
+        <ZIPCd>80112</ZIPCd>
+      </USAddress>
+    </Filer>
+    <BusinessOfficerGrp>
+      <PersonNm>NATASHA HARRIS</PersonNm>
+      <PersonTitleTxt>CHAIRMAN OF FINANCE</PersonTitleTxt>
+      <PhoneNum>7206720086</PhoneNum>
+      <SignatureDt>2024-01-17</SignatureDt>
+      <DiscussWithPaidPreparerInd>1</DiscussWithPaidPreparerInd>
+    </BusinessOfficerGrp>
+    <SigningOfficerGrp>
+      <PersonFullName>
+        <PersonFirstNm>NATASHA</PersonFirstNm>
+        <PersonLastNm>HARRIS</PersonLastNm>
+      </PersonFullName>
+      <SSN>XXX-XX-XXXX</SSN>
+    </SigningOfficerGrp>
+    <IRSResponsiblePrtyInfoCurrInd>1</IRSResponsiblePrtyInfoCurrInd>
+    <PreparerPersonGrp>
+      <PreparerPersonNm>KYLE FRITCH CPA</PreparerPersonNm>
+      <PTIN>P01313374</PTIN>
+      <PhoneNum>9702238825</PhoneNum>
+      <PreparationDt>2024-01-17</PreparationDt>
+    </PreparerPersonGrp>
+    <AdditionalFilerInformation>
+      <TrustedCustomerGrp>
+        <TrustedCustomerCd>2</TrustedCustomerCd>
+        <AuthenticationAssuranceLevelCd>AAL1</AuthenticationAssuranceLevelCd>
+        <IdentityAssuranceLevelCd>IAL1</IdentityAssuranceLevelCd>
+      </TrustedCustomerGrp>
+    </AdditionalFilerInformation>
+    <TaxYr>2022</TaxYr>
+    <BuildTS>2023-04-26 12:10:37Z</BuildTS>
+  </ReturnHeader>
+  <ReturnData documentCnt="10">
+    <IRS990 documentId="RetDoc1038000001" referenceDocumentId="RetDoc1044400001">
+      <AddressChangeInd>X</AddressChangeInd>
+      <PrincipalOfficerNm>NATASHA HARRIS</PrincipalOfficerNm>
+      <USAddress>
+        <AddressLine1Txt>333 INVERNESS DR SOUTH</AddressLine1Txt>
+        <CityNm>ENGLEWOOD</CityNm>
+        <StateAbbreviationCd>CO</StateAbbreviationCd>
+        <ZIPCd>80112</ZIPCd>
+      </USAddress>
+      <GrossReceiptsAmt>2494056</GrossReceiptsAmt>
+      <GroupReturnForAffiliatesInd>0</GroupReturnForAffiliatesInd>
+      <Organization501c3Ind>X</Organization501c3Ind>
+      <WebsiteAddressTxt>WWW.COLORADOCHRISTIANACADEMY.COM</WebsiteAddressTxt>
+      <TypeOfOrganizationCorpInd>X</TypeOfOrganizationCorpInd>
+      <FormationYr>2020</FormationYr>
+      <LegalDomicileStateCd>CO</LegalDomicileStateCd>
+      <ActivityOrMissionDesc>CHRIST-CENTERED EDUCATION, PRIORITIZING ACADEMIC ACHIEVEMENTS &amp; DEVELOPMENT OF THE WHOLE CHILD.</ActivityOrMissionDesc>
+      <VotingMembersGoverningBodyCnt>9</VotingMembersGoverningBodyCnt>
+      <VotingMembersIndependentCnt>9</VotingMembersIndependentCnt>
+      <TotalEmployeeCnt>22</TotalEmployeeCnt>
+      <TotalVolunteersCnt>12</TotalVolunteersCnt>
+      <TotalGrossUBIAmt>0</TotalGrossUBIAmt>
+      <NetUnrelatedBusTxblIncmAmt>0</NetUnrelatedBusTxblIncmAmt>
+      <PYContributionsGrantsAmt>691662</PYContributionsGrantsAmt>
+      <CYContributionsGrantsAmt>1455556</CYContributionsGrantsAmt>
+      <PYProgramServiceRevenueAmt>956508</PYProgramServiceRevenueAmt>
+      <CYProgramServiceRevenueAmt>1009339</CYProgramServiceRevenueAmt>
+      <PYInvestmentIncomeAmt>45</PYInvestmentIncomeAmt>
+      <CYInvestmentIncomeAmt>2786</CYInvestmentIncomeAmt>
+      <PYOtherRevenueAmt>69551</PYOtherRevenueAmt>
+      <CYOtherRevenueAmt>-31608</CYOtherRevenueAmt>
+      <PYTotalRevenueAmt>1717766</PYTotalRevenueAmt>
+      <CYTotalRevenueAmt>2436073</CYTotalRevenueAmt>
+      <PYGrantsAndSimilarPaidAmt>50109</PYGrantsAndSimilarPaidAmt>
+      <CYGrantsAndSimilarPaidAmt>55718</CYGrantsAndSimilarPaidAmt>
+      <PYBenefitsPaidToMembersAmt>0</PYBenefitsPaidToMembersAmt>
+      <CYBenefitsPaidToMembersAmt>0</CYBenefitsPaidToMembersAmt>
+      <PYSalariesCompEmpBnftPaidAmt>1342009</PYSalariesCompEmpBnftPaidAmt>
+      <CYSalariesCompEmpBnftPaidAmt>1014358</CYSalariesCompEmpBnftPaidAmt>
+      <PYTotalProfFndrsngExpnsAmt>0</PYTotalProfFndrsngExpnsAmt>
+      <CYTotalProfFndrsngExpnsAmt>0</CYTotalProfFndrsngExpnsAmt>
+      <CYTotalFundraisingExpenseAmt>2869</CYTotalFundraisingExpenseAmt>
+      <PYOtherExpensesAmt>472574</PYOtherExpensesAmt>
+      <CYOtherExpensesAmt>427990</CYOtherExpensesAmt>
+      <PYTotalExpensesAmt>1864692</PYTotalExpensesAmt>
+      <CYTotalExpensesAmt>1498066</CYTotalExpensesAmt>
+      <PYRevenuesLessExpensesAmt>-146926</PYRevenuesLessExpensesAmt>
+      <CYRevenuesLessExpensesAmt>938007</CYRevenuesLessExpensesAmt>
+      <TotalAssetsBOYAmt>744579</TotalAssetsBOYAmt>
+      <TotalAssetsEOYAmt>1538384</TotalAssetsEOYAmt>
+      <TotalLiabilitiesBOYAmt>335942</TotalLiabilitiesBOYAmt>
+      <TotalLiabilitiesEOYAmt>191740</TotalLiabilitiesEOYAmt>
+      <NetAssetsOrFundBalancesBOYAmt>408637</NetAssetsOrFundBalancesBOYAmt>
+      <NetAssetsOrFundBalancesEOYAmt>1346644</NetAssetsOrFundBalancesEOYAmt>
+      <InfoInScheduleOPartIIIInd>X</InfoInScheduleOPartIIIInd>
+      <MissionDesc>COLORADO CHRISTIAN ACADEMY PROVIDES AN INNOVATIVE CHRIST-CENTERED EDUCATION THAT PRIORITIZES ACADEMIC ACHIEVEMENTS AND INDIVIDUAL DEVELOPMENT OF THE WHOLE CHILD. IN RELATIONSHIP WITH PARENTS, WE WILL BUILD HEALTHY FOUNDATIONS THAT RESULT IN RESILIENT STUDENTS.</MissionDesc>
+      <SignificantNewProgramSrvcInd>0</SignificantNewProgramSrvcInd>
+      <SignificantChangeInd>0</SignificantChangeInd>
+      <ExpenseAmt>1310044</ExpenseAmt>
+      <GrantAmt>55718</GrantAmt>
+      <RevenueAmt>1009339</RevenueAmt>
+      <Desc>COLORADO CHRISTIAN ACADEMY PROVIDES AN INNOVATIVE CHRIST-CENTERED EDUCATION THAT PRIORITIZES ACADEMIC ACHIEVEMENTS AND INDIVIDUAL DEVELOPMENT OF THE WHOLE CHILD. IN RELATIONSHIP WITH PARENTS, WE WILL BUILD HEALTHY FOUNDATIONS THAT RESULT IN RESILIENT STUDENTS. THE ULTIMATE OUTCOME AT COLORADO CHRISTIAN ACADEMY IS THAT STUDENTS WOULD COME TO KNOW JESUS DURING THEIR ACADEMIC AND PERSONAL DEVELOPMENT. WE BELIEVE THAT A LIVING KNOWLEDGE OF GOD'S NATURE CREATES A CLEAR UNDERSTANDING AND LOVE FOR ONESELF AND OTHERS. WE WANT STUDENTS TO TRULY KNOW THE VOICE OF GOD. IT IS OUR AIM THAT EVERY STUDENT HAS A COMPREHENSIVE UNDERSTANDING OF THE BIBLE, HISTORY, LITERATURE, AND CULTURE, AND HIGH PROFICIENCY IN ESSENTIAL SKILLS LIKE MATH, READING, AND COMMUNICATION. COLORADO CHRISTIAN ACADEMY'S PROGRAMS ARE AS FOLLOWS:PRESCHOOL AND PRE-KINDERGARTEN - THE PRESCHOOL AND PRE-KINDERGARTEN PROGRAMS ARE DESIGNED TO PARTNER WITH FAMILIES TO PREPARE STUDENTS FOR KINDERGARTEN AND BEYOND AT COLORADO CHRISTIAN ACADEMY. ALIGNING WITH THE MISSION AND VISION OF FOCUSING ON THE WHOLE CHILD DELIVERS A DEVELOPMENTALLY APPROPRIATE ENVIRONMENT. THIS PROVIDES BEGINNING FOUNDATIONS OF LITERACY AND MATH FUNDAMENTALS, SOCIAL AND EMOTIONAL HEALTH, SELF-DISCIPLINE, PHYSICAL AND COGNITIVE DEVELOPMENTAL GROWTH, AND INTENTIONALITY WITH EVERY INTERACTION. THE CORE OF ALL THESE FOUNDATIONS AND LEARNING EXPERIENCES IS TAUGHT THROUGH THE LENS THAT OUR CREATOR SEES EACH CHILD AS HIS MASTERPIECE. EVERY CHILD IS EVALUATED UPON ENTERING THE PRESCHOOL AND PRE-KINDERGARTEN PROGRAMS TO DEVELOP SCHOOL-YEAR GROWTH GOALS IN PERSONAL, ACADEMIC AND SPIRITUAL AREAS, AND STUDENTS ARE EVALUATED BY TEACHERS, IN PARTNERSHIP WITH PARENTS, ON EVALUATING STUDENT GROWTH MID-YEAR AND END-OF-YEAR IN THESE RESPECTIVE AREAS.KINDERGARTEN THROUGH 8TH GRADE - WE OFFER KINDERGARTEN THROUGH 8TH GRADE CORE PROGRAM AND TRADITIONAL SCHEDULE THAT INCLUDES A FOCUS ON THE CORE SUBJECTS (MATH, READING, READING COMPREHENSION AND BIBLE), CO-CURRICULARS (SPANISH, CIVICS, SCIENCE, WELLNESS/FITNESS, MUSIC, ART), AND CHAPEL. DIMENSIONS IS A SINGAPORE MATH PROGRAM THAT GETS STUDENTS TO UNDERSTAND MATH CONCEPTS BY TRAINING THEM TO THINK AND UNDERSTAND MATH CONCEPTS AND NOT JUST MEMORIZE MATH FACTS. THEY INTRODUCE EACH NEW BUILDING BLOCK THROUGH A THREE-STEP SCAFFOLD. LITERACY ESSENTIALS IS A READING PROGRAM THAT TEACHES THE CODE OF THE ENGLISH LANGUAGE. LEARNING A LANGUAGE BY VIEWING IT AS A PUZZLE TO BE SOLVED AND DECIPHERED, LAYS THE MENTAL TRACKS FOR CRITICAL THINKING AND PROBLEM SOLVING NEEDED IN SCHOOL AND IN LIFE. ALL STUDENTS WILL RECEIVE THIS PROGRAM, BUT THE PACE WILL VARY BASED ON GRADE. STUDENTS WILL LEARN THE OVERARCHING STORY OF GOD AND THE WORLD. IT IS IMPORTANT FOR EVERYONE TO KNOW THE TRUE STORY THAT WE HAVE BEEN BORN INTO BECAUSE WE ARE TEMPTED TO LIVE A DIFFERENT STORY IN OUR SOCIETY. THIS STORY IS FOUNDATIONAL TO THE REST OF THE CURRICULUM AT COLORADO CHRISTIAN ACADEMY. SCIENCE AT CCA WILL ACTIVELY PRIORITIZE THE SCIENTIFIC PROCESSES THROUGH INVESTIGATION AND LABS. STUDENTS WILL LEARN BASIC SCIENTIFIC PRINCIPLES/CONCEPTS PLUS THE MENTAL THINKING THAT EXERCISES CAUSE/EFFECT REASONING THAT TAKES ONE FROM EVIDENCE TO VALID CONCLUSIONS. ALL SCIENCE WILL BE TAUGHT THROUGH A BIBLICAL WORLDVIEW, WHICH SEES SCIENCE AS A CELEBRATION OF GOD'S BRILLIANCE AND HANDIWORK.WE BELIEVE THAT THERE ARE IDEAS TO REALIZE AND SOLUTIONS TO IMPLEMENT THAT CAN BRING A BETTER QUALITY OF LIFE TO OUR BROKEN WORLD. STUDENTS LEARN THAT THEIR IDEAS AND ACTIONS CAN HAVE A POSITIVE IMPACT ON THOSE AROUND THEM. THIS SCHOOL-WIDE FOCUS ON INNOVATING TEACHES STUDENTS HOW TO UNDERSTAND PROBLEMS, IDEATE, STRATEGICALLY PLAN, DESIGN, TRY, FAIL, REFINE, AND SUCCEED. IT IS A PROCESS THAT CONTINUALLY CHALLENGES THEM TO GROW. THIS DEEPER LEARNING PROVIDES VALUABLE CONNECTIONS BETWEEN THE CURRICULUM, THEMSELVES, AND THE WORLD. AT COLORADO CHRISTIAN ACADEMY, WE BUILD STRONG FOUNDATIONS IN STUDENTS THAT CREATE HEALTHY HABITS FOR A LIFETIME. WE KNOW THAT A STUDENT'S MENTAL, SPIRITUAL, AND EMOTIONAL CAPACITY INCREASES WHEN THEIR BODY IS RESTED, WELL-FED, AND EXERCISED. COLORADO CHRISTIAN ACADEMY HAS MADE BRAVE DECISIONS AROUND SCHEDULE, DIET, EXERCISE, UNIFORMS, AND HOMEWORK THAT PROMOTE A WELL-BALANCED LIFE THAT INCREASES THE OVERALL HOLISTIC HEALTH OF OUR STUDENTS. EVERY CHILD IS EVALUATED UPON ENTERING THE KINDERGARTEN THROUGH 8TH GRADE PROGRAM WITH AN EXTENSIVE KAUFMAN ASSESSMENT (A NATIONALLY RECOGNIZED AND BENCHMARKED ASSESSMENT), AFTER WHICH COLORADO CHRISTIAN ACADEMY WORKS WITH STUDENTS AND PARENTS TO DEVELOP SCHOOL-YEAR GROWTH GOALS IN PERSONAL, ACADEMIC AND SPIRITUAL AREAS. STUDENTS ARE EVALUATED BY TEACHERS, IN PARTNERSHIP WITH PARENTS, ON EVALUATING STUDENT GROWTH MID-YEAR AND END-OF-YEAR IN THESE RESPECTIVE AREAS. ADDITIONAL KAUFMAN ASSESSMENTS WILL OCCUR THROUGHOUT A STUDENT'S ENROLLMENT AT COLORADO CHRISTIAN ACADEMY TO BENCHMARK HIS/HER PROGRESS ACADEMICALLY.BEFORE CARE, AFTER CARE &amp; FLEXIBLE FRIDAYS - STUDENTS WHO ARE ENROLLED AS A PART TIME STUDENT CAN ALSO ADD ON OUR FLEXIBLE FRIDAY OPTION. FRIDAYS ARE A DAY WHERE STUDENTS DIVE DEEP INTO THEIR LEARNING BY PARTICIPATING IN EXCURSIONS AROUND TOWN, ACTIVITIES ON CAMPUS, PROJECTS, AND HANDS-ON, EXPERIENTIAL LEARNING. ALL PROJECTS AND ACTIVITIES ARE CONNECTED TO THE OVERALL SCOPE AND SEQUENCE OF THEIR ACADEMICS AND ARE TAILORED TO THE STUDENTS' STRENGTHS, INTERESTS, AND PASSIONS. FRIDAYS ARE ALSO A GOOD OPPORTUNITY FOR STUDENTS TO SPEND A LITTLE EXTRA TIME ON THEIR PERSONAL LEARNING GOALS RELATED TO THEIR CORE SUBJECTS OR CO-CURRICULARS. WE BELIEVE THAT EXPERIENTIAL LEARNING PROVIDES OUR STUDENTS WITH TANGIBLE EXPERIENCE IN ACADEMIA AND THIS PROGRAM WILL GREATLY SUPPLEMENT STUDENTS' LEARNING ALONGSIDE OUR CORE CURRICULUM.</Desc>
+      <TotalProgramServiceExpensesAmt>1310044</TotalProgramServiceExpensesAmt>
+      <DescribedInSection501c3Ind referenceDocumentId="RetDoc1039100001">1</DescribedInSection501c3Ind>
+      <ScheduleBRequiredInd referenceDocumentId="RetDoc1234500001">1</ScheduleBRequiredInd>
+      <PoliticalCampaignActyInd>0</PoliticalCampaignActyInd>
+      <LobbyingActivitiesInd>0</LobbyingActivitiesInd>
+      <SubjectToProxyTaxInd>0</SubjectToProxyTaxInd>
+      <DonorAdvisedFundInd referenceDocumentId="RetDoc1040000001">0</DonorAdvisedFundInd>
+      <ConservationEasementsInd referenceDocumentId="RetDoc1040000001">0</ConservationEasementsInd>
+      <CollectionsOfArtInd referenceDocumentId="RetDoc1040000001">0</CollectionsOfArtInd>
+      <CreditCounselingInd referenceDocumentId="RetDoc1040000001">0</CreditCounselingInd>
+      <DonorRstrOrQuasiEndowmentsInd>0</DonorRstrOrQuasiEndowmentsInd>
+      <ReportLandBuildingEquipmentInd referenceDocumentId="RetDoc1040000001">1</ReportLandBuildingEquipmentInd>
+      <ReportInvestmentsOtherSecInd referenceDocumentId="RetDoc1040000001">0</ReportInvestmentsOtherSecInd>
+      <ReportProgramRelatedInvstInd referenceDocumentId="RetDoc1040000001">0</ReportProgramRelatedInvstInd>
+      <ReportOtherAssetsInd referenceDocumentId="RetDoc1040000001">0</ReportOtherAssetsInd>
+      <ReportOtherLiabilitiesInd referenceDocumentId="RetDoc1040000001">0</ReportOtherLiabilitiesInd>
+      <IncludeFIN48FootnoteInd referenceDocumentId="RetDoc1040000001">0</IncludeFIN48FootnoteInd>
+      <IndependentAuditFinclStmtInd referenceDocumentId="RetDoc1040000001">0</IndependentAuditFinclStmtInd>
+      <ConsolidatedAuditFinclStmtInd referenceDocumentId="RetDoc1040000001">0</ConsolidatedAuditFinclStmtInd>
+      <SchoolOperatingInd referenceDocumentId="RetDoc1040400001">1</SchoolOperatingInd>
+      <ForeignOfficeInd>0</ForeignOfficeInd>
+      <ForeignActivitiesInd>0</ForeignActivitiesInd>
+      <MoreThan5000KToOrgInd>0</MoreThan5000KToOrgInd>
+      <MoreThan5000KToIndividualsInd>0</MoreThan5000KToIndividualsInd>
+      <ProfessionalFundraisingInd referenceDocumentId="RetDoc1041300001">0</ProfessionalFundraisingInd>
+      <FundraisingActivitiesInd referenceDocumentId="RetDoc1041300001">1</FundraisingActivitiesInd>
+      <GamingActivitiesInd referenceDocumentId="RetDoc1041300001">0</GamingActivitiesInd>
+      <OperateHospitalInd>0</OperateHospitalInd>
+      <GrantsToOrganizationsInd referenceDocumentId="RetDoc1041900001">0</GrantsToOrganizationsInd>
+      <GrantsToIndividualsInd referenceDocumentId="RetDoc1041900001">1</GrantsToIndividualsInd>
+      <ScheduleJRequiredInd referenceDocumentId="RetDoc1042400001">1</ScheduleJRequiredInd>
+      <TaxExemptBondsInd>0</TaxExemptBondsInd>
+      <EngagedInExcessBenefitTransInd referenceDocumentId="RetDoc1042800001">0</EngagedInExcessBenefitTransInd>
+      <PYExcessBenefitTransInd referenceDocumentId="RetDoc1042800001">0</PYExcessBenefitTransInd>
+      <LoanOutstandingInd referenceDocumentId="RetDoc1042800001">0</LoanOutstandingInd>
+      <GrantToRelatedPersonInd referenceDocumentId="RetDoc1042800001">1</GrantToRelatedPersonInd>
+      <BusinessRlnWithOrgMemInd referenceDocumentId="RetDoc1042800001">0</BusinessRlnWithOrgMemInd>
+      <BusinessRlnWithFamMemInd referenceDocumentId="RetDoc1042800001">0</BusinessRlnWithFamMemInd>
+      <BusinessRlnWith35CtrlEntInd>0</BusinessRlnWith35CtrlEntInd>
+      <DeductibleNonCashContriInd>0</DeductibleNonCashContriInd>
+      <DeductibleArtContributionInd>0</DeductibleArtContributionInd>
+      <TerminateOperationsInd>0</TerminateOperationsInd>
+      <PartialLiquidationInd>0</PartialLiquidationInd>
+      <DisregardedEntityInd>0</DisregardedEntityInd>
+      <RelatedEntityInd>0</RelatedEntityInd>
+      <RelatedOrganizationCtrlEntInd>0</RelatedOrganizationCtrlEntInd>
+      <TrnsfrExmptNonChrtblRltdOrgInd>0</TrnsfrExmptNonChrtblRltdOrgInd>
+      <ActivitiesConductedPrtshpInd>0</ActivitiesConductedPrtshpInd>
+      <ScheduleORequiredInd>1</ScheduleORequiredInd>
+      <IRPDocumentCnt>0</IRPDocumentCnt>
+      <IRPDocumentW2GCnt>0</IRPDocumentW2GCnt>
+      <EmployeeCnt>22</EmployeeCnt>
+      <EmploymentTaxReturnsFiledInd>1</EmploymentTaxReturnsFiledInd>
+      <UnrelatedBusIncmOverLimitInd>0</UnrelatedBusIncmOverLimitInd>
+      <ForeignFinancialAccountInd>0</ForeignFinancialAccountInd>
+      <ProhibitedTaxShelterTransInd>0</ProhibitedTaxShelterTransInd>
+      <TaxablePartyNotificationInd>0</TaxablePartyNotificationInd>
+      <NondeductibleContributionsInd>0</NondeductibleContributionsInd>
+      <QuidProQuoContributionsInd>0</QuidProQuoContributionsInd>
+      <Form8282PropertyDisposedOfInd>0</Form8282PropertyDisposedOfInd>
+      <RcvFndsToPayPrsnlBnftCntrctInd>0</RcvFndsToPayPrsnlBnftCntrctInd>
+      <PayPremiumsPrsnlBnftCntrctInd>0</PayPremiumsPrsnlBnftCntrctInd>
+      <IndoorTanningServicesInd>0</IndoorTanningServicesInd>
+      <SubjToTaxRmnrtnExPrchtPymtInd>0</SubjToTaxRmnrtnExPrchtPymtInd>
+      <SubjectToExcsTaxNetInvstIncInd>0</SubjectToExcsTaxNetInvstIncInd>
+      <InfoInScheduleOPartVIInd>X</InfoInScheduleOPartVIInd>
+      <GoverningBodyVotingMembersCnt>9</GoverningBodyVotingMembersCnt>
+      <IndependentVotingMemberCnt>9</IndependentVotingMemberCnt>
+      <FamilyOrBusinessRlnInd>1</FamilyOrBusinessRlnInd>
+      <DelegationOfMgmtDutiesInd>0</DelegationOfMgmtDutiesInd>
+      <ChangeToOrgDocumentsInd>0</ChangeToOrgDocumentsInd>
+      <MaterialDiversionOrMisuseInd>0</MaterialDiversionOrMisuseInd>
+      <MembersOrStockholdersInd>0</MembersOrStockholdersInd>
+      <ElectionOfBoardMembersInd>0</ElectionOfBoardMembersInd>
+      <DecisionsSubjectToApprovaInd>0</DecisionsSubjectToApprovaInd>
+      <MinutesOfGoverningBodyInd>1</MinutesOfGoverningBodyInd>
+      <MinutesOfCommitteesInd>0</MinutesOfCommitteesInd>
+      <OfficerMailingAddressInd>0</OfficerMailingAddressInd>
+      <LocalChaptersInd>0</LocalChaptersInd>
+      <Form990ProvidedToGvrnBodyInd>1</Form990ProvidedToGvrnBodyInd>
+      <ConflictOfInterestPolicyInd>1</ConflictOfInterestPolicyInd>
+      <AnnualDisclosureCoveredPrsnInd>1</AnnualDisclosureCoveredPrsnInd>
+      <RegularMonitoringEnfrcInd>1</RegularMonitoringEnfrcInd>
+      <WhistleblowerPolicyInd>0</WhistleblowerPolicyInd>
+      <DocumentRetentionPolicyInd>0</DocumentRetentionPolicyInd>
+      <CompensationProcessCEOInd>1</CompensationProcessCEOInd>
+      <CompensationProcessOtherInd>1</CompensationProcessOtherInd>
+      <InvestmentInJointVentureInd>0</InvestmentInJointVentureInd>
+      <StatesWhereCopyOfReturnIsFldCd>CO</StatesWhereCopyOfReturnIsFldCd>
+      <UponRequestInd>X</UponRequestInd>
+      <BooksInCareOfDetail>
+        <BusinessName>
+          <BusinessNameLine1Txt>NATASHA HARRIS</BusinessNameLine1Txt>
+        </BusinessName>
+        <PhoneNum>7206720086</PhoneNum>
+        <USAddress>
+          <AddressLine1Txt>11004 WILDFIELD LANE</AddressLine1Txt>
+          <CityNm>LITTLETON</CityNm>
+          <StateAbbreviationCd>CO</StateAbbreviationCd>
+          <ZIPCd>80125</ZIPCd>
+        </USAddress>
+      </BooksInCareOfDetail>
+      <NoListedPersonsCompensatedInd>X</NoListedPersonsCompensatedInd>
+      <Form990PartVIISectionAGrp>
+        <PersonNm>MATT CARTIER</PersonNm>
+        <TitleTxt>FORMER OFFICER</TitleTxt>
+        <AverageHoursPerWeekRt>0.00</AverageHoursPerWeekRt>
+        <FormerOfcrDirectorTrusteeInd>X</FormerOfcrDirectorTrusteeInd>
+        <ReportableCompFromOrgAmt>191668</ReportableCompFromOrgAmt>
+        <ReportableCompFromRltdOrgAmt>0</ReportableCompFromRltdOrgAmt>
+        <OtherCompensationAmt>28126</OtherCompensationAmt>
+      </Form990PartVIISectionAGrp>
+      <Form990PartVIISectionAGrp>
+        <PersonNm>BRANDON BRIEN</PersonNm>
+        <TitleTxt>DIR. OF FINANCE &amp; OPS (THRU 2/23)</TitleTxt>
+        <AverageHoursPerWeekRt>45.00</AverageHoursPerWeekRt>
+        <HighestCompensatedEmployeeInd>X</HighestCompensatedEmployeeInd>
+        <ReportableCompFromOrgAmt>114645</ReportableCompFromOrgAmt>
+        <ReportableCompFromRltdOrgAmt>0</ReportableCompFromRltdOrgAmt>
+        <OtherCompensationAmt>5581</OtherCompensationAmt>
+      </Form990PartVIISectionAGrp>
+      <Form990PartVIISectionAGrp>
+        <PersonNm>JOHN MARLATT</PersonNm>
+        <TitleTxt>DIRECTOR OF ACADEMICS (FROM 5/23)</TitleTxt>
+        <AverageHoursPerWeekRt>45.00</AverageHoursPerWeekRt>
+        <OfficerInd>X</OfficerInd>
+        <ReportableCompFromOrgAmt>0</ReportableCompFromOrgAmt>
+        <ReportableCompFromRltdOrgAmt>0</ReportableCompFromRltdOrgAmt>
+        <OtherCompensationAmt>0</OtherCompensationAmt>
+      </Form990PartVIISectionAGrp>
+      <Form990PartVIISectionAGrp>
+        <PersonNm>NATASHA HARRIS</PersonNm>
+        <TitleTxt>PRESIDENT/CHAIRMAN OF FINANCE</TitleTxt>
+        <AverageHoursPerWeekRt>10.00</AverageHoursPerWeekRt>
+        <IndividualTrusteeOrDirectorInd>X</IndividualTrusteeOrDirectorInd>
+        <OfficerInd>X</OfficerInd>
+        <ReportableCompFromOrgAmt>0</ReportableCompFromOrgAmt>
+        <ReportableCompFromRltdOrgAmt>0</ReportableCompFromRltdOrgAmt>
+        <OtherCompensationAmt>0</OtherCompensationAmt>
+      </Form990PartVIISectionAGrp>
+      <Form990PartVIISectionAGrp>
+        <PersonNm>FRANK MCNULTY</PersonNm>
+        <TitleTxt>SECRETARY/TREASURER</TitleTxt>
+        <AverageHoursPerWeekRt>5.00</AverageHoursPerWeekRt>
+        <IndividualTrusteeOrDirectorInd>X</IndividualTrusteeOrDirectorInd>
+        <OfficerInd>X</OfficerInd>
+        <ReportableCompFromOrgAmt>0</ReportableCompFromOrgAmt>
+        <ReportableCompFromRltdOrgAmt>0</ReportableCompFromRltdOrgAmt>
+        <OtherCompensationAmt>0</OtherCompensationAmt>
+      </Form990PartVIISectionAGrp>
+      <Form990PartVIISectionAGrp>
+        <PersonNm>MATT HARRIS</PersonNm>
+        <TitleTxt>DIRECTOR</TitleTxt>
+        <AverageHoursPerWeekRt>5.00</AverageHoursPerWeekRt>
+        <IndividualTrusteeOrDirectorInd>X</IndividualTrusteeOrDirectorInd>
+        <ReportableCompFromOrgAmt>0</ReportableCompFromOrgAmt>
+        <ReportableCompFromRltdOrgAmt>0</ReportableCompFromRltdOrgAmt>
+        <OtherCompensationAmt>0</OtherCompensationAmt>
+      </Form990PartVIISectionAGrp>
+      <Form990PartVIISectionAGrp>
+        <PersonNm>SHANNON MCNULTY</PersonNm>
+        <TitleTxt>DIRECTOR</TitleTxt>
+        <AverageHoursPerWeekRt>6.00</AverageHoursPerWeekRt>
+        <IndividualTrusteeOrDirectorInd>X</IndividualTrusteeOrDirectorInd>
+        <ReportableCompFromOrgAmt>0</ReportableCompFromOrgAmt>
+        <ReportableCompFromRltdOrgAmt>0</ReportableCompFromRltdOrgAmt>
+        <OtherCompensationAmt>0</OtherCompensationAmt>
+      </Form990PartVIISectionAGrp>
+      <Form990PartVIISectionAGrp>
+        <PersonNm>MARIELLA BROWN</PersonNm>
+        <TitleTxt>DIRECTOR</TitleTxt>
+        <AverageHoursPerWeekRt>15.00</AverageHoursPerWeekRt>
+        <IndividualTrusteeOrDirectorInd>X</IndividualTrusteeOrDirectorInd>
+        <ReportableCompFromOrgAmt>0</ReportableCompFromOrgAmt>
+        <ReportableCompFromRltdOrgAmt>0</ReportableCompFromRltdOrgAmt>
+        <OtherCompensationAmt>0</OtherCompensationAmt>
+      </Form990PartVIISectionAGrp>
+      <Form990PartVIISectionAGrp>
+        <PersonNm>GEWAN BROWN</PersonNm>
+        <TitleTxt>DIRECTOR</TitleTxt>
+        <AverageHoursPerWeekRt>7.00</AverageHoursPerWeekRt>
+        <IndividualTrusteeOrDirectorInd>X</IndividualTrusteeOrDirectorInd>
+        <ReportableCompFromOrgAmt>0</ReportableCompFromOrgAmt>
+        <ReportableCompFromRltdOrgAmt>0</ReportableCompFromRltdOrgAmt>
+        <OtherCompensationAmt>0</OtherCompensationAmt>
+      </Form990PartVIISectionAGrp>
+      <Form990PartVIISectionAGrp>
+        <PersonNm>MACKENZIE SHAFER</PersonNm>
+        <TitleTxt>DIRECTOR</TitleTxt>
+        <AverageHoursPerWeekRt>6.00</AverageHoursPerWeekRt>
+        <IndividualTrusteeOrDirectorInd>X</IndividualTrusteeOrDirectorInd>
+        <ReportableCompFromOrgAmt>0</ReportableCompFromOrgAmt>
+        <ReportableCompFromRltdOrgAmt>0</ReportableCompFromRltdOrgAmt>
+        <OtherCompensationAmt>0</OtherCompensationAmt>
+      </Form990PartVIISectionAGrp>
+      <Form990PartVIISectionAGrp>
+        <PersonNm>TONY SHAFER</PersonNm>
+        <TitleTxt>DIRECTOR</TitleTxt>
+        <AverageHoursPerWeekRt>5.00</AverageHoursPerWeekRt>
+        <IndividualTrusteeOrDirectorInd>X</IndividualTrusteeOrDirectorInd>
+        <ReportableCompFromOrgAmt>0</ReportableCompFromOrgAmt>
+        <ReportableCompFromRltdOrgAmt>0</ReportableCompFromRltdOrgAmt>
+        <OtherCompensationAmt>0</OtherCompensationAmt>
+      </Form990PartVIISectionAGrp>
+      <Form990PartVIISectionAGrp>
+        <PersonNm>STACY OSTERMILLER</PersonNm>
+        <TitleTxt>DIRECTOR</TitleTxt>
+        <AverageHoursPerWeekRt>15.00</AverageHoursPerWeekRt>
+        <IndividualTrusteeOrDirectorInd>X</IndividualTrusteeOrDirectorInd>
+        <ReportableCompFromOrgAmt>0</ReportableCompFromOrgAmt>
+        <ReportableCompFromRltdOrgAmt>0</ReportableCompFromRltdOrgAmt>
+        <OtherCompensationAmt>0</OtherCompensationAmt>
+      </Form990PartVIISectionAGrp>
+      <TotalReportableCompFromOrgAmt>306313</TotalReportableCompFromOrgAmt>
+      <TotReportableCompRltdOrgAmt>0</TotReportableCompRltdOrgAmt>
+      <TotalOtherCompensationAmt>33707</TotalOtherCompensationAmt>
+      <IndivRcvdGreaterThan100KCnt>2</IndivRcvdGreaterThan100KCnt>
+      <FormerOfcrEmployeesListedInd>1</FormerOfcrEmployeesListedInd>
+      <TotalCompGreaterThan150KInd>1</TotalCompGreaterThan150KInd>
+      <CompensationFromOtherSrcsInd>0</CompensationFromOtherSrcsInd>
+      <CntrctRcvdGreaterThan100KCnt>0</CntrctRcvdGreaterThan100KCnt>
+      <FundraisingAmt>122205</FundraisingAmt>
+      <AllOtherContributionsAmt>1333351</AllOtherContributionsAmt>
+      <TotalContributionsAmt>1455556</TotalContributionsAmt>
+      <ProgramServiceRevenueGrp>
+        <Desc>TUITION FEES</Desc>
+        <BusinessCd>611710</BusinessCd>
+        <TotalRevenueColumnAmt>912165</TotalRevenueColumnAmt>
+        <RelatedOrExemptFuncIncomeAmt>912165</RelatedOrExemptFuncIncomeAmt>
+      </ProgramServiceRevenueGrp>
+      <ProgramServiceRevenueGrp>
+        <Desc>EXTRACURRICULAR AND ST</Desc>
+        <BusinessCd>611710</BusinessCd>
+        <TotalRevenueColumnAmt>68923</TotalRevenueColumnAmt>
+        <RelatedOrExemptFuncIncomeAmt>68923</RelatedOrExemptFuncIncomeAmt>
+      </ProgramServiceRevenueGrp>
+      <ProgramServiceRevenueGrp>
+        <Desc>ACADEMIC SERVICE FEES</Desc>
+        <BusinessCd>611710</BusinessCd>
+        <TotalRevenueColumnAmt>25251</TotalRevenueColumnAmt>
+        <RelatedOrExemptFuncIncomeAmt>25251</RelatedOrExemptFuncIncomeAmt>
+      </ProgramServiceRevenueGrp>
+      <TotalOthProgramServiceRevGrp>
+        <TotalRevenueColumnAmt>3000</TotalRevenueColumnAmt>
+        <RelatedOrExemptFuncIncomeAmt>3000</RelatedOrExemptFuncIncomeAmt>
+      </TotalOthProgramServiceRevGrp>
+      <TotalProgramServiceRevenueAmt>1009339</TotalProgramServiceRevenueAmt>
+      <InvestmentIncomeGrp>
+        <TotalRevenueColumnAmt>2786</TotalRevenueColumnAmt>
+        <ExclusionAmt>2786</ExclusionAmt>
+      </InvestmentIncomeGrp>
+      <FundraisingGrossIncomeAmt>26375</FundraisingGrossIncomeAmt>
+      <ContriRptFundraisingEventAmt>122205</ContriRptFundraisingEventAmt>
+      <FundraisingDirectExpensesAmt>57983</FundraisingDirectExpensesAmt>
+      <NetIncmFromFundraisingEvtGrp>
+        <TotalRevenueColumnAmt>-31608</TotalRevenueColumnAmt>
+        <ExclusionAmt>-31608</ExclusionAmt>
+      </NetIncmFromFundraisingEvtGrp>
+      <TotalRevenueGrp>
+        <TotalRevenueColumnAmt>2436073</TotalRevenueColumnAmt>
+        <RelatedOrExemptFuncIncomeAmt>1009339</RelatedOrExemptFuncIncomeAmt>
+        <UnrelatedBusinessRevenueAmt>0</UnrelatedBusinessRevenueAmt>
+        <ExclusionAmt>-28822</ExclusionAmt>
+      </TotalRevenueGrp>
+      <GrantsToDomesticIndividualsGrp>
+        <TotalAmt>55718</TotalAmt>
+        <ProgramServicesAmt>55718</ProgramServicesAmt>
+      </GrantsToDomesticIndividualsGrp>
+      <CompCurrentOfcrDirectorsGrp>
+        <TotalAmt>259314</TotalAmt>
+        <ProgramServicesAmt>206634</ProgramServicesAmt>
+        <ManagementAndGeneralAmt>51862</ManagementAndGeneralAmt>
+        <FundraisingAmt>818</FundraisingAmt>
+      </CompCurrentOfcrDirectorsGrp>
+      <OtherSalariesAndWagesGrp>
+        <TotalAmt>586851</TotalAmt>
+        <ProgramServicesAmt>579876</ProgramServicesAmt>
+        <ManagementAndGeneralAmt>6586</ManagementAndGeneralAmt>
+        <FundraisingAmt>389</FundraisingAmt>
+      </OtherSalariesAndWagesGrp>
+      <PensionPlanContributionsGrp>
+        <TotalAmt>7207</TotalAmt>
+        <ProgramServicesAmt>7181</ProgramServicesAmt>
+        <FundraisingAmt>26</FundraisingAmt>
+      </PensionPlanContributionsGrp>
+      <OtherEmployeeBenefitsGrp>
+        <TotalAmt>74136</TotalAmt>
+        <ProgramServicesAmt>67339</ProgramServicesAmt>
+        <ManagementAndGeneralAmt>6698</ManagementAndGeneralAmt>
+        <FundraisingAmt>99</FundraisingAmt>
+      </OtherEmployeeBenefitsGrp>
+      <PayrollTaxesGrp>
+        <TotalAmt>86850</TotalAmt>
+        <ProgramServicesAmt>78773</ProgramServicesAmt>
+        <ManagementAndGeneralAmt>7915</ManagementAndGeneralAmt>
+        <FundraisingAmt>162</FundraisingAmt>
+      </PayrollTaxesGrp>
+      <FeesForServicesOtherGrp>
+        <TotalAmt>20085</TotalAmt>
+        <ProgramServicesAmt>2041</ProgramServicesAmt>
+        <ManagementAndGeneralAmt>17752</ManagementAndGeneralAmt>
+        <FundraisingAmt>292</FundraisingAmt>
+      </FeesForServicesOtherGrp>
+      <AdvertisingGrp>
+        <TotalAmt>88564</TotalAmt>
+        <ManagementAndGeneralAmt>87619</ManagementAndGeneralAmt>
+        <FundraisingAmt>945</FundraisingAmt>
+      </AdvertisingGrp>
+      <OfficeExpensesGrp>
+        <TotalAmt>15632</TotalAmt>
+        <ProgramServicesAmt>15256</ProgramServicesAmt>
+        <ManagementAndGeneralAmt>368</ManagementAndGeneralAmt>
+        <FundraisingAmt>8</FundraisingAmt>
+      </OfficeExpensesGrp>
+      <InformationTechnologyGrp>
+        <TotalAmt>46328</TotalAmt>
+        <ProgramServicesAmt>45215</ProgramServicesAmt>
+        <ManagementAndGeneralAmt>1091</ManagementAndGeneralAmt>
+        <FundraisingAmt>22</FundraisingAmt>
+      </InformationTechnologyGrp>
+      <OccupancyGrp>
+        <TotalAmt>60410</TotalAmt>
+        <ProgramServicesAmt>58959</ProgramServicesAmt>
+        <ManagementAndGeneralAmt>1422</ManagementAndGeneralAmt>
+        <FundraisingAmt>29</FundraisingAmt>
+      </OccupancyGrp>
+      <DepreciationDepletionGrp>
+        <TotalAmt>7959</TotalAmt>
+        <ProgramServicesAmt>7768</ProgramServicesAmt>
+        <ManagementAndGeneralAmt>187</ManagementAndGeneralAmt>
+        <FundraisingAmt>4</FundraisingAmt>
+      </DepreciationDepletionGrp>
+      <InsuranceGrp>
+        <TotalAmt>25205</TotalAmt>
+        <ProgramServicesAmt>23451</ProgramServicesAmt>
+        <ManagementAndGeneralAmt>1719</ManagementAndGeneralAmt>
+        <FundraisingAmt>35</FundraisingAmt>
+      </InsuranceGrp>
+      <OtherExpensesGrp>
+        <Desc>STUDENT SUPPLIES AND CU</Desc>
+        <TotalAmt>127362</TotalAmt>
+        <ProgramServicesAmt>127362</ProgramServicesAmt>
+        <ManagementAndGeneralAmt>0</ManagementAndGeneralAmt>
+        <FundraisingAmt>0</FundraisingAmt>
+      </OtherExpensesGrp>
+      <OtherExpensesGrp>
+        <Desc>PROFESSIONAL DEVELOPMEN</Desc>
+        <TotalAmt>13205</TotalAmt>
+        <ProgramServicesAmt>11977</ProgramServicesAmt>
+        <ManagementAndGeneralAmt>1203</ManagementAndGeneralAmt>
+        <FundraisingAmt>25</FundraisingAmt>
+      </OtherExpensesGrp>
+      <OtherExpensesGrp>
+        <Desc>BANK AND OTHER FEES</Desc>
+        <TotalAmt>7229</TotalAmt>
+        <ProgramServicesAmt>7229</ProgramServicesAmt>
+        <ManagementAndGeneralAmt>0</ManagementAndGeneralAmt>
+        <FundraisingAmt>0</FundraisingAmt>
+      </OtherExpensesGrp>
+      <OtherExpensesGrp>
+        <Desc>STUDENT TECHNOLOGY</Desc>
+        <TotalAmt>5064</TotalAmt>
+        <ProgramServicesAmt>5064</ProgramServicesAmt>
+        <ManagementAndGeneralAmt>0</ManagementAndGeneralAmt>
+        <FundraisingAmt>0</FundraisingAmt>
+      </OtherExpensesGrp>
+      <AllOtherExpensesGrp>
+        <TotalAmt>10947</TotalAmt>
+        <ProgramServicesAmt>10201</ProgramServicesAmt>
+        <ManagementAndGeneralAmt>731</ManagementAndGeneralAmt>
+        <FundraisingAmt>15</FundraisingAmt>
+      </AllOtherExpensesGrp>
+      <TotalFunctionalExpensesGrp>
+        <TotalAmt>1498066</TotalAmt>
+        <ProgramServicesAmt>1310044</ProgramServicesAmt>
+        <ManagementAndGeneralAmt>185153</ManagementAndGeneralAmt>
+        <FundraisingAmt>2869</FundraisingAmt>
+      </TotalFunctionalExpensesGrp>
+      <SavingsAndTempCashInvstGrp>
+        <BOYAmt>652828</BOYAmt>
+        <EOYAmt>92459</EOYAmt>
+      </SavingsAndTempCashInvstGrp>
+      <PledgesAndGrantsReceivableGrp>
+        <EOYAmt>535751</EOYAmt>
+      </PledgesAndGrantsReceivableGrp>
+      <AccountsReceivableGrp>
+        <BOYAmt>4174</BOYAmt>
+        <EOYAmt>36601</EOYAmt>
+      </AccountsReceivableGrp>
+      <PrepaidExpensesDefrdChargesGrp>
+        <BOYAmt>27784</BOYAmt>
+        <EOYAmt>24557</EOYAmt>
+      </PrepaidExpensesDefrdChargesGrp>
+      <LandBldgEquipCostOrOtherBssAmt>862281</LandBldgEquipCostOrOtherBssAmt>
+      <LandBldgEquipAccumDeprecAmt>13265</LandBldgEquipAccumDeprecAmt>
+      <LandBldgEquipBasisNetGrp>
+        <BOYAmt>21224</BOYAmt>
+        <EOYAmt>849016</EOYAmt>
+      </LandBldgEquipBasisNetGrp>
+      <OtherAssetsTotalGrp>
+        <BOYAmt>38569</BOYAmt>
+        <EOYAmt>0</EOYAmt>
+      </OtherAssetsTotalGrp>
+      <TotalAssetsGrp>
+        <BOYAmt>744579</BOYAmt>
+        <EOYAmt>1538384</EOYAmt>
+      </TotalAssetsGrp>
+      <AccountsPayableAccrExpnssGrp>
+        <BOYAmt>276407</BOYAmt>
+        <EOYAmt>40330</EOYAmt>
+      </AccountsPayableAccrExpnssGrp>
+      <DeferredRevenueGrp>
+        <BOYAmt>59535</BOYAmt>
+        <EOYAmt>151410</EOYAmt>
+      </DeferredRevenueGrp>
+      <TotalLiabilitiesGrp>
+        <BOYAmt>335942</BOYAmt>
+        <EOYAmt>191740</EOYAmt>
+      </TotalLiabilitiesGrp>
+      <OrganizationFollowsFASB117Ind>X</OrganizationFollowsFASB117Ind>
+      <NoDonorRestrictionNetAssetsGrp>
+        <BOYAmt>375697</BOYAmt>
+        <EOYAmt>1243265</EOYAmt>
+      </NoDonorRestrictionNetAssetsGrp>
+      <DonorRestrictionNetAssetsGrp>
+        <BOYAmt>32940</BOYAmt>
+        <EOYAmt>103379</EOYAmt>
+      </DonorRestrictionNetAssetsGrp>
+      <TotalNetAssetsFundBalanceGrp>
+        <BOYAmt>408637</BOYAmt>
+        <EOYAmt>1346644</EOYAmt>
+      </TotalNetAssetsFundBalanceGrp>
+      <TotLiabNetAssetsFundBalanceGrp>
+        <BOYAmt>744579</BOYAmt>
+        <EOYAmt>1538384</EOYAmt>
+      </TotLiabNetAssetsFundBalanceGrp>
+      <ReconcilationRevenueExpnssAmt>938007</ReconcilationRevenueExpnssAmt>
+      <OtherChangesInNetAssetsAmt>0</OtherChangesInNetAssetsAmt>
+      <MethodOfAccountingAccrualInd>X</MethodOfAccountingAccrualInd>
+      <AccountantCompileOrReviewInd>0</AccountantCompileOrReviewInd>
+      <FSAuditedInd>0</FSAuditedInd>
+      <FederalGrantAuditRequiredInd>0</FederalGrantAuditRequiredInd>
+    </IRS990>
+    <IRS990ScheduleA documentId="RetDoc1039100001">
+      <SchoolInd>X</SchoolInd>
+    </IRS990ScheduleA>
+    <IRS990ScheduleB documentId="RetDoc1234500001">
+      <ContributorInformationGrp>
+        <ContributorNum>RESTRICTED</ContributorNum>
+        <ContributorBusinessName>
+          <BusinessNameLine1>RESTRICTED</BusinessNameLine1>
+        </ContributorBusinessName>
+        <ContributorUSAddress>
+          <AddressLine1>RESTRICTED</AddressLine1>
+          <AddressLine2>RESTRICTED</AddressLine2>
+          <City>RESTRICTED</City>
+          <State>RESTRICTED</State>
+          <ZIPCode>RESTRICTED</ZIPCode>
+        </ContributorUSAddress>
+        <TotalContributionsAmt>RESTRICTED</TotalContributionsAmt>
+      </ContributorInformationGrp>
+    </IRS990ScheduleB>
+    <IRS990ScheduleD documentId="RetDoc1040000001">
+      <LeaseholdImprovementsGrp>
+        <OtherCostOrOtherBasisAmt>16030</OtherCostOrOtherBasisAmt>
+        <DepreciationAmt>6412</DepreciationAmt>
+        <BookValueAmt>9618</BookValueAmt>
+      </LeaseholdImprovementsGrp>
+      <EquipmentGrp>
+        <OtherCostOrOtherBasisAmt>846251</OtherCostOrOtherBasisAmt>
+        <DepreciationAmt>6853</DepreciationAmt>
+        <BookValueAmt>839398</BookValueAmt>
+      </EquipmentGrp>
+      <TotalBookValueLandBuildingsAmt>849016</TotalBookValueLandBuildingsAmt>
+    </IRS990ScheduleD>
+    <IRS990ScheduleE documentId="RetDoc1040400001">
+      <NondiscriminatoryPolicyStmtInd>1</NondiscriminatoryPolicyStmtInd>
+      <PolicyStmtInBrochuresEtcInd>1</PolicyStmtInBrochuresEtcInd>
+      <PlcyPblczdViaBroadcastMediaInd>1</PlcyPblczdViaBroadcastMediaInd>
+      <MaintainRacialCompRecsInd>1</MaintainRacialCompRecsInd>
+      <MaintainScholarshipsRecsInd>1</MaintainScholarshipsRecsInd>
+      <MaintainCpyOfBrochuresEtcInd>1</MaintainCpyOfBrochuresEtcInd>
+      <MaintainCpyOfAllSolInd>1</MaintainCpyOfAllSolInd>
+      <DiscriminateRaceStdntsRghtsInd>0</DiscriminateRaceStdntsRghtsInd>
+      <DiscriminateRaceAdmissPlcyInd>0</DiscriminateRaceAdmissPlcyInd>
+      <DiscriminateRaceEmplmFcultyInd>0</DiscriminateRaceEmplmFcultyInd>
+      <DiscriminateRaceSchsInd>0</DiscriminateRaceSchsInd>
+      <DiscriminateRaceEducPlcyInd>0</DiscriminateRaceEducPlcyInd>
+      <DiscriminateRaceUseOfFcltsInd>0</DiscriminateRaceUseOfFcltsInd>
+      <DiscriminateRaceAthltProgInd>0</DiscriminateRaceAthltProgInd>
+      <DiscriminateRaceOtherActyInd>0</DiscriminateRaceOtherActyInd>
+      <GovernmentFinancialAidRcvdInd>0</GovernmentFinancialAidRcvdInd>
+      <GovernmentFinancialAidRvkdInd>0</GovernmentFinancialAidRvkdInd>
+      <ComplianceWithRevProc7550Ind>1</ComplianceWithRevProc7550Ind>
+      <SupplementalInformationDetail>
+        <FormAndLineReferenceDesc>SCHEDULE E, PART I, LINE 3</FormAndLineReferenceDesc>
+        <ExplanationTxt>THE SCHOOL PERIODICALLY PUBLISHES ITS NON-DISCRIMINATION POLICY WITH RESPECT TO ENROLLMENT AND PARTICIPATION IN PROGRAMS AND ACTIVITIES ON ITS WEBSITE, FORMS AND BROCHURES, AND IN LOCAL NEWSPAPERS WHICH ARE MADE AVAILABLE TO THE PUBLIC. IN THE CASE OF EMPLOYEES, THE EMPLOYEE HANDBOOK PROVIDES INFORMATION WITH RESPECT TO THE SCHOOL'S NON-DISCRIMINATORY EMPLOYMENT POLICIES.</ExplanationTxt>
+      </SupplementalInformationDetail>
+    </IRS990ScheduleE>
+    <IRS990ScheduleG documentId="RetDoc1041300001">
+      <FundraisingEventInformationGrp>
+        <Event1Nm>BUBBLES AND BENEFACTORS</Event1Nm>
+        <GrossReceiptsEvent1Amt>93660</GrossReceiptsEvent1Amt>
+        <CharitableContriEvent1Amt>67285</CharitableContriEvent1Amt>
+        <GrossRevenueEvent1Amt>26375</GrossRevenueEvent1Amt>
+        <NonCashPrizesEvent1Amt>4743</NonCashPrizesEvent1Amt>
+        <RentFacilityCostsEvent1Amt>6150</RentFacilityCostsEvent1Amt>
+        <FoodAndBeverageEvent1Amt>25052</FoodAndBeverageEvent1Amt>
+        <EntertainmentEvent1Amt>18878</EntertainmentEvent1Amt>
+        <OtherDirectExpensesEvent1Amt>3160</OtherDirectExpensesEvent1Amt>
+        <Event2Nm>FUTURES IN BLOOM</Event2Nm>
+        <GrossReceiptsEvent2Amt>54920</GrossReceiptsEvent2Amt>
+        <CharitableContriEvent2Amt>54920</CharitableContriEvent2Amt>
+        <GrossReceiptsTotalAmt>148580</GrossReceiptsTotalAmt>
+        <CharitableContributionsTotAmt>122205</CharitableContributionsTotAmt>
+        <GrossRevenueTotalEventsAmt>26375</GrossRevenueTotalEventsAmt>
+        <NonCashPrizesTotalEventsAmt>4743</NonCashPrizesTotalEventsAmt>
+        <RentFcltyCostsTotalEventsAmt>6150</RentFcltyCostsTotalEventsAmt>
+        <FoodAndBeverageTotalEventsAmt>25052</FoodAndBeverageTotalEventsAmt>
+        <EntertainmentTotalEventsAmt>18878</EntertainmentTotalEventsAmt>
+        <OthDirectExpnssTotalEventsAmt>3160</OthDirectExpnssTotalEventsAmt>
+        <DirectExpenseSummaryEventsAmt>57983</DirectExpenseSummaryEventsAmt>
+        <NetIncomeSummaryAmt>-31608</NetIncomeSummaryAmt>
+      </FundraisingEventInformationGrp>
+    </IRS990ScheduleG>
+    <IRS990ScheduleI documentId="RetDoc1041900001">
+      <GrantRecordsMaintainedInd>1</GrantRecordsMaintainedInd>
+      <GrantsOtherAsstToIndivInUSGrp>
+        <GrantTypeTxt>FIANCIAL AID</GrantTypeTxt>
+        <RecipientCnt>16</RecipientCnt>
+        <CashGrantAmt>55718</CashGrantAmt>
+      </GrantsOtherAsstToIndivInUSGrp>
+      <SupplementalInformationDetail>
+        <FormAndLineReferenceDesc>PART I, LINE 2:</FormAndLineReferenceDesc>
+        <ExplanationTxt>COLORADO CHRISTIAN ACADEMY USES A 3RD PARTY VENDOR, FACTS, TO ANALYZE THE TRUE FINANCIAL NEED AFTER A FAMILY ASKS FOR TUITION ASSISTANCE AND SUBMITS A FORM THROUGH FACTS. FACTS RECOMMENDS VARIOUS LEVELS OF RECOMMENDED OF TUITION ASSISTANCE, AND COLORADO CHRISTIAN ACADEMY HAS A TUITION ASSISTANCE COMMITTEE THAT ANALYZES AND VOTES ON ALLOCATING THE TUITION ASSISTANCE TO THE FAMILY. THE ENTIRE PROCESS IS CONFIDENTIAL TO ENSURE UNBIASED ALLOCATIONS TO FAMILIES.</ExplanationTxt>
+      </SupplementalInformationDetail>
+    </IRS990ScheduleI>
+    <IRS990ScheduleJ documentId="RetDoc1042400001">
+      <CompensationSurveyInd>X</CompensationSurveyInd>
+      <BoardOrCommitteeApprovalInd>X</BoardOrCommitteeApprovalInd>
+      <SeverancePaymentInd>1</SeverancePaymentInd>
+      <SupplementalNonqualRtrPlanInd>0</SupplementalNonqualRtrPlanInd>
+      <EquityBasedCompArrngmInd>0</EquityBasedCompArrngmInd>
+      <CompBasedOnRevenueOfFlngOrgInd>0</CompBasedOnRevenueOfFlngOrgInd>
+      <CompBsdOnRevRelatedOrgsInd>0</CompBsdOnRevRelatedOrgsInd>
+      <CompBsdNetEarnsFlngOrgInd>0</CompBsdNetEarnsFlngOrgInd>
+      <CompBsdNetEarnsRltdOrgsInd>0</CompBsdNetEarnsRltdOrgsInd>
+      <AnyNonFixedPaymentsInd>0</AnyNonFixedPaymentsInd>
+      <InitialContractExceptionInd>0</InitialContractExceptionInd>
+      <RltdOrgOfficerTrstKeyEmplGrp>
+        <PersonNm>MATT CARTIER</PersonNm>
+        <TitleTxt>FORMER OFFICER</TitleTxt>
+        <BaseCompensationFilingOrgAmt>86687</BaseCompensationFilingOrgAmt>
+        <CompensationBasedOnRltdOrgsAmt>0</CompensationBasedOnRltdOrgsAmt>
+        <BonusFilingOrganizationAmount>0</BonusFilingOrganizationAmount>
+        <BonusRelatedOrganizationsAmt>0</BonusRelatedOrganizationsAmt>
+        <OtherCompensationFilingOrgAmt>104981</OtherCompensationFilingOrgAmt>
+        <OtherCompensationRltdOrgsAmt>0</OtherCompensationRltdOrgsAmt>
+        <DeferredCompensationFlngOrgAmt>6902</DeferredCompensationFlngOrgAmt>
+        <DeferredCompRltdOrgsAmt>0</DeferredCompRltdOrgsAmt>
+        <NontaxableBenefitsFilingOrgAmt>21225</NontaxableBenefitsFilingOrgAmt>
+        <NontaxableBenefitsRltdOrgsAmt>0</NontaxableBenefitsRltdOrgsAmt>
+        <TotalCompensationFilingOrgAmt>219795</TotalCompensationFilingOrgAmt>
+        <TotalCompensationRltdOrgsAmt>0</TotalCompensationRltdOrgsAmt>
+        <CompReportPrior990FilingOrgAmt>0</CompReportPrior990FilingOrgAmt>
+        <CompReportPrior990RltdOrgsAmt>0</CompReportPrior990RltdOrgsAmt>
+      </RltdOrgOfficerTrstKeyEmplGrp>
+      <SupplementalInformationDetail>
+        <FormAndLineReferenceDesc>PART I, LINE 4A</FormAndLineReferenceDesc>
+        <ExplanationTxt>MATT CARTIER, FORMER PRINCIPAL/HEAD OF SCHOOL - SEVERANCE PAYMENT OF $104,981 AS REQUIRED UNDER AGREEMENT WITH EMPLOYER UPON DEPARTURE FROM EMPLOYMENT.</ExplanationTxt>
+      </SupplementalInformationDetail>
+    </IRS990ScheduleJ>
+    <IRS990ScheduleL documentId="RetDoc1042800001">
+      <GrntAsstBnftInterestedPrsnGrp>
+        <CashGrantAmt>35256</CashGrantAmt>
+        <TypeOfAssistanceTxt>DISCOUNTED TUITION</TypeOfAssistanceTxt>
+        <AssistancePurposeTxt>TUITION DISCOUNT</AssistancePurposeTxt>
+      </GrntAsstBnftInterestedPrsnGrp>
+    </IRS990ScheduleL>
+    <IRS990ScheduleO documentId="RetDoc1044400001">
+      <SupplementalInformationDetail>
+        <FormAndLineReferenceDesc>FORM 990, PART VI, SECTION A, LINE 2</FormAndLineReferenceDesc>
+        <ExplanationTxt>BOARD MEMBERS NATASHA AND MATTHEW HARRIS HAVE A FAMILY RELATIONSHIP. BOARD MEMBERS SHANNON AND FRANK MCNULTY HAVE A FAMILY RELATIONSHIP. BOARD MEMBERS MARIELLA AND GEWAN BROWN HAVE A FAMILY RELATIONSHIP. BOARD MEMBERS MACKENZIE AND TONY SHAFER HAVE A FAMILY RELATIONSHIP. THE ABOVE RELATIONSHIPS DO NOT IMPAIR THE INDEPENDENCE OF ANY MEMBER, SINCE NEITHER THE MEMBER NOR RELATED PARTY WAS INVOLVED IN ANY TRANSACTIONS REPORTABLE ON SCHEDULE L.</ExplanationTxt>
+      </SupplementalInformationDetail>
+      <SupplementalInformationDetail>
+        <FormAndLineReferenceDesc>FORM 990, PART VI, SECTION A, LINE 8B</FormAndLineReferenceDesc>
+        <ExplanationTxt>COLORADO CHRISTIAN ACADEMY DOES NOT HAVE ANY COMMITTEES WITH THE AUTHORITY TO ACT ON BEHALF OF THE GOVERNING BODY.</ExplanationTxt>
+      </SupplementalInformationDetail>
+      <SupplementalInformationDetail>
+        <FormAndLineReferenceDesc>FORM 990, PART VI, SECTION B, LINE 11B</FormAndLineReferenceDesc>
+        <ExplanationTxt>A COPY OF THE FORM 990 TAX RETURN IS INITIALLY REVIEWED BY THE FINANCE COMMITTEE CHAIRMAN OF COLORADO CHRISTIAN ACADEMY. UPON COMPLETION OF THE FINANCE COMMITTEE CHAIRMAN'S REVIEW, A FINAL DRAFT IS PRESENTED TO THE ENTIRE GOVERNING BODY FOR FINAL REVIEW AND APPROVAL BEFORE FILING.</ExplanationTxt>
+      </SupplementalInformationDetail>
+      <SupplementalInformationDetail>
+        <FormAndLineReferenceDesc>FORM 990, PART VI, SECTION B, LINE 12C</FormAndLineReferenceDesc>
+        <ExplanationTxt>THE SCHOOL'S CONFLICT OF INTEREST POLICY COVERS ALL OFFICERS, DIRECTORS, AND MEMBERS OF COMMITTEES WITH BOARD DELEGATED POWERS. EACH DIRECTOR, OFFICER, AND MEMBER OF COMMITTEES WITH BOARD DELEGATED POWERS SHALL ANNUALLY SIGN A CONFLICT OF INTEREST STATEMENT. THE BOARD OF DIRECTORS SHALL REGULARLY AND CONSISTENTLY MONITOR AND ENFORCE COMPLIANCE WITH THE POLICY BY REVIEWING ANNUAL STATEMENTS AND TAKING SUCH OTHER ACTIONS AS ARE NECESSARY FOR EFFECTIVE OVERSIGHT. THE EXISTENCE OF ANY ACTUAL OR POTENTIAL CONFLICT OF INTEREST IS REVIEWED BY THE BOARD OF DIRECTORS. IF CONFLICTS ARE DETERMINED, THE PERSON WITH THE CONFLICT IS EXCLUDED FROM THE DELIBERATIONS AND WILL REFRAIN FROM VOTING ON THE MATTER.</ExplanationTxt>
+      </SupplementalInformationDetail>
+      <SupplementalInformationDetail>
+        <FormAndLineReferenceDesc>FORM 990, PART VI, SECTION B, LINE 15</FormAndLineReferenceDesc>
+        <ExplanationTxt>THE INITIAL COMPENSATION FOR THE HEAD OF SCHOOL AND OTHER OFFICERS AND KEY EMPLOYEES WAS DETERMINED BY THE FOUNDING BOARD MEMBERS OF THE SCHOOL. COMPENSATION LEVELS WERE DETERMINED BASED ON THE FOUNDING BOARD MEMBERS REVIEW OF COMPARABLE COMPENSATION FOR SIMILARLY QUALIFIED PERSONS IN SIMILARLY SITUATED ORGANIZATIONS. GOING FORWARD, THE COMPENSATION OF THE HEAD OF SCHOOL AND OTHER KEY EMPLOYEES WILL BE APPROVED ANNUALLY BY THE BOARD OF DIRECTORS. COMPENSATION LEVELS WILL BE DETERMINED BASED ON REVIEW OF COMPARABILITY SALARY DATA FOR SIMILAR POSITIONS AT SCHOOLS SIMILAR TO COLORADO CHRISTIAN ACADEMY AS WELL AS THE INDIVIDUAL'S PERFORMANCE. MINUTES OF THE MEETINGS AT WHICH COMPENSATION IS REVIEWED AND APPROVED ARE KEPT.</ExplanationTxt>
+      </SupplementalInformationDetail>
+      <SupplementalInformationDetail>
+        <FormAndLineReferenceDesc>FORM 990, PART VI, SECTION C, LINE 19</FormAndLineReferenceDesc>
+        <ExplanationTxt>THE SCHOOL MAKES ITS GOVERNING DOCUMENTS, CONFLICT OF INTEREST POLICY, AND FINANCIAL STATEMENTS AVAILABLE TO THE PUBLIC UPON REQUEST.</ExplanationTxt>
+      </SupplementalInformationDetail>
+    </IRS990ScheduleO>
+  </ReturnData>
+</Return>

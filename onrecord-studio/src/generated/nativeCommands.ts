@@ -71,6 +71,10 @@ export interface NativeCommandMap {
   evaluate_financial_scenario: { args: { input: Types.FinancialScenarioInput }; result: Types.FinancialScenario };
   get_facility_coverage: { args: NoArgs; result: Types.FacilityCoverageWorkspace };
   save_facility_coverage_mapping: { args: { mapping: Types.FacilityCoverageMapping }; result: Types.FacilityCoverageWorkspace };
+  search_organisations: { args: { query: string }; result: Types.OrganisationMatch[] };
+  check_organisation_filings: { args: { ein: string; auditKey?: string | null }; result: Types.OrganisationFilings };
+  get_organisation_filings: { args: { ein: string }; result: Types.OrganisationFilings | null };
+  list_organisation_checks: { args: NoArgs; result: Types.OrganisationCheckSummary[] };
   get_casework_state: { args: NoArgs; result: Types.CaseworkState };
   get_case_scope: { args: { caseId: string }; result: Types.CaseScope };
   create_casework_case: { args: { reportId: string }; result: Types.CaseworkCase };

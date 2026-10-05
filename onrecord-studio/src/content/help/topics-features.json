@@ -661,5 +661,51 @@
       "view-analysis",
       "measured-vs-unassessed"
     ]
+  },
+  {
+    "id": "organisation-filings",
+    "title": "Organisation filings",
+    "group": "Concepts",
+    "summary": "Read what a tax-exempt organisation's Form 990 returns state, its single audits, and the payments your tables record to it.",
+    "keywords": [
+      "organisation",
+      "organization",
+      "nonprofit",
+      "non-profit",
+      "990",
+      "form 990",
+      "ein",
+      "irs",
+      "schedule j",
+      "schedule l",
+      "severance",
+      "former officer",
+      "diversion",
+      "single audit",
+      "federal audit clearinghouse",
+      "propublica",
+      "compensation",
+      "interested persons"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "Open the Investigation workbench and choose Organisation filings. Enter an organisation's name or its nine-digit EIN. A name is looked up in ProPublica Nonprofit Explorer; choose the match, then select Check filings. The check downloads the IRS e-file index for each submission year from 2024 (about 90 MB a year), keeps only that organisation's rows and discards the rest, then reads each of its Form 990 returns out of the IRS archive by requesting only the parts of the archive that hold it. A past year's index is read once; the current and previous years are read again on each check.",
+          "For each return the view shows the figures the return states (revenue, expenses, assets, liabilities, government grants), the answer to Part VI line 5 on a significant diversion of assets, whether Part VII lists a former officer, director, trustee or employee, the people listed with compensation, Schedule J compensation and its severance answer, and Schedule L transactions with interested persons. Every one of these is the organisation's own statement on its return, quoted or copied, with the filer's written explanations shown in full. \"The return carries no answer\" and \"not stated\" mean the return has no such entry; they do not mean No or zero. A payment to a former officer is shown as a payment and is not characterised. Nothing in this view is stored as a finding.",
+          "Forms 990-EZ, 990-PF and 990-T are listed but not read. Returns in IRS index years before 2024 are not read, because those indexes do not say which archive holds a return; the yearly summary from ProPublica Nonprofit Explorer, built from IRS extracts, covers earlier years with revenue, expenses, assets, liabilities and officer compensation. Each return's archive address, file name and SHA-256 are listed under \"Where this return was read\" so you can compare it with the published file.",
+          "Single audits come from the Federal Audit Clearinghouse and need a free api.data.gov key, entered in the key field. The key is sent only to api.fac.gov and is not saved. Each audit lists the federal amount expended and the auditor's recorded answers and findings as the submission records them. Without a key no lookup runs, and the view says so rather than showing an empty list.",
+          "\"Public money in your library\" lists rows of the contract, amendment and payment tables you mapped under Spending and outcomes whose vendor value contains the organisation's name. Those tables carry no EIN, so the match is by name: each vendor value is shown as written for you to confirm. A total is withheld when any matched row's amount could not be read."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [
+      "organisations"
+    ],
+    "related": [
+      "facility-coverage",
+      "measured-vs-unassessed"
+    ]
   }
 ]

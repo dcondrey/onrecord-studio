@@ -638,3 +638,103 @@ check is untested against a real one.
 Not built: the request compiled by casework always cites the CPRA, whatever jurisdiction the
 table came from; the SB 272 catalogue is not consulted to name the system of record; only the
 stored-property definition has a check, so the other definitions cannot reach answered.
+
+## 34. Organisation Filings
+
+Source: `ingestion/organisation_filings.rs`, `ingestion/remote_zip.rs`, `parsers/form990.rs`,
+`storage/organisations.rs`, `storage/financial.rs` (`organisation_public_money`),
+`src/components/dashboard/OrganisationFilingsPanel.tsx`.
+
+This view states what documents say. It stores no finding and has no finding kind.
+
+### A. Which returns are read
+
+The IRS publishes one e-file index per submission year (2017 onward) and the returns in batch
+archives. Only the indexes from 2024 name the archive that holds each return (`XML_BATCH_ID`), so
+only those years' returns are read. A check downloads each needed year's index (54 to 93 MB on
+2026-10-05), keeps the rows whose EIN equals the organisation's, and deletes the file. A year
+older than the previous calendar year is read once; the current and previous years are read on
+every check.
+
+The index writes some archive names in lower case (`2024_TEOS_XML_05a`) where the published file
+and its members are upper case; the lower-case address redirects to a not-found page. Archive
+names are upper-cased before use. The 2024 archives hold each return under a directory named
+for the archive; the 2025 and 2026 archives hold it at the top level. A return is therefore found
+by its file name (`<OBJECT_ID>_public.xml`) in any directory, without regard to case, and the
+member name the archive actually uses is the one stored.
+
+A return is read with byte-range requests: the archive's last 65,633 bytes (end record, zip64
+locator and record), the central directory (15 to 17 MB for an archive of about 1 GB and 150,000
+members), then the member's local header and data. The member must match the size and CRC-32 its
+directory entry records. Members are stored, deflated (2024) or Deflate64 (2025 and 2026); the
+Deflate64 path has no fixture test and is exercised only by the ignored live check. Its SHA-256, archive address and member name are stored with the XML
+itself, so a later check re-reads the stored copy. A request that is redirected, or answered
+without `206` and a matching `Content-Range`, is an error.
+
+Only Form 990 is read. A 990-EZ, 990-PF or 990-T is listed with that reason.
+
+### B. What a return states
+
+Element names were taken from 9,681 published Form 990 returns in one 2024 archive (schema
+versions 2020v1.3 to 2023v4.0) and three more read singly (to 2023v5.1), not from the schema
+documents.
+
+| Shown | Element |
+|---|---|
+| Revenue, expenses, assets, liabilities, net assets | `CYTotalRevenueAmt`, `CYTotalExpensesAmt`, `TotalAssetsEOYAmt`, `TotalLiabilitiesEOYAmt`, `NetAssetsOrFundBalancesEOYAmt` |
+| Government grants | `GovernmentGrantsAmt` |
+| Part VI line 5, significant diversion of assets | `MaterialDiversionOrMisuseInd` |
+| Part VII line 3, a former person is listed | `FormerOfcrEmployeesListedInd` |
+| Part VII Section A rows | `Form990PartVIISectionAGrp` |
+| Schedule J Part I line 4a, severance or change-of-control payment | `IRS990ScheduleJ/SeverancePaymentInd` |
+| Schedule J Part II rows | `RltdOrgOfficerTrstKeyEmplGrp` |
+| Schedule L Parts I to IV | `DisqualifiedPersonExBnftTrGrp`, `LoansBtwnOrgInterestedPrsnGrp`, `GrntAsstBnftInterestedPrsnGrp`, `BusTrInvolveInterestedPrsnGrp` |
+| The filer's explanations on Schedules J and L | `SupplementalInformationDetail` |
+
+A yes/no element holds `true`/`false`, `1`/`0`, or `X` for a checked box; any other value fails
+the return rather than being guessed. An element the return does not carry is absent: shown as
+"The return carries no answer" or "not stated", never as No or zero. Whether Schedule J or L is
+attached is recorded separately from its rows, so an empty list on a return without the schedule
+is not read as "none reported". A Schedule L row with no name, relationship, description or
+amount is dropped: filing software emits such rows for a part left blank. Part VII rows are shown
+when marked former or carrying any compensation; the rest are counted.
+
+Not read: Schedule O explanations (including the one Part VI line 5 requires when answered Yes),
+Schedule J Part III beyond its supplemental text, Schedule R related organisations, and the
+amount of a severance payment, which the form has no field for. The filer may give it in the
+Schedule J explanation, which is quoted whole.
+
+### C. Summary by year
+
+ProPublica Nonprofit Explorer API v2 (`/organizations/<ein>.json`, `filings_with_data`): tax
+year, form type, total revenue, total functional expenses, total assets and liabilities at year
+end, and compensation of current officers. These are ProPublica's extract of IRS files, shown
+with that attribution and a link, and cover years the returns above do not. Name search uses
+`/search.json`. The site's `download-xml` and `download-filing` addresses are excluded by its
+robots file and are not requested.
+
+### D. Single audits
+
+Federal Audit Clearinghouse (`api.fac.gov/general?auditee_ein=eq.<ein>`, then
+`/findings?report_id=in.(…)`), with the user's own api.data.gov key sent in `X-Api-Key` to that
+host only and not stored. Per audit: year, fiscal year end, auditor, federal amount expended, and
+the submission's recorded answers (financial statement opinion, going concern, internal control
+deficiency and material weakness, material noncompliance, low-risk auditee) with their values as
+recorded. Per finding row: reference number, compliance requirement code, and the recorded Y/N
+columns. With no key, no lookup runs and the record holds no audit history, which the view states.
+Finding text (`/findings_text`) is not read; the one 2016 row sampled held a migration
+placeholder instead of text.
+
+### E. Public money in the library
+
+For each table mapped under roles contract, amendment or payment with vendor and amount columns:
+rows whose vendor value, reduced to lower-case letters and digits, contains the organisation's
+name reduced the same way, grouped by vendor value as written and fiscal year. These tables carry
+no EIN, so this is a name match and every matched vendor value is shown. A group's sum is NULL
+when any of its amounts could not be read as a number. It is computed when the record is read,
+not stored, so it follows the tables as they change.
+
+### F. Failure of one source
+
+A source that fails (an index year, an archive, the summary, the audits) leaves a warning naming
+it and whatever an earlier check stored from that source. The rest of the record is saved.

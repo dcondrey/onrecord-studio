@@ -210,6 +210,14 @@ pub enum SourceRecheck {
     Gone(AcquisitionRecord),
 }
 
+/// What [`ApiClient::get_direct`] received.
+#[derive(Debug, Clone)]
+pub struct DirectResponse {
+    pub status: u16,
+    pub content_range: Option<String>,
+    pub bytes: Vec<u8>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DownloadedPayload {
     pub path: PathBuf,
@@ -1223,6 +1231,66 @@ impl ApiClient {
                 let _ = tokio::fs::remove_file(destination).await;
             }
             result
+        })
+        .await
+    }
+
+    /// A GET that carries the caller's headers and follows no redirect, so a `Range` or an API
+    /// key is answered by the host it was addressed to or not at all. Header values never appear
+    /// in an error.
+    pub async fn get_direct(
+        &self,
+        url: Url,
+        headers: &[(&'static str, &str)],
+        maximum_bytes: usize,
+    ) -> Result<DirectResponse, AppError> {
+        validate_remote_url(&self.dns, &url).await?;
+        self.execute_with_retries(&url, "Request", || async {
+            let _host_permit = self.reserve_host_slot(&url).await?;
+            let mut request = self
+                .client
+                .get(url.clone())
+                .timeout(self.transfer_deadline(maximum_bytes));
+            for (name, value) in headers {
+                request = request.header(*name, *value);
+            }
+            let response = request.send().await.map_err(|error| {
+                RetryDisposition::Retry(
+                    AppError::Network(format!("GET '{url}' failed: {}", error.without_url())),
+                    None,
+                )
+            })?;
+            let status = response.status();
+            self.governor.record_status(
+                &url,
+                status.as_u16(),
+                parse_retry_after(response.headers()),
+            );
+            if status.is_redirection() {
+                return Err(RetryDisposition::Terminal(AppError::PortalDiscovery(
+                    format!("GET '{url}' was redirected, which this request does not follow"),
+                )));
+            }
+            validate_success_status("GET", &url, &response)?;
+            let content_range = response
+                .headers()
+                .get(reqwest::header::CONTENT_RANGE)
+                .and_then(|value| value.to_str().ok())
+                .map(str::to_string);
+            let (_, bytes) = read_response_bytes(response, maximum_bytes, "Response")
+                .await
+                .map_err(|error| {
+                    if error.is_retryable() {
+                        RetryDisposition::Retry(error, None)
+                    } else {
+                        RetryDisposition::Terminal(error)
+                    }
+                })?;
+            Ok(DirectResponse {
+                status: status.as_u16(),
+                content_range,
+                bytes,
+            })
         })
         .await
     }

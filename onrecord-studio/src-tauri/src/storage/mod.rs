@@ -79,6 +79,8 @@ pub mod financial;
 
 pub mod facilities;
 
+pub mod organisations;
+
 pub mod bundle;
 pub mod case_scope;
 pub mod casework;

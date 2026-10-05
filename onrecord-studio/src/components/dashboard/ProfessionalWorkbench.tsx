@@ -5,12 +5,13 @@ import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { ResearchReport } from '../../types';
 import CaseworkPanel from './CaseworkPanel';
 import FinancialInvestigationsPanel from './FinancialInvestigationsPanel';
+import OrganisationFilingsPanel from './OrganisationFilingsPanel';
 import MonitoringPanel from './MonitoringPanel';
 import EvidenceReviewPanel from './EvidenceReviewPanel';
 import InvestigationEvaluationPanel from './InvestigationEvaluationPanel';
 import PackageVerifier from './PackageVerifier';
 
-const tabs = ['Cases and follow-through', 'Spending and outcomes', 'Coverage and changes', 'Evidence review', 'Usefulness'] as const;
+const tabs = ['Cases and follow-through', 'Spending and outcomes', 'Coverage and changes', 'Evidence review', 'Usefulness', 'Organisation filings'] as const;
 type Tab = typeof tabs[number];
 export default function ProfessionalWorkbench({ initialReportId = '', initialTab = tabs[0] }: { initialReportId?: string; initialTab?: Tab } = {}) {
   const [tab, setTab] = useState<Tab>(initialTab);
@@ -41,6 +42,7 @@ export default function ProfessionalWorkbench({ initialReportId = '', initialTab
       {tab === tabs[2] && <><div className="mb-4 flex flex-wrap items-center gap-3"><label className="text-label leading-4 text-fg-secondary">Topic<select className="analysis-input ml-2" value={caseContext.topic} onChange={e => setCaseContext({ id: null, topic: e.target.value })}>{['homelessness','police','abatement','bathrooms','waste'].map(topic => <option key={topic}>{topic}</option>)}</select></label><p className="text-label leading-4 text-muted">{caseContext.id ? 'Coverage linked to the case selected in Cases and follow-through.' : 'Topic-wide coverage. Select a case to link new expectations to it.'}</p></div><MonitoringPanel caseId={caseContext.id} topic={caseContext.topic} /></>}
       {tab === tabs[3] && <>{error && <p role="alert" className="text-sm text-danger">{error}</p>}<div className="mb-4 flex flex-wrap gap-3"><label className="min-w-0 flex-1 text-label leading-4 text-fg-secondary">Investigation<select className="analysis-input mt-1 w-full" value={reportId} onChange={e => setReportId(e.target.value)}><option value="">Select a saved investigation</option>{reportId && !reports.some(report => report.id === reportId) && <option value={reportId}>Original dossier of selected case</option>}{reports.map(report => <option key={report.id} value={report.id}>{report.synthesis.title}</option>)}</select></label><button className="analysis-button" onClick={() => setRefresh(n => n + 1)}>Refresh investigations</button></div>{reportId ? <EvidenceReviewPanel reportId={reportId} /> : <p className="text-sm text-muted">A saved investigation is needed for evidence review. Autonomous research creates dossiers from collected public records.</p>}</>}
       {tab === tabs[4] && <InvestigationEvaluationPanel />}
+      {tab === tabs[5] && <OrganisationFilingsPanel />}
     </div>
   </section>;
 }
