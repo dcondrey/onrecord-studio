@@ -21,6 +21,7 @@
 pub mod corpus;
 pub mod cross_agency;
 pub(crate) mod discovery_search;
+pub mod document_origin;
 pub mod duckdb;
 pub mod fts;
 pub mod legacy_import;

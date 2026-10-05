@@ -5,6 +5,7 @@ pub mod analysis_workbench;
 pub mod audit;
 pub mod c2pa;
 pub mod corpus;
+pub mod document_origin;
 pub mod intent;
 pub mod investigation;
 pub mod legal;
@@ -38,6 +39,11 @@ pub use corpus::{
     CorpusEvidenceReference, CorpusIndexStatus, CorpusPattern, CorpusPatternKind,
     CorpusPatternQuery, EntityBroker, EntityPath, EntityPathOutcome, EntityPathStep,
     EntityResolutionBasis, EntityValidationGrade, RelationshipBasis, RelationshipKind,
+};
+pub use document_origin::{
+    DocumentInternalMetadata, DocumentOrigin, DocumentOriginReport, HeldComparison,
+    HeldDocumentMatch, HeldDocumentRelation, InternalMetadataField, InternalMetadataFormat,
+    InternalMetadataUnreadReason, NearDuplicateMatch, NotComparedReason,
 };
 pub use investigation::{
     AuxiliaryEventInput, AuxiliaryImportResult, AuxiliaryStreamKind, CaseEvidencePackageResult,

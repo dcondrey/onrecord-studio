@@ -95,6 +95,16 @@ impl PdfMetadataSignals {
 /// exceeds `MAX_PDF_BYTES`. A structurally-broken PDF is treated as empty metadata rather than an
 /// error — the detector caller decides whether "no signals" is a finding.
 pub fn read_pdf_metadata_signals(path: &Path) -> Result<PdfMetadataSignals, AppError> {
+    // A file that lopdf refuses to open is not a signal by itself — an unrelated forensic
+    // audit path already records that as an ingestion issue.
+    Ok(read_parsed_pdf_metadata_signals(path)?.unwrap_or_default())
+}
+
+/// As [`read_pdf_metadata_signals`], but `None` when the file could not be parsed as a PDF, so a
+/// caller showing the fields can tell "this PDF records no value" from "this file was not read".
+pub fn read_parsed_pdf_metadata_signals(
+    path: &Path,
+) -> Result<Option<PdfMetadataSignals>, AppError> {
     let metadata = std::fs::metadata(path)
         .map_err(|error| AppError::Storage(format!("PDF metadata stat failed: {error}")))?;
     if metadata.len() > MAX_PDF_BYTES {
@@ -102,12 +112,9 @@ pub fn read_pdf_metadata_signals(path: &Path) -> Result<PdfMetadataSignals, AppE
             "PDF exceeds {MAX_PDF_BYTES}-byte metadata read cap"
         )));
     }
-    let Ok(document) = crate::parsers::pdf::load_bounded(path) else {
-        // A file that lopdf refuses to open is not a signal by itself — an unrelated forensic
-        // audit path already records that as an ingestion issue.
-        return Ok(PdfMetadataSignals::default());
-    };
-    Ok(extract_from_document(&document))
+    Ok(crate::parsers::pdf::load_bounded(path)
+        .ok()
+        .map(|document| extract_from_document(&document)))
 }
 
 /// Extract signals from an already-parsed lopdf Document. Split out from `read_pdf_metadata_signals`
