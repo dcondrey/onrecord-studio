@@ -756,6 +756,18 @@ reader's choice among the first five results, or skipped. `organisation_payees` 
 distinct payee value of the searched payment tables (500 per table, most rows first) so the
 organisations the library pays can be looked up by the name the table uses.
 
+### G. Connections to the library
+
+`Library` in the panel searches the collected documents (`hybrid_search`, first ten) and held
+requests (`query_audit_records_page`, first ten) for the organisation's name as text; a search
+that fails is reported as such, not as "none". `organisationRequests.ts` builds the contract-file
+request (contracts and amendments, invoices and payment records, monitoring and corrective action,
+outcome reports) to a saved source the reader chooses, keyed `organisation:<ein>:contract-file:
+<portal key>` with lead reference `organisation:<ein>`, and tracks it through
+`request_record_gap`, so it lives in casework beside the record gaps (§33 F) with the same states.
+The period is the latest read return's tax period and the two preceding fiscal years, or "the
+last three fiscal years" when no return was read.
+
 ### G. Failure of one source
 
 A source that fails (an index year, an archive, the summary, the audits) leaves a warning naming

@@ -3,8 +3,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { Form990Statement, OrganisationFilings } from '../types';
 
-const bridge = vi.hoisted(() => ({ invoke: vi.fn() }));
+const bridge = vi.hoisted(() => ({ invoke: vi.fn(), open: vi.fn() }));
 vi.mock('../ipc', () => ({ invokeCommand: bridge.invoke }));
+vi.mock('../store/useAppStore', () => ({ useAppStore: Object.assign((selector: (s: unknown) => unknown) => selector({ portals: [{ registration: { portalKey: 'sdhc', displayName: 'San Diego Housing Commission', originUrl: 'https://sdhc.test', canonicalUrl: 'https://sdhc.test/requests' } }] }), { getState: () => ({ openCasework: bridge.open }) }) }));
 import OrganisationFilingsPanel from '../components/dashboard/OrganisationFilingsPanel';
 
 const statement = (overrides: Partial<Form990Statement>): Form990Statement => ({
@@ -94,5 +95,29 @@ describe('organisation filings', () => {
     expect(checked).toEqual(['222222222', '330215585', '330580463']);
     expect(screen.getByText(/222222222: Error: index unread/)).toBeTruthy();
     expect(lists).toBe(2);
+  });
+
+  it('shows what the library holds on the organisation and tracks the contract-file request for a chosen agency', async () => {
+    const record = filings('111111111', 'First Organisation');
+    let trackedInput: { gapKey: string; custodian: string } | undefined;
+    bridge.invoke.mockImplementation((name: string, args: { input?: { gapKey: string; custodian: string } }) => {
+      if (name === 'list_organisation_checks' || name === 'list_organisation_payment_mappings') return Promise.resolve([]);
+      if (name === 'get_analytical_schema') return Promise.resolve({ datasets: [], columns: [], templates: [] });
+      if (name === 'hybrid_search') return Promise.resolve([{ stableId: 'd1', portalKey: 'sdhc', requestId: 1, documentId: 2, fileName: 'contract.pdf', title: 'Services agreement', agencyName: 'San Diego Housing Commission', jurisdiction: 'CA', documentType: null, publicationDate: '2025-03-01', observationDate: null, effectiveDate: null, characterStart: 0, characterEnd: 10, excerpt: 'First Organisation shall provide outreach.' }]);
+      if (name === 'query_audit_records_page') return Promise.reject(new Error('no request index'));
+      if (name === 'get_record_gap_requests') return Promise.resolve(trackedInput ? [{ gapKey: trackedInput.gapKey, caseId: 'c', reportId: 'lead:x', requestId: 'r', state: 'DRAFT', submittedAt: null, determinationDueOn: null, deadlinePassedWithoutRecordedResponse: false, productions: 0, remainingOmissions: 0 }] : []);
+      if (name === 'request_record_gap') { trackedInput = args.input; return Promise.resolve({}); }
+      return Promise.resolve(record);
+    });
+    render(<OrganisationFilingsPanel />);
+    await open('111111111');
+    expect(await screen.findByText('Services agreement')).toBeTruthy();
+    expect(screen.getByText('First Organisation shall provide outreach.')).toBeTruthy();
+    expect(screen.getByText(/Request search: Error: no request index/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Agency'), { target: { value: 'sdhc' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Track this request' }));
+    expect(trackedInput).toMatchObject({ gapKey: 'organisation:111111111:contract-file:sdhc', custodian: 'San Diego Housing Commission' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Open casework' }));
+    expect(bridge.open).toHaveBeenCalledWith('lead:x');
   });
 });

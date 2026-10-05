@@ -1469,6 +1469,9 @@ Measured by the ignored live check (`live_organisation_check`, EIN 33-0215585): 
 (tax periods 2023-06, 2024-06, 2025-06; revenue 41,418,753, 46,119,889 and 41,585,915 as stated),
 13 summary years (2011 to 2023), ten single audits (2016 to 2025), and a second check that
 refetched no return and returned the same record.
+Connected the same day: the record lists the library's documents and held requests naming the
+organisation, and drafts and tracks a contract-file request to a chosen agency through the record-
+gap casework path.
 Also built the same day for that use: a payee-table mapping (any imported table's vendor, amount
 and fiscal-year columns) searched beside the spending-role tables, and a one-row-per-organisation
 portfolio table over everything checked, and a pasted list of names or EINs (or the payees of the mapped payment tables) looked up and

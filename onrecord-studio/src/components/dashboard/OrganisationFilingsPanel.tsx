@@ -2,12 +2,14 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type {
-  AnalyticalSchema, FilingExplanation, Form990Statement, OrganisationCheckSummary, OrganisationFilings, OrganisationMatch,
+  AnalyticalSchema, HybridSearchResult, RecordGapRequestStatus, RequestSearchResult, FilingExplanation, Form990Statement, OrganisationCheckSummary, OrganisationFilings, OrganisationMatch,
   OrganisationPaymentMapping, OrganisationReturn, ScheduleLPart, SingleAuditHistory,
 } from '../../types';
 import { save } from '@tauri-apps/plugin-dialog';
 import { portfolioCsv, portfolioRow, type PortfolioRow } from '../../utils/organisationPortfolio';
 import { isEin, normalisedName, parseOrganisationList } from '../../utils/organisationNames';
+import { contractFileRequest } from '../../utils/organisationRequests';
+import { useAppStore } from '../../store/useAppStore';
 
 const dollars = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const NOT_STATED = 'not stated';
@@ -110,6 +112,71 @@ function Audits({ history }: { history: SingleAuditHistory | null }) {
   </div>;
 }
 
+/** What the library already holds about the organisation, and the request that would fill what it
+ * does not: the same casework path the record gaps use. */
+function Library({ filings }: { filings: OrganisationFilings }) {
+  const portals = useAppStore((state) => state.portals);
+  const [documents, setDocuments] = useState<HybridSearchResult[] | undefined>(undefined);
+  const [requests, setRequests] = useState<RequestSearchResult[] | undefined>(undefined);
+  const [notes, setNotes] = useState<string[]>([]);
+  const [custodianKey, setCustodianKey] = useState('');
+  const [tracked, setTracked] = useState<RecordGapRequestStatus | undefined>(undefined);
+  const [message, setMessage] = useState('');
+  const gate = useLatestRequestGate();
+  const name = filings.name ?? '';
+  const custodian = portals.find((portal) => portal.registration.portalKey === custodianKey);
+  const input = custodian ? contractFileRequest(filings, custodian.registration.displayName, custodian.registration.portalKey) : undefined;
+  useEffect(() => {
+    if (!name) return;
+    const request = gate.begin();
+    const found: string[] = [];
+    void Promise.all([
+      invokeCommand('hybrid_search', { query: name, limit: 10 }).then((hits) => Array.isArray(hits) ? hits : [], (reason) => { found.push(`Document search: ${String(reason)}`); return []; }),
+      invokeCommand('query_audit_records_page', { searchTerm: name, pageSize: 10 }).then((page) => Array.isArray(page?.records) ? page.records : [], (reason) => { found.push(`Request search: ${String(reason)}`); return []; }),
+    ]).then(([hits, held]) => { if (!gate.isCurrent(request)) return; setDocuments(hits); setRequests(held); setNotes(found); });
+    return gate.invalidate;
+  }, [gate, name]);
+  const gapKey = input?.gapKey;
+  useEffect(() => {
+    if (!gapKey) { setTracked(undefined); return; }
+    const request = gate.begin();
+    void invokeCommand('get_record_gap_requests', { gapKeys: [gapKey] }).then((statuses) => { if (gate.isCurrent(request)) setTracked(Array.isArray(statuses) ? statuses.find((s) => s.gapKey === gapKey) : undefined); }, () => undefined);
+  }, [gate, gapKey, message]);
+  const track = () => {
+    if (!input) return;
+    const request = gate.begin();
+    invokeCommand('request_record_gap', { input }).then(() => { if (gate.isCurrent(request)) setMessage('Tracked. Record the submission date in casework once you have filed it.'); }, (reason) => { if (gate.isCurrent(request)) setMessage(String(reason)); });
+  };
+  const date = (value: string | null) => value ? value.slice(0, 10) : '';
+  return <section aria-label="In your library" className="space-y-3">
+    <h3 className="text-sm font-semibold text-fg">In your library</h3>
+    {notes.map((note) => <p key={note} className="text-label leading-4 text-warning">{note}</p>)}
+    <div className="grid gap-4 sm:grid-cols-2">
+      <div>
+        <h4 className="text-label leading-4 text-muted">Documents that mention the name{documents ? ` (${documents.length}${documents.length === 10 ? ', first 10' : ''})` : ''}</h4>
+        {documents?.length === 0 && <p className="text-label leading-4 text-muted">None of the collected documents mentions this name.</p>}
+        <ul className="mt-1 space-y-2">{(documents ?? []).map((hit) => <li key={hit.stableId} className="text-label leading-4"><span className="text-fg">{hit.title || hit.fileName}</span><span className="text-muted"> · {hit.agencyName}{hit.publicationDate ? ` · ${date(hit.publicationDate)}` : ''}</span>{hit.excerpt && <blockquote className="mt-1 border-l-2 border-line-strong pl-2 text-fg-secondary">{hit.excerpt}</blockquote>}</li>)}</ul>
+      </div>
+      <div>
+        <h4 className="text-label leading-4 text-muted">Held requests that mention the name{requests ? ` (${requests.length}${requests.length === 10 ? ', first 10' : ''})` : ''}</h4>
+        {requests?.length === 0 && <p className="text-label leading-4 text-muted">No held request mentions this name.</p>}
+        <ul className="mt-1 space-y-1">{(requests ?? []).map((held) => <li key={`${held.portalKey}:${held.requestId}`} className="text-label leading-4"><span className="text-fg">{held.title}</span><span className="text-muted"> · {held.agencyName} · {held.status} · {date(held.createdAt)}</span></li>)}</ul>
+      </div>
+    </div>
+    <div className="rounded-lg border border-line-strong p-3 space-y-2">
+      <h4 className="text-label leading-4 text-fg">The contract file</h4>
+      <p className="text-label leading-4 text-muted">Filings and payment rows do not show what an agency contracted for, paid against, or found in monitoring. Choose the agency and track a drafted request for its contract file; you review and file it yourself.</p>
+      <label className="text-label leading-4 text-fg-secondary">Agency<select className="analysis-input ml-2" value={custodianKey} onChange={(event) => { setCustodianKey(event.target.value); setMessage(''); }}><option value="">Choose a saved source</option>{portals.map((portal) => <option key={portal.registration.portalKey} value={portal.registration.portalKey}>{portal.registration.displayName}</option>)}</select></label>
+      {portals.length === 0 && <p className="text-label leading-4 text-muted">No source is saved yet; add the agency's request portal in the sidebar first.</p>}
+      {input && <details className="text-label leading-4"><summary className="text-accent">Drafted request</summary><pre className="mt-2 whitespace-pre-wrap text-fg-secondary">{input.draft}</pre></details>}
+      {input && (tracked
+        ? <p className="text-label leading-4 text-fg-secondary">Tracked as a casework request{tracked.submittedAt ? `, submitted ${date(tracked.submittedAt)}` : '; no submission date is recorded yet'}. <button type="button" className="text-accent underline" onClick={() => useAppStore.getState().openCasework(tracked.reportId)}>Open casework</button></p>
+        : <button type="button" className="analysis-button" onClick={track}>Track this request</button>)}
+      {message && <p role="status" className="text-label leading-4 text-muted">{message}</p>}
+    </div>
+  </section>;
+}
+
 function Record({ filings }: { filings: OrganisationFilings }) {
   return <div className="space-y-5">
     {filings.warnings.length > 0 && <ul role="alert" className="list-disc pl-5 text-label leading-4 text-warning">{filings.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
@@ -131,6 +198,7 @@ function Record({ filings }: { filings: OrganisationFilings }) {
       <h3 className="text-sm font-semibold text-fg">Single audits of federal money</h3>
       <Audits history={filings.singleAudits} />
     </section>
+    <Library filings={filings} />
     <section aria-label="Public money in your library" className="space-y-2">
       <h3 className="text-sm font-semibold text-fg">Public money in your library</h3>
       {filings.publicMoney.length > 0 && <Table caption="Rows of your mapped contract, amendment and payment tables whose vendor value contains this organisation's name. The tables carry no EIN, so confirm each vendor value is this organisation."
