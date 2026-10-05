@@ -29,6 +29,9 @@ state lookup. Prefer `DuckDbRepository` in new code; both are exported from `sto
 `storage::sqlite::analytical_import` parses the source once. That read hashes the file, writes
 every record's original cells to a staging column store and profiles each column; once the column
 types are decided, the typed table is built from the stored originals in 50,000-row ranges.
+Rows cross into and out of DuckDB as Arrow column batches, never cell by cell. Parsing, hashing,
+profiling and conversion each run on a second thread, while the thread that owns the connection
+reads and appends, since a DuckDB connection and its appender stay on one thread.
 Delimited text and XLSX worksheets are streamed from disk, through one XLSX reader
 (`parsers::excel::xlsx_value_bounds`) shared with document extraction; a worksheet that stores its
 cells out of row order is refused with a way forward. XLS, XLSB, ODS and JSON are parsed whole and
