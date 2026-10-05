@@ -57,7 +57,8 @@ export type FindingKind =
   | 'POLICE_STOP_LEAD'
   | 'ABATEMENT_LOG_LEAD'
   | 'CHARGE_LOG_LEAD'
-  | 'CAPACITY_COMPARISON_LEAD';
+  | 'CAPACITY_COMPARISON_LEAD'
+  | 'RELEASE_TIMING_CONCENTRATION';
 
 /**
  * How a finding's confidence was derived. `UNASSESSED` distinguishes an unmeasured rung from a

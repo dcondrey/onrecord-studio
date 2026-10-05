@@ -228,6 +228,11 @@ export const PLAIN_FINDING_TEXT: Record<FindingKind, PlainText> = {
     notShown: 'It does not show that a deadline was missed. The requester may have agreed to installments or changed the request.',
     next: "Read the request's correspondence for a production schedule or a change of scope.",
   },
+  RELEASE_TIMING_CONCENTRATION: {
+    observed: "A larger share of this agency's releases began late on the last working day before a weekend or court holiday than of the other releases on the same portal.",
+    notShown: 'It does not show why. Work is often finished and posted at the end of a week, and the portal records when a file was uploaded, not when it was made public.',
+    next: "Read the counts, both shares and the cited files. If it matters to your work, ask the agency for the requests' due dates and the portal's document activity log.",
+  },
   ABATEMENT_LOG_LEAD: {
     observed: "A count from an agency's released encampment abatement logs: the hours between a notice being posted and the abatement at the same place, and abatements at places with no notice in the log.",
     notShown: 'It does not show that too little notice was given. The logs do not record the notice period that applied, whether anyone was present, or what was done with belongings.',

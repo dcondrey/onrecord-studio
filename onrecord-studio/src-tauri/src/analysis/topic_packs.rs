@@ -184,7 +184,8 @@ pub fn finding_basis(kind: FindingKind) -> TopicFindingBasis {
         | K::PoliceStopLead
         | K::AbatementLogLead
         | K::ChargeLogLead
-        | K::CapacityComparisonLead => TopicFindingBasis::Pattern,
+        | K::CapacityComparisonLead
+        | K::ReleaseTimingConcentration => TopicFindingBasis::Pattern,
     }
 }
 

@@ -262,6 +262,12 @@ pub enum FindingKind {
     /// inventory. Counted by the discovery feed's SQL and recorded as sent. A comparison between
     /// sources, not a statement that one series moved another.
     CapacityComparisonLead,
+    /// An agency's releases began at or after 3 p.m. on the last working day before a weekend or
+    /// California court holiday at a share at least twice, and ten points above, that of the
+    /// other releases on the same portal. A count of the portal's recorded upload times. It does
+    /// not show why the uploads fall where they do: work is often finished and posted at the end
+    /// of a week, and the portal does not record when an uploaded file was made public.
+    ReleaseTimingConcentration,
 }
 
 impl FindingKind {
@@ -313,6 +319,7 @@ impl FindingKind {
             Self::AbatementLogLead => "ABATEMENT_LOG_LEAD",
             Self::ChargeLogLead => "CHARGE_LOG_LEAD",
             Self::CapacityComparisonLead => "CAPACITY_COMPARISON_LEAD",
+            Self::ReleaseTimingConcentration => "RELEASE_TIMING_CONCENTRATION",
         }
     }
 
@@ -364,6 +371,7 @@ impl FindingKind {
             Self::AbatementLogLead,
             Self::ChargeLogLead,
             Self::CapacityComparisonLead,
+            Self::ReleaseTimingConcentration,
         ]
         .into_iter()
         .find(|candidate| candidate.as_str() == value)
@@ -475,6 +483,8 @@ impl FindingKind {
             Self::ChargeLogLead => false,
             // Counts from three publishers beside each other; no rule is applied to them.
             Self::CapacityComparisonLead => false,
+            // Two shares of counted upload times. When work is posted breaks no rule.
+            Self::ReleaseTimingConcentration => false,
         }
     }
 }
