@@ -38,6 +38,7 @@ const datasetKinds: AnalyticalDatasetKind[] = [
 
 const cityDatasets: { value: CityDataset; label: string }[] = [
   { value: 'NIBRS_OFFENSES', label: 'SDPD NIBRS offenses (by year)' },
+  { value: 'CALLS_FOR_SERVICE', label: 'SDPD calls for service (by year)' },
   { value: 'GET_IT_DONE_ENCAMPMENTS', label: 'Get It Done encampment reports (closed, by year)' },
   { value: 'GET_IT_DONE_OPEN', label: 'Get It Done open reports (all services, today)' },
   { value: 'GET_IT_DONE_OUTCOMES', label: 'Get It Done closed reports (those seen open, by year)' },

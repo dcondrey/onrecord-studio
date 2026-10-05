@@ -64,6 +64,18 @@ fn city_dataset_spec(
         }
     };
     Ok(match dataset {
+        CityDataset::CallsForService => {
+            let year = yearly(2015, "SDPD calls for service")?;
+            let file_name = format!("pd_calls_for_service_{year}_datasd.csv");
+            CityDatasetSpec {
+                url: format!("https://seshat.datasd.org/police_calls_for_service/{file_name}"),
+                kind: AnalyticalDatasetKind::CallsForService,
+                display_name: format!("SDPD calls for service {year}"),
+                file_name,
+                partial: year >= current_year,
+                row_filter: None,
+            }
+        }
         CityDataset::NibrsOffenses => {
             let year = yearly(2020, "SDPD NIBRS offenses")?;
             let file_name = format!("pd_nibrs_{year}_datasd.csv");
@@ -395,6 +407,8 @@ mod tests {
         );
         assert!(spec(CityDataset::NibrsOffenses, Some(2027)).is_err());
         assert!(spec(CityDataset::NibrsOffenses, None).is_err());
+        assert!(spec(CityDataset::CallsForService, Some(2014)).is_err());
+        assert!(spec(CityDataset::CallsForService, Some(2015)).is_ok());
         assert!(spec(CityDataset::GetItDoneEncampments, Some(2015)).is_err());
         assert!(spec(CityDataset::GetItDoneEncampments, Some(2016)).is_ok());
         assert!(spec(CityDataset::GetItDoneOutcomes, None).is_err());

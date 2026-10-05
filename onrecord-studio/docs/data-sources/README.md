@@ -57,12 +57,13 @@ or when no shelter is reasonably available. 63.0406(a): written notice of clean-
   Mission Bay (Ingraham St, Sea World Dr) and Golden Hill — plausibly (c)(3)/(c)(5). Testing them needs
   the City Manager's (c)(5) park designations and the ordinance sign locations (City Auditor OCA-26-07
   Appendix B lists sign locations as a City dataset) — request both.
-- In the app: Analysis → Analytical Import → "Fetch and import" downloads NIBRS offenses or Get It Done
-  encampment reports for a year, SANDAG schools, or SANDAG transit stops (Get It Done 2025 is 128 MB,
-  over the 96 MB table limit, so only `service_name = 'Encampment'` rows are kept and the publisher
-  file's SHA-256 is stored in the snapshot's validation summary; "closed reports (those seen open)"
-  keeps instead the rows whose `service_request_id` appears in an imported open copy). "Encampment ordinance observations"
-  runs both checks above over whatever is imported. Calls for service are not offered: a full year
-  (2025: 466,980 rows x 14 columns) exceeds the 6,000,000-cell import limit.
+- In the app: Analysis → Analytical Import → "Fetch and import" downloads NIBRS offenses, calls for
+  service (2015 on) or Get It Done encampment reports for a year, SANDAG schools, or SANDAG transit
+  stops. Delimited files are streamed (up to 1 GB and 20 million cells; calls for service 2024, the
+  largest year, is 970,649 rows x 14 columns). Get It Done closed-year files are kept as a subset by
+  choice: `service_name = 'Encampment'`, or "closed reports (those seen open)", the rows whose
+  `service_request_id` appears in an imported open copy; the publisher file's SHA-256 is stored in the
+  snapshot's validation summary. "Encampment ordinance observations" runs both checks above over
+  whatever is imported.
 - NIBRS `occured_on` is a date only; `approved_on` is report approval time, not incident time, so
   time-of-day tests must use the ArrestsCites log.

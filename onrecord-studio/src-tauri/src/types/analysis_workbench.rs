@@ -161,6 +161,8 @@ pub struct NearestFeature {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum CityDataset {
     NibrsOffenses,
+    /// SDPD calls for service, one published file per year.
+    CallsForService,
     GetItDoneEncampments,
     GetItDoneOpen,
     /// A closed-year file, kept only for reports already seen in an imported open copy.
