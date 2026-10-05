@@ -9,6 +9,7 @@ import { save } from '@tauri-apps/plugin-dialog';
 import { portfolioCsv, portfolioRow, type PortfolioRow } from '../../utils/organisationPortfolio';
 import { isEin, normalisedName, parseOrganisationList } from '../../utils/organisationNames';
 import { contractFileRequest } from '../../utils/organisationRequests';
+import { guidanceForSubject } from '../../utils/sourceGuidance';
 import { useAppStore } from '../../store/useAppStore';
 
 const dollars = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
@@ -147,6 +148,12 @@ function Library({ filings }: { filings: OrganisationFilings }) {
     const request = gate.begin();
     invokeCommand('request_record_gap', { input }).then(() => { if (gate.isCurrent(request)) setMessage('Tracked. Record the submission date in casework once you have filed it.'); }, (reason) => { if (gate.isCurrent(request)) setMessage(String(reason)); });
   };
+  const collect = () => {
+    if (!custodian || !name) return;
+    const request = gate.begin();
+    invokeCommand('start_data_source', { url: custodian.registration.originUrl, guidance: guidanceForSubject(name) })
+      .then(() => { if (gate.isCurrent(request)) setMessage(`Collection started from ${custodian.registration.displayName} for "${name}"; the source is listed in the sidebar. The lists above are read again when you reopen this organisation.`); }, (reason) => { if (gate.isCurrent(request)) setMessage(String(reason)); });
+  };
   const date = (value: string | null) => value ? value.slice(0, 10) : '';
   return <section aria-label="In your library" className="space-y-3">
     <h3 className="text-sm font-semibold text-fg">In your library</h3>
@@ -165,9 +172,10 @@ function Library({ filings }: { filings: OrganisationFilings }) {
     </div>
     <div className="rounded-lg border border-line-strong p-3 space-y-2">
       <h4 className="text-label leading-4 text-fg">The contract file</h4>
-      <p className="text-label leading-4 text-muted">Filings and payment rows do not show what an agency contracted for, paid against, or found in monitoring. Choose the agency and track a drafted request for its contract file; you review and file it yourself.</p>
+      <p className="text-label leading-4 text-muted">Filings and payment rows do not show what an agency contracted for, paid against, or found in monitoring. Choose the agency, then either collect what its request portal already released under this name, or track a drafted request for its contract file; you review and file it yourself.</p>
       <label className="text-label leading-4 text-fg-secondary">Agency<select className="analysis-input ml-2" value={custodianKey} onChange={(event) => { setCustodianKey(event.target.value); setMessage(''); }}><option value="">Choose a saved source</option>{portals.map((portal) => <option key={portal.registration.portalKey} value={portal.registration.portalKey}>{portal.registration.displayName}</option>)}</select></label>
       {portals.length === 0 && <p className="text-label leading-4 text-muted">No source is saved yet; add the agency's request portal in the sidebar first.</p>}
+      {custodian && name && <button type="button" className="analysis-button" onClick={collect}>Search {custodian.registration.displayName} for this name</button>}
       {input && <details className="text-label leading-4"><summary className="text-accent">Drafted request</summary><pre className="mt-2 whitespace-pre-wrap text-fg-secondary">{input.draft}</pre></details>}
       {input && (tracked
         ? <p className="text-label leading-4 text-fg-secondary">Tracked as a casework request{tracked.submittedAt ? `, submitted ${date(tracked.submittedAt)}` : '; no submission date is recorded yet'}. <button type="button" className="text-accent underline" onClick={() => useAppStore.getState().openCasework(tracked.reportId)}>Open casework</button></p>

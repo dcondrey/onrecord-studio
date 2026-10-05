@@ -107,6 +107,7 @@ describe('organisation filings', () => {
       if (name === 'query_audit_records_page') return Promise.reject(new Error('no request index'));
       if (name === 'get_record_gap_requests') return Promise.resolve(trackedInput ? [{ gapKey: trackedInput.gapKey, caseId: 'c', reportId: 'lead:x', requestId: 'r', state: 'DRAFT', submittedAt: null, determinationDueOn: null, deadlinePassedWithoutRecordedResponse: false, productions: 0, remainingOmissions: 0 }] : []);
       if (name === 'request_record_gap') { trackedInput = args.input; return Promise.resolve({}); }
+      if (name === 'start_data_source') return Promise.resolve({});
       return Promise.resolve(record);
     });
     render(<OrganisationFilingsPanel />);
@@ -115,6 +116,10 @@ describe('organisation filings', () => {
     expect(screen.getByText('First Organisation shall provide outreach.')).toBeTruthy();
     expect(screen.getByText(/Request search: Error: no request index/)).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Agency'), { target: { value: 'sdhc' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Search San Diego Housing Commission for this name' }));
+    await screen.findByText(/Collection started from San Diego Housing Commission for "First Organisation"/);
+    const [, collection] = bridge.invoke.mock.calls.find(([command]) => command === 'start_data_source')!;
+    expect(collection).toMatchObject({ url: 'https://sdhc.test', guidance: { subject: 'First Organisation' } });
     fireEvent.click(await screen.findByRole('button', { name: 'Track this request' }));
     expect(trackedInput).toMatchObject({ gapKey: 'organisation:111111111:contract-file:sdhc', custodian: 'San Diego Housing Commission' });
     fireEvent.click(await screen.findByRole('button', { name: 'Open casework' }));

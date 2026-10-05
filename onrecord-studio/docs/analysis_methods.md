@@ -765,6 +765,10 @@ request (contracts and amendments, invoices and payment records, monitoring and 
 outcome reports) to a saved source the reader chooses, keyed `organisation:<ein>:contract-file:
 <portal key>` with lead reference `organisation:<ein>`, and tracks it through
 `request_record_gap`, so it lives in casework beside the record gaps (§33 F) with the same states.
+The same chosen source can be collected from for the organisation's name as subject
+(`start_data_source` with `guidanceForSubject(name)`), the path a record gap's portal search uses;
+the panel does not read the results itself, they arrive through the ordinary collection and show
+in the two lists on the next open.
 The period is the latest read return's tax period and the two preceding fiscal years, or "the
 last three fiscal years" when no return was read.
 
