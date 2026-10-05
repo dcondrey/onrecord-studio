@@ -9,14 +9,22 @@ without it). No key, cookie or CSRF token. Envelope `{"success":"true","data":..
 `openapi.json`. Operator: Pasadena Consulting Group; the same product serves other agencies
 (`sandiegocounty.efile.systems`, `sdc.efile.systems`, and others).
 
-## Terms: unresolved
+## Terms, and the decision taken
 
 The site's Terms of Service (`GET /help/markdown?doc_id=terms-of-service&doc_type=public`) prohibit
 any "deep link", "page-scrape", "robot", "spider" or other automatic device to access, copy or
 monitor any portion of the site, or to obtain information "through any means not made purposely
 available through the website", and prohibit use "for advertising or commercial purposes". There is
 no robots.txt. The export routes below are the ones the site itself offers as download buttons.
-No reader is built until the owner decides how to proceed (see docs/ROADMAP.md).
+Decision (2026-10-04, delegated by the owner): the app ships no automated client for this portal.
+The terms bar automated access outright, the operator is a private vendor, and OnRecord is a paid
+app, so a built-in fetcher would put the owner's access and the product at risk for data a person
+can download in a few clicks. Built instead: import of the files the portal's own export buttons
+produce (agency reports, statements of economic interests, campaign search, lobbyist filings, and
+the yearly campaign bulk workbook), recognised by their headers, with checks on the imported
+tables. A request to the City Clerk for a data feed or written permission is drafted for the owner
+to send; if granted, a fetcher can feed the same tables. The routes below stay documented for that
+case and are not called by the app.
 
 ## Routes
 
