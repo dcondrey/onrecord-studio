@@ -33,6 +33,13 @@
         ]
       },
       {
+        "heading": "Places abated on many days",
+        "paragraphs": [
+          "From a log of completed abatements alone, the app counts how many separate days each place was abated. A place is the recorded coordinates rounded to about eleven metres. The lead says how many of the abatements were at places abated on 20 or more days and names the most abated, with the first and last date.",
+          "The log records that an abatement was completed. It does not record who was there, whether the same people returned, what was offered, or what became of belongings."
+        ]
+      },
+      {
         "heading": "What it does not show",
         "paragraphs": [
           "That too little notice was given. The logs do not record which notice period applied, and 24 and 72 hours are yardsticks, not the agency's stated requirement. Notice can be given by a route the posting log does not record, and two rows at one place can be different events.",

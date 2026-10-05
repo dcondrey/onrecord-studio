@@ -22,6 +22,10 @@ const NEAR_METRES = 150;
 const RING_METRES = 800;
 /** An abatement's ring is compared before and after only with this many reports in it beforehand. */
 const RING_BASELINE = 10;
+/** The same count is taken this many days earlier at the same places, to show how the counts were already moving. */
+const EARLIER_DAYS = 28;
+/** A place is called repeatedly abated at this many separate days. */
+const REPEAT_DAYS = 20;
 const REPORT_COORDINATES = [['lat', 'lng'], ['latitude', 'longitude']] as const;
 
 function logRoles(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary, time: string[]): LogRoles | null {
@@ -67,6 +71,30 @@ export function reportsAroundAbatements(schema: AnalyticalSchema, dataset: Analy
   return { tables, coordinates, since: `${Number(until.slice(0, 4)) - coverage.closed.length + 1}-01-01`, until };
 }
 
+function repeatQueries(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary): DiscoveryQuery[] {
+  if (logRoles(schema, dataset, names.posted)) return [];
+  const roles = logRoles(schema, dataset, names.completed);
+  if (!roles) return [];
+  return [{
+    id: 'abatement_repeat_places', title: 'Places abated on many separate days',
+    method: `Abatements in ${dataset.displayName} are counted once per place and day; a place is the recorded coordinates rounded to four decimal places (about eleven metres). One place can carry several address texts in the log; the one written most often is shown. Rows without coordinates or a readable time are counted apart. The log records that an abatement was completed, not who was there.`,
+    sql: `WITH logged AS (
+ SELECT ROUND(TRY_CAST(${quoteIdentifier(roles.latitude)} AS DOUBLE), 4) AS latitude, ROUND(TRY_CAST(${quoteIdentifier(roles.longitude)} AS DOUBLE), 4) AS longitude,
+  CAST(${instant(roles.time)} AS DATE) AS day, TRIM(CAST(${quoteIdentifier(roles.address)} AS VARCHAR)) AS address
+ FROM ${quoteIdentifier(dataset.tableName)}
+), place_days AS (
+ SELECT latitude, longitude, day, MODE(address) AS address FROM logged WHERE latitude IS NOT NULL AND longitude IS NOT NULL AND day IS NOT NULL GROUP BY latitude, longitude, day
+), places AS (
+ SELECT latitude, longitude, MODE(address) AS address, COUNT(*) AS days, MIN(day) AS first_day, MAX(day) AS last_day FROM place_days GROUP BY latitude, longitude
+)
+SELECT address, days, CAST(first_day AS VARCHAR) AS first_day, CAST(last_day AS VARCHAR) AS last_day,
+ COUNT(*) OVER () AS places, SUM(days) OVER () AS place_days, COUNT(*) FILTER (WHERE days = 1) OVER () AS places_abated_once,
+ COUNT(*) FILTER (WHERE days >= ${REPEAT_DAYS}) OVER () AS repeat_places, COALESCE(SUM(days) FILTER (WHERE days >= ${REPEAT_DAYS}) OVER (), 0) AS repeat_place_days,
+ (SELECT COUNT(*) FROM logged WHERE latitude IS NULL OR longitude IS NULL OR day IS NULL) AS rows_not_placed
+FROM places ORDER BY days DESC, address LIMIT 5`,
+  }];
+}
+
 function reportQueries(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary): DiscoveryQuery[] {
   const reports = reportsAroundAbatements(schema, dataset);
   if (!reports) return [];
@@ -75,7 +103,7 @@ function reportQueries(schema: AnalyticalSchema, dataset: AnalyticalDatasetSumma
   // A box a little larger than the ring keeps the join small; the distance is then computed exactly enough for these radii.
   return [{
     id: 'abatement_reports_nearby', title: `Encampment reports filed near an abatement in the ${WINDOW_DAYS} days before and after it`,
-    method: `Abatements in ${dataset.displayName} are counted once per place and day (coordinates rounded to four decimal places). Encampment reports come from ${reports.tables.map((table) => table.displayName).join(', ')}, once per report number; those tables hold every report filed from ${reports.since} to ${reports.until}, so only abatements whose ${WINDOW_DAYS} days before and after fall inside that period are counted. A report is near an abatement within ${NEAR_METRES} metres and in the surrounding ring from ${NEAR_METRES} to ${RING_METRES} metres, by straight-line distance between the recorded coordinates. Each count is of report and abatement pairs: a report near two abatements is counted twice. Reports filed on the abatement day are counted apart. An abatement's ring is compared before and after only when it held at least ${RING_BASELINE} reports beforehand; a rise by half and a fall by a third are the same ratio in each direction.`,
+    method: `Abatements in ${dataset.displayName} are counted once per place and day (coordinates rounded to four decimal places). Encampment reports come from ${reports.tables.map((table) => table.displayName).join(', ')}, once per report number; those tables hold every report filed from ${reports.since} to ${reports.until}, so only abatements whose ${WINDOW_DAYS} days before and after fall inside that period are counted. A report is near an abatement within ${NEAR_METRES} metres and in the surrounding ring from ${NEAR_METRES} to ${RING_METRES} metres, by straight-line distance between the recorded coordinates. Each count is of report and abatement pairs: a report near two abatements is counted twice. Reports filed on the abatement day are counted apart. An abatement's ring is compared before and after only when it held at least ${RING_BASELINE} reports beforehand; a rise by half and a fall by a third are the same ratio in each direction. The same before-and-after count is also taken ${EARLIER_DAYS} days earlier at the same places, for the abatements whose earlier ${WINDOW_DAYS * 2 + 1} days are inside the period; it shows how the counts were already moving and is not a period without abatements.`,
     sql: `WITH abatements AS (
  SELECT DISTINCT ROUND(TRY_CAST(${quoteIdentifier(roles.latitude)} AS DOUBLE), 4) AS latitude, ROUND(TRY_CAST(${quoteIdentifier(roles.longitude)} AS DOUBLE), 4) AS longitude, CAST(${instant(roles.time)} AS DATE) AS day
  FROM ${quoteIdentifier(dataset.tableName)}
@@ -90,8 +118,9 @@ ${reports.tables.map((table) => ` SELECT TRIM(CAST(${quoteIdentifier('service_re
   AND day - ${WINDOW_DAYS} >= DATE '${reports.since}' AND day + ${WINDOW_DAYS} <= DATE '${reports.until}'
 ), pairs AS (
  SELECT counted.latitude AS place_latitude, counted.longitude AS place_longitude, counted.day AS place_day, reports.day - counted.day AS offset_days,
+  counted.day - ${EARLIER_DAYS + WINDOW_DAYS} >= DATE '${reports.since}' AS earlier_counted,
   SQRT(POW((reports.latitude - counted.latitude) * 110540, 2) + POW((reports.longitude - counted.longitude) * 111320 * COS(RADIANS(counted.latitude)), 2)) AS metres
- FROM counted JOIN reports ON reports.day BETWEEN counted.day - ${WINDOW_DAYS} AND counted.day + ${WINDOW_DAYS}
+ FROM counted JOIN reports ON reports.day BETWEEN counted.day - ${EARLIER_DAYS + WINDOW_DAYS} AND counted.day + ${WINDOW_DAYS}
   AND reports.latitude BETWEEN counted.latitude - 0.0075 AND counted.latitude + 0.0075 AND reports.longitude BETWEEN counted.longitude - 0.0095 AND counted.longitude + 0.0095
 )
 SELECT (SELECT COUNT(*) FROM abatements) AS abatement_place_days, (SELECT COUNT(*) FROM counted) AS counted_place_days,
@@ -104,13 +133,20 @@ SELECT (SELECT COUNT(*) FROM abatements) AS abatement_place_days, (SELECT COUNT(
  COUNT(*) FILTER (WHERE ring_before >= ${RING_BASELINE} AND ring_after < ring_before) AS ring_fewer_after,
  COUNT(*) FILTER (WHERE ring_before >= ${RING_BASELINE} AND ring_after * 2 >= ring_before * 3) AS ring_rose_by_half,
  COUNT(*) FILTER (WHERE ring_before >= ${RING_BASELINE} AND ring_after * 3 <= ring_before * 2) AS ring_fell_by_third,
+ (SELECT COUNT(*) FROM counted WHERE day - ${EARLIER_DAYS + WINDOW_DAYS} >= DATE '${reports.since}') AS earlier_place_days,
+ COALESCE(SUM(earlier_near_before), 0) AS earlier_near_before, COALESCE(SUM(earlier_near_after), 0) AS earlier_near_after,
+ COALESCE(SUM(earlier_ring_before), 0) AS earlier_ring_before, COALESCE(SUM(earlier_ring_after), 0) AS earlier_ring_after,
  '${reports.since}' AS reports_since, '${reports.until}' AS reports_until
 FROM (
  SELECT place_latitude, place_longitude, place_day,
-  COUNT(*) FILTER (WHERE metres <= ${NEAR_METRES} AND offset_days < 0) AS near_before, COUNT(*) FILTER (WHERE metres <= ${NEAR_METRES} AND offset_days > 0) AS near_after,
+  COUNT(*) FILTER (WHERE metres <= ${NEAR_METRES} AND offset_days BETWEEN -${WINDOW_DAYS} AND -1) AS near_before, COUNT(*) FILTER (WHERE metres <= ${NEAR_METRES} AND offset_days > 0) AS near_after,
   COUNT(*) FILTER (WHERE metres <= ${NEAR_METRES} AND offset_days = 0) AS near_same_day,
-  COUNT(*) FILTER (WHERE metres > ${NEAR_METRES} AND metres <= ${RING_METRES} AND offset_days < 0) AS ring_before,
-  COUNT(*) FILTER (WHERE metres > ${NEAR_METRES} AND metres <= ${RING_METRES} AND offset_days > 0) AS ring_after
+  COUNT(*) FILTER (WHERE metres > ${NEAR_METRES} AND metres <= ${RING_METRES} AND offset_days BETWEEN -${WINDOW_DAYS} AND -1) AS ring_before,
+  COUNT(*) FILTER (WHERE metres > ${NEAR_METRES} AND metres <= ${RING_METRES} AND offset_days > 0) AS ring_after,
+  COUNT(*) FILTER (WHERE earlier_counted AND metres <= ${NEAR_METRES} AND offset_days BETWEEN -${EARLIER_DAYS + WINDOW_DAYS} AND -${EARLIER_DAYS + 1}) AS earlier_near_before,
+  COUNT(*) FILTER (WHERE earlier_counted AND metres <= ${NEAR_METRES} AND offset_days BETWEEN -${EARLIER_DAYS - 1} AND -${EARLIER_DAYS - WINDOW_DAYS}) AS earlier_near_after,
+  COUNT(*) FILTER (WHERE earlier_counted AND metres > ${NEAR_METRES} AND metres <= ${RING_METRES} AND offset_days BETWEEN -${EARLIER_DAYS + WINDOW_DAYS} AND -${EARLIER_DAYS + 1}) AS earlier_ring_before,
+  COUNT(*) FILTER (WHERE earlier_counted AND metres > ${NEAR_METRES} AND metres <= ${RING_METRES} AND offset_days BETWEEN -${EARLIER_DAYS - 1} AND -${EARLIER_DAYS - WINDOW_DAYS}) AS earlier_ring_after
  FROM pairs GROUP BY place_latitude, place_longitude, place_day
 ) AS per_abatement`,
   }];
@@ -118,7 +154,7 @@ FROM (
 
 export function abatementQueries(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary): DiscoveryQuery[] {
   const completed = abatementCompanion(schema, dataset);
-  if (!completed) return reportQueries(schema, dataset);
+  if (!completed) return [...repeatQueries(schema, dataset), ...reportQueries(schema, dataset)];
   const posted = logRoles(schema, dataset, names.posted)!;
   return [{
     id: 'abatement_notice_hours', title: 'Hours between a posted notice and the abatement',
@@ -154,6 +190,21 @@ FROM paired`,
 const count = (value: unknown): number => { const parsed = Number(value); return value == null || value === '' || !Number.isFinite(parsed) ? 0 : parsed; };
 const shown = (value: number) => Math.round(value).toLocaleString('en-US');
 
+function repeatLeads(results: { query: DiscoveryQuery; result?: SqlQueryResult }[]): ServiceLead[] {
+  const entry = results.find((item) => item.query.id === 'abatement_repeat_places');
+  if (!entry?.result?.rows.length) return [];
+  const rows = entry.result.rows.map((values) => Object.fromEntries(entry.result!.columns.map((name, index) => [name, values[index]])));
+  const repeatPlaces = count(rows[0].repeat_places);
+  if (!repeatPlaces) return [];
+  const placeDays = count(rows[0].place_days); const notPlaced = count(rows[0].rows_not_placed);
+  const listed = rows.filter((row) => count(row.days) >= REPEAT_DAYS).map((row) => `${String(row.address ?? 'a place with no address text')}, ${shown(count(row.days))} days from ${String(row.first_day)} to ${String(row.last_day)}`);
+  return [{ key: 'abatement_repeat_places', priority: 98, query: entry.query,
+    title: `${shown(count(rows[0].repeat_place_days))} of ${shown(placeDays)} abatements were at ${shown(repeatPlaces)} ${repeatPlaces === 1 ? 'place' : 'places'} abated on ${REPEAT_DAYS} or more separate days`,
+    detail: `The log records abatements at ${shown(count(rows[0].places))} places; ${shown(count(rows[0].places_abated_once))} were abated on one day only. The most abated: ${listed.join('; ')}.${notPlaced ? ` ${shown(notPlaced)} rows have no coordinates or readable time and are in none of these counts.` : ''} A place is the recorded coordinates rounded to about eleven metres, and an abatement is counted once per place and day. The log records that an abatement was completed. It does not record who was there, whether the same people returned, what was offered, or what became of belongings.`,
+    question: 'At the places abated most often, what did each abatement cost, and what shelter or storage was offered there? The contractor\'s invoices by date and the outreach and stored-property records for those addresses would show it.',
+  }];
+}
+
 function reportLeads(results: { query: DiscoveryQuery; result?: SqlQueryResult }[]): ServiceLead[] {
   const entry = results.find((item) => item.query.id === 'abatement_reports_nearby');
   if (!entry?.result?.rows.length) return [];
@@ -163,16 +214,17 @@ function reportLeads(results: { query: DiscoveryQuery; result?: SqlQueryResult }
   const [nearBefore, nearAfter, ringBefore, ringAfter] = [count(row.near_before), count(row.near_after), count(row.ring_before), count(row.ring_after)];
   const notPlaced = count(row.reports_not_placed);
   const compared = count(row.ring_compared);
+  const earlier = count(row.earlier_place_days);
   return [{ key: 'abatement_reports_nearby', priority: 94, query: entry.query,
     title: `Around ${shown(placeDays)} abatements, ${shown(nearAfter)} Encampment reports were filed within ${NEAR_METRES} metres in the ${WINDOW_DAYS} days after and ${shown(nearBefore)} in the ${WINDOW_DAYS} days before`,
-    detail: `${shown(placeDays)} of ${shown(count(row.abatement_place_days))} abatement place-days fall where the imported reports are complete (${String(row.reports_since)} to ${String(row.reports_until)}, ${shown(count(row.reports_in_period))} Encampment reports). Within ${NEAR_METRES} metres: ${shown(nearBefore)} reports in the ${WINDOW_DAYS} days before, ${shown(count(row.near_same_day))} on the day, ${shown(nearAfter)} in the ${WINDOW_DAYS} days after. From ${NEAR_METRES} to ${RING_METRES} metres: ${shown(ringBefore)} before and ${shown(ringAfter)} after.${compared ? ` Of ${shown(compared)} abatements with at least ${RING_BASELINE} reports in that ring beforehand, ${shown(count(row.ring_more_after))} had more afterwards and ${shown(count(row.ring_fewer_after))} fewer; in ${shown(count(row.ring_rose_by_half))} the count rose by half or more and in ${shown(count(row.ring_fell_by_third))} it fell by a third or more.` : ''}${notPlaced ? ` ${shown(notPlaced)} reports have no coordinates or date and are in none of these counts.` : ''} These are counts of report and abatement pairs, so a report near several abatements is counted once for each. A report is a resident's complaint, not a person or a camp, and an abatement is often scheduled because reports were filed, so more reports before than after is expected whatever the abatement did. The counts do not show where anyone went.`,
+    detail: `${shown(placeDays)} of ${shown(count(row.abatement_place_days))} abatement place-days fall where the imported reports are complete (${String(row.reports_since)} to ${String(row.reports_until)}, ${shown(count(row.reports_in_period))} Encampment reports). Within ${NEAR_METRES} metres: ${shown(nearBefore)} reports in the ${WINDOW_DAYS} days before, ${shown(count(row.near_same_day))} on the day, ${shown(nearAfter)} in the ${WINDOW_DAYS} days after. From ${NEAR_METRES} to ${RING_METRES} metres: ${shown(ringBefore)} before and ${shown(ringAfter)} after.${compared ? ` Of ${shown(compared)} abatements with at least ${RING_BASELINE} reports in that ring beforehand, ${shown(count(row.ring_more_after))} had more afterwards and ${shown(count(row.ring_fewer_after))} fewer; in ${shown(count(row.ring_rose_by_half))} the count rose by half or more and in ${shown(count(row.ring_fell_by_third))} it fell by a third or more.` : ''}${earlier >= PLACE_DAY_MINIMUM ? ` The same count taken ${EARLIER_DAYS} days earlier at ${shown(earlier)} of these abatements' places: within ${NEAR_METRES} metres ${shown(count(row.earlier_near_before))} then ${shown(count(row.earlier_near_after))}; in the ring ${shown(count(row.earlier_ring_before))} then ${shown(count(row.earlier_ring_after))}. That is how the counts were moving before the abatement.` : ''}${notPlaced ? ` ${shown(notPlaced)} reports have no coordinates or date and are in none of these counts.` : ''} These are counts of report and abatement pairs, so a report near several abatements is counted once for each. A report is a resident's complaint, not a person or a camp, and an abatement is often scheduled because reports were filed, so more reports before than after is expected whatever the abatement did. The counts do not show where anyone went.`,
     question: 'Where the surrounding ring has more reports after an abatement than before, what did the abatement record say became of the people and belongings there? The work orders and the stored-property log for those places would show it.',
   }];
 }
 
 export function abatementLeads(results: { query: DiscoveryQuery; result?: SqlQueryResult }[]): ServiceLead[] {
   const entry = results.find((item) => item.query.id === 'abatement_notice_hours');
-  if (!entry?.result?.rows.length) return reportLeads(results);
+  if (!entry?.result?.rows.length) return [...repeatLeads(results), ...reportLeads(results)];
   const row = Object.fromEntries(entry.result.columns.map((name, index) => [name, entry.result!.rows[0][index]]));
   const paired = count(row.paired_places);
   if (paired < PAIRED_MINIMUM) return [];

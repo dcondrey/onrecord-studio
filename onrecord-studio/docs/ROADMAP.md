@@ -1359,8 +1359,12 @@ paragraph above, abatements from 2023-07-31 to 2026-01-27):
   a third or more after 2,573 and rose by half or more after 1,430. Site fell while the ring rose
   by half: 139. Site and ring both fell by a third: 235.
 - Council District 3 holds 2.44 of the 2.70 million ring pairs.
-Worth building from this: the placebo comparison inside the lead (so the stated change is against
-drift, not against zero), the weekly profile, and a lead on repeat abatement at one place.
+Built 2026-10-05 from this (methods §19 D and E): the lead on places abated on 20 or more
+separate days, and the count taken 28 days earlier shown inside the reports lead. The app's two
+statements reproduce the figures above on the real files (131 places, 7,814 of 13,387
+place-days; earlier count 296,235 then 304,996 and 2,722,122 then 2,707,555). The reports
+statement now takes 12.3 seconds from CSV in the DuckDB CLI; its time inside the app against the
+30-second limit is not verified. Not built: the weekly profile.
 
 ## Leads from service-report tables (2026-10-04)
 

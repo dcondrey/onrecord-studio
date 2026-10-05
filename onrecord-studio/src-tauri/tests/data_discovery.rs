@@ -542,7 +542,8 @@ async fn reports_around_abatements_are_counted_once_per_report_inside_the_comple
     db.run_migrations(include_str!("../migrations/0001_initial_schema.sql"))
         .await
         .unwrap();
-    let mut sql = fixture["queries"][0]["sql"].as_str().unwrap().to_string();
+    let mut repeat_sql = fixture["queries"][0]["sql"].as_str().unwrap().to_string();
+    let mut sql = fixture["queries"][1]["sql"].as_str().unwrap().to_string();
     for name in ["completed", "closed2025", "open"] {
         let path = temp.path().join(format!("{name}.csv"));
         std::fs::write(&path, fixture["csv"][name].as_str().unwrap()).unwrap();
@@ -550,6 +551,26 @@ async fn reports_around_abatements_are_counted_once_per_report_inside_the_comple
         let imported = db.import_analytical_csv(input).await.unwrap();
         assert_eq!(imported.rejected_rows, 0, "{name}");
         sql = sql.replace(&format!("analysis_nearby_{name}"), &imported.table_name);
+        repeat_sql = repeat_sql.replace(&format!("analysis_nearby_{name}"), &imported.table_name);
+    }
+    // Three placed abatements at three places, one day each; the fourth row has no coordinates.
+    let repeats = db.execute_restricted_sql(&repeat_sql, 100).await.unwrap();
+    assert_eq!(repeats.row_count, 3);
+    for (column, expected) in [
+        ("days", json!(1)),
+        ("places", json!(3)),
+        ("places_abated_once", json!(3)),
+        ("repeat_places", json!(0)),
+        ("rows_not_placed", json!(1)),
+    ] {
+        let value = cell(&repeats, 0, column);
+        assert_eq!(
+            value
+                .as_i64()
+                .or_else(|| value.as_str().and_then(|text| text.parse().ok())),
+            expected.as_i64(),
+            "{column}"
+        );
     }
     let result = db.execute_restricted_sql(&sql, 100).await.unwrap();
     assert_eq!(result.row_count, 1);
@@ -582,6 +603,10 @@ async fn reports_around_abatements_are_counted_once_per_report_inside_the_comple
         // 15 after against 11 before is under half again; 17 would be the first to count.
         ("ring_rose_by_half", 0),
         ("ring_fell_by_third", 0),
+        // Both abatements have their earlier 29 days inside the period; no report falls in them.
+        ("earlier_place_days", 2),
+        ("earlier_near_before", 0),
+        ("earlier_ring_after", 0),
     ] {
         assert_eq!(count(column), expected, "{column}");
     }
