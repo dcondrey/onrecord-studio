@@ -28,6 +28,9 @@ const closed2025 = [reportHeader, [
   ['5', '2025-03-22 08:00:00', 'Encampment', '32.7145', '-117.1500'], ['6', '2025-06-01 08:00:00', 'Encampment', '32.7300', '-117.1257'],
   ['7', '2025-03-16 08:00:00', 'Encampment', '32.7280', '-117.1500'], ['8', '2025-03-30 08:00:00', 'Encampment', '32.7100', '-117.1500'],
   ['9', '2025-03-12 08:00:00', 'Pothole', '32.7100', '-117.1500'], ['10', '2025-03-18 08:00:00', 'Encampment', '32.7100', '-117.1500']]];
+// Ten more reports 300 m north of Q in the fortnight before and fifteen after: with the one to
+// the east, eleven before and fifteen after, so Q's ring is compared and has not risen by half.
+for (let index = 0; index < 25; index += 1) closed2025[1].push([String(100 + index), index < 10 ? '2025-06-05 08:00:00' : '2025-06-15 08:00:00', 'Encampment', '32.7327', '-117.1300']);
 const open = [reportHeader, [['10', '2025-03-18 08:00:00', 'Encampment', '32.7100', '-117.1500'], ['11', '2025-09-20 08:00:00', 'Encampment', '', '']]];
 const alias = (header) => header.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '');
 const tables = { completed, closed2025, open };

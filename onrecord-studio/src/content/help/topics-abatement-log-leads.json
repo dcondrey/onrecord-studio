@@ -28,6 +28,7 @@
         "heading": "Reports around an abatement",
         "paragraphs": [
           "When a log of completed abatements is imported beside the City's Encampment reports with coordinates, the app counts the reports filed within 150 metres of each abatement, and in the ring from 150 to 800 metres around it, in the 14 days before and the 14 days after. Abatements are counted once per place and day, and only where the imported reports are complete for the whole four weeks.",
+          "For abatements with at least 10 reports in the ring beforehand, the lead also says how many had more reports there afterwards and how many fewer, and how many rose by half or more or fell by a third or more.",
           "These are counts of report and abatement pairs, so a report near several abatements is counted once for each. A report is a resident's complaint, not a person or a camp. An abatement is often scheduled because reports were filed, so more reports before than after is expected whatever the abatement did, and the counts do not show where anyone went."
         ]
       },

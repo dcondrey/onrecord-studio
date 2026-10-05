@@ -565,16 +565,23 @@ async fn reports_around_abatements_are_counted_once_per_report_inside_the_comple
         ("abatement_place_days", 4),
         // One abatement has no coordinates; one is within 14 days of the reports' last day.
         ("counted_place_days", 2),
-        // Ten Encampment reports; the one held by both tables is one report; the Pothole is not read.
-        ("reports_in_period", 10),
+        // Thirty-five Encampment reports; the one held by both tables is one report; the Pothole is not read.
+        ("reports_in_period", 35),
         ("reports_not_placed", 1),
         ("near_before", 2),
         ("near_same_day", 1),
         // The report 15 days after is outside the window.
         ("near_after", 2),
-        ("ring_before", 1),
+        ("ring_before", 11),
         // The report 2 km away is in neither distance band.
-        ("ring_after", 1),
+        ("ring_after", 16),
+        // Only the abatement with ten or more ring reports beforehand is compared: 11 before, 15 after.
+        ("ring_compared", 1),
+        ("ring_more_after", 1),
+        ("ring_fewer_after", 0),
+        // 15 after against 11 before is under half again; 17 would be the first to count.
+        ("ring_rose_by_half", 0),
+        ("ring_fell_by_third", 0),
     ] {
         assert_eq!(count(column), expected, "{column}");
     }

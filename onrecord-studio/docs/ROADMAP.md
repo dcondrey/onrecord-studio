@@ -1331,9 +1331,9 @@ Report and abatement pairs within 150 metres: 319,347 in the 14 days before, 24,
 2,692,389 after (0.4% fewer). So on these counts reports do not rise in the surrounding ring after
 an abatement; the pair counts are many times the number of reports because abatements cluster.
 The query took 4.5 seconds from CSV. Not verified: its run time inside the app against the
-30-second limit, and the lead in the running app. Not built: a per-place breakdown (which
-abatements had more ring reports after than before), which is what would answer where reports
-moved.
+30-second limit, and the lead in the running app. Per abatement, of the 11,208 with at least 10
+ring reports beforehand: 5,151 had more afterwards and 5,884 fewer; 809 rose by half or more and
+1,114 fell by a third or more. Not built: naming the places where the ring rose.
 
 ## Leads from service-report tables (2026-10-04)
 

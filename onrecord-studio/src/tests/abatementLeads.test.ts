@@ -64,6 +64,9 @@ describe('Encampment reports around abatements', () => {
     expect(lead.detail).toContain('a report near several abatements is counted once for each');
     expect(lead.detail).toContain('The counts do not show where anyone went.');
     expect(lead.detail).not.toContain('no coordinates');
+    expect(lead.detail).not.toContain('in that ring beforehand');
+    expect(abatementLeads([{ query: nearbyQuery, result: counts(11208, { ring_compared: 11208, ring_more_after: 5151, ring_fewer_after: 5884, ring_rose_by_half: 809, ring_fell_by_third: 1114 }) }])[0].detail)
+      .toContain('Of 11,208 abatements with at least 10 reports in that ring beforehand, 5,151 had more afterwards and 5,884 fewer; in 809 the count rose by half or more and in 1,114 it fell by a third or more.');
     expect(abatementLeads([{ query: nearbyQuery, result: counts(30, { reports_not_placed: 7 }) }])[0].detail).toContain('7 reports have no coordinates or date and are in none of these counts.');
   });
 });
