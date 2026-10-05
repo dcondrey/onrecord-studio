@@ -9,7 +9,8 @@ export type AnalyticalDatasetKind =
   | 'BUDGET_DIMENSION';
 
 export type CityDataset = 'NIBRS_OFFENSES' | 'GET_IT_DONE_ENCAMPMENTS' | 'GET_IT_DONE_OPEN' | 'GET_IT_DONE_OUTCOMES' | 'SCHOOLS' | 'TRANSIT_STOPS' | 'OPERATING_BUDGET'
-  | 'RIPA_STOPS' | 'RIPA_STOP_REASONS' | 'RIPA_STOP_RESULTS' | 'RIPA_PROPERTY_SEIZURE_BASIS';
+  | 'RIPA_STOPS' | 'RIPA_STOP_REASONS' | 'RIPA_STOP_RESULTS' | 'RIPA_PROPERTY_SEIZURE_BASIS'
+  | 'SHELTER_INVENTORY';
 
 export interface AnalyticalImportRequest {
   datasetKind: AnalyticalDatasetKind;
