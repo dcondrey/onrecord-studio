@@ -10,6 +10,11 @@
 //! fallback). Suggestions are deterministic phrase matches over complete agenda items; each
 //! carries the agenda passage it rests on and a basis label.
 use super::agenda::{heading_date, HeadingDate, ITEMS};
+use super::agenda_revisions::{compare, item_title, outline};
+use super::meeting_posting::{
+    self as posting, minutes_before, pacific_publisher, pacific_to_utc, posted_at,
+    start_time_after_date, FetchHeaders,
+};
 use crate::{
     analysis::{
         claim_validation::{
@@ -25,9 +30,11 @@ use crate::{
     storage::{findings::FindingsFilter, pii::mask_pii, sqlite::DuckDbRepository},
     types::{meetings::*, ClaimCheckOutcome, CoverageExpectation},
 };
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveTime};
+use duckdb::OptionalExt;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ops::Range;
+use std::sync::LazyLock;
 
 const HEADER_CHARACTERS: usize = 12_000;
 const ROLE_CHARACTERS: usize = 1_500;
@@ -37,6 +44,8 @@ const TEXT_CHARACTERS: usize = 300_000;
 const SUGGESTIONS_PER_MEETING: usize = 12;
 const PASSAGES_PER_KIND: usize = 3;
 const QUOTE_CHARACTERS: usize = 400;
+/// Copies of one agenda compared, newest kept, so a much-revised agenda stays bounded.
+const AGENDA_VERSIONS: usize = 6;
 
 /// Publishing bodies, earliest heading match wins. Extend this table to recognize a new body.
 const BODIES: &[(&str, Phrases)] = &[
@@ -68,6 +77,16 @@ const BODIES: &[(&str, Phrases)] = &[
         ],
     ),
 ];
+/// Names from the meeting-body registry, each matched as written and shown as matched. `BODIES`
+/// wins a tie, so a body in both keeps its established label.
+static REGISTERED_BODIES: LazyLock<Vec<(&'static str, Vec<String>)>> = LazyLock::new(|| {
+    crate::ingestion::meeting_bodies::meeting_bodies()
+        .iter()
+        .flat_map(|body| std::iter::once(body.name).chain(body.heading_names.iter().copied()))
+        .map(|name| (name, name_words(name)))
+        .collect()
+});
+
 const AGENDA: Phrases = &[&["agenda"]];
 const MINUTES: Phrases = &[&["minutes"]];
 const VIDEO: Phrases = &[&["video"], &["recording"], &["webcast"]];
@@ -223,6 +242,9 @@ pub(crate) struct MeetingSource {
     pub content_type: String,
     pub source_url: Option<String>,
     pub text: String,
+    /// The fetch that delivered the bytes the app holds; `None` when no fetch is recorded.
+    pub fetch: Option<FetchHeaders>,
+    pub differing_fetches: u32,
 }
 
 impl MeetingSource {
@@ -434,6 +456,8 @@ struct Recognized {
     body_range: Range<usize>,
     body_in_text: bool,
     date: DateReading,
+    /// A start time written directly after the heading date.
+    time: Option<NaiveTime>,
     publisher_meeting: Option<String>,
 }
 
@@ -445,6 +469,11 @@ fn first_body(tokens: &[Token]) -> Option<(&'static str, Range<usize>)> {
     BODIES
         .iter()
         .filter_map(|(label, phrases)| first_phrase(tokens, phrases).map(|r| (*label, r)))
+        .chain(
+            REGISTERED_BODIES
+                .iter()
+                .filter_map(|(label, words)| first_words(tokens, words).map(|r| (*label, r))),
+        )
         .min_by_key(|(_, range)| range.start)
 }
 
@@ -500,12 +529,16 @@ fn recognize(source: &MeetingSource) -> Option<Recognized> {
             (body, range, false)
         }
     };
+    let mut time = None;
     let date = match heading_date(header) {
-        HeadingDate::Recorded(date, range) => DateReading::Recorded {
-            date,
-            range,
-            in_text: true,
-        },
+        HeadingDate::Recorded(date, range) => {
+            time = start_time_after_date(&header[range.end..]);
+            DateReading::Recorded {
+                date,
+                range,
+                in_text: true,
+            }
+        }
         HeadingDate::Conflicting => DateReading::Conflicting,
         HeadingDate::Absent => match heading_date(&label) {
             HeadingDate::Recorded(date, range) => DateReading::Recorded {
@@ -523,6 +556,7 @@ fn recognize(source: &MeetingSource) -> Option<Recognized> {
         body_range,
         body_in_text,
         date,
+        time,
         publisher_meeting: publisher_meeting(source.source_url.as_deref()),
     })
 }
@@ -586,19 +620,7 @@ fn agenda_items(
             ));
             continue;
         }
-        let rest = &text[first.end()..next.start()];
-        let title_end = ["Council District", "Proposed Actions", "Recommendation"]
-            .iter()
-            .filter_map(|marker| rest.find(marker))
-            .min()
-            .unwrap_or(rest.len());
-        let title = rest[..title_end]
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ")
-            .chars()
-            .take(300)
-            .collect();
+        let (title, _) = item_title(&text[first.end()..next.start()]);
         items.push(AgendaItem {
             meeting,
             source: source_index,
@@ -624,7 +646,85 @@ fn agenda_items(
 pub(crate) struct ParsedCalendar {
     pub meetings: Vec<CalendarMeeting>,
     pub items: Vec<AgendaItem>,
+    pub posting_counts: PostingCounts,
     pub limitations: Vec<String>,
+}
+
+type Posted = Result<chrono::DateTime<chrono::Utc>, PostingAbsence>;
+
+/// One meeting's agenda copies that have text, earliest first, and how they were ordered. With a
+/// recorded `Last-Modified` on every copy the header orders them; otherwise the order in which
+/// the app collected them does (`sources` arrives newest first).
+fn agenda_versions(
+    members: &[(usize, Recognized)],
+    sources: &[MeetingSource],
+    posted: &HashMap<usize, Posted>,
+) -> (Vec<usize>, RevisionOrderBasis) {
+    let mut versions = members
+        .iter()
+        .filter(|(index, found)| {
+            found.role == MeetingDocumentRole::Agenda && !sources[*index].text.is_empty()
+        })
+        .map(|(index, _)| *index)
+        .collect::<Vec<_>>();
+    versions.sort_by_key(|index| std::cmp::Reverse(*index));
+    let times = versions
+        .iter()
+        .map(|index| posted[index].ok())
+        .collect::<Option<Vec<_>>>();
+    match times {
+        Some(times) if versions.len() > 1 => {
+            let mut timed = versions.into_iter().zip(times).collect::<Vec<_>>();
+            timed.sort_by_key(|(_, time)| *time);
+            (
+                timed.into_iter().map(|(index, _)| index).collect(),
+                RevisionOrderBasis::LastModified,
+            )
+        }
+        _ => (versions, RevisionOrderBasis::CollectionOrder),
+    }
+}
+
+fn masked(title: Option<String>) -> Result<Option<String>, AppError> {
+    title
+        .map(|title| mask_pii(&title).map(|result| result.masked_text))
+        .transpose()
+}
+
+fn agenda_revisions(
+    versions: &[usize],
+    order_basis: RevisionOrderBasis,
+    sources: &[MeetingSource],
+) -> Result<Vec<AgendaRevision>, AppError> {
+    let kept = &versions[versions.len().saturating_sub(AGENDA_VERSIONS)..];
+    let outlines = kept
+        .iter()
+        .map(|index| outline(&sources[*index].text))
+        .collect::<Vec<_>>();
+    let mut revisions = Vec::new();
+    for (pair, lists) in kept.windows(2).zip(outlines.windows(2)) {
+        let (earlier, later) = (&sources[pair[0]], &sources[pair[1]]);
+        let found = compare(&lists[0], &lists[1]);
+        let mut changes = Vec::with_capacity(found.changes.len());
+        for change in found.changes {
+            changes.push(AgendaItemChange {
+                kind: change.kind,
+                item: change.item,
+                before: masked(change.before)?,
+                after: masked(change.after)?,
+            });
+        }
+        revisions.push(AgendaRevision {
+            earlier_document_id: earlier.document_id,
+            earlier_label: earlier.file_name.clone(),
+            later_document_id: later.document_id,
+            later_label: later.file_name.clone(),
+            order_basis,
+            changes,
+            titles_not_compared: found.titles_not_compared,
+        });
+    }
+    Ok(revisions)
 }
 
 /// Groups meeting documents into meetings and extracts complete items from upcoming agendas.
@@ -650,6 +750,7 @@ pub(crate) fn parse_calendar(
     let mut meetings = Vec::new();
     let mut items = Vec::new();
     let mut limitations = Vec::new();
+    let mut posting_counts = PostingCounts::default();
     for (key, mut members) in groups {
         members.sort_by_key(|(index, found)| (found.role, sources[*index].document_id));
         let (lead_index, lead) = &members[0];
@@ -709,24 +810,54 @@ pub(crate) fn parse_calendar(
         let mut comment_deadlines = Vec::new();
         let mut comment_instructions = Vec::new();
         let meeting_index = meetings.len();
-        // Sources arrive newest first; an amended or revised agenda supersedes earlier copies,
-        // so items are read from the newest agenda only.
-        let newest_agenda = members
+        let posted = members
             .iter()
-            .filter(|(index, found)| {
-                found.role == MeetingDocumentRole::Agenda && !sources[*index].text.is_empty()
+            .map(|(index, _)| {
+                let source = &sources[*index];
+                (
+                    *index,
+                    posted_at(source.source_url.as_deref(), source.fetch.as_ref()),
+                )
             })
-            .map(|(index, _)| *index)
-            .min();
+            .collect::<HashMap<_, _>>();
+        // An amended or revised agenda supersedes earlier copies, so items are read from the
+        // latest copy only.
+        let (versions, order_basis) = agenda_versions(&members, sources, &posted);
+        let newest_agenda = versions.last().copied();
+        let start_times = members
+            .iter()
+            .filter(|(_, found)| found.role == MeetingDocumentRole::Agenda)
+            .filter_map(|(_, found)| found.time)
+            .collect::<BTreeSet<_>>();
+        let start_time = (start_times.len() == 1)
+            .then(|| start_times.first().copied())
+            .flatten();
+        let start = date.zip(start_time).map(|(date, time)| date.and_time(time));
         let mut quoted_passages = BTreeSet::new();
         for (index, found) in &members {
             let source = &sources[*index];
+            // Hours to the meeting need a file time, the meeting's own stated start, and a
+            // publisher whose stated times are known to be Pacific time.
+            let minutes_before_meeting = match (found.role, &posted[index], start) {
+                (MeetingDocumentRole::Agenda, Ok(posted), Some(start))
+                    if pacific_publisher(source.source_url.as_deref()) =>
+                {
+                    pacific_to_utc(start).map(|start| minutes_before(*posted, start))
+                }
+                _ => None,
+            };
+            if let Some(minutes) = minutes_before_meeting {
+                posting::count(&mut posting_counts, minutes);
+            }
             documents.push(MeetingDocument {
                 role: found.role,
                 portal_key: source.portal_key.clone(),
                 document_id: source.document_id,
                 label: source.file_name.clone(),
                 source_url: source.source_url.clone(),
+                posting: posting::posting_time(&posted[index]),
+                minutes_before_meeting,
+                differing_fetches: source.differing_fetches,
             });
             if found.role != MeetingDocumentRole::Agenda || source.text.is_empty() {
                 continue;
@@ -739,7 +870,7 @@ pub(crate) fn parse_calendar(
             if Some(*index) != newest_agenda {
                 if timing == MeetingTiming::Upcoming {
                     limitations.push(format!(
-                        "{}: a newer agenda for the same meeting was collected, so items were read from that one only.",
+                        "{}: a later copy of this meeting's agenda was collected, so items were read from that one only.",
                         source.file_name
                     ));
                 }
@@ -763,7 +894,9 @@ pub(crate) fn parse_calendar(
             date_citation,
             date_note,
             timing,
+            start_time: start_time.map(|time| time.format("%H:%M").to_string()),
             documents,
+            revisions: agenda_revisions(&versions, order_basis, sources)?,
             comment_deadlines,
             comment_instructions,
             suggestions: Vec::new(),
@@ -772,6 +905,7 @@ pub(crate) fn parse_calendar(
     Ok(ParsedCalendar {
         meetings,
         items,
+        posting_counts,
         limitations,
     })
 }
@@ -1224,12 +1358,61 @@ async fn load_sources(repository: &DuckDbRepository) -> Result<LoadedSources, Ap
                             content_type: row.get(5)?,
                             source_url: row.get(6)?,
                             text: row.get(7)?,
+                            fetch: None,
+                            differing_fetches: 0,
                         })
                     },
                 )
                 .map_err(storage)?
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(storage)?;
+            let mut sources = sources;
+            // The first fetch that delivered the bytes now held states their file time; a later
+            // re-check that received other bytes describes a copy the app did not keep.
+            let mut held = conn
+                .prepare(
+                    "SELECT a.last_modified, a.response_date, a.retrieved_at
+                     FROM document_acquisitions a
+                     JOIN documents d
+                       ON d.id = a.document_id AND d.portal_subdomain = a.portal_subdomain
+                     WHERE a.portal_subdomain = ?1 AND a.document_id = ?2
+                       AND a.raw_file_sha256 = d.raw_file_sha256
+                     ORDER BY a.acquisition_id LIMIT 1",
+                )
+                .map_err(storage)?;
+            let mut differing = conn
+                .prepare(
+                    "SELECT count(*) FROM document_acquisitions
+                     WHERE portal_subdomain = ?1 AND document_id = ?2
+                       AND previous_raw_file_sha256 IS NOT NULL
+                       AND previous_raw_file_sha256 <> raw_file_sha256",
+                )
+                .map_err(storage)?;
+            for source in &mut sources {
+                source.fetch = held
+                    .query_row(
+                        duckdb::params![source.portal_key, source.document_id],
+                        |row| {
+                            Ok(FetchHeaders {
+                                last_modified: row.get(0)?,
+                                response_date: row.get(1)?,
+                                retrieved_at: row.get(2)?,
+                            })
+                        },
+                    )
+                    .optional()
+                    .map_err(storage)?;
+                source.differing_fetches = differing
+                    .query_row(
+                        duckdb::params![source.portal_key, source.document_id],
+                        |row| row.get::<_, i64>(0),
+                    )
+                    .map_err(storage)?
+                    .try_into()
+                    .unwrap_or(u32::MAX);
+            }
+            drop(held);
+            drop(differing);
             let mut agencies = HashMap::new();
             let mut statement = conn
                 .prepare("SELECT portal_subdomain, id, name FROM agencies")
@@ -1410,12 +1593,17 @@ pub async fn calendar(
     order(&mut parsed.meetings);
     limitations.extend(parsed.limitations);
     limitations.push(format!(
-        "Covers at most {SOURCE_LIMIT} public agenda, minutes and video documents, {TEXT_CHARACTERS} characters each. A body is recognized only from its heading or file name ({}); a date comes from a weekday-and-full-date heading, or, when the heading carries no date, is inferred from the file name or description. Items are recognized only by explicit \"Item N:\" headings. Suggestions are phrase matches, not assessments of the item.",
+        "A posting time is the file's Last-Modified header as the server sent it when the app fetched the file. It is the server's statement about the file, not proof of when the public could first read it, and it is not shown where the header is the request time. Hours to a meeting are computed only when an agenda heading states a start time directly after its date and the publisher is a San Diego or State agency, read as Pacific time. Copies of an agenda are compared by item number, title (first {} characters) and item text; a revised agenda published at the same address replaces the earlier copy when collected again, so only copies at different addresses are compared.",
+        super::agenda_revisions::TITLE_CHARACTERS
+    ));
+    limitations.push(format!(
+        "Covers at most {SOURCE_LIMIT} public agenda, minutes and video documents, {TEXT_CHARACTERS} characters each. A body is recognized only from its heading or file name ({} and the registered boards and commissions); a date comes from a weekday-and-full-date heading, or, when the heading carries no date, is inferred from the file name or description. Items are recognized only by explicit \"Item N:\" headings. Suggestions are phrase matches, not assessments of the item.",
         BODIES.iter().map(|(label, _)| *label).collect::<Vec<_>>().join(", ")
     ));
     Ok(MeetingCalendar {
         today: today.format("%Y-%m-%d").to_string(),
         meetings: parsed.meetings,
+        posting_counts: parsed.posting_counts,
         limitations,
     })
 }
@@ -1442,6 +1630,8 @@ mod tests {
             content_type: "application/pdf".into(),
             source_url: Some(format!("https://www.sandiego.gov/{file_name}")),
             text,
+            fetch: None,
+            differing_fetches: 0,
         }
     }
 
@@ -1814,12 +2004,38 @@ mod tests {
             conn.execute("INSERT INTO documents_fts(document_id,portal_subdomain,file_name,extracted_text) VALUES (?1,'city',?2,?3)", duckdb::params![id, name, text]).unwrap();
         }
         conn.execute("INSERT INTO documents(id,request_id,portal_subdomain,file_name,description,content_type,visibility,created_at,updated_at) VALUES (5,1,'city','council-video.mp4','City Council meeting video','video/mp4','public','2026-09-27','2026-09-27')",[]).unwrap();
+        // The agenda's held bytes came from the first fetch; a later re-check received other
+        // bytes, which the app did not keep and whose header must not describe the held copy.
+        let held = "a".repeat(64);
+        conn.execute("UPDATE documents SET raw_file_sha256=?1, download_url='https://www.sandiego.gov/sites/default/files/agenda.pdf' WHERE id=2", duckdb::params![held]).unwrap();
+        for (digest, previous, modified) in [
+            (held.clone(), None, "Mon, 28 Sep 2026 21:00:00 GMT"),
+            (
+                "b".repeat(64),
+                Some(held.clone()),
+                "Tue, 29 Sep 2026 23:30:00 GMT",
+            ),
+        ] {
+            conn.execute("INSERT INTO document_acquisitions(portal_subdomain,document_id,requested_url,resolved_url,redirect_chain_json,http_status,last_modified,raw_file_sha256,file_size,previous_raw_file_sha256,retrieved_at,response_date) VALUES ('city',2,'u','u','[]',200,?1,?2,1,?3,'2026-09-30T08:00:00.000000Z','Wed, 30 Sep 2026 08:00:00 GMT')", duckdb::params![modified, digest, previous]).unwrap();
+        }
         drop(conn);
         let calendar = calendar(&repository, today()).await.unwrap();
         assert_eq!(calendar.meetings.len(), 2);
         let first = &calendar.meetings[0];
         assert_eq!(first.timing, MeetingTiming::Upcoming);
         assert_eq!(first.documents.len(), 1);
+        assert_eq!(
+            first.documents[0].posting,
+            PostingTime::Recorded {
+                last_modified: "2026-09-28T21:00:00Z".into()
+            }
+        );
+        assert_eq!(first.documents[0].differing_fetches, 1);
+        // Posted Monday 21:00 UTC; the meeting starts Thursday 14:00 Pacific daylight time.
+        assert_eq!(first.start_time.as_deref(), Some("14:00"));
+        assert_eq!(first.documents[0].minutes_before_meeting, Some(72 * 60));
+        assert_eq!(calendar.posting_counts.agenda_files_with_both_times, 1);
+        assert_eq!(calendar.posting_counts.under_72_hours_before_start, 0);
         assert!(first
             .suggestions
             .iter()
@@ -1828,5 +2044,114 @@ mod tests {
         assert_eq!(video.timing, MeetingTiming::DateNotRecorded);
         assert_eq!(video.documents[0].role, MeetingDocumentRole::Video);
         assert!(video.body_citation.character_start.is_none());
+        assert_eq!(
+            video.documents[0].posting,
+            PostingTime::NotRecorded {
+                reason: PostingAbsence::NoFetchRecord
+            }
+        );
+    }
+
+    fn fetched(mut source: MeetingSource, last_modified: &str) -> MeetingSource {
+        source.fetch = Some(FetchHeaders {
+            last_modified: Some(last_modified.into()),
+            response_date: Some("Wed, 30 Sep 2026 08:00:00 GMT".into()),
+            retrieved_at: "2026-09-30T08:00:00.000000Z".into(),
+        });
+        source
+    }
+
+    #[test]
+    fn hours_to_a_meeting_need_a_recorded_file_time_and_a_stated_start_time() {
+        let day = today() + chrono::Duration::days(1);
+        let timed = fetched(agenda(1, day), "Mon, 28 Sep 2026 21:00:00 GMT");
+        let mut untimed = fetched(
+            agenda(2, day + chrono::Duration::days(7)),
+            "Mon, 28 Sep 2026 21:00:00 GMT",
+        );
+        untimed.text = untimed.text.replace(", AT 2:00 PM", "");
+        // The docket host reports the request time, so its header is not a posting time.
+        let mut docket = fetched(
+            agenda(3, day + chrono::Duration::days(14)),
+            "Mon, 28 Sep 2026 21:00:00 GMT",
+        );
+        docket.source_url = Some("https://sandiego.hylandcloud.com/211agendaonlinecouncil/Documents/ViewAgenda?meetingId=7192&type=agenda&doctype=1".into());
+        let parsed = parse_calendar(&[timed, untimed, docket], today()).unwrap();
+        let of = |id: i64| {
+            parsed
+                .meetings
+                .iter()
+                .find(|meeting| meeting.documents[0].document_id == id)
+                .unwrap()
+        };
+        assert_eq!(of(1).documents[0].minutes_before_meeting, Some(72 * 60));
+        assert_eq!(of(2).start_time, None);
+        assert!(matches!(
+            of(2).documents[0].posting,
+            PostingTime::Recorded { .. }
+        ));
+        assert_eq!(of(2).documents[0].minutes_before_meeting, None);
+        assert_eq!(of(3).start_time.as_deref(), Some("14:00"));
+        assert_eq!(
+            of(3).documents[0].posting,
+            PostingTime::NotRecorded {
+                reason: PostingAbsence::RequestTimeHost
+            }
+        );
+        assert_eq!(of(3).documents[0].minutes_before_meeting, None);
+        assert_eq!(parsed.posting_counts.agenda_files_with_both_times, 1);
+    }
+
+    #[test]
+    fn two_copies_of_one_agenda_are_ordered_by_file_time_and_compared_by_item() {
+        let day = today() + chrono::Duration::days(1);
+        let original = fetched(agenda(1, day), "Fri, 25 Sep 2026 21:00:00 GMT");
+        let mut revised = fetched(agenda(2, day), "Mon, 28 Sep 2026 21:00:00 GMT");
+        revised.text = revised
+            .text
+            .replace("Item 601: Approval of Council Minutes. Proposed Actions: Approval of Council Minutes for May 7, 2026. ", "")
+            .replace("Housing Authority of the County", "Housing Authority of the County (Rev. 9/28/26)")
+            .replace("Item 606:", "Item 330: Emergency Repair Contract. Proposed Actions: Ratify. Item 606:");
+        // Collection order says the original (listed first) is newest; the file times say otherwise.
+        let parsed = parse_calendar(&[original.clone(), revised.clone()], today()).unwrap();
+        assert_eq!(parsed.meetings.len(), 1);
+        let revision = &parsed.meetings[0].revisions[0];
+        assert_eq!(revision.order_basis, RevisionOrderBasis::LastModified);
+        assert_eq!(
+            (revision.earlier_document_id, revision.later_document_id),
+            (1, 2)
+        );
+        assert_eq!(
+            revision
+                .changes
+                .iter()
+                .map(|change| (change.kind, change.item.as_str()))
+                .collect::<Vec<_>>(),
+            vec![
+                (AgendaItemChangeKind::Removed, "Item 601"),
+                (AgendaItemChangeKind::Reworded, "Item 605"),
+                (AgendaItemChangeKind::Added, "Item 330"),
+            ]
+        );
+        // Items are read from the later copy.
+        assert!(parsed.items.iter().all(|item| item.source == 1));
+        assert!(parsed.items.iter().any(|item| item.label == "Item 330"));
+
+        // Without a file time on one copy the app's collection order decides, and says so.
+        let mut unfetched = revised.clone();
+        unfetched.fetch = None;
+        let parsed = parse_calendar(&[unfetched, original.clone()], today()).unwrap();
+        let revision = &parsed.meetings[0].revisions[0];
+        assert_eq!(revision.order_basis, RevisionOrderBasis::CollectionOrder);
+        assert_eq!(
+            (revision.earlier_document_id, revision.later_document_id),
+            (1, 2)
+        );
+
+        let mut copy = original.clone();
+        copy.document_id = 9;
+        let parsed = parse_calendar(&[original, copy], today()).unwrap();
+        let revision = &parsed.meetings[0].revisions[0];
+        assert!(revision.changes.is_empty() && revision.titles_not_compared.is_empty());
     }
 }

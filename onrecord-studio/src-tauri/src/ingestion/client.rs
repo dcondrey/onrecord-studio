@@ -230,6 +230,9 @@ pub struct AcquisitionRecord {
     pub content_type: Option<String>,
     pub etag: Option<String>,
     pub last_modified: Option<String>,
+    /// The response's `Date` header: the server's own clock when it answered. A `Last-Modified`
+    /// equal to it is the request time, not a statement about the file.
+    pub response_date: Option<String>,
     /// Local clock when the response headers arrived; not a trusted timestamp.
     pub retrieved_at: String,
 }
@@ -250,6 +253,7 @@ fn acquisition_record(
         content_type: recorded_header(headers, reqwest::header::CONTENT_TYPE),
         etag: recorded_header(headers, reqwest::header::ETAG),
         last_modified: recorded_header(headers, reqwest::header::LAST_MODIFIED),
+        response_date: recorded_header(headers, reqwest::header::DATE),
         retrieved_at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
     }
 }
@@ -4655,6 +4659,7 @@ fn unused_acquisition() -> AcquisitionRecord {
         content_type: None,
         etag: None,
         last_modified: None,
+        response_date: None,
         retrieved_at: String::new(),
     }
 }

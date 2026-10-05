@@ -32,6 +32,79 @@ async fn a_core_from_before_fetch_history_still_opens() {
         .expect("the upgraded core must record fetches");
 }
 
+/// Fetch history written before the response `Date` header was kept has no `response_date`
+/// column. Opening that core must add it, leave the old row's value absent rather than
+/// defaulted, and store the header for fetches made afterwards.
+#[tokio::test]
+async fn fetch_history_from_before_the_response_date_gains_the_column_without_a_value() {
+    let repository = repository_with_document().await;
+    repository
+        .conn
+        .lock()
+        .await
+        .execute_batch(&format!(
+            "DROP INDEX idx_document_acquisitions_document;
+             DROP TABLE document_acquisitions;
+             CREATE TABLE document_acquisitions (
+                 acquisition_id BIGINT PRIMARY KEY DEFAULT nextval('document_acquisition_seq'),
+                 portal_subdomain TEXT NOT NULL,
+                 document_id BIGINT NOT NULL,
+                 sync_run_id TEXT,
+                 requested_url TEXT NOT NULL,
+                 resolved_url TEXT NOT NULL,
+                 redirect_chain_json TEXT NOT NULL,
+                 http_status BIGINT NOT NULL,
+                 content_type TEXT,
+                 etag TEXT,
+                 last_modified TEXT,
+                 raw_file_sha256 TEXT NOT NULL CHECK (length(raw_file_sha256) = 64),
+                 file_size BIGINT NOT NULL CHECK (file_size >= 0),
+                 previous_raw_file_sha256 TEXT,
+                 retrieved_at TEXT NOT NULL
+             );
+             CREATE INDEX idx_document_acquisitions_document
+                 ON document_acquisitions(portal_subdomain, document_id);
+             INSERT INTO document_acquisitions (
+                 portal_subdomain, document_id, requested_url, resolved_url, redirect_chain_json,
+                 http_status, last_modified, raw_file_sha256, file_size, retrieved_at
+             ) VALUES ('{PORTAL_SUBDOMAIN}', {DOCUMENT_ID}, 'https://a.example/x', 'https://a.example/x',
+                 '[]', 200, 'Fri, 02 Oct 2026 21:31:25 GMT', '{RAW_FILE_SHA256}', 1,
+                 '2026-10-04T00:00:00.000000Z');"
+        ))
+        .unwrap();
+    repository
+        .run_migrations(MIGRATION)
+        .await
+        .expect("a core with the older fetch history must open");
+    repository
+        .record_document_acquisition(
+            PORTAL_SUBDOMAIN,
+            DOCUMENT_ID as u64,
+            None,
+            RAW_FILE_SHA256,
+            1,
+            &crate::ingestion::client::AcquisitionRecord {
+                response_date: Some("Mon, 05 Oct 2026 07:16:39 GMT".to_string()),
+                ..test_acquisition()
+            },
+        )
+        .await
+        .expect("the upgraded core must record fetches");
+    let conn = repository.conn.lock().await;
+    let mut statement = conn
+        .prepare("SELECT response_date FROM document_acquisitions ORDER BY acquisition_id")
+        .unwrap();
+    let dates = statement
+        .query_map([], |row| row.get::<_, Option<String>>(0))
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert_eq!(
+        dates,
+        vec![None, Some("Mon, 05 Oct 2026 07:16:39 GMT".to_string())]
+    );
+}
+
 /// Startup runs the migration script on every launch, so a second run must be a no-op rather
 /// than an error, and the provenance classification columns must survive it.
 #[tokio::test]

@@ -5,10 +5,10 @@ import type { CalendarMeeting, MeetingCalendar } from '../types';
 const meeting = (id: string, timing: CalendarMeeting['timing'], date: string | null): CalendarMeeting => ({
   id, jurisdiction: 'CA', body: `Body ${id}`, timing, date,
   bodyCitation: { portalKey: 'p', documentId: 1, characterStart: null, characterEnd: null, quote: null, label: null },
-  dateCitation: null, dateNote: null, documents: [], commentDeadlines: [], commentInstructions: [], suggestions: [],
+  dateCitation: null, dateNote: null, startTime: null, documents: [], revisions: [], commentDeadlines: [], commentInstructions: [], suggestions: [],
 } as CalendarMeeting);
 
-const calendar = (meetings: CalendarMeeting[]): MeetingCalendar => ({ today: '2026-10-01', meetings, limitations: [] });
+const calendar = (meetings: CalendarMeeting[]): MeetingCalendar => ({ today: '2026-10-01', meetings, postingCounts: { agendaFilesWithBothTimes: 0, under72HoursBeforeStart: 0, afterMeetingStart: 0 }, limitations: [] });
 
 describe('nextUpcomingMeeting', () => {
   it('counts days to the nearest recorded upcoming date and ignores past or undated meetings', () => {
