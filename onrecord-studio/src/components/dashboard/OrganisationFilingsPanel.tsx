@@ -9,6 +9,7 @@ import { save } from '@tauri-apps/plugin-dialog';
 import { portfolioCsv, portfolioRow, type PortfolioRow } from '../../utils/organisationPortfolio';
 import { isEin, normalisedName, parseOrganisationList } from '../../utils/organisationNames';
 import { contractFileRequest } from '../../utils/organisationRequests';
+import { peopleAcrossReturns, yearChange } from '../../utils/organisationPeople';
 import { guidanceForSubject } from '../../utils/sourceGuidance';
 import { useAppStore } from '../../store/useAppStore';
 
@@ -185,6 +186,25 @@ function Library({ filings }: { filings: OrganisationFilings }) {
   </section>;
 }
 
+const signed = (value: number | null) => value === null ? '' : `${value > 0 ? '+' : value < 0 ? '−' : ''}${dollars.format(Math.abs(value))}`;
+
+function People({ filings }: { filings: OrganisationFilings }) {
+  const people = peopleAcrossReturns(filings);
+  if (people.length === 0) return null;
+  const periods = [...new Set(people.flatMap((p) => p.years.map((y) => y.period)))].sort().reverse();
+  return <section aria-label="People across returns" className="space-y-2">
+    <h3 className="text-sm font-semibold text-fg">People across the read returns</h3>
+    <Table caption="Everyone Part VII or Schedule J lists on any read return, with reportable compensation from the organisation per return (Schedule J total in brackets where listed). An empty cell is a return that does not list the person; &quot;former&quot; is the box the return checked."
+      head={['Name', 'Title (latest)', ...periods]}
+      rows={people.map((p) => [p.name, p.years[0].title ?? NOT_STATED, ...periods.map((period) => {
+        const year = p.years.find((y) => y.period === period);
+        if (!year) return '';
+        const comp = year.reportable === null ? (year.scheduleJTotal === null ? NOT_STATED : `[${dollars.format(year.scheduleJTotal)}]`) : `${dollars.format(year.reportable)}${year.scheduleJTotal !== null ? ` [${dollars.format(year.scheduleJTotal)}]` : ''}`;
+        return `${comp}${year.former ? ', former' : ''}`;
+      })])} />
+  </section>;
+}
+
 function Record({ filings }: { filings: OrganisationFilings }) {
   return <div className="space-y-5">
     {filings.warnings.length > 0 && <ul role="alert" className="list-disc pl-5 text-label leading-4 text-warning">{filings.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
@@ -193,11 +213,12 @@ function Record({ filings }: { filings: OrganisationFilings }) {
       <p className="text-label leading-4 text-muted">Read from the IRS e-file archives for index years {filings.indexYears.map((check) => check.year).join(', ') || 'none'}. Each figure and answer is the organisation's own statement on its return. Earlier years' returns are not read; the summary below covers them.</p>
       {filings.returns.length ? filings.returns.map((listed) => <ReturnCard key={listed.objectId} listed={listed} />) : <p className="text-label leading-4 text-muted">The IRS indexes that were read list no e-filed return under this EIN.</p>}
     </section>
+    <People filings={filings} />
     <section aria-label="Summary by year" className="space-y-2">
       <h3 className="text-sm font-semibold text-fg">Summary by year</h3>
       {filings.summary ? <>
-        {filings.summary.years.length > 0 ? <Table caption="Figures extracted from each year's return." head={['Tax year', 'Form', 'Total revenue', 'Total expenses', 'Total assets', 'Total liabilities', 'Compensation of current officers']}
-          rows={filings.summary.years.map((year) => [String(year.taxYear), year.formType ?? NOT_STATED, money(year.totalRevenue), money(year.totalExpenses), money(year.totalAssetsEndOfYear), money(year.totalLiabilitiesEndOfYear), money(year.officerCompensation)])} />
+        {filings.summary.years.length > 0 ? <Table caption="Figures extracted from each year's return. The change column is the difference from the year before, shown only when both years state the figure." head={['Tax year', 'Form', 'Total revenue', 'Change', 'Total expenses', 'Change', 'Total assets', 'Total liabilities', 'Compensation of current officers']}
+          rows={filings.summary.years.map((year, index) => [String(year.taxYear), year.formType ?? NOT_STATED, money(year.totalRevenue), signed(yearChange(filings.summary!.years, index, (y) => y.totalRevenue)), money(year.totalExpenses), signed(yearChange(filings.summary!.years, index, (y) => y.totalExpenses)), money(year.totalAssetsEndOfYear), money(year.totalLiabilitiesEndOfYear), money(year.officerCompensation)])} />
           : <p className="text-label leading-4 text-muted">The source holds no extracted year for this organisation.</p>}
         <p className="text-label leading-4 text-muted">Source: <a className="text-accent underline" href={filings.summary.sourceUrl} target="_blank" rel="noreferrer">ProPublica Nonprofit Explorer</a>, from IRS extracts, retrieved {filings.summary.retrievedAt.slice(0, 10)}.</p>
       </> : <p className="text-label leading-4 text-muted">No summary was read.</p>}

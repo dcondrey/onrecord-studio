@@ -739,7 +739,14 @@ no EIN, so this is a name match and every matched vendor value is shown. A group
 when any of its amounts could not be read as a number. It is computed when the record is read,
 not stored, so it follows the tables as they change.
 
-### F. Portfolio
+### F. People across returns and year changes
+
+`organisationPeople.ts` joins Part VII and Schedule J rows across the read returns by name
+reduced to letters and digits (the newest return's spelling shown), newest return first; a return that does not
+list a person yields no cell, not a zero. `yearChange` is the difference between consecutive
+summary years, null when either is unstated. Both are shown as arithmetic on stated figures.
+
+### G. Portfolio
 
 `src/utils/organisationPortfolio.ts` derives one row per stored organisation from its record:
 the latest return with a read statement (by tax period), its answers, Schedule L row count,
@@ -756,7 +763,7 @@ reader's choice among the first five results, or skipped. `organisation_payees` 
 distinct payee value of the searched payment tables (500 per table, most rows first) so the
 organisations the library pays can be looked up by the name the table uses.
 
-### G. Connections to the library
+### H. Connections to the library
 
 `Library` in the panel searches the collected documents (`hybrid_search`, first ten) and held
 requests (`query_audit_records_page`, first ten) for the organisation's name as text; a search
@@ -772,7 +779,7 @@ in the two lists on the next open.
 The period is the latest read return's tax period and the two preceding fiscal years, or "the
 last three fiscal years" when no return was read.
 
-### G. Failure of one source
+### I. Failure of one source
 
 A source that fails (an index year, an archive, the summary, the audits) leaves a warning naming
 it and whatever an earlier check stored from that source. The rest of the record is saved.
