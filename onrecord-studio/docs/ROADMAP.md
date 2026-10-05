@@ -1096,6 +1096,73 @@ Next, in order:
 5. Local ordinance codes 65000 and 65002 do not name the ordinance; the stop records'
    `reasonforstopexplanation` text may. Not read yet.
 
+## Cross-source accountability build (2026-10-04)
+
+Decision (owner, 2026-10-04): implement the cross-source comparisons, evasion profiling, escalation,
+briefing, displacement, provenance and change-detection ideas the owner supplied, finding data
+sources where the library lacks them. Settled constraints, so they are not reopened: every output
+is a count or a quoted statement with its source; no output says an agency intended, hid, or
+broke anything unless a counted statutory deadline supports it; a comparison between sources is
+not a causal claim. Not built, by decision: an anonymous source drop with automatic release (a
+desktop app cannot provide source anonymity; a provenance manifest on a file stripped of
+identifying marks attests receipt, not authenticity), a predicted settlement probability or
+liability index (no data supports the figure), a verdict that new ordinance text conflicts with
+state law (the app reports what the text changed), and anchoring hashes to an outside ledger by
+default (opt-in only, and never submitted without the owner's confirmation).
+
+Audited 2026-10-04 (file references in the session's audit reports; the facts that shape the work):
+- A lead cites one snapshot and stores no citations, SHA-256 or SQL (`service_leads.rs`), so a
+  cross-table lead cannot cite its numbers yet.
+- The operating budget file has no council-district or programme column, and no published City
+  table gives budget or spending by district. District-level funding statements can only be
+  checked against a document that states them.
+- Shelter capacity: UCSD Homelessness Hub ArcGIS layer `HIC_ES_2014_2024` (one row per
+  emergency-shelter project per year 2014 to 2026, city, address, coordinates, beds, utilisation;
+  sourced from RTFH's Housing Inventory Count; no licence stated). RTFH's own yearly workbooks
+  cover every project type but change layout and URL each year. HUD's per-CoC PDFs are the
+  reference totals (CA-601 emergency shelter year-round beds: 4,386 in 2023, 3,746 in 2024, 3,587
+  in 2025). SDHC occupancy exists only as Tableau and PDF.
+- Shared denial language: detectors compare across portals but count agencies by bare id, so
+  same-numbered agencies in different portals merge; findings carry no agency names or offsets;
+  the paraphrase detector works within one agency only.
+- Release timing: `documents.created_at` holds the portal's timestamp with offset; no detector
+  reads weekday, hour or holidays; PDF and OOXML timestamps are compared only with the request's
+  determination time.
+- Redaction corroboration never searches imported tables and rechecks only the newest 200
+  documents.
+- Budget: no under-spending, adopted-without-actuals or transfer finding; operating actuals are
+  not fetched by the app.
+- Change detection: a source re-check records both hashes and discards the new bytes; nothing
+  detects a request or document dropping out of a portal listing; no row or column comparison
+  between dataset snapshots.
+- Council dockets: fetchable from the City's OnBase agenda pages (meeting list, agenda body, item
+  detail, attachments); the system publishes no posting time, so a revision is only visible by
+  comparing the app's own successive copies. Settlements over 50,000 dollars are Council
+  resolutions (paged index, one scanned PDF each); no payout table is published.
+- Hand-imported files are stored with `visibility = public` and one detector counts them as an
+  agency release.
+- Escalation: no draft for a deadline that passed with no response, no draft cites other
+  findings or the agency's record, no petition draft.
+- Signed exports exist (Ed25519, self-managed key); nothing is signed per document, and the
+  architecture doc's "no per-document retrieval time is stored" conflicts with
+  `document_acquisitions.retrieved_at`.
+
+Order of work:
+1. Leads that cite several tables with snapshot, SHA-256 and SQL; shelter inventory fetch; a lead
+   setting homelessness budget, encampment reports and shelter beds side by side by year.
+2. Shared denial language: agency identity fix, agency names and passage offsets, paraphrase
+   across agencies.
+3. Release timing against the portal's own distribution, weekends and court holidays.
+4. Hand-imported files labelled apart from agency releases and compared with held documents.
+5. Budget under-spending, adopted lines without actuals, operating actuals fetch.
+6. Redaction corroboration from imported tables and for older documents when new material arrives.
+7. Re-check keeps changed bytes and shows the difference; listing drop-outs; snapshot row and
+   column comparison (on the peer's watchlist storage, no second diff store).
+8. Docket copies over time with revision differences; settlement resolutions as a table.
+9. Draft for an overdue request with no response, citing the agency's counted record.
+10. Briefing export with every figure's source; place-level counts; reports after abatements in
+    nearby places; a signed receipt for one document.
+
 ## Leads from service-report tables (2026-10-04)
 
 Decision: "What stands out" shows leads about the subject of the records; facts about a table
