@@ -330,6 +330,39 @@ describe('AnalysisWorkbench SQL result gating', () => {
   });
 });
 
+describe('AnalysisWorkbench City dataset fetch', () => {
+  it('sends a year only for the tables the publisher splits by year', async () => {
+    bridge.invoke.mockImplementation(async (name: string) => {
+      switch (name) {
+        case 'get_analytical_schema':
+          return { datasets: [], columns: [], templates: [] };
+        case 'list_analytical_import_candidates':
+        case 'query_corpus_patterns':
+          return [];
+        case 'get_data_maintenance_status':
+          return upkeep;
+        default:
+          return null;
+      }
+    });
+    render(<Harness />);
+    const select = await screen.findByLabelText('City dataset') as HTMLSelectElement;
+    const sent: Record<string, unknown> = {};
+    for (const option of Array.from(select.options)) {
+      fireEvent.change(select, { target: { value: option.value } });
+      const fetch = screen.getByRole('button', { name: 'Fetch and import' });
+      await waitFor(() => expect(fetch).toHaveProperty('disabled', false));
+      fireEvent.click(fetch);
+      await waitFor(() => expect(bridge.invoke).toHaveBeenCalledWith('fetch_city_dataset', expect.objectContaining({ dataset: option.value })));
+      sent[option.value] = (bridge.invoke.mock.calls.find(([name, args]) => name === 'fetch_city_dataset' && (args as { dataset: string }).dataset === option.value)![1] as { year: unknown }).year;
+    }
+    // The fetch refuses a year for a table published as one file.
+    const year = expect.any(Number);
+    expect(sent).toEqual({ NIBRS_OFFENSES: year, GET_IT_DONE_ENCAMPMENTS: year, GET_IT_DONE_OUTCOMES: year, GET_IT_DONE_OPEN: null, SCHOOLS: null, TRANSIT_STOPS: null, OPERATING_BUDGET: null,
+      RIPA_STOPS: null, RIPA_STOP_REASONS: null, RIPA_STOP_RESULTS: null, RIPA_PROPERTY_SEIZURE_BASIS: null, SHELTER_INVENTORY: null });
+  });
+});
+
 describe('AnalysisWorkbench hybrid search result gating', () => {
   it('keeps the latest search results even when an earlier search resolves after it', async () => {
     const hybridResolvers = new Map<string, (results: unknown[]) => void>();

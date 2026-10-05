@@ -1,8 +1,9 @@
 import type { AnalyticalDatasetSummary, AnalyticalSchema, ServiceLeadInput, SqlQueryResult } from '../types';
-import { buildDiscoveryPlan, discoveryDefaults, type DiscoveryQuery, type DiscoverySelection } from './dataDiscovery';
+import { buildDiscoveryPlan, discoveryDefaults, quoteIdentifier, type DiscoveryQuery, type DiscoverySelection } from './dataDiscovery';
 import { abatementCompanion, abatementLeads, abatementQueries } from './abatementLeads';
 import { stopCompanions, stopLeads, stopQueries } from './stopLeads';
 import { chargeLeads, chargeQueries } from './chargeLeads';
+import { capacityCompanions, capacityLeads, capacityQueries } from './capacityLeads';
 import { backlogChangeLeads, budgetTable, recurringServiceLeads, serviceAccountabilityLeads, serviceAccountabilityQueries, serviceCompanions, serviceRequestRoles } from './serviceAccountability';
 
 export interface DiscoveryObservation {
@@ -18,6 +19,8 @@ export interface DiscoveryObservation {
   selection?: DiscoverySelection;
   /** Set on a lead: the published records it was counted from. */
   family?: ServiceLeadInput['family'];
+  /** Set on a lead built from other tables' results as well: the tables its query does not name. */
+  reads?: string[];
 }
 export interface AutomaticProfile {
   fingerprint: string;
@@ -38,10 +41,12 @@ const records = (result: SqlQueryResult) => result.rows.map((row) => Object.from
 export function snapshotFingerprint(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary): string {
   // A check that reads other tables is stale once those tables change, not only this one.
   const companions = serviceCompanions(schema, dataset);
+  const capacity = capacityCompanions(schema, dataset);
   const columns = schema.columns.filter((column) => column.tableName === dataset.tableName);
   return JSON.stringify([dataset, columns, companions ? [companions.earlier, ...companions.outcomes].map((table) => table.snapshotId) : [],
     serviceRequestRoles(columns)?.group ? budgetTable(schema)?.snapshotId ?? null : null,
-    Object.values(stopCompanions(schema, dataset) ?? {}).map((table) => table.snapshotId), abatementCompanion(schema, dataset)?.snapshotId ?? null]);
+    Object.values(stopCompanions(schema, dataset) ?? {}).map((table) => table.snapshotId), abatementCompanion(schema, dataset)?.snapshotId ?? null,
+    capacity ? [capacity.budget, capacity.reports.open, ...capacity.reports.closed].map((table) => table.snapshotId) : []]);
 }
 
 export function automaticProfileQuery(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary): DiscoveryQuery {
@@ -61,7 +66,7 @@ export function automaticFollowups(schema: AnalyticalSchema, dataset: Analytical
   // One consistent counting unit, no inferred sums, rates, or cross-publisher joins.
   const plan = buildDiscoveryPlan(schema, selection);
   return [...plan.queries.filter((query) => (query.id === 'coverage' && selection.period) || (query.id === 'groups' && selection.dimension) || (query.id === 'changes' && selection.period)),
-    ...serviceAccountabilityQueries(schema, dataset), ...stopQueries(schema, dataset), ...abatementQueries(schema, dataset), ...chargeQueries(schema, dataset)];
+    ...serviceAccountabilityQueries(schema, dataset), ...stopQueries(schema, dataset), ...abatementQueries(schema, dataset), ...chargeQueries(schema, dataset), ...capacityQueries(schema, dataset)];
 }
 
 export function metadataObservations(dataset: AnalyticalDatasetSummary): DiscoveryObservation[] {
@@ -93,7 +98,8 @@ export function profileObservations(schema: AnalyticalSchema, dataset: Analytica
     title: item.title, detail: item.detail, question: item.question, query: item.query,
   });
   const observations: DiscoveryObservation[] = [...serviceAccountabilityLeads(profile.results).map(lead('SERVICE_REPORTS')), ...stopLeads(profile.results).map(lead('POLICE_STOPS')),
-    ...abatementLeads(profile.results).map(lead('ABATEMENT_LOGS')), ...chargeLeads(profile.results).map(lead('CHARGE_LOGS'))];
+    ...abatementLeads(profile.results).map(lead('ABATEMENT_LOGS')), ...chargeLeads(profile.results).map(lead('CHARGE_LOGS')),
+    ...capacityLeads(profile.results).map(lead('CAPACITY_COMPARISON'))];
   const get = (id: string) => profile.results.find((entry) => entry.query.id === id);
   // A column's missing-value rate describes the source table's own completeness, not the subject
   // of the investigation; it stays on the import/quality screen rather than "what stands out".
@@ -139,7 +145,7 @@ export function recurringObservations(schema: AnalyticalSchema, profiles: Record
   const tables = schema.datasets.flatMap((dataset) => profiles[dataset.snapshotId] ? [{ snapshotId: dataset.snapshotId, displayName: dataset.displayName, sourceUri: dataset.sourceUri, retrievedAt: dataset.retrievedAt, results: profiles[dataset.snapshotId].results }] : []);
   return [...backlogChangeLeads(tables), ...recurringServiceLeads(tables)].map((lead) => ({
     id: `${lead.snapshotId}:${lead.key}`, snapshotId: lead.snapshotId, kind: 'lead', family: 'SERVICE_REPORTS', priority: lead.priority,
-    title: lead.title, detail: lead.detail, question: lead.question, query: lead.query,
+    title: lead.title, detail: lead.detail, question: lead.question, query: lead.query, reads: lead.reads,
   }));
 }
 
@@ -148,8 +154,12 @@ export function recurringObservations(schema: AnalyticalSchema, profiles: Record
 export function storedLeads(schema: AnalyticalSchema, profiles: Record<string, AutomaticProfile>): { leads: ServiceLeadInput[]; complete: boolean } {
   const observations = [...schema.datasets.flatMap((dataset) => profiles[dataset.snapshotId] ? profileObservations(schema, dataset, profiles[dataset.snapshotId]) : []),
     ...recurringObservations(schema, profiles)].filter((item) => item.kind === 'lead' && item.query && item.family);
+  // A lead cites its own table first, then every other imported table its SQL names or its
+  // figures were otherwise read from.
+  const sources = (item: DiscoveryObservation) => [item.snapshotId, ...schema.datasets.filter((dataset) => dataset.snapshotId !== item.snapshotId
+    && (item.reads?.includes(dataset.snapshotId) || item.query!.sql.includes(quoteIdentifier(dataset.tableName)))).map((dataset) => dataset.snapshotId)];
   return {
-    leads: observations.map((item) => ({ family: item.family!, key: item.id, snapshotId: item.snapshotId, title: item.title, detail: item.detail, question: item.question, method: item.query!.method })),
+    leads: observations.map((item) => ({ family: item.family!, key: item.id, snapshotId: item.snapshotId, snapshotIds: sources(item), title: item.title, detail: item.detail, question: item.question, method: item.query!.method, sql: item.query!.sql })),
     complete: schema.datasets.every((dataset) => profiles[dataset.snapshotId]?.results.every((entry) => !entry.error)),
   };
 }

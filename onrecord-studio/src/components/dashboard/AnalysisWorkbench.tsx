@@ -36,11 +36,12 @@ const datasetKinds: AnalyticalDatasetKind[] = [
   'BUDGET_DIMENSION',
 ];
 
-const cityDatasets: { value: CityDataset; label: string }[] = [
-  { value: 'NIBRS_OFFENSES', label: 'SDPD NIBRS offenses (by year)' },
-  { value: 'GET_IT_DONE_ENCAMPMENTS', label: 'Get It Done encampment reports (closed, by year)' },
+/** `yearly` marks the tables the publisher splits by year; the fetch refuses a year for any other. */
+const cityDatasets: { value: CityDataset; label: string; yearly?: true }[] = [
+  { value: 'NIBRS_OFFENSES', label: 'SDPD NIBRS offenses (by year)', yearly: true },
+  { value: 'GET_IT_DONE_ENCAMPMENTS', label: 'Get It Done encampment reports (closed, by year)', yearly: true },
   { value: 'GET_IT_DONE_OPEN', label: 'Get It Done open reports (all services, today)' },
-  { value: 'GET_IT_DONE_OUTCOMES', label: 'Get It Done closed reports (those seen open, by year)' },
+  { value: 'GET_IT_DONE_OUTCOMES', label: 'Get It Done closed reports (those seen open, by year)', yearly: true },
   { value: 'SCHOOLS', label: 'SANDAG schools' },
   { value: 'TRANSIT_STOPS', label: 'SANDAG transit stops (GTFS)' },
   { value: 'OPERATING_BUDGET', label: 'City operating budget (all years)' },
@@ -48,6 +49,7 @@ const cityDatasets: { value: CityDataset; label: string }[] = [
   { value: 'RIPA_STOP_REASONS', label: 'SDPD stop records (RIPA): reasons for the stop' },
   { value: 'RIPA_STOP_RESULTS', label: 'SDPD stop records (RIPA): results of the stop' },
   { value: 'RIPA_PROPERTY_SEIZURE_BASIS', label: 'SDPD stop records (RIPA): basis for property seizure' },
+  { value: 'SHELTER_INVENTORY', label: 'Emergency shelter inventory (UCSD Homelessness Hub, all years)' },
 ];
 
 export default function AnalysisWorkbench() {
@@ -82,7 +84,7 @@ export default function AnalysisWorkbench() {
   const [importResult, setImportResult] = useState<AnalyticalImportResult | null>(null);
   const [cityDataset, setCityDataset] = useState<CityDataset>('NIBRS_OFFENSES');
   const [cityYear, setCityYear] = useState(String(new Date().getFullYear() - 1));
-  const cityDatasetIsYearly = cityDataset !== 'GET_IT_DONE_OPEN' && cityDataset !== 'SCHOOLS' && cityDataset !== 'TRANSIT_STOPS';
+  const cityDatasetIsYearly = cityDatasets.some((item) => item.value === cityDataset && item.yearly);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // `sqlResult` is written asynchronously from two independent paths: the automatic-discovery

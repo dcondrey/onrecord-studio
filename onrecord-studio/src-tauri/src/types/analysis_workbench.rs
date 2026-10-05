@@ -174,6 +174,9 @@ pub enum CityDataset {
     RipaStopReasons,
     RipaStopResults,
     RipaPropertySeizureBasis,
+    /// Emergency-shelter projects per year, as UCSD's Homelessness Hub compiled them from the
+    /// Regional Task Force on Homelessness Housing Inventory Count.
+    ShelterInventory,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

@@ -1,0 +1,1298 @@
+{
+  "inventory": "{\"type\":\"FeatureCollection\",\"features\":[{\"type\":\"Feature\",\"id\":1,\"geometry\":null,\"properties\":{\"HMIS_Org_ID\":15,\"HMIS_Proj_ID\":\"200\",\"Year\":2017,\"Organization_Name\":\"Provider\",\"Project_Name\":\"Shelter 1\",\"City\":\"San Diego\",\"Final_Address\":\"1 Main St\",\"X\":-117.1,\"Y\":32.7,\"Inclement\":\"No\",\"Bed_Type\":\"Facility-based beds\",\"Victim_Service_Provider\":\"No\",\"Year_Round_Beds\":5,\"Total_Seasonal_Beds\":0,\"Overflow_Beds\":0,\"PIT_Count\":1,\"Total_Beds\":9,\"Utilization_Rate\":null,\"Project_Name_Cleaned\":\"Shelter 1\",\"Housing_Type\":\"Site-based single site\",\"ObjectId\":1}},{\"type\":\"Feature\",\"id\":2,\"geometry\":null,\"properties\":{\"HMIS_Org_ID\":15,\"HMIS_Proj_ID\":\"201\",\"Year\":2023,\"Organization_Name\":\"Provider\",\"Project_Name\":\"Shelter 2\",\"City\":\"San Diego\",\"Final_Address\":\"1 Main St\",\"X\":-117.1,\"Y\":32.7,\"Inclement\":\"No\",\"Bed_Type\":\"Facility-based beds\",\"Victim_Service_Provider\":\"No\",\"Year_Round_Beds\":80,\"Total_Seasonal_Beds\":0,\"Overflow_Beds\":0,\"PIT_Count\":1,\"Total_Beds\":85,\"Utilization_Rate\":null,\"Project_Name_Cleaned\":\"Shelter 2\",\"Housing_Type\":\"Site-based single site\",\"ObjectId\":2}},{\"type\":\"Feature\",\"id\":3,\"geometry\":null,\"properties\":{\"HMIS_Org_ID\":15,\"HMIS_Proj_ID\":\"202\",\"Year\":2024,\"Organization_Name\":\"Provider\",\"Project_Name\":\"Shelter 3\",\"City\":\"San Diego\",\"Final_Address\":\"1 Main St\",\"X\":-117.1,\"Y\":32.7,\"Inclement\":\"No\",\"Bed_Type\":\"Facility-based beds\",\"Victim_Service_Provider\":\"No\",\"Year_Round_Beds\":100,\"Total_Seasonal_Beds\":0,\"Overflow_Beds\":0,\"PIT_Count\":1,\"Total_Beds\":110,\"Utilization_Rate\":null,\"Project_Name_Cleaned\":\"Shelter 3\",\"Housing_Type\":\"Site-based single site\",\"ObjectId\":3}},{\"type\":\"Feature\",\"id\":4,\"geometry\":null,\"properties\":{\"HMIS_Org_ID\":15,\"HMIS_Proj_ID\":\"203\",\"Year\":2024,\"Organization_Name\":\"Provider\",\"Project_Name\":\"Shelter 4\",\"City\":\"San Diego\",\"Final_Address\":\"1 Main St\",\"X\":-117.1,\"Y\":32.7,\"Inclement\":\"No\",\"Bed_Type\":\"Facility-based beds\",\"Victim_Service_Provider\":\"No\",\"Year_Round_Beds\":50,\"Total_Seasonal_Beds\":0,\"Overflow_Beds\":0,\"PIT_Count\":1,\"Total_Beds\":60,\"Utilization_Rate\":null,\"Project_Name_Cleaned\":\"Shelter 4\",\"Housing_Type\":\"Site-based single site\",\"ObjectId\":4}},{\"type\":\"Feature\",\"id\":5,\"geometry\":null,\"properties\":{\"HMIS_Org_ID\":15,\"HMIS_Proj_ID\":\"204\",\"Year\":2025,\"Organization_Name\":\"Provider\",\"Project_Name\":\"Shelter 5\",\"City\":\"San Diego\",\"Final_Address\":\"1 Main St\",\"X\":-117.1,\"Y\":32.7,\"Inclement\":\"No\",\"Bed_Type\":\"Facility-based beds\",\"Victim_Service_Provider\":\"No\",\"Year_Round_Beds\":120,\"Total_Seasonal_Beds\":0,\"Overflow_Beds\":0,\"PIT_Count\":1,\"Total_Beds\":130,\"Utilization_Rate\":null,\"Project_Name_Cleaned\":\"Shelter 5\",\"Housing_Type\":\"Site-based single site\",\"ObjectId\":5}},{\"type\":\"Feature\",\"id\":6,\"geometry\":null,\"properties\":{\"HMIS_Org_ID\":15,\"HMIS_Proj_ID\":\"205\",\"Year\":2025,\"Organization_Name\":\"Provider\",\"Project_Name\":\"Shelter 6\",\"City\":\"San Diego\",\"Final_Address\":\"1 Main St\",\"X\":-117.1,\"Y\":32.7,\"Inclement\":\"No\",\"Bed_Type\":\"Facility-based beds\",\"Victim_Service_Provider\":\"No\",\"Year_Round_Beds\":null,\"Total_Seasonal_Beds\":0,\"Overflow_Beds\":0,\"PIT_Count\":1,\"Total_Beds\":40,\"Utilization_Rate\":null,\"Project_Name_Cleaned\":\"Shelter 6\",\"Housing_Type\":\"Site-based single site\",\"ObjectId\":6}},{\"type\":\"Feature\",\"id\":7,\"geometry\":null,\"properties\":{\"HMIS_Org_ID\":15,\"HMIS_Proj_ID\":\"206\",\"Year\":2025,\"Organization_Name\":\"Provider\",\"Project_Name\":\"Shelter 7\",\"City\":\"Carlsbad\",\"Final_Address\":\"1 Main St\",\"X\":-117.1,\"Y\":32.7,\"Inclement\":\"No\",\"Bed_Type\":\"Facility-based beds\",\"Victim_Service_Provider\":\"No\",\"Year_Round_Beds\":50,\"Total_Seasonal_Beds\":0,\"Overflow_Beds\":0,\"PIT_Count\":1,\"Total_Beds\":50,\"Utilization_Rate\":null,\"Project_Name_Cleaned\":\"Shelter 7\",\"Housing_Type\":\"Site-based single site\",\"ObjectId\":7}},{\"type\":\"Feature\",\"id\":8,\"geometry\":null,\"properties\":{\"HMIS_Org_ID\":15,\"HMIS_Proj_ID\":\"207\",\"Year\":2026,\"Organization_Name\":\"Provider\",\"Project_Name\":\"Shelter 8\",\"City\":\"San Diego\",\"Final_Address\":\"1 Main St\",\"X\":-117.1,\"Y\":32.7,\"Inclement\":\"No\",\"Bed_Type\":\"Facility-based beds\",\"Victim_Service_Provider\":\"No\",\"Year_Round_Beds\":90,\"Total_Seasonal_Beds\":0,\"Overflow_Beds\":0,\"PIT_Count\":1,\"Total_Beds\":95,\"Utilization_Rate\":null,\"Project_Name_Cleaned\":\"Shelter 8\",\"Housing_Type\":\"Site-based single site\",\"ObjectId\":8}}]}",
+  "budget": "\"amount\",\"report_fy\",\"budget_cycle\",\"fund_type\",\"fund_number\",\"dept_name\",\"funds_center_number\",\"account\",\"account_number\"\n\"900\",\"23\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1001000011\",\"Salaried Wages\",\"500011\"\n\"1000\",\"24\",\"adopted\",\"General Fund\",\"100000\",\"Homelessness Strategies & Solutions\",\"1001000011\",\"Salaried Wages\",\"500011\"\n\"500\",\"24\",\"adopted\",\"General Fund\",\"100000\",\"Homelessness Strategies & Solutions\",\"1001000011\",\"Salaried Wages\",\"512000\"\n\"9999\",\"24\",\"adopted\",\"General Fund\",\"100000\",\"Homelessness Strategies & Solutions\",\"1001000011\",\"Salaried Wages\",\"420000\"\n\"7777\",\"24\",\"proposed\",\"General Fund\",\"100000\",\"Homelessness Strategies & Solutions\",\"1001000011\",\"Salaried Wages\",\"500011\"\n\"800\",\"24\",\"adopted\",\"General Fund\",\"100000\",\"Police\",\"1001000011\",\"Salaried Wages\",\"500011\"\n\"2000\",\"25\",\"adopted\",\"General Fund\",\"100000\",\"Homelessness Strategies & Solutions\",\"1001000011\",\"Salaried Wages\",\"500011\"\n\"3000\",\"26\",\"\",\"General Fund\",\"100000\",\"Homelessness Strategies & Solutions\",\"1001000011\",\"Salaried Wages\",\"500011\"\n",
+  "reports": {
+    "2023": "\"service_request_id\",\"service_request_parent_id\",\"sap_notification_number\",\"date_requested\",\"case_age_days\",\"case_record_type\",\"service_name\",\"service_name_detail\",\"date_closed\",\"status\",\"lat\",\"lng\",\"street_address\",\"zipcode\",\"council_district\",\"comm_plan_code\",\"comm_plan_name\",\"park_name\",\"case_origin\",\"referred\",\"iamfloc\",\"floc\",\"public_description\"\n\"6001\",\"\",\"\",\"2023-08-15 09:00:00.000\",\"3\",\"ESD Complaint/Report\",\"Encampment\",\"\",\"2023-12-01\",\"Closed\",\"32.7\",\"-117.1\",\"1 Main St\",\"92101\",\"3\",\"56\",\"Downtown\",\"\",\"Mobile\",\"\",\"\",\"\",\"\"\n\"6002\",\"\",\"\",\"2023-03-01 09:00:00.000\",\"3\",\"ESD Complaint/Report\",\"Encampment\",\"\",\"2023-04-01\",\"Closed\",\"32.7\",\"-117.1\",\"1 Main St\",\"92101\",\"3\",\"56\",\"Downtown\",\"\",\"Mobile\",\"\",\"\",\"\",\"\"\n",
+    "2024": "\"service_request_id\",\"service_request_parent_id\",\"sap_notification_number\",\"date_requested\",\"case_age_days\",\"case_record_type\",\"service_name\",\"service_name_detail\",\"date_closed\",\"status\",\"lat\",\"lng\",\"street_address\",\"zipcode\",\"council_district\",\"comm_plan_code\",\"comm_plan_name\",\"park_name\",\"case_origin\",\"referred\",\"iamfloc\",\"floc\",\"public_description\"\n\"7001\",\"\",\"\",\"2023-09-01 09:00:00.000\",\"3\",\"ESD Complaint/Report\",\"Encampment\",\"\",\"2024-02-01\",\"Closed\",\"32.7\",\"-117.1\",\"1 Main St\",\"92101\",\"3\",\"56\",\"Downtown\",\"\",\"Mobile\",\"\",\"\",\"\",\"\"\n\"7002\",\"\",\"\",\"2024-07-10 09:00:00.000\",\"3\",\"ESD Complaint/Report\",\"Encampment\",\"\",\"2024-08-01\",\"Closed\",\"32.7\",\"-117.1\",\"1 Main St\",\"92101\",\"3\",\"56\",\"Downtown\",\"\",\"Mobile\",\"\",\"\",\"\",\"\"\n",
+    "2025": "\"service_request_id\",\"service_request_parent_id\",\"sap_notification_number\",\"date_requested\",\"case_age_days\",\"case_record_type\",\"service_name\",\"service_name_detail\",\"date_closed\",\"status\",\"lat\",\"lng\",\"street_address\",\"zipcode\",\"council_district\",\"comm_plan_code\",\"comm_plan_name\",\"park_name\",\"case_origin\",\"referred\",\"iamfloc\",\"floc\",\"public_description\"\n\"8001\",\"\",\"\",\"2024-07-01 00:05:00.000\",\"3\",\"ESD Complaint/Report\",\"Encampment\",\"\",\"2025-01-05\",\"Closed\",\"32.7\",\"-117.1\",\"1 Main St\",\"92101\",\"3\",\"56\",\"Downtown\",\"\",\"Mobile\",\"\",\"\",\"\",\"\"\n\"8002\",\"\",\"\",\"2024-06-30 23:50:00.000\",\"3\",\"ESD Complaint/Report\",\"Encampment\",\"\",\"2025-01-06\",\"Closed\",\"32.7\",\"-117.1\",\"1 Main St\",\"92101\",\"3\",\"56\",\"Downtown\",\"\",\"Mobile\",\"\",\"\",\"\",\"\"\n\"9001\",\"\",\"\",\"2024-11-02 08:00:00.000\",\"3\",\"ESD Complaint/Report\",\"Encampment\",\"\",\"2025-03-01\",\"Closed\",\"32.7\",\"-117.1\",\"1 Main St\",\"92101\",\"3\",\"56\",\"Downtown\",\"\",\"Mobile\",\"\",\"\",\"\",\"\"\n\"8003\",\"\",\"\",\"2024-08-01 10:00:00.000\",\"3\",\"ESD Complaint/Report\",\"Homeless Outreach\",\"\",\"2025-02-01\",\"Closed\",\"32.7\",\"-117.1\",\"1 Main St\",\"92101\",\"3\",\"56\",\"Downtown\",\"\",\"Mobile\",\"\",\"\",\"\",\"\"\n",
+    "2026": "\"service_request_id\",\"service_request_parent_id\",\"sap_notification_number\",\"date_requested\",\"case_age_days\",\"case_record_type\",\"service_name\",\"service_name_detail\",\"date_closed\",\"status\",\"lat\",\"lng\",\"street_address\",\"zipcode\",\"council_district\",\"comm_plan_code\",\"comm_plan_name\",\"park_name\",\"case_origin\",\"referred\",\"iamfloc\",\"floc\",\"public_description\"\n\"5001\",\"\",\"\",\"2025-02-01 09:00:00.000\",\"3\",\"ESD Complaint/Report\",\"Encampment\",\"\",\"2026-01-05\",\"Closed\",\"32.7\",\"-117.1\",\"1 Main St\",\"92101\",\"3\",\"56\",\"Downtown\",\"\",\"Mobile\",\"\",\"\",\"\",\"\"\n",
+    "open": "\"service_request_id\",\"service_request_parent_id\",\"sap_notification_number\",\"date_requested\",\"case_age_days\",\"case_record_type\",\"service_name\",\"service_name_detail\",\"date_closed\",\"status\",\"lat\",\"lng\",\"street_address\",\"zipcode\",\"council_district\",\"comm_plan_code\",\"comm_plan_name\",\"park_name\",\"case_origin\",\"referred\",\"iamfloc\",\"floc\",\"public_description\"\n\"9001\",\"\",\"\",\"2024-11-02 08:00:00.000\",\"3\",\"ESD Complaint/Report\",\"Encampment\",\"\",\"\",\"In Process\",\"32.7\",\"-117.1\",\"1 Main St\",\"92101\",\"3\",\"56\",\"Downtown\",\"\",\"Mobile\",\"\",\"\",\"\",\"\"\n\"9002\",\"\",\"\",\"2024-11-03 08:00:00.000\",\"3\",\"ESD Complaint/Report\",\"Pothole\",\"\",\"\",\"In Process\",\"32.7\",\"-117.1\",\"1 Main St\",\"92101\",\"3\",\"56\",\"Downtown\",\"\",\"Mobile\",\"\",\"\",\"\",\"\"\n\"9003\",\"\",\"\",\"2025-08-01 08:00:00.000\",\"3\",\"ESD Complaint/Report\",\"Encampment\",\"\",\"\",\"In Process\",\"32.7\",\"-117.1\",\"1 Main St\",\"92101\",\"3\",\"56\",\"Downtown\",\"\",\"Mobile\",\"\",\"\",\"\",\"\"\n"
+  },
+  "schema": {
+    "datasets": [
+      {
+        "snapshotId": "shelter",
+        "datasetKind": "REGIONAL_DATA",
+        "displayName": "Shelter inventory fixture",
+        "tableName": "analysis_shelter",
+        "importedRows": 1,
+        "rejectedRows": 0,
+        "sourceUri": "https://example.test/hic.geojson",
+        "sourceSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "retrievedAt": "2026-10-04T12:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}",
+        "unconvertedByColumn": {}
+      },
+      {
+        "snapshotId": "budget",
+        "datasetKind": "OPERATING_BUDGET",
+        "displayName": "Budget fixture",
+        "tableName": "analysis_budget",
+        "importedRows": 1,
+        "rejectedRows": 0,
+        "sourceUri": "https://example.test/budget.csv",
+        "sourceSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "retrievedAt": "2026-10-04T12:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}",
+        "unconvertedByColumn": {}
+      },
+      {
+        "snapshotId": "closed_2023",
+        "datasetKind": "REGIONAL_DATA",
+        "displayName": "Closed 2023 fixture",
+        "tableName": "analysis_closed_2023",
+        "importedRows": 1,
+        "rejectedRows": 0,
+        "sourceUri": "https://seshat.datasd.org/get_it_done_reports/get_it_done_requests_closed_2023_datasd.csv",
+        "sourceSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "retrievedAt": "2026-10-04T12:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}",
+        "unconvertedByColumn": {}
+      },
+      {
+        "snapshotId": "closed_2024",
+        "datasetKind": "REGIONAL_DATA",
+        "displayName": "Closed 2024 fixture",
+        "tableName": "analysis_closed_2024",
+        "importedRows": 1,
+        "rejectedRows": 0,
+        "sourceUri": "https://seshat.datasd.org/get_it_done_reports/get_it_done_requests_closed_2024_datasd.csv",
+        "sourceSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "retrievedAt": "2026-10-04T12:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}",
+        "unconvertedByColumn": {}
+      },
+      {
+        "snapshotId": "closed_2025",
+        "datasetKind": "REGIONAL_DATA",
+        "displayName": "Closed 2025 fixture",
+        "tableName": "analysis_closed_2025",
+        "importedRows": 1,
+        "rejectedRows": 0,
+        "sourceUri": "https://seshat.datasd.org/get_it_done_reports/get_it_done_requests_closed_2025_datasd.csv",
+        "sourceSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "retrievedAt": "2026-10-04T12:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}",
+        "unconvertedByColumn": {}
+      },
+      {
+        "snapshotId": "closed_2026",
+        "datasetKind": "REGIONAL_DATA",
+        "displayName": "Closed 2026 fixture",
+        "tableName": "analysis_closed_2026",
+        "importedRows": 1,
+        "rejectedRows": 0,
+        "sourceUri": "https://seshat.datasd.org/get_it_done_reports/get_it_done_requests_closed_2026_datasd.csv",
+        "sourceSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "retrievedAt": "2026-10-04T12:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}",
+        "unconvertedByColumn": {}
+      },
+      {
+        "snapshotId": "open",
+        "datasetKind": "REGIONAL_DATA",
+        "displayName": "Open reports fixture",
+        "tableName": "analysis_open",
+        "importedRows": 1,
+        "rejectedRows": 0,
+        "sourceUri": "https://seshat.datasd.org/get_it_done_reports/get_it_done_requests_open_datasd.csv",
+        "sourceSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "retrievedAt": "2026-10-04T12:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}",
+        "unconvertedByColumn": {}
+      }
+    ],
+    "templates": [],
+    "columns": [
+      {
+        "tableName": "analysis_shelter",
+        "columnName": "hmis_org_id",
+        "logicalType": "CATEGORY",
+        "originalName": "HMIS_Org_ID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_shelter",
+        "columnName": "hmis_proj_id",
+        "logicalType": "CATEGORY",
+        "originalName": "HMIS_Proj_ID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_shelter",
+        "columnName": "year",
+        "logicalType": "CATEGORY",
+        "originalName": "Year",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_shelter",
+        "columnName": "organization_name",
+        "logicalType": "CATEGORY",
+        "originalName": "Organization_Name",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_shelter",
+        "columnName": "project_name",
+        "logicalType": "CATEGORY",
+        "originalName": "Project_Name",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_shelter",
+        "columnName": "city",
+        "logicalType": "CATEGORY",
+        "originalName": "City",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_shelter",
+        "columnName": "final_address",
+        "logicalType": "CATEGORY",
+        "originalName": "Final_Address",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_shelter",
+        "columnName": "x",
+        "logicalType": "CATEGORY",
+        "originalName": "X",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_shelter",
+        "columnName": "y",
+        "logicalType": "CATEGORY",
+        "originalName": "Y",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_shelter",
+        "columnName": "inclement",
+        "logicalType": "CATEGORY",
+        "originalName": "Inclement",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_shelter",
+        "columnName": "bed_type",
+        "logicalType": "CATEGORY",
+        "originalName": "Bed_Type",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_shelter",
+        "columnName": "victim_service_provider",
+        "logicalType": "CATEGORY",
+        "originalName": "Victim_Service_Provider",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_shelter",
+        "columnName": "year_round_beds",
+        "logicalType": "CATEGORY",
+        "originalName": "Year_Round_Beds",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_shelter",
+        "columnName": "total_seasonal_beds",
+        "logicalType": "CATEGORY",
+        "originalName": "Total_Seasonal_Beds",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_shelter",
+        "columnName": "overflow_beds",
+        "logicalType": "CATEGORY",
+        "originalName": "Overflow_Beds",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_shelter",
+        "columnName": "pit_count",
+        "logicalType": "CATEGORY",
+        "originalName": "PIT_Count",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_shelter",
+        "columnName": "total_beds",
+        "logicalType": "CATEGORY",
+        "originalName": "Total_Beds",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_shelter",
+        "columnName": "utilization_rate",
+        "logicalType": "CATEGORY",
+        "originalName": "Utilization_Rate",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_shelter",
+        "columnName": "project_name_cleaned",
+        "logicalType": "CATEGORY",
+        "originalName": "Project_Name_Cleaned",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_shelter",
+        "columnName": "housing_type",
+        "logicalType": "CATEGORY",
+        "originalName": "Housing_Type",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_shelter",
+        "columnName": "objectid",
+        "logicalType": "CATEGORY",
+        "originalName": "ObjectId",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_budget",
+        "columnName": "amount",
+        "logicalType": "CATEGORY",
+        "originalName": "amount",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_budget",
+        "columnName": "report_fy",
+        "logicalType": "CATEGORY",
+        "originalName": "report_fy",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_budget",
+        "columnName": "budget_cycle",
+        "logicalType": "CATEGORY",
+        "originalName": "budget_cycle",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_budget",
+        "columnName": "fund_type",
+        "logicalType": "CATEGORY",
+        "originalName": "fund_type",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_budget",
+        "columnName": "fund_number",
+        "logicalType": "CATEGORY",
+        "originalName": "fund_number",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_budget",
+        "columnName": "dept_name",
+        "logicalType": "CATEGORY",
+        "originalName": "dept_name",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_budget",
+        "columnName": "funds_center_number",
+        "logicalType": "CATEGORY",
+        "originalName": "funds_center_number",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_budget",
+        "columnName": "account",
+        "logicalType": "CATEGORY",
+        "originalName": "account",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_budget",
+        "columnName": "account_number",
+        "logicalType": "CATEGORY",
+        "originalName": "account_number",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2023",
+        "columnName": "service_request_id",
+        "logicalType": "CATEGORY",
+        "originalName": "service_request_id",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2023",
+        "columnName": "service_request_parent_id",
+        "logicalType": "CATEGORY",
+        "originalName": "service_request_parent_id",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2023",
+        "columnName": "sap_notification_number",
+        "logicalType": "CATEGORY",
+        "originalName": "sap_notification_number",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2023",
+        "columnName": "date_requested",
+        "logicalType": "CATEGORY",
+        "originalName": "date_requested",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2023",
+        "columnName": "case_age_days",
+        "logicalType": "CATEGORY",
+        "originalName": "case_age_days",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2023",
+        "columnName": "case_record_type",
+        "logicalType": "CATEGORY",
+        "originalName": "case_record_type",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2023",
+        "columnName": "service_name",
+        "logicalType": "CATEGORY",
+        "originalName": "service_name",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2023",
+        "columnName": "service_name_detail",
+        "logicalType": "CATEGORY",
+        "originalName": "service_name_detail",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2023",
+        "columnName": "date_closed",
+        "logicalType": "CATEGORY",
+        "originalName": "date_closed",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2023",
+        "columnName": "status",
+        "logicalType": "CATEGORY",
+        "originalName": "status",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2023",
+        "columnName": "lat",
+        "logicalType": "CATEGORY",
+        "originalName": "lat",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2023",
+        "columnName": "lng",
+        "logicalType": "CATEGORY",
+        "originalName": "lng",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2023",
+        "columnName": "street_address",
+        "logicalType": "CATEGORY",
+        "originalName": "street_address",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2023",
+        "columnName": "zipcode",
+        "logicalType": "CATEGORY",
+        "originalName": "zipcode",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2023",
+        "columnName": "council_district",
+        "logicalType": "CATEGORY",
+        "originalName": "council_district",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2023",
+        "columnName": "comm_plan_code",
+        "logicalType": "CATEGORY",
+        "originalName": "comm_plan_code",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2023",
+        "columnName": "comm_plan_name",
+        "logicalType": "CATEGORY",
+        "originalName": "comm_plan_name",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2023",
+        "columnName": "park_name",
+        "logicalType": "CATEGORY",
+        "originalName": "park_name",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2023",
+        "columnName": "case_origin",
+        "logicalType": "CATEGORY",
+        "originalName": "case_origin",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2023",
+        "columnName": "referred",
+        "logicalType": "CATEGORY",
+        "originalName": "referred",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2023",
+        "columnName": "iamfloc",
+        "logicalType": "CATEGORY",
+        "originalName": "iamfloc",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2023",
+        "columnName": "floc",
+        "logicalType": "CATEGORY",
+        "originalName": "floc",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2023",
+        "columnName": "public_description",
+        "logicalType": "CATEGORY",
+        "originalName": "public_description",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2024",
+        "columnName": "service_request_id",
+        "logicalType": "CATEGORY",
+        "originalName": "service_request_id",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2024",
+        "columnName": "service_request_parent_id",
+        "logicalType": "CATEGORY",
+        "originalName": "service_request_parent_id",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2024",
+        "columnName": "sap_notification_number",
+        "logicalType": "CATEGORY",
+        "originalName": "sap_notification_number",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2024",
+        "columnName": "date_requested",
+        "logicalType": "CATEGORY",
+        "originalName": "date_requested",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2024",
+        "columnName": "case_age_days",
+        "logicalType": "CATEGORY",
+        "originalName": "case_age_days",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2024",
+        "columnName": "case_record_type",
+        "logicalType": "CATEGORY",
+        "originalName": "case_record_type",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2024",
+        "columnName": "service_name",
+        "logicalType": "CATEGORY",
+        "originalName": "service_name",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2024",
+        "columnName": "service_name_detail",
+        "logicalType": "CATEGORY",
+        "originalName": "service_name_detail",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2024",
+        "columnName": "date_closed",
+        "logicalType": "CATEGORY",
+        "originalName": "date_closed",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2024",
+        "columnName": "status",
+        "logicalType": "CATEGORY",
+        "originalName": "status",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2024",
+        "columnName": "lat",
+        "logicalType": "CATEGORY",
+        "originalName": "lat",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2024",
+        "columnName": "lng",
+        "logicalType": "CATEGORY",
+        "originalName": "lng",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2024",
+        "columnName": "street_address",
+        "logicalType": "CATEGORY",
+        "originalName": "street_address",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2024",
+        "columnName": "zipcode",
+        "logicalType": "CATEGORY",
+        "originalName": "zipcode",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2024",
+        "columnName": "council_district",
+        "logicalType": "CATEGORY",
+        "originalName": "council_district",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2024",
+        "columnName": "comm_plan_code",
+        "logicalType": "CATEGORY",
+        "originalName": "comm_plan_code",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2024",
+        "columnName": "comm_plan_name",
+        "logicalType": "CATEGORY",
+        "originalName": "comm_plan_name",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2024",
+        "columnName": "park_name",
+        "logicalType": "CATEGORY",
+        "originalName": "park_name",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2024",
+        "columnName": "case_origin",
+        "logicalType": "CATEGORY",
+        "originalName": "case_origin",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2024",
+        "columnName": "referred",
+        "logicalType": "CATEGORY",
+        "originalName": "referred",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2024",
+        "columnName": "iamfloc",
+        "logicalType": "CATEGORY",
+        "originalName": "iamfloc",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2024",
+        "columnName": "floc",
+        "logicalType": "CATEGORY",
+        "originalName": "floc",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2024",
+        "columnName": "public_description",
+        "logicalType": "CATEGORY",
+        "originalName": "public_description",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2025",
+        "columnName": "service_request_id",
+        "logicalType": "CATEGORY",
+        "originalName": "service_request_id",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2025",
+        "columnName": "service_request_parent_id",
+        "logicalType": "CATEGORY",
+        "originalName": "service_request_parent_id",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2025",
+        "columnName": "sap_notification_number",
+        "logicalType": "CATEGORY",
+        "originalName": "sap_notification_number",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2025",
+        "columnName": "date_requested",
+        "logicalType": "CATEGORY",
+        "originalName": "date_requested",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2025",
+        "columnName": "case_age_days",
+        "logicalType": "CATEGORY",
+        "originalName": "case_age_days",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2025",
+        "columnName": "case_record_type",
+        "logicalType": "CATEGORY",
+        "originalName": "case_record_type",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2025",
+        "columnName": "service_name",
+        "logicalType": "CATEGORY",
+        "originalName": "service_name",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2025",
+        "columnName": "service_name_detail",
+        "logicalType": "CATEGORY",
+        "originalName": "service_name_detail",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2025",
+        "columnName": "date_closed",
+        "logicalType": "CATEGORY",
+        "originalName": "date_closed",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2025",
+        "columnName": "status",
+        "logicalType": "CATEGORY",
+        "originalName": "status",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2025",
+        "columnName": "lat",
+        "logicalType": "CATEGORY",
+        "originalName": "lat",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2025",
+        "columnName": "lng",
+        "logicalType": "CATEGORY",
+        "originalName": "lng",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2025",
+        "columnName": "street_address",
+        "logicalType": "CATEGORY",
+        "originalName": "street_address",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2025",
+        "columnName": "zipcode",
+        "logicalType": "CATEGORY",
+        "originalName": "zipcode",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2025",
+        "columnName": "council_district",
+        "logicalType": "CATEGORY",
+        "originalName": "council_district",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2025",
+        "columnName": "comm_plan_code",
+        "logicalType": "CATEGORY",
+        "originalName": "comm_plan_code",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2025",
+        "columnName": "comm_plan_name",
+        "logicalType": "CATEGORY",
+        "originalName": "comm_plan_name",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2025",
+        "columnName": "park_name",
+        "logicalType": "CATEGORY",
+        "originalName": "park_name",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2025",
+        "columnName": "case_origin",
+        "logicalType": "CATEGORY",
+        "originalName": "case_origin",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2025",
+        "columnName": "referred",
+        "logicalType": "CATEGORY",
+        "originalName": "referred",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2025",
+        "columnName": "iamfloc",
+        "logicalType": "CATEGORY",
+        "originalName": "iamfloc",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2025",
+        "columnName": "floc",
+        "logicalType": "CATEGORY",
+        "originalName": "floc",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2025",
+        "columnName": "public_description",
+        "logicalType": "CATEGORY",
+        "originalName": "public_description",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2026",
+        "columnName": "service_request_id",
+        "logicalType": "CATEGORY",
+        "originalName": "service_request_id",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2026",
+        "columnName": "service_request_parent_id",
+        "logicalType": "CATEGORY",
+        "originalName": "service_request_parent_id",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2026",
+        "columnName": "sap_notification_number",
+        "logicalType": "CATEGORY",
+        "originalName": "sap_notification_number",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2026",
+        "columnName": "date_requested",
+        "logicalType": "CATEGORY",
+        "originalName": "date_requested",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2026",
+        "columnName": "case_age_days",
+        "logicalType": "CATEGORY",
+        "originalName": "case_age_days",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2026",
+        "columnName": "case_record_type",
+        "logicalType": "CATEGORY",
+        "originalName": "case_record_type",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2026",
+        "columnName": "service_name",
+        "logicalType": "CATEGORY",
+        "originalName": "service_name",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2026",
+        "columnName": "service_name_detail",
+        "logicalType": "CATEGORY",
+        "originalName": "service_name_detail",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2026",
+        "columnName": "date_closed",
+        "logicalType": "CATEGORY",
+        "originalName": "date_closed",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2026",
+        "columnName": "status",
+        "logicalType": "CATEGORY",
+        "originalName": "status",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2026",
+        "columnName": "lat",
+        "logicalType": "CATEGORY",
+        "originalName": "lat",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2026",
+        "columnName": "lng",
+        "logicalType": "CATEGORY",
+        "originalName": "lng",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2026",
+        "columnName": "street_address",
+        "logicalType": "CATEGORY",
+        "originalName": "street_address",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2026",
+        "columnName": "zipcode",
+        "logicalType": "CATEGORY",
+        "originalName": "zipcode",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2026",
+        "columnName": "council_district",
+        "logicalType": "CATEGORY",
+        "originalName": "council_district",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2026",
+        "columnName": "comm_plan_code",
+        "logicalType": "CATEGORY",
+        "originalName": "comm_plan_code",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2026",
+        "columnName": "comm_plan_name",
+        "logicalType": "CATEGORY",
+        "originalName": "comm_plan_name",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2026",
+        "columnName": "park_name",
+        "logicalType": "CATEGORY",
+        "originalName": "park_name",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2026",
+        "columnName": "case_origin",
+        "logicalType": "CATEGORY",
+        "originalName": "case_origin",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2026",
+        "columnName": "referred",
+        "logicalType": "CATEGORY",
+        "originalName": "referred",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2026",
+        "columnName": "iamfloc",
+        "logicalType": "CATEGORY",
+        "originalName": "iamfloc",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2026",
+        "columnName": "floc",
+        "logicalType": "CATEGORY",
+        "originalName": "floc",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_closed_2026",
+        "columnName": "public_description",
+        "logicalType": "CATEGORY",
+        "originalName": "public_description",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_open",
+        "columnName": "service_request_id",
+        "logicalType": "CATEGORY",
+        "originalName": "service_request_id",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_open",
+        "columnName": "service_request_parent_id",
+        "logicalType": "CATEGORY",
+        "originalName": "service_request_parent_id",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_open",
+        "columnName": "sap_notification_number",
+        "logicalType": "CATEGORY",
+        "originalName": "sap_notification_number",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_open",
+        "columnName": "date_requested",
+        "logicalType": "CATEGORY",
+        "originalName": "date_requested",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_open",
+        "columnName": "case_age_days",
+        "logicalType": "CATEGORY",
+        "originalName": "case_age_days",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_open",
+        "columnName": "case_record_type",
+        "logicalType": "CATEGORY",
+        "originalName": "case_record_type",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_open",
+        "columnName": "service_name",
+        "logicalType": "CATEGORY",
+        "originalName": "service_name",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_open",
+        "columnName": "service_name_detail",
+        "logicalType": "CATEGORY",
+        "originalName": "service_name_detail",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_open",
+        "columnName": "date_closed",
+        "logicalType": "CATEGORY",
+        "originalName": "date_closed",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_open",
+        "columnName": "status",
+        "logicalType": "CATEGORY",
+        "originalName": "status",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_open",
+        "columnName": "lat",
+        "logicalType": "CATEGORY",
+        "originalName": "lat",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_open",
+        "columnName": "lng",
+        "logicalType": "CATEGORY",
+        "originalName": "lng",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_open",
+        "columnName": "street_address",
+        "logicalType": "CATEGORY",
+        "originalName": "street_address",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_open",
+        "columnName": "zipcode",
+        "logicalType": "CATEGORY",
+        "originalName": "zipcode",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_open",
+        "columnName": "council_district",
+        "logicalType": "CATEGORY",
+        "originalName": "council_district",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_open",
+        "columnName": "comm_plan_code",
+        "logicalType": "CATEGORY",
+        "originalName": "comm_plan_code",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_open",
+        "columnName": "comm_plan_name",
+        "logicalType": "CATEGORY",
+        "originalName": "comm_plan_name",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_open",
+        "columnName": "park_name",
+        "logicalType": "CATEGORY",
+        "originalName": "park_name",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_open",
+        "columnName": "case_origin",
+        "logicalType": "CATEGORY",
+        "originalName": "case_origin",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_open",
+        "columnName": "referred",
+        "logicalType": "CATEGORY",
+        "originalName": "referred",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_open",
+        "columnName": "iamfloc",
+        "logicalType": "CATEGORY",
+        "originalName": "iamfloc",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_open",
+        "columnName": "floc",
+        "logicalType": "CATEGORY",
+        "originalName": "floc",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_open",
+        "columnName": "public_description",
+        "logicalType": "CATEGORY",
+        "originalName": "public_description",
+        "nullable": true,
+        "dictionary": null
+      }
+    ]
+  },
+  "queries": [
+    {
+      "id": "capacity_comparison",
+      "title": "Homelessness budget, Encampment reports and emergency shelter beds, by fiscal year",
+      "method": "Three series for the City of San Diego per fiscal year (1 July to 30 June, named by the year it ends). Budget: the sum of amount in Budget fixture where budget_cycle is adopted, account_number begins with 5 (the City's expense accounts) and dept_name contains \"homeless\"; a two-digit report_fy is read as 2000 plus that number. A year with no such department has no amount, which is not an amount of zero, and rows with no budget_cycle are not counted as adopted. Reports: rows whose service_name is Encampment in Open reports fixture and the closed-reports tables for 2023 to 2026, counted once per service_request_id and filing time, by the fiscal year of date_requested. The publisher files a closed report under the year it was closed, so a fiscal year is counted only when the open file and every closed file from the calendar year it began through 2026 are imported, each retrieved at least a day after its year ended or no earlier than the open copy. Here that is FY 2024 to FY 2026; other years are not counted. Beds: the sum of Year_Round_Beds, and of Total_Beds, over the rows of Shelter inventory fixture whose City is San Diego, per Year. The inventory is a count made on one night each January, so the January 2025 count is set beside fiscal year 2025, seven months into it. Years before 2018 are left out because the year-round and seasonal columns were filled differently then. A fiscal year is compared when all three series are present and at least 30 Encampment reports were filed in it. A lead is raised with at least 2 such years and one series differing by 10% or more between the first and the latest; 10% is a fixed yardstick, not a statistical test. The series come from three publishers and nothing here shows why any of them moved.",
+      "sql": "WITH budget_lines AS (\n SELECT TRIM(CAST(\"dept_name\" AS VARCHAR)) AS department, TRY_CAST(TRY_CAST(CAST(\"report_fy\" AS VARCHAR) AS DOUBLE) AS INTEGER) AS report_fy, TRY_CAST(\"amount\" AS DOUBLE) AS amount,\n  CAST(\"account_number\" AS VARCHAR) LIKE '5%' AS expense, COALESCE(CONTAINS(LOWER(TRIM(CAST(\"dept_name\" AS VARCHAR))), 'homeless'), FALSE) AS named\n FROM \"analysis_budget\"\n WHERE LOWER(TRIM(CAST(\"budget_cycle\" AS VARCHAR))) = 'adopted'\n), budget_years AS (\n SELECT CASE WHEN report_fy BETWEEN 0 AND 99 THEN 2000 + report_fy ELSE report_fy END AS fiscal_year, COUNT(*) AS adopted_rows, COUNT(*) FILTER (WHERE named) AS department_rows,\n  SUM(amount) FILTER (WHERE named AND expense) AS adopted_expense, COUNT(*) FILTER (WHERE named AND expense AND amount IS NULL) AS unreadable_amounts,\n  STRING_AGG(DISTINCT department, '; ') FILTER (WHERE named) AS departments\n FROM budget_lines WHERE report_fy IS NOT NULL GROUP BY 1\n), report_rows AS (\n SELECT TRIM(CAST(\"service_request_id\" AS VARCHAR)) AS report_id, TRY_CAST(CAST(\"date_requested\" AS VARCHAR) AS TIMESTAMP) AS filed_at\n FROM \"analysis_open\" WHERE TRIM(CAST(\"service_name\" AS VARCHAR)) = 'Encampment'\n UNION ALL\n SELECT TRIM(CAST(\"service_request_id\" AS VARCHAR)) AS report_id, TRY_CAST(CAST(\"date_requested\" AS VARCHAR) AS TIMESTAMP) AS filed_at\n FROM \"analysis_closed_2026\" WHERE TRIM(CAST(\"service_name\" AS VARCHAR)) = 'Encampment'\n UNION ALL\n SELECT TRIM(CAST(\"service_request_id\" AS VARCHAR)) AS report_id, TRY_CAST(CAST(\"date_requested\" AS VARCHAR) AS TIMESTAMP) AS filed_at\n FROM \"analysis_closed_2025\" WHERE TRIM(CAST(\"service_name\" AS VARCHAR)) = 'Encampment'\n UNION ALL\n SELECT TRIM(CAST(\"service_request_id\" AS VARCHAR)) AS report_id, TRY_CAST(CAST(\"date_requested\" AS VARCHAR) AS TIMESTAMP) AS filed_at\n FROM \"analysis_closed_2024\" WHERE TRIM(CAST(\"service_name\" AS VARCHAR)) = 'Encampment'\n UNION ALL\n SELECT TRIM(CAST(\"service_request_id\" AS VARCHAR)) AS report_id, TRY_CAST(CAST(\"date_requested\" AS VARCHAR) AS TIMESTAMP) AS filed_at\n FROM \"analysis_closed_2023\" WHERE TRIM(CAST(\"service_name\" AS VARCHAR)) = 'Encampment'\n), reports AS (SELECT DISTINCT report_id, filed_at FROM report_rows\n), report_years AS (\n SELECT YEAR(filed_at) + CAST(MONTH(filed_at) >= 7 AS INTEGER) AS fiscal_year, COUNT(*) AS encampment_reports FROM reports WHERE filed_at IS NOT NULL GROUP BY 1\n), report_span AS (\n SELECT COUNT(*) FILTER (WHERE filed_at IS NULL) AS undated_reports FROM reports\n), bed_years AS (\n SELECT TRY_CAST(TRY_CAST(CAST(\"year\" AS VARCHAR) AS DOUBLE) AS INTEGER) AS fiscal_year, COUNT(*) AS shelter_projects, SUM(TRY_CAST(\"year_round_beds\" AS DOUBLE)) AS year_round_beds, SUM(TRY_CAST(\"total_beds\" AS DOUBLE)) AS total_beds,\n  COUNT(*) FILTER (WHERE TRY_CAST(\"year_round_beds\" AS DOUBLE) IS NULL) AS projects_without_year_round, COUNT(*) FILTER (WHERE TRY_CAST(\"total_beds\" AS DOUBLE) IS NULL) AS projects_without_total\n FROM \"analysis_shelter\" WHERE LOWER(TRIM(CAST(\"city\" AS VARCHAR))) = 'san diego' GROUP BY 1\n)\nSELECT bed_years.fiscal_year, adopted_rows, department_rows, departments, adopted_expense, unreadable_amounts,\n CASE WHEN bed_years.fiscal_year IN (2024, 2025, 2026) THEN COALESCE(encampment_reports, 0) END AS encampment_reports, undated_reports,\n shelter_projects, year_round_beds, total_beds, projects_without_year_round, projects_without_total\nFROM bed_years LEFT JOIN budget_years ON budget_years.fiscal_year = bed_years.fiscal_year\n LEFT JOIN report_years ON report_years.fiscal_year = bed_years.fiscal_year CROSS JOIN report_span\nWHERE bed_years.fiscal_year >= 2018 ORDER BY bed_years.fiscal_year"
+    }
+  ]
+}

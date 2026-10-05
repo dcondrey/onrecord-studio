@@ -14,6 +14,10 @@ const GET_IT_DONE_OPEN_URI: &str =
 const OPERATING_BUDGET_URI: &str =
     "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv";
 
+/// UCSD Homelessness Hub's layer of emergency-shelter projects per year, compiled from the
+/// Regional Task Force on Homelessness Housing Inventory Count. GeoJSON, as the SANDAG layers are.
+const SHELTER_INVENTORY_URI: &str = "https://services1.arcgis.com/eGSDp8lpKe5izqVc/arcgis/rest/services/HIC_ES_2014_2024/FeatureServer/0/query?where=1%3D1&outFields=*&returnGeometry=false&f=geojson";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RowFilter {
     Equals {
@@ -35,6 +39,8 @@ struct CityDatasetSpec {
     file_name: String,
     partial: bool,
     row_filter: Option<RowFilter>,
+    /// The table is summed per year, so a response the server cut short is refused, not imported.
+    refuse_truncated: bool,
 }
 
 /// The URL is always built here from a fixed template; years outside the publisher's series are
@@ -74,6 +80,7 @@ fn city_dataset_spec(
                 file_name,
                 partial: year >= current_year,
                 row_filter: None,
+                refuse_truncated: false,
             }
         }
         CityDataset::GetItDoneEncampments => {
@@ -91,6 +98,7 @@ fn city_dataset_spec(
                     column: "service_name",
                     value: "Encampment",
                 }),
+                refuse_truncated: false,
             }
         }
         CityDataset::GetItDoneOutcomes => {
@@ -108,6 +116,7 @@ fn city_dataset_spec(
                     column: "service_request_id",
                     source_uri: GET_IT_DONE_OPEN_URI,
                 }),
+                refuse_truncated: false,
             }
         }
         CityDataset::GetItDoneOpen => {
@@ -120,6 +129,7 @@ fn city_dataset_spec(
                 // The publisher replaces this file daily; a snapshot is the backlog on one day.
                 partial: true,
                 row_filter: None,
+                refuse_truncated: false,
             }
         }
         CityDataset::Schools => {
@@ -131,6 +141,7 @@ fn city_dataset_spec(
                 file_name: "sandag_schools.geojson".into(),
                 partial: false,
                 row_filter: None,
+                refuse_truncated: false,
             }
         }
         CityDataset::TransitStops => {
@@ -142,6 +153,7 @@ fn city_dataset_spec(
                 file_name: "Transit_Stops_GTFS.csv".into(),
                 partial: false,
                 row_filter: None,
+                refuse_truncated: false,
             }
         }
         CityDataset::RipaStops
@@ -185,6 +197,7 @@ fn city_dataset_spec(
                 // The publisher appends to the current file; a snapshot is the stops to date.
                 partial: true,
                 row_filter: None,
+                refuse_truncated: false,
             }
         }
         CityDataset::OperatingBudget => {
@@ -196,6 +209,22 @@ fn city_dataset_spec(
                 file_name: "budget_operating_datasd.csv".into(),
                 partial: false,
                 row_filter: None,
+                refuse_truncated: false,
+            }
+        }
+        CityDataset::ShelterInventory => {
+            unsplit("The emergency shelter inventory")?;
+            CityDatasetSpec {
+                url: SHELTER_INVENTORY_URI.into(),
+                kind: AnalyticalDatasetKind::RegionalData,
+                display_name:
+                    "Emergency shelter inventory by year (UCSD Homelessness Hub, from RTFH's Housing Inventory Count)"
+                        .into(),
+                file_name: "hic_emergency_shelter.geojson".into(),
+                // The compiler adds a year of projects after each January count.
+                partial: true,
+                row_filter: None,
+                refuse_truncated: true,
             }
         }
     })
@@ -243,6 +272,20 @@ fn keep_matching_rows(
     Ok(publisher_rows)
 }
 
+/// Fails when the server's response says it holds rows it did not send.
+fn refuse_truncated_response(path: &Path, name: &str) -> Result<(), AppError> {
+    let bytes = std::fs::read(path)
+        .map_err(|error| AppError::Storage(format!("Failed to read the download: {error}")))?;
+    let value: serde_json::Value = serde_json::from_slice(&bytes)
+        .map_err(|error| AppError::DataParsing(format!("{name} is not JSON: {error}")))?;
+    if crate::storage::tabular::reports_more_rows(&value) {
+        return Err(AppError::DataParsing(format!(
+            "{name}: the publisher's server sent only part of the table, so yearly sums would be short; nothing was imported"
+        )));
+    }
+    Ok(())
+}
+
 impl QueueManager {
     pub async fn fetch_city_dataset(
         &self,
@@ -286,6 +329,18 @@ impl QueueManager {
                 "{} download was empty",
                 spec.display_name
             )));
+        }
+        if spec.refuse_truncated {
+            let (path, name) = (staged.clone(), spec.display_name.clone());
+            let checked = spawn_blocking("Check City dataset", move || {
+                refuse_truncated_response(&path, &name)
+            })
+            .await
+            .and_then(|result| result);
+            if let Err(error) = checked {
+                let _ = tokio::fs::remove_file(&staged).await;
+                return Err(error);
+            }
         }
         let published =
             objects::commit_staged_object(&self.download_root, &staged, &downloaded.sha256).await?;
@@ -405,6 +460,30 @@ mod tests {
             spec(CityDataset::OperatingBudget, None).unwrap().kind,
             AnalyticalDatasetKind::OperatingBudget
         );
+        assert!(spec(CityDataset::ShelterInventory, Some(2025)).is_err());
+        let shelter = spec(CityDataset::ShelterInventory, None).unwrap();
+        assert!(shelter.refuse_truncated && shelter.url.ends_with("f=geojson"));
+    }
+
+    #[test]
+    fn a_response_the_server_cut_short_is_refused() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("layer.geojson");
+        let layer = |properties: &str| {
+            format!(
+                r#"{{"type":"FeatureCollection"{properties},"features":[{{"type":"Feature","id":1,"geometry":null,"properties":{{"Year":2025}}}}]}}"#
+            )
+        };
+        std::fs::write(&path, layer("")).unwrap();
+        assert!(refuse_truncated_response(&path, "layer").is_ok());
+        std::fs::write(
+            &path,
+            layer(r#","properties":{"exceededTransferLimit":true}"#),
+        )
+        .unwrap();
+        assert!(refuse_truncated_response(&path, "layer").is_err());
+        std::fs::write(&path, "<html>Service unavailable</html>").unwrap();
+        assert!(refuse_truncated_response(&path, "layer").is_err());
     }
 
     #[test]
