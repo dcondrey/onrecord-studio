@@ -50,6 +50,7 @@ fn url(value: &str, query: &[(&str, &str)]) -> Result<Url, AppError> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IndexRow {
+    pub ein: String,
     pub object_id: String,
     pub return_type: String,
     pub tax_period: String,
@@ -57,9 +58,12 @@ pub struct IndexRow {
     pub batch_id: Option<String>,
 }
 
-/// The rows of one IRS index that belong to `ein`. Columns are found by header name because the
+/// Reads every row of one IRS index into `sink`. Columns are found by header name because the
 /// index gained `XML_BATCH_ID` in 2024.
-pub fn filter_index<R: Read>(reader: R, ein: &str) -> Result<Vec<IndexRow>, AppError> {
+pub fn read_index<R: Read>(
+    reader: R,
+    mut sink: impl FnMut(IndexRow) -> Result<(), AppError>,
+) -> Result<u64, AppError> {
     let mut csv = csv::ReaderBuilder::new().flexible(true).from_reader(reader);
     let headers = csv
         .headers()
@@ -77,13 +81,10 @@ pub fn filter_index<R: Read>(reader: R, ein: &str) -> Result<Vec<IndexRow>, AppE
         required("TAXPAYER_NAME")?,
     );
     let batch_at = column("XML_BATCH_ID");
-    let mut rows = Vec::new();
+    let mut rows = 0;
     for record in csv.byte_records() {
         let record =
             record.map_err(|error| invalid(format!("The IRS index is not readable: {error}")))?;
-        if record.get(ein_at) != Some(ein.as_bytes()) {
-            continue;
-        }
         let field = |at: usize| {
             String::from_utf8_lossy(record.get(at).unwrap_or_default())
                 .trim()
@@ -95,7 +96,8 @@ pub fn filter_index<R: Read>(reader: R, ein: &str) -> Result<Vec<IndexRow>, AppE
                 "The IRS index lists a return without a numeric OBJECT_ID",
             ));
         }
-        rows.push(IndexRow {
+        sink(IndexRow {
+            ein: field(ein_at),
             object_id,
             return_type: field(type_at),
             tax_period: field(period_at),
@@ -106,29 +108,55 @@ pub fn filter_index<R: Read>(reader: R, ein: &str) -> Result<Vec<IndexRow>, AppE
                         .bytes()
                         .all(|b| b.is_ascii_alphanumeric() || b == b'_')
             }),
-        });
+        })?;
+        rows += 1;
     }
     Ok(rows)
 }
 
-/// Downloads one year's index (about 90 MB), keeps the organisation's rows and deletes the file.
-async fn index_rows(client: &ApiClient, year: i32, ein: &str) -> Result<Vec<IndexRow>, AppError> {
+/// Downloads one year's index (54 to 93 MB) and replaces the library's copy of that year, then
+/// deletes the file. Every organisation's rows are kept, so the next organisation checked costs
+/// no download for the year.
+async fn refresh_index_year(
+    client: &ApiClient,
+    repository: &DuckDbRepository,
+    year: i32,
+) -> Result<IndexYearCheck, AppError> {
     let staged = std::env::temp_dir().join(format!(".irs-index.{}.partial", uuid::Uuid::new_v4()));
-    let index_url = url(&format!("{IRS_RETURNS}/{year}/index_{year}.csv"), &[])?;
+    let index_url = format!("{IRS_RETURNS}/{year}/index_{year}.csv");
     let outcome = async {
-        client.download_url_to_path(index_url, &staged).await?;
-        let (path, ein) = (staged.clone(), ein.to_string());
-        tokio::task::spawn_blocking(move || {
-            let file = std::fs::File::open(&path)
-                .map_err(|error| AppError::Storage(format!("IRS index staging file: {error}")))?;
-            filter_index(std::io::BufReader::new(file), &ein)
-        })
-        .await
-        .map_err(|error| AppError::Internal(format!("IRS index filter task: {error}")))?
+        client
+            .download_url_to_path(url(&index_url, &[])?, &staged)
+            .await?;
+        repository
+            .replace_irs_index_year(year, &staged, &index_url)
+            .await
     }
     .await;
     let _ = tokio::fs::remove_file(&staged).await;
     outcome
+}
+
+/// How long a copy of the current or previous year's index is used before it is fetched again.
+/// The IRS adds to an index through the year after it; older years are read once.
+const INDEX_REFRESH_DAYS: i64 = 7;
+
+async fn index_year(
+    client: &ApiClient,
+    repository: &DuckDbRepository,
+    year: i32,
+    now: chrono::DateTime<Utc>,
+) -> Result<IndexYearCheck, AppError> {
+    if let Some(held) = repository.irs_index_year(year).await? {
+        let settled = year < now.year() - 1;
+        let fresh = chrono::DateTime::parse_from_rfc3339(&held.checked_at)
+            .map(|at| now.signed_duration_since(at).num_days() < INDEX_REFRESH_DAYS)
+            .unwrap_or(false);
+        if settled || fresh {
+            return Ok(held);
+        }
+    }
+    refresh_index_year(client, repository, year).await
 }
 
 fn parse_content_range(value: &str) -> Option<(u64, u64, u64)> {
@@ -492,59 +520,50 @@ pub async fn check_organisation(
     let mut returns = Vec::new();
 
     for year in FIRST_INDEX_YEAR_WITH_ARCHIVE..=now.year() {
-        let held = previous
-            .as_ref()
-            .and_then(|p| p.index_years.iter().find(|check| check.year == year));
-        let keep_previous = |returns: &mut Vec<OrganisationReturn>| {
-            if let Some(previous) = &previous {
-                returns.extend(
-                    previous
-                        .returns
-                        .iter()
-                        .filter(|r| r.index_year == year)
-                        .cloned(),
-                );
-            }
-        };
-        // The IRS adds to an index through the year after it; older ones are read once.
-        if let Some(held) = held.filter(|_| year < now.year() - 1) {
-            index_years.push(held.clone());
-            keep_previous(&mut returns);
-            continue;
-        }
-        match index_rows(client, year, &ein).await {
-            Ok(rows) => {
-                index_years.push(IndexYearCheck {
-                    year,
-                    checked_at: Utc::now().to_rfc3339(),
-                    returns_listed: rows.len() as u32,
-                });
-                returns.extend(rows.into_iter().map(|row| OrganisationReturn {
-                    // The index writes some archive names in lower case
-                    // (`2024_TEOS_XML_05a`) where the published file is upper case.
-                    archive_url: row.batch_id.as_ref().map(|batch| {
-                        format!("{IRS_RETURNS}/{year}/{}.zip", batch.to_ascii_uppercase())
-                    }),
-                    member_name: None,
-                    object_id: row.object_id,
-                    index_year: year,
-                    return_type: row.return_type,
-                    tax_period: row.tax_period,
-                    taxpayer_name: row.taxpayer_name,
-                    xml_sha256: None,
-                    retrieved_at: None,
-                    statement: None,
-                    unread_reason: None,
-                }));
-            }
+        let held = match index_year(client, repository, year, now).await {
+            Ok(held) => held,
             Err(error) => {
                 warnings.push(format!("IRS index for {year} was not read: {error}"));
-                if let Some(held) = held {
-                    index_years.push(held.clone());
+                // What an earlier check read from this year stands until the index is read again.
+                if let Some(previous) = &previous {
+                    if let Some(held) = previous.index_years.iter().find(|c| c.year == year) {
+                        index_years.push(held.clone());
+                    }
+                    returns.extend(
+                        previous
+                            .returns
+                            .iter()
+                            .filter(|r| r.index_year == year)
+                            .cloned(),
+                    );
                 }
-                keep_previous(&mut returns);
+                continue;
             }
-        }
+        };
+        let rows = repository.irs_index_rows(year, &ein).await?;
+        index_years.push(IndexYearCheck {
+            returns_listed: rows.len() as u32,
+            ..held
+        });
+        returns.extend(rows.into_iter().map(|row| {
+            OrganisationReturn {
+                // The index writes some archive names in lower case (`2024_TEOS_XML_05a`) where
+                // the published file is upper case.
+                archive_url: row.batch_id.as_ref().map(|batch| {
+                    format!("{IRS_RETURNS}/{year}/{}.zip", batch.to_ascii_uppercase())
+                }),
+                member_name: None,
+                object_id: row.object_id,
+                index_year: year,
+                return_type: row.return_type,
+                tax_period: row.tax_period,
+                taxpayer_name: row.taxpayer_name,
+                xml_sha256: None,
+                retrieved_at: None,
+                statement: None,
+                unread_reason: None,
+            }
+        }));
     }
 
     let mut to_fetch: BTreeMap<String, Vec<String>> = BTreeMap::new();
@@ -672,27 +691,43 @@ mod tests {
     use super::*;
 
     #[test]
-    fn index_filter_keeps_only_the_organisation_and_reads_both_header_shapes() {
+    fn index_reader_takes_both_header_shapes_and_refuses_a_row_without_an_id() {
         let with_batch = "RETURN_ID,FILING_TYPE,EIN,TAX_PERIOD,SUB_DATE,TAXPAYER_NAME,RETURN_TYPE,DLN,OBJECT_ID,XML_BATCH_ID\n\
 22398228,EFILE,630809530,202312,2024,WALKER COUNTY HUMANE SOCIETY,990EZ,93492022012314,202410229349201231,2024_TEOS_XML_01A\n\
-22578413,EFILE,330215585,202306,2024,ALPHA PROJECT FOR THE HOMELESS,990,93493135061464,202411359349306146,2024_TEOS_XML_05a\n\
-,EFILE,033021558,202306,2024,\"OTHER, INC\",990,1,202411359349306147,2024_TEOS_XML_05a\n";
+,EFILE,330215585,202306,2024,\"ALPHA PROJECT, INC\",990,1,202411359349306146,2024_TEOS_XML_05a\n";
+        let mut rows = Vec::new();
+        let count = read_index(with_batch.as_bytes(), |row| {
+            rows.push(row);
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(count, 2);
         assert_eq!(
-            filter_index(with_batch.as_bytes(), "330215585").unwrap(),
-            vec![IndexRow {
+            rows[1],
+            IndexRow {
+                ein: "330215585".into(),
                 object_id: "202411359349306146".into(),
                 return_type: "990".into(),
                 tax_period: "202306".into(),
-                taxpayer_name: "ALPHA PROJECT FOR THE HOMELESS".into(),
+                taxpayer_name: "ALPHA PROJECT, INC".into(),
                 batch_id: Some("2024_TEOS_XML_05a".into()),
-            }]
+            }
         );
         let without_batch = "RETURN_ID,FILING_TYPE,EIN,TAX_PERIOD,SUB_DATE,TAXPAYER_NAME,RETURN_TYPE,DLN,OBJECT_ID\n\
 21319700,EFILE,330215585,202112,2023,ALPHA PROJECT FOR THE HOMELESS,990,93493018011043,202340189349301104\n";
-        let rows = filter_index(without_batch.as_bytes(), "330215585").unwrap();
-        assert_eq!(rows.len(), 1);
+        let mut rows = Vec::new();
+        read_index(without_batch.as_bytes(), |row| {
+            rows.push(row);
+            Ok(())
+        })
+        .unwrap();
         assert_eq!(rows[0].batch_id, None);
-        assert!(filter_index("EIN,TAX_PERIOD\n1,2\n".as_bytes(), "330215585").is_err());
+        assert!(read_index("EIN,TAX_PERIOD\n1,2\n".as_bytes(), |_| Ok(())).is_err());
+        assert!(read_index(
+            "EIN,TAX_PERIOD,TAXPAYER_NAME,RETURN_TYPE,OBJECT_ID\n1,2,n,990,abc\n".as_bytes(),
+            |_| Ok(())
+        )
+        .is_err());
     }
 
     #[test]

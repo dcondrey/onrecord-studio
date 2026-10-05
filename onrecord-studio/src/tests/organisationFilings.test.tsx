@@ -12,7 +12,7 @@ const statement = (overrides: Partial<Form990Statement>): Form990Statement => ({
   totalRevenue: 1000, totalExpenses: null, totalAssetsEndOfYear: 0, totalLiabilitiesEndOfYear: null, netAssetsEndOfYear: null, governmentGrants: null,
   significantDiversionReported: false, formerListed: null, totalReportableCompensation: null, people: [],
   scheduleJAttached: false, severancePaymentReported: null, scheduleJPeople: [], scheduleJExplanations: [],
-  scheduleLAttached: false, scheduleLTransactions: [], scheduleLExplanations: [], ...overrides,
+  scheduleLAttached: false, scheduleLTransactions: [], scheduleLExplanations: [], scheduleOExplanations: [], ...overrides,
 });
 const filings = (ein: string, name: string, overrides: Partial<OrganisationFilings> = {}): OrganisationFilings => ({
   ein, name, checkedAt: '2026-10-05T00:00:00Z', indexYears: [{ year: 2024, checkedAt: '2026-10-05T00:00:00Z', returnsListed: 0 }], returns: [],
@@ -28,7 +28,8 @@ describe('organisation filings', () => {
   it('discards a check that resolves after another organisation was opened', async () => {
     let resolveCheck: (value: OrganisationFilings) => void = () => {};
     bridge.invoke.mockImplementation((name: string, args: { ein?: string }) => {
-      if (name === 'list_organisation_checks') return Promise.resolve([]);
+      if (name === 'list_organisation_checks' || name === 'list_organisation_payment_mappings') return Promise.resolve([]);
+      if (name === 'get_analytical_schema') return Promise.resolve({ datasets: [], columns: [], templates: [] });
       if (name === 'check_organisation_filings') return new Promise((resolve) => { resolveCheck = resolve; });
       return Promise.resolve(args.ein === '222222222' ? filings('222222222', 'Second Organisation') : null);
     });
@@ -50,7 +51,8 @@ describe('organisation filings', () => {
         statement: statement({ formerListed: null, significantDiversionReported: false }) },
       { objectId: '2', indexYear: 2024, returnType: '990EZ', taxPeriod: '202206', taxpayerName: 'FIRST', archiveUrl: null, memberName: null, xmlSha256: null, retrievedAt: null, statement: null, unreadReason: 'This return type is not read; only Form 990 is.' },
     ] });
-    bridge.invoke.mockImplementation((name: string) => Promise.resolve(name === 'list_organisation_checks' ? [] : record));
+    bridge.invoke.mockImplementation((name: string) => Promise.resolve(
+      name === 'list_organisation_checks' || name === 'list_organisation_payment_mappings' ? [] : name === 'get_analytical_schema' ? { datasets: [], columns: [], templates: [] } : record));
     render(<OrganisationFilingsPanel />);
     await open('111111111');
     const read = within(await screen.findByRole('article', { name: 'Form 990, tax period 2023-06' }));
@@ -61,5 +63,24 @@ describe('organisation filings', () => {
     expect(read.getByText(/No Schedule J is attached/)).toBeTruthy();
     expect(within(screen.getByRole('article', { name: 'Form 990EZ, tax period 2022-06' })).getByText(/Not read: This return type is not read/)).toBeTruthy();
     expect(screen.getByText(/No single-audit lookup has run/)).toBeTruthy();
+  });
+
+  it('checks a pasted list one organisation at a time, records a failure, and reloads the portfolio once', async () => {
+    const checked: string[] = [];
+    let lists = 0;
+    bridge.invoke.mockImplementation((name: string, args: { ein?: string }) => {
+      if (name === 'list_organisation_checks') { lists += 1; return Promise.resolve([]); }
+      if (name === 'list_organisation_payment_mappings') return Promise.resolve([]);
+      if (name === 'get_analytical_schema') return Promise.resolve({ datasets: [], columns: [], templates: [] });
+      if (name === 'check_organisation_filings') { checked.push(args.ein!); return args.ein === '222222222' ? Promise.reject(new Error('index unread')) : Promise.resolve(filings(args.ein!, 'X')); }
+      return Promise.resolve(null);
+    });
+    render(<OrganisationFilingsPanel />);
+    fireEvent.change(screen.getByLabelText(/EINs, one per line/), { target: { value: '33-1111111, not-an-ein\n222222222' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Check 2 organisations' }));
+    await screen.findByText(/2 of 2 checked, 1 failed/);
+    expect(checked).toEqual(['331111111', '222222222']);
+    expect(screen.getByText(/222222222: Error: index unread/)).toBeTruthy();
+    expect(lists).toBe(2);
   });
 });

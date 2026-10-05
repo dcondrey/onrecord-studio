@@ -652,9 +652,11 @@ This view states what documents say. It stores no finding and has no finding kin
 The IRS publishes one e-file index per submission year (2017 onward) and the returns in batch
 archives. Only the indexes from 2024 name the archive that holds each return (`XML_BATCH_ID`), so
 only those years' returns are read. A check downloads each needed year's index (54 to 93 MB on
-2026-10-05), keeps the rows whose EIN equals the organisation's, and deletes the file. A year
-older than the previous calendar year is read once; the current and previous years are read on
-every check.
+2026-10-05) and replaces the library's copy of that year (`irs_efile_index`, every row, about a
+million a year) in one transaction, then deletes the file; a failed read leaves the earlier copy.
+A year older than the previous calendar year is fetched once; the current and previous years are
+fetched again when the copy is more than seven days old. The organisation's rows are then read
+from the library, so checking a second organisation costs no index download.
 
 The index writes some archive names in lower case (`2024_TEOS_XML_05a`) where the published file
 and its members are upper case; the lower-case address redirects to a not-found page. Archive
@@ -689,7 +691,7 @@ documents.
 | Schedule J Part I line 4a, severance or change-of-control payment | `IRS990ScheduleJ/SeverancePaymentInd` |
 | Schedule J Part II rows | `RltdOrgOfficerTrstKeyEmplGrp` |
 | Schedule L Parts I to IV | `DisqualifiedPersonExBnftTrGrp`, `LoansBtwnOrgInterestedPrsnGrp`, `GrntAsstBnftInterestedPrsnGrp`, `BusTrInvolveInterestedPrsnGrp` |
-| The filer's explanations on Schedules J and L | `SupplementalInformationDetail` |
+| The filer's explanations on Schedules J, L and O | `SupplementalInformationDetail` |
 
 A yes/no element holds `true`/`false`, `1`/`0`, or `X` for a checked box; any other value fails
 the return rather than being guessed. An element the return does not carry is absent: shown as
@@ -699,8 +701,9 @@ is not read as "none reported". A Schedule L row with no name, relationship, des
 amount is dropped: filing software emits such rows for a part left blank. Part VII rows are shown
 when marked former or carrying any compensation; the rest are counted.
 
-Not read: Schedule O explanations (including the one Part VI line 5 requires when answered Yes),
-Schedule J Part III beyond its supplemental text, Schedule R related organisations, and the
+Schedule O is quoted whole, every explanation with its line reference, opened by default when
+Part VI line 5 is answered Yes (the form requires an explanation there); which paragraph answers
+which line is left to the reader rather than matched from its label. Not read: Schedule J Part III beyond its supplemental text, Schedule R related organisations, and the
 amount of a severance payment, which the form has no field for. The filer may give it in the
 Schedule J explanation, which is quoted whole.
 
@@ -727,14 +730,28 @@ placeholder instead of text.
 
 ### E. Public money in the library
 
-For each table mapped under roles contract, amendment or payment with vendor and amount columns:
-rows whose vendor value, reduced to lower-case letters and digits, contains the organisation's
+For each table mapped under roles contract, amendment or payment with vendor and amount columns,
+and each table the user names as a payee table (`organisation_payment_mappings`: vendor, amount
+and optional fiscal-year columns, checked against the imported schema when saved): rows whose
+vendor value, reduced to lower-case letters and digits, contains the organisation's
 name reduced the same way, grouped by vendor value as written and fiscal year. These tables carry
 no EIN, so this is a name match and every matched vendor value is shown. A group's sum is NULL
 when any of its amounts could not be read as a number. It is computed when the record is read,
 not stored, so it follows the tables as they change.
 
-### F. Failure of one source
+### F. Portfolio
+
+`src/utils/organisationPortfolio.ts` derives one row per stored organisation from its record:
+the latest return with a read statement (by tax period), its answers, Schedule L row count,
+audits and finding rows, and the payment groups, summed only when every group has a sum. Each
+absent value is labelled as absent ("no answer", "not read", "no lookup"); none is shown as No or
+zero. Export CSV writes the same rows (`portfolioCsv`), absent values as empty cells, through
+`export_organisation_portfolio_csv` to a path chosen in the save dialog.
+
+A pasted list of EINs is checked sequentially in the view (one `check_organisation_filings`
+call at a time); a failure is listed and the rest continue.
+
+### G. Failure of one source
 
 A source that fails (an index year, an archive, the summary, the audits) leaves a warning naming
 it and whatever an earlier check stored from that source. The rest of the record is saved.
