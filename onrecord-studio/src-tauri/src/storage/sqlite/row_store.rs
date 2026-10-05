@@ -16,12 +16,30 @@ pub(super) const ROW_STORE_KEY: &str = "rowStore";
 /// The digest of a row's original fields, in order, including surplus fields. A row the parser
 /// could not read has no fields and hashes as JSON `null`.
 pub(super) fn row_hash(fields: Option<&csv::StringRecord>) -> String {
-    let encoded = match fields {
-        Some(record) => serde_json::to_string(&record.iter().collect::<Vec<_>>()),
-        None => serde_json::to_string(&serde_json::Value::Null),
+    /// The JSON is written straight into the digest rather than built as a string first.
+    struct Digesting(sha2::Sha256);
+    impl std::io::Write for Digesting {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            sha2::Digest::update(&mut self.0, bytes);
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    struct Fields<'a>(&'a csv::StringRecord);
+    impl serde::Serialize for Fields<'_> {
+        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            serializer.collect_seq(self.0.iter())
+        }
+    }
+    let mut digest = Digesting(<sha2::Sha256 as sha2::Digest>::new());
+    match fields {
+        Some(record) => serde_json::to_writer(&mut digest, &Fields(record)),
+        None => serde_json::to_writer(&mut digest, &serde_json::Value::Null),
     }
     .expect("strings always serialize");
-    sha256_hex(encoded.as_bytes())
+    crate::integrity::digest_hex(sha2::Digest::finalize(digest.0))
 }
 
 fn storage(error: impl std::fmt::Display) -> AppError {

@@ -228,7 +228,7 @@ impl OriginalsBatch {
         self.row.len()
     }
 
-    fn append(&mut self, appender: &mut duckdb::Appender<'_>) -> Result<(), AppError> {
+    fn finish(&mut self) -> Vec<ArrayRef> {
         let mut columns: Vec<ArrayRef> = vec![
             Arc::new(self.row.finish()),
             Arc::new(self.hash.finish()),
@@ -243,42 +243,94 @@ impl OriginalsBatch {
                 .map(|cell| Arc::new(cell.finish()) as ArrayRef),
         );
         columns.push(Arc::new(self.surplus.finish()));
-        bulk_append(appender, columns)
+        columns
     }
+}
+
+/// What the reading thread hands the thread that owns the connection.
+enum ReadMessage {
+    /// The store's column aliases, sent before the first batch.
+    Columns(Vec<String>),
+    Batch(Vec<ArrayRef>),
 }
 
 /// The one read of the source: every record's original fields go to `staging` as text while each
 /// column is profiled. Whether a row is readable is known here; how its cells convert is not, since
-/// that depends on types the whole column decides.
+/// that depends on types the whole column decides. Parsing, hashing, profiling and building
+/// batches run on a second thread; this one, which owns the connection, creates the store and
+/// appends, so the two overlap.
 fn read_once(
     tx: &Connection,
     source: &TableSource,
     kind: &AnalyticalDatasetKind,
     staging: &str,
 ) -> Result<ReadOutcome, AppError> {
-    let mut originals: Option<(duckdb::Appender<'_>, OriginalsBatch)> = None;
+    // Two batches in flight bound what the reader can get ahead of the writer by.
+    let (sender, receiver) = std::sync::mpsc::sync_channel(2);
+    std::thread::scope(|scope| {
+        let reader = scope.spawn(move || read_and_profile(source, kind, &sender));
+        let mut appender: Option<duckdb::Appender<'_>> = None;
+        let written = (|| {
+            for message in &receiver {
+                match message {
+                    ReadMessage::Columns(aliases) => {
+                        create_originals(tx, staging, &aliases)?;
+                        appender = Some(tx.appender(staging).map_err(read_failed)?);
+                    }
+                    ReadMessage::Batch(columns) => bulk_append(
+                        appender.as_mut().expect("columns arrive before any batch"),
+                        columns,
+                    )?,
+                }
+            }
+            match appender.as_mut() {
+                Some(appender) => appender.flush().map_err(read_failed),
+                None => Ok(()),
+            }
+        })();
+        // A writer that stopped leaves the reader blocked on a full channel until this is dropped.
+        drop(receiver);
+        let read = reader
+            .join()
+            .unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+        written?;
+        let read = read?;
+        // A header-only table never produced a batch, so its store is created here.
+        if appender.is_none() {
+            create_originals(tx, staging, &read.aliases)?;
+        }
+        Ok(read)
+    })
+}
+
+fn read_and_profile(
+    source: &TableSource,
+    kind: &AnalyticalDatasetKind,
+    sender: &std::sync::mpsc::SyncSender<ReadMessage>,
+) -> Result<ReadOutcome, AppError> {
+    let stopped =
+        |_| AppError::Internal("Analytical import: the store stopped accepting rows".into());
+    let mut batch: Option<OriginalsBatch> = None;
     let (mut aliases, mut hints, mut profiles) = (Vec::new(), Vec::new(), Vec::new());
     let (mut malformed_rows, mut duplicate_key_rows, mut repaired_trailing_rows) = (0, 0, 0);
     let mut repair_row_numbers = Vec::new();
     let mut seen_keys = HashSet::new();
     let documented = *kind != AnalyticalDatasetKind::RegionalData;
     let read = source.read(|headers, row_index, record| {
-        if originals.is_none() {
+        if batch.is_none() {
             aliases = column_aliases(headers);
             hints = headers
                 .iter()
                 .map(|header| {
-                    Some(logical_type_for(kind, header)).filter(|logical| {
-                        *kind != AnalyticalDatasetKind::RegionalData && !is_text(logical)
-                    })
+                    Some(logical_type_for(kind, header))
+                        .filter(|logical| documented && !is_text(logical))
                 })
                 .collect();
             profiles = headers.iter().map(|_| ColumnProfile::default()).collect();
-            create_originals(tx, staging, &aliases)?;
-            originals = Some((
-                tx.appender(staging).map_err(read_failed)?,
-                OriginalsBatch::new(aliases.len()),
-            ));
+            sender
+                .send(ReadMessage::Columns(aliases.clone()))
+                .map_err(stopped)?;
+            batch = Some(OriginalsBatch::new(aliases.len()));
         }
         let width = aliases.len();
         let row_number = row_index + 1;
@@ -297,12 +349,15 @@ fn read_once(
                         continue;
                     }
                     profile.non_empty += 1;
-                    if let Some((first, second)) = slash_date_fields(raw) {
-                        profile.slash_dates += 1;
-                        profile.first_over_12 |= first > 12;
-                        profile.second_over_12 |= second > 12;
-                    }
+                    // Day and month order matters only to a documented date column.
                     if let Some(hint) = hints[index] {
+                        if matches!(hint, "DATE" | "TIMESTAMP") {
+                            if let Some((first, second)) = slash_date_fields(raw) {
+                                profile.slash_dates += 1;
+                                profile.first_over_12 |= first > 12;
+                                profile.second_over_12 |= second > 12;
+                            }
+                        }
                         for (slot, order) in DateOrder::ALL.iter().enumerate() {
                             if !profile.converts[slot] {
                                 profile.converts[slot] =
@@ -330,7 +385,7 @@ fn read_once(
         }
         let malformed = !errors.is_empty();
         malformed_rows += usize::from(malformed);
-        let (appender, batch) = originals.as_mut().expect("created on the first record");
+        let batch = batch.as_mut().expect("created on the first record");
         batch.row.append_value(row_number as i64);
         batch.hash.append_value(row_store::row_hash(fields));
         batch
@@ -338,9 +393,11 @@ fn read_once(
             .append_value(fields.map_or(0, csv::StringRecord::len) as i32);
         batch.malformed.append_value(malformed);
         batch.parse_error.append_option(record.err());
-        batch
-            .messages
-            .append_value(serde_json::to_string(&errors).expect("strings always serialize"));
+        batch.messages.append_value(if errors.is_empty() {
+            "[]".to_owned()
+        } else {
+            serde_json::to_string(&errors).expect("strings always serialize")
+        });
         for (index, cell) in batch.cells.iter_mut().enumerate() {
             cell.append_option(fields.and_then(|record| record.get(index)));
         }
@@ -352,18 +409,17 @@ fn read_once(
                     .expect("strings always serialize")
             }));
         if batch.len() == APPEND_BATCH_ROWS {
-            batch.append(appender)?;
+            sender
+                .send(ReadMessage::Batch(batch.finish()))
+                .map_err(stopped)?;
         }
         Ok(())
     })?;
-    match originals {
-        Some((mut appender, mut batch)) => {
-            if batch.len() > 0 {
-                batch.append(&mut appender)?;
-            }
-            appender.flush().map_err(read_failed)?
-        }
-        // A header-only table never reached the callback.
+    match batch.as_mut() {
+        Some(batch) if batch.len() > 0 => sender
+            .send(ReadMessage::Batch(batch.finish()))
+            .map_err(stopped)?,
+        Some(_) => {}
         None => {
             aliases = column_aliases(&read.headers);
             profiles = read
@@ -371,7 +427,6 @@ fn read_once(
                 .iter()
                 .map(|_| ColumnProfile::default())
                 .collect();
-            create_originals(tx, staging, &aliases)?;
         }
     }
     Ok(ReadOutcome {
