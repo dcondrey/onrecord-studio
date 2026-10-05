@@ -2,9 +2,7 @@
 
 use crate::{
     error::AppError,
-    ingestion::starter_sets::{
-        starter_sets_report, validate_registry, StarterSetsReport, STARTER_SETS,
-    },
+    ingestion::starter_sets::{validate_registry, StarterSetsReport, STARTER_SET_REGISTRY_VERSION},
 };
 
 /// The starter-set registry. Reads static data only: no network request is made and nothing is
@@ -12,6 +10,10 @@ use crate::{
 /// `start_data_source`.
 #[tauri::command]
 pub async fn list_starter_sets() -> Result<StarterSetsReport, AppError> {
-    validate_registry(STARTER_SETS)?;
-    Ok(starter_sets_report())
+    let sets = crate::ingestion::starter_sets::all_starter_sets();
+    validate_registry(&sets)?;
+    Ok(StarterSetsReport {
+        registry_version: STARTER_SET_REGISTRY_VERSION,
+        sets,
+    })
 }

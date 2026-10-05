@@ -5,7 +5,8 @@ pub(crate) fn is_sdhc_board_index(url: &Url) -> bool {
     matches!(url.host_str(), Some("sdhc.org" | "www.sdhc.org"))
         && matches!(url.path().trim_end_matches('/'),
             "/governance-legislative-affairs/sdhc-board-of-commissioners/meetings"
-            | "/governance-legislative-affairs/sdhc-board-of-commissioners/meetings/meetings-archive")
+            | "/governance-legislative-affairs/sdhc-board-of-commissioners/meetings/meetings-archive"
+            | "/governance-legislative-affairs/housing-authority-of-the-city-of-san-diego/meeting")
 }
 
 /// SDHC publishes many board reports, presentations and resolutions through extensionless
@@ -565,15 +566,23 @@ pub(crate) fn meeting_identity(url: &Url) -> Option<String> {
     Some(identity.to_string())
 }
 
-/// Resolve the public OnBase document route that the selected meeting page itself declares.
-pub(crate) fn hyland_document_companion(url: &Url, html: &str) -> Option<String> {
-    if url.host_str()? != "sandiego.hylandcloud.com"
-        || !url
-            .path()
-            .eq_ignore_ascii_case("/211agendaonlinecouncil/Meetings/ViewMeeting")
-    {
+/// The City's two OnBase Agenda Online applications (Council; Council committees). A companion
+/// route is only ever built under the application the page itself was served from.
+fn hyland_application(url: &Url, route: &str) -> Option<&'static str> {
+    if url.host_str() != Some("sandiego.hylandcloud.com") {
         return None;
     }
+    ["/211agendaonlinecouncil", "/211agendaonlinecomm"]
+        .into_iter()
+        .find(|application| {
+            url.path()
+                .eq_ignore_ascii_case(&format!("{application}{route}"))
+        })
+}
+
+/// Resolve the public OnBase document route that the selected meeting page itself declares.
+pub(crate) fn hyland_document_companion(url: &Url, html: &str) -> Option<String> {
+    let application = hyland_application(url, "/Meetings/ViewMeeting")?;
     let pairs = url
         .query_pairs()
         .collect::<std::collections::BTreeMap<_, _>>();
@@ -588,14 +597,13 @@ pub(crate) fn hyland_document_companion(url: &Url, html: &str) -> Option<String>
         "3" => "summary",
         _ => return None,
     };
-    let template = format!(
-        "/211agendaonlinecouncil/Documents/ViewAgenda?meetingId={id}&type=AGENDATYPEVALUE&doctype="
-    );
+    let template =
+        format!("{application}/Documents/ViewAgenda?meetingId={id}&type=AGENDATYPEVALUE&doctype=");
     if !html.contains(&template) {
         return None;
     }
     let mut document = url
-        .join("/211agendaonlinecouncil/Documents/ViewAgenda")
+        .join(&format!("{application}/Documents/ViewAgenda"))
         .ok()?;
     document.query_pairs_mut().extend_pairs([
         ("meetingId", id.as_ref()),
@@ -611,13 +619,9 @@ pub(crate) fn hyland_document_companion(url: &Url, html: &str) -> Option<String>
 const MAX_AGENDA_ITEMS: usize = 128;
 
 pub(crate) fn hyland_agenda_items(url: &Url, html: &str) -> Vec<(String, String)> {
-    if url.host_str() != Some("sandiego.hylandcloud.com")
-        || !url
-            .path()
-            .eq_ignore_ascii_case("/211agendaonlinecouncil/Documents/ViewAgenda")
-    {
+    let Some(application) = hyland_application(url, "/Documents/ViewAgenda") else {
         return Vec::new();
-    }
+    };
     let pairs = url
         .query_pairs()
         .collect::<std::collections::BTreeMap<_, _>>();
@@ -653,7 +657,7 @@ pub(crate) fn hyland_agenda_items(url: &Url, html: &str) -> Vec<(String, String)
             continue;
         }
         let mut target = url
-            .join("/211agendaonlinecouncil/Meetings/ViewMeetingAgendaItem")
+            .join(&format!("{application}/Meetings/ViewMeetingAgendaItem"))
             .expect("absolute route");
         target.query_pairs_mut().extend_pairs([
             ("meetingId", id.as_ref()),
@@ -712,12 +716,14 @@ fn agenda_research_priority(label: &str) -> usize {
 }
 
 pub(crate) fn hyland_item_attachment(item: &Url, attachment: &Url) -> bool {
-    if item.host_str() != Some("sandiego.hylandcloud.com")
-        || attachment.host_str() != item.host_str()
+    let Some(application) = hyland_application(item, "/Meetings/ViewMeetingAgendaItem") else {
+        return false;
+    };
+    if attachment.host_str() != item.host_str()
         || !attachment
             .path()
             .to_ascii_lowercase()
-            .starts_with("/211agendaonlinecouncil/documents/downloadfile/")
+            .starts_with(&format!("{application}/documents/downloadfile/"))
     {
         return false;
     }
@@ -989,5 +995,28 @@ mod tests {
             source_jurisdiction("onrecord://local/sandiego"),
             "Unclassified source"
         );
+    }
+
+    #[test]
+    fn a_committee_meeting_resolves_only_within_the_committee_application() {
+        let url = Url::parse("https://sandiego.hylandcloud.com/211agendaonlinecomm/Meetings/ViewMeeting?id=7199&doctype=1&site=comm").unwrap();
+        let committee = "/211agendaonlinecomm/Documents/ViewAgenda?meetingId=7199&type=AGENDATYPEVALUE&doctype=";
+        assert_eq!(
+            hyland_document_companion(&url, committee).as_deref(),
+            Some("https://sandiego.hylandcloud.com/211agendaonlinecomm/Documents/ViewAgenda?meetingId=7199&type=agenda&doctype=1")
+        );
+        // A template for the Council application on a committee page declares nothing here.
+        assert!(hyland_document_companion(
+            &url,
+            &committee.replace("211agendaonlinecomm", "211agendaonlinecouncil")
+        )
+        .is_none());
+        let item = Url::parse("https://sandiego.hylandcloud.com/211agendaonlinecomm/Meetings/ViewMeetingAgendaItem?meetingId=7199&itemId=5&isSection=false&type=agenda").unwrap();
+        let file = "https://sandiego.hylandcloud.com/211agendaonlinecomm/Documents/DownloadFile/r.pdf?meetingId=7199&itemId=5&publishId=1";
+        assert!(hyland_item_attachment(&item, &Url::parse(file).unwrap()));
+        assert!(!hyland_item_attachment(
+            &item,
+            &Url::parse(&file.replace("211agendaonlinecomm", "211agendaonlinecouncil")).unwrap()
+        ));
     }
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { REGIONAL_SOURCES } from '../utils/regionalSources';
 import { HOUSING_SOURCES } from '../utils/housingSources';
+import { MEETING_BODIES, MEETING_BODY_SOURCES } from '../utils/meetingBodySources';
 import { SAN_DIEGO_SOURCES, sanDiegoGuidance, sanDiegoSourceForUrl } from '../utils/sanDiego';
 
 describe('regional source routing', () => {
@@ -71,6 +72,28 @@ describe('regional source routing', () => {
     expect(budget.url).toBe('https://budget.sandiego.gov/transparency');
     expect(sanDiegoGuidance(budget).additionalSeedUrls).toContain('https://data.sandiego.gov/departments/department-of-finance/');
     expect(sanDiegoSourceForUrl('https://budget.sandiego.gov/transparency#/sandiegoca/reports/7714')).toBeUndefined();
+  });
+
+  it('offers every registered meeting body as a catalogue source at the registry address, scoped to its publisher', () => {
+    expect(MEETING_BODIES.length).toBeGreaterThanOrEqual(16);
+    expect(MEETING_BODY_SOURCES).toHaveLength(MEETING_BODIES.length);
+    for (const body of MEETING_BODIES) {
+      const source = sanDiegoSourceForUrl(body.url);
+      expect(source?.id, body.name).toBe(body.id);
+      expect(source?.label).toBe(body.name);
+      expect(source?.access ?? 'public').toBe('public');
+      const guidance = sanDiegoGuidance(source!);
+      if (body.pattern === 'CITY_PAGE_PDF' || body.pattern === 'CITY_FIXED_URL') {
+        expect(source?.crawlPolicy.maximumDepth).toBe(0);
+        expect(guidance.allowedHostnames).toEqual(['www.sandiego.gov']);
+        expect(guidance.includeUrlPrefixes).toEqual([body.url, 'https://www.sandiego.gov/sites/default/files/']);
+      } else if (body.pattern === 'AGENCY_PAGE') {
+        expect(guidance.allowedHostnames).toEqual([new URL(body.url).hostname]);
+        expect(guidance.restrictDownloadsToSourceHost).toBe(true);
+      }
+      // An unopened address says so where the operator chooses it.
+      expect(/has not been opened/.test(source!.coverage)).toBe(body.verifiedAsOf === null);
+    }
   });
 
   it('retains selected document scope, case-sensitive PDF aliases, fiscal context, and unavailable routes', () => {
