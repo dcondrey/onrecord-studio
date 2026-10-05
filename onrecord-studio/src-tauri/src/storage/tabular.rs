@@ -815,10 +815,11 @@ impl TypeEvidence {
                 .as_bytes()
                 .get(1)
                 .is_some_and(u8::is_ascii_digit);
-        self.integer &= !leading_zero && value.parse::<i64>().is_ok();
-        self.number &= !leading_zero && exact_decimal(value);
-        self.float &= !leading_zero && plain_decimal(value);
-        self.date &= chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d").is_ok();
+        // A candidate one value has ruled out stays ruled out, so it is not tested again.
+        self.integer = self.integer && !leading_zero && value.parse::<i64>().is_ok();
+        self.number = self.number && !leading_zero && exact_decimal(value);
+        self.float = self.float && !leading_zero && plain_decimal(value);
+        self.date = self.date && chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d").is_ok();
     }
 
     pub(crate) fn inferred(&self, header: &str) -> &'static str {
@@ -864,15 +865,18 @@ pub(crate) fn plain_decimal(value: &str) -> bool {
 
 pub(crate) fn exact_decimal(value: &str) -> bool {
     let value = value.strip_prefix(['-', '+']).unwrap_or(value);
-    let parts = value.split('.').collect::<Vec<_>>();
-    parts.len() <= 2
-        && !parts[0].is_empty()
-        && parts[0].len() <= 28
-        && parts[0].bytes().all(|b| b.is_ascii_digit())
-        && (parts.len() == 1
-            || (!parts[1].is_empty()
-                && parts[1].len() <= 10
-                && parts[1].bytes().all(|b| b.is_ascii_digit())))
+    let (whole, fraction) = match value.split_once('.') {
+        Some((whole, fraction)) => (whole, Some(fraction)),
+        None => (value, None),
+    };
+    !whole.is_empty()
+        && whole.len() <= 28
+        && whole.bytes().all(|b| b.is_ascii_digit())
+        && fraction.is_none_or(|fraction| {
+            !fraction.is_empty()
+                && fraction.len() <= 10
+                && fraction.bytes().all(|b| b.is_ascii_digit())
+        })
 }
 
 #[cfg(test)]

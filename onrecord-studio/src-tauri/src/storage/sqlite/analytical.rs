@@ -563,21 +563,6 @@ fn normalize_timestamp(raw: &str, order: DateOrder) -> Option<String> {
         .or_else(|| normalize_date(raw, order).map(|date| format!("{date}T00:00:00")))
 }
 
-pub(super) fn json_to_sql_value(value: &serde_json::Value) -> duckdb::types::Value {
-    match value {
-        serde_json::Value::Null => duckdb::types::Value::Null,
-        serde_json::Value::Number(number) => number
-            .as_i64()
-            .map(duckdb::types::Value::BigInt)
-            .unwrap_or_else(|| duckdb::types::Value::Double(number.as_f64().unwrap_or(0.0))),
-        serde_json::Value::Bool(value) => duckdb::types::Value::Boolean(*value),
-        other => duckdb::types::Value::Text(match other {
-            serde_json::Value::String(value) => value.clone(),
-            _ => other.to_string(),
-        }),
-    }
-}
-
 fn dataset_kind_from_str(value: &str) -> AnalyticalDatasetKind {
     match value {
         "REGIONAL_DATA" => AnalyticalDatasetKind::RegionalData,

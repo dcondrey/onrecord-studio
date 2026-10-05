@@ -11,15 +11,22 @@
 //! empty source cell.
 
 use super::analytical::{
-    analytical_counting_key, duckdb_type, json_to_sql_value, logical_type_for, normalize_csv_value,
-    quote_ident, schema_warnings_for, slash_date_fields, unique_column_alias, validation_notes_for,
-    DateOrder, ANALYTICAL_PARSER_VERSION,
+    analytical_counting_key, duckdb_type, logical_type_for, normalize_csv_value, quote_ident,
+    schema_warnings_for, slash_date_fields, unique_column_alias, validation_notes_for, DateOrder,
+    ANALYTICAL_PARSER_VERSION,
 };
 use super::row_store;
 use super::*;
 use crate::storage::tabular::{TableSource, TypeEvidence};
 use crate::types::{AnalyticalImportRequest, AnalyticalImportResult};
+use duckdb::arrow::array::{
+    Array, ArrayBuilder, ArrayRef, AsArray, BooleanBuilder, Float64Builder, Int32Builder,
+    Int64Builder, StringBuilder,
+};
+use duckdb::arrow::datatypes::{Field, Int64Type, Schema};
+use duckdb::arrow::record_batch::RecordBatch;
 use std::collections::{BTreeMap, HashSet};
+use std::sync::Arc;
 
 /// What the read learned about one column.
 #[derive(Default)]
@@ -29,8 +36,9 @@ struct ColumnProfile {
     slash_dates: usize,
     first_over_12: bool,
     second_over_12: bool,
-    /// Values the column's documented type converts, under each [`DateOrder::ALL`].
-    converts: [usize; 3],
+    /// Whether any value converts to the column's documented type, under each [`DateOrder::ALL`].
+    /// One converting value settles a slot, so later values are not converted again.
+    converts: [bool; 3],
 }
 
 #[derive(Debug, Clone)]
@@ -73,7 +81,7 @@ fn plan_columns(
                     .iter()
                     .position(|candidate| *candidate == order)
                     .unwrap_or(2)];
-                if profile.non_empty > 0 && converted == 0 {
+                if profile.non_empty > 0 && !converted {
                     warnings.push(format!(
                         "{header}: none of its {} values is a {}; kept as text.",
                         profile.non_empty,
@@ -168,6 +176,77 @@ fn create_originals(tx: &Connection, table: &str, aliases: &[String]) -> Result<
     .map_err(storage("Failed to create the original-cell store"))
 }
 
+/// Rows gathered per batch before one bulk append: an appender call per cell is what dominated
+/// the read.
+const APPEND_BATCH_ROWS: usize = 16_384;
+
+fn bulk_append(
+    appender: &mut duckdb::Appender<'_>,
+    columns: Vec<ArrayRef>,
+) -> Result<(), AppError> {
+    let schema = Schema::new(
+        columns
+            .iter()
+            .enumerate()
+            .map(|(index, column)| {
+                Field::new(format!("c{index}"), column.data_type().clone(), true)
+            })
+            .collect::<Vec<_>>(),
+    );
+    let batch = RecordBatch::try_new(Arc::new(schema), columns)
+        .map_err(|error| AppError::Internal(format!("Analytical import batch: {error}")))?;
+    appender.append_record_batch(batch).map_err(read_failed)
+}
+
+/// The original-cell store's columns, built a batch at a time.
+struct OriginalsBatch {
+    row: Int64Builder,
+    hash: StringBuilder,
+    field_count: Int32Builder,
+    malformed: BooleanBuilder,
+    parse_error: StringBuilder,
+    messages: StringBuilder,
+    cells: Vec<StringBuilder>,
+    surplus: StringBuilder,
+}
+
+impl OriginalsBatch {
+    fn new(width: usize) -> Self {
+        Self {
+            row: Int64Builder::new(),
+            hash: StringBuilder::new(),
+            field_count: Int32Builder::new(),
+            malformed: BooleanBuilder::new(),
+            parse_error: StringBuilder::new(),
+            messages: StringBuilder::new(),
+            cells: (0..width).map(|_| StringBuilder::new()).collect(),
+            surplus: StringBuilder::new(),
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.row.len()
+    }
+
+    fn append(&mut self, appender: &mut duckdb::Appender<'_>) -> Result<(), AppError> {
+        let mut columns: Vec<ArrayRef> = vec![
+            Arc::new(self.row.finish()),
+            Arc::new(self.hash.finish()),
+            Arc::new(self.field_count.finish()),
+            Arc::new(self.malformed.finish()),
+            Arc::new(self.parse_error.finish()),
+            Arc::new(self.messages.finish()),
+        ];
+        columns.extend(
+            self.cells
+                .iter_mut()
+                .map(|cell| Arc::new(cell.finish()) as ArrayRef),
+        );
+        columns.push(Arc::new(self.surplus.finish()));
+        bulk_append(appender, columns)
+    }
+}
+
 /// The one read of the source: every record's original fields go to `staging` as text while each
 /// column is profiled. Whether a row is readable is known here; how its cells convert is not, since
 /// that depends on types the whole column decides.
@@ -177,11 +256,12 @@ fn read_once(
     kind: &AnalyticalDatasetKind,
     staging: &str,
 ) -> Result<ReadOutcome, AppError> {
-    let mut originals: Option<duckdb::Appender<'_>> = None;
+    let mut originals: Option<(duckdb::Appender<'_>, OriginalsBatch)> = None;
     let (mut aliases, mut hints, mut profiles) = (Vec::new(), Vec::new(), Vec::new());
     let (mut malformed_rows, mut duplicate_key_rows, mut repaired_trailing_rows) = (0, 0, 0);
     let mut repair_row_numbers = Vec::new();
     let mut seen_keys = HashSet::new();
+    let documented = *kind != AnalyticalDatasetKind::RegionalData;
     let read = source.read(|headers, row_index, record| {
         if originals.is_none() {
             aliases = column_aliases(headers);
@@ -195,7 +275,10 @@ fn read_once(
                 .collect();
             profiles = headers.iter().map(|_| ColumnProfile::default()).collect();
             create_originals(tx, staging, &aliases)?;
-            originals = Some(tx.appender(staging).map_err(read_failed)?);
+            originals = Some((
+                tx.appender(staging).map_err(read_failed)?,
+                OriginalsBatch::new(aliases.len()),
+            ));
         }
         let width = aliases.len();
         let row_number = row_index + 1;
@@ -206,7 +289,10 @@ fn read_once(
             Ok(record) => {
                 for (index, profile) in profiles.iter_mut().enumerate() {
                     let raw = record.get(index).unwrap_or("").trim();
-                    profile.evidence.observe(raw);
+                    // Only an undocumented table's types are inferred from its values.
+                    if !documented {
+                        profile.evidence.observe(raw);
+                    }
                     if raw.is_empty() {
                         continue;
                     }
@@ -218,8 +304,9 @@ fn read_once(
                     }
                     if let Some(hint) = hints[index] {
                         for (slot, order) in DateOrder::ALL.iter().enumerate() {
-                            if normalize_csv_value(raw, hint, *order).is_ok() {
-                                profile.converts[slot] += 1;
+                            if !profile.converts[slot] {
+                                profile.converts[slot] =
+                                    normalize_csv_value(raw, hint, *order).is_ok();
                             }
                         }
                     }
@@ -243,42 +330,39 @@ fn read_once(
         }
         let malformed = !errors.is_empty();
         malformed_rows += usize::from(malformed);
-        let text = |value: Option<&str>| {
-            value.map_or(duckdb::types::Value::Null, |v| {
-                duckdb::types::Value::Text(v.to_owned())
-            })
-        };
-        // A JSON array: the appender cannot bind a list, and the row view casts it back.
-        let surplus = fields
-            .filter(|record| record.len() > width)
-            .map(|record| {
-                duckdb::types::Value::Text(
-                    serde_json::to_string(&record.iter().skip(width).collect::<Vec<_>>())
-                        .expect("strings always serialize"),
-                )
-            })
-            .unwrap_or(duckdb::types::Value::Null);
-        let row = [
-            duckdb::types::Value::BigInt(row_number as i64),
-            duckdb::types::Value::Text(row_store::row_hash(fields)),
-            duckdb::types::Value::Int(fields.map_or(0, csv::StringRecord::len) as i32),
-            duckdb::types::Value::Boolean(malformed),
-            text(record.err()),
-            duckdb::types::Value::Text(
-                serde_json::to_string(&errors).expect("strings always serialize"),
-            ),
-        ]
-        .into_iter()
-        .chain((0..width).map(|index| text(fields.and_then(|record| record.get(index)))))
-        .chain(std::iter::once(surplus));
-        originals
-            .as_mut()
-            .expect("created on the first record")
-            .append_row(duckdb::appender_params_from_iter(row))
-            .map_err(read_failed)
+        let (appender, batch) = originals.as_mut().expect("created on the first record");
+        batch.row.append_value(row_number as i64);
+        batch.hash.append_value(row_store::row_hash(fields));
+        batch
+            .field_count
+            .append_value(fields.map_or(0, csv::StringRecord::len) as i32);
+        batch.malformed.append_value(malformed);
+        batch.parse_error.append_option(record.err());
+        batch
+            .messages
+            .append_value(serde_json::to_string(&errors).expect("strings always serialize"));
+        for (index, cell) in batch.cells.iter_mut().enumerate() {
+            cell.append_option(fields.and_then(|record| record.get(index)));
+        }
+        // A JSON array: the store holds text, and the row view casts it back.
+        batch
+            .surplus
+            .append_option(fields.filter(|record| record.len() > width).map(|record| {
+                serde_json::to_string(&record.iter().skip(width).collect::<Vec<_>>())
+                    .expect("strings always serialize")
+            }));
+        if batch.len() == APPEND_BATCH_ROWS {
+            batch.append(appender)?;
+        }
+        Ok(())
     })?;
     match originals {
-        Some(mut appender) => appender.flush().map_err(read_failed)?,
+        Some((mut appender, mut batch)) => {
+            if batch.len() > 0 {
+                batch.append(&mut appender)?;
+            }
+            appender.flush().map_err(read_failed)?
+        }
         // A header-only table never reached the callback.
         None => {
             aliases = column_aliases(&read.headers);
@@ -301,6 +385,53 @@ fn read_once(
         repaired_trailing_rows,
         repair_row_numbers,
     })
+}
+
+/// A typed column's values, built a batch at a time in the Arrow type that matches what
+/// `normalize_csv_value` produces for it; DuckDB casts each to the column's declared type.
+enum TypedColumn {
+    Integer(Int64Builder),
+    Float(Float64Builder),
+    Text(StringBuilder),
+}
+
+impl TypedColumn {
+    fn for_logical(logical: &str) -> Self {
+        match logical {
+            "INTEGER" => Self::Integer(Int64Builder::new()),
+            "FLOAT" | "DECIMAL" => Self::Float(Float64Builder::new()),
+            _ => Self::Text(StringBuilder::new()),
+        }
+    }
+
+    fn append(&mut self, value: &serde_json::Value) -> Result<(), AppError> {
+        match (self, value) {
+            (Self::Integer(column), serde_json::Value::Null) => column.append_null(),
+            (Self::Float(column), serde_json::Value::Null) => column.append_null(),
+            (Self::Text(column), serde_json::Value::Null) => column.append_null(),
+            (Self::Integer(column), serde_json::Value::Number(number)) if number.is_i64() => {
+                column.append_option(number.as_i64())
+            }
+            (Self::Float(column), serde_json::Value::Number(number)) => {
+                column.append_option(number.as_f64())
+            }
+            (Self::Text(column), serde_json::Value::String(text)) => column.append_value(text),
+            (_, value) => {
+                return Err(AppError::Internal(format!(
+                    "Analytical import: converted value {value} does not fit its column"
+                )))
+            }
+        }
+        Ok(())
+    }
+
+    fn finish(&mut self) -> ArrayRef {
+        match self {
+            Self::Integer(column) => Arc::new(column.finish()),
+            Self::Float(column) => Arc::new(column.finish()),
+            Self::Text(column) => Arc::new(column.finish()),
+        }
+    }
 }
 
 /// Converts every readable row from the stored originals into the typed table, in bounded
@@ -327,38 +458,50 @@ fn convert_rows(
         .map(|plan| quote_ident(&plan.alias))
         .collect::<Vec<_>>()
         .join(", ");
-    let batch_sql = format!(
-        "SELECT _row, {cells} FROM {} WHERE NOT _malformed AND _row > ?1 AND _row <= ?2 ORDER BY _row",
-        quote_ident(originals)
-    );
+    let mut statement = tx
+        .prepare(&format!(
+            "SELECT _row, {cells} FROM {} WHERE NOT _malformed AND _row > ?1 AND _row <= ?2 ORDER BY _row",
+            quote_ident(originals)
+        ))
+        .map_err(read_failed)?;
+    let mut typed_rows = tx.appender(typed).map_err(read_failed)?;
+    let mut notes_rows = tx.appender(&notes_table).map_err(read_failed)?;
+    let unreadable =
+        || AppError::Internal("Analytical import: stored originals are not text".into());
     // `_row` numbers every source row from 1, malformed ones included, so a fixed range scans one
     // batch of the store rather than sorting everything after the previous batch.
     for after in (0..rows as i64).step_by(CONVERT_BATCH_ROWS as usize) {
-        let batch = {
-            let mut statement = tx.prepare(&batch_sql).map_err(read_failed)?;
-            let converted = statement
-                .query_map(params![after, after + CONVERT_BATCH_ROWS], |row| {
-                    let cells = (1..=plans.len())
-                        .map(|index| row.get::<_, Option<String>>(index))
-                        .collect::<Result<Vec<_>, _>>()?;
-                    Ok((row.get::<_, i64>(0)?, cells))
+        statement
+            .execute(params![after, after + CONVERT_BATCH_ROWS])
+            .map_err(read_failed)?;
+        while let Some(chunk) = statement.step().map_err(read_failed)? {
+            let source_rows = chunk
+                .column(0)
+                .as_primitive_opt::<Int64Type>()
+                .ok_or_else(unreadable)?;
+            let stored = (1..=plans.len())
+                .map(|index| {
+                    chunk
+                        .column(index)
+                        .as_string_opt::<i32>()
+                        .ok_or_else(unreadable)
                 })
-                .map_err(read_failed)?
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(read_failed)?;
-            converted
-        };
-        let mut typed_rows = tx.appender(typed).map_err(read_failed)?;
-        let mut notes_rows = tx.appender(&notes_table).map_err(read_failed)?;
-        for (row, cells) in batch {
-            let mut notes = Vec::new();
-            let values = plans
+                .collect::<Result<Vec<_>, _>>()?;
+            let mut columns = plans
                 .iter()
-                .zip(cells)
-                .enumerate()
-                .map(|(index, (plan, cell))| {
-                    let raw = cell.as_deref().unwrap_or("").trim();
-                    match normalize_csv_value(raw, plan.logical, plan.order) {
+                .map(|plan| TypedColumn::for_logical(plan.logical))
+                .collect::<Vec<_>>();
+            for position in 0..chunk.len() {
+                let row = source_rows.value(position);
+                let mut notes = Vec::new();
+                for (index, plan) in plans.iter().enumerate() {
+                    let cell = &stored[index];
+                    let raw = if cell.is_null(position) {
+                        ""
+                    } else {
+                        cell.value(position).trim()
+                    };
+                    let value = match normalize_csv_value(raw, plan.logical, plan.order) {
                         Ok(value) => {
                             null_counts[index] += usize::from(value.is_null());
                             value
@@ -368,29 +511,29 @@ fn convert_rows(
                             notes.push(format!("{}: {error}", plan.header));
                             serde_json::Value::Null
                         }
-                    }
-                });
-            let values = values.collect::<Vec<_>>();
-            typed_rows
-                .append_row(duckdb::appender_params_from_iter(
-                    values
-                        .iter()
-                        .map(json_to_sql_value)
-                        .chain(std::iter::once(duckdb::types::Value::BigInt(row))),
-                ))
-                .map_err(read_failed)?;
-            if !notes.is_empty() {
-                notes_rows
-                    .append_row(params![
-                        row,
-                        serde_json::to_string(&notes).expect("strings always serialize")
-                    ])
-                    .map_err(read_failed)?;
+                    };
+                    columns[index].append(&value)?;
+                }
+                if !notes.is_empty() {
+                    notes_rows
+                        .append_row(params![
+                            row,
+                            serde_json::to_string(&notes).expect("strings always serialize")
+                        ])
+                        .map_err(read_failed)?;
+                }
             }
+            let mut arrays = columns
+                .iter_mut()
+                .map(TypedColumn::finish)
+                .collect::<Vec<_>>();
+            arrays.push(chunk.column(0).clone());
+            bulk_append(&mut typed_rows, arrays)?;
         }
-        typed_rows.flush().map_err(read_failed)?;
-        notes_rows.flush().map_err(read_failed)?;
     }
+    typed_rows.flush().map_err(read_failed)?;
+    notes_rows.flush().map_err(read_failed)?;
+    drop((typed_rows, notes_rows, statement));
     tx.execute_batch(&format!(
         "UPDATE {originals} SET _messages = n._messages FROM {notes} n WHERE {originals}._row = n._row;
          DROP TABLE {notes};",
