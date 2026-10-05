@@ -464,50 +464,60 @@ impl DateOrder {
     }
 }
 
-pub(super) fn normalize_csv_value(
-    raw: &str,
+/// A cell converted to its column's type. Text borrows the source cell where it can.
+#[derive(Debug, PartialEq)]
+pub(super) enum Normalized<'a> {
+    Null,
+    Integer(i64),
+    Float(f64),
+    Text(std::borrow::Cow<'a, str>),
+}
+
+pub(super) fn normalize_csv_value<'a>(
+    raw: &'a str,
     logical: &str,
     order: DateOrder,
-) -> Result<serde_json::Value, String> {
+) -> Result<Normalized<'a>, String> {
+    use std::borrow::Cow;
     if raw.is_empty() {
-        return Ok(serde_json::Value::Null);
+        return Ok(Normalized::Null);
     }
+    let finite = |value: f64| Some(value).filter(|value| value.is_finite());
     match logical {
         "INTEGER" => raw
             .parse::<i64>()
-            .map(|value| serde_json::json!(value))
+            .map(Normalized::Integer)
             .map_err(|_| format!("could not parse integer '{raw}'")),
         // Bind decimal strings directly, avoiding a binary floating-point round trip.
         "NUMBER" if crate::storage::tabular::exact_decimal(raw) => {
-            Ok(serde_json::Value::String(raw.to_string()))
+            Ok(Normalized::Text(Cow::Borrowed(raw)))
         }
         "NUMBER" => Err(format!("could not parse exact decimal '{raw}'")),
         // Approximate by declaration: the original text stays in the snapshot's column store.
         "FLOAT" if crate::storage::tabular::plain_decimal(raw) => raw
             .parse::<f64>()
             .ok()
-            .and_then(serde_json::Number::from_f64)
-            .map(serde_json::Value::Number)
+            .and_then(finite)
+            .map(Normalized::Float)
             .ok_or_else(|| format!("could not parse decimal '{raw}'")),
         "FLOAT" => Err(format!("could not parse decimal '{raw}'")),
         "DATE" => normalize_date(raw, order)
-            .map(serde_json::Value::String)
+            .map(|date| Normalized::Text(Cow::Owned(date)))
             .ok_or_else(|| format!("could not parse date '{raw}'")),
         "LOCAL_TIMESTAMP" => normalize_local_timestamp(raw)
-            .map(serde_json::Value::String)
+            .map(|at| Normalized::Text(Cow::Owned(at)))
             .ok_or_else(|| format!("could not parse date and time '{raw}'")),
         "TIMESTAMP" => normalize_timestamp(raw, order)
-            .map(serde_json::Value::String)
+            .map(|at| Normalized::Text(Cow::Owned(at)))
             .ok_or_else(|| format!("could not parse timestamp '{raw}'")),
         "DECIMAL" => raw
             .replace(',', "")
             .parse::<f64>()
-            .map(serde_json::Number::from_f64)
             .ok()
-            .flatten()
-            .map(serde_json::Value::Number)
+            .and_then(finite)
+            .map(Normalized::Float)
             .ok_or_else(|| format!("could not parse amount '{raw}'")),
-        _ => Ok(serde_json::Value::String(raw.to_string())),
+        _ => Ok(Normalized::Text(Cow::Borrowed(raw))),
     }
 }
 

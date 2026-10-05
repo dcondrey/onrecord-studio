@@ -13,7 +13,7 @@
 use super::analytical::{
     analytical_counting_key, duckdb_type, logical_type_for, normalize_csv_value, quote_ident,
     schema_warnings_for, slash_date_fields, unique_column_alias, validation_notes_for, DateOrder,
-    ANALYTICAL_PARSER_VERSION,
+    Normalized, ANALYTICAL_PARSER_VERSION,
 };
 use super::row_store;
 use super::*;
@@ -459,21 +459,17 @@ impl TypedColumn {
         }
     }
 
-    fn append(&mut self, value: &serde_json::Value) -> Result<(), AppError> {
+    fn append(&mut self, value: Normalized<'_>) -> Result<(), AppError> {
         match (self, value) {
-            (Self::Integer(column), serde_json::Value::Null) => column.append_null(),
-            (Self::Float(column), serde_json::Value::Null) => column.append_null(),
-            (Self::Text(column), serde_json::Value::Null) => column.append_null(),
-            (Self::Integer(column), serde_json::Value::Number(number)) if number.is_i64() => {
-                column.append_option(number.as_i64())
-            }
-            (Self::Float(column), serde_json::Value::Number(number)) => {
-                column.append_option(number.as_f64())
-            }
-            (Self::Text(column), serde_json::Value::String(text)) => column.append_value(text),
+            (Self::Integer(column), Normalized::Null) => column.append_null(),
+            (Self::Float(column), Normalized::Null) => column.append_null(),
+            (Self::Text(column), Normalized::Null) => column.append_null(),
+            (Self::Integer(column), Normalized::Integer(value)) => column.append_value(value),
+            (Self::Float(column), Normalized::Float(value)) => column.append_value(value),
+            (Self::Text(column), Normalized::Text(text)) => column.append_value(text),
             (_, value) => {
                 return Err(AppError::Internal(format!(
-                    "Analytical import: converted value {value} does not fit its column"
+                    "Analytical import: converted value {value:?} does not fit its column"
                 )))
             }
         }
@@ -489,9 +485,83 @@ impl TypedColumn {
     }
 }
 
+/// One stored chunk, converted: the typed table's columns for its rows, per-column empty and
+/// unconverted counts, and each row's reasons as the JSON its originals record.
+struct ConvertedChunk {
+    columns: Vec<ArrayRef>,
+    nulls: Vec<usize>,
+    unconverted: Vec<usize>,
+    notes: Vec<(i64, String)>,
+}
+
+fn convert_chunk(
+    chunk: &duckdb::arrow::array::StructArray,
+    plans: &[ColumnPlan],
+) -> Result<ConvertedChunk, AppError> {
+    let unreadable =
+        || AppError::Internal("Analytical import: stored originals are not text".into());
+    let source_rows = chunk
+        .column(0)
+        .as_primitive_opt::<Int64Type>()
+        .ok_or_else(unreadable)?;
+    let stored = (1..=plans.len())
+        .map(|index| {
+            chunk
+                .column(index)
+                .as_string_opt::<i32>()
+                .ok_or_else(unreadable)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut columns = plans
+        .iter()
+        .map(|plan| TypedColumn::for_logical(plan.logical))
+        .collect::<Vec<_>>();
+    let mut converted = ConvertedChunk {
+        columns: Vec::with_capacity(plans.len() + 1),
+        nulls: vec![0; plans.len()],
+        unconverted: vec![0; plans.len()],
+        notes: Vec::new(),
+    };
+    for position in 0..chunk.len() {
+        let mut reasons = Vec::new();
+        for (index, plan) in plans.iter().enumerate() {
+            let cell = stored[index];
+            let raw = if cell.is_null(position) {
+                ""
+            } else {
+                cell.value(position).trim()
+            };
+            let value = match normalize_csv_value(raw, plan.logical, plan.order) {
+                Ok(value) => {
+                    converted.nulls[index] += usize::from(value == Normalized::Null);
+                    value
+                }
+                Err(error) => {
+                    converted.unconverted[index] += 1;
+                    reasons.push(format!("{}: {error}", plan.header));
+                    Normalized::Null
+                }
+            };
+            columns[index].append(value)?;
+        }
+        if !reasons.is_empty() {
+            converted.notes.push((
+                source_rows.value(position),
+                serde_json::to_string(&reasons).expect("strings always serialize"),
+            ));
+        }
+    }
+    converted
+        .columns
+        .extend(columns.iter_mut().map(TypedColumn::finish));
+    converted.columns.push(chunk.column(0).clone());
+    Ok(converted)
+}
+
 /// Converts every readable row from the stored originals into the typed table, in bounded
 /// batches, and returns per-column empty and unconverted counts. A row whose cells did not all
-/// convert gets the reasons recorded beside its originals.
+/// convert gets the reasons recorded beside its originals. Cells convert on a second thread while
+/// this one, which owns the connection, reads the next chunk and appends the last.
 fn convert_rows(
     tx: &Connection,
     originals: &str,
@@ -521,71 +591,63 @@ fn convert_rows(
         .map_err(read_failed)?;
     let mut typed_rows = tx.appender(typed).map_err(read_failed)?;
     let mut notes_rows = tx.appender(&notes_table).map_err(read_failed)?;
-    let unreadable =
-        || AppError::Internal("Analytical import: stored originals are not text".into());
-    // `_row` numbers every source row from 1, malformed ones included, so a fixed range scans one
-    // batch of the store rather than sorting everything after the previous batch.
-    for after in (0..rows as i64).step_by(CONVERT_BATCH_ROWS as usize) {
-        statement
-            .execute(params![after, after + CONVERT_BATCH_ROWS])
-            .map_err(read_failed)?;
-        while let Some(chunk) = statement.step().map_err(read_failed)? {
-            let source_rows = chunk
-                .column(0)
-                .as_primitive_opt::<Int64Type>()
-                .ok_or_else(unreadable)?;
-            let stored = (1..=plans.len())
-                .map(|index| {
-                    chunk
-                        .column(index)
-                        .as_string_opt::<i32>()
-                        .ok_or_else(unreadable)
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-            let mut columns = plans
-                .iter()
-                .map(|plan| TypedColumn::for_logical(plan.logical))
-                .collect::<Vec<_>>();
-            for position in 0..chunk.len() {
-                let row = source_rows.value(position);
-                let mut notes = Vec::new();
-                for (index, plan) in plans.iter().enumerate() {
-                    let cell = &stored[index];
-                    let raw = if cell.is_null(position) {
-                        ""
-                    } else {
-                        cell.value(position).trim()
-                    };
-                    let value = match normalize_csv_value(raw, plan.logical, plan.order) {
-                        Ok(value) => {
-                            null_counts[index] += usize::from(value.is_null());
-                            value
-                        }
-                        Err(error) => {
-                            unconverted[index] += 1;
-                            notes.push(format!("{}: {error}", plan.header));
-                            serde_json::Value::Null
-                        }
-                    };
-                    columns[index].append(&value)?;
-                }
-                if !notes.is_empty() {
-                    notes_rows
-                        .append_row(params![
-                            row,
-                            serde_json::to_string(&notes).expect("strings always serialize")
-                        ])
-                        .map_err(read_failed)?;
+    // Four chunks in flight bound how far reading can run ahead of converting.
+    let (chunks, to_convert) = std::sync::mpsc::sync_channel(4);
+    let (done, converted) = std::sync::mpsc::channel();
+    std::thread::scope(|scope| {
+        scope.spawn(move || {
+            for chunk in to_convert {
+                let result = convert_chunk(&chunk, plans);
+                let failed = result.is_err();
+                if done.send(result).is_err() || failed {
+                    break;
                 }
             }
-            let mut arrays = columns
-                .iter_mut()
-                .map(TypedColumn::finish)
-                .collect::<Vec<_>>();
-            arrays.push(chunk.column(0).clone());
-            bulk_append(&mut typed_rows, arrays)?;
+        });
+        let mut write = |result: Result<ConvertedChunk, AppError>| -> Result<(), AppError> {
+            let chunk = result?;
+            for (total, count) in null_counts.iter_mut().zip(&chunk.nulls) {
+                *total += count;
+            }
+            for (total, count) in unconverted.iter_mut().zip(&chunk.unconverted) {
+                *total += count;
+            }
+            for (row, reasons) in chunk.notes {
+                notes_rows
+                    .append_row(params![row, reasons])
+                    .map_err(read_failed)?;
+            }
+            bulk_append(&mut typed_rows, chunk.columns)
+        };
+        // Dropping `chunks` on every path below ends the converter's loop.
+        let chunks = chunks;
+        // `_row` numbers every source row from 1, malformed ones included, so a fixed range scans
+        // one batch of the store rather than sorting everything after the previous batch.
+        for after in (0..rows as i64).step_by(CONVERT_BATCH_ROWS as usize) {
+            statement
+                .execute(params![after, after + CONVERT_BATCH_ROWS])
+                .map_err(read_failed)?;
+            while let Some(chunk) = statement.step().map_err(read_failed)? {
+                if chunks.send(chunk).is_err() {
+                    // The converter stops only on an error, which it sent before stopping.
+                    return Err(converted
+                        .try_iter()
+                        .find_map(Result::err)
+                        .unwrap_or_else(|| {
+                            AppError::Internal("Analytical import: conversion stopped".into())
+                        }));
+                }
+                while let Ok(result) = converted.try_recv() {
+                    write(result)?;
+                }
+            }
         }
-    }
+        drop(chunks);
+        for result in converted {
+            write(result)?;
+        }
+        Ok::<_, AppError>(())
+    })?;
     typed_rows.flush().map_err(read_failed)?;
     notes_rows.flush().map_err(read_failed)?;
     drop((typed_rows, notes_rows, statement));
