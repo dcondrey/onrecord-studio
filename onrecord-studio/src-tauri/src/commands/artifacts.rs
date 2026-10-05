@@ -6,8 +6,12 @@
 
 use crate::{
     analysis::artifacts::{
-        appeal::draft_appeal, followup_request::draft_followup,
-        statutory_appeal::draft_for_request, ArtifactError, DraftAvailability, DraftedArtifact,
+        agency_record::AgencyIdentity,
+        appeal::draft_appeal,
+        followup_request::draft_followup,
+        overdue_followup::{draft_for_saved_casework_request, OverdueFollowUpDraft},
+        statutory_appeal::draft_for_request,
+        ArtifactError, DraftAvailability, DraftedArtifact,
     },
     commands::profile::disclosure_context,
     error::AppError,
@@ -32,7 +36,9 @@ fn map_artifact_error(error: ArtifactError) -> AppError {
         ArtifactError::MissingField(field) => AppError::Analysis(format!(
             "Finding is missing a field the draft needs: {field}"
         )),
-        other @ (ArtifactError::NotALegalClaim { .. } | ArtifactError::AppealNotSupported(_)) => {
+        other @ (ArtifactError::NotALegalClaim { .. }
+        | ArtifactError::AppealNotSupported(_)
+        | ArtifactError::FollowUpNotAvailable(_)) => {
             AppError::Analysis(other.to_string())
         }
     }
@@ -104,6 +110,31 @@ pub async fn draft_appeal_from_statutory_deadline(
         request_id,
         &jurisdiction,
         &disclosure,
+    )
+    .await
+}
+
+/// Drafts the follow-up letter for a saved casework request whose computed determination deadline
+/// has passed with no recorded response. Refuses, with the reason, until that date has passed and
+/// whenever a date the letter would state is not recorded. `agency` adds that agency's counted
+/// record from the library when it holds enough closed requests.
+#[tauri::command]
+pub async fn draft_overdue_follow_up(
+    case_id: String,
+    request_id: String,
+    agency: Option<AgencyIdentity>,
+    repository: State<'_, DuckDbRepository>,
+    profile_store: State<'_, Arc<ProfileStore>>,
+    corpus: State<'_, CorpusIndex>,
+) -> Result<OverdueFollowUpDraft, AppError> {
+    let disclosure = disclosure_context(&profile_store, &repository, &corpus).await?;
+    draft_for_saved_casework_request(
+        &repository,
+        case_id,
+        request_id,
+        agency,
+        &disclosure,
+        chrono::Utc::now(),
     )
     .await
 }

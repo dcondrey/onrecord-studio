@@ -204,6 +204,7 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::artifacts::draft_appeal_from_finding,
         commands::artifacts::draft_availability_for_finding,
         commands::artifacts::draft_appeal_from_statutory_deadline,
+        commands::artifacts::draft_overdue_follow_up,
         commands::report::export_verifiable_report,
         commands::report::export_evidence_packet,
         commands::report::preview_packet_annotations,

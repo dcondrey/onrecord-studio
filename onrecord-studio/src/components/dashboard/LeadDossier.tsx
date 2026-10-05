@@ -3,6 +3,7 @@ import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
 import type { DossierGap, EvidenceLink, LeadDossier as LeadDossierData } from '../../types';
+import { tableLeadSources, type TableLeadSources } from '../../utils/tableLeadSources';
 import { findingToBriefingEvidence } from './BriefingWorkspace';
 import ArtifactDrafts from './ArtifactDrafts';
 import EvidenceChain from '../objects/EvidenceChain';
@@ -59,6 +60,7 @@ export default function LeadDossier({ findingId }: { findingId: string }) {
       {state.status === 'ready' && (
         <div className="space-y-4">
           <EvidenceChain dossier={state.dossier} />
+          <TablesRead sources={tableLeadSources(state.dossier.finding.explanation)} />
           <Section title="Draft from this finding">
             <ArtifactDrafts findingId={state.dossier.finding.id} />
           </Section>
@@ -104,6 +106,31 @@ export default function LeadDossier({ findingId }: { findingId: string }) {
         </div>
       )}
     </section>
+  );
+}
+
+// Shown only for a lead whose stored explanation names the tables it read; a document finding has
+// none and gets no section rather than an empty one.
+function TablesRead({ sources }: { sources: TableLeadSources | null }) {
+  if (sources === null) return null;
+  return (
+    <Section title={`Tables read (${sources.tables.length}) and query`}>
+      <ul className="space-y-2">
+        {sources.tables.map((table) => (
+          <li key={table.line}>
+            {table.parts === null ? table.line : (
+              <>
+                <span className="font-medium text-fg">{table.parts.name}</span>
+                <span className="block break-all">Source: {table.parts.source}</span>
+                <span className="block">Retrieved: {table.parts.retrievedOn}</span>
+                <span className="block break-all font-mono">SHA-256: {table.parts.sha256}</span>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+      <pre aria-label="Query the figures were computed with" className="mt-2 whitespace-pre-wrap break-words font-mono">{sources.sql}</pre>
+    </Section>
   );
 }
 

@@ -11,6 +11,8 @@ const BASIS_LABEL: Record<DraftEvidenceBasis, string> = {
     "Counted comparison with the agency's own stated commitment",
   COUNTED_STATUTORY_DEADLINE:
     "Counted against the statutory determination period",
+  DEADLINE_PASSED_WITHOUT_RECORDED_RESPONSE:
+    "Computed deadline passed with no recorded response (not a finding about the agency's conduct)",
 };
 
 export function confidenceLabel(confidence: FindingConfidence): string {

@@ -28,6 +28,7 @@ import abatementLogLeads from './topics-abatement-log-leads.json';
 import chargeLogLeads from './topics-charge-log-leads.json';
 import capacityComparisonLeads from './topics-capacity-comparison-leads.json';
 import releaseTiming from './topics-release-timing.json';
+import overdueFollowUp from './topics-overdue-follow-up.json';
 
 export type HelpGroup =
   | 'Getting started'
@@ -107,6 +108,7 @@ const ALL_HELP_TOPICS = [
   ...chargeLogLeads,
   ...capacityComparisonLeads,
   ...releaseTiming,
+  ...overdueFollowUp,
 ] as HelpTopic[];
 
 /**

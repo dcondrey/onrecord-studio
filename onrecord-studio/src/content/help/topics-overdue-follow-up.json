@@ -1,0 +1,71 @@
+[
+  {
+    "id": "overdue-follow-up",
+    "title": "Follow-up letter when a deadline passes with no response",
+    "group": "Findings",
+    "summary": "For a records request in a case, a letter that states the date you recorded, the computed deadline for a determination, and the days since, and asks for the determination. It exists only after the deadline has passed with nothing recorded.",
+    "keywords": [
+      "follow-up",
+      "follow up",
+      "overdue",
+      "no response",
+      "silence",
+      "deadline",
+      "determination",
+      "7922.535",
+      "letter",
+      "agency record",
+      "casework"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "In a case, open a records request and expand Compiled CPRA request and statutory clock. When nothing is recorded at or after the filing date, Draft overdue follow-up letter appears under the scheduled follow-ups. The letter is drafted from the last saved revision, so save the case first.",
+          "The application sends nothing. The letter is text you review, edit and send yourself."
+        ]
+      },
+      {
+        "heading": "What the letter states",
+        "items": [
+          "The date you recorded as the submission date, named as your own record. The count treats that date as the date of receipt.",
+          "The rule: Government Code section 7922.535, ten calendar days from receipt, with a last day on a weekend or judicial holiday moved to the next court day.",
+          "The deadline, labelled as computed and not as a recorded date.",
+          "The calendar days since that deadline, as of the day you draft it.",
+          "A request for the determination and the estimated date the records will be available, and for a copy of any determination or extension notice already sent, since your records may be incomplete.",
+          "One sentence that a requester may seek judicial relief under Government Code section 7923.000 et seq. It cites the section and quotes nothing."
+        ]
+      },
+      {
+        "heading": "When no letter is drafted",
+        "paragraphs": [
+          "The reason is shown in place of the letter. A letter is refused when:"
+        ],
+        "items": [
+          "The deadline has not passed. On the deadline day itself there is no letter; the day after, the letter says one day.",
+          "No submission date is recorded, or the request is still a draft.",
+          "The request's state records a response (acknowledged, partial, produced or closed), or a production is recorded. This letter covers silence only.",
+          "The submission date is later than today."
+        ]
+      },
+      {
+        "heading": "What it does not say",
+        "paragraphs": [
+          "It is a follow-up, not an appeal and not a court filing. It says the computed deadline passed and that your records hold no response. It does not say why, and it does not say the agency broke a rule: your records may be missing a reply the agency sent. Its confidence is shown as not assessed for that reason.",
+          "A case request has no field for an agency's extension notice, so the letter says none is recorded and counts the ten-day period. If you received an extension notice, correct the deadline in the text before sending."
+        ]
+      },
+      {
+        "heading": "The agency's record (optional)",
+        "paragraphs": [
+          "After a letter is drafted you can choose an agency from your library. Only agencies with at least 10 closed requests are listed, and an agency is one portal's agency: the same number on another portal is a different agency and is never combined. Choosing one redrafts the letter with one added paragraph and replaces any edits you made, so choose before editing.",
+          "The paragraph gives counts from your library only, and says so: how many closed requests are held and the dates they span; how many of those carry a determination date recorded with its source, and how many of those are dated after the deadline computed under the same rule; and, where closure notices stating no responsive records are stored, how many of those have a recorded finding of an earlier, similar release by the same agency. That last count measures similar text, not that the earlier release answered the request.",
+          "A count of zero is printed only when requests were observed and none met the condition. Where nothing could be measured, the letter says that instead of printing zero. Delete the paragraph from the text if you do not want it, or choose None."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [],
+    "related": ["request-drafts", "dispositions", "legal-vs-pattern"]
+  }
+]

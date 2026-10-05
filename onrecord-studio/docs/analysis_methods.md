@@ -455,3 +455,47 @@ Groups were identical wherever both passes ran. 16,000 passages is the most 2,00
 
 ### E. What a finding does and does not claim
 A finding states how many passages in how many documents share wording, names the agencies, and cites up to 12 passages (one per agency first) with the character range of each in `documents_fts.extracted_text`, the units `SUBSTRING` uses. Every finding's text says that shared wording is not evidence that agencies coordinated and does not show that any request was not reviewed individually: standard wording, a common template or a quoted statute all produce it. All three kinds are pattern signals (`is_legal_claim` false).
+
+## 33. Follow-up Letter After a Deadline Passes With No Recorded Response
+
+Code: `analysis/artifacts/overdue_followup.rs` (letter), `analysis/artifacts/agency_record.rs` (paragraph and minimum), `storage/sqlite/agency_record.rs` (counts), command `draft_overdue_follow_up`, UI `OverdueFollowUp.tsx` in the casework panel.
+
+### A. Dates and rule
+The letter is drafted for one saved casework request. Its dates come from `request_compiler::evaluate_filing`, the same call the request's filing plan is built from, so the letter and the plan cannot disagree. The received date is the request's `submittedAt`, widened to the start of that day in UTC; the letter names it as the sender's own record and says the count treats it as the date of receipt. The deadline is the evaluator's `effective_deadline_at`: received date plus 10 calendar days under Government Code § 7922.535, moved to the next court day when it lands on a Saturday, Sunday or judicial holiday (`court_calendar`), or the date a valid extension notice gave, moved the same way. Days since the deadline is `calendar_days_elapsed - allowed_calendar_days` as of the instant the command runs. The letter is dated that day.
+
+A casework request has no extension field, so that path always evaluates with no extension and the letter says none is recorded. The drafting function itself accepts an evaluated extension (tested) for a caller that has one.
+
+### B. Refusals
+No letter is produced, and the reason is returned for display, when any of these holds:
+
+| Condition | Why |
+|---|---|
+| no `submittedAt` | there is no date to count from; none is guessed |
+| state `DRAFT` | the request is not recorded as submitted |
+| state `ACKNOWLEDGED`, `PARTIAL`, `PRODUCED` or `CLOSED` | a response is recorded |
+| any production recorded at or after the filing date (basis is not `ObservationWithoutRecordedActivity`) | a response is recorded |
+| a sourced determination | `statutory_appeal.rs` covers that case |
+| extension status other than `NotInvoked` or `Valid` | the same two statuses `statutory_appeal.rs` accepts and `cpra_calendar_confidence_basis_points` scores without penalty |
+| elapsed days not greater than allowed days | the deadline has not passed; on the deadline day there is no letter |
+| received date with no stated source | nothing is counted from an unsourced date |
+| jurisdiction other than `US-CA` | no other statute is modeled |
+| the evaluator returns an error (for example a submission date after today) | the dates cannot be evaluated together |
+
+### C. What the letter claims
+It states the received date and its source, the rule, the computed deadline (labelled as computed), the days since, and that the sender's records hold no response. It asks for the determination and the estimated date of availability, and for a copy of anything already sent. Its evidence basis is `DEADLINE_PASSED_WITHOUT_RECORDED_RESPONSE` and its confidence is `Unassessed`: 10000 basis points is reserved for a count in which every date input was recorded, and here the determination was not observed. It is titled a follow-up. A test asserts the text contains none of "violat", "unlawful", "illegal", "breach", "intent", "deliberate", "willful", "refus", "ignor", "bad faith", "appeal", "petition".
+
+One sentence says a requester may seek judicial relief under Government Code section 7923.000 et seq. The section was read at leginfo.legislature.ca.gov on 2026-10-05 (Chapter 1 of the enforcement part; added by Stats. 2021, Ch. 614, operative 2023-01-01). The page was read through a text-extraction tool, not in a browser. The letter cites the section number and quotes none of its text.
+
+### D. The agency paragraph
+Optional. The user picks an agency after the first draft; nothing links a casework request to a library agency automatically, and a custodian name is not matched to one. An agency is `(portal_subdomain, agency_id)`; the same id on another portal is never pooled (tested).
+
+- N: requests assigned to the agency with a non-empty `closed_at`. Period: the earliest and latest `created_at` date among them.
+- M of N: requests the shared evaluator reads as `SourcedDeterminationEvent` with an extension status of `NotInvoked` or `Valid`. A determination timestamp with no source, an unreadable date, or an unknown extension reason leaves the request out of M; it stays in N and is described as counted neither way.
+- L of M: those the evaluator marks past the deadline.
+- K of N: closed requests whose stored closure notice classifies as no responsive records (`dispositions.rs`).
+- C of K: those with an undismissed `NO_RECORDS_CONTRADICTED_BY_RELEASE` finding for the same portal and agency. That detector records an earlier release by the same agency close in subject and wording; the paragraph says the comparison measures similarity of text and not responsiveness.
+
+Minimum N is 10 (`MINIMUM_CLOSED_REQUESTS`), tested at 9, 10 and 11. Below it the paragraph is omitted. With 10, one request moves any share by at most a tenth; below that a count describes a handful of individually identifiable requests while reading as a pattern. No percentage is printed at any N. When M is 0 the paragraph says no request carries a sourced determination and prints no late count; when K is 0 the no-records sentence is omitted. A zero is printed only for L with M above 0, or C with K above 0. The paragraph says the counts come from the sender's library and not from all requests the agency received.
+
+### E. Table leads in the dossier
+`src/utils/tableLeadSources.ts` is the only reader of the "Tables read:" and "SQL:" tail that `service_leads.rs` appends to a table lead's stored explanation. The on-screen dossier shows, per table, its name, source address, retrieval date and full SHA-256, then the query. A line whose parts cannot be separated is shown as stored. An explanation without the tail yields no section.

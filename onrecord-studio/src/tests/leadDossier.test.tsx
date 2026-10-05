@@ -26,6 +26,9 @@ const bridge = vi.hoisted(() => ({
   gates: new Map<string, Promise<void>>(),
 }));
 
+// The tail `analysis/service_leads.rs` appends to a table-derived lead, in its stored form.
+const TABLE_LEAD_EXPLANATION = vi.hoisted(() => `Open reports exceed the budgeted crew capacity. Method: grouped by category. Worth asking: which categories wait longest?\n\nTables read:\n1. 'Get It Done open reports' (https://example.test/open.csv), retrieved 2026-10-04, sha256 ${'ab'.repeat(32)}\n2. 'City operating budget' (no source address recorded), retrieved 2026-10-03, sha256 ${'cd'.repeat(32)}\n\nSQL:\nSELECT category FROM service_backlog`);
+
 function dossier(findingId: string, headline: string) {
   return {
     finding: {
@@ -63,6 +66,7 @@ vi.mock('../ipc', () => ({
     if (command !== 'build_lead_dossier') return Promise.reject(new Error(`unexpected ${command}`));
     const id = args?.findingId ?? '';
     const answer = dossier(id, `Headline for ${id}`);
+    if (id === 'table-lead') answer.finding.explanation = TABLE_LEAD_EXPLANATION;
     const gate = bridge.gates.get(id);
     return gate ? gate.then(() => answer) : Promise.resolve(answer);
   },
@@ -86,6 +90,21 @@ describe('LeadDossier', () => {
     expect(screen.getByText(/later revision of the data/)).toBeTruthy();
     expect(screen.getByText(/figures not examined/)).toBeTruthy();
     expect(screen.queryByText(/Every figure found/)).toBeNull();
+    // A document finding reads no table: no tables section, no query.
+    expect(screen.queryByText(/Tables read/)).toBeNull();
+    expect(screen.queryByLabelText('Query the figures were computed with')).toBeNull();
+  });
+
+  it('shows every table a table lead read, with its source, retrieval date and full digest, and the query', async () => {
+    render(<LeadDossier findingId="table-lead" />);
+    await screen.findByText('Tables read (2) and query');
+    expect(screen.getByText('Get It Done open reports')).toBeTruthy();
+    expect(screen.getByText('Source: https://example.test/open.csv')).toBeTruthy();
+    expect(screen.getByText('Source: no source address recorded')).toBeTruthy();
+    expect(screen.getByText('Retrieved: 2026-10-03')).toBeTruthy();
+    expect(screen.getByText(`SHA-256: ${'ab'.repeat(32)}`)).toBeTruthy();
+    expect(screen.getByText(`SHA-256: ${'cd'.repeat(32)}`)).toBeTruthy();
+    expect(screen.getByLabelText('Query the figures were computed with').textContent).toBe('SELECT category FROM service_backlog');
   });
 
   it('mounts the drafts panel for the finding below the evidence chain', async () => {

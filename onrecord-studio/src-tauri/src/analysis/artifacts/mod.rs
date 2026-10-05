@@ -15,8 +15,10 @@
 //! **What this module will not do:** send anything. It produces drafts. Delivery is the user's,
 //! not the app's.
 
+pub mod agency_record;
 pub mod appeal;
 pub mod followup_request;
+pub mod overdue_followup;
 pub mod statutory_appeal;
 pub mod templates;
 
@@ -66,6 +68,9 @@ pub enum DraftEvidenceBasis {
     CountedPolicyComparison,
     /// A request whose sourced determination date exceeded the statutory deadline.
     CountedStatutoryDeadline,
+    /// A request whose computed deadline passed with nothing recorded in response. States the
+    /// count and the absence; it is not a finding about the agency's conduct.
+    DeadlinePassedWithoutRecordedResponse,
 }
 
 impl DraftEvidenceBasis {
@@ -82,6 +87,11 @@ impl DraftEvidenceBasis {
             Self::CountedStatutoryDeadline => {
                 "This appeal rests on recorded dates for the request, counted against the \
                  statutory determination period."
+            }
+            Self::DeadlinePassedWithoutRecordedResponse => {
+                "This letter rests on the recorded received date, counted against the statutory \
+                 determination period, and on the absence of a recorded response in my own \
+                 records. It does not state why no response is recorded."
             }
         }
     }
@@ -238,6 +248,8 @@ pub enum ArtifactError {
     NotALegalClaim { finding_kind: FindingKind },
     #[error("No appeal can be drafted: {0}")]
     AppealNotSupported(String),
+    #[error("No overdue follow-up letter can be drafted: {0}")]
+    FollowUpNotAvailable(String),
 }
 
 /// Read-only helpers shared between followup and appeal draft paths.
