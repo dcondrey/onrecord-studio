@@ -1,0 +1,188 @@
+{
+  "csv": {
+    "completed": "\"Customer Provided Address\",\"Geolocation (Latitude)\",\"Geolocation (Longitude)\",\"Date/Time Closed\"\n\"P Street\",\"32.7100\",\"-117.1500\",\"3/15/2025, 9:00 AM\"\n\"Q Street\",\"32.7300\",\"-117.1300\",\"6/10/2025, 9:00 AM\"\n\"R Street\",\"32.7500\",\"-117.1100\",\"9/25/2025, 9:00 AM\"\n\"S Street\",\"\",\"\",\"4/1/2025, 9:00 AM\"\n",
+    "closed2025": "\"service_request_id\",\"date_requested\",\"service_name\",\"lat\",\"lng\"\n\"1\",\"2025-03-05 08:00:00\",\"Encampment\",\"32.7100\",\"-117.1500\"\n\"2\",\"2025-03-10 08:00:00\",\"Encampment\",\"32.7105\",\"-117.1500\"\n\"3\",\"2025-03-15 12:00:00\",\"Encampment\",\"32.7100\",\"-117.1500\"\n\"4\",\"2025-03-20 08:00:00\",\"Encampment\",\"32.7100\",\"-117.1505\"\n\"5\",\"2025-03-22 08:00:00\",\"Encampment\",\"32.7145\",\"-117.1500\"\n\"6\",\"2025-06-01 08:00:00\",\"Encampment\",\"32.7300\",\"-117.1257\"\n\"7\",\"2025-03-16 08:00:00\",\"Encampment\",\"32.7280\",\"-117.1500\"\n\"8\",\"2025-03-30 08:00:00\",\"Encampment\",\"32.7100\",\"-117.1500\"\n\"9\",\"2025-03-12 08:00:00\",\"Pothole\",\"32.7100\",\"-117.1500\"\n\"10\",\"2025-03-18 08:00:00\",\"Encampment\",\"32.7100\",\"-117.1500\"\n\"100\",\"2025-06-05 08:00:00\",\"Encampment\",\"32.7327\",\"-117.1300\"\n\"101\",\"2025-06-05 08:00:00\",\"Encampment\",\"32.7327\",\"-117.1300\"\n\"102\",\"2025-06-05 08:00:00\",\"Encampment\",\"32.7327\",\"-117.1300\"\n\"103\",\"2025-06-05 08:00:00\",\"Encampment\",\"32.7327\",\"-117.1300\"\n\"104\",\"2025-06-05 08:00:00\",\"Encampment\",\"32.7327\",\"-117.1300\"\n\"105\",\"2025-06-05 08:00:00\",\"Encampment\",\"32.7327\",\"-117.1300\"\n\"106\",\"2025-06-05 08:00:00\",\"Encampment\",\"32.7327\",\"-117.1300\"\n\"107\",\"2025-06-05 08:00:00\",\"Encampment\",\"32.7327\",\"-117.1300\"\n\"108\",\"2025-06-05 08:00:00\",\"Encampment\",\"32.7327\",\"-117.1300\"\n\"109\",\"2025-06-05 08:00:00\",\"Encampment\",\"32.7327\",\"-117.1300\"\n\"110\",\"2025-06-15 08:00:00\",\"Encampment\",\"32.7327\",\"-117.1300\"\n\"111\",\"2025-06-15 08:00:00\",\"Encampment\",\"32.7327\",\"-117.1300\"\n\"112\",\"2025-06-15 08:00:00\",\"Encampment\",\"32.7327\",\"-117.1300\"\n\"113\",\"2025-06-15 08:00:00\",\"Encampment\",\"32.7327\",\"-117.1300\"\n\"114\",\"2025-06-15 08:00:00\",\"Encampment\",\"32.7327\",\"-117.1300\"\n\"115\",\"2025-06-15 08:00:00\",\"Encampment\",\"32.7327\",\"-117.1300\"\n\"116\",\"2025-06-15 08:00:00\",\"Encampment\",\"32.7327\",\"-117.1300\"\n\"117\",\"2025-06-15 08:00:00\",\"Encampment\",\"32.7327\",\"-117.1300\"\n\"118\",\"2025-06-15 08:00:00\",\"Encampment\",\"32.7327\",\"-117.1300\"\n\"119\",\"2025-06-15 08:00:00\",\"Encampment\",\"32.7327\",\"-117.1300\"\n\"120\",\"2025-06-15 08:00:00\",\"Encampment\",\"32.7327\",\"-117.1300\"\n\"121\",\"2025-06-15 08:00:00\",\"Encampment\",\"32.7327\",\"-117.1300\"\n\"122\",\"2025-06-15 08:00:00\",\"Encampment\",\"32.7327\",\"-117.1300\"\n\"123\",\"2025-06-15 08:00:00\",\"Encampment\",\"32.7327\",\"-117.1300\"\n\"124\",\"2025-06-15 08:00:00\",\"Encampment\",\"32.7327\",\"-117.1300\"\n",
+    "open": "\"service_request_id\",\"date_requested\",\"service_name\",\"lat\",\"lng\"\n\"10\",\"2025-03-18 08:00:00\",\"Encampment\",\"32.7100\",\"-117.1500\"\n\"11\",\"2025-09-20 08:00:00\",\"Encampment\",\"\",\"\"\n"
+  },
+  "schema": {
+    "datasets": [
+      {
+        "snapshotId": "completed",
+        "datasetKind": "REGIONAL_DATA",
+        "displayName": "Nearby fixture, completed",
+        "tableName": "analysis_nearby_completed",
+        "importedRows": 4,
+        "rejectedRows": 0,
+        "sourceUri": null,
+        "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "retrievedAt": "2025-10-01T12:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}",
+        "unconvertedByColumn": {}
+      },
+      {
+        "snapshotId": "closed2025",
+        "datasetKind": "REGIONAL_DATA",
+        "displayName": "Nearby fixture, closed2025",
+        "tableName": "analysis_nearby_closed2025",
+        "importedRows": 35,
+        "rejectedRows": 0,
+        "sourceUri": "https://seshat.datasd.org/get_it_done_reports/get_it_done_requests_closed_2025_datasd.csv",
+        "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "retrievedAt": "2025-10-01T12:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}",
+        "unconvertedByColumn": {}
+      },
+      {
+        "snapshotId": "open",
+        "datasetKind": "REGIONAL_DATA",
+        "displayName": "Nearby fixture, open",
+        "tableName": "analysis_nearby_open",
+        "importedRows": 2,
+        "rejectedRows": 0,
+        "sourceUri": "https://seshat.datasd.org/get_it_done_reports/get_it_done_requests_open_datasd.csv",
+        "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "retrievedAt": "2025-10-01T12:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}",
+        "unconvertedByColumn": {}
+      }
+    ],
+    "templates": [],
+    "columns": [
+      {
+        "tableName": "analysis_nearby_completed",
+        "columnName": "customer_provided_address",
+        "logicalType": "CATEGORY",
+        "originalName": "Customer Provided Address",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_nearby_completed",
+        "columnName": "geolocation__latitude",
+        "logicalType": "CATEGORY",
+        "originalName": "Geolocation (Latitude)",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_nearby_completed",
+        "columnName": "geolocation__longitude",
+        "logicalType": "CATEGORY",
+        "originalName": "Geolocation (Longitude)",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_nearby_completed",
+        "columnName": "date_time_closed",
+        "logicalType": "CATEGORY",
+        "originalName": "Date/Time Closed",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_nearby_closed2025",
+        "columnName": "service_request_id",
+        "logicalType": "CATEGORY",
+        "originalName": "service_request_id",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_nearby_closed2025",
+        "columnName": "date_requested",
+        "logicalType": "CATEGORY",
+        "originalName": "date_requested",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_nearby_closed2025",
+        "columnName": "service_name",
+        "logicalType": "CATEGORY",
+        "originalName": "service_name",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_nearby_closed2025",
+        "columnName": "lat",
+        "logicalType": "CATEGORY",
+        "originalName": "lat",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_nearby_closed2025",
+        "columnName": "lng",
+        "logicalType": "CATEGORY",
+        "originalName": "lng",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_nearby_open",
+        "columnName": "service_request_id",
+        "logicalType": "CATEGORY",
+        "originalName": "service_request_id",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_nearby_open",
+        "columnName": "date_requested",
+        "logicalType": "CATEGORY",
+        "originalName": "date_requested",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_nearby_open",
+        "columnName": "service_name",
+        "logicalType": "CATEGORY",
+        "originalName": "service_name",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_nearby_open",
+        "columnName": "lat",
+        "logicalType": "CATEGORY",
+        "originalName": "lat",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_nearby_open",
+        "columnName": "lng",
+        "logicalType": "CATEGORY",
+        "originalName": "lng",
+        "nullable": true,
+        "dictionary": null
+      }
+    ]
+  },
+  "queries": [
+    {
+      "id": "abatement_repeat_places",
+      "title": "Places abated on many separate days",
+      "method": "Abatements in Nearby fixture, completed are counted once per place and day; a place is the recorded coordinates rounded to four decimal places (about eleven metres). One place can carry several address texts in the log; the one written most often is shown. Rows without coordinates or a readable time are counted apart. The log records that an abatement was completed, not who was there.",
+      "sql": "WITH logged AS (\n SELECT ROUND(TRY_CAST(\"geolocation__latitude\" AS DOUBLE), 4) AS latitude, ROUND(TRY_CAST(\"geolocation__longitude\" AS DOUBLE), 4) AS longitude,\n  CAST(COALESCE(TRY_CAST(CAST(\"date_time_closed\" AS VARCHAR) AS TIMESTAMP), TRY_STRPTIME(CAST(\"date_time_closed\" AS VARCHAR), ['%m/%d/%Y, %I:%M %p', '%-m/%-d/%Y, %-I:%M %p', '%m/%d/%Y %H:%M'])) AS DATE) AS day, TRIM(CAST(\"customer_provided_address\" AS VARCHAR)) AS address\n FROM \"analysis_nearby_completed\"\n), place_days AS (\n SELECT latitude, longitude, day, MODE(address) AS address FROM logged WHERE latitude IS NOT NULL AND longitude IS NOT NULL AND day IS NOT NULL GROUP BY latitude, longitude, day\n), places AS (\n SELECT latitude, longitude, MODE(address) AS address, COUNT(*) AS days, MIN(day) AS first_day, MAX(day) AS last_day FROM place_days GROUP BY latitude, longitude\n)\nSELECT address, days, CAST(first_day AS VARCHAR) AS first_day, CAST(last_day AS VARCHAR) AS last_day,\n COUNT(*) OVER () AS places, SUM(days) OVER () AS place_days, COUNT(*) FILTER (WHERE days = 1) OVER () AS places_abated_once,\n COUNT(*) FILTER (WHERE days >= 20) OVER () AS repeat_places, COALESCE(SUM(days) FILTER (WHERE days >= 20) OVER (), 0) AS repeat_place_days,\n (SELECT COUNT(*) FROM logged WHERE latitude IS NULL OR longitude IS NULL OR day IS NULL) AS rows_not_placed\nFROM places ORDER BY days DESC, address LIMIT 5"
+    },
+    {
+      "id": "abatement_reports_nearby",
+      "title": "Encampment reports filed near an abatement in the 14 days before and after it",
+      "method": "Abatements in Nearby fixture, completed are counted once per place and day (coordinates rounded to four decimal places). Encampment reports come from Nearby fixture, open, Nearby fixture, closed2025, once per report number; those tables hold every report filed from 2025-01-01 to 2025-10-01, so only abatements whose 14 days before and after fall inside that period are counted. A report is near an abatement within 150 metres and in the surrounding ring from 150 to 800 metres, by straight-line distance between the recorded coordinates. Each count is of report and abatement pairs: a report near two abatements is counted twice. Reports filed on the abatement day are counted apart. An abatement's ring is compared before and after only when it held at least 10 reports beforehand; a rise by half and a fall by a third are the same ratio in each direction. The same before-and-after count is also taken 28 days earlier at the same places, for the abatements whose earlier 29 days are inside the period; it shows how the counts were already moving and is not a period without abatements.",
+      "sql": "WITH abatements AS (\n SELECT DISTINCT ROUND(TRY_CAST(\"geolocation__latitude\" AS DOUBLE), 4) AS latitude, ROUND(TRY_CAST(\"geolocation__longitude\" AS DOUBLE), 4) AS longitude, CAST(COALESCE(TRY_CAST(CAST(\"date_time_closed\" AS VARCHAR) AS TIMESTAMP), TRY_STRPTIME(CAST(\"date_time_closed\" AS VARCHAR), ['%m/%d/%Y, %I:%M %p', '%-m/%-d/%Y, %-I:%M %p', '%m/%d/%Y %H:%M'])) AS DATE) AS day\n FROM \"analysis_nearby_completed\"\n), report_rows AS (\n SELECT TRIM(CAST(\"service_request_id\" AS VARCHAR)) AS report_id, TRY_CAST(\"lat\" AS DOUBLE) AS latitude, TRY_CAST(\"lng\" AS DOUBLE) AS longitude,\n  CAST(TRY_CAST(CAST(\"date_requested\" AS VARCHAR) AS TIMESTAMP) AS DATE) AS day\n FROM \"analysis_nearby_open\" WHERE TRIM(CAST(\"service_name\" AS VARCHAR)) = 'Encampment'\n UNION ALL\n SELECT TRIM(CAST(\"service_request_id\" AS VARCHAR)) AS report_id, TRY_CAST(\"lat\" AS DOUBLE) AS latitude, TRY_CAST(\"lng\" AS DOUBLE) AS longitude,\n  CAST(TRY_CAST(CAST(\"date_requested\" AS VARCHAR) AS TIMESTAMP) AS DATE) AS day\n FROM \"analysis_nearby_closed2025\" WHERE TRIM(CAST(\"service_name\" AS VARCHAR)) = 'Encampment'\n), reports AS (\n SELECT report_id, MIN(latitude) AS latitude, MIN(longitude) AS longitude, MIN(day) AS day FROM report_rows GROUP BY report_id\n), counted AS (\n SELECT * FROM abatements WHERE latitude IS NOT NULL AND longitude IS NOT NULL AND day IS NOT NULL\n  AND day - 14 >= DATE '2025-01-01' AND day + 14 <= DATE '2025-10-01'\n), pairs AS (\n SELECT counted.latitude AS place_latitude, counted.longitude AS place_longitude, counted.day AS place_day, reports.day - counted.day AS offset_days,\n  counted.day - 42 >= DATE '2025-01-01' AS earlier_counted,\n  SQRT(POW((reports.latitude - counted.latitude) * 110540, 2) + POW((reports.longitude - counted.longitude) * 111320 * COS(RADIANS(counted.latitude)), 2)) AS metres\n FROM counted JOIN reports ON reports.day BETWEEN counted.day - 42 AND counted.day + 14\n  AND reports.latitude BETWEEN counted.latitude - 0.0075 AND counted.latitude + 0.0075 AND reports.longitude BETWEEN counted.longitude - 0.0095 AND counted.longitude + 0.0095\n)\nSELECT (SELECT COUNT(*) FROM abatements) AS abatement_place_days, (SELECT COUNT(*) FROM counted) AS counted_place_days,\n (SELECT COUNT(*) FROM reports WHERE day BETWEEN DATE '2025-01-01' AND DATE '2025-10-01') AS reports_in_period,\n (SELECT COUNT(*) FROM reports WHERE latitude IS NULL OR longitude IS NULL OR day IS NULL) AS reports_not_placed,\n COALESCE(SUM(near_before), 0) AS near_before, COALESCE(SUM(near_after), 0) AS near_after, COALESCE(SUM(near_same_day), 0) AS near_same_day,\n COALESCE(SUM(ring_before), 0) AS ring_before, COALESCE(SUM(ring_after), 0) AS ring_after,\n COUNT(*) FILTER (WHERE ring_before >= 10) AS ring_compared,\n COUNT(*) FILTER (WHERE ring_before >= 10 AND ring_after > ring_before) AS ring_more_after,\n COUNT(*) FILTER (WHERE ring_before >= 10 AND ring_after < ring_before) AS ring_fewer_after,\n COUNT(*) FILTER (WHERE ring_before >= 10 AND ring_after * 2 >= ring_before * 3) AS ring_rose_by_half,\n COUNT(*) FILTER (WHERE ring_before >= 10 AND ring_after * 3 <= ring_before * 2) AS ring_fell_by_third,\n (SELECT COUNT(*) FROM counted WHERE day - 42 >= DATE '2025-01-01') AS earlier_place_days,\n COALESCE(SUM(earlier_near_before), 0) AS earlier_near_before, COALESCE(SUM(earlier_near_after), 0) AS earlier_near_after,\n COALESCE(SUM(earlier_ring_before), 0) AS earlier_ring_before, COALESCE(SUM(earlier_ring_after), 0) AS earlier_ring_after,\n '2025-01-01' AS reports_since, '2025-10-01' AS reports_until\nFROM (\n SELECT place_latitude, place_longitude, place_day,\n  COUNT(*) FILTER (WHERE metres <= 150 AND offset_days BETWEEN -14 AND -1) AS near_before, COUNT(*) FILTER (WHERE metres <= 150 AND offset_days > 0) AS near_after,\n  COUNT(*) FILTER (WHERE metres <= 150 AND offset_days = 0) AS near_same_day,\n  COUNT(*) FILTER (WHERE metres > 150 AND metres <= 800 AND offset_days BETWEEN -14 AND -1) AS ring_before,\n  COUNT(*) FILTER (WHERE metres > 150 AND metres <= 800 AND offset_days > 0) AS ring_after,\n  COUNT(*) FILTER (WHERE earlier_counted AND metres <= 150 AND offset_days BETWEEN -42 AND -29) AS earlier_near_before,\n  COUNT(*) FILTER (WHERE earlier_counted AND metres <= 150 AND offset_days BETWEEN -27 AND -14) AS earlier_near_after,\n  COUNT(*) FILTER (WHERE earlier_counted AND metres > 150 AND metres <= 800 AND offset_days BETWEEN -42 AND -29) AS earlier_ring_before,\n  COUNT(*) FILTER (WHERE earlier_counted AND metres > 150 AND metres <= 800 AND offset_days BETWEEN -27 AND -14) AS earlier_ring_after\n FROM pairs GROUP BY place_latitude, place_longitude, place_day\n) AS per_abatement"
+    }
+  ]
+}

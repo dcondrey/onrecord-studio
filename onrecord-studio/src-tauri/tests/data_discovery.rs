@@ -480,6 +480,51 @@ async fn stop_record_checks_run_on_imported_tables_with_the_publishers_headers()
 }
 
 #[tokio::test]
+async fn a_stored_property_log_is_counted_by_disposition_as_written_and_releases_only_when_recorded(
+) {
+    let fixture: Value =
+        serde_json::from_str(include_str!("fixtures/belongings-leads.json")).unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let db = DuckDbRepository::new(temp.path().join("belongings.db")).unwrap();
+    db.run_migrations(include_str!("../migrations/0001_initial_schema.sql"))
+        .await
+        .unwrap();
+    for (position, name) in ["released", "bare"].into_iter().enumerate() {
+        let path = temp.path().join(format!("{name}.csv"));
+        std::fs::write(&path, fixture["csv"][name].as_str().unwrap()).unwrap();
+        let input: AnalyticalImportRequest = serde_json::from_value(json!({ "datasetKind":"REGIONAL_DATA", "displayName":name, "localPath":path, "sourceUri":format!("https://example.test/{name}.csv"), "partialDataset":true })).unwrap();
+        let imported = db.import_analytical_csv(input).await.unwrap();
+        let sql = fixture["queries"][position]["sql"]
+            .as_str()
+            .unwrap()
+            .replace(&format!("analysis_belongings_{name}"), &imported.table_name);
+        let result = db.execute_restricted_sql(&sql, 100).await.unwrap();
+        let count = |row: usize, column: &str| -> i64 {
+            let value = cell(&result, row, column);
+            value
+                .as_i64()
+                .or_else(|| value.as_str().and_then(|text| text.parse().ok()))
+                .unwrap_or_else(|| panic!("{column} is not a count: {value}"))
+        };
+        assert_eq!(result.row_count, 3, "{name}");
+        assert_eq!(cell(&result, 0, "disposition"), &json!("Discarded"));
+        assert_eq!((count(0, "entries"), count(0, "all_entries")), (3, 6));
+        assert_eq!(count(1, "entries"), 2);
+        // The entry with a blank disposition is counted apart, not dropped or merged.
+        assert!(cell(&result, 2, "disposition").is_null());
+        assert_eq!(count(2, "entries"), 1);
+        assert_eq!(cell(&result, 0, "first_taken"), &json!("2024-12-02"));
+        assert_eq!(cell(&result, 0, "last_taken"), &json!("2025-07-08"));
+        if name == "released" {
+            assert_eq!(count(0, "released_entries"), 1);
+        } else {
+            // No release column: nothing was counted, which is not a count of zero.
+            assert!(cell(&result, 0, "released_entries").is_null());
+        }
+    }
+}
+
+#[tokio::test]
 async fn abatement_logs_pair_one_notice_with_one_abatement_in_the_released_format() {
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/abatement-leads.json")).unwrap();
@@ -531,6 +576,149 @@ async fn abatement_logs_pair_one_notice_with_one_abatement_in_the_released_forma
         assert_eq!(number(column), expected, "{column}");
     }
     assert_eq!(cell(&result, 0, "last_posted"), &json!("2025-07-10"));
+}
+
+#[tokio::test]
+async fn reports_around_abatements_are_counted_once_per_report_inside_the_complete_period() {
+    let fixture: Value =
+        serde_json::from_str(include_str!("fixtures/abatement-reports-nearby.json")).unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let db = DuckDbRepository::new(temp.path().join("nearby.db")).unwrap();
+    db.run_migrations(include_str!("../migrations/0001_initial_schema.sql"))
+        .await
+        .unwrap();
+    let mut repeat_sql = fixture["queries"][0]["sql"].as_str().unwrap().to_string();
+    let mut sql = fixture["queries"][1]["sql"].as_str().unwrap().to_string();
+    for name in ["completed", "closed2025", "open"] {
+        let path = temp.path().join(format!("{name}.csv"));
+        std::fs::write(&path, fixture["csv"][name].as_str().unwrap()).unwrap();
+        let input: AnalyticalImportRequest = serde_json::from_value(json!({ "datasetKind":"REGIONAL_DATA", "displayName":name, "localPath":path, "sourceUri":format!("https://example.test/{name}.csv"), "partialDataset":true })).unwrap();
+        let imported = db.import_analytical_csv(input).await.unwrap();
+        assert_eq!(imported.rejected_rows, 0, "{name}");
+        sql = sql.replace(&format!("analysis_nearby_{name}"), &imported.table_name);
+        repeat_sql = repeat_sql.replace(&format!("analysis_nearby_{name}"), &imported.table_name);
+    }
+    // Three placed abatements at three places, one day each; the fourth row has no coordinates.
+    let repeats = db.execute_restricted_sql(&repeat_sql, 100).await.unwrap();
+    assert_eq!(repeats.row_count, 3);
+    for (column, expected) in [
+        ("days", json!(1)),
+        ("places", json!(3)),
+        ("places_abated_once", json!(3)),
+        ("repeat_places", json!(0)),
+        ("rows_not_placed", json!(1)),
+    ] {
+        let value = cell(&repeats, 0, column);
+        assert_eq!(
+            value
+                .as_i64()
+                .or_else(|| value.as_str().and_then(|text| text.parse().ok())),
+            expected.as_i64(),
+            "{column}"
+        );
+    }
+    let result = db.execute_restricted_sql(&sql, 100).await.unwrap();
+    assert_eq!(result.row_count, 1);
+    let count = |name: &str| -> i64 {
+        let value = cell(&result, 0, name);
+        value
+            .as_i64()
+            .or_else(|| value.as_f64().map(|number| number as i64))
+            .or_else(|| value.as_str().and_then(|text| text.parse().ok()))
+            .unwrap_or_else(|| panic!("{name} is not a count: {value}"))
+    };
+    for (column, expected) in [
+        ("abatement_place_days", 4),
+        // One abatement has no coordinates; one is within 14 days of the reports' last day.
+        ("counted_place_days", 2),
+        // Thirty-five Encampment reports; the one held by both tables is one report; the Pothole is not read.
+        ("reports_in_period", 35),
+        ("reports_not_placed", 1),
+        ("near_before", 2),
+        ("near_same_day", 1),
+        // The report 15 days after is outside the window.
+        ("near_after", 2),
+        ("ring_before", 11),
+        // The report 2 km away is in neither distance band.
+        ("ring_after", 16),
+        // Only the abatement with ten or more ring reports beforehand is compared: 11 before, 15 after.
+        ("ring_compared", 1),
+        ("ring_more_after", 1),
+        ("ring_fewer_after", 0),
+        // 15 after against 11 before is under half again; 17 would be the first to count.
+        ("ring_rose_by_half", 0),
+        ("ring_fell_by_third", 0),
+        // Both abatements have their earlier 29 days inside the period; no report falls in them.
+        ("earlier_place_days", 2),
+        ("earlier_near_before", 0),
+        ("earlier_ring_after", 0),
+    ] {
+        assert_eq!(count(column), expected, "{column}");
+    }
+}
+
+#[tokio::test]
+async fn agency_report_export_counts_reports_by_form_and_by_named_official() {
+    let fixture: Value =
+        serde_json::from_str(include_str!("fixtures/disclosure-leads.json")).unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let db = DuckDbRepository::new(temp.path().join("reports.db")).unwrap();
+    db.run_migrations(include_str!("../migrations/0001_initial_schema.sql"))
+        .await
+        .unwrap();
+    let path = temp.path().join("agency_reports.csv");
+    std::fs::write(&path, fixture["csv"].as_str().unwrap()).unwrap();
+    let input: AnalyticalImportRequest = serde_json::from_value(json!({ "datasetKind":"REGIONAL_DATA", "displayName":"agency reports", "localPath":path, "partialDataset":true })).unwrap();
+    let imported = db.import_analytical_csv(input).await.unwrap();
+    assert_eq!((imported.imported_rows, imported.rejected_rows), (8, 0));
+    let count = |result: &SqlQueryResult, row: usize, name: &str| -> i64 {
+        let value = cell(result, row, name);
+        value
+            .as_i64()
+            .or_else(|| value.as_f64().map(|number| number as i64))
+            .or_else(|| value.as_str().and_then(|text| text.parse().ok()))
+            .unwrap_or_else(|| panic!("{name} is not a count: {value}"))
+    };
+    let mut results = Vec::new();
+    for query in fixture["queries"].as_array().unwrap() {
+        let sql = query["sql"]
+            .as_str()
+            .unwrap()
+            .replace("analysis_agency_reports", &imported.table_name);
+        results.push(db.execute_restricted_sql(&sql, 100).await.unwrap());
+    }
+    let forms: Vec<(String, i64, i64)> = (0..results[0].row_count)
+        .map(|row| {
+            (
+                cell(&results[0], row, "form").as_str().unwrap().to_string(),
+                count(&results[0], row, "reports"),
+                count(&results[0], row, "undated"),
+            )
+        })
+        .collect();
+    // The type "FPPC 802; Not electronically filed." is Form 802; the undated report is counted.
+    assert_eq!(
+        forms,
+        vec![
+            ("FPPC 803".to_string(), 6, 0),
+            ("FPPC 801".to_string(), 1, 1),
+            ("FPPC 802".to_string(), 1, 0),
+        ]
+    );
+    let officials = &results[1];
+    assert_eq!(officials.row_count, 3);
+    assert_eq!(cell(officials, 0, "official"), &json!("Official A"));
+    for (column, expected) in [
+        ("reports", 4),
+        ("all_reports", 6),
+        ("officials_named", 2),
+        // The report with an empty official cell is counted apart, under no name.
+        ("unnamed_reports", 1),
+    ] {
+        assert_eq!(count(officials, 0, column), expected, "{column}");
+    }
+    assert_eq!(cell(officials, 0, "first_filed"), &json!("2026-01-05"));
+    assert_eq!(cell(officials, 0, "last_filed"), &json!("2026-08-28"));
 }
 
 #[tokio::test]

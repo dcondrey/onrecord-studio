@@ -75,6 +75,8 @@ export interface NativeCommandMap {
   get_case_scope: { args: { caseId: string }; result: Types.CaseScope };
   create_casework_case: { args: { reportId: string }; result: Types.CaseworkCase };
   save_casework_case: { args: { case: Types.CaseworkCase; expectedRevision: number; author: string }; result: Types.CaseworkCase };
+  request_record_gap: { args: { input: Types.RecordGapRequestInput }; result: Types.CaseworkCase };
+  get_record_gap_requests: { args: { gapKeys: string[] }; result: Types.RecordGapRequestStatus[] };
   export_casework_packet: { args: { caseId: string; contributor: string }; result: string };
   preview_casework_import: { args: { payload: string }; result: Types.CaseworkImportPreview };
   import_casework_packet: { args: { payload: string; expectedRevision?: number | null; packetSha256: string; author: string }; result: Types.CaseworkCase };

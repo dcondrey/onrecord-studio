@@ -40,6 +40,22 @@ pub async fn create_casework_case(
 ) -> Result<CaseworkCase, AppError> {
     repository.create_casework_case(report_id).await
 }
+/// Tracks the drafted request for a record gap behind a table lead; the lead's case is opened
+/// when it has none.
+#[tauri::command]
+pub async fn request_record_gap(
+    input: RecordGapRequestInput,
+    repository: State<'_, DuckDbRepository>,
+) -> Result<CaseworkCase, AppError> {
+    repository.request_record_gap(input).await
+}
+#[tauri::command]
+pub async fn get_record_gap_requests(
+    gap_keys: Vec<String>,
+    repository: State<'_, DuckDbRepository>,
+) -> Result<Vec<RecordGapRequestStatus>, AppError> {
+    repository.record_gap_requests(gap_keys).await
+}
 #[tauri::command]
 pub async fn save_casework_case(
     case: CaseworkCase,

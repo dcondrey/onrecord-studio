@@ -125,6 +125,8 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::casework::get_case_scope,
         commands::casework::create_casework_case,
         commands::casework::save_casework_case,
+        commands::casework::request_record_gap,
+        commands::casework::get_record_gap_requests,
         commands::casework::export_casework_packet,
         commands::casework::preview_casework_import,
         commands::casework::import_casework_packet,

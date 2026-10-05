@@ -290,6 +290,100 @@ fn quoted_date(date: &str, items: &[&CaseworkCitation]) -> bool {
         })
     })
 }
+/// The topic of a case opened from a table lead, which belongs to no research topic.
+const TABLE_LEAD_TOPIC: &str = "general";
+const MAX_GAP_KEYS: usize = 200;
+const MAX_GAP_TEXT: usize = 6_000;
+const MAX_GAP_LIST: usize = 24;
+fn gap_request_id(gap_key: &str) -> String {
+    format!("gap-{}", &sha256_hex(gap_key.as_bytes())[..40])
+}
+fn lead_report_id(lead_ref: &str) -> String {
+    format!("lead:{}", &sha256_hex(lead_ref.as_bytes())[..40])
+}
+fn gap_text(label: &str, value: &str, limit: usize, required: bool) -> Result<(), AppError> {
+    if (required && value.trim().is_empty()) || value.len() > limit {
+        return Err(invalid(format!(
+            "A record gap's {label} is {} (limit {limit} bytes).",
+            if value.len() > limit {
+                "too long"
+            } else {
+                "missing"
+            }
+        )));
+    }
+    Ok(())
+}
+fn validate_gap_input(input: &RecordGapRequestInput) -> Result<(), AppError> {
+    gap_text("key", &input.gap_key, 600, true)?;
+    gap_text("lead", &input.lead_ref, 2_400, true)?;
+    gap_text("lead title", &input.lead_title, 2_400, true)?;
+    gap_text("lead question", &input.lead_question, MAX_GAP_TEXT, true)?;
+    gap_text("title", &input.title, 300, true)?;
+    gap_text("custodian", &input.custodian, 300, false)?;
+    gap_text("description", &input.gap, MAX_GAP_TEXT, true)?;
+    gap_text("purpose", &input.resolves, MAX_GAP_TEXT, true)?;
+    gap_text("draft", &input.draft, 24_000, true)?;
+    gap_text("period", &input.period, 300, false)?;
+    for (label, values) in [
+        ("record type", &input.record_types),
+        ("field", &input.fields),
+    ] {
+        if values.len() > MAX_GAP_LIST {
+            return Err(invalid(format!(
+                "A record gap names more than {MAX_GAP_LIST} {label}s."
+            )));
+        }
+        for value in values {
+            gap_text(label, value, 600, true)?;
+        }
+    }
+    if input.record_types.is_empty() {
+        return Err(invalid("A record gap names no record to request."));
+    }
+    Ok(())
+}
+fn request_from_gap(input: &RecordGapRequestInput) -> CaseworkRequest {
+    CaseworkRequest {
+        id: gap_request_id(&input.gap_key),
+        title: input.title.trim().to_string(),
+        custodian: input.custodian.trim().to_string(),
+        gap: input.gap.clone(),
+        resolves: input.resolves.clone(),
+        draft: input.draft.clone(),
+        state: "DRAFT".into(),
+        expected_record_types: input.record_types.clone(),
+        expected_fields: input.fields.clone(),
+        expected_period: input.period.trim().to_string(),
+        ..Default::default()
+    }
+}
+/// A case for a lead counted from imported tables. It cites no document, so it starts with no
+/// evidence; its one question is the lead's own, open.
+fn create_from_lead(input: &RecordGapRequestInput) -> CaseworkCase {
+    let mut title = input.lead_title.trim().to_string();
+    while title.len() > 480 {
+        title.pop();
+    }
+    CaseworkCase {
+        id: format!("case-{}", uuid::Uuid::new_v4()),
+        report_id: lead_report_id(&input.lead_ref),
+        topic: TABLE_LEAD_TOPIC.into(),
+        title,
+        disposition: "OPEN".into(),
+        created_at: now(),
+        updated_at: now(),
+        questions: vec![CaseworkQuestion {
+            id: "lead".into(),
+            question: input.lead_question.clone(),
+            next_test: format!("Obtain: {}", input.title.trim()),
+            disposition: "OPEN".into(),
+            ..Default::default()
+        }],
+        notes: "Opened from a lead counted from imported tables. The counts are not a finding of intent or wrongdoing, and the case cites no document until one is added.".into(),
+        ..Default::default()
+    }
+}
 fn create_from_report(report: &ResearchReport, states: &BTreeMap<String, String>) -> CaseworkCase {
     let mut evidence = Vec::new();
     let mut questions = report
@@ -678,8 +772,15 @@ fn validate(
         || case.title.trim().is_empty()
         || case.title.len() > 500
         || case.owner.len() > 120
-        || !["homelessness", "police", "abatement", "bathrooms", "waste"]
-            .contains(&case.topic.as_str())
+        || ![
+            "homelessness",
+            "police",
+            "abatement",
+            "bathrooms",
+            "waste",
+            TABLE_LEAD_TOPIC,
+        ]
+        .contains(&case.topic.as_str())
         || !["OPEN", "ACTIVE", "ON_HOLD", "RESOLVED", "DISMISSED"]
             .contains(&case.disposition.as_str())
     {
@@ -1333,6 +1434,92 @@ impl DuckDbRepository {
             )?;
             tx.commit().map_err(storage)?;
             Ok(case)
+        })
+        .await
+    }
+    /// Tracks the drafted request for one record gap, opening the lead's case when it has none.
+    /// Sending a gap already tracked returns the case unchanged.
+    pub async fn request_record_gap(
+        &self,
+        input: RecordGapRequestInput,
+    ) -> Result<CaseworkCase, AppError> {
+        validate_gap_input(&input)?;
+        self.query_connection("Track record gap request", move |conn| {
+            conn.execute_batch(SCHEMA).map_err(storage)?;
+            let existing: Option<Vec<u8>> = conn
+                .query_row(
+                    "SELECT payload_zstd FROM casework_cases WHERE report_id=?1 ORDER BY updated_at DESC LIMIT 1",
+                    params![lead_report_id(&input.lead_ref)],
+                    |row| row.get(0),
+                )
+                .optional()
+                .map_err(storage)?;
+            let request = request_from_gap(&input);
+            let (mut case, summary) = match existing {
+                Some(existing) => {
+                    let mut case: CaseworkCase = decode(&existing)?;
+                    if case.requests.iter().any(|r| r.id == request.id) {
+                        refresh_case(conn, &mut case)?;
+                        return Ok(case);
+                    }
+                    (case, "Added a drafted request for a record gap.")
+                }
+                None => (
+                    create_from_lead(&input),
+                    "Opened from a table lead with a drafted request for a record gap.",
+                ),
+            };
+            case.requests.push(request);
+            validate(conn, &mut case, false)?;
+            let tx = conn.transaction().map_err(storage)?;
+            write_case(&tx, &mut case, "Discovery feed", summary)?;
+            tx.commit().map_err(storage)?;
+            Ok(case)
+        })
+        .await
+    }
+    /// The tracked request for each gap key that has one. A key with no entry was never asked.
+    pub async fn record_gap_requests(
+        &self,
+        gap_keys: Vec<String>,
+    ) -> Result<Vec<RecordGapRequestStatus>, AppError> {
+        if gap_keys.len() > MAX_GAP_KEYS {
+            return Err(invalid(format!(
+                "At most {MAX_GAP_KEYS} record gaps are looked up at once."
+            )));
+        }
+        self.query_connection("Load record gap requests", move |conn| {
+            conn.execute_batch(SCHEMA).map_err(storage)?;
+            let by_request: BTreeMap<String, String> = gap_keys
+                .into_iter()
+                .map(|key| (gap_request_id(&key), key))
+                .collect();
+            let observed_at = now();
+            let mut statuses = Vec::new();
+            for case in cases(conn)? {
+                for request in &case.requests {
+                    let Some(gap_key) = by_request.get(&request.id) else {
+                        continue;
+                    };
+                    let mut request = request.clone();
+                    compile_request(&mut request, &case.evidence, &observed_at)?;
+                    let plan = request.filing_plan.as_ref();
+                    statuses.push(RecordGapRequestStatus {
+                        gap_key: gap_key.clone(),
+                        case_id: case.id.clone(),
+                        report_id: case.report_id.clone(),
+                        request_id: request.id.clone(),
+                        state: request.state.clone(),
+                        submitted_at: request.submitted_at.clone(),
+                        determination_due_on: plan.map(|p| p.determination_due_on.clone()),
+                        deadline_passed_without_recorded_response: plan
+                            .is_some_and(|p| p.deadline_passed_without_recorded_response),
+                        productions: request.productions.len(),
+                        remaining_omissions: request_omissions(&request).len(),
+                    });
+                }
+            }
+            Ok(statuses)
         })
         .await
     }
@@ -2442,6 +2629,69 @@ mod tests {
             String::from_utf8_lossy(committed),
             "the signed package's byte layout has changed; see this test's doc comment"
         );
+    }
+    #[tokio::test]
+    async fn a_record_gap_opens_one_case_per_lead_tracks_each_gap_once_and_has_no_clock_until_filed(
+    ) {
+        let db = setup(false).await;
+        let gap = |key: &str| RecordGapRequestInput {
+            gap_key: key.into(),
+            lead_ref: "abatement_repeat_places|https://example.test/log.csv".into(),
+            lead_title: "412 of 900 abatements were at 6 places".into(),
+            lead_question: "What became of belongings at these places?".into(),
+            title: "Stored-property intake and release log".into(),
+            custodian: String::new(),
+            gap: "The log does not record what became of belongings.".into(),
+            resolves: "How many items were stored, discarded and retrieved.".into(),
+            draft: "Please provide the stored-property log.".into(),
+            record_types: vec!["Stored-property intake log".into()],
+            fields: vec!["Disposition".into()],
+            period: "2023-01-01 to 2023-12-31".into(),
+        };
+        let first = db.request_record_gap(gap("storage")).await.unwrap();
+        assert_eq!((first.revision, first.requests.len()), (1, 1));
+        assert!(first.evidence.is_empty() && first.report_id.starts_with("lead:"));
+        assert!(first.requests[0]
+            .compiled_draft
+            .contains("Stored-property intake log"));
+        let again = db.request_record_gap(gap("storage")).await.unwrap();
+        assert_eq!((again.id.as_str(), again.revision), (first.id.as_str(), 1));
+        let mut both = db.request_record_gap(gap("invoices")).await.unwrap();
+        assert_eq!(
+            (both.id.as_str(), both.requests.len()),
+            (first.id.as_str(), 2)
+        );
+        assert!(db
+            .request_record_gap(RecordGapRequestInput {
+                record_types: vec![],
+                ..gap("empty")
+            })
+            .await
+            .is_err());
+
+        let keys = || vec!["storage".to_string(), "invoices".into(), "never".into()];
+        let unfiled = db.record_gap_requests(keys()).await.unwrap();
+        assert_eq!(unfiled.len(), 2);
+        assert!(unfiled
+            .iter()
+            .all(|s| s.state == "DRAFT" && s.determination_due_on.is_none()));
+
+        both.requests[0].state = "SUBMITTED".into();
+        both.requests[0].submitted_at = Some("2020-01-06".into());
+        let revision = both.revision;
+        db.save_casework_case(both, revision, "Desk".into())
+            .await
+            .unwrap();
+        let filed = db.record_gap_requests(keys()).await.unwrap();
+        let storage_gap = filed.iter().find(|s| s.gap_key == "storage").unwrap();
+        assert_eq!(storage_gap.submitted_at.as_deref(), Some("2020-01-06"));
+        assert_eq!(
+            storage_gap.determination_due_on.as_deref(),
+            Some("2020-01-16")
+        );
+        assert!(storage_gap.deadline_passed_without_recorded_response);
+        let other = filed.iter().find(|s| s.gap_key == "invoices").unwrap();
+        assert!(other.submitted_at.is_none() && !other.deadline_passed_without_recorded_response);
     }
     #[tokio::test]
     async fn creates_persistent_case_from_real_report_revisits_unresolved_work_and_rejects_stale_revisions(

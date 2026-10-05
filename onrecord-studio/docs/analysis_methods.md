@@ -364,6 +364,16 @@ Rows are keyed by the address text (trimmed, lower case) and the coordinates rou
 The logs record a posting time and a closing time. They do not record the notice period that applied, so 24 and 72 hours are yardsticks and the lead is not a finding that notice fell short; `ENCAMPMENT_NOTICE_SHORTFALL` (a notice document against a stated minimum) is the kind that makes that comparison. Notice may have been given by a route the posting log does not record, and two rows at one place can be different events. Neither log records whether anyone was present or what was done with belongings.
 
 
+### D. Reports around an abatement
+`abatementLeads.ts` also runs on a completion log alone (`abatement_reports_nearby`), stored under the same kind. Verified natively by `tests/data_discovery.rs::reports_around_abatements_are_counted_once_per_report_inside_the_complete_period`. It needs the open Get It Done copy and every closed-year file from some year to the open copy's year (`encampmentReportCoverage`, §21), each with `lat` and `lng`: closed files are keyed by close year, so those tables hold every Encampment report filed since that earliest year began. Abatements are counted once per place and day (coordinates rounded to four decimal places) and only when the 14 days before and after fall inside that period. Reports are counted once per report number. A report is near within 150 metres and in the ring from 150 to 800 metres, by straight-line distance on the recorded coordinates (a degree of latitude taken as 110,540 metres, a degree of longitude as 111,320 metres times the cosine of the latitude). Counted: report and abatement pairs before, on the day, and after, in each band; reports with no coordinates or date. Per abatement, the ring is compared before and after only when it held at least 10 reports beforehand: how many had more afterwards, how many fewer, how many rose by half or more (after × 2 ≥ before × 3) and how many fell by a third or more (after × 3 ≤ before × 2), the same ratio in each direction. A lead needs 30 counted abatement place-days.
+
+The same before-and-after count is also taken 28 days earlier at the same places, for abatements whose earlier fortnights are inside the period, and shown beside the actual one when 30 abatements are behind it: it shows how the counts were already moving, and is not a period without abatements, since many places are abated repeatedly.
+
+The counts are pairs, so a report near several abatements is counted for each; in a dense area the pair counts exceed the number of reports many times over. Reports are complaints, not people. Abatements are often scheduled because reports were filed, so more reports before than after is expected whatever the abatement did. The lead does not say anyone moved and does not use the word displacement.
+
+### E. Places abated on many days
+`abatement_repeat_places`, on a completion log alone. A place is the coordinates rounded to four decimal places (about eleven metres); an abatement is counted once per place and day; the address shown is the text written most often for that place. Counted: places, place-days, places abated on one day only, places abated on 20 or more separate days and their place-days, and rows with no coordinates or readable time. The lead needs one place at 20 days and names up to five. The log records that an abatement was completed, not who was there or whether the same people returned.
+
 ## 20. Arrest and Citation Log Leads
 
 `src/utils/chargeLeads.ts`, run by automatic discovery and stored as `CHARGE_LOG_LEAD` findings (§17 E). Verified natively by `tests/data_discovery.rs::charge_log_checks_count_arrests_and_citations_not_charge_rows`, which imports a table with the headers and values of the logs SDPD released to requests 25-7080 and 26-6187.
@@ -486,6 +496,19 @@ Each figure is a sum from a published table. Adopted is the original appropriati
 ### F. Missing tables
 `dataGaps.ts` offers `OPERATING_ACTUALS` when a budget table is imported and no actuals table is.
 
+## 25. Disclosure Filing Leads
+
+`src/utils/disclosureLeads.ts`, run by automatic discovery and stored as `DISCLOSURE_FILING_LEAD` findings (§17 E). Verified natively by `tests/data_discovery.rs::agency_report_export_counts_reports_by_form_and_by_named_official`, which imports a file with the headers and values of the City of San Diego filing portal's agency-report export. The app does not download from that portal; the file is exported there and imported (`docs/data-sources/city-disclosure-filings.md`).
+
+### A. Which tables are read
+A table with `filing_date`, `filing_type`, `description`, `agency` and `official` columns: one row per report on FPPC Form 801, 802, 803 or 806.
+
+### B. What is counted
+The form is the first eight characters of the filing type in upper case, so a type carrying a note ("FPPC 802; Not electronically filed.") is counted under its form. The date is the first ten characters of the filing date. Counted: reports per form with the number undated and the first and last date; for Form 803, reports per official named, the number of officials named, and reports whose official cell is empty, which are counted apart and never under a name. A lead needs 10 Form 803 reports and names an official with 3 or more, at most five.
+
+### C. What a lead does and does not claim
+A behested payment report is the official's own disclosure of a payment made to a third party at the official's request. The export has a short description and no amount column; payor, payee and amount are on the filed form. A count of reports is not a finding about any decision, a larger count can reflect more complete reporting, and the export covers only the dates chosen when it was downloaded.
+
 ## 27. Meeting Posting Time and Agenda Revisions
 Shown in the Meetings view; neither produces a finding.
 
@@ -585,3 +608,33 @@ Minimum N is 10 (`MINIMUM_CLOSED_REQUESTS`), tested at 9, 10 and 11. Below it th
 
 ### E. Table leads in the dossier
 `src/utils/tableLeadSources.ts` is the only reader of the "Tables read:" and "SQL:" tail that `service_leads.rs` appends to a table lead's stored explanation. The on-screen dossier shows, per table, its name, source address, retrieval date and full SHA-256, then the query. A line whose parts cannot be separated is shown as stored. An explanation without the tail yields no section.
+
+### F. Record gaps behind a table lead
+
+Source: `src/utils/recordGaps.ts`, `src/utils/belongingsLeads.ts`, `storage/casework.rs`
+(`request_record_gap`, `record_gap_requests`).
+
+A gap definition is data: a record, the checks (by query id) whose leads leave it open, the record
+types and fields to ask for, search terms, and the check that reads the record once imported. It
+names no place or agency. The period and identifiers come from the lead's own result; the
+custodian is the saved source whose host the table was retrieved from, else that host, else left
+blank. One gap exists per definition, check and source address, so a newer copy of a table does
+not ask again.
+
+States: not asked; found (held requests matching a search term that have released files, which
+is not an answer); drafted (tracked, no submission date, so no clock); requested and overdue (the
+CPRA determination clock `plan_filing` already models, counted at read time); produced; closed;
+answered. Answered requires the definition's check to have returned rows on an imported table.
+
+Tracking stores a `CaseworkRequest` whose id is derived from the gap key, in a case whose
+`report_id` is `lead:` plus a digest of the check and source. That case cites no document and has
+topic `general`. Sending the same gap again changes nothing.
+
+The stored-property check counts rows by the disposition text as written, blank apart, and
+entries with a non-blank release date. With no release column the release count is NULL, not
+zero. Its column names are assumed; no released stored-property log has been imported, so the
+check is untested against a real one.
+
+Not built: the request compiled by casework always cites the CPRA, whatever jurisdiction the
+table came from; the SB 272 catalogue is not consulted to name the system of record; only the
+stored-property definition has a check, so the other definitions cannot reach answered.

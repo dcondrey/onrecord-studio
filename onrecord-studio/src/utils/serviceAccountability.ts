@@ -14,8 +14,11 @@ export interface ServiceRequestRoles {
   group: string | null;
   areas: string[];
 }
+/** What a lead's own result says a follow-up record should cover. */
+export interface LeadScope { period?: string; identifiers?: string[] }
 export interface ServiceLead {
   key: string;
+  scope?: LeadScope;
   priority: number;
   title: string;
   detail: string;

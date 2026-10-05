@@ -239,9 +239,14 @@ export const PLAIN_FINDING_TEXT: Record<FindingKind, PlainText> = {
     next: "Ask the department for its revised budget and year-end report for the year named, or its overtime and vacancy reports, and read the Council's settlement resolutions.",
   },
   ABATEMENT_LOG_LEAD: {
-    observed: "A count from an agency's released encampment abatement logs: the hours between a notice being posted and the abatement at the same place, and abatements at places with no notice in the log.",
-    notShown: 'It does not show that too little notice was given. The logs do not record the notice period that applied, whether anyone was present, or what was done with belongings.',
+    observed: "A count from an agency's released encampment abatement logs: the hours between a notice being posted and the abatement at the same place, abatements at places with no notice in the log, or resident reports filed near an abatement in the two weeks before and after it.",
+    notShown: 'It does not show that too little notice was given, or where anyone went afterwards. The logs do not record the notice period that applied, whether anyone was present, or what was done with belongings.',
     next: "Ask the agency for its abatement procedure, the notices as posted and the stored-property log for the places listed.",
+  },
+  DISCLOSURE_FILING_LEAD: {
+    observed: "A count from a city's export of agency reports: behested payment reports by the official named on them, and how many reports of each form the export holds.",
+    notShown: 'It does not show that a payment influenced anything. The export has no amount column, and the report is filed by the official named on it.',
+    next: 'Read the filed Form 803 for the payor and amount, then look for the same payor in council dockets and contract awards.',
   },
   CHARGE_LOG_LEAD: {
     observed: "A count from a police department's released arrest and citation log: arrests and citations citing an encampment, encroachment, lodging or public urination section, and arrests on those sections alone.",

@@ -1,0 +1,115 @@
+{
+  "csv": {
+    "released": "\"Date Stored\",\"Item Description\",\"Disposition\",\"Date Released\"\n\"7/1/2025\",\"Tent\",\"Discarded\",\"\"\n\"7/1/2025\",\"Bicycle\",\"Stored\",\"7/9/2025\"\n\"7/3/2025\",\"Backpack\",\"Stored\",\"\"\n\"7/3/2025\",\"Bedding\",\"Discarded\",\"\"\n\"12/2/2024\",\"Cart\",\"Discarded\",\"\"\n\"7/8/2025\",\"Documents\",\"\",\"\"\n",
+    "bare": "\"Date Stored\",\"Item Description\",\"Disposition\"\n\"7/1/2025\",\"Tent\",\"Discarded\"\n\"7/1/2025\",\"Bicycle\",\"Stored\"\n\"7/3/2025\",\"Backpack\",\"Stored\"\n\"7/3/2025\",\"Bedding\",\"Discarded\"\n\"12/2/2024\",\"Cart\",\"Discarded\"\n\"7/8/2025\",\"Documents\",\"\"\n"
+  },
+  "schema": {
+    "datasets": [
+      {
+        "snapshotId": "released",
+        "datasetKind": "REGIONAL_DATA",
+        "displayName": "Stored-property fixture, released",
+        "tableName": "analysis_belongings_released",
+        "importedRows": 6,
+        "rejectedRows": 0,
+        "sourceUri": "https://example.test/released.csv",
+        "sourceSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "retrievedAt": "2026-10-05T00:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}",
+        "unconvertedByColumn": {}
+      },
+      {
+        "snapshotId": "bare",
+        "datasetKind": "REGIONAL_DATA",
+        "displayName": "Stored-property fixture, bare",
+        "tableName": "analysis_belongings_bare",
+        "importedRows": 6,
+        "rejectedRows": 0,
+        "sourceUri": "https://example.test/bare.csv",
+        "sourceSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "retrievedAt": "2026-10-05T00:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}",
+        "unconvertedByColumn": {}
+      }
+    ],
+    "templates": [],
+    "columns": [
+      {
+        "tableName": "analysis_belongings_released",
+        "columnName": "date_stored",
+        "logicalType": "CATEGORY",
+        "originalName": "Date Stored",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_belongings_released",
+        "columnName": "item_description",
+        "logicalType": "CATEGORY",
+        "originalName": "Item Description",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_belongings_released",
+        "columnName": "disposition",
+        "logicalType": "CATEGORY",
+        "originalName": "Disposition",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_belongings_released",
+        "columnName": "date_released",
+        "logicalType": "CATEGORY",
+        "originalName": "Date Released",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_belongings_bare",
+        "columnName": "date_stored",
+        "logicalType": "CATEGORY",
+        "originalName": "Date Stored",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_belongings_bare",
+        "columnName": "item_description",
+        "logicalType": "CATEGORY",
+        "originalName": "Item Description",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_belongings_bare",
+        "columnName": "disposition",
+        "logicalType": "CATEGORY",
+        "originalName": "Disposition",
+        "nullable": true,
+        "dictionary": null
+      }
+    ]
+  },
+  "queries": [
+    {
+      "id": "belongings_disposition",
+      "title": "Stored-property entries by recorded disposition",
+      "method": "Rows of Stored-property fixture, released are counted by the text in disposition exactly as written; rows where it is blank are counted apart. An entry is counted as released when date_released is not blank. A row is an entry in the log as released, not necessarily one item or one person.",
+      "sql": "WITH entries AS (\n SELECT NULLIF(TRIM(CAST(\"disposition\" AS VARCHAR)), '') AS disposition, NULLIF(TRIM(CAST(\"date_released\" AS VARCHAR)), '') IS NOT NULL AS released, CAST(COALESCE(TRY_CAST(CAST(\"date_stored\" AS VARCHAR) AS TIMESTAMP), TRY_STRPTIME(CAST(\"date_stored\" AS VARCHAR), ['%m/%d/%Y, %I:%M %p', '%m/%d/%Y %H:%M', '%m/%d/%Y', '%-m/%-d/%Y'])) AS DATE) AS taken\n FROM \"analysis_belongings_released\"\n)\nSELECT disposition, COUNT(*) AS entries, SUM(COUNT(*)) OVER () AS all_entries, COUNT(*) OVER () AS dispositions,\n SUM(COUNT(*) FILTER (WHERE released)) OVER () AS released_entries,\n CAST(MIN(MIN(taken)) OVER () AS VARCHAR) AS first_taken, CAST(MAX(MAX(taken)) OVER () AS VARCHAR) AS last_taken\nFROM entries GROUP BY disposition ORDER BY entries DESC, disposition LIMIT 8"
+    },
+    {
+      "id": "belongings_disposition",
+      "title": "Stored-property entries by recorded disposition",
+      "method": "Rows of Stored-property fixture, bare are counted by the text in disposition exactly as written; rows where it is blank are counted apart. The table has no release or retrieval date column, so releases are not counted. A row is an entry in the log as released, not necessarily one item or one person.",
+      "sql": "WITH entries AS (\n SELECT NULLIF(TRIM(CAST(\"disposition\" AS VARCHAR)), '') AS disposition, CAST(NULL AS BOOLEAN) AS released, CAST(COALESCE(TRY_CAST(CAST(\"date_stored\" AS VARCHAR) AS TIMESTAMP), TRY_STRPTIME(CAST(\"date_stored\" AS VARCHAR), ['%m/%d/%Y, %I:%M %p', '%m/%d/%Y %H:%M', '%m/%d/%Y', '%-m/%-d/%Y'])) AS DATE) AS taken\n FROM \"analysis_belongings_bare\"\n)\nSELECT disposition, COUNT(*) AS entries, SUM(COUNT(*)) OVER () AS all_entries, COUNT(*) OVER () AS dispositions,\n CAST(NULL AS BIGINT) AS released_entries,\n CAST(MIN(MIN(taken)) OVER () AS VARCHAR) AS first_taken, CAST(MAX(MAX(taken)) OVER () AS VARCHAR) AS last_taken\nFROM entries GROUP BY disposition ORDER BY entries DESC, disposition LIMIT 8"
+    }
+  ]
+}
