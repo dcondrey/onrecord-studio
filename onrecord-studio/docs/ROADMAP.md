@@ -1163,6 +1163,28 @@ Order of work:
 10. Briefing export with every figure's source; place-level counts; reports after abatements in
     nearby places; a signed receipt for one document.
 
+Built 2026-10-04 (order item 3): `RELEASE_TIMING_CONCENTRATION` (methods §21). Per agency and
+portal, the share of releases that began at or after 3 p.m. on the last working day before a
+weekend or California court holiday, against the portal's other releases; a release is one
+request's files uploaded less than 60 minutes apart. The audit line above is corrected:
+`documents.created_at` is the portal's upload time only for a listed file whose portal gave one;
+it is the request's opening time, its closing time (closure notices) or the app's first-seen time
+on other paths, and those rows are left out or not read. `held_back_response` and
+`regenerated_response` time a file by its own upload time when it has one. Measured on
+`eval-encampment-2` (142 sandiego.nextrequest.com requests, read-only DuckDB CLI, 2026-10-04; SQL
+equivalent of the detector's grouping, weekends only, no holiday calendar): 771 documents, of
+which 142 are closure notices and 629 listed files, all with an upload time; 215 releases from
+2020-06-18 to 2026-09-10, the largest of 168 files. By weekday: Monday 38, Tuesday 45, Wednesday
+35, Thursday 46, Friday 48, Saturday 3, Sunday 0. By starting hour: 5 a.m. 3, 6 a.m. 14, 7 a.m.
+17, 8 a.m. 18, 9 a.m. 14, 10 a.m. 19, 11 a.m. 26, noon 19, 1 p.m. 21, 2 p.m. 25, 3 p.m. 26,
+4 p.m. 12, 5 p.m. 1. At or after 3 p.m.: 39 (18.1%); on a Friday at or after 3 p.m.: 9 (4.2%).
+The agency with most releases has 77, 4 of them Friday from 3 p.m. (5.2%); the next two have 50
+and 21, with none and 1; no other agency has 20, so by these counts nothing would be reported
+there. Not measured: the
+detector itself on that collection (it is opened only by the CLI), and its file ages. That
+collection has no `request_release_events` table and no request with a determination time, so the
+two older detectors do not run on it.
+
 ## Leads from service-report tables (2026-10-04)
 
 Decision: "What stands out" shows leads about the subject of the records; facts about a table
