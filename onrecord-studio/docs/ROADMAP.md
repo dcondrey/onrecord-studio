@@ -1450,6 +1450,30 @@ used. `api.fac.gov/general?auditee_ein=eq.<ein>` answers 403 without an `X-Api-K
 question: an EIN's history needs every year's index (about 90 MB each); fetch them only when the
 user asks for an organisation, and keep only the rows for EINs asked about.
 
+Decided and built 2026-10-05 (methods §34): an index is fetched only when the user checks an
+organisation, filtered to that EIN as it is read, and deleted; a year older than the previous
+calendar year is fetched once per organisation. Returns are read by byte range (`remote_zip.rs`,
+`ApiClient::get_direct`), parsed with `roxmltree` (`parsers/form990.rs`, element names taken
+from 9,681 published returns), and stored with their XML and SHA-256. Commands
+`search_organisations`, `check_organisation_filings`, `get_organisation_filings`,
+`list_organisation_checks`; view "Organisation filings" in the Investigation workbench; ProPublica
+summary with attribution; single audits with a user-supplied key; vendor-name matches from the
+mapped contract, amendment and payment tables. Found while building: the 2017 to 2023 indexes
+have no `XML_BATCH_ID`; the 2024 index writes three archive names in lower case that the server
+only serves in upper case; 2024 archives put members under a directory and 2025 and 2026
+archives do not, and compress with Deflate64 (crate `deflate64`); archives other than `01A` are about 1 GB with a 15 MB directory and
+need the zip64 record; `api.fac.gov` answers with an api.data.gov key (`DEMO_KEY` worked).
+Measured by the ignored live check (`live_organisation_check`, EIN 33-0215585): three returns read
+(tax periods 2023-06, 2024-06, 2025-06; revenue 41,418,753, 46,119,889 and 41,585,915 as stated),
+13 summary years (2011 to 2023), ten single audits (2016 to 2025), and a second check that
+refetched no return and returned the same record.
+Not built: returns from index years before 2024 (no archive named; would need every archive's
+directory for a year, about 150 MB); Forms 990-EZ, 990-PF and 990-T; Schedule O, Schedule R and
+the Part VI line 5 explanation; single-audit finding text; saving the clearinghouse key (it is
+typed each session); payments from tables not mapped under Spending and outcomes, or matched by
+anything but vendor name; progress reporting during a check; watchlist or packet integration
+(peer-owned). Not checked in the running app: the view has only been exercised by its tests.
+
 ## Leads from service-report tables (2026-10-04)
 
 Decision: "What stands out" shows leads about the subject of the records; facts about a table

@@ -64,6 +64,8 @@ pub mod financial;
 
 pub mod facilities;
 
+pub mod organisations;
+
 pub mod casework;
 
 pub mod monitoring;

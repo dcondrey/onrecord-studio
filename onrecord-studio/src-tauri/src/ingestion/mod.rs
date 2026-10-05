@@ -8,7 +8,9 @@ pub mod limiter;
 #[cfg(test)]
 mod live_evaluation;
 pub mod meeting_bodies;
+pub mod organisation_filings;
 pub mod queue;
+pub mod remote_zip;
 pub mod source_catalog;
 pub mod starter_sets;
 

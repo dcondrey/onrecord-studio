@@ -94,6 +94,9 @@ pub use facilities::*;
 pub mod casework;
 pub use casework::*;
 
+pub mod organisation;
+pub use organisation::*;
+
 pub mod monitoring;
 pub use monitoring::*;
 

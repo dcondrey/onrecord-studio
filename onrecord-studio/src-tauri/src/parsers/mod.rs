@@ -7,6 +7,7 @@ pub mod eml;
 pub mod entropy;
 pub mod excel;
 pub mod forensic_evidence;
+pub mod form990;
 pub mod format;
 pub mod html;
 pub mod layout_side_channel;

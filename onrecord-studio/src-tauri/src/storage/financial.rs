@@ -877,6 +877,95 @@ fn validate_financial_sources(
 
 /// Stable schema/mapping semantics join the autonomous scheduler's meaningful revision.
 /// This also works before the financial panel has ever been opened on an upgraded database.
+const VENDOR_ROLES: &[&str] = &["contract", "amendment", "payment"];
+
+impl DuckDbRepository {
+    /// Rows of the mapped contract, amendment and payment tables whose vendor value contains the
+    /// organisation's name, compared on letters and digits only. These tables carry no EIN, so
+    /// the match is by name; each matched vendor value is returned as written for the reader to
+    /// judge. The second list says what was searched when nothing, or not everything, was found.
+    pub async fn organisation_public_money(
+        &self,
+        name: &str,
+    ) -> Result<(Vec<PublicMoneyLine>, Vec<String>), AppError> {
+        let needle = name
+            .to_lowercase()
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { ' ' })
+            .collect::<String>()
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        if needle.len() < 4 {
+            return Ok((
+                vec![],
+                vec!["The organisation's name is too short to search vendor names for.".into()],
+            ));
+        }
+        let workspace = self.financial_workspace().await?;
+        let mut lines = vec![];
+        let mut notes = vec![];
+        let mut searched = false;
+        for mapping in workspace.mappings.iter().filter(|m| {
+            VENDOR_ROLES.contains(&m.role.as_str())
+                && m.columns.contains_key("vendor_id")
+                && m.columns.contains_key("amount")
+        }) {
+            let Some(dataset) = workspace
+                .datasets
+                .iter()
+                .find(|d| d.snapshot_id == mapping.snapshot_id)
+            else {
+                continue;
+            };
+            searched = true;
+            let fiscal_year = if mapping.columns.contains_key("fy") {
+                expression(mapping, "fy")
+            } else {
+                "NULL".into()
+            };
+            let sql = format!(
+                "WITH mapped AS (SELECT {} AS vendor, {fiscal_year} AS fy, {} AS amount FROM {}) SELECT vendor, CAST(fy AS VARCHAR) AS fy, COUNT(*) AS source_rows, CAST(CASE WHEN COUNT(*)=COUNT(amount) THEN SUM(amount) END AS VARCHAR) AS amount FROM mapped WHERE trim(regexp_replace(lower(vendor),'[^a-z0-9]+',' ','g')) LIKE {} GROUP BY vendor, fy ORDER BY fy, vendor",
+                expression(mapping, "vendor_id"),
+                expression(mapping, "amount"),
+                quote(&dataset.table_name),
+                literal(&format!("%{needle}%")),
+            );
+            let result = self.execute_restricted_sql(&sql, 500).await?;
+            if result.rows.is_empty() {
+                notes.push(format!(
+                    "No row of {} ({}) has a vendor value containing the organisation's name. That table identifies vendors by its column {}.",
+                    dataset.name, mapping.role, mapping.columns["vendor_id"]
+                ));
+            }
+            if result.truncated {
+                notes.push(format!(
+                    "{} ({}) matched more vendor and year groups than the 500 shown.",
+                    dataset.name, mapping.role
+                ));
+            }
+            for row in result.rows {
+                let Some(vendor_value) = row.first().and_then(value_string) else {
+                    continue;
+                };
+                lines.push(PublicMoneyLine {
+                    role: mapping.role.clone(),
+                    dataset_name: dataset.name.clone(),
+                    source_url: dataset.source_url.clone(),
+                    vendor_value,
+                    fiscal_year: row.get(1).and_then(value_string),
+                    rows: row.get(2).and_then(serde_json::Value::as_u64).unwrap_or(0),
+                    amount: row.get(3).and_then(value_string),
+                });
+            }
+        }
+        if !searched {
+            notes.push("No contract, amendment or payment table with vendor and amount columns is mapped under Spending and outcomes, so no payments were looked up.".into());
+        }
+        Ok((lines, notes))
+    }
+}
+
 pub fn financial_mapping_revision(conn: &duckdb::Connection) -> Result<String, AppError> {
     conn.execute_batch(SCHEMA).map_err(error)?;
     conn.query_row("SELECT COALESCE(md5(string_agg(mapping_json,'|' ORDER BY role)),'') FROM financial_mappings",[],|row|row.get(0)).map_err(error)
