@@ -249,6 +249,8 @@ pub enum FindingKind {
     /// posted notice and the abatement at the same place, and abatements at a place with no
     /// notice in the log. Counted by the discovery feed's SQL and recorded as sent. The logs do
     /// not record the notice period that applied, so this is not a finding that notice fell short.
+    /// Also: Encampment reports filed near an abatement in the 14 days before and after it, as
+    /// counts of report and abatement pairs; they do not show where anyone went.
     AbatementLogLead,
     /// A count read from a police department's released arrest and citation log: arrests and
     /// citations citing an encampment, encroachment, lodging or public urination section, and

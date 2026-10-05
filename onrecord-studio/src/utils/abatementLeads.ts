@@ -1,5 +1,6 @@
 import type { AnalyticalDatasetSummary, AnalyticalSchema, SqlQueryResult } from '../types';
 import { quoteIdentifier, type DiscoveryQuery } from './dataDiscovery';
+import { encampmentReportCoverage } from './capacityLeads';
 import { serviceRequestRoles, type ServiceLead } from './serviceAccountability';
 
 /** Encampment abatement logs as agencies release them: one table of notices posted and one of
@@ -14,6 +15,12 @@ const names = {
 interface LogRoles { time: string; address: string; latitude: string; longitude: string }
 /** A pairing is stated only with this many places behind it. */
 const PAIRED_MINIMUM = 30;
+/** Reports around abatements are stated only with this many abatement place-days behind them. */
+const PLACE_DAY_MINIMUM = 30;
+const WINDOW_DAYS = 14;
+const NEAR_METRES = 150;
+const RING_METRES = 800;
+const REPORT_COORDINATES = [['lat', 'lng'], ['latitude', 'longitude']] as const;
 
 function logRoles(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary, time: string[]): LogRoles | null {
   const columns = schema.columns.filter((column) => column.tableName === dataset.tableName);
@@ -43,9 +50,63 @@ const rows = (table: AnalyticalDatasetSummary, roles: LogRoles) => `SELECT LOWER
 const places = (source: string) => `SELECT address, latitude, longitude, COUNT(*) AS entries, MIN(logged_at) AS logged_at FROM ${source}
  WHERE address IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL AND logged_at IS NOT NULL GROUP BY address, latitude, longitude`;
 
+/** The Encampment report tables that hold every report filed since `since`, when each has coordinates. */
+export function reportsAroundAbatements(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary): { tables: AnalyticalDatasetSummary[]; coordinates: readonly [string, string]; since: string; until: string } | null {
+  if (logRoles(schema, dataset, names.posted) || !logRoles(schema, dataset, names.completed)) return null;
+  const coverage = encampmentReportCoverage(schema);
+  if (!coverage?.closed.length) return null;
+  const tables = [coverage.open, ...coverage.closed];
+  const has = (table: AnalyticalDatasetSummary, name: string) => schema.columns.some((column) => column.tableName === table.tableName && column.columnName === name);
+  const coordinates = REPORT_COORDINATES.find(([latitude, longitude]) => tables.every((table) => has(table, latitude) && has(table, longitude)));
+  if (!coordinates) return null;
+  // Closed files are keyed by close year: with every year from the earliest held to the open copy,
+  // each report filed since that year began is in one of the tables.
+  const until = coverage.open.retrievedAt.slice(0, 10);
+  return { tables, coordinates, since: `${Number(until.slice(0, 4)) - coverage.closed.length + 1}-01-01`, until };
+}
+
+function reportQueries(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary): DiscoveryQuery[] {
+  const reports = reportsAroundAbatements(schema, dataset);
+  if (!reports) return [];
+  const roles = logRoles(schema, dataset, names.completed)!;
+  const [latitude, longitude] = reports.coordinates;
+  // A box a little larger than the ring keeps the join small; the distance is then computed exactly enough for these radii.
+  return [{
+    id: 'abatement_reports_nearby', title: `Encampment reports filed near an abatement in the ${WINDOW_DAYS} days before and after it`,
+    method: `Abatements in ${dataset.displayName} are counted once per place and day (coordinates rounded to four decimal places). Encampment reports come from ${reports.tables.map((table) => table.displayName).join(', ')}, once per report number; those tables hold every report filed from ${reports.since} to ${reports.until}, so only abatements whose ${WINDOW_DAYS} days before and after fall inside that period are counted. A report is near an abatement within ${NEAR_METRES} metres and in the surrounding ring from ${NEAR_METRES} to ${RING_METRES} metres, by straight-line distance between the recorded coordinates. Each count is of report and abatement pairs: a report near two abatements is counted twice. Reports filed on the abatement day are counted apart.`,
+    sql: `WITH abatements AS (
+ SELECT DISTINCT ROUND(TRY_CAST(${quoteIdentifier(roles.latitude)} AS DOUBLE), 4) AS latitude, ROUND(TRY_CAST(${quoteIdentifier(roles.longitude)} AS DOUBLE), 4) AS longitude, CAST(${instant(roles.time)} AS DATE) AS day
+ FROM ${quoteIdentifier(dataset.tableName)}
+), report_rows AS (
+${reports.tables.map((table) => ` SELECT TRIM(CAST(${quoteIdentifier('service_request_id')} AS VARCHAR)) AS report_id, TRY_CAST(${quoteIdentifier(latitude)} AS DOUBLE) AS latitude, TRY_CAST(${quoteIdentifier(longitude)} AS DOUBLE) AS longitude,
+  CAST(TRY_CAST(CAST(${quoteIdentifier('date_requested')} AS VARCHAR) AS TIMESTAMP) AS DATE) AS day
+ FROM ${quoteIdentifier(table.tableName)} WHERE TRIM(CAST(${quoteIdentifier('service_name')} AS VARCHAR)) = 'Encampment'`).join('\n UNION ALL\n')}
+), reports AS (
+ SELECT report_id, MIN(latitude) AS latitude, MIN(longitude) AS longitude, MIN(day) AS day FROM report_rows GROUP BY report_id
+), counted AS (
+ SELECT * FROM abatements WHERE latitude IS NOT NULL AND longitude IS NOT NULL AND day IS NOT NULL
+  AND day - ${WINDOW_DAYS} >= DATE '${reports.since}' AND day + ${WINDOW_DAYS} <= DATE '${reports.until}'
+), pairs AS (
+ SELECT reports.day - counted.day AS offset_days,
+  SQRT(POW((reports.latitude - counted.latitude) * 110540, 2) + POW((reports.longitude - counted.longitude) * 111320 * COS(RADIANS(counted.latitude)), 2)) AS metres
+ FROM counted JOIN reports ON reports.day BETWEEN counted.day - ${WINDOW_DAYS} AND counted.day + ${WINDOW_DAYS}
+  AND reports.latitude BETWEEN counted.latitude - 0.0075 AND counted.latitude + 0.0075 AND reports.longitude BETWEEN counted.longitude - 0.0095 AND counted.longitude + 0.0095
+)
+SELECT (SELECT COUNT(*) FROM abatements) AS abatement_place_days, (SELECT COUNT(*) FROM counted) AS counted_place_days,
+ (SELECT COUNT(*) FROM reports WHERE day BETWEEN DATE '${reports.since}' AND DATE '${reports.until}') AS reports_in_period,
+ (SELECT COUNT(*) FROM reports WHERE latitude IS NULL OR longitude IS NULL OR day IS NULL) AS reports_not_placed,
+ COUNT(*) FILTER (WHERE metres <= ${NEAR_METRES} AND offset_days < 0) AS near_before, COUNT(*) FILTER (WHERE metres <= ${NEAR_METRES} AND offset_days > 0) AS near_after,
+ COUNT(*) FILTER (WHERE metres <= ${NEAR_METRES} AND offset_days = 0) AS near_same_day,
+ COUNT(*) FILTER (WHERE metres > ${NEAR_METRES} AND metres <= ${RING_METRES} AND offset_days < 0) AS ring_before,
+ COUNT(*) FILTER (WHERE metres > ${NEAR_METRES} AND metres <= ${RING_METRES} AND offset_days > 0) AS ring_after,
+ '${reports.since}' AS reports_since, '${reports.until}' AS reports_until
+FROM pairs`,
+  }];
+}
+
 export function abatementQueries(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary): DiscoveryQuery[] {
   const completed = abatementCompanion(schema, dataset);
-  if (!completed) return [];
+  if (!completed) return reportQueries(schema, dataset);
   const posted = logRoles(schema, dataset, names.posted)!;
   return [{
     id: 'abatement_notice_hours', title: 'Hours between a posted notice and the abatement',
@@ -81,9 +142,24 @@ FROM paired`,
 const count = (value: unknown): number => { const parsed = Number(value); return value == null || value === '' || !Number.isFinite(parsed) ? 0 : parsed; };
 const shown = (value: number) => Math.round(value).toLocaleString('en-US');
 
+function reportLeads(results: { query: DiscoveryQuery; result?: SqlQueryResult }[]): ServiceLead[] {
+  const entry = results.find((item) => item.query.id === 'abatement_reports_nearby');
+  if (!entry?.result?.rows.length) return [];
+  const row = Object.fromEntries(entry.result.columns.map((name, index) => [name, entry.result!.rows[0][index]]));
+  const placeDays = count(row.counted_place_days);
+  if (placeDays < PLACE_DAY_MINIMUM) return [];
+  const [nearBefore, nearAfter, ringBefore, ringAfter] = [count(row.near_before), count(row.near_after), count(row.ring_before), count(row.ring_after)];
+  const notPlaced = count(row.reports_not_placed);
+  return [{ key: 'abatement_reports_nearby', priority: 94, query: entry.query,
+    title: `Around ${shown(placeDays)} abatements, ${shown(nearAfter)} Encampment reports were filed within ${NEAR_METRES} metres in the ${WINDOW_DAYS} days after and ${shown(nearBefore)} in the ${WINDOW_DAYS} days before`,
+    detail: `${shown(placeDays)} of ${shown(count(row.abatement_place_days))} abatement place-days fall where the imported reports are complete (${String(row.reports_since)} to ${String(row.reports_until)}, ${shown(count(row.reports_in_period))} Encampment reports). Within ${NEAR_METRES} metres: ${shown(nearBefore)} reports in the ${WINDOW_DAYS} days before, ${shown(count(row.near_same_day))} on the day, ${shown(nearAfter)} in the ${WINDOW_DAYS} days after. From ${NEAR_METRES} to ${RING_METRES} metres: ${shown(ringBefore)} before and ${shown(ringAfter)} after.${notPlaced ? ` ${shown(notPlaced)} reports have no coordinates or date and are in none of these counts.` : ''} These are counts of report and abatement pairs, so a report near several abatements is counted once for each. A report is a resident's complaint, not a person or a camp, and an abatement is often scheduled because reports were filed, so more reports before than after is expected whatever the abatement did. The counts do not show where anyone went.`,
+    question: 'Where the surrounding ring has more reports after an abatement than before, what did the abatement record say became of the people and belongings there? The work orders and the stored-property log for those places would show it.',
+  }];
+}
+
 export function abatementLeads(results: { query: DiscoveryQuery; result?: SqlQueryResult }[]): ServiceLead[] {
   const entry = results.find((item) => item.query.id === 'abatement_notice_hours');
-  if (!entry?.result?.rows.length) return [];
+  if (!entry?.result?.rows.length) return reportLeads(results);
   const row = Object.fromEntries(entry.result.columns.map((name, index) => [name, entry.result!.rows[0][index]]));
   const paired = count(row.paired_places);
   if (paired < PAIRED_MINIMUM) return [];

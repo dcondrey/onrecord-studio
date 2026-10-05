@@ -1321,6 +1321,20 @@ agency reports, 278 of them Form 803 through 2024, on 2026-10-04), and the lead 
 app. Not built: the user-started reader for the portal's API, and imports for statements of
 economic interests, campaign and lobbyist exports.
 
+Built 2026-10-05: Encampment reports filed around abatements (methods §19 D; `abatementLeads.ts`,
+`abatement_reports_nearby`, stored as `ABATEMENT_LOG_LEAD`). Measured with the app's SQL in the
+DuckDB CLI on the released completion log (26-772) and the open and closed 2023 to 2026 Get It
+Done files retrieved 2026-10-05: 13,387 of 13,406 abatement place-days fall where reports are
+complete (2023-01-01 to 2026-10-05; 205,764 Encampment reports, 82 with no coordinates or date).
+Report and abatement pairs within 150 metres: 319,347 in the 14 days before, 24,239 on the day,
+307,733 in the 14 days after (3.6% fewer after). From 150 to 800 metres: 2,704,069 before and
+2,692,389 after (0.4% fewer). So on these counts reports do not rise in the surrounding ring after
+an abatement; the pair counts are many times the number of reports because abatements cluster.
+The query took 4.5 seconds from CSV. Not verified: its run time inside the app against the
+30-second limit, and the lead in the running app. Not built: a per-place breakdown (which
+abatements had more ring reports after than before), which is what would answer where reports
+moved.
+
 ## Leads from service-report tables (2026-10-04)
 
 Decision: "What stands out" shows leads about the subject of the records; facts about a table

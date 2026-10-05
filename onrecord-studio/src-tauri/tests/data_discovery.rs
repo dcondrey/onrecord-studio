@@ -534,6 +534,53 @@ async fn abatement_logs_pair_one_notice_with_one_abatement_in_the_released_forma
 }
 
 #[tokio::test]
+async fn reports_around_abatements_are_counted_once_per_report_inside_the_complete_period() {
+    let fixture: Value =
+        serde_json::from_str(include_str!("fixtures/abatement-reports-nearby.json")).unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let db = DuckDbRepository::new(temp.path().join("nearby.db")).unwrap();
+    db.run_migrations(include_str!("../migrations/0001_initial_schema.sql"))
+        .await
+        .unwrap();
+    let mut sql = fixture["queries"][0]["sql"].as_str().unwrap().to_string();
+    for name in ["completed", "closed2025", "open"] {
+        let path = temp.path().join(format!("{name}.csv"));
+        std::fs::write(&path, fixture["csv"][name].as_str().unwrap()).unwrap();
+        let input: AnalyticalImportRequest = serde_json::from_value(json!({ "datasetKind":"REGIONAL_DATA", "displayName":name, "localPath":path, "sourceUri":format!("https://example.test/{name}.csv"), "partialDataset":true })).unwrap();
+        let imported = db.import_analytical_csv(input).await.unwrap();
+        assert_eq!(imported.rejected_rows, 0, "{name}");
+        sql = sql.replace(&format!("analysis_nearby_{name}"), &imported.table_name);
+    }
+    let result = db.execute_restricted_sql(&sql, 100).await.unwrap();
+    assert_eq!(result.row_count, 1);
+    let count = |name: &str| -> i64 {
+        let value = cell(&result, 0, name);
+        value
+            .as_i64()
+            .or_else(|| value.as_f64().map(|number| number as i64))
+            .or_else(|| value.as_str().and_then(|text| text.parse().ok()))
+            .unwrap_or_else(|| panic!("{name} is not a count: {value}"))
+    };
+    for (column, expected) in [
+        ("abatement_place_days", 4),
+        // One abatement has no coordinates; one is within 14 days of the reports' last day.
+        ("counted_place_days", 2),
+        // Ten Encampment reports; the one held by both tables is one report; the Pothole is not read.
+        ("reports_in_period", 10),
+        ("reports_not_placed", 1),
+        ("near_before", 2),
+        ("near_same_day", 1),
+        // The report 15 days after is outside the window.
+        ("near_after", 2),
+        ("ring_before", 1),
+        // The report 2 km away is in neither distance band.
+        ("ring_after", 1),
+    ] {
+        assert_eq!(count(column), expected, "{column}");
+    }
+}
+
+#[tokio::test]
 async fn agency_report_export_counts_reports_by_form_and_by_named_official() {
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/disclosure-leads.json")).unwrap();

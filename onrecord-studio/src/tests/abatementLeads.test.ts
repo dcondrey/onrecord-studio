@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import fixture from '../../src-tauri/tests/fixtures/abatement-leads.json';
 import service from '../../src-tauri/tests/fixtures/service-accountability.json';
 import type { AnalyticalSchema, SqlQueryResult } from '../types';
-import { abatementLeads, abatementQueries } from '../utils/abatementLeads';
+import nearby from '../../src-tauri/tests/fixtures/abatement-reports-nearby.json';
+import { abatementLeads, abatementQueries, reportsAroundAbatements } from '../utils/abatementLeads';
 import { storedLeads } from '../utils/automaticDiscovery';
 
 const schema = fixture.schema as AnalyticalSchema;
@@ -36,5 +37,33 @@ describe('leads from released abatement logs', () => {
   it('stores the lead under the abatement family', () => {
     const stored = storedLeads(schema, { posted: { fingerprint: 'f', checkedAt: 'now', results: [{ query, result: hours(2067) }] } });
     expect(stored.leads).toEqual([expect.objectContaining({ family: 'ABATEMENT_LOGS', key: 'posted:abatement_notice_hours' })]);
+  });
+});
+
+describe('Encampment reports around abatements', () => {
+  const around = nearby.schema as AnalyticalSchema;
+  const [log, closed, open] = around.datasets;
+  const nearbyQuery = nearby.queries[0];
+  const counts = (placeDays: number, extra: Record<string, unknown> = {}) => result({ abatement_place_days: 13406, counted_place_days: placeDays, reports_in_period: 41222, reports_not_placed: 0,
+    near_before: 500, near_after: 480, near_same_day: 40, ring_before: 5000, ring_after: 5100, reports_since: '2023-01-01', reports_until: '2026-10-04', ...extra });
+
+  it('reads a completion log only beside report tables that are complete and carry coordinates', () => {
+    expect(abatementQueries(around, log).map((item) => item.id)).toEqual(['abatement_reports_nearby']);
+    expect(reportsAroundAbatements(around, log)).toMatchObject({ since: '2025-01-01', until: '2025-10-01', coordinates: ['lat', 'lng'] });
+    // Without the closed-year file, reports closed before the open copy are in no table.
+    expect(abatementQueries({ ...around, datasets: [log, open] }, log)).toEqual([]);
+    expect(abatementQueries({ ...around, columns: around.columns.filter((column) => !(column.tableName === closed.tableName && column.columnName === 'lng')) }, log)).toEqual([]);
+    expect(abatementQueries(around, closed)).toEqual([]);
+  });
+
+  it('states the counts at 30 abatement place-days, not 29, and says what they are counts of', () => {
+    expect(abatementLeads([{ query: nearbyQuery, result: counts(29) }])).toEqual([]);
+    const [lead] = abatementLeads([{ query: nearbyQuery, result: counts(30) }]);
+    expect(lead.title).toBe('Around 30 abatements, 480 Encampment reports were filed within 150 metres in the 14 days after and 500 in the 14 days before');
+    expect(lead.detail).toContain('Within 150 metres: 500 reports in the 14 days before, 40 on the day, 480 in the 14 days after. From 150 to 800 metres: 5,000 before and 5,100 after.');
+    expect(lead.detail).toContain('a report near several abatements is counted once for each');
+    expect(lead.detail).toContain('The counts do not show where anyone went.');
+    expect(lead.detail).not.toContain('no coordinates');
+    expect(abatementLeads([{ query: nearbyQuery, result: counts(30, { reports_not_placed: 7 }) }])[0].detail).toContain('7 reports have no coordinates or date and are in none of these counts.');
   });
 });

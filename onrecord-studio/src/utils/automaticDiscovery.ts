@@ -1,6 +1,6 @@
 import type { AnalyticalDatasetSummary, AnalyticalSchema, ServiceLeadInput, SqlQueryResult } from '../types';
 import { buildDiscoveryPlan, discoveryDefaults, quoteIdentifier, type DiscoveryQuery, type DiscoverySelection } from './dataDiscovery';
-import { abatementCompanion, abatementLeads, abatementQueries } from './abatementLeads';
+import { abatementCompanion, abatementLeads, abatementQueries, reportsAroundAbatements } from './abatementLeads';
 import { stopCompanions, stopLeads, stopQueries } from './stopLeads';
 import { chargeLeads, chargeQueries } from './chargeLeads';
 import { disclosureLeads, disclosureQueries } from './disclosureLeads';
@@ -47,7 +47,7 @@ export function snapshotFingerprint(schema: AnalyticalSchema, dataset: Analytica
   const columns = schema.columns.filter((column) => column.tableName === dataset.tableName);
   return JSON.stringify([dataset, columns, companions ? [companions.earlier, ...companions.outcomes].map((table) => table.snapshotId) : [],
     serviceRequestRoles(columns)?.group ? budgetTable(schema)?.snapshotId ?? null : null,
-    Object.values(stopCompanions(schema, dataset) ?? {}).map((table) => table.snapshotId), abatementCompanion(schema, dataset)?.snapshotId ?? null,
+    Object.values(stopCompanions(schema, dataset) ?? {}).map((table) => table.snapshotId), abatementCompanion(schema, dataset)?.snapshotId ?? null, reportsAroundAbatements(schema, dataset)?.tables.map((table) => table.snapshotId) ?? null,
     capacity ? [capacity.budget, capacity.reports.open, ...capacity.reports.closed].map((table) => table.snapshotId) : [],
     spendingCompanion(schema, dataset)?.snapshotId ?? null]);
 }
