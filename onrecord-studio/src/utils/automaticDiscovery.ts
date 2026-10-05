@@ -2,6 +2,7 @@ import type { AnalyticalDatasetSummary, AnalyticalSchema, ServiceLeadInput, SqlQ
 import { buildDiscoveryPlan, discoveryDefaults, type DiscoveryQuery, type DiscoverySelection } from './dataDiscovery';
 import { abatementCompanion, abatementLeads, abatementQueries } from './abatementLeads';
 import { stopCompanions, stopLeads, stopQueries } from './stopLeads';
+import { chargeLeads, chargeQueries } from './chargeLeads';
 import { backlogChangeLeads, budgetTable, recurringServiceLeads, serviceAccountabilityLeads, serviceAccountabilityQueries, serviceCompanions, serviceRequestRoles } from './serviceAccountability';
 
 export interface DiscoveryObservation {
@@ -60,7 +61,7 @@ export function automaticFollowups(schema: AnalyticalSchema, dataset: Analytical
   // One consistent counting unit, no inferred sums, rates, or cross-publisher joins.
   const plan = buildDiscoveryPlan(schema, selection);
   return [...plan.queries.filter((query) => (query.id === 'coverage' && selection.period) || (query.id === 'groups' && selection.dimension) || (query.id === 'changes' && selection.period)),
-    ...serviceAccountabilityQueries(schema, dataset), ...stopQueries(schema, dataset), ...abatementQueries(schema, dataset)];
+    ...serviceAccountabilityQueries(schema, dataset), ...stopQueries(schema, dataset), ...abatementQueries(schema, dataset), ...chargeQueries(schema, dataset)];
 }
 
 export function metadataObservations(dataset: AnalyticalDatasetSummary): DiscoveryObservation[] {
@@ -92,7 +93,7 @@ export function profileObservations(schema: AnalyticalSchema, dataset: Analytica
     title: item.title, detail: item.detail, question: item.question, query: item.query,
   });
   const observations: DiscoveryObservation[] = [...serviceAccountabilityLeads(profile.results).map(lead('SERVICE_REPORTS')), ...stopLeads(profile.results).map(lead('POLICE_STOPS')),
-    ...abatementLeads(profile.results).map(lead('ABATEMENT_LOGS'))];
+    ...abatementLeads(profile.results).map(lead('ABATEMENT_LOGS')), ...chargeLeads(profile.results).map(lead('CHARGE_LOGS'))];
   const get = (id: string) => profile.results.find((entry) => entry.query.id === id);
   // A column's missing-value rate describes the source table's own completeness, not the subject
   // of the investigation; it stays on the import/quality screen rather than "what stands out".

@@ -251,6 +251,12 @@ pub enum FindingKind {
     /// notice in the log. Counted by the discovery feed's SQL and recorded as sent. The logs do
     /// not record the notice period that applied, so this is not a finding that notice fell short.
     AbatementLogLead,
+    /// A count read from a police department's released arrest and citation log: arrests and
+    /// citations citing an encampment, encroachment, lodging or public urination section, and
+    /// arrests on those sections alone. Counted by the discovery feed's SQL and recorded as sent.
+    /// The log records the charge, not housing status, so this is not a finding about who was
+    /// charged or why.
+    ChargeLogLead,
 }
 
 impl FindingKind {
@@ -300,6 +306,7 @@ impl FindingKind {
             Self::ServiceReportLead => "SERVICE_REPORT_LEAD",
             Self::PoliceStopLead => "POLICE_STOP_LEAD",
             Self::AbatementLogLead => "ABATEMENT_LOG_LEAD",
+            Self::ChargeLogLead => "CHARGE_LOG_LEAD",
         }
     }
 
@@ -349,6 +356,7 @@ impl FindingKind {
             Self::ServiceReportLead,
             Self::PoliceStopLead,
             Self::AbatementLogLead,
+            Self::ChargeLogLead,
         ]
         .into_iter()
         .find(|candidate| candidate.as_str() == value)
@@ -456,6 +464,8 @@ impl FindingKind {
             // Two recorded times with no stated minimum to count them against;
             // `EncampmentNoticeShortfall` is the kind that has one.
             Self::AbatementLogLead => false,
+            // Counts of charges as the department recorded them.
+            Self::ChargeLogLead => false,
         }
     }
 }

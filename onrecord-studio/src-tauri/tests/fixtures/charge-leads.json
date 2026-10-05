@@ -1,0 +1,80 @@
+{
+  "csv": "\"activityNumber\",\"ActivityType\",\"activityDate\",\"violationSection\",\"race\"\n\"2500000101\",\"ARREST\",\"2025-01-01 00:02:00\",\"63.0404(C)\",\"BLACK\"\n\"2500000201\",\"ARREST\",\"2025-01-02 10:00:00\",\"54.011\",\"WHITE\"\n\"2500000201\",\"ARREST\",\"2025-01-02 10:00:00\",\"242\",\"WHITE\"\n\"2500000301\",\"ARREST\",\"2025-01-03 23:10:00\",\"647(F)DK\",\"HISPANIC\"\n\"2780001\",\"CITATION\",\"2025-01-04 08:10:00\",\"56.55\",\"WHITE\"\n\"2780002\",\"CITATION\",\"2025-01-05 09:00:00\",\"647(E)\",\"BLACK\"\n\"2780003\",\"CITATION\",\"2025-01-06 01:57:00\",\"16025A\",\"HISPANIC\"\n\"2780004\",\"CITATION\",\"2025-02-01 07:30:00\",\"54.0110\",\"NULL\"\n\"2780005\",\"CITATION\",\"2025-02-02 12:00:00\",\"63.0102B7\",\"WHITE\"\n",
+  "schema": {
+    "datasets": [
+      {
+        "snapshotId": "charges",
+        "datasetKind": "REGIONAL_DATA",
+        "displayName": "Charge fixture",
+        "tableName": "analysis_charge_log",
+        "importedRows": 9,
+        "rejectedRows": 0,
+        "sourceUri": "https://example.test/charges.csv",
+        "sourceSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "retrievedAt": "2026-10-04T00:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}",
+        "unconvertedByColumn": {}
+      }
+    ],
+    "templates": [],
+    "columns": [
+      {
+        "tableName": "analysis_charge_log",
+        "columnName": "activitynumber",
+        "logicalType": "CATEGORY",
+        "originalName": "activityNumber",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_charge_log",
+        "columnName": "activitytype",
+        "logicalType": "CATEGORY",
+        "originalName": "ActivityType",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_charge_log",
+        "columnName": "activitydate",
+        "logicalType": "CATEGORY",
+        "originalName": "activityDate",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_charge_log",
+        "columnName": "violationsection",
+        "logicalType": "CATEGORY",
+        "originalName": "violationSection",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_charge_log",
+        "columnName": "race",
+        "logicalType": "CATEGORY",
+        "originalName": "race",
+        "nullable": true,
+        "dictionary": null
+      }
+    ]
+  },
+  "queries": [
+    {
+      "id": "charges_living_outdoors",
+      "title": "Arrests and citations under encampment, encroachment, lodging and public urination sections",
+      "method": "Rows in Charge fixture are charges; rows sharing an activity number are one arrest or citation. An arrest or citation is counted when any of its rows cites San Diego Municipal Code 63.0404 (unauthorized encampment), Municipal Code 54.0110 (unauthorized encroachment), Penal Code 647(e) (lodging without consent), Municipal Code 56.55 (urinating or defecating in public). Sections are compared in upper case with spaces removed; 54.011 is read as 54.0110 because spreadsheets drop a trailing zero. The file records the charge, not whether the person had housing.",
+      "sql": "WITH charges AS (\n SELECT UPPER(TRIM(CAST(\"activitynumber\" AS VARCHAR))) AS activity, UPPER(TRIM(CAST(\"activitytype\" AS VARCHAR))) AS activity_type, REPLACE(UPPER(TRIM(CAST(\"violationsection\" AS VARCHAR))), ' ', '') AS section,\n  CAST(TRY_CAST(CAST(\"activitydate\" AS VARCHAR) AS TIMESTAMP) AS DATE) AS activity_date, NULLIF(NULLIF(UPPER(TRIM(CAST(\"race\" AS VARCHAR))), ''), 'NULL') AS race\n FROM \"analysis_charge_log\" WHERE \"activitynumber\" IS NOT NULL\n), activities AS (\n SELECT activity, MIN(activity_type) AS activity_type, COUNT(*) AS charges,\n  COUNT(*) FILTER (WHERE section LIKE '63.0404%') AS encampment,\n  COUNT(*) FILTER (WHERE (section IN ('54.011', '54.0110') OR section LIKE '54.011(%' OR section LIKE '54.0110(%')) AS encroachment,\n  COUNT(*) FILTER (WHERE (section = '647E' OR section LIKE '647(E)%')) AS lodging,\n  COUNT(*) FILTER (WHERE section LIKE '56.55%') AS urination,\n  MIN(activity_date) AS activity_date,\n  MIN(race) AS race\n FROM charges GROUP BY activity\n), counted AS (\n SELECT *, encampment + encroachment + lodging + urination AS these FROM activities\n)\nSELECT COUNT(*) AS activities, COUNT(*) FILTER (WHERE these > 0) AS counted_activities,\n COUNT(*) FILTER (WHERE these > 0 AND activity_type = 'ARREST') AS arrests, COUNT(*) FILTER (WHERE these > 0 AND activity_type = 'CITATION') AS citations,\n COUNT(*) FILTER (WHERE these > 0 AND these = charges AND activity_type = 'ARREST') AS arrests_on_these_alone,\n COUNT(*) FILTER (WHERE encampment > 0) AS encampment,\n COUNT(*) FILTER (WHERE encroachment > 0) AS encroachment,\n COUNT(*) FILTER (WHERE lodging > 0) AS lodging,\n COUNT(*) FILTER (WHERE urination > 0) AS urination,\n CAST(MIN(activity_date) AS VARCHAR) AS first_date, CAST(MAX(activity_date) AS VARCHAR) AS last_date\nFROM counted"
+    },
+    {
+      "id": "charges_living_outdoors_race",
+      "title": "Recorded race in those arrests and citations, beside every arrest and citation in the file",
+      "method": "Rows in Charge fixture are charges; rows sharing an activity number are one arrest or citation. An arrest or citation is counted when any of its rows cites San Diego Municipal Code 63.0404 (unauthorized encampment), Municipal Code 54.0110 (unauthorized encroachment), Penal Code 647(e) (lodging without consent), Municipal Code 56.55 (urinating or defecating in public). Sections are compared in upper case with spaces removed; 54.011 is read as 54.0110 because spreadsheets drop a trailing zero. The file records the charge, not whether the person had housing. Race is the department's entry for each arrest or citation; entries that are blank are left out of both columns. The comparison is with the other arrests and citations in the same file, not with the population.",
+      "sql": "WITH charges AS (\n SELECT UPPER(TRIM(CAST(\"activitynumber\" AS VARCHAR))) AS activity, UPPER(TRIM(CAST(\"activitytype\" AS VARCHAR))) AS activity_type, REPLACE(UPPER(TRIM(CAST(\"violationsection\" AS VARCHAR))), ' ', '') AS section,\n  CAST(TRY_CAST(CAST(\"activitydate\" AS VARCHAR) AS TIMESTAMP) AS DATE) AS activity_date, NULLIF(NULLIF(UPPER(TRIM(CAST(\"race\" AS VARCHAR))), ''), 'NULL') AS race\n FROM \"analysis_charge_log\" WHERE \"activitynumber\" IS NOT NULL\n), activities AS (\n SELECT activity, MIN(activity_type) AS activity_type, COUNT(*) AS charges,\n  COUNT(*) FILTER (WHERE section LIKE '63.0404%') AS encampment,\n  COUNT(*) FILTER (WHERE (section IN ('54.011', '54.0110') OR section LIKE '54.011(%' OR section LIKE '54.0110(%')) AS encroachment,\n  COUNT(*) FILTER (WHERE (section = '647E' OR section LIKE '647(E)%')) AS lodging,\n  COUNT(*) FILTER (WHERE section LIKE '56.55%') AS urination,\n  MIN(activity_date) AS activity_date,\n  MIN(race) AS race\n FROM charges GROUP BY activity\n), counted AS (\n SELECT *, encampment + encroachment + lodging + urination AS these FROM activities\n)\nSELECT race, COUNT(*) FILTER (WHERE these > 0) AS counted_activities, COUNT(*) AS activities,\n SUM(COUNT(*) FILTER (WHERE these > 0)) OVER () AS all_counted_activities, SUM(COUNT(*)) OVER () AS all_activities\nFROM counted WHERE race IS NOT NULL GROUP BY race ORDER BY counted_activities DESC, race LIMIT 12"
+    }
+  ]
+}

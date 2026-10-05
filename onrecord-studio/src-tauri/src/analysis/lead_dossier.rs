@@ -343,6 +343,10 @@ pub fn falsification_for(kind: FindingKind) -> DossierFalsification {
             "The notice was given earlier or by another route than the posting the log records, or the two rows are different events at one place.",
             &["the notices as posted, with their posting times", "the abatement work orders and the stored-property log for the same places"],
         ),
+        FindingKind::ChargeLogLead => (
+            "The sections were charged against people who are housed, or alongside conduct the log does not record.",
+            &["the arrest and citation reports for the activity numbers counted", "the prosecutor's filing decision and case outcome for each charge"],
+        ),
         FindingKind::PoliceStopLead => (
             "The difference follows from why and where the stops were made, not from who was stopped.",
             &["the stop records broken down by reason for the stop, beat and assignment", "the department's property and evidence log for the items seized"],

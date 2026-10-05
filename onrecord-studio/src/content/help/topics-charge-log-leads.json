@@ -1,0 +1,45 @@
+[
+  {
+    "id": "finding-charge-log-lead",
+    "title": "Arrest and citation log leads",
+    "group": "Finding kinds",
+    "keywords": [
+      "arrest",
+      "citation",
+      "charge",
+      "encampment",
+      "encroachment",
+      "lodging",
+      "urination",
+      "restroom",
+      "race"
+    ],
+    "summary": "Counts from a police department's released arrest and citation log: how many arrests and citations cite an encampment, encroachment, lodging or public urination section, and how many arrests were on those sections alone.",
+    "sections": [
+      {
+        "heading": "What it shows",
+        "paragraphs": [
+          "Police departments release arrest and citation logs in response to records requests, with one row per charge. Rows that share an activity number are one arrest or citation. When such a log is imported as a table, the app counts the arrests and citations that cite San Diego Municipal Code 63.0404 (unauthorized encampment), Municipal Code 54.0110 (unauthorized encroachment), Penal Code 647(e) (lodging without consent) or Municipal Code 56.55 (urinating or defecating in public).",
+          "The lead gives the count for each section, how many were citations and how many arrests, and in how many arrests no other section was charged. Where the log records race, it gives the share of these arrests and citations recorded for each of the most frequent races beside that race's share of every arrest and citation in the same file."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "That the people charged had no housing. The log records a section, not housing status; these sections are also charged against people who are housed, and encroachment covers objects left in the street as well as people.",
+          "Whether shelter was offered or available, where a restroom was open, or what became of the charge. The race comparison is with other arrests and citations in the same file. It is not adjusted for where officers were assigned and is not a finding of unequal treatment."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is not assessed: the finding restates recorded charges and infers nothing to score."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": ["CHARGE_LOG_LEAD"],
+    "commandGroups": [],
+    "related": ["legal-vs-pattern", "findings-inbox", "finding-police-stop-lead", "finding-abatement-log-lead"]
+  }
+]

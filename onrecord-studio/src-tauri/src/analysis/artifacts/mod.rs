@@ -148,6 +148,7 @@ impl DraftFamily {
             | FindingKind::ServiceReportLead
             | FindingKind::PoliceStopLead
             | FindingKind::AbatementLogLead
+            | FindingKind::ChargeLogLead
             // A description of how a release was spread out; it identifies no gap to ask about.
             | FindingKind::RollingProduction => Self::NoDraft,
         }

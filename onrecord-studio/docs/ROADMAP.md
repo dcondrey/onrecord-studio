@@ -1035,6 +1035,24 @@ paths still point at the original temp directory; files are under `downloads/obj
 holds SDPD arrest and citation exports (26-6187, 25-7080, 22-2226 with race) and Urban Corps
 cleanup invoices with labour cost and tonnage per day (25-8547); none is read by a check yet.
 
+Built 2026-10-04: the feed proposes the records collection. When an imported open-reports file
+lists Encampment reports and no abatement log is imported, "What stands out" offers to collect
+sandiego.nextrequest.com for "encampment, abatement, homeless shelter, public restroom, stored
+property" (`dataGaps.ts`, `collect`; started through `start_data_source`). It starts only when
+asked, never under automatic upkeep. The two released .xlsx logs import through the same call
+Data upkeep makes and reproduce the figures above
+(`tests/data_discovery.rs::released_abatement_spreadsheets_import_and_reproduce_the_measured_hours`,
+ignored; needs `ONRECORD_ENCAMPMENT_COLLECTION=/Volumes/A/onrecord-eval/eval-encampment-2`). Not
+verified: the collection itself in the running app.
+
+Built 2026-10-04: leads from released arrest and citation logs (methods §20). Measured with the
+app's SQL on 26-6187 (2025-01-01 to 2026-06-22): 82,054 arrests and citations; 2,349 cite an
+encampment, encroachment, lodging or public urination section (encroachment 1,704, encampment 268,
+urination 206, lodging 194); 1,894 citations and 455 arrests, 259 of the arrests on those sections
+alone. Recorded race among the 2,349 against all in the file: White 41.3% and 34.0%, Black 26.7%
+and 14.9%, Hispanic 24.5% and 30.6%. 22-2226 holds only 56.55 citations (1,564, 2017 to 2021), so
+it has counts and no comparison. 25-7080 overlaps 26-6187 in dates and is counted alone.
+
 Measured, not built:
 - Open Encampment reports in Get It Done (2026-09-14 copy): 2,036; median age 7 to 14 days in
   eight districts and 903.5 days in District 4 (158 reports); 850 days for the 29 held by DSD.

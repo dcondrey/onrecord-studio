@@ -361,3 +361,16 @@ Rows are keyed by the address text (trimmed, lower case) and the coordinates rou
 ### C. What a lead does and does not claim
 The logs record a posting time and a closing time. They do not record the notice period that applied, so 24 and 72 hours are yardsticks and the lead is not a finding that notice fell short; `ENCAMPMENT_NOTICE_SHORTFALL` (a notice document against a stated minimum) is the kind that makes that comparison. Notice may have been given by a route the posting log does not record, and two rows at one place can be different events. Neither log records whether anyone was present or what was done with belongings.
 
+
+## 20. Arrest and Citation Log Leads
+
+`src/utils/chargeLeads.ts`, run by automatic discovery and stored as `CHARGE_LOG_LEAD` findings (§17 E). Verified natively by `tests/data_discovery.rs::charge_log_checks_count_arrests_and_citations_not_charge_rows`, which imports a table with the headers and values of the logs SDPD released to requests 25-7080 and 26-6187.
+
+### A. Which tables are read
+A table with `activitynumber`, `activitytype` and `violationsection` columns. `activitydate` and `race` are read when present. Each row is a charge; rows sharing an activity number are one arrest or citation, and every count is of arrests and citations, not rows.
+
+### B. What is counted
+An arrest or citation is counted when any of its rows cites San Diego Municipal Code 63.0404 (encampment), 54.0110 (encroachment; also released as 54.011 because spreadsheets drop a trailing zero), Penal Code 647(e) (lodging) or Municipal Code 56.55 (urinating or defecating in public). Sections are compared in upper case with spaces removed, by prefix or exact value, so 647(F) is not 647(E). Counted: all arrests and citations in the file, those citing a listed section, of those arrests and citations, arrests in which every row cites a listed section, and the count per section. A lead needs 30. Where race is recorded, the twelve most frequent races among the counted are returned with their counts among the counted and among all; entries that are blank or the publisher's `NULL` are left out of both. The lead names at most three races, each with 30 of the counted, and none when the file holds only listed sections.
+
+### C. What a lead does and does not claim
+The log records a section, not housing status. The listed sections are also charged against people who are housed, and encroachment covers objects as well as people. The log does not record whether shelter was offered, where a restroom was open, or what became of the charge. The race comparison is with other arrests and citations in the same file, is not adjusted for where officers were assigned, and is not a finding of unequal treatment; the lead says so. Two released files can cover overlapping dates; each table is counted alone.

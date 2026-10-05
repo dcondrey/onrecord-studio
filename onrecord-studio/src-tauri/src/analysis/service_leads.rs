@@ -33,6 +33,7 @@ pub enum LeadFamily {
     ServiceReports,
     PoliceStops,
     AbatementLogs,
+    ChargeLogs,
 }
 
 impl LeadFamily {
@@ -41,6 +42,7 @@ impl LeadFamily {
             Self::ServiceReports => FindingKind::ServiceReportLead,
             Self::PoliceStops => FindingKind::PoliceStopLead,
             Self::AbatementLogs => FindingKind::AbatementLogLead,
+            Self::ChargeLogs => FindingKind::ChargeLogLead,
         }
     }
 }

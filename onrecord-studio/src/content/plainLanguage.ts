@@ -233,6 +233,11 @@ export const PLAIN_FINDING_TEXT: Record<FindingKind, PlainText> = {
     notShown: 'It does not show that too little notice was given. The logs do not record the notice period that applied, whether anyone was present, or what was done with belongings.',
     next: "Ask the agency for its abatement procedure, the notices as posted and the stored-property log for the places listed.",
   },
+  CHARGE_LOG_LEAD: {
+    observed: "A count from a police department's released arrest and citation log: arrests and citations citing an encampment, encroachment, lodging or public urination section, and arrests on those sections alone.",
+    notShown: 'It does not show that the people charged had no housing, or why they were charged. The log records the section, not whether shelter was offered or what became of the charge.',
+    next: "Ask the department for the reports behind the arrests made on these sections alone, and the prosecutor for what became of the charges.",
+  },
   POLICE_STOP_LEAD: {
     observed: "A count from a police department's published stop records: how often people an officer perceived as unhoused were stopped, arrested, cited or had property seized, and the recorded reasons.",
     notShown: "It does not show unequal treatment. Rates are not adjusted for where stops were made, and perception is the officer's entry.",

@@ -532,3 +532,145 @@ async fn abatement_logs_pair_one_notice_with_one_abatement_in_the_released_forma
     }
     assert_eq!(cell(&result, 0, "last_posted"), &json!("2025-07-10"));
 }
+
+#[tokio::test]
+async fn charge_log_checks_count_arrests_and_citations_not_charge_rows() {
+    let fixture: Value = serde_json::from_str(include_str!("fixtures/charge-leads.json")).unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let db = DuckDbRepository::new(temp.path().join("charges.db")).unwrap();
+    db.run_migrations(include_str!("../migrations/0001_initial_schema.sql"))
+        .await
+        .unwrap();
+    let path = temp.path().join("charges.csv");
+    std::fs::write(&path, fixture["csv"].as_str().unwrap()).unwrap();
+    let input: AnalyticalImportRequest = serde_json::from_value(json!({ "datasetKind":"REGIONAL_DATA", "displayName":"charges", "localPath":path, "sourceUri":"https://example.test/charges.csv", "partialDataset":true })).unwrap();
+    let imported = db.import_analytical_csv(input).await.unwrap();
+    assert_eq!((imported.imported_rows, imported.rejected_rows), (9, 0));
+    let run = |index: usize| {
+        let sql = fixture["queries"][index]["sql"]
+            .as_str()
+            .unwrap()
+            .replace("analysis_charge_log", &imported.table_name);
+        let db = &db;
+        async move { db.execute_restricted_sql(&sql, 100).await.unwrap() }
+    };
+    let count = |result: &SqlQueryResult, row: usize, name: &str| -> i64 {
+        let value = cell(result, row, name);
+        value
+            .as_i64()
+            .or_else(|| value.as_f64().map(|number| number as i64))
+            .or_else(|| value.as_str().and_then(|text| text.parse().ok()))
+            .unwrap_or_else(|| panic!("{name} is not a count: {value}"))
+    };
+    let counts = run(0).await;
+    assert_eq!(counts.row_count, 1);
+    for (column, expected) in [
+        // Nine charge rows are eight arrests and citations.
+        ("activities", 8),
+        ("counted_activities", 5),
+        ("arrests", 2),
+        ("citations", 3),
+        // The arrest that also cites battery is not on these sections alone.
+        ("arrests_on_these_alone", 1),
+        ("encampment", 1),
+        // 54.011 and 54.0110 are one section.
+        ("encroachment", 2),
+        // 647(F) is not 647(E).
+        ("lodging", 1),
+        ("urination", 1),
+    ] {
+        assert_eq!(count(&counts, 0, column), expected, "{column}");
+    }
+    assert_eq!(cell(&counts, 0, "first_date"), &json!("2025-01-01"));
+    assert_eq!(cell(&counts, 0, "last_date"), &json!("2025-02-02"));
+    let races = run(1).await;
+    // The citation whose race is the publisher's "NULL" is in neither column.
+    let rows: Vec<(String, i64, i64, i64, i64)> = (0..races.row_count)
+        .map(|row| {
+            (
+                cell(&races, row, "race").as_str().unwrap().to_string(),
+                count(&races, row, "counted_activities"),
+                count(&races, row, "activities"),
+                count(&races, row, "all_counted_activities"),
+                count(&races, row, "all_activities"),
+            )
+        })
+        .collect();
+    assert_eq!(
+        rows,
+        vec![
+            ("BLACK".to_string(), 2, 2, 4, 7),
+            ("WHITE".to_string(), 2, 3, 4, 7),
+            ("HISPANIC".to_string(), 0, 2, 4, 7),
+        ]
+    );
+}
+
+/// The two logs as the City released them (PRA 25-5806 notices, 26-772 abatements), read from a
+/// collection's object store the way Data upkeep reads them: no extension on disk, the format
+/// taken from the released file name.
+#[tokio::test]
+#[ignore = "Needs ONRECORD_ENCAMPMENT_COLLECTION, a directory holding the 2026-10-03 encampment collection"]
+async fn released_abatement_spreadsheets_import_and_reproduce_the_measured_hours() {
+    let collection = std::path::PathBuf::from(
+        std::env::var("ONRECORD_ENCAMPMENT_COLLECTION").expect("ONRECORD_ENCAMPMENT_COLLECTION"),
+    );
+    let fixture: Value =
+        serde_json::from_str(include_str!("fixtures/abatement-leads.json")).unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let db = DuckDbRepository::new(temp.path().join("abatement.db")).unwrap();
+    db.run_migrations(include_str!("../migrations/0001_initial_schema.sql"))
+        .await
+        .unwrap();
+    let mut sql = fixture["queries"][0]["sql"].as_str().unwrap().to_string();
+    for (name, file_name, sha256, rows) in [
+        (
+            "posted",
+            "PRA #25-5806 - ESD.xlsx",
+            "ed2b8da8521d761ddc03403a0452b22e6c5df223a7356448ab328c52bd9c74e2",
+            11_090,
+        ),
+        (
+            "completed",
+            "Copy of Abatements Completed 7.31.23 to 1.28.26.xlsx",
+            "ba47308323e283fef3a1f2c4174059793eddde98a34bcecef9cf1bb98004a428",
+            14_000,
+        ),
+    ] {
+        let path = collection
+            .join("downloads/objects")
+            .join(&sha256[..2])
+            .join(sha256);
+        let input: AnalyticalImportRequest = serde_json::from_value(json!({ "datasetKind":"REGIONAL_DATA", "displayName":file_name, "localPath":path, "sourceUri":format!("https://example.test/{name}"), "partialDataset":true, "sourceFileName":file_name, "expectedSourceSha256":sha256 })).unwrap();
+        let imported = db.import_analytical_csv(input).await.unwrap();
+        assert_eq!(
+            (imported.imported_rows, imported.rejected_rows),
+            (rows, 0),
+            "{name}"
+        );
+        sql = sql.replace(&format!("analysis_abatement_{name}"), &imported.table_name);
+    }
+    let result = db.execute_restricted_sql(&sql, 100).await.unwrap();
+    let number = |name: &str| -> f64 {
+        let value = cell(&result, 0, name);
+        value
+            .as_f64()
+            .or_else(|| value.as_str().and_then(|text| text.parse().ok()))
+            .unwrap_or_else(|| panic!("{name} is not numeric: {value}"))
+    };
+    for (column, expected) in [
+        ("posted_notices", 11_090.0),
+        ("completed_abatements", 14_000.0),
+        ("paired_places", 2_067.0),
+        ("completed_before_posted", 11.0),
+        ("under_3_hours", 22.0),
+        ("under_24_hours", 101.0),
+        ("from_24_to_72_hours", 1_811.0),
+        ("over_72_hours", 144.0),
+        ("median_hours", 29.3),
+        ("abatements_in_notice_period", 11_104.0),
+        ("abatements_without_notice_in_log", 214.0),
+    ] {
+        assert_eq!(number(column), expected, "{column}");
+    }
+}
