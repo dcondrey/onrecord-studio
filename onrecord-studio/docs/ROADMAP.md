@@ -1053,6 +1053,19 @@ alone. Recorded race among the 2,349 against all in the file: White 41.3% and 34
 and 14.9%, Hispanic 24.5% and 30.6%. 22-2226 holds only 56.55 citations (1,564, 2017 to 2021), so
 it has counts and no comparison. 25-7080 overlaps 26-6187 in dates and is counted alone.
 
+Built 2026-10-04: shared denial wording (methods §23). The three detectors now identify an
+agency by portal and id (same-numbered agencies on two portals were merged or pooled; reproduced
+by a test in each detector before the fix), name the agencies from `agencies.name`, and cite each
+passage by its character range in the stored text. Every phrase occurrence is a passage (up to 8
+per document, cut to its paragraph), so two reused paragraphs in one letter are two clusters.
+`cross_corpus_shared_language` also reports reworded reuse across three or more agencies (60% of
+content words shared, under 85% of five-word sequences), with no confidence because the 60% floor
+is unmeasured. Statute-like phrases count only near wording that addresses a requester. Pairs
+come from MinHash bands: on 16,000 synthetic passages the index and banded pass took 0.4 s
+(shingles) and 1.3 s (word sets) where the all-pairs pass took 259 s and 94 s, with the same
+groups. The cap stays at the newest 2,000 documents (the paraphrase detector's rose from 800).
+Not verified: the detectors on a real collection, and the phrase lists' precision and recall.
+
 Measured, not built:
 - Open Encampment reports in Get It Done (2026-09-14 copy): 2,036; median age 7 to 14 days in
   eight districts and 903.5 days in District 4 (158 reports); 850 days for the 29 held by DSD.
@@ -1122,9 +1135,6 @@ Audited 2026-10-04 (file references in the session's audit reports; the facts th
   cover every project type but change layout and URL each year. HUD's per-CoC PDFs are the
   reference totals (CA-601 emergency shelter year-round beds: 4,386 in 2023, 3,746 in 2024, 3,587
   in 2025). SDHC occupancy exists only as Tableau and PDF.
-- Shared denial language: detectors compare across portals but count agencies by bare id, so
-  same-numbered agencies in different portals merge; findings carry no agency names or offsets;
-  the paraphrase detector works within one agency only.
 - Release timing: `documents.created_at` holds the portal's timestamp with offset; no detector
   reads weekday, hour or holidays; PDF and OOXML timestamps are compared only with the request's
   determination time.

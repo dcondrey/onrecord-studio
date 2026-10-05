@@ -419,3 +419,39 @@ For the files of the late releases (the 50 most recent) the internal modificatio
 
 ### C. What a finding does and does not claim
 It is a count of upload times against the same portal's other uploads. It does not say why they fall where they do: staff often finish and post work at the end of a week or before a holiday, and requests that fall due then are released then; the finding says so. The portal records when a file was uploaded and not when a file uploaded earlier was made public. The holiday list is California's; days proclaimed for one occasion are not modeled, and an agency in another state keeps a different calendar. The 3 p.m. start is the last two hours of an 8-to-5 day; on the collection in ROADMAP "Cross-source accountability build" 18% of releases began at or after it. No request draft is offered.
+
+## 23. Shared Denial and Determination Wording
+Three detectors compare passages of public documents: `boilerplate_denial` (near-identical denial wording across requests on different topics), `cross_corpus_shared_language` (one determination passage, near-identical or reworded, across three or more agencies) and `evasion_paraphrased_denials` (denial passages of one agency that share vocabulary but not wording). The shared code is `analysis/detectors/text_shared.rs`.
+
+### A. Which passages are compared
+Nothing stored labels a document as a denial or determination letter. A passage is the text around an occurrence of one of the detector's phrases, matched on word tokens (so a phrase broken across lines is found and a longer word is not): up to 300 bytes each side (200 for the paraphrase detector), widened to whole words, cut at blank-line paragraph breaks, and never overlapping the previous passage. A passage under 120 characters is dropped, which also drops a one-sentence denial standing in its own paragraph. Each document contributes up to 8 passages from its first 50,000 characters, and each is compared on its own, so two reused paragraphs in one letter form two clusters. The newest 2,000 public documents are read per run.
+
+Phrases that state a search outcome ("no responsive records", "no records exist", ...) count wherever they occur. Phrases that statutes, policies and ordinary prose also use ("records are exempt from disclosure", "pursuant to government code", "not readily available", "we have determined", "does not maintain", ...) count only within 120 words of wording that addresses a requester: "your" followed within five words by "request", or "you" followed within two by "requested". A released record that quotes a statute is therefore not a candidate. Precision and recall of the phrase lists on real letters are unmeasured.
+
+### B. Agencies
+An agency is a portal and an id within it; the same id on two portals is two agencies, and every distinct-agency count and grouping uses the pair. Names come from `agencies.name` joined on both columns. An agency with no row or a blank name is described as having no recorded name, with its id and portal; the id is never printed as a name. A request with no recorded agency is not counted toward any agency, and `boilerplate_denial` names a single agency only when every passage of the cluster is attributed to it.
+
+### C. Similarity and gates
+* `boilerplate_denial`: Jaccard of five-word shingles at or above 0.60 against the cluster's first passage; at least 5 documents and 3 distinct request titles.
+* `cross_corpus_shared_language`, near-identical: the same at 0.85; at least 5 documents and 3 agencies.
+* `cross_corpus_shared_language`, reworded: passages linked by pairs sharing at least 60% of their distinct content words (words of three letters or more outside a stop list) and less than 85% of their five-word shingles; at least 3 agencies. The 60% floor is a chosen cut-off with no measured error rate, so these findings are `Unassessed`.
+* `evasion_paraphrased_denials`: passages of one agency linked by pairs sharing at least 35% of content words and less than 35% of content-word shingles; the largest group per agency, at least 4 documents and 3 request titles, emitted at 6,500 basis points or more.
+
+### D. Candidate pairs
+Pairs are not compared exhaustively. Each set gets MinHash signatures in bands of 3 rows; only sets sharing a band are compared, and exact Jaccard decides. Two sets with Jaccard `s` share a band with probability `1 - (1 - s^3)^b`: with 40 bands (thresholds 0.60 and 0.85) a pair at 0.60 is missed with probability 5.9e-5 and a pair at 0.85 below 1e-16; with 160 bands (threshold 0.35) a pair at 0.35 is missed with probability 9.0e-4 and a pair at 0.45 with 2.2e-7. `banded_candidates_reproduce_the_exhaustive_comparison` checks, on 480 synthetic passages, that every pair at each threshold is a candidate and that clusters and groups equal the all-pairs result.
+
+Measured 2026-10-04 on synthetic passages (optimised build of the same functions, one run on a loaded machine; `banded_pass_cost` reproduces it):
+
+| passages | sets | index | banded pass | pairs compared | all-pairs pass |
+|---|---|---|---|---|---|
+| 2,000 | shingles, 0.60 | 15 ms | 2 ms | 339 of 1,999,000 | 7.4 s |
+| 2,000 | words, 0.35 | 150 ms | 42 ms | 8,252 of 1,999,000 | 1.7 s |
+| 16,000 | shingles, 0.60 | 329 ms | 69 ms | 2,613 of 127,992,000 | 259 s |
+| 16,000 | words, 0.35 | 444 ms | 842 ms | 461,692 of 127,992,000 | 94 s |
+| 40,000 | shingles, 0.60 | 2.1 s | 0.6 s | 6,581 of 799,980,000 | not run |
+| 40,000 | words, 0.35 | 5.3 s | 2.7 s | 2,850,625 of 799,980,000 | not run |
+
+Groups were identical wherever both passes ran. 16,000 passages is the most 2,000 documents can yield. Reading and tokenising the documents was not timed, so the document cap was not raised.
+
+### E. What a finding does and does not claim
+A finding states how many passages in how many documents share wording, names the agencies, and cites up to 12 passages (one per agency first) with the character range of each in `documents_fts.extracted_text`, the units `SUBSTRING` uses. Every finding's text says that shared wording is not evidence that agencies coordinated and does not show that any request was not reviewed individually: standard wording, a common template or a quoted statute all produce it. All three kinds are pattern signals (`is_legal_claim` false).

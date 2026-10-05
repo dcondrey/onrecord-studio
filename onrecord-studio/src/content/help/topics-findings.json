@@ -49,7 +49,7 @@
     "id": "finding-boilerplate-denial",
     "title": "Boilerplate denial",
     "group": "Finding kinds",
-    "summary": "Near-identical denial wording reused across unrelated requests within one agency, which can indicate stock refusals instead of individual review.",
+    "summary": "Near-identical denial wording reused across requests on different topics. The finding names the agency or agencies the requests were made to and cites where the passage sits in each document.",
     "keywords": [
       "boilerplate denial",
       "finding",
@@ -65,13 +65,13 @@
       {
         "heading": "What it flags",
         "paragraphs": [
-          "Near-identical denial wording reused across unrelated requests within one agency, which can indicate stock refusals instead of individual review."
+          "Near-identical denial wording reused across requests on different topics. The finding names the agency or agencies the requests were made to and cites where the passage sits in each document."
         ]
       },
       {
         "heading": "What it does not show",
         "paragraphs": [
-          "That any denial was improper. Reusing wording is a pattern, and the legal basis of each denial is not evaluated."
+          "That any denial was improper, that agencies coordinated, or that a request was not reviewed individually. Reusing wording is a pattern, and the legal basis of each denial is not evaluated."
         ]
       },
       {
@@ -512,7 +512,7 @@
     "id": "finding-evasion-paraphrased-denials",
     "title": "Paraphrased denials",
     "group": "Finding kinds",
-    "summary": "Denial language that is highly similar in vocabulary across distinct requests but has different surface phrasing, which would defeat a direct boilerplate match.",
+    "summary": "Denial passages on requests to one agency that share most of their vocabulary across distinct requests but are worded differently, so a direct boilerplate match does not group them. The finding names the agency and cites where each passage sits in its document.",
     "keywords": [
       "evasion paraphrased denials",
       "finding",
@@ -528,13 +528,13 @@
       {
         "heading": "What it flags",
         "paragraphs": [
-          "Denial language that is highly similar in vocabulary across distinct requests but has different surface phrasing, which would defeat a direct boilerplate match."
+          "Denial passages on requests to one agency that share most of their vocabulary across distinct requests but are worded differently, so a direct boilerplate match does not group them. The finding names the agency and cites where each passage sits in its document."
         ]
       },
       {
         "heading": "What it does not show",
         "paragraphs": [
-          "Intent to evade. It is a pattern in wording and is not a legal claim."
+          "Intent to evade, or that a request was not reviewed individually. It is a pattern in wording and is not a legal claim."
         ]
       },
       {
@@ -745,7 +745,7 @@
     "id": "finding-cross-corpus-shared-language",
     "title": "Shared language across agencies",
     "group": "Finding kinds",
-    "summary": "The same denial paragraph appearing across multiple agencies, which can point to a shared template or circulating guidance.",
+    "summary": "The same determination paragraph, or a reworded version of it, appearing in responses from three or more agencies. The headline says whether the wording is near-identical or reworded; the finding names the agencies and cites where the passage sits in each document. Agencies with the same number on different portals are counted separately.",
     "keywords": [
       "cross corpus shared language",
       "finding",
@@ -762,13 +762,13 @@
       {
         "heading": "What it flags",
         "paragraphs": [
-          "The same denial paragraph appearing across multiple agencies, which can point to a shared template or circulating guidance."
+          "The same determination paragraph, or a reworded version of it, appearing in responses from three or more agencies. The headline says whether the wording is near-identical or reworded; the finding names the agencies and cites where the passage sits in each document. Agencies with the same number on different portals are counted separately."
         ]
       },
       {
         "heading": "What it does not show",
         "paragraphs": [
-          "Coordination. Shared wording can come from a public template or standard legal text."
+          "Coordination, or that a request was not reviewed individually. Shared wording can come from a public template or standard legal text. Reworded matches rest on a chosen word-overlap cut-off and carry no confidence."
         ]
       },
       {

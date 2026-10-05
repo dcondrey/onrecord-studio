@@ -1,354 +1,125 @@
 //! Boilerplate-denial detector.
 //!
-//! Surfaces clusters of denial responses whose language is near-identical across otherwise
-//! unrelated requests. An agency running 500 distinct requests through the same refusal
-//! paragraph is asserting a policy, not conducting individualized review — and that fact is
-//! worth surfacing without an analyst having to notice.
+//! Surfaces clusters of passages with denial wording that is near-identical across requests on
+//! different topics, and names the agencies the requests were made to.
 //!
-//! **Similarity approach**: word-shingled Jaccard over normalized denial excerpts. The Wave 1
-//! detector-contract exposes `run(&DuckDbRepository)` — it does not surface the `VectorIndex`,
-//! and forcing a fastembed load inside a bounded refresh call would either stall the refresh
-//! (first-run model download) or require plumbing the vector handle through the whole detector
-//! layer just for this one detector. Shingling gives the same "these paragraphs are copy-paste"
-//! answer that a cosine ≥ 0.90 in bge-small space would give, deterministically, offline, and
-//! without new dependencies. If a later wave wants embedding-based recall (semantic similarity
-//! across differently-worded denials that mean the same thing), it will need a new contract that
-//! passes the vector handle in.
+//! **Passages**: nothing stored labels a document as a denial letter, so candidates are the
+//! paragraphs around the phrases in `RULES`, up to `MAX_PASSAGES_PER_DOCUMENT` per document, each
+//! compared on its own.
 //!
-//! **What this is not**: a legal finding. `FindingKind::BoilerplateDenial` is a pattern signal.
-//! `is_legal_claim = false`.
+//! **Similarity**: Jaccard over hashed five-word shingles, deterministic and offline. Candidate
+//! pairs come from MinHash bands (`BANDING_FROM_0_60`); exact Jaccard decides.
+//!
+//! **What this is not**: a legal finding, evidence of coordination, or a showing that a request
+//! was not reviewed individually. `FindingKind::BoilerplateDenial` is a pattern signal.
 
-use super::text_shared::jaccard;
+use super::text_shared::{
+    agencies_of, agency_label, all_words, cite_passages, distinct_documents, distinct_titles,
+    exemplar, load_passages, name_agencies, seed_clusters, shingles, BandIndex, PassageCandidate,
+    PassageRules, SeedCluster, BANDING_FROM_0_60, PATTERN_CAVEAT,
+};
 use crate::{
     analysis::finding::{
-        finding_id, Finding, FindingCitation, FindingConfidence, FindingKind, FindingSeverity,
-        FindingSubject,
+        finding_id, Finding, FindingConfidence, FindingKind, FindingSeverity, FindingSubject,
     },
     error::AppError,
     storage::DuckDbRepository,
 };
 use chrono::Utc;
-use duckdb::params;
 use std::collections::{BTreeMap, HashSet};
 
 pub const SLUG: &str = "boilerplate_denial";
 
-/// Cap on candidate denial documents pulled per invocation. Bounded so a huge corpus keeps
-/// refresh responsive.
-const MAX_CANDIDATES: i64 = 2_000;
-
-/// Minimum characters in the extracted denial excerpt. Below this, similarity scores become
-/// spurious — "no records" alone will Jaccard-match itself trivially and doesn't warrant an
-/// alert.
-const MIN_EXCERPT_CHARS: usize = 120;
-
-/// Shingle size in words. Five is standard for near-duplicate paragraph detection and captures
-/// the kind of stock language ("The [department] has reviewed the request and has determined
-/// that no responsive records exist within its custody") that this detector is built to find.
 const SHINGLE_WORDS: usize = 5;
 
-/// Jaccard-similarity threshold to consider two excerpts near-duplicates. 0.60 on 5-shingles
-/// corresponds roughly to bge-small cosine ≥ 0.90 in practice for paragraphs of this length.
+/// Jaccard at or above which two passages count as the same wording.
 const JACCARD_THRESHOLD: f64 = 0.60;
 
-/// Minimum cluster size (distinct requests) to fire a finding. Below this it's coincidence, not
-/// a pattern.
+/// Minimum distinct documents in a cluster.
 const MIN_CLUSTER_SIZE: usize = 5;
 
-/// Minimum distinct request titles across a cluster. Two identical denials on the same topic
-/// are far weaker evidence than five identical denials on five distinct topics.
+/// Minimum distinct request titles across a cluster. Identical denials on one topic are weaker
+/// than identical denials on several.
 const MIN_DISTINCT_TOPICS: usize = 3;
 
-/// Cap the number of findings this detector can emit per run.
 const MAX_FINDINGS: usize = 50;
 
-/// A denial excerpt pulled from documents_fts alongside its request identity.
-struct DenialCandidate {
-    document_id: i64,
-    portal_key: String,
-    agency_id: Option<i64>,
-    request_title: Option<String>,
-    file_name: Option<String>,
-    excerpt: String,
-    shingles: HashSet<u64>,
-}
-
-/// One cluster of near-identical denials with a picked exemplar.
-struct DenialCluster {
-    members: Vec<usize>,
-    agency_ids: HashSet<i64>,
-    distinct_titles: HashSet<String>,
-    average_similarity: f64,
-}
-
-/// Phrases whose presence in a document's text is a strong signal that the passage is denial
-/// language. Kept short and conservative — we would rather miss denials than tag a released
-/// document as one.
-const DENIAL_PHRASES: &[&str] = &[
-    "no responsive records",
-    "no records exist",
-    "no records were located",
-    "no records that respond",
-    "no records available",
-    "cannot locate any records",
-    "unable to locate records",
-    "does not maintain records",
-    "not readily available",
-    "records are exempt from disclosure",
-    "does not possess records",
-    "no documents responsive",
-];
+static RULES: PassageRules = PassageRules {
+    outcome: &[
+        &["no", "responsive", "records"],
+        &["no", "records", "exist"],
+        &["no", "records", "were", "located"],
+        &["no", "records", "that", "respond"],
+        &["no", "records", "available"],
+        &["cannot", "locate", "any", "records"],
+        &["unable", "to", "locate", "records"],
+        &["does", "not", "maintain", "records"],
+        &["does", "not", "possess", "records"],
+        &["no", "documents", "responsive"],
+    ],
+    needs_addressee: &[
+        &["not", "readily", "available"],
+        &["records", "are", "exempt", "from", "disclosure"],
+    ],
+    half_window: 300,
+};
 
 pub async fn run(repository: &DuckDbRepository) -> Result<Vec<Finding>, AppError> {
-    let candidates = load_candidates(repository).await?;
-    if candidates.len() < MIN_CLUSTER_SIZE {
-        return Ok(Vec::new());
-    }
-    let clusters = cluster_candidates(&candidates);
+    let candidates = load_passages(repository, "Boilerplate-denial passage query", &RULES).await?;
+    let sets = shingle_sets(&candidates);
+    let index = BandIndex::build(&sets, BANDING_FROM_0_60);
+    let clusters = qualifying(
+        &candidates,
+        seed_clusters(&sets, JACCARD_THRESHOLD, |seed| index.later(seed)),
+    );
     let mut findings = build_findings(&candidates, clusters);
-    // Rank clusters by (avg_similarity desc, cluster_size desc) then cap.
     findings.sort_by_key(|f| std::cmp::Reverse(f.confidence.rank_weight()));
     findings.truncate(MAX_FINDINGS);
     Ok(findings)
 }
 
-async fn load_candidates(repository: &DuckDbRepository) -> Result<Vec<DenialCandidate>, AppError> {
-    repository
-        .query_connection("Boilerplate-denial candidate query", move |conn| {
-            let mut statement = conn
-                .prepare(
-                    "SELECT d.id, d.portal_subdomain, d.request_id, r.agency_id,
-                            r.title, d.file_name, fts.extracted_text
-                     FROM documents d
-                     JOIN documents_fts fts
-                        ON fts.document_id = d.id
-                       AND fts.portal_subdomain = d.portal_subdomain
-                     JOIN requests r
-                        ON r.id = d.request_id
-                       AND r.portal_subdomain = d.portal_subdomain
-                     WHERE LOWER(TRIM(d.visibility)) = 'public'
-                       AND d.portal_subdomain NOT IN (SELECT subdomain FROM user_supplied_sources)
-                       AND fts.extracted_text IS NOT NULL
-                       AND LENGTH(fts.extracted_text) >= ?1
-                     ORDER BY d.id DESC
-                     LIMIT ?2",
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!(
-                        "Failed to prepare boilerplate-denial candidate query: {error}"
-                    ))
-                })?;
-            let rows = statement
-                .query_map(params![MIN_EXCERPT_CHARS as i64, MAX_CANDIDATES], |row| {
-                    Ok((
-                        row.get::<_, i64>(0)?,
-                        row.get::<_, String>(1)?,
-                        row.get::<_, i64>(2)?,
-                        row.get::<_, Option<i64>>(3)?,
-                        row.get::<_, Option<String>>(4)?,
-                        row.get::<_, Option<String>>(5)?,
-                        row.get::<_, String>(6)?,
-                    ))
-                })
-                .map_err(|error| {
-                    AppError::Storage(format!(
-                        "Failed to run boilerplate-denial candidate query: {error}"
-                    ))
-                })?;
-            let mut out = Vec::new();
-            for row in rows {
-                let (
-                    document_id,
-                    portal_key,
-                    request_id,
-                    agency_id,
-                    request_title,
-                    file_name,
-                    extracted_text,
-                ) = row.map_err(|error| {
-                    AppError::Storage(format!("Failed to decode denial candidate row: {error}"))
-                })?;
-                let Some(excerpt) = extract_denial_excerpt(&extracted_text) else {
-                    continue;
-                };
-                let normalized = normalize(&excerpt);
-                if normalized.split_whitespace().count() < SHINGLE_WORDS {
-                    continue;
-                }
-                let shingles = shingle(&normalized, SHINGLE_WORDS);
-                if shingles.is_empty() {
-                    continue;
-                }
-                let _ = request_id; // reserved for future intra-request dedup
-                out.push(DenialCandidate {
-                    document_id,
-                    portal_key,
-                    agency_id,
-                    request_title,
-                    file_name,
-                    excerpt,
-                    shingles,
-                });
-            }
-            Ok(out)
-        })
-        .await
-}
-
-/// Finds the passage surrounding a denial phrase inside a full extracted-text body. Returns
-/// `None` when no denial phrase appears. The window is roughly the paragraph the phrase sits in,
-/// bounded to keep shingling costs stable.
-fn extract_denial_excerpt(text: &str) -> Option<String> {
-    let haystack = text.to_ascii_lowercase();
-    let matched_at = DENIAL_PHRASES
+fn shingle_sets(candidates: &[PassageCandidate]) -> Vec<HashSet<u64>> {
+    candidates
         .iter()
-        .filter_map(|phrase| haystack.find(phrase))
-        .min()?;
-    // Bounded window: ~600 characters around the matched phrase, clamped to the string. That
-    // captures the typical boilerplate paragraph without dragging in whole documents.
-    let start = matched_at.saturating_sub(300);
-    let end = matched_at.saturating_add(300).min(text.len());
-    // Snap start/end to whitespace so we don't split a shingle mid-word.
-    let start = text[..start]
-        .rfind(char::is_whitespace)
-        .map_or(0, |i| i + 1);
-    let end = text[end..]
-        .find(char::is_whitespace)
-        .map_or(text.len(), |i| end + i);
-    let excerpt = text[start..end].trim().to_string();
-    if excerpt.len() < MIN_EXCERPT_CHARS {
-        return None;
-    }
-    Some(excerpt)
+        .map(|candidate| shingles(&all_words(&candidate.excerpt), SHINGLE_WORDS))
+        .collect()
 }
 
-/// Lower-cases, collapses whitespace, strips punctuation. Any two paragraphs that differ only in
-/// letter case, spacing, or trailing periods hash to the same tokens.
-fn normalize(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut prev_was_space = true;
-    for ch in text.chars() {
-        if ch.is_alphanumeric() {
-            for lower in ch.to_lowercase() {
-                out.push(lower);
-            }
-            prev_was_space = false;
-        } else if (ch.is_whitespace() || ch.is_ascii_punctuation()) && !prev_was_space {
-            out.push(' ');
-            prev_was_space = true;
-        }
-    }
-    out.trim().to_string()
-}
-
-/// Emits the set of contiguous `n`-word shingles as 64-bit FNV-1a hashes. Hash-set membership
-/// then serves as the input to Jaccard similarity in O(|A|+|B|).
-fn shingle(normalized: &str, n: usize) -> HashSet<u64> {
-    let words: Vec<&str> = normalized.split_whitespace().collect();
-    if words.len() < n {
-        return HashSet::new();
-    }
-    let mut set = HashSet::with_capacity(words.len().saturating_sub(n).saturating_add(1));
-    for window in words.windows(n) {
-        let mut hasher: u64 = 0xcbf2_9ce4_8422_2325;
-        for word in window {
-            for byte in word.as_bytes() {
-                hasher ^= *byte as u64;
-                hasher = hasher.wrapping_mul(0x0000_0100_0000_01B3);
-            }
-            hasher ^= 0x20; // shingle-word separator
-            hasher = hasher.wrapping_mul(0x0000_0100_0000_01B3);
-        }
-        set.insert(hasher);
-    }
-    set
-}
-
-/// Greedy single-link clustering. For each unseen candidate, expand to any other candidate whose
-/// Jaccard vs. the seed exceeds the threshold. O(n²) worst case, bounded by MAX_CANDIDATES.
-fn cluster_candidates(candidates: &[DenialCandidate]) -> Vec<DenialCluster> {
-    let mut clusters = Vec::new();
-    let mut assigned = vec![false; candidates.len()];
-    for i in 0..candidates.len() {
-        if assigned[i] {
-            continue;
-        }
-        let mut members = vec![i];
-        let mut similarity_total = 0.0;
-        let mut pair_count = 0.0;
-        assigned[i] = true;
-        for j in (i + 1)..candidates.len() {
-            if assigned[j] {
-                continue;
-            }
-            let sim = jaccard(&candidates[i].shingles, &candidates[j].shingles);
-            if sim >= JACCARD_THRESHOLD {
-                assigned[j] = true;
-                members.push(j);
-                similarity_total += sim;
-                pair_count += 1.0;
-            }
-        }
-        if members.len() < MIN_CLUSTER_SIZE {
-            continue;
-        }
-        let mut agency_ids = HashSet::new();
-        let mut distinct_titles = HashSet::new();
-        for &member in &members {
-            if let Some(id) = candidates[member].agency_id {
-                agency_ids.insert(id);
-            }
-            if let Some(title) = &candidates[member].request_title {
-                let t = title.trim().to_ascii_lowercase();
-                if !t.is_empty() {
-                    distinct_titles.insert(t);
-                }
-            }
-        }
-        if distinct_titles.len() < MIN_DISTINCT_TOPICS {
-            continue;
-        }
-        let average = if pair_count > 0.0 {
-            similarity_total / pair_count
-        } else {
-            // Single-member clusters were rejected above, so `pair_count == 0` cannot happen
-            // for surviving clusters. Kept defensively.
-            1.0
-        };
-        clusters.push(DenialCluster {
-            members,
-            agency_ids,
-            distinct_titles,
-            average_similarity: average,
-        });
-    }
+fn qualifying(candidates: &[PassageCandidate], clusters: Vec<SeedCluster>) -> Vec<SeedCluster> {
     clusters
+        .into_iter()
+        .filter(|cluster| {
+            distinct_documents(candidates, &cluster.members) >= MIN_CLUSTER_SIZE
+                && distinct_titles(candidates, &cluster.members) >= MIN_DISTINCT_TOPICS
+        })
+        .collect()
 }
 
-fn build_findings(candidates: &[DenialCandidate], clusters: Vec<DenialCluster>) -> Vec<Finding> {
-    let mut findings = Vec::new();
+fn build_findings(candidates: &[PassageCandidate], clusters: Vec<SeedCluster>) -> Vec<Finding> {
     let now = Utc::now();
+    let mut by_id = BTreeMap::new();
     for cluster in clusters {
-        // Prefer stable representative: lowest document_id in the cluster.
-        let exemplar_idx = cluster
+        let exemplar = exemplar(candidates, &cluster.members);
+        let cluster_size = distinct_documents(candidates, &cluster.members);
+        let distinct_topics = distinct_titles(candidates, &cluster.members);
+        let agencies = agencies_of(candidates, &cluster.members);
+        let unattributed = cluster
             .members
             .iter()
-            .copied()
-            .min_by_key(|&idx| candidates[idx].document_id)
-            .expect("cluster has ≥ MIN_CLUSTER_SIZE members");
-        let exemplar = &candidates[exemplar_idx];
-        let cluster_size = cluster.members.len();
-        let distinct_topics = cluster.distinct_titles.len();
-        let cross_agency = cluster.agency_ids.len() > 1;
+            .filter(|&&member| candidates[member].agency.is_none())
+            .count();
+        // One agency only when every member is attributed to it; a member with no recorded agency
+        // may belong to any.
+        let single_agency = (agencies.len() == 1 && unattributed == 0)
+            .then(|| agencies.iter().next())
+            .flatten();
 
-        // Severity: crossing agency lines is a stronger signal than within-agency reuse.
-        let severity = if cross_agency {
+        let severity = if agencies.len() > 1 {
             FindingSeverity::Serious
         } else {
             FindingSeverity::Notable
         };
 
-        // Confidence: scaled by (cluster_size, similarity, distinct_topics).
         let size_component = ((cluster_size as f64 / 20.0).min(1.0)) * 3_000.0;
         let similarity_component = ((cluster.average_similarity - JACCARD_THRESHOLD)
             / (1.0 - JACCARD_THRESHOLD))
@@ -356,311 +127,291 @@ fn build_findings(candidates: &[DenialCandidate], clusters: Vec<DenialCluster>) 
             * 4_000.0;
         let topic_component = ((distinct_topics as f64 / 10.0).min(1.0)) * 3_000.0;
         let bp = (size_component + similarity_component + topic_component).round() as u16;
-        let confidence = FindingConfidence::measured(bp);
 
-        // Subject anchor: agency when within-agency cluster; portal only when cross-agency.
-        let subject = if cross_agency {
-            FindingSubject {
-                portal_key: Some(exemplar.portal_key.clone()),
-                document_id: Some(exemplar.document_id),
-                ..Default::default()
-            }
-        } else {
-            FindingSubject {
-                portal_key: Some(exemplar.portal_key.clone()),
-                agency_id: exemplar.agency_id,
-                document_id: Some(exemplar.document_id),
-                ..Default::default()
-            }
+        let subject = FindingSubject {
+            portal_key: Some(exemplar.portal_key.clone()),
+            agency_id: single_agency.map(|(key, _)| key.id),
+            document_id: Some(exemplar.document_id),
+            ..Default::default()
         };
 
-        // Salient bits determine id stability. Cluster size and topic count are bucketed so that
-        // adding one more copy of the same denial upserts the same row until it crosses a
-        // decade boundary; that keeps the inbox stable without erasing legitimate growth.
-        let size_bucket = format!("size_bucket={}", cluster_size / 10);
-        let topics_bucket = format!("topics_bucket={}", distinct_topics / 5);
-        let cross_agency_bit = format!(
-            "cross_agency={}",
-            if cross_agency { "true" } else { "false" }
-        );
-        let id = finding_id(
-            FindingKind::BoilerplateDenial,
-            SLUG,
-            &subject,
-            &[&size_bucket, &topics_bucket, &cross_agency_bit],
-        );
+        // Size and topic counts are bucketed so one more copy of the same denial upserts the same
+        // row. The passage offset keeps two reused paragraphs of one letter apart.
+        let salient = [
+            format!("size_bucket={}", cluster_size / 10),
+            format!("topics_bucket={}", distinct_topics / 5),
+            format!("agencies={}", agencies.len()),
+            format!("passage_start={}", exemplar.character_start),
+        ];
+        let salient: Vec<&str> = salient.iter().map(String::as_str).collect();
+        let id = finding_id(FindingKind::BoilerplateDenial, SLUG, &subject, &salient);
 
-        let headline = if cross_agency {
-            format!(
-                "Same denial language appears across {cluster_size} requests from {agencies} agencies",
-                agencies = cluster.agency_ids.len()
-            )
-        } else {
-            format!(
-                "Agency's denial language repeats near-verbatim across {cluster_size} distinct requests"
-            )
+        let (headline, who) = match single_agency {
+            Some((key, name)) => {
+                let agency = agency_label(key, name.as_deref(), false);
+                (
+                    format!(
+                        "Denial wording repeats near-verbatim across {cluster_size} requests to \
+                         {agency}"
+                    ),
+                    format!("All were made to {agency}."),
+                )
+            }
+            None if agencies.is_empty() => (
+                format!(
+                    "Denial wording repeats near-verbatim across {cluster_size} requests with no \
+                     recorded agency"
+                ),
+                "No agency is recorded for these requests.".to_string(),
+            ),
+            None => {
+                let unattributed_note = if unattributed > 0 {
+                    format!(" {unattributed} passages are on requests with no recorded agency.")
+                } else {
+                    String::new()
+                };
+                (
+                    format!(
+                        "Same denial wording appears across {cluster_size} requests to {} agencies",
+                        agencies.len()
+                    ),
+                    format!("Agencies: {}.{unattributed_note}", name_agencies(&agencies)),
+                )
+            }
         };
 
         let similarity_pct = (cluster.average_similarity * 100.0).round() as u32;
         let explanation = format!(
-            "{cluster_size} denial passages share near-identical wording (average {similarity_pct}% \
-             shingle overlap) across {distinct_topics} distinct request topics. \
-             Individualized review would be expected to produce distinct language per request; \
-             this cluster is consistent with a stock refusal being applied uniformly."
+            "{passages} passages in {cluster_size} public documents share near-identical wording \
+             (average {similarity_pct}% of five-word sequences in common with the first) across \
+             {distinct_topics} distinct request titles. {who} Each citation gives the passage's \
+             position in its document. {PATTERN_CAVEAT}",
+            passages = cluster.members.len(),
         );
 
-        // Cite up to 5 representative documents from the cluster.
-        let mut cited = 0usize;
-        let mut citations = Vec::new();
-        for &member in cluster.members.iter().take(5) {
-            let candidate = &candidates[member];
-            let label = candidate
-                .file_name
-                .clone()
-                .or_else(|| candidate.request_title.clone())
-                .unwrap_or_else(|| format!("document {}", candidate.document_id));
-            let quote_preview = candidate
-                .excerpt
-                .split_whitespace()
-                .take(24)
-                .collect::<Vec<_>>()
-                .join(" ");
-            citations.push(FindingCitation {
-                portal_key: candidate.portal_key.clone(),
-                document_id: candidate.document_id,
-                character_start: None,
-                character_end: None,
-                quote: Some(quote_preview),
-                label: Some(label),
-            });
-            cited += 1;
-        }
-        debug_assert!(cited >= 1, "cluster guaranteed to have ≥ 1 member");
-
-        findings.push(Finding {
+        let finding = Finding {
             id,
             kind: FindingKind::BoilerplateDenial,
             severity,
-            confidence,
+            confidence: FindingConfidence::measured(bp),
             subject,
             headline,
             explanation,
-            citations,
+            citations: cite_passages(candidates, &cluster.members),
             discovered_at: now,
             last_seen_at: now,
             dismissed_at: None,
             source_detector: SLUG.into(),
-        });
+        };
+        by_id.entry(finding.id.clone()).or_insert(finding);
     }
-    // Deterministic order for callers that inspect the vec directly (tests, dumps).
-    findings.sort_by(|a, b| {
-        b.confidence
-            .rank_weight()
-            .cmp(&a.confidence.rank_weight())
-            .then_with(|| a.id.cmp(&b.id))
-    });
-    // Deduplicate on id in case two subject-equivalent clusters produced the same anchor; the
-    // storage layer's upsert would resolve this anyway, but returning duplicates would confuse
-    // any caller that trusts the vec verbatim.
-    let mut seen = BTreeMap::new();
-    for finding in findings {
-        seen.entry(finding.id.clone()).or_insert(finding);
-    }
-    seen.into_values().collect()
+    by_id.into_values().collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::analysis::detectors::text_shared::fixtures::{
+        corpus, letter, overlapping, stored_slice, Letter, NO_RECORDS_LETTER,
+    };
 
-    fn cand(id: i64, agency: Option<i64>, title: &str, excerpt: &str) -> DenialCandidate {
-        let normalized = normalize(excerpt);
-        let shingles = shingle(&normalized, SHINGLE_WORDS);
-        DenialCandidate {
-            document_id: id,
-            portal_key: "test".into(),
-            agency_id: agency,
-            request_title: Some(title.into()),
-            file_name: Some(format!("doc-{id}.pdf")),
-            excerpt: excerpt.into(),
-            shingles,
+    const DISTINCT_DENIAL: &str = "After conducting a search across multiple databases, the \
+        office has no responsive records matching the terms described, and accordingly nothing \
+        will be produced under this cover for the period named in the correspondence.";
+
+    fn letters(count: i64, text: &str) -> Vec<Letter> {
+        (1..=count)
+            .map(|id| letter("city-a", (7, "Police Department"), id, text))
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn agencies_sharing_an_id_on_different_portals_are_counted_separately() {
+        let letters = (1..=6)
+            .map(|id| {
+                let portal = if id % 2 == 0 { "city-a" } else { "city-b" };
+                letter(portal, (1, "Police"), id, NO_RECORDS_LETTER)
+            })
+            .collect();
+        let findings = run(&corpus(letters).await).await.unwrap();
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        let finding = &findings[0];
+        assert!(
+            finding.headline.contains("2 agencies"),
+            "{}",
+            finding.headline
+        );
+        assert_eq!(finding.severity, FindingSeverity::Serious);
+        assert_eq!(finding.subject.agency_id, None);
+        assert!(
+            finding
+                .explanation
+                .contains("Agencies: Police (city-a); Police (city-b)."),
+            "{}",
+            finding.explanation
+        );
+    }
+
+    #[tokio::test]
+    async fn one_agency_is_named_and_the_finding_states_what_it_does_not_show() {
+        let findings = run(&corpus(letters(5, NO_RECORDS_LETTER)).await)
+            .await
+            .unwrap();
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        let finding = &findings[0];
+        assert_eq!(finding.kind, FindingKind::BoilerplateDenial);
+        assert_eq!(finding.severity, FindingSeverity::Notable);
+        assert_eq!(finding.subject.agency_id, Some(7));
+        assert!(finding
+            .headline
+            .ends_with("5 requests to Police Department"));
+        assert!(finding.explanation.contains(PATTERN_CAVEAT));
+    }
+
+    #[tokio::test]
+    async fn a_blank_agency_name_is_reported_as_missing_not_as_a_name() {
+        let letters = (1..=5)
+            .map(|id| letter("city-a", (7, " "), id, NO_RECORDS_LETTER))
+            .collect();
+        let findings = run(&corpus(letters).await).await.unwrap();
+        assert!(
+            findings[0]
+                .headline
+                .ends_with("an agency with no recorded name (id 7 on city-a)"),
+            "{}",
+            findings[0].headline
+        );
+    }
+
+    #[tokio::test]
+    async fn requests_without_an_agency_are_not_attributed_to_one() {
+        let mut letters = letters(3, NO_RECORDS_LETTER);
+        for id in 4..=5 {
+            letters.push(Letter {
+                agency: None,
+                ..letter("city-a", (0, ""), id, NO_RECORDS_LETTER)
+            });
         }
+        let findings = run(&corpus(letters).await).await.unwrap();
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert_eq!(findings[0].subject.agency_id, None);
+        assert!(findings[0]
+            .explanation
+            .contains("2 passages are on requests with no recorded agency"));
     }
 
-    fn stock_denial() -> String {
-        // 40+ tokens so shingling produces enough windows to be meaningful.
-        "The Department has carefully reviewed the request and determined that no responsive \
-         records exist within its custody, care, or control at this time and therefore respectfully \
-         declines the request pursuant to applicable exemptions."
-            .into()
-    }
-
-    fn stock_denial_lightly_edited() -> String {
-        // Same passage with punctuation swaps and a comma added — Jaccard should stay above the
-        // threshold because word content is unchanged.
-        "The Department has carefully reviewed the request and determined that, no responsive \
-         records exist within its custody care or control at this time; and therefore respectfully \
-         declines the request pursuant to applicable exemptions."
-            .into()
-    }
-
-    fn distinct_denial() -> String {
-        "After conducting a diligent search across multiple databases, the department was unable \
-         to locate any responsive materials matching the terms described in the request, and \
-         accordingly no documents will be produced under this cover."
-            .into()
-    }
-
-    #[test]
-    fn normalize_lowercases_and_strips_punctuation() {
-        assert_eq!(
-            normalize("  The Department, has REVIEWED the request. "),
-            "the department has reviewed the request"
-        );
-    }
-
-    #[test]
-    fn shingle_produces_deterministic_hashes_and_agrees_across_calls() {
-        let a = shingle(&normalize(&stock_denial()), SHINGLE_WORDS);
-        let b = shingle(&normalize(&stock_denial()), SHINGLE_WORDS);
-        assert_eq!(a, b);
-        assert!(!a.is_empty(), "long normalized text produces shingles");
-    }
-
-    #[test]
-    fn jaccard_is_high_for_lightly_edited_reuse_and_low_for_distinct_prose() {
-        let base = shingle(&normalize(&stock_denial()), SHINGLE_WORDS);
-        let edited = shingle(&normalize(&stock_denial_lightly_edited()), SHINGLE_WORDS);
-        let different = shingle(&normalize(&distinct_denial()), SHINGLE_WORDS);
-        assert!(
-            jaccard(&base, &edited) >= JACCARD_THRESHOLD,
-            "punctuation edits must not drop below threshold"
-        );
-        assert!(
-            jaccard(&base, &different) < JACCARD_THRESHOLD,
-            "genuinely different denials must not cluster"
-        );
-    }
-
-    #[test]
-    fn extract_denial_excerpt_finds_the_paragraph_containing_a_phrase() {
+    #[tokio::test]
+    async fn each_citation_range_slices_the_stored_text_to_the_passage() {
         let body = format!(
-            "Cover letter irrelevant intro paragraph. {}\n\nSincerely,\nRecords Officer",
-            stock_denial()
+            "Señor Núñez — re: café records, naïve résumé file\n\n{NO_RECORDS_LETTER}\n\n\
+             Sincerely,\nRecords Officer"
         );
-        let excerpt = extract_denial_excerpt(&body).expect("must extract when phrase present");
-        assert!(excerpt.contains("no responsive records"));
-    }
-
-    #[test]
-    fn extract_denial_excerpt_none_when_no_phrase_present() {
-        assert!(extract_denial_excerpt(
-            "Cover letter about the enclosed records, which are attached in full."
-        )
-        .is_none());
-    }
-
-    #[test]
-    fn extract_denial_excerpt_none_when_matched_passage_too_short() {
-        // Match present but the surrounding text is too short to meet MIN_EXCERPT_CHARS.
-        assert!(extract_denial_excerpt("no records exist here.").is_none());
-    }
-
-    #[test]
-    fn cluster_forms_when_five_agency_denials_are_near_identical_across_distinct_topics() {
-        let mut candidates = Vec::new();
-        for (i, topic) in ["salaries", "vendors", "meetings", "budgets", "training"]
-            .iter()
-            .enumerate()
-        {
-            candidates.push(cand(i as i64 + 1, Some(7), topic, &stock_denial()));
+        let repository = corpus(letters(5, &body)).await;
+        let findings = run(&repository).await.unwrap();
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert_eq!(findings[0].citations.len(), 5);
+        for citation in &findings[0].citations {
+            let sliced = stored_slice(&repository, citation).await;
+            assert_eq!(sliced, NO_RECORDS_LETTER);
+            assert!(citation
+                .label
+                .as_deref()
+                .unwrap()
+                .starts_with("Police Department: "));
         }
-        let clusters = cluster_candidates(&candidates);
-        assert_eq!(clusters.len(), 1, "one cluster of five reused denials");
-        assert_eq!(clusters[0].members.len(), 5);
-        assert_eq!(clusters[0].distinct_titles.len(), 5);
-        let findings = build_findings(&candidates, clusters);
-        assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].kind, FindingKind::BoilerplateDenial);
-        assert_eq!(findings[0].severity, FindingSeverity::Notable);
-        assert!(findings[0].headline.contains("repeats near-verbatim"));
     }
 
-    #[test]
-    fn cross_agency_cluster_is_scored_more_severely() {
-        let mut candidates = Vec::new();
-        for i in 0..5 {
-            candidates.push(cand(
-                i,
-                Some(i % 2 + 1), // alternating agencies 1 and 2
-                &format!("topic-{i}"),
-                &stock_denial(),
+    #[tokio::test]
+    async fn two_reused_paragraphs_in_one_letter_are_two_clusters() {
+        let second = "The remaining portion of your request seeks personnel evaluations. Those \
+            records are exempt from disclosure because releasing them would be an unwarranted \
+            invasion of personal privacy, and they are withheld in full on that ground.";
+        let letters = (1..=5)
+            .map(|id| {
+                let text = format!(
+                    "{NO_RECORDS_LETTER}\n\nReference number {id} concerns a matter unlike any \
+                     other in this set, described here in words chosen for letter {id} only.\n\n\
+                     {second}"
+                );
+                letter("city-a", (7, "Police Department"), id, &text)
+            })
+            .collect();
+        let repository = corpus(letters).await;
+        let findings = run(&repository).await.unwrap();
+        assert_eq!(findings.len(), 2, "{findings:?}");
+        let mut passages = Vec::new();
+        for finding in &findings {
+            passages.push(stored_slice(&repository, &finding.citations[0]).await);
+        }
+        passages.sort();
+        assert_eq!(passages, [second, NO_RECORDS_LETTER]);
+    }
+
+    #[tokio::test]
+    async fn a_released_record_quoting_the_statute_is_not_denial_wording() {
+        let quoted = "Section 4.2 of the records manual restates the statute: personnel, medical \
+            and similar records are exempt from disclosure where release would be an unwarranted \
+            invasion of personal privacy, and such files are not readily available to the public \
+            counter.";
+        assert!(run(&corpus(letters(5, quoted)).await)
+            .await
+            .unwrap()
+            .is_empty());
+        let addressed = format!("We write in response to your request of last month. {quoted}");
+        assert_eq!(
+            run(&corpus(letters(5, &addressed)).await)
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn fires_at_five_documents_on_three_topics_and_not_below_either() {
+        let titled = |count: i64, topics: i64| -> Vec<Letter> {
+            (1..=count)
+                .map(|id| Letter {
+                    title: format!("Topic {}", id % topics),
+                    ..letter("city-a", (7, "Police Department"), id, NO_RECORDS_LETTER)
+                })
+                .collect()
+        };
+        for (count, topics, expected) in [(4, 4, 0), (5, 5, 1), (6, 6, 1), (6, 2, 0), (6, 3, 1)] {
+            let findings = run(&corpus(titled(count, topics)).await).await.unwrap();
+            assert_eq!(findings.len(), expected, "{count} letters, {topics} topics");
+        }
+    }
+
+    #[tokio::test]
+    async fn differently_worded_denials_do_not_cluster() {
+        let mut letters = letters(3, NO_RECORDS_LETTER);
+        for id in 4..=6 {
+            letters.push(letter(
+                "city-a",
+                (7, "Police Department"),
+                id,
+                DISTINCT_DENIAL,
             ));
         }
-        let clusters = cluster_candidates(&candidates);
-        assert_eq!(clusters.len(), 1);
-        let findings = build_findings(&candidates, clusters);
-        assert_eq!(findings[0].severity, FindingSeverity::Serious);
-        assert!(findings[0].headline.contains("across"));
+        assert!(run(&corpus(letters).await).await.unwrap().is_empty());
     }
 
     #[test]
-    fn no_cluster_below_minimum_size() {
-        // Four members — below MIN_CLUSTER_SIZE (5).
-        let candidates: Vec<_> = ["a", "b", "c", "d"]
-            .iter()
-            .enumerate()
-            .map(|(i, t)| cand(i as i64, Some(1), t, &stock_denial()))
-            .collect();
-        let clusters = cluster_candidates(&candidates);
-        assert!(
-            clusters.is_empty(),
-            "four near-duplicate denials must not fire"
-        );
+    fn the_similarity_threshold_is_inclusive() {
+        for (shared, clustered) in [(59, false), (60, true), (61, true)] {
+            let (a, b) = overlapping(shared, 100);
+            let sets = [a, b];
+            let clusters = seed_clusters(&sets, JACCARD_THRESHOLD, |seed| (seed + 1..2).collect());
+            assert_eq!(clusters.len() == 1, clustered, "{shared}/100");
+        }
     }
 
-    #[test]
-    fn no_cluster_when_topics_are_not_diverse() {
-        // Five denials with same topic title — coincidence, not a pattern.
-        let candidates: Vec<_> = (0..5)
-            .map(|i| cand(i, Some(1), "same-topic", &stock_denial()))
-            .collect();
-        let clusters = cluster_candidates(&candidates);
-        assert!(
-            clusters.is_empty(),
-            "same-topic cluster must not fire; topic diversity is required"
-        );
-    }
-
-    #[test]
-    fn genuinely_distinct_denials_do_not_cluster() {
-        let candidates = vec![
-            cand(1, Some(1), "one", &stock_denial()),
-            cand(2, Some(1), "two", &distinct_denial()),
-            cand(
-                3,
-                Some(1),
-                "three",
-                "The requested information cannot be released because releasing it \
-                 would compromise ongoing investigations that involve sensitive personnel matters \
-                 currently under active administrative review by the department.",
-            ),
-        ];
-        let clusters = cluster_candidates(&candidates);
-        assert!(clusters.is_empty(), "no cluster from distinct prose");
-    }
-
-    #[test]
-    fn finding_id_is_stable_across_reruns_for_the_same_cluster() {
-        let candidates: Vec<_> = ["a", "b", "c", "d", "e"]
-            .iter()
-            .enumerate()
-            .map(|(i, t)| cand(i as i64 + 1, Some(1), t, &stock_denial()))
-            .collect();
-        let first = build_findings(&candidates, cluster_candidates(&candidates));
-        let second = build_findings(&candidates, cluster_candidates(&candidates));
-        assert_eq!(first.len(), 1);
-        assert_eq!(second.len(), 1);
+    #[tokio::test]
+    async fn finding_id_is_stable_across_reruns() {
+        let repository = corpus(letters(5, NO_RECORDS_LETTER)).await;
+        let first = run(&repository).await.unwrap();
+        let second = run(&repository).await.unwrap();
         assert_eq!(first[0].id, second[0].id);
     }
 }
