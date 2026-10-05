@@ -1335,6 +1335,33 @@ The query took 4.5 seconds from CSV. Not verified: its run time inside the app a
 ring reports beforehand: 5,151 had more afterwards and 5,884 fewer; 809 rose by half or more and
 1,114 fell by a third or more. Not built: naming the places where the ring rose.
 
+Measured 2026-10-05, not built (one-off SQL kept at
+`/Volumes/A/onrecord-eval/analysis/abatement-reports-deep-2026-10-05.sql`; same files as the
+paragraph above, abatements from 2023-07-31 to 2026-01-27):
+- Week by week, report and abatement pairs within 150 metres rise into the abatement (148,114 six
+  weeks before to 163,240 in the week before) and fall after it (155,784 in the first week to
+  142,668 in the sixth). In the 150 to 800 metre ring they stay between 1.34 and 1.36 million
+  every week.
+- Placebo, the same places with the date moved 28 days earlier: within 150 metres 296,235 then
+  304,996 (3.0% more); ring 2,722,122 then 2,707,555 (0.5% fewer). Against that drift the actual
+  change is 3.6% fewer at the site and 0.4% fewer in the ring, so the ring shows no change beyond
+  the background and the site shows a fall.
+- By year of abatement: 2023 (from 31 July) site +0.9%, ring +3.9%; 2024 site -11.2%, ring -6.2%;
+  2025 site -1.9%, ring +0.1%. January 2026 (403 abatements) shows site +23% and ring +47%, but
+  its "before" fortnight is late December; not to be read without a seasonal baseline.
+- Repeats: 131 places with 20 or more abatements account for 7,814 of 13,387 place-days; 2,129
+  places were abated once. The most abated coordinates (recorded as 300 16th Street and as 1600 K
+  Street) have 331 place-days in two and a half years. One coordinate can carry several address
+  strings.
+- No place rises consistently: at the most abated place the ring rose by half or more after 24
+  abatements and fell by a third or more after 32.
+- Of 8,124 abatements with at least 5 reports within 150 metres beforehand, the site count fell by
+  a third or more after 2,573 and rose by half or more after 1,430. Site fell while the ring rose
+  by half: 139. Site and ring both fell by a third: 235.
+- Council District 3 holds 2.44 of the 2.70 million ring pairs.
+Worth building from this: the placebo comparison inside the lead (so the stated change is against
+drift, not against zero), the weekly profile, and a lead on repeat abatement at one place.
+
 ## Leads from service-report tables (2026-10-04)
 
 Decision: "What stands out" shows leads about the subject of the records; facts about a table
