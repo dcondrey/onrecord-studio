@@ -79,10 +79,21 @@ fn is_modeled(date: NaiveDate) -> bool {
     (FIRST_MODELED_YEAR..=LAST_MODELED_YEAR).contains(&date.year())
 }
 
+/// Every holiday of the modeled span and the two years after it, built once. A date's holidays
+/// are those of its own year and the next (a January 1 on Saturday is observed the Friday
+/// before), and a deadline can roll a few days past the last modeled year.
+fn modeled_holidays() -> &'static std::collections::HashSet<NaiveDate> {
+    static HOLIDAYS: std::sync::OnceLock<std::collections::HashSet<NaiveDate>> =
+        std::sync::OnceLock::new();
+    HOLIDAYS.get_or_init(|| {
+        (FIRST_MODELED_YEAR..=LAST_MODELED_YEAR + 2)
+            .flat_map(holidays_of_year)
+            .collect()
+    })
+}
+
 fn is_closed(date: NaiveDate) -> bool {
-    matches!(date.weekday(), Weekday::Sat | Weekday::Sun)
-        || holidays_of_year(date.year()).contains(&date)
-        || holidays_of_year(date.year() + 1).contains(&date)
+    matches!(date.weekday(), Weekday::Sat | Weekday::Sun) || modeled_holidays().contains(&date)
 }
 
 /// The day a period whose nominal last day is `date` actually ends.
@@ -154,6 +165,18 @@ mod tests {
             );
         }
         assert!(court_day_on_or_after(date("2100-01-04")).is_err());
+    }
+
+    #[test]
+    fn the_memoized_calendar_closes_exactly_the_days_the_rule_does() {
+        let mut day = date("1990-01-01");
+        while day <= date("2100-12-31") {
+            let rule = matches!(day.weekday(), Weekday::Sat | Weekday::Sun)
+                || holidays_of_year(day.year()).contains(&day)
+                || holidays_of_year(day.year() + 1).contains(&day);
+            assert_eq!(is_closed(day), rule, "{day}");
+            day = day.succ_opt().unwrap();
+        }
     }
 
     #[test]

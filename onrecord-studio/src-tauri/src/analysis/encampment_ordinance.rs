@@ -75,15 +75,26 @@ fn distance_feet((lat_a, lon_a): (f64, f64), (lat_b, lon_b): (f64, f64)) -> f64 
     2.0 * EARTH_RADIUS_FEET * h.sqrt().min(1.0).asin()
 }
 
+/// The first feature at the least distance. A feature is skipped without the full formula when
+/// its latitude difference alone, a lower bound on great-circle distance, is already farther than
+/// the best so far.
 fn nearest(point: (f64, f64), features: &[(String, (f64, f64))]) -> Option<NearestFeature> {
-    features
-        .iter()
-        .map(|(name, at)| (name, distance_feet(point, *at)))
-        .min_by(|a, b| a.1.total_cmp(&b.1))
-        .map(|(name, distance)| NearestFeature {
-            name: name.clone(),
-            distance_feet: distance.round(),
-        })
+    let mut best: Option<(&String, f64)> = None;
+    for (name, at) in features {
+        if best.is_some_and(|(_, distance)| {
+            (at.0 - point.0).abs().to_radians() * EARTH_RADIUS_FEET > distance
+        }) {
+            continue;
+        }
+        let distance = distance_feet(point, *at);
+        if best.is_none_or(|(_, shortest)| distance < shortest) {
+            best = Some((name, distance));
+        }
+    }
+    best.map(|(name, distance)| NearestFeature {
+        name: name.clone(),
+        distance_feet: distance.round(),
+    })
 }
 
 fn coordinate(value: Option<&str>, range: std::ops::RangeInclusive<f64>) -> Option<f64> {
@@ -562,6 +573,35 @@ mod tests {
 
     fn at(value: &str) -> TimeOfDay {
         time_of_day(recorded_datetime(value))
+    }
+
+    #[test]
+    fn pruning_finds_the_same_nearest_feature_as_measuring_every_one() {
+        // A deterministic spread over San Diego: 2,000 features, 500 points.
+        let mut seed = 0x2545_f491_4f6c_dd1d_u64;
+        let mut next = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            (seed % 1_000_000) as f64 / 1_000_000.0
+        };
+        let mut place = || (32.5 + next() * 0.6, -117.3 + next() * 0.4);
+        let features = (0..2000)
+            .map(|i| (format!("f{i}"), place()))
+            .collect::<Vec<_>>();
+        for _ in 0..500 {
+            let point = place();
+            let measured = features
+                .iter()
+                .map(|(name, at)| (name, distance_feet(point, *at)))
+                .min_by(|a, b| a.1.total_cmp(&b.1))
+                .unwrap();
+            let pruned = nearest(point, &features).unwrap();
+            assert_eq!(
+                (pruned.name.as_str(), pruned.distance_feet),
+                (measured.0.as_str(), measured.1.round())
+            );
+        }
     }
 
     #[test]

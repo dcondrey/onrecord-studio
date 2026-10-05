@@ -268,10 +268,14 @@ fn tokens(text: &str) -> Vec<Token> {
             if current.is_empty() {
                 start = index;
             }
-            current.extend(character.to_lowercase());
+            if character == '’' {
+                current.push('\'');
+            } else {
+                current.extend(character.to_lowercase());
+            }
         } else if !current.is_empty() {
             output.push(Token {
-                text: std::mem::take(&mut current).replace('’', "'"),
+                text: std::mem::take(&mut current),
                 start,
                 end: index,
             });
@@ -279,7 +283,7 @@ fn tokens(text: &str) -> Vec<Token> {
     }
     if !current.is_empty() {
         output.push(Token {
-            text: current.replace('’', "'"),
+            text: current,
             start,
             end: text.len(),
         });
@@ -1423,6 +1427,26 @@ pub async fn calendar(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn curly_and_straight_apostrophes_make_the_same_token_at_the_same_offsets() {
+        let text = "The MAYOR’S office, the Mayor's ’note";
+        let words = tokens(text)
+            .into_iter()
+            .map(|t| (t.text, t.start, t.end))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            words,
+            vec![
+                ("the".into(), 0, 3),
+                ("mayor's".into(), 4, 13),
+                ("office".into(), 14, 20),
+                ("the".into(), 22, 25),
+                ("mayor's".into(), 26, 33),
+                ("note".into(), 37, 41),
+            ]
+        );
+    }
 
     const AGENDA: &str = "CITY OF SAN DIEGO COUNCIL AGENDA {WEEKDAY}, {DATE}, AT 2:00 PM \
         Deadline for Distribution: Comments received by 8:00 AM on the day of the meeting will be distributed to the City Council. \

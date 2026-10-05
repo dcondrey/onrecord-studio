@@ -612,34 +612,32 @@ pub fn finding_id(
 ) -> String {
     // Field labels included so an added/removed subject field can't collide silently. The unit
     // separator (0x1f) is not a legal character in any field we hash, so no field value can
-    // impersonate another by embedding the separator.
-    let mut parts: Vec<String> = Vec::with_capacity(8 + salient_bits.len());
-    parts.push(format!("kind={}", kind.as_str()));
-    parts.push(format!("detector={source_detector}"));
-    parts.push(format!(
-        "portal_key={}",
-        subject.portal_key.as_deref().unwrap_or("")
-    ));
-    parts.push(format!(
-        "agency_id={}",
-        subject.agency_id.map_or(String::new(), |v| v.to_string())
-    ));
-    parts.push(format!(
-        "request_id={}",
-        subject.request_id.map_or(String::new(), |v| v.to_string())
-    ));
-    parts.push(format!(
-        "document_id={}",
-        subject.document_id.map_or(String::new(), |v| v.to_string())
-    ));
-    parts.push(format!(
-        "entity_id={}",
-        subject.entity_id.as_deref().unwrap_or("")
-    ));
+    // impersonate another by embedding the separator. Stored findings are keyed by this digest,
+    // so the bytes hashed must never change.
+    use std::fmt::Write;
+    let mut key = String::with_capacity(128);
+    let mut field = |label: &str, value: Option<&dyn std::fmt::Display>| {
+        if !key.is_empty() {
+            key.push('\u{1f}');
+        }
+        key.push_str(label);
+        key.push('=');
+        if let Some(value) = value {
+            write!(key, "{value}").expect("writing to a String cannot fail");
+        }
+    };
+    field("kind", Some(&kind.as_str()));
+    field("detector", Some(&source_detector));
+    field("portal_key", subject.portal_key.as_ref().map(|v| v as _));
+    field("agency_id", subject.agency_id.as_ref().map(|v| v as _));
+    field("request_id", subject.request_id.as_ref().map(|v| v as _));
+    field("document_id", subject.document_id.as_ref().map(|v| v as _));
+    field("entity_id", subject.entity_id.as_ref().map(|v| v as _));
     for salient in salient_bits {
-        parts.push((*salient).to_string());
+        key.push('\u{1f}');
+        key.push_str(salient);
     }
-    sha256_hex(parts.join("\u{1f}").as_bytes())[..20].into()
+    sha256_hex(key.as_bytes())[..20].into()
 }
 
 #[cfg(test)]
@@ -676,6 +674,39 @@ mod tests {
         assert_eq!(
             FindingConfidence::measured(0).stored_basis_points(),
             Some(0)
+        );
+    }
+
+    /// Digests computed from the previous implementation: an unchanged input must keep its id, or
+    /// every stored finding and its review disposition would be orphaned.
+    #[test]
+    fn finding_ids_match_those_already_stored() {
+        let subject = FindingSubject {
+            portal_key: Some("sd".into()),
+            agency_id: Some(7),
+            request_id: Some(-42),
+            document_id: None,
+            entity_id: None,
+        };
+        assert_eq!(
+            finding_id(
+                FindingKind::HeldBackResponse,
+                "held_back",
+                &subject,
+                &["day=12", "late"]
+            ),
+            "4aa617ac09b56b4c312f"
+        );
+        let subject = FindingSubject {
+            portal_key: None,
+            agency_id: None,
+            request_id: None,
+            document_id: Some(9_007_199_254_740_993),
+            entity_id: Some("ent/1".into()),
+        };
+        assert_eq!(
+            finding_id(FindingKind::HeldBackResponse, "", &subject, &[]),
+            "88bf8199dce84c7467c7"
         );
     }
 

@@ -257,7 +257,14 @@ fn quote_exists(source: &ResearchEvidence, quote: &str) -> bool {
 }
 
 fn normalized(value: &str) -> String {
-    value.split_whitespace().collect::<Vec<_>>().join(" ")
+    let mut text = String::with_capacity(value.len());
+    for word in value.split_whitespace() {
+        if !text.is_empty() {
+            text.push(' ');
+        }
+        text.push_str(word);
+    }
+    text
 }
 fn valid_date(value: &str) -> bool {
     chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d").is_ok()

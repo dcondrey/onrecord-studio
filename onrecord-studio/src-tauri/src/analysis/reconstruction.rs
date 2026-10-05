@@ -348,12 +348,12 @@ fn numeric_findings(
     let observations: Vec<_> = documents.iter().flat_map(|d| numbers(d)).collect();
     let mut pattern_regex_cache: HashMap<String, Regex> = HashMap::new();
     let mut compiled_pattern = |pattern: &str| -> Regex {
-        pattern_regex_cache
-            .entry(pattern.to_string())
-            .or_insert_with(|| {
-                Regex::new(&numeric_pattern(pattern, options.fixed_width_masks)).unwrap()
-            })
-            .clone()
+        if let Some(regex) = pattern_regex_cache.get(pattern) {
+            return regex.clone();
+        }
+        let regex = Regex::new(&numeric_pattern(pattern, options.fixed_width_masks)).unwrap();
+        pattern_regex_cache.insert(pattern.to_string(), regex.clone());
+        regex
     };
     numbers(target).into_iter().filter(|o| MASK.is_match(&o.pattern)).take(24).map(|clue| {
         let constraint = compiled_pattern(&clue.pattern);
