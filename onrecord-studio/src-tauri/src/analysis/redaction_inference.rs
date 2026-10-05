@@ -155,7 +155,7 @@ pub async fn infer_redaction_candidates(
     let hint = classify_entity_hint(&context);
     let query = build_search_query(&context);
     let (candidates_source, semantic_used) = if let Some(index) = vector_index {
-        match run_semantic_lookup(index, portal_key, document_id, &query).await {
+        match run_semantic_lookup(index, repository, portal_key, document_id, &query).await {
             Ok(results) if !results.is_empty() => (results, true),
             _ => (
                 run_lexical_lookup(repository, portal_key, document_id, &query).await?,
@@ -534,8 +534,11 @@ async fn run_lexical_lookup(
         .collect())
 }
 
+/// Searches every portal: each match is reported with its portal, which the panel prints beside
+/// the document.
 async fn run_semantic_lookup(
     index: &VectorIndex,
+    repository: &DuckDbRepository,
     portal_key: &str,
     exclude_document_id: i64,
     query: &str,
@@ -545,7 +548,7 @@ async fn run_semantic_lookup(
         .semantic_search(
             query,
             HybridSearchFilter {
-                portal_key: Some(portal_key.to_string()),
+                portal_key: None,
                 agency_name: None,
                 jurisdiction: None,
                 document_type: None,
@@ -555,17 +558,34 @@ async fn run_semantic_lookup(
             60,
         )
         .await?;
-    let sites: Vec<CandidateSite> = results
+    let hand_added = repository.user_supplied_source_keys().await?;
+    Ok(corroborating_sites(
+        results,
+        portal_key,
+        exclude_document_id,
+        &hand_added,
+    ))
+}
+
+/// Drops the redacted document itself, identified by portal and id together, and every file the
+/// user added by hand, which is not something another source released.
+fn corroborating_sites(
+    results: Vec<crate::types::HybridSearchResult>,
+    portal_key: &str,
+    exclude_document_id: i64,
+    hand_added: &HashSet<String>,
+) -> Vec<CandidateSite> {
+    results
         .into_iter()
-        .filter(|r| r.document_id as i64 != exclude_document_id)
+        .filter(|r| !(r.portal_key == portal_key && r.document_id as i64 == exclude_document_id))
+        .filter(|r| !hand_added.contains(&r.portal_key))
         .map(|r| CandidateSite {
             portal_key: r.portal_key,
             document_id: r.document_id as i64,
             excerpt: r.excerpt,
             raw_score: r.semantic_score.unwrap_or(r.fused_score),
         })
-        .collect();
-    Ok(sites)
+        .collect()
 }
 
 /// One candidate value's corroboration: the evidence rows, the `(portal, document)` pairs they
@@ -839,6 +859,47 @@ fn dedup_preserve_order<T: PartialEq>(items: Vec<T>) -> Vec<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn semantic_matches_keep_other_portals_and_drop_the_document_itself_and_hand_added_files() {
+        let result = |portal: &str, document_id: u64| crate::types::HybridSearchResult {
+            stable_id: format!("{portal}:{document_id}"),
+            portal_key: portal.into(),
+            request_id: 1,
+            document_id,
+            file_name: "release.pdf".into(),
+            title: String::new(),
+            agency_name: String::new(),
+            jurisdiction: String::new(),
+            document_type: None,
+            publication_date: None,
+            observation_date: None,
+            effective_date: None,
+            character_start: 0,
+            character_end: 0,
+            excerpt: "signed by Jane Doe".into(),
+            lexical_rank: None,
+            semantic_score: Some(0.9),
+            fused_score: 0.9,
+            retrieval_status: String::new(),
+        };
+        let sites = corroborating_sites(
+            vec![
+                result("city", 7),
+                result("county", 7),
+                result("city", 8),
+                result("source-local-1", 9),
+            ],
+            "city",
+            7,
+            &HashSet::from(["source-local-1".to_string()]),
+        );
+        let kept: Vec<_> = sites
+            .iter()
+            .map(|site| (site.portal_key.as_str(), site.document_id))
+            .collect();
+        assert_eq!(kept, vec![("county", 7), ("city", 8)]);
+    }
 
     #[test]
     fn scans_bracketed_redaction_markers() {
