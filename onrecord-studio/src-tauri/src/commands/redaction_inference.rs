@@ -1,9 +1,9 @@
 //! On-demand redaction-inference IPC command.
 //!
-//! The autonomous detector (`analysis::detectors::inferred_redaction_identity`) sweeps the corpus
-//! with the lexical path only. This command exposes the full inference engine, including the
-//! semantic path via `VectorIndex`, so the interactive redaction panel can offer richer results
-//! for a specific span the user is looking at.
+//! The autonomous detector (`analysis::detectors::inferred_redaction_identity`) does not use this
+//! engine: it reports only text found between the same anchors. This command exposes the ranked
+//! inference engine, including the semantic path via `VectorIndex`, for the interactive panel on
+//! a specific span the user is looking at.
 
 use crate::{
     analysis::redaction_inference::{

@@ -142,11 +142,10 @@ pub enum FindingKind {
     /// Records surfacing after any plausible appeal window closed. Adversarial pattern signal,
     /// not a legal claim on its own.
     EvasionLateArrivingRecords,
-    /// A redaction in one document has one or more likely candidate identities derived from
-    /// surrounding context and independent corroborating documents in the corpus. Not a
-    /// decryption; not a legal claim. The inference engine bounds each candidate's likelihood
-    /// below a ceiling and only fires this finding when the top candidate has strong
-    /// corroboration across at least three independent documents.
+    /// The words on both sides of a redaction mark appear, in the same order, in another
+    /// collected document or in a row of an imported table, with text standing where the mark is.
+    /// The finding cites both passages and never states what the redaction covers. Not a legal
+    /// claim.
     RedactionCandidateInferred,
     /// Same denial paragraph appearing across multiple agencies (not just within one). Distinct
     /// from `BoilerplateDenial`, which stays within one agency. The cross-agency variant is

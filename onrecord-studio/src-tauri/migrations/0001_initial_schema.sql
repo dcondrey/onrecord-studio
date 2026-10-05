@@ -819,3 +819,67 @@ CREATE TABLE IF NOT EXISTS analysis_rule_versions (
     rule_key TEXT PRIMARY KEY,
     version BIGINT NOT NULL
 );
+
+-- ----------------------------------------------------------------------------
+-- REDACTION SWEEP
+-- What the automatic comparison of redaction marks against other sources has covered. Derived
+-- state: every row can be rebuilt from `documents_fts` and the imported tables, and none of it is
+-- evidence. Runs are numbered; a source whose `scanned_run` is below the newest span's
+-- `added_run` has not been compared with that span yet. Offsets are characters of the stored text.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS redaction_sweep_documents (
+    portal_key TEXT NOT NULL,
+    document_id BIGINT NOT NULL,
+    -- The text digest and byte length the row was computed from; a different value means the
+    -- stored text changed and the document is taken in again.
+    text_version TEXT NOT NULL,
+    scanned_run BIGINT NOT NULL,
+    PRIMARY KEY (portal_key, document_id)
+);
+CREATE TABLE IF NOT EXISTS redaction_sweep_spans (
+    portal_key TEXT NOT NULL,
+    document_id BIGINT NOT NULL,
+    passage_start BIGINT NOT NULL,
+    passage_end BIGINT NOT NULL,
+    left_anchor TEXT NOT NULL,
+    right_anchor TEXT NOT NULL,
+    -- The anchors cut to the mark's own line, which is all a table row can hold. NULL when the
+    -- line has fewer than three words on either side of the mark.
+    row_left_anchor TEXT,
+    row_right_anchor TEXT,
+    CHECK ((row_left_anchor IS NULL) = (row_right_anchor IS NULL)),
+    quote TEXT NOT NULL,
+    person_like BOOLEAN NOT NULL,
+    -- Two different values were found between these anchors, so the wording is reused prose.
+    reused_wording BOOLEAN NOT NULL,
+    added_run BIGINT NOT NULL,
+    PRIMARY KEY (portal_key, document_id, passage_start)
+);
+CREATE TABLE IF NOT EXISTS redaction_sweep_tables (
+    snapshot_id TEXT PRIMARY KEY,
+    source_sha256 TEXT NOT NULL,
+    -- NULL until one pass over every row has finished.
+    scanned_run BIGINT,
+    -- The run a pass in progress began in and the last row it read; both NULL between passes.
+    pass_run BIGINT,
+    resume_after_row BIGINT,
+    CHECK ((pass_run IS NULL) = (resume_after_row IS NULL))
+);
+CREATE TABLE IF NOT EXISTS redaction_sweep_matches (
+    portal_key TEXT NOT NULL,
+    document_id BIGINT NOT NULL,
+    passage_start BIGINT NOT NULL,
+    source_kind TEXT NOT NULL CHECK (source_kind IN ('DOCUMENT', 'TABLE')),
+    -- A document's portal and id, or a table's snapshot and row number.
+    source_scope TEXT NOT NULL,
+    source_item BIGINT NOT NULL,
+    -- Digest of the value between the anchors. The value itself is not copied here.
+    value_sha256 TEXT NOT NULL,
+    name_shaped BOOLEAN NOT NULL,
+    source_start BIGINT,
+    source_end BIGINT,
+    column_name TEXT,
+    CHECK ((source_kind = 'DOCUMENT') = (source_start IS NOT NULL AND source_end IS NOT NULL)),
+    CHECK ((source_kind = 'TABLE') = (column_name IS NOT NULL)),
+    PRIMARY KEY (portal_key, document_id, passage_start, source_kind, source_scope, source_item, value_sha256)
+);

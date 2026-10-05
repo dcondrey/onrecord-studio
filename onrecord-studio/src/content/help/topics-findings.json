@@ -698,7 +698,7 @@
     "id": "finding-redaction-candidate-inferred",
     "title": "Inferred redaction candidate",
     "group": "Finding kinds",
-    "summary": "A redaction with a likely candidate identity derived from surrounding context and at least three independent corroborating documents.",
+    "summary": "The words on both sides of a redaction also appear in another collected document or an imported table, with text where the redaction is.",
     "keywords": [
       "redaction candidate inferred",
       "finding",
@@ -715,13 +715,14 @@
       {
         "heading": "What it flags",
         "paragraphs": [
-          "A redaction with a likely candidate identity derived from surrounding context and at least three independent corroborating documents."
+          "A redaction mark whose surrounding words, up to five on each side and at least three, appear in the same order in another collected document or in one row of an imported table, with text between them. Both passages are cited by character position; a table is cited by name, source address, SHA-256, row and column. The text found there is not printed in the finding.",
+          "Nothing is reported when two sources hold different text between the same words, when the text is a phone number, address or other personal identifier, or when the source is a file you added by hand. Where the context or the text reads as a person's name, the same text must appear in two independent sources."
         ]
       },
       {
         "heading": "What it does not show",
         "paragraphs": [
-          "That the redacted identity is known. It is inference, not decryption, and is tagged as a hypothesis wherever it appears. Verifiable reports leave it out."
+          "What the redaction covers. Matching words are not the redacted content: wording is reused in templates and amended versions, so the other passage may concern a different record, date or person. It is tagged as a hypothesis wherever it appears, and verifiable reports leave it out."
         ]
       },
       {

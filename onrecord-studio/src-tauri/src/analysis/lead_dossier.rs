@@ -288,8 +288,8 @@ pub fn falsification_for(kind: FindingKind) -> DossierFalsification {
             &["the search log showing when each location was searched", "the correspondence announcing the supplemental release"],
         ),
         FindingKind::RedactionCandidateInferred => (
-            "The inferred value is wrong; the redacted text is something else of the same length.",
-            &["an unredacted copy from another release", "a record naming the same person or item in the clear"],
+            "The matching words are reused wording, and the other passage concerns a different record, date or person.",
+            &["an unredacted copy from another release", "the dates and record identifiers of both cited passages"],
         ),
         FindingKind::CrossCorpusSharedLanguage => (
             "The shared language comes from a common template or statute, not coordination.",
