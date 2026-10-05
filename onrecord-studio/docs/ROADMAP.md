@@ -1055,10 +1055,13 @@ Measured, not built:
   Environmental Services 12,598, Police abandoned vehicles 4,038, Caltrans 1,341); no check reads it.
 
 Next, in order:
-1. Collect the owner's subjects from sandiego.nextrequest.com into the library from inside the
-   app (the live evaluation's collection by subject, as a user action). The checks above only
-   fire once the released spreadsheets are in the library and imported as tables; today that
-   needs the owner to add the portal and import each sheet. Then checks for the other released
+1. The abatement check only fires once the released spreadsheets are in the library as tables.
+   The app can already do both: the Collection plan dialog collects a source for a subject
+   (`start_collection`), and Data upkeep with automatic import turns released sheets into tables
+   (`maintain_one_table`). Not verified end to end: collecting "encampment" from
+   sandiego.nextrequest.com in the owner's library, and the two .xlsx logs through the import
+   (the native test uses CSV with the same headers and time format). Nothing proposes that
+   collection to the owner; the gap seeker only fetches City datasets. Then checks for the other released
    tables: SDPD citation and arrest exports (the columns `encampment_ordinance.rs` already
    reads), and contractor invoices (cost and tonnage per abatement day against the budget).
 1a. A stated notice minimum: with the City's abatement procedure in the library as a stored
@@ -1066,7 +1069,9 @@ Next, in order:
    for notice documents.
 2. Stored versus discarded property: no published table records it. The stop records give the
    seizure basis only. The check has to come from released abatement and storage logs (item 1).
-3. Encampment reports by area and staff group as their own lead (District 4, above).
+3. Done 2026-10-04 for areas: Encampment, homeless, shelter and restroom services are shown in
+   the area leads ahead of larger services (methods §17 B). By staff group (29 Encampment reports
+   held by DSD, median 850 days) is not built.
 4. Homelessness spending against outcomes: Homelessness Strategies and Solutions department lines
    in the operating budget against shelter capacity and exits, which need SDHC and RTFH tables
    that the source catalogs list only as pages and PDFs.

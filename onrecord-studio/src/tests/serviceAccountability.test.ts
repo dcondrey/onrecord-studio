@@ -43,6 +43,15 @@ describe('service-report leads', () => {
     expect(partial).not.toContain('$73.9');
   });
 
+  it('shows a followed service\'s area even when two larger services outrank it', () => {
+    const area = { query: query('service_backlog_area:council_district'), result: response(['category', 'area', 'open_reports', 'median_days', 'over_one_year', 'all_median_days'],
+      [['Parks Issue', '3', 772, 367, 387, 221], ['Vegetation Encroachment', '1', 666, 373, 340, 181], ['Tree Maintenance', '2', 500, 400, 300, 200], ['Encampment', '4', 158, 904, 119, 10]]) };
+    const leads = serviceAccountabilityLeads([area]);
+    expect(leads.map((lead) => lead.title.split(':')[0])).toEqual(['Parks Issue', 'Vegetation Encroachment', 'Encampment']);
+    expect(leads[2].title).toBe('Encampment: open reports in council district 4 are a median 904 days old, against 10 across all areas');
+    expect(leads[2].priority).toBeGreaterThan(leads[0].priority);
+  });
+
   it('states a backlog only from counted reports and keeps small counts off the feed', () => {
     const backlog = (stale: number) => ({ query: query('service_backlog'), result: response(
       ['category', 'open_reports', 'median_age_days', 'open_over_one_year', 'oldest_age_days', 'earliest_opened', 'all_open_reports', 'all_open_over_one_year'],

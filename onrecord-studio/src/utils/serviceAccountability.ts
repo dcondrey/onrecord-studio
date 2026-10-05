@@ -62,6 +62,8 @@ const STALE_DAYS = 365;
 const AREA_MINIMUM_REPORTS = 30;
 /** An area is named when its median is at least this multiple of the median across all areas. */
 const AREA_MEDIAN_RATIO = 1.5;
+/** Services the owner follows; their area rows are shown even when larger services outrank them. */
+const FOLLOWED_SERVICES = /encampment|homeless|shelter|restroom/i;
 const REPEAT_PLACE_REPORTS = 10;
 const REPEAT_PLACE_DAYS = 90;
 const REFERRED_MINIMUM_REPORTS = 100;
@@ -197,9 +199,9 @@ FROM service_area JOIN service_all_areas ON service_area.category = service_all_
   for (const area of roles.areas) {
     queries.push({
       id: `service_backlog_area:${area}`, title: `Open reports older in some areas (${area})`,
-      method: `Median age of open reports per ${roles.category} and ${area}, against the median for that service across all areas. An area is listed with at least ${AREA_MINIMUM_REPORTS} open reports, at least three areas reporting, and a median at least ${AREA_MEDIAN_RATIO} times the all-area median. ${basis}`,
+      method: `Median age of open reports per ${roles.category} and ${area}, against the median for that service across all areas. An area is listed with at least ${AREA_MINIMUM_REPORTS} open reports, at least three areas reporting, a median at least ${AREA_MEDIAN_RATIO} times the all-area median, and either an all-area median of 30 days or more or an area median over ${STALE_DAYS} days. ${basis}`,
       sql: `${byArea(area, 'unresolved', 'open_reports')}
-WHERE open_reports >= ${AREA_MINIMUM_REPORTS} AND areas >= 3 AND all_median_days >= 30 AND median_days >= ${AREA_MEDIAN_RATIO} * all_median_days
+WHERE open_reports >= ${AREA_MINIMUM_REPORTS} AND areas >= 3 AND (all_median_days >= 30 OR median_days > ${STALE_DAYS}) AND median_days >= ${AREA_MEDIAN_RATIO} * all_median_days
 ORDER BY over_one_year DESC, open_reports DESC, service_area.category, area`,
     }, {
       id: `service_wait_area:${area}`, title: `Slower closure in some areas (${area})`,
@@ -315,11 +317,11 @@ export function serviceAccountabilityLeads(results: { query: DiscoveryQuery; res
       });
     } else if (id === 'service_backlog_area' || id === 'service_wait_area') {
       const open = id === 'service_backlog_area';
-      rows.slice(0, 2).forEach((row, index) => {
+      [...rows.slice(0, 2), ...rows.slice(2).filter((row) => FOLLOWED_SERVICES.test(String(row.category))).slice(0, 2)].forEach((row, index) => {
         const median = count(row.median_days); const overall = count(row.all_median_days);
         if (median === null || overall === null) return;
         const reports = shown(count(open ? row.open_reports : row.closed_reports) ?? 0);
-        leads.push({ key: `${query.id}:${index}`, priority: (open ? 95 : 94) - index, query,
+        leads.push({ key: `${query.id}:${index}`, priority: FOLLOWED_SERVICES.test(String(row.category)) ? 99 : (open ? 95 : 94) - index, query,
           title: open
             ? `${String(row.category)}: open reports in ${areaLabel(area, row.area)} are a median ${shown(median)} days old, against ${shown(overall)} across all areas`
             : `${String(row.category)}: reports in ${areaLabel(area, row.area)} took a median ${shown(median)} days to close, against ${shown(overall)} across all areas`,
