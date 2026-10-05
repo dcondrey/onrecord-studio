@@ -14,6 +14,9 @@ export function AutomaticDiscoveryProvider({ children }: { children: ReactNode }
     maintain: () => invokeCommand('run_data_maintenance', {}),
     query: (sql) => invokeCommand('run_analytical_sql', { sql, limit: 100 }),
     fetch: (request) => invokeCommand('fetch_city_dataset', request),
+    record: (leads, complete) => invokeCommand('record_service_leads', { leads, complete }).then((outcome) => {
+      if (outcome.findingsRecorded + outcome.staleCleared > 0) useAppStore.getState().requestFindingsRefresh();
+    }),
   }, () => document.visibilityState !== 'hidden'));
   useEffect(() => {
     controller.start();

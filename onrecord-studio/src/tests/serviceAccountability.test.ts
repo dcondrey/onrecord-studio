@@ -20,6 +20,38 @@ describe('service-report leads', () => {
     expect(serviceAccountabilityQueries(other, other.datasets[0])).toEqual([]);
   });
 
+  it('names the owning department only from the publisher\'s staff group, and an adopted amount only from budget rows', () => {
+    const backlog = (group: string | null, carried: number | null) => ({ query: query('service_backlog'), result: response(
+      ['category', 'open_reports', 'open_over_one_year', 'all_open_reports', 'all_open_over_one_year', 'staff_group', 'staff_group_reports'],
+      [['Street Light Maintenance', 100, 60, 100, 60, group, carried]]) });
+    const budget = (unreadable: number) => ({ query: query('service_budget'), result: response(['department', 'fiscal_year', 'adopted_expense', 'budget_rows', 'unreadable_amounts'],
+      [['Transportation', 25, 190_600_000, 967, 0], ['Transportation', 24, 172_800_000, 900, 0], ['Stormwater', 25, 73_900_000, 500, unreadable]]) });
+    const detail = (...results: Parameters<typeof serviceAccountabilityLeads>[0]) => serviceAccountabilityLeads(results)[0];
+    const owned = detail(backlog('TSW', 51), budget(0));
+    expect(owned.detail).toContain('The publisher lists Street Light Maintenance (51 of 100 open reports) under its staff group TSW, read here as the Transportation and Stormwater departments. Adopted operating expense: Transportation $190.6 million in FY 25, $172.8 million in FY 24; Stormwater $73.9 million in FY 25.');
+    expect(owned.question).toBe('What do the Transportation and Stormwater budget and staffing say about the Street Light Maintenance backlog?');
+    // Half is not most; no group means no owner; an unassigned group is said to be unassigned.
+    for (const unowned of [detail(backlog('TSW', 50), budget(0)), detail(backlog(null, null), budget(0))]) {
+      expect(unowned.detail).not.toContain('staff group');
+      expect(unowned.question).toContain('Which department owns Street Light Maintenance');
+    }
+    expect(detail(backlog('Parking', 100), budget(0)).detail).toContain('under its staff group Parking, which this app does not assign to a budget department.');
+    // No budget table and an unreadable amount are both absences, never a figure.
+    expect(detail(backlog('TSW', 100)).detail).toContain('No operating budget table is imported, so no adopted amount is shown.');
+    const partial = detail(backlog('TSW', 100), budget(3)).detail;
+    expect(partial).toContain('The budget table has no readable adopted amount for Stormwater.');
+    expect(partial).not.toContain('$73.9');
+  });
+
+  it('shows a followed service\'s area even when two larger services outrank it', () => {
+    const area = { query: query('service_backlog_area:council_district'), result: response(['category', 'area', 'open_reports', 'median_days', 'over_one_year', 'all_median_days'],
+      [['Parks Issue', '3', 772, 367, 387, 221], ['Vegetation Encroachment', '1', 666, 373, 340, 181], ['Tree Maintenance', '2', 500, 400, 300, 200], ['Encampment', '4', 158, 904, 119, 10]]) };
+    const leads = serviceAccountabilityLeads([area]);
+    expect(leads.map((lead) => lead.title.split(':')[0])).toEqual(['Parks Issue', 'Vegetation Encroachment', 'Encampment']);
+    expect(leads[2].title).toBe('Encampment: open reports in council district 4 are a median 904 days old, against 10 across all areas');
+    expect(leads[2].priority).toBeGreaterThan(leads[0].priority);
+  });
+
   it('states a backlog only from counted reports and keeps small counts off the feed', () => {
     const backlog = (stale: number) => ({ query: query('service_backlog'), result: response(
       ['category', 'open_reports', 'median_age_days', 'open_over_one_year', 'oldest_age_days', 'earliest_opened', 'all_open_reports', 'all_open_over_one_year'],

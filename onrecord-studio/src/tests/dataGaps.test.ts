@@ -41,6 +41,20 @@ describe('missing tables the app fetches for itself', () => {
   });
 });
 
+describe('the budget behind a backlog', () => {
+  it('asks for the operating budget only when a staff group is read as a department and no budget table is imported', () => {
+    const latest = table('latest', open, '2026-10-04T00:00:00Z');
+    const backlog = (group: string | null): Record<string, AutomaticProfile> => ({ latest: { fingerprint: 'f', checkedAt: 'now', results: [{ query: query('service_backlog'), result: response(['category', 'staff_group'], [['Pothole', group]]) }] } });
+    const keys = (schema: AnalyticalSchema, group: string | null) => dataGaps(schema, backlog(group), '2026-10-04T12:00:00Z').map((gap) => gap.key);
+    expect(keys(catalog(latest), 'TSW')).toEqual(['budget:latest']);
+    expect(keys(catalog(latest), 'Parking')).toEqual([]);
+    expect(keys(catalog(latest), null)).toEqual([]);
+    const withBudget = catalog(latest);
+    const budget = base.datasets.find((dataset) => dataset.snapshotId === 'budget')!;
+    expect(keys({ ...withBudget, datasets: [...withBudget.datasets, budget], columns: [...withBudget.columns, ...base.columns.filter((column) => column.tableName === budget.tableName)] }, 'TSW')).toEqual([]);
+  });
+});
+
 describe('fetching a missing table', () => {
   const upkeep = (autoRefresh: boolean): DataMaintenanceStatus => ({ policy: { enabled: true, autoImport: true, autoRefresh, refreshHours: 24, retentionMode: 'ORIGINALS', retainedFileBudgetBytes: 10 * 1024 ** 3 }, effectiveAt: '2026-09-14T00:00:00Z', retainedFileBytes: 0, referencedDocuments: 0, reclaimedFileBytes: 0, events: [] });
   const schema = catalog(table('first', open, '2026-09-01T17:00:00Z'));
@@ -97,5 +111,31 @@ describe('fetching a missing table', () => {
     await vi.advanceTimersByTimeAsync(20_000);
     expect(controller.snapshot().gapStatus[key]).toBe('fetched');
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('storing leads as findings', () => {
+  const controllers: DiscoveryController[] = [];
+  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-09-14T00:00:00Z')); });
+  afterEach(() => { controllers.splice(0).forEach((controller) => controller.stop()); vi.useRealTimers(); });
+
+  it('sends a changed set once, and calls it complete only when every table was checked without error', async () => {
+    const backlog = response(['category', 'open_reports', 'open_over_one_year', 'earliest_opened', 'all_open_reports', 'all_open_over_one_year'], [['Pothole', 40, 30, '2024-01-01', 40, 30]]);
+    let failed = false;
+    const record = vi.fn(async () => ({}));
+    const controller = new DiscoveryController({ schema: async () => catalog(table('first', open, '2026-09-13T00:00:00Z'), table('second', closed2026, '2026-09-13T00:00:00Z')),
+      candidates: async () => [], patterns: async () => [], record,
+      query: async (sql) => {
+        if (!sql.includes('service_backlog AS (')) return response(['column_name'], []);
+        if (sql.includes('analysis_second') && !failed) { failed = true; throw new Error('Temporary query failure'); }
+        return backlog;
+      } });
+    controllers.push(controller); controller.start();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(record).toHaveBeenCalledTimes(1);
+    expect(record).toHaveBeenLastCalledWith([expect.objectContaining({ key: 'first:service_backlog', snapshotId: 'first', title: '30 of 40 open reports have been open more than a year' })], false);
+    await vi.advanceTimersByTimeAsync(310_000);
+    expect(record).toHaveBeenCalledTimes(2);
+    expect(record).toHaveBeenLastCalledWith([expect.objectContaining({ snapshotId: 'first' }), expect.objectContaining({ snapshotId: 'second' })], true);
   });
 });

@@ -1,0 +1,125 @@
+{
+  "csv": {
+    "posted": "\"Case Number\",\"Date Posted\",\"Customer Provided Address\",\"Geolocation (Latitude)\",\"Geolocation (Longitude)\"\n\"1\",\"7/1/2025, 8:00 AM\",\"A Street\",\"32.765\",\"-117.165\"\n\"2\",\"7/1/2025, 8:00 AM\",\"B Street\",\"32.766\",\"-117.166\"\n\"3\",\"7/1/2025, 8:00 AM\",\"C Street\",\"32.767\",\"-117.167\"\n\"4\",\"7/3/2025, 9:00 AM\",\"D Street\",\"32.768\",\"-117.168\"\n\"5\",\"7/2/2025, 9:00 AM\",\"E Street\",\"32.769\",\"-117.169\"\n\"6\",\"7/10/2025, 1:30 PM\",\"E Street\",\"32.769\",\"-117.169\"\n\"7\",\"7/4/2025, 9:00 AM\",\"F Street\",\"\",\"\"\n",
+    "completed": "\"Customer Provided Address\",\"Geolocation (Latitude)\",\"Geolocation (Longitude)\",\"Date/Time Closed\"\n\"A Street\",\"32.765\",\"-117.165\",\"7/1/2025, 10:00 AM\"\n\"B Street\",\"32.766\",\"-117.166\",\"7/2/2025, 2:00 PM\"\n\"C Street\",\"32.767\",\"-117.167\",\"7/5/2025, 8:00 AM\"\n\"D Street\",\"32.768\",\"-117.168\",\"7/3/2025, 8:00 AM\"\n\"E Street\",\"32.769\",\"-117.169\",\"7/9/2025, 8:00 AM\"\n\"G Street\",\"32.771\",\"-117.171\",\"7/6/2025, 12:15 PM\"\n\"H Street\",\"32.772\",\"-117.172\",\"7/31/2025, 12:15 PM\"\n"
+  },
+  "schema": {
+    "datasets": [
+      {
+        "snapshotId": "posted",
+        "datasetKind": "REGIONAL_DATA",
+        "displayName": "Abatement fixture, posted",
+        "tableName": "analysis_abatement_posted",
+        "importedRows": 7,
+        "rejectedRows": 0,
+        "sourceUri": "https://example.test/posted.csv",
+        "sourceSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "retrievedAt": "2026-10-04T00:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}",
+        "unconvertedByColumn": {}
+      },
+      {
+        "snapshotId": "completed",
+        "datasetKind": "REGIONAL_DATA",
+        "displayName": "Abatement fixture, completed",
+        "tableName": "analysis_abatement_completed",
+        "importedRows": 7,
+        "rejectedRows": 0,
+        "sourceUri": "https://example.test/completed.csv",
+        "sourceSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "retrievedAt": "2026-10-04T00:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}",
+        "unconvertedByColumn": {}
+      }
+    ],
+    "templates": [],
+    "columns": [
+      {
+        "tableName": "analysis_abatement_posted",
+        "columnName": "case_number",
+        "logicalType": "CATEGORY",
+        "originalName": "Case Number",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_abatement_posted",
+        "columnName": "date_posted",
+        "logicalType": "CATEGORY",
+        "originalName": "Date Posted",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_abatement_posted",
+        "columnName": "customer_provided_address",
+        "logicalType": "CATEGORY",
+        "originalName": "Customer Provided Address",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_abatement_posted",
+        "columnName": "geolocation__latitude",
+        "logicalType": "CATEGORY",
+        "originalName": "Geolocation (Latitude)",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_abatement_posted",
+        "columnName": "geolocation__longitude",
+        "logicalType": "CATEGORY",
+        "originalName": "Geolocation (Longitude)",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_abatement_completed",
+        "columnName": "customer_provided_address",
+        "logicalType": "CATEGORY",
+        "originalName": "Customer Provided Address",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_abatement_completed",
+        "columnName": "geolocation__latitude",
+        "logicalType": "CATEGORY",
+        "originalName": "Geolocation (Latitude)",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_abatement_completed",
+        "columnName": "geolocation__longitude",
+        "logicalType": "CATEGORY",
+        "originalName": "Geolocation (Longitude)",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_abatement_completed",
+        "columnName": "date_time_closed",
+        "logicalType": "CATEGORY",
+        "originalName": "Date/Time Closed",
+        "nullable": true,
+        "dictionary": null
+      }
+    ]
+  },
+  "queries": [
+    {
+      "id": "abatement_notice_hours",
+      "title": "Hours between a posted notice and the abatement",
+      "method": "Notices in Abatement fixture, posted and abatements in Abatement fixture, completed are matched on the same recorded address and the same coordinates to five decimal places. Hours are counted only where a place has exactly one notice and exactly one abatement, so a notice is never paired with another notice's abatement. Also counted: abatements dated within the period the notice log covers at a place with no notice in that log. Rows without coordinates or a readable time are counted apart. The logs record a posting time and a closing time, not the notice period that applied.",
+      "sql": "WITH posted_rows AS (\n SELECT LOWER(TRIM(CAST(\"customer_provided_address\" AS VARCHAR))) AS address,\n  ROUND(TRY_CAST(\"geolocation__latitude\" AS DOUBLE), 5) AS latitude, ROUND(TRY_CAST(\"geolocation__longitude\" AS DOUBLE), 5) AS longitude, COALESCE(TRY_CAST(CAST(\"date_posted\" AS VARCHAR) AS TIMESTAMP), TRY_STRPTIME(CAST(\"date_posted\" AS VARCHAR), ['%m/%d/%Y, %I:%M %p', '%-m/%-d/%Y, %-I:%M %p', '%m/%d/%Y %H:%M'])) AS logged_at\n FROM \"analysis_abatement_posted\"\n), completed_rows AS (\n SELECT LOWER(TRIM(CAST(\"customer_provided_address\" AS VARCHAR))) AS address,\n  ROUND(TRY_CAST(\"geolocation__latitude\" AS DOUBLE), 5) AS latitude, ROUND(TRY_CAST(\"geolocation__longitude\" AS DOUBLE), 5) AS longitude, COALESCE(TRY_CAST(CAST(\"date_time_closed\" AS VARCHAR) AS TIMESTAMP), TRY_STRPTIME(CAST(\"date_time_closed\" AS VARCHAR), ['%m/%d/%Y, %I:%M %p', '%-m/%-d/%Y, %-I:%M %p', '%m/%d/%Y %H:%M'])) AS logged_at\n FROM \"analysis_abatement_completed\"\n), posted_places AS (\n SELECT address, latitude, longitude, COUNT(*) AS entries, MIN(logged_at) AS logged_at FROM posted_rows\n WHERE address IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL AND logged_at IS NOT NULL GROUP BY address, latitude, longitude\n), completed_places AS (\n SELECT address, latitude, longitude, COUNT(*) AS entries, MIN(logged_at) AS logged_at FROM completed_rows\n WHERE address IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL AND logged_at IS NOT NULL GROUP BY address, latitude, longitude\n), paired AS (\n SELECT DATE_DIFF('minute', posted_places.logged_at, completed_places.logged_at) / 60.0 AS hours FROM posted_places JOIN completed_places\n  ON completed_places.address = posted_places.address AND completed_places.latitude = posted_places.latitude AND completed_places.longitude = posted_places.longitude\n WHERE posted_places.entries = 1 AND completed_places.entries = 1\n), notice_period AS (SELECT MIN(logged_at) AS first_posted, MAX(logged_at) AS last_posted FROM posted_rows\n), in_period AS (\n SELECT completed_rows.* FROM completed_rows, notice_period WHERE logged_at >= first_posted AND logged_at <= last_posted AND address IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL\n)\nSELECT (SELECT COUNT(*) FROM posted_rows) AS posted_notices, (SELECT COUNT(*) FROM completed_rows) AS completed_abatements,\n (SELECT COUNT(*) FROM posted_rows WHERE logged_at IS NULL OR latitude IS NULL OR longitude IS NULL OR address IS NULL) AS notices_not_matchable,\n COUNT(*) AS paired_places, COUNT(*) FILTER (WHERE hours < 0) AS completed_before_posted, COUNT(*) FILTER (WHERE hours >= 0 AND hours < 3) AS under_3_hours,\n COUNT(*) FILTER (WHERE hours >= 0 AND hours < 24) AS under_24_hours, COUNT(*) FILTER (WHERE hours >= 24 AND hours < 72) AS from_24_to_72_hours,\n COUNT(*) FILTER (WHERE hours >= 72) AS over_72_hours, ROUND(MEDIAN(hours) FILTER (WHERE hours >= 0), 1) AS median_hours,\n (SELECT COUNT(*) FROM in_period) AS abatements_in_notice_period,\n (SELECT COUNT(*) FROM in_period WHERE NOT EXISTS (SELECT 1 FROM posted_places WHERE posted_places.address = in_period.address AND posted_places.latitude = in_period.latitude AND posted_places.longitude = in_period.longitude)) AS abatements_without_notice_in_log,\n (SELECT CAST(CAST(first_posted AS DATE) AS VARCHAR) FROM notice_period) AS first_posted, (SELECT CAST(CAST(last_posted AS DATE) AS VARCHAR) FROM notice_period) AS last_posted\nFROM paired"
+    }
+  ]
+}

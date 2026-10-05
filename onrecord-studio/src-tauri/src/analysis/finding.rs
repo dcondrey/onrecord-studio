@@ -234,6 +234,23 @@ pub enum FindingKind {
     /// spread over months. Describes how the release was spread out; it is not a finding that any
     /// deadline was missed, and the release dates are never the agency's determination.
     RollingProduction,
+    /// A count read from a publisher's service-report table (311-style reports): open reports
+    /// older than a year, an area slower than the others, a place reported repeatedly, referrals
+    /// with no outcome, or reports that left an open file between two copies. Counted by the
+    /// discovery feed's SQL and recorded as sent; a count of the publisher's rows, not a finding
+    /// that a duty was breached.
+    ServiceReportLead,
+    /// A count read from a police department's published stop records (RIPA): how often people
+    /// the officer perceived as unhoused were stopped, arrested, cited or had property seized,
+    /// and for what recorded reasons. Counted by the discovery feed's SQL and recorded as sent.
+    /// A difference in rates is not adjusted for the reason for the stop and is not a finding of
+    /// unequal treatment.
+    PoliceStopLead,
+    /// A count read from an agency's released encampment abatement logs: the hours between a
+    /// posted notice and the abatement at the same place, and abatements at a place with no
+    /// notice in the log. Counted by the discovery feed's SQL and recorded as sent. The logs do
+    /// not record the notice period that applied, so this is not a finding that notice fell short.
+    AbatementLogLead,
 }
 
 impl FindingKind {
@@ -280,6 +297,9 @@ impl FindingKind {
             Self::EncampmentNoticeStatedShortfall => "ENCAMPMENT_NOTICE_STATED_SHORTFALL",
             Self::RedactionInconsistentAcrossReleases => "REDACTION_INCONSISTENT_ACROSS_RELEASES",
             Self::RollingProduction => "ROLLING_PRODUCTION",
+            Self::ServiceReportLead => "SERVICE_REPORT_LEAD",
+            Self::PoliceStopLead => "POLICE_STOP_LEAD",
+            Self::AbatementLogLead => "ABATEMENT_LOG_LEAD",
         }
     }
 
@@ -326,6 +346,9 @@ impl FindingKind {
             Self::EncampmentNoticeStatedShortfall,
             Self::RedactionInconsistentAcrossReleases,
             Self::RollingProduction,
+            Self::ServiceReportLead,
+            Self::PoliceStopLead,
+            Self::AbatementLogLead,
         ]
         .into_iter()
         .find(|candidate| candidate.as_str() == value)
@@ -426,6 +449,13 @@ impl FindingKind {
             // A count of recorded release dates. Producing records in installments breaks no
             // rule this kind evaluates.
             Self::RollingProduction => false,
+            // Counts of a publisher's rows. The table records no inspections, work or duty.
+            Self::ServiceReportLead => false,
+            // Counts of the department's own stop records, compared without adjustment.
+            Self::PoliceStopLead => false,
+            // Two recorded times with no stated minimum to count them against;
+            // `EncampmentNoticeShortfall` is the kind that has one.
+            Self::AbatementLogLead => false,
         }
     }
 }

@@ -1,5 +1,5 @@
-import type { AnalyticalImportCandidate, AnalyticalSchema, CorpusPattern, DataMaintenanceStatus, SqlQueryResult } from '../types';
-import { automaticFollowups, automaticProfileQuery, snapshotFingerprint, type AutomaticProfile } from './automaticDiscovery';
+import type { AnalyticalImportCandidate, AnalyticalSchema, CorpusPattern, DataMaintenanceStatus, ServiceLeadInput, SqlQueryResult } from '../types';
+import { automaticFollowups, automaticProfileQuery, snapshotFingerprint, storedLeads, type AutomaticProfile } from './automaticDiscovery';
 import { dataGaps, type DataGap } from './dataGaps';
 
 export interface DiscoveryTransport {
@@ -9,6 +9,8 @@ export interface DiscoveryTransport {
   query(sql: string): Promise<SqlQueryResult>;
   maintain?(): Promise<DataMaintenanceStatus>;
   fetch?(request: DataGap['fetch']): Promise<unknown>;
+  /** Stores the feed's leads as findings; `complete` permits dropping earlier leads not sent. */
+  record?(leads: ServiceLeadInput[], complete: boolean): Promise<unknown>;
 }
 export interface AutomaticDiscoveryState {
   schema: AnalyticalSchema | null;
@@ -44,6 +46,8 @@ export class DiscoveryController {
   private secondaryInFlight = new Set<'candidates' | 'patterns'>();
   private gapRetryAt = new Map<string, number>();
   private requestedGaps = new Set<string>();
+  private recordedLeads = '';
+  private recordRetryAt = 0;
   private pending: { snapshotId: string; fingerprint: string; queries: ReturnType<typeof automaticFollowups> } | null = null;
 
   constructor(private transport: DiscoveryTransport, private visible: () => boolean = () => true, private now: () => number = Date.now) { this.maintainedAt = this.now() - 55_000; }
@@ -164,6 +168,19 @@ export class DiscoveryController {
         const dataset = schema.datasets.find((item) => !this.state.profiles[item.snapshotId] && this.now() >= (this.failures.get(snapshotFingerprint(schema, item)) ?? 0));
         if (!dataset) {
           this.publish({ activeSnapshot: null });
+          const stored = storedLeads(schema, this.state.profiles);
+          const leadsKey = JSON.stringify(stored);
+          if (this.transport.record && leadsKey !== this.recordedLeads && (stored.complete || stored.leads.length) && this.now() >= this.recordRetryAt) {
+            // Keyed by what was sent, so it is noted even if the controller stopped meanwhile.
+            const outcome = await this.transport.record(stored.leads, stored.complete).then(() => null, (reason) => String(reason));
+            if (outcome === null) this.recordedLeads = leadsKey;
+            else this.recordRetryAt = this.now() + 300_000;
+            if (this.valid(generation)) {
+              const errors = { ...this.state.errors }; delete errors.leads;
+              this.publish({ errors: outcome === null ? errors : { ...errors, leads: outcome } });
+            }
+            return;
+          }
           const gap = this.nextGap();
           if (!gap) { nextDelay = 5000; return; }
           this.requestedGaps.delete(gap.key);

@@ -1,0 +1,46 @@
+[
+  {
+    "id": "finding-police-stop-lead",
+    "title": "Police stop leads",
+    "group": "Finding kinds",
+    "keywords": [
+      "RIPA",
+      "stops",
+      "unhoused",
+      "homeless",
+      "arrest",
+      "citation",
+      "property seized",
+      "enforcement",
+      "encampment"
+    ],
+    "summary": "Counts from a police department's published stop records: stops, arrests, citations and property seizures for people an officer perceived as unhoused, set beside everyone else stopped.",
+    "sections": [
+      {
+        "heading": "What it shows",
+        "paragraphs": [
+          "California's Racial and Identity Profiling Act requires each stop to be recorded, with the officer's perception of the person, the reason for the stop, the result and any property seized. The publisher keeps these in separate tables matched on stop and person number.",
+          "The app counts how many persons were perceived as unhoused, how many were arrested, cited or had property seized, the most recorded reasons, and, for each reason with at least 100 persons in both groups, the rate of arrest without a warrant in each group for that same reason.",
+          "When the persons table is imported without its companion tables, the app fetches them under your Data upkeep settings."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "Unequal treatment. Perception is the officer's entry, not the person's housing status. A person can have several results. Rates are not adjusted for where officers were assigned.",
+          "What happened to seized property. The table records the basis for a seizure, not where the property was kept, whether it was returned or whether it was discarded."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is not assessed: the finding restates counts of the publisher's rows and infers nothing to score."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": ["POLICE_STOP_LEAD"],
+    "commandGroups": [],
+    "related": ["legal-vs-pattern", "findings-inbox", "finding-service-report-lead"]
+  }
+]

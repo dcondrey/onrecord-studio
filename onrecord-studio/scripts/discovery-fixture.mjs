@@ -18,7 +18,7 @@ export const csv = `group,year,amount,phase\n${rows.join('\n')}\n`;
 export const schema = {
   datasets: [{ snapshotId: 'fixture', datasetKind: 'REGIONAL_DATA', displayName: 'Discovery fixture', tableName: 'analysis_fixture',
     importedRows: rows.length, rejectedRows: 0, sourceUri: 'https://example.test/fixture.csv', sourceSha256: 'a'.repeat(64),
-    retrievedAt: '2026-09-14T00:00:00Z', observationPeriodStart: null, observationPeriodEnd: null, partialDataset: true, validationSummary: '{}' }],
+    retrievedAt: '2026-09-14T00:00:00Z', observationPeriodStart: null, observationPeriodEnd: null, partialDataset: true, validationSummary: '{}', unconvertedByColumn: {} }],
   columns: ['group', 'year', 'amount', 'phase'].map(columnName => ({ tableName: 'analysis_fixture', columnName, logicalType: columnName === 'amount' ? 'INTEGER' : 'TEXT', originalName: columnName, nullable: true, dictionary: null })), templates: [],
 };
 export const selection = { snapshotId: 'fixture', measure: 'amount', aggregation: 'sum', dimension: 'group', period: 'year', periodMode: 'year_code', filters: [{ column: 'phase', operator: 'equals', value: 'adopted' }] };

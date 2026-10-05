@@ -1003,6 +1003,81 @@ The detectors now produce 0 findings on this corpus. Next, in order:
    measured only against San Diego's wording; other NextRequest portals' notices will show as
    not classified until a rule names them.
 
+## Owner focus: homelessness accountability (2026-10-04)
+
+Decision (owner, 2026-10-04): leads should concern homeless sweeps, shelter beds, encampment
+enforcement, public restrooms, housing, property stored and returned versus discarded, human
+rights, poor or ineffective spending, and unfair treatment, not generic service backlogs.
+"NextRequest files are probably most relevant."
+
+Built 2026-10-04: leads from SDPD's published stop records (methods §18), fetched by the app
+(`RIPA_STOPS` and three companion tables). Measured with the app's SQL on the files published
+2026-10-04 (stops 2024-01-01 to 2026-09-28):
+- 38,041 of 263,488 persons stopped were perceived as unhoused. Custodial arrest 28.8% against
+  13.4% of others; on an outstanding warrant 14.2% against 3.6%; without a warrant 17.0% against
+  10.5%; citation 14.3% against 41.8%; property seized 7.4% against 2.2%.
+- Most recorded reasons: local ordinance infraction 5,841, local ordinance misdemeanour 2,835,
+  647(e) lodging 2,362, encroachment (1460(b) SH) 859.
+- For the same recorded reason, arrest without a warrant was higher for people perceived as
+  unhoused in 2 of 38 reasons compared (petty theft, battery). Counting warrant arrests it was 9
+  of 38. The gap is mostly warrant arrests, which the lead states.
+- Property seized from people perceived as unhoused: evidence 1,810, contraband 1,501, vehicle
+  impound 212, safekeeping 151, abandoned property 32. Nothing published says where it went.
+
+Built 2026-10-04: hours between a posted abatement notice and the abatement, from released logs
+(methods §19). Measured with the app's SQL on the two logs in the 2026-10-03 collection (25-5806
+notices posted 2023-08-01 to 2025-07-28; 26-772 abatements completed to 2026-01-28): 11,090
+notices, 14,000 abatements; 2,067 places with exactly one of each; 22 completed within 3 hours of
+posting, 101 within 24 hours, 1,811 from 24 to 72 hours, 144 later; median 29.3 hours; 11 recorded
+completed before posting; 214 of 11,104 abatements in the notice period at a place with no notice
+in the log. The collection is copied to `/Volumes/A/onrecord-eval/eval-encampment-2` (core.db
+paths still point at the original temp directory; files are under `downloads/objects/`). It also
+holds SDPD arrest and citation exports (26-6187, 25-7080, 22-2226 with race) and Urban Corps
+cleanup invoices with labour cost and tonnage per day (25-8547); none is read by a check yet.
+
+Measured, not built:
+- Open Encampment reports in Get It Done (2026-09-14 copy): 2,036; median age 7 to 14 days in
+  eight districts and 903.5 days in District 4 (158 reports); 850 days for the 29 held by DSD.
+- The owner's library holds 3 requests from sandiego.nextrequest.com. The 142-request encampment
+  collection measured on 2026-10-03 was made by `ingestion::live_evaluation` into a separate
+  directory and is not in the library.
+- Contractor billing for abatement crews (Urban Corps invoices released to 25-8547), read by a
+  one-off script, not the app: 2,013 crew-days from 2025-01-02 to 2025-09-30 in the sheets that
+  share one layout, labour 2,076,060 and vehicle fees 295,206 dollars, 672.3 tons recorded, so
+  about 3,527 dollars per recorded ton. 1,471 crew-days record no tonnage (1,066 blank, 405
+  zero), costing 1,790,050. Unverified: the monthly files repeat earlier months' sheets (deduplicated
+  by date, crew and labour cost), earlier invoices use other layouts and were skipped, a blank
+  tonnage is not zero, and some crews (police support) may not haul. Needs a parser for the
+  invoice layout before any lead.
+- Closure times by year (2016 to 2018 closed files) cannot be read as a slowdown: files are keyed
+  by close year and the programme began 2016-05-20, so early years cannot hold old reports.
+- Where referred reports went is recorded in Get It Done's `referred` column (closed 2018:
+  Environmental Services 12,598, Police abandoned vehicles 4,038, Caltrans 1,341); no check reads it.
+
+Next, in order:
+1. The abatement check only fires once the released spreadsheets are in the library as tables.
+   The app can already do both: the Collection plan dialog collects a source for a subject
+   (`start_collection`), and Data upkeep with automatic import turns released sheets into tables
+   (`maintain_one_table`). Not verified end to end: collecting "encampment" from
+   sandiego.nextrequest.com in the owner's library, and the two .xlsx logs through the import
+   (the native test uses CSV with the same headers and time format). Nothing proposes that
+   collection to the owner; the gap seeker only fetches City datasets. Then checks for the other released
+   tables: SDPD citation and arrest exports (the columns `encampment_ordinance.rs` already
+   reads), and contractor invoices (cost and tonnage per abatement day against the budget).
+1a. A stated notice minimum: with the City's abatement procedure in the library as a stored
+   authority, the abatement log counts could be compared with it as `encampment_notice.rs` does
+   for notice documents.
+2. Stored versus discarded property: no published table records it. The stop records give the
+   seizure basis only. The check has to come from released abatement and storage logs (item 1).
+3. Done 2026-10-04 for areas: Encampment, homeless, shelter and restroom services are shown in
+   the area leads ahead of larger services (methods §17 B). By staff group (29 Encampment reports
+   held by DSD, median 850 days) is not built.
+4. Homelessness spending against outcomes: Homelessness Strategies and Solutions department lines
+   in the operating budget against shelter capacity and exits, which need SDHC and RTFH tables
+   that the source catalogs list only as pages and PDFs.
+5. Local ordinance codes 65000 and 65002 do not name the ordinance; the stop records'
+   `reasonforstopexplanation` text may. Not read yet.
+
 ## Leads from service-report tables (2026-10-04)
 
 Decision: "What stands out" shows leads about the subject of the records; facts about a table
@@ -1039,11 +1114,19 @@ daily). Next, in order:
    a newer open copy after seven days, and the closed-reports year filtered to reports seen open.
    Not built: seeking a source for a gap outside that registry (searching the source catalogs in
    `src/utils/*Sources.ts` or the publisher's dataset index by the missing role).
-2. Join a lead to the council agenda and budget: the department that owns a service, its adopted
-   line (`budget_lines.rs`), and upcoming meeting items (`analysis_methods.md` §11), so a lead
-   offers a drafted public comment.
-3. Store service leads as findings so Story Desk ranks them with document findings. Needs a
-   FindingKind on both sides of the IPC contract and a help topic.
+2. Budget half done 2026-10-04: the backlog lead names the publisher's staff group, the budget
+   departments it is read as, and their adopted operating expense (methods §17 B "Owner and
+   budget"); a missing budget table is fetched as a gap. `case_record_type` proved to be a staff
+   group label, not a department code. Measured on the 2026-09-14 open file and the budget file
+   published 2026-10-04: Sidewalk Repair Issue 14,645 of 14,690, Street Light Maintenance 14,332
+   of 14,358 and ROW Maintenance 10,471 of 10,564 open reports are under TSW; adopted expense
+   Transportation 190.6 million (FY 25) and 172.8 million (FY 24), Stormwater 73.9 and 67.6.
+   Not built: the department total is not the service's line (the budget file has no program
+   below funds center; `budget_lines.rs` is not used), and agenda matching: `research::meetings`
+   matches findings by portal agency, and these findings name a department, not a portal agency.
+3. Done 2026-10-04: service leads are stored as `SERVICE_REPORT_LEAD` findings
+   (`record_service_leads`, methods §17 E). They carry no portal agency, so agenda suggestions
+   (§11 "Stored finding subject") do not match them until item 2 names the owning department.
 4. The same role-based checks for code-enforcement cases and permits (opened, closed, type, area).
 5. Full Get It Done closed years exceed the 96 MB import limit; only Encampment rows are kept.
    Area comparisons for other services need a per-service subset or a streamed aggregate.

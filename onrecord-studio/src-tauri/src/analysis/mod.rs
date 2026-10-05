@@ -60,6 +60,7 @@ pub mod typed_edges;
 
 pub mod finding;
 pub mod gaps;
+pub mod service_leads;
 pub mod topic_packs;
 
 pub mod detectors;

@@ -1,6 +1,7 @@
 import type { AnalyticalDatasetSummary, AnalyticalSchema, CityDataset } from '../types';
 import type { AutomaticProfile } from './automaticDiscovery';
-import { serviceCompanions } from './serviceAccountability';
+import { budgetTable, serviceCompanions, staffGroupDepartments } from './serviceAccountability';
+import { missingStopCompanions } from './stopLeads';
 
 /** A question the imported tables cannot answer, and the published table that would answer it. */
 export interface DataGap {
@@ -27,15 +28,38 @@ function holdsEveryService(dataset: AnalyticalDatasetSummary): boolean {
 }
 
 export function dataGaps(schema: AnalyticalSchema, profiles: Record<string, AutomaticProfile>, today: string): DataGap[] {
-  const latest = schema.datasets.filter((dataset) => dataset.sourceUri === OPEN_REPORTS).sort((a, b) => a.retrievedAt.localeCompare(b.retrievedAt)).at(-1);
-  if (!latest) return [];
-  const result = (id: string) => profiles[latest.snapshotId]?.results.find((entry) => entry.query.id === id)?.result;
   const gaps: DataGap[] = [];
+  for (const dataset of schema.datasets) for (const missing of missingStopCompanions(schema, dataset)) {
+    gaps.push({
+      key: `stops:${dataset.snapshotId}:${missing.dataset}`, snapshotId: dataset.snapshotId, fetch: { dataset: missing.dataset, year: null },
+      title: 'The stop records need their companion table',
+      detail: `${dataset.displayName} lists the persons stopped. The publisher keeps ${missing.holds} in a separate table, matched on stop and person number.`,
+    });
+  }
+  const latest = schema.datasets.filter((dataset) => dataset.sourceUri === OPEN_REPORTS).sort((a, b) => a.retrievedAt.localeCompare(b.retrievedAt)).at(-1);
+  if (!latest) return gaps;
+  const result = (id: string) => profiles[latest.snapshotId]?.results.find((entry) => entry.query.id === id)?.result;
+  const services = result('service_backlog');
+  // Encampment reports say where residents complained; the stop records say what enforcement followed.
+  if (!schema.columns.some((column) => column.columnName === 'perceivedunhoused')
+    && services?.rows.some((row) => /encampment/i.test(String(row[services.columns.indexOf('category')])))) gaps.push({
+    key: `stops:${latest.snapshotId}`, snapshotId: latest.snapshotId, fetch: { dataset: 'RIPA_STOPS', year: null },
+    title: 'The police stop records would show enforcement against people perceived as unhoused',
+    detail: 'Encampment reports are open in the imported file. SDPD publishes each person stopped with the officer’s perceived-unhoused entry, the reason, the result and property seized.',
+  });
   const age = (Date.parse(today.slice(0, 10)) - Date.parse(day(latest))) / 86_400_000;
   if (result('service_backlog')?.rows.length && age >= RECOPY_DAYS) gaps.push({
     key: `copy:${latest.snapshotId}`, snapshotId: latest.snapshotId, fetch: { dataset: 'GET_IT_DONE_OPEN', year: null },
     title: 'A newer copy of the open reports would show what changed',
     detail: `The open-reports file was last retrieved ${day(latest)}, and the publisher replaces it daily. A second copy shows which reports left and which arrived since then.`,
+  });
+  const backlog = result('service_backlog');
+  const group = backlog ? backlog.columns.indexOf('staff_group') : -1;
+  const owners = [...new Set((backlog?.rows ?? []).flatMap((row) => staffGroupDepartments(row[group]) ?? []))];
+  if (owners.length && !budgetTable(schema)) gaps.push({
+    key: `budget:${latest.snapshotId}`, snapshotId: latest.snapshotId, fetch: { dataset: 'OPERATING_BUDGET', year: null },
+    title: 'The operating budget would show what the responsible departments were given',
+    detail: `The open reports are handled by staff groups read as ${owners.join(', ')}. The City’s operating budget file lists each department’s adopted amounts by fiscal year.`,
   });
   const movement = result('service_movement');
   const earlier = serviceCompanions(schema, latest)?.earlier;

@@ -11,6 +11,9 @@ use chrono::Datelike;
 const GET_IT_DONE_OPEN_URI: &str =
     "https://seshat.datasd.org/get_it_done_reports/get_it_done_requests_open_datasd.csv";
 
+const OPERATING_BUDGET_URI: &str =
+    "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RowFilter {
     Equals {
@@ -137,6 +140,60 @@ fn city_dataset_spec(
                 kind: AnalyticalDatasetKind::RegionalData,
                 display_name: "SANDAG transit stops (MTS and NCTD GTFS)".into(),
                 file_name: "Transit_Stops_GTFS.csv".into(),
+                partial: false,
+                row_filter: None,
+            }
+        }
+        CityDataset::RipaStops
+        | CityDataset::RipaStopReasons
+        | CityDataset::RipaStopResults
+        | CityDataset::RipaPropertySeizureBasis => {
+            let (folder, stem, kind, label) = match dataset {
+                CityDataset::RipaStops => (
+                    "police_ripa_stops",
+                    "ripa_stops",
+                    AnalyticalDatasetKind::RipaStops,
+                    "persons stopped",
+                ),
+                CityDataset::RipaStopReasons => (
+                    "police_ripa_stop_reason",
+                    "ripa_stop_reason",
+                    AnalyticalDatasetKind::RegionalData,
+                    "reasons for the stop",
+                ),
+                CityDataset::RipaStopResults => (
+                    "police_ripa_stop_result",
+                    "ripa_stop_result",
+                    AnalyticalDatasetKind::RegionalData,
+                    "results of the stop",
+                ),
+                _ => (
+                    "police_ripa_prop_seize_basis",
+                    "ripa_prop_seize_basis",
+                    AnalyticalDatasetKind::RegionalData,
+                    "basis for property seizure",
+                ),
+            };
+            let display_name = format!("SDPD stop records (RIPA), {label}");
+            unsplit(&display_name)?;
+            let file_name = format!("{stem}_datasd.csv");
+            CityDatasetSpec {
+                url: format!("https://seshat.datasd.org/{folder}/{file_name}"),
+                kind,
+                display_name,
+                file_name,
+                // The publisher appends to the current file; a snapshot is the stops to date.
+                partial: true,
+                row_filter: None,
+            }
+        }
+        CityDataset::OperatingBudget => {
+            unsplit("The City operating budget")?;
+            CityDatasetSpec {
+                url: OPERATING_BUDGET_URI.into(),
+                kind: AnalyticalDatasetKind::OperatingBudget,
+                display_name: "City operating budget (all published years)".into(),
+                file_name: "budget_operating_datasd.csv".into(),
                 partial: false,
                 row_filter: None,
             }
@@ -339,6 +396,15 @@ mod tests {
         assert!(spec(CityDataset::GetItDoneOpen, None).is_ok());
         assert!(spec(CityDataset::Schools, Some(2025)).is_err());
         assert!(spec(CityDataset::TransitStops, None).is_ok());
+        assert_eq!(
+            spec(CityDataset::RipaStopResults, None).unwrap().url,
+            "https://seshat.datasd.org/police_ripa_stop_result/ripa_stop_result_datasd.csv"
+        );
+        assert!(spec(CityDataset::OperatingBudget, Some(2025)).is_err());
+        assert_eq!(
+            spec(CityDataset::OperatingBudget, None).unwrap().kind,
+            AnalyticalDatasetKind::OperatingBudget
+        );
     }
 
     #[test]

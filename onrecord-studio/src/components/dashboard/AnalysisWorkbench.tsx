@@ -43,6 +43,11 @@ const cityDatasets: { value: CityDataset; label: string }[] = [
   { value: 'GET_IT_DONE_OUTCOMES', label: 'Get It Done closed reports (those seen open, by year)' },
   { value: 'SCHOOLS', label: 'SANDAG schools' },
   { value: 'TRANSIT_STOPS', label: 'SANDAG transit stops (GTFS)' },
+  { value: 'OPERATING_BUDGET', label: 'City operating budget (all years)' },
+  { value: 'RIPA_STOPS', label: 'SDPD stop records (RIPA): persons stopped' },
+  { value: 'RIPA_STOP_REASONS', label: 'SDPD stop records (RIPA): reasons for the stop' },
+  { value: 'RIPA_STOP_RESULTS', label: 'SDPD stop records (RIPA): results of the stop' },
+  { value: 'RIPA_PROPERTY_SEIZURE_BASIS', label: 'SDPD stop records (RIPA): basis for property seizure' },
 ];
 
 export default function AnalysisWorkbench() {

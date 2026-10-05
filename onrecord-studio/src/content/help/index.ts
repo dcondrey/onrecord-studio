@@ -22,6 +22,9 @@ import pageView from './topics-page-view.json';
 import navigation from './topics-navigation.json';
 import dispositions from './topics-dispositions.json';
 import rollingProduction from './topics-rolling-production.json';
+import serviceReportLeads from './topics-service-report-leads.json';
+import policeStopLeads from './topics-police-stop-leads.json';
+import abatementLogLeads from './topics-abatement-log-leads.json';
 
 export type HelpGroup =
   | 'Getting started'
@@ -95,6 +98,9 @@ const ALL_HELP_TOPICS = [
   ...navigation,
   ...dispositions,
   ...rollingProduction,
+  ...serviceReportLeads,
+  ...policeStopLeads,
+  ...abatementLogLeads,
 ] as HelpTopic[];
 
 /**
