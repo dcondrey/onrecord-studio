@@ -108,8 +108,30 @@ impl DuckDbRepository {
         .await
     }
 
+    /// Keys of the sources whose documents the user added by hand.
+    pub async fn user_supplied_source_keys(
+        &self,
+    ) -> Result<std::collections::HashSet<String>, AppError> {
+        self.query_connection("User-supplied source keys", |connection| {
+            let mut statement = connection
+                .prepare("SELECT subdomain FROM user_supplied_sources")
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to list user-supplied sources: {error}"))
+                })?;
+            let keys = statement
+                .query_map([], |row| row.get::<_, String>(0))
+                .and_then(|rows| rows.collect::<Result<_, _>>())
+                .map_err(|error| {
+                    AppError::Storage(format!("Failed to list user-supplied sources: {error}"))
+                })?;
+            Ok(keys)
+        })
+        .await
+    }
+
     /// Find documents in the corpus whose extracted text mentions terms overlapping with a
-    /// redaction's context, excluding the redacted document itself. A document is identified by
+    /// redaction's context, excluding the redacted document itself and every file the user added
+    /// by hand, which is not something another source released. A document is identified by
     /// its portal and id together, so another portal's document with the same id stays a
     /// candidate. A copy of the redacted document (same extracted-text digest) is excluded and
     /// identical copies elsewhere count once, since neither is independent corroboration. The
@@ -163,6 +185,7 @@ impl DuckDbRepository {
                    AND documents_fts.portal_subdomain = documents.portal_subdomain \
                  WHERE NOT (documents.id = ?1 AND documents.portal_subdomain = ?3) \
                    AND LOWER(TRIM(documents.visibility)) = 'public' \
+                   AND documents.portal_subdomain NOT IN (SELECT subdomain FROM user_supplied_sources) \
                    AND LENGTH(documents_fts.extracted_text) > 0 \
                    AND LOWER(documents_fts.extracted_text) LIKE '%' || ?4 || '%' \
                    AND NOT COALESCE(documents.extracted_text_sha256 = ( \

@@ -1337,6 +1337,26 @@ Diego's 14,570 rows), so another city's sums can be short by its rejected rows. 
 fetch and the leads in the running app; whether the fiscal 2022 difference is a transfer or a
 carry-forward; the pay file for any year but 2024.
 
+Built 2026-10-05: redaction context matched across documents and imported tables (methods §30).
+The automatic detector no longer uses the ranked lexical engine. It reports a redaction mark only
+when the same words on both sides of it stand around text in another collected document or in one
+row of an imported table, cites both passages by character range (a table by name, source
+address, SHA-256, row and column), and never prints that text or says what the redaction covers.
+Every eligible document is taken in once, so the old newest-200 window is gone, a document is
+portal plus id throughout, and hand-added files are read on neither side.
+Verified by tests on fresh databases: text outside the anchors is not a match; a match in another
+portal is cited on both sides by ranges that slice back to the text; a table cell is cited by
+snapshot, row and column and a value across two cells is refused; a redacted document older than
+the former window meets a source that arrives later; two portals sharing document ids are kept
+apart; hand-added files are excluded in the sweep and in both on-demand engines; work past each
+bound is done by the next run; a core without the sweep tables is swept after upgrade.
+Measured: 2026-10-05, debug build, one run on a loaded machine (`table_scan_cost`): a run that took in 500 one-mark documents and read a 300,000-row, five-column imported table against those 500 marks took 12.7 s, row assembly by the `analytical_rows` view included. An optimised build is not measured.
+Not verified: any run on a real corpus (match rate, false positives from reused wording, and
+time on real text are unmeasured); the semantic path of the on-demand panel now searches every
+portal, tested only at its result filter because the embedding model is not loaded in tests; the
+person-name rule rests on a capitalised-words shape and a short list of lead-in phrases, whose
+misses are unmeasured. A mark with fewer than three words on either side is not compared.
+
 ## Leads from service-report tables (2026-10-04)
 
 Decision: "What stands out" shows leads about the subject of the records; facts about a table

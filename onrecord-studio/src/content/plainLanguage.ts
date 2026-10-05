@@ -99,9 +99,9 @@ export const PLAIN_FINDING_TEXT: Record<FindingKind, PlainText> = {
     next: 'Check the publication dates against the answer date and ask the agency when the records were created.',
   },
   REDACTION_CANDIDATE_INFERRED: {
-    observed: 'Surrounding text and other documents point to a possible name behind a redaction.',
-    notShown: 'It does not reveal what was redacted. It is a guess from context, and it may be wrong.',
-    next: 'Treat it as a lead only. Do not repeat the name as fact, and confirm through a record the agency releases.',
+    observed: 'The words on both sides of a redaction also appear in another document or an imported table, with text where this document has the redaction.',
+    notShown: 'It does not show what was redacted. Agencies reuse wording, so the other passage may be about a different record, date or person.',
+    next: 'Open both cited passages and compare their dates and context. Do not repeat what the other passage says as the redacted content; confirm through a record the agency releases.',
   },
   CROSS_CORPUS_SHARED_LANGUAGE: {
     observed: 'The same paragraph, or a reworded version of it, appears in responses from three or more agencies.',

@@ -65,12 +65,6 @@ impl ReconstructionDocument {
     }
 }
 
-fn normalized(text: &str) -> String {
-    text.split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_lowercase()
-}
 fn window(text: &str, start: usize, end: usize, radius: usize) -> (usize, usize) {
     let mut left = start.saturating_sub(radius);
     let mut right = (end + radius).min(text.len());
@@ -143,7 +137,7 @@ pub fn search_terms(
                 terms.insert(value);
             }
         }
-        for anchor in anchors(&target.text, mask.start(), mask.end()) {
+        for anchor in anchors(&target.text, mask.start(), mask.end()).0 {
             if anchor.len() >= 8 {
                 terms.insert(anchor);
             }
@@ -426,23 +420,16 @@ fn merge_fixed_masks(left: &str, right: &str) -> Option<String> {
     Some(result)
 }
 
-fn anchors(text: &str, start: usize, end: usize) -> Vec<String> {
+/// Up to five words on each side of `start..end`, and the bytes they span together.
+fn anchors(text: &str, start: usize, end: usize) -> ([String; 2], std::ops::Range<usize>) {
     let (left, right) = window(text, start, end, 160);
-    let before = text[left..start]
-        .split_whitespace()
-        .rev()
-        .take(5)
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .collect::<Vec<_>>()
-        .join(" ");
-    let after = text[end..right]
-        .split_whitespace()
-        .take(5)
-        .collect::<Vec<_>>()
-        .join(" ");
-    vec![before, after]
+    let offset = |word: &str| word.as_ptr() as usize - text.as_ptr() as usize;
+    let before: Vec<&str> = text[left..start].split_whitespace().rev().take(5).collect();
+    let after: Vec<&str> = text[end..right].split_whitespace().take(5).collect();
+    let passage = before.last().map_or(start, |word| offset(word))
+        ..after.last().map_or(end, |word| offset(word) + word.len());
+    let before = before.into_iter().rev().collect::<Vec<_>>().join(" ");
+    ([before, after.join(" ")], passage)
 }
 fn whitespace_pattern(text: &str) -> String {
     text.split_whitespace()
@@ -450,39 +437,113 @@ fn whitespace_pattern(text: &str) -> String {
         .collect::<Vec<_>>()
         .join(r"\s+")
 }
+
+/// Text found between the same words that surround a mask. Offsets are bytes of the searched text.
+pub(crate) struct AnchoredMatch {
+    /// Left anchor through right anchor.
+    pub passage: std::ops::Range<usize>,
+    pub value: std::ops::Range<usize>,
+}
+
+/// The words on each side of a mask, and the one definition of "the same surrounding words": at
+/// least three words a side, none of them itself a mask, compared across case and whitespace.
+pub(crate) struct AnchoredSpan {
+    left: String,
+    right: String,
+    pattern: Regex,
+}
+
+impl AnchoredSpan {
+    /// The anchors of the mask at `start..end`, and the bytes of `text` they and the mask span.
+    pub(crate) fn around(
+        text: &str,
+        start: usize,
+        end: usize,
+    ) -> Option<(Self, std::ops::Range<usize>)> {
+        let ([left, right], passage) = anchors(text, start, end);
+        Some((Self::from_anchors(left, right)?, passage))
+    }
+
+    pub(crate) fn from_anchors(left: String, right: String) -> Option<Self> {
+        if [&left, &right]
+            .iter()
+            .any(|anchor| anchor.split_whitespace().count() < 3 || MASK.is_match(anchor))
+        {
+            return None;
+        }
+        let pattern = Regex::new(&format!(
+            r"(?i){}\s*(?P<value>[^\r\n]{{1,160}}?)\s*{}",
+            whitespace_pattern(&left),
+            whitespace_pattern(&right)
+        ))
+        .ok()?;
+        Some(Self {
+            left,
+            right,
+            pattern,
+        })
+    }
+
+    pub(crate) fn left(&self) -> &str {
+        &self.left
+    }
+
+    pub(crate) fn right(&self) -> &str {
+        &self.right
+    }
+
+    /// Every unmasked value standing between the two anchors in `text`.
+    pub(crate) fn matches<'a>(&'a self, text: &'a str) -> impl Iterator<Item = AnchoredMatch> + 'a {
+        self.pattern.captures_iter(text).filter_map(|capture| {
+            let value = capture.name("value")?;
+            let trimmed = value.as_str().trim();
+            if trimmed.is_empty() || MASK.is_match(trimmed) {
+                return None;
+            }
+            let start = value.start() + (value.as_str().len() - value.as_str().trim_start().len());
+            Some(AnchoredMatch {
+                passage: capture.get(0)?.range(),
+                value: start..start + trimmed.len(),
+            })
+        })
+    }
+}
+
+/// Personal contact and identity values are never a candidate for what a mask covers.
+pub(crate) fn is_personal_identifier(value: &str) -> bool {
+    mask_pii(value).is_ok_and(|masked| !masked.findings.is_empty())
+}
+
+/// Shaped like a person's name: two to five capitalised words that are not a public role.
+pub(crate) fn is_name_shaped(value: &str) -> bool {
+    NAME.is_match(value) && !ROLE.is_match(value)
+}
+
+/// Words lower-cased and joined by single spaces: the form in which two passages are compared.
+pub(crate) fn normalized(text: &str) -> String {
+    text.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
+}
+
 fn passage_findings(
     target: &ReconstructionDocument,
     documents: &[&ReconstructionDocument],
 ) -> Vec<ReconstructionFinding> {
     let mut findings = vec![];
     for mask in MASK.find_iter(&target.text).take(MAX_FINDINGS) {
-        let anchor = anchors(&target.text, mask.start(), mask.end());
-        if anchor
-            .iter()
-            .any(|a| a.split_whitespace().count() < 3 || MASK.is_match(a))
-        {
-            continue;
-        }
-        let Ok(pattern) = Regex::new(&format!(
-            r"(?i){}\s*(?P<value>[^\r\n]{{1,160}}?)\s*{}",
-            whitespace_pattern(&anchor[0]),
-            whitespace_pattern(&anchor[1])
-        )) else {
+        let Some((span, _)) = AnchoredSpan::around(&target.text, mask.start(), mask.end()) else {
             continue;
         };
         let mut candidates = vec![];
         for document in documents {
-            for capture in pattern.captures_iter(&document.text).take(12) {
-                let value = capture.name("value").unwrap().as_str().trim();
-                if MASK.is_match(value) || value.is_empty() {
+            for found in span.matches(&document.text).take(12) {
+                let value = &document.text[found.value.clone()];
+                if is_personal_identifier(value) {
                     continue;
                 }
-                let all = capture.get(0).unwrap();
-                let (left, right) = window(&document.text, all.start(), all.end(), 0);
-                // Personal contact/identity masks are never a target for this public-record tool.
-                if mask_pii(value).is_ok_and(|p| !p.findings.is_empty()) {
-                    continue;
-                }
+                let (left, right) = (found.passage.start, found.passage.end);
                 candidates.push(ReconstructionCandidate { value: value.into(), evidence: vec![document.cite(left,right)], supports: vec!["Both surrounding passages match across whitespace and case differences.".into()], limitations: vec!["Matching prose can be reused in templates or amended versions; compare dates and record context.".into()], contradicted: false });
             }
         }

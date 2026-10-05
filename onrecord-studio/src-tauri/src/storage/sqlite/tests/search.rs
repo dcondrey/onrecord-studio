@@ -289,6 +289,67 @@ async fn evidence_search_prepares_and_returns_matching_requests() {
     assert!(filtered.len() <= results.len());
 }
 
+/// A file the user added by hand is not something another source released, so it is never
+/// counted as corroboration for what a release redacts.
+#[tokio::test]
+async fn redaction_context_matches_never_include_a_hand_added_file() {
+    let repository = repository_with_document().await;
+    {
+        let connection = repository.conn.lock().await;
+        for (portal, kind) in [
+            ("collected", "NEXT_REQUEST"),
+            ("source-local-1", "LOCAL_FILE"),
+        ] {
+            connection
+                .execute(
+                    "INSERT INTO portals (subdomain, display_name, base_url, source_kind)
+                     VALUES (?1, ?1, 'https://example.test', ?2)",
+                    params![portal, kind],
+                )
+                .unwrap();
+            connection
+                .execute(
+                    "INSERT INTO documents (
+                        id, request_id, portal_subdomain, file_name, visibility,
+                        created_at, updated_at
+                     ) VALUES (?1, ?2, ?3, 'other.pdf', 'public',
+                        '2026-08-24T12:01:00Z', '2026-08-24T12:01:00Z')",
+                    params![DOCUMENT_ID + 5, REQUEST_ID, portal],
+                )
+                .unwrap();
+            connection
+                .execute(
+                    "INSERT INTO documents_fts (
+                        document_id, portal_subdomain, file_name, extracted_text
+                     ) VALUES (?1, ?2, 'other.pdf', ?3)",
+                    params![
+                        DOCUMENT_ID + 5,
+                        portal,
+                        format!("alpha beta held under {portal}")
+                    ],
+                )
+                .unwrap();
+        }
+    }
+    let portals = repository
+        .find_redaction_context_matches(
+            PORTAL_SUBDOMAIN,
+            DOCUMENT_ID,
+            vec!["alpha".to_string()],
+            10,
+        )
+        .await
+        .expect("the lookup must succeed")
+        .into_iter()
+        .map(|(portal, _, _, _, _)| portal)
+        .collect::<Vec<_>>();
+    assert_eq!(portals, vec!["collected".to_string()]);
+    assert_eq!(
+        repository.user_supplied_source_keys().await.unwrap(),
+        std::collections::HashSet::from(["source-local-1".to_string()])
+    );
+}
+
 /// A document is identified by its portal and id together. Excluding the redacted document by id
 /// alone dropped every other portal's document that happened to share the number, and ranking
 /// after the `LIMIT` let a weaker hit displace the strongest one.
