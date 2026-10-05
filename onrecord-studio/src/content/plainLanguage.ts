@@ -30,7 +30,7 @@ export const PLAIN_FINDING_TEXT: Record<FindingKind, PlainText> = {
   },
   BOILERPLATE_DENIAL: {
     observed: 'Nearly identical denial wording appears in responses to unrelated requests.',
-    notShown: 'It does not show that any denial was wrong. Agencies often use standard wording for standard reasons.',
+    notShown: 'It does not show that any denial was wrong or that a request was not reviewed individually. Agencies often use standard wording for standard reasons.',
     next: 'Read two of the cited denials side by side and check whether each explains its own request.',
   },
   JUST_IN_TIME_COMPLIANCE: {
@@ -79,7 +79,7 @@ export const PLAIN_FINDING_TEXT: Record<FindingKind, PlainText> = {
     next: 'Compare the request wording with the other documents, and consider asking the agency to re-check its search.',
   },
   EVASION_PARAPHRASED_DENIALS: {
-    observed: 'Denials on different topics share the same underlying reasons in different words.',
+    observed: 'Denials from one agency on different topics use much the same vocabulary in different wording.',
     notShown: 'It does not show the wording was chosen for any purpose. Similar reasons can produce similar letters.',
     next: 'Read the denial letters together and check whether the reasons fit each request.',
   },
@@ -104,8 +104,8 @@ export const PLAIN_FINDING_TEXT: Record<FindingKind, PlainText> = {
     next: 'Treat it as a lead only. Do not repeat the name as fact, and confirm through a record the agency releases.',
   },
   CROSS_CORPUS_SHARED_LANGUAGE: {
-    observed: 'The same paragraph appears in responses from more than one agency.',
-    notShown: 'It does not show the agencies coordinated. A shared template or common legal text is a likely cause.',
+    observed: 'The same paragraph, or a reworded version of it, appears in responses from three or more agencies.',
+    notShown: 'It does not show the agencies coordinated or that any request was not reviewed individually. A shared template or common legal text is a likely cause.',
     next: 'Find the source of the paragraph, such as a statute or model policy, before drawing a conclusion.',
   },
   CROSS_CORPUS_TEMPORAL_SHIFT: {
