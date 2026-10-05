@@ -181,7 +181,8 @@ pub fn finding_basis(kind: FindingKind) -> TopicFindingBasis {
         | K::RedactionInconsistentAcrossReleases
         | K::RollingProduction
         | K::ServiceReportLead
-        | K::PoliceStopLead => TopicFindingBasis::Pattern,
+        | K::PoliceStopLead
+        | K::AbatementLogLead => TopicFindingBasis::Pattern,
     }
 }
 

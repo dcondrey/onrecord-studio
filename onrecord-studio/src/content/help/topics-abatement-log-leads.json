@@ -1,0 +1,44 @@
+[
+  {
+    "id": "finding-abatement-log-lead",
+    "title": "Abatement log leads",
+    "group": "Finding kinds",
+    "keywords": [
+      "abatement",
+      "sweep",
+      "encampment",
+      "notice",
+      "posted",
+      "cleanup",
+      "belongings",
+      "hours"
+    ],
+    "summary": "Counts from an agency's released encampment abatement logs: how many hours passed between a notice being posted and the abatement at the same place.",
+    "sections": [
+      {
+        "heading": "What it shows",
+        "paragraphs": [
+          "Agencies release two kinds of log in response to records requests: notices posted (a time and a place) and abatements completed (a time and a place). When both are imported as tables, the app matches them on the same recorded address and the same coordinates.",
+          "Hours are counted only at places with exactly one notice and exactly one abatement, so a notice is never paired with another notice's abatement. The lead gives how many were completed within 3 hours, within 24 hours, from 24 to 72 hours and later, how many are recorded completed before the notice was posted, and how many abatements dated within the notice log's period are at a place with no notice in that log."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "That too little notice was given. The logs do not record which notice period applied, and 24 and 72 hours are yardsticks, not the agency's stated requirement. Notice can be given by a route the posting log does not record, and two rows at one place can be different events.",
+          "Whether anyone was present, or what was done with belongings. Neither log records it."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is not assessed: the finding restates recorded times and infers nothing to score. A notice document compared with the agency's own stated minimum is a different finding kind."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": ["ABATEMENT_LOG_LEAD"],
+    "commandGroups": [],
+    "related": ["legal-vs-pattern", "findings-inbox", "finding-police-stop-lead"]
+  }
+]

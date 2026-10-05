@@ -246,6 +246,11 @@ pub enum FindingKind {
     /// A difference in rates is not adjusted for the reason for the stop and is not a finding of
     /// unequal treatment.
     PoliceStopLead,
+    /// A count read from an agency's released encampment abatement logs: the hours between a
+    /// posted notice and the abatement at the same place, and abatements at a place with no
+    /// notice in the log. Counted by the discovery feed's SQL and recorded as sent. The logs do
+    /// not record the notice period that applied, so this is not a finding that notice fell short.
+    AbatementLogLead,
 }
 
 impl FindingKind {
@@ -294,6 +299,7 @@ impl FindingKind {
             Self::RollingProduction => "ROLLING_PRODUCTION",
             Self::ServiceReportLead => "SERVICE_REPORT_LEAD",
             Self::PoliceStopLead => "POLICE_STOP_LEAD",
+            Self::AbatementLogLead => "ABATEMENT_LOG_LEAD",
         }
     }
 
@@ -342,6 +348,7 @@ impl FindingKind {
             Self::RollingProduction,
             Self::ServiceReportLead,
             Self::PoliceStopLead,
+            Self::AbatementLogLead,
         ]
         .into_iter()
         .find(|candidate| candidate.as_str() == value)
@@ -446,6 +453,9 @@ impl FindingKind {
             Self::ServiceReportLead => false,
             // Counts of the department's own stop records, compared without adjustment.
             Self::PoliceStopLead => false,
+            // Two recorded times with no stated minimum to count them against;
+            // `EncampmentNoticeShortfall` is the kind that has one.
+            Self::AbatementLogLead => false,
         }
     }
 }

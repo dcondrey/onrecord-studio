@@ -54,7 +54,8 @@ export type FindingKind =
   | 'REDACTION_INCONSISTENT_ACROSS_RELEASES'
   | 'ROLLING_PRODUCTION'
   | 'SERVICE_REPORT_LEAD'
-  | 'POLICE_STOP_LEAD';
+  | 'POLICE_STOP_LEAD'
+  | 'ABATEMENT_LOG_LEAD';
 
 /**
  * How a finding's confidence was derived. `UNASSESSED` distinguishes an unmeasured rung from a
@@ -127,7 +128,7 @@ export interface EvidenceGapView {
 /** One discovery-feed lead sent to `record_service_leads`. Mirrors `analysis/service_leads.rs`. */
 export interface ServiceLeadInput {
   /** Which published records the lead was counted from; decides the finding kind. */
-  family: 'SERVICE_REPORTS' | 'POLICE_STOPS';
+  family: 'SERVICE_REPORTS' | 'POLICE_STOPS' | 'ABATEMENT_LOGS';
   key: string;
   snapshotId: string;
   title: string;

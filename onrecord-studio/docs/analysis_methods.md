@@ -348,3 +348,16 @@ A persons table is one with `id`, `pid` and `perceivedunhoused` columns (SDPD's 
 ### C. What a lead does and does not claim
 Perception is the officer's entry, not housing status. A person can have several results and several reasons and is counted under each. Rates are not adjusted for where officers were assigned. A difference in rates is not a finding of unequal treatment, and the lead says so. The property table records a basis, not where property was kept or whether it was returned or discarded.
 
+## 19. Abatement Log Leads
+
+`src/utils/abatementLeads.ts`, run by automatic discovery and stored as `ABATEMENT_LOG_LEAD` findings (§17 E). Verified natively by `tests/data_discovery.rs::abatement_logs_pair_one_notice_with_one_abatement_in_the_released_format`, which imports two tables with the headers and the `7/1/2025, 8:00 AM` time format of the logs San Diego released to requests 25-5806 and 26-772.
+
+### A. Which tables are read
+A notice log has a posting-time column (`date_posted`, …), an address column and latitude and longitude columns. A completion log has a closing-time column (`date_time_closed`, …) and the same place columns, and no posting-time column. A table with service-report roles (§17 A) is neither. The check runs on a notice log when a completion log is imported, using the latest one. Released spreadsheets import as general tables whose types are inferred from values, so the time text is kept as recorded and parsed in the query.
+
+### B. What is counted
+Rows are keyed by the address text (trimmed, lower case) and the coordinates rounded to five decimal places. Hours from posting to closing are counted only at places with exactly one notice and exactly one abatement, so a notice is never paired with another notice's abatement: completed before posting, within 3 hours, within 24 hours, from 24 to 72 hours, 72 hours or more, and the median of the non-negative values. Also counted: abatements dated between the first and last posting at a place with no notice in the log, and notices with no coordinates or no readable time. A lead needs 30 paired places.
+
+### C. What a lead does and does not claim
+The logs record a posting time and a closing time. They do not record the notice period that applied, so 24 and 72 hours are yardsticks and the lead is not a finding that notice fell short; `ENCAMPMENT_NOTICE_SHORTFALL` (a notice document against a stated minimum) is the kind that makes that comparison. Notice may have been given by a route the posting log does not record, and two rows at one place can be different events. Neither log records whether anyone was present or what was done with belongings.
+

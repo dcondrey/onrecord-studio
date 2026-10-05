@@ -1024,12 +1024,31 @@ Built 2026-10-04: leads from SDPD's published stop records (methods §18), fetch
 - Property seized from people perceived as unhoused: evidence 1,810, contraband 1,501, vehicle
   impound 212, safekeeping 151, abandoned property 32. Nothing published says where it went.
 
+Built 2026-10-04: hours between a posted abatement notice and the abatement, from released logs
+(methods §19). Measured with the app's SQL on the two logs in the 2026-10-03 collection (25-5806
+notices posted 2023-08-01 to 2025-07-28; 26-772 abatements completed to 2026-01-28): 11,090
+notices, 14,000 abatements; 2,067 places with exactly one of each; 22 completed within 3 hours of
+posting, 101 within 24 hours, 1,811 from 24 to 72 hours, 144 later; median 29.3 hours; 11 recorded
+completed before posting; 214 of 11,104 abatements in the notice period at a place with no notice
+in the log. The collection is copied to `/Volumes/A/onrecord-eval/eval-encampment-2` (core.db
+paths still point at the original temp directory; files are under `downloads/objects/`). It also
+holds SDPD arrest and citation exports (26-6187, 25-7080, 22-2226 with race) and Urban Corps
+cleanup invoices with labour cost and tonnage per day (25-8547); none is read by a check yet.
+
 Measured, not built:
 - Open Encampment reports in Get It Done (2026-09-14 copy): 2,036; median age 7 to 14 days in
   eight districts and 903.5 days in District 4 (158 reports); 850 days for the 29 held by DSD.
 - The owner's library holds 3 requests from sandiego.nextrequest.com. The 142-request encampment
   collection measured on 2026-10-03 was made by `ingestion::live_evaluation` into a separate
   directory and is not in the library.
+- Contractor billing for abatement crews (Urban Corps invoices released to 25-8547), read by a
+  one-off script, not the app: 2,013 crew-days from 2025-01-02 to 2025-09-30 in the sheets that
+  share one layout, labour 2,076,060 and vehicle fees 295,206 dollars, 672.3 tons recorded, so
+  about 3,527 dollars per recorded ton. 1,471 crew-days record no tonnage (1,066 blank, 405
+  zero), costing 1,790,050. Unverified: the monthly files repeat earlier months' sheets (deduplicated
+  by date, crew and labour cost), earlier invoices use other layouts and were skipped, a blank
+  tonnage is not zero, and some crews (police support) may not haul. Needs a parser for the
+  invoice layout before any lead.
 - Closure times by year (2016 to 2018 closed files) cannot be read as a slowdown: files are keyed
   by close year and the programme began 2016-05-20, so early years cannot hold old reports.
 - Where referred reports went is recorded in Get It Done's `referred` column (closed 2018:
@@ -1037,9 +1056,14 @@ Measured, not built:
 
 Next, in order:
 1. Collect the owner's subjects from sandiego.nextrequest.com into the library from inside the
-   app (the live evaluation's collection by subject, as a user action), then read the released
-   tables: abatement logs, stored-property logs, citation exports, shelter capacity reports.
-   Role-based checks need real released files to be designed against; none is in the library.
+   app (the live evaluation's collection by subject, as a user action). The checks above only
+   fire once the released spreadsheets are in the library and imported as tables; today that
+   needs the owner to add the portal and import each sheet. Then checks for the other released
+   tables: SDPD citation and arrest exports (the columns `encampment_ordinance.rs` already
+   reads), and contractor invoices (cost and tonnage per abatement day against the budget).
+1a. A stated notice minimum: with the City's abatement procedure in the library as a stored
+   authority, the abatement log counts could be compared with it as `encampment_notice.rs` does
+   for notice documents.
 2. Stored versus discarded property: no published table records it. The stop records give the
    seizure basis only. The check has to come from released abatement and storage logs (item 1).
 3. Encampment reports by area and staff group as their own lead (District 4, above).

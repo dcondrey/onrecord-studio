@@ -478,3 +478,57 @@ async fn stop_record_checks_run_on_imported_tables_with_the_publishers_headers()
         }
     }
 }
+
+#[tokio::test]
+async fn abatement_logs_pair_one_notice_with_one_abatement_in_the_released_format() {
+    let fixture: Value =
+        serde_json::from_str(include_str!("fixtures/abatement-leads.json")).unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let db = DuckDbRepository::new(temp.path().join("abatement.db")).unwrap();
+    db.run_migrations(include_str!("../migrations/0001_initial_schema.sql"))
+        .await
+        .unwrap();
+    let mut sql = fixture["queries"][0]["sql"].as_str().unwrap().to_string();
+    for name in ["posted", "completed"] {
+        let path = temp.path().join(format!("{name}.csv"));
+        std::fs::write(&path, fixture["csv"][name].as_str().unwrap()).unwrap();
+        let input: AnalyticalImportRequest = serde_json::from_value(json!({ "datasetKind":"REGIONAL_DATA", "displayName":name, "localPath":path, "sourceUri":format!("https://example.test/{name}.csv"), "partialDataset":true })).unwrap();
+        let imported = db.import_analytical_csv(input).await.unwrap();
+        // "7/1/2025, 8:00 AM" is kept as recorded rather than refused as an unreadable date.
+        assert_eq!(
+            (imported.imported_rows, imported.rejected_rows),
+            (7, 0),
+            "{name}"
+        );
+        sql = sql.replace(&format!("analysis_abatement_{name}"), &imported.table_name);
+    }
+    let result = db.execute_restricted_sql(&sql, 100).await.unwrap();
+    assert_eq!(result.row_count, 1);
+    let number = |name: &str| -> f64 {
+        let value = cell(&result, 0, name);
+        value
+            .as_f64()
+            .or_else(|| value.as_str().and_then(|text| text.parse().ok()))
+            .unwrap_or_else(|| panic!("{name} is not numeric: {value}"))
+    };
+    for (column, expected) in [
+        ("posted_notices", 7.0),
+        ("completed_abatements", 7.0),
+        // The notice with no coordinates.
+        ("notices_not_matchable", 1.0),
+        // The place with two notices is not paired with its one abatement.
+        ("paired_places", 4.0),
+        ("completed_before_posted", 1.0),
+        ("under_3_hours", 1.0),
+        ("under_24_hours", 1.0),
+        ("from_24_to_72_hours", 1.0),
+        ("over_72_hours", 1.0),
+        ("median_hours", 30.0),
+        // The abatement after the last notice is outside the notice log's period.
+        ("abatements_in_notice_period", 6.0),
+        ("abatements_without_notice_in_log", 1.0),
+    ] {
+        assert_eq!(number(column), expected, "{column}");
+    }
+    assert_eq!(cell(&result, 0, "last_posted"), &json!("2025-07-10"));
+}

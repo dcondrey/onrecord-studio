@@ -32,6 +32,7 @@ const MAX_TEXT_CHARS: usize = 6_000;
 pub enum LeadFamily {
     ServiceReports,
     PoliceStops,
+    AbatementLogs,
 }
 
 impl LeadFamily {
@@ -39,6 +40,7 @@ impl LeadFamily {
         match self {
             Self::ServiceReports => FindingKind::ServiceReportLead,
             Self::PoliceStops => FindingKind::PoliceStopLead,
+            Self::AbatementLogs => FindingKind::AbatementLogLead,
         }
     }
 }

@@ -228,6 +228,11 @@ export const PLAIN_FINDING_TEXT: Record<FindingKind, PlainText> = {
     notShown: 'It does not show that a deadline was missed. The requester may have agreed to installments or changed the request.',
     next: "Read the request's correspondence for a production schedule or a change of scope.",
   },
+  ABATEMENT_LOG_LEAD: {
+    observed: "A count from an agency's released encampment abatement logs: the hours between a notice being posted and the abatement at the same place, and abatements at places with no notice in the log.",
+    notShown: 'It does not show that too little notice was given. The logs do not record the notice period that applied, whether anyone was present, or what was done with belongings.',
+    next: "Ask the agency for its abatement procedure, the notices as posted and the stored-property log for the places listed.",
+  },
   POLICE_STOP_LEAD: {
     observed: "A count from a police department's published stop records: how often people an officer perceived as unhoused were stopped, arrested, cited or had property seized, and the recorded reasons.",
     notShown: "It does not show unequal treatment. Rates are not adjusted for where stops were made, and perception is the officer's entry.",
