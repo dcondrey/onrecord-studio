@@ -26,15 +26,21 @@ state lookup. Prefer `DuckDbRepository` in new code; both are exported from `sto
 
 ### Analytical imports
 
-`storage::sqlite::analytical_import` reads a delimited file twice from disk (profile, then write),
-hashing each read; the two digests must agree or the transaction stores nothing. Workbooks and
-JSON are parsed whole and keep the in-memory caps in `storage::tabular`. A row is rejected only when
+`storage::sqlite::analytical_import` parses the source once. That read hashes the file, writes
+every record's original cells to a staging column store and profiles each column; once the column
+types are decided, the typed table is built from the stored originals in 50,000-row ranges.
+Delimited text and XLSX worksheets are streamed from disk, through one XLSX reader
+(`parsers::excel::xlsx_value_bounds`) shared with document extraction; a worksheet that stores its
+cells out of row order is refused with a way forward. XLS, XLSB, ODS and JSON are parsed whole and
+keep the in-memory caps in `storage::tabular`. A row is rejected only when
 the file makes it unreadable (parse failure, or a field count other than the header's beyond empty
 trailing fields). A cell that does not convert to its column's type is NULL in the typed table,
 kept as written, and counted in `validationSummary.unconvertedByColumn`; finance, budget-line and
 facility gates count those cells in the columns they read, so a NULL never passes as complete
 coverage. A documented column type is dropped to text only when no value converts. `n/n/yyyy`
-dates convert only when the column's own values settle day and month order.
+dates convert only when the column's own values settle day and month order. Plain decimals beyond
+exact scale, and documented coordinate columns, are `FLOAT` (DOUBLE): approximate by declaration,
+with the original text kept in the column store.
 
 Original cells live per snapshot in `analysis_src_<id>`, one text column per source column, keyed
 by `_row`; the typed table carries `_source_row` (its latest view excludes it). Snapshots imported
