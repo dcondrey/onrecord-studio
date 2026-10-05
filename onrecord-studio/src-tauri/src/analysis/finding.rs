@@ -257,6 +257,12 @@ pub enum FindingKind {
     /// The log records the charge, not housing status, so this is not a finding about who was
     /// charged or why.
     ChargeLogLead,
+    /// An agency's releases began at or after 3 p.m. on the last working day before a weekend or
+    /// California court holiday at a share at least twice, and ten points above, that of the
+    /// other releases on the same portal. A count of the portal's recorded upload times. It does
+    /// not show why the uploads fall where they do: work is often finished and posted at the end
+    /// of a week, and the portal does not record when an uploaded file was made public.
+    ReleaseTimingConcentration,
 }
 
 impl FindingKind {
@@ -307,6 +313,7 @@ impl FindingKind {
             Self::PoliceStopLead => "POLICE_STOP_LEAD",
             Self::AbatementLogLead => "ABATEMENT_LOG_LEAD",
             Self::ChargeLogLead => "CHARGE_LOG_LEAD",
+            Self::ReleaseTimingConcentration => "RELEASE_TIMING_CONCENTRATION",
         }
     }
 
@@ -357,6 +364,7 @@ impl FindingKind {
             Self::PoliceStopLead,
             Self::AbatementLogLead,
             Self::ChargeLogLead,
+            Self::ReleaseTimingConcentration,
         ]
         .into_iter()
         .find(|candidate| candidate.as_str() == value)
@@ -466,6 +474,8 @@ impl FindingKind {
             Self::AbatementLogLead => false,
             // Counts of charges as the department recorded them.
             Self::ChargeLogLead => false,
+            // Two shares of counted upload times. When work is posted breaks no rule.
+            Self::ReleaseTimingConcentration => false,
         }
     }
 }

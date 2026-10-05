@@ -355,6 +355,10 @@ pub fn falsification_for(kind: FindingKind) -> DossierFalsification {
             "The requester narrowed or added to the request, agreed to installments, or the records were found and reviewed in stages.",
             &["the request's correspondence on scope and schedule", "any production schedule or extension notice the agency sent"],
         ),
+        FindingKind::ReleaseTimingConcentration => (
+            "Staff finish and post work at the end of the week, or the requests released then fell due then.",
+            &["the request log with each request's due date and assigned staff", "the portal's document activity log showing when each file was uploaded and when it was made public"],
+        ),
         FindingKind::RedactionInconsistentAcrossReleases => (
             "The two copies are different versions of the record, or the later release applied an exemption the earlier one did not.",
             &["both releases with their response letters and cited exemptions", "the redaction log or review notes for each request"],

@@ -12,6 +12,7 @@
 //! **Bounds**: reads at most `MAX_CANDIDATES` documents per invocation; caller runs the sweep on
 //! ingest completion and on explicit refresh, no background heartbeat.
 
+use super::release_timing::{portal_upload_time, ReleaseBasis, PORTAL_LISTED_FILE};
 use crate::{
     analysis::finding::{
         finding_id, Finding, FindingCitation, FindingConfidence, FindingKind, FindingSeverity,
@@ -58,6 +59,7 @@ struct Candidate {
     file_name: Option<String>,
     local_path: String,
     release_at: DateTime<Utc>,
+    release_basis: ReleaseBasis,
     deadline_at: DateTime<Utc>,
 }
 
@@ -87,25 +89,27 @@ async fn load_candidates(repository: &DuckDbRepository) -> Result<Vec<Candidate>
     repository
         .query_connection("Held-back-response candidate query", move |conn| {
             // Response documents = public documents attached to a request whose determination_at
-            // and due_date are both known. The determination_at is our best available
-            // release-timestamp proxy (per this project's DeterminationBasis model); due_date is
-            // the statutory deadline the request was working against.
+            // and due_date are both known. A file's release time is the portal's own upload time
+            // for it when one is recorded, and the request's determination_at otherwise;
+            // due_date is the statutory deadline the request was working against.
             let mut statement = conn
-                .prepare(
+                .prepare(&format!(
                     "SELECT d.id, d.portal_subdomain, d.request_id, d.file_name, d.local_path,
-                        r.determination_at, r.due_date
+                        r.determination_at, r.due_date,
+                        CASE WHEN {PORTAL_LISTED_FILE} THEN d.created_at END, r.created_at
                      FROM documents d
                      JOIN requests r
                         ON r.id = d.request_id
                        AND r.portal_subdomain = d.portal_subdomain
+                     LEFT JOIN portals p ON p.subdomain = d.portal_subdomain
                      WHERE d.local_path IS NOT NULL
                        AND LOWER(TRIM(d.visibility)) = 'public'
                        AND LOWER(COALESCE(d.content_type, '')) LIKE 'application/pdf%'
                        AND r.determination_at IS NOT NULL
                        AND r.due_date IS NOT NULL
                      ORDER BY r.determination_at DESC
-                     LIMIT ?1",
-                )
+                     LIMIT ?1"
+                ))
                 .map_err(|error| {
                     AppError::Storage(format!(
                         "Failed to prepare held-back candidate query: {error}"
@@ -121,6 +125,8 @@ async fn load_candidates(repository: &DuckDbRepository) -> Result<Vec<Candidate>
                         row.get::<_, String>(4)?,
                         row.get::<_, String>(5)?,
                         row.get::<_, String>(6)?,
+                        row.get::<_, Option<String>>(7)?,
+                        row.get::<_, String>(8)?,
                     ))
                 })
                 .map_err(|error| {
@@ -136,11 +142,21 @@ async fn load_candidates(repository: &DuckDbRepository) -> Result<Vec<Candidate>
                     local_path,
                     determination_at,
                     due_date,
+                    portal_file_time,
+                    request_created_at,
                 ) = row.map_err(|error| {
                     AppError::Storage(format!("Failed to decode candidate row: {error}"))
                 })?;
-                let Ok(release_at) = parse_iso(&determination_at) else {
-                    continue;
+                let uploaded = portal_file_time
+                    .and_then(|value| portal_upload_time(&value, &request_created_at));
+                let (release_at, release_basis) = match uploaded {
+                    Some(uploaded) => (uploaded.with_timezone(&Utc), ReleaseBasis::DocumentUpload),
+                    None => {
+                        let Ok(determined) = parse_iso(&determination_at) else {
+                            continue;
+                        };
+                        (determined, ReleaseBasis::RequestDetermination)
+                    }
                 };
                 let Ok(deadline_at) = parse_iso(&due_date) else {
                     continue;
@@ -152,6 +168,7 @@ async fn load_candidates(repository: &DuckDbRepository) -> Result<Vec<Candidate>
                     file_name,
                     local_path,
                     release_at,
+                    release_basis,
                     deadline_at,
                 });
             }
@@ -360,13 +377,14 @@ fn evaluate(candidate: &Candidate, dates: PdfMetadataDates) -> Option<Finding> {
         "xmp:ModifyDate"
     };
     let explanation = format!(
-        "\"{file_name}\" (request {request_id}) was released on {release} \
+        "\"{file_name}\" (request {request_id}) was released on {release} ({basis}) \
          but its {signal_source} shows it was last modified on {edited} \
          — {holdback_days} day{plural} earlier. The release landed within {wire_hours}h of \
          the statutory deadline ({deadline}), consistent with a document that was ready \
          earlier and held back until the wire.",
         request_id = candidate.request_id,
         release = format_short(candidate.release_at),
+        basis = candidate.release_basis.describe(),
         edited = format_short(effective_mod),
         plural = if holdback_days == 1 { "" } else { "s" },
         wire_hours = AT_THE_WIRE_HOURS,
@@ -418,6 +436,7 @@ mod tests {
             file_name: Some("response.pdf".into()),
             local_path: "/tmp/response.pdf".into(),
             release_at,
+            release_basis: ReleaseBasis::RequestDetermination,
             deadline_at,
         }
     }
@@ -590,5 +609,23 @@ mod tests {
         let a = evaluate(&candidate, dates).unwrap();
         let b = evaluate(&candidate, dates).unwrap();
         assert_eq!(a.id, b.id, "same evidence must produce same id for upsert");
+    }
+
+    #[tokio::test]
+    async fn a_file_is_timed_by_its_own_upload_and_by_the_determination_only_without_one() {
+        let repository = super::super::release_timing::repository_with_one_dated_upload().await;
+        let candidates = load_candidates(&repository).await.expect("load");
+        let timed = |id: i64| {
+            let candidate = candidates
+                .iter()
+                .find(|candidate| candidate.document_id == id)
+                .expect("candidate");
+            (candidate.release_at, candidate.release_basis)
+        };
+        let uploaded = Utc.with_ymd_and_hms(2026, 3, 4, 23, 30, 0).unwrap();
+        let determined = Utc.with_ymd_and_hms(2026, 3, 5, 20, 0, 0).unwrap();
+        assert_eq!(timed(1), (uploaded, ReleaseBasis::DocumentUpload));
+        assert_eq!(timed(2), (determined, ReleaseBasis::RequestDetermination));
+        assert_eq!(timed(3), (determined, ReleaseBasis::RequestDetermination));
     }
 }

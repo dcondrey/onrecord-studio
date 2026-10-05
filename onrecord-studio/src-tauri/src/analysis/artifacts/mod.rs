@@ -150,7 +150,9 @@ impl DraftFamily {
             | FindingKind::AbatementLogLead
             | FindingKind::ChargeLogLead
             // A description of how a release was spread out; it identifies no gap to ask about.
-            | FindingKind::RollingProduction => Self::NoDraft,
+            | FindingKind::RollingProduction
+            // A count of when uploads were recorded; it identifies no gap in the records.
+            | FindingKind::ReleaseTimingConcentration => Self::NoDraft,
         }
     }
 }
@@ -395,7 +397,7 @@ mod tests {
     use super::*;
     use crate::analysis::finding::{FindingSeverity, FindingSubject};
 
-    pub(crate) fn all_kinds() -> [FindingKind; 26] {
+    pub(crate) fn all_kinds() -> [FindingKind; 27] {
         use FindingKind::*;
         [
             HeldBackResponse,
@@ -424,6 +426,7 @@ mod tests {
             EncampmentNoticeStatedShortfall,
             RedactionInconsistentAcrossReleases,
             RollingProduction,
+            ReleaseTimingConcentration,
         ]
     }
 
