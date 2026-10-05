@@ -50,6 +50,14 @@ that adds or removes a snapshot; never write to it. Its row hash for a column-st
 SHA-256 of the row's original fields as a JSON array; ledger rows keep the hash they were stored
 with.
 
+A parser-version change re-imports every automatic table as a new snapshot. The superseded one is
+kept: a snapshot is a record of what was imported, and the latest view and new queries already read
+the newest. Measured on a 5.3 GB core (2026-10-05): 24 tables, 6.49M rows, about 70 s, file
+1.73 -> 2.90 GB after the startup storage rewrite; none of the 11 superseded snapshots was cited by
+a lead, finding or text column. Row numbers and original cells match across the two snapshots, so
+geospatial monitoring skips a row a same-source snapshot (same SHA-256 and URI) already observed
+rather than raising it again unreviewed.
+
 ## 2. Derived projections
 
 Everything below is rebuildable from the core. None of it is evidence in its own right.
