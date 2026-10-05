@@ -238,6 +238,7 @@ async fn load_denials(repository: &DuckDbRepository) -> Result<Vec<Denial>, AppE
                         ON agencies.id = requests.agency_id
                        AND agencies.portal_subdomain = requests.portal_subdomain
                      WHERE LOWER(TRIM(documents.visibility)) = 'public'
+                       AND documents.portal_subdomain NOT IN (SELECT subdomain FROM user_supplied_sources)
                        AND LENGTH(documents_fts.extracted_text) > 0
                        AND (
                            LOWER(documents_fts.extracted_text) LIKE '%no responsive records%' OR
