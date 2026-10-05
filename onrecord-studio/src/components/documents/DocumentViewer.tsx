@@ -2,7 +2,8 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useC2PA } from '../../hooks/useC2PA';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { invokeCommand } from '../../ipc';
-import type { DocumentClaimChecks, EvidenceBundle, ForensicFinding, ProvenanceConfidence, ProvenanceVerificationRecord, RecoveredVersionProfile } from '../../types';
+import type { DocumentClaimChecks, DocumentInternalMetadata, DocumentOriginReport, EvidenceBundle, ForensicFinding, ProvenanceConfidence, ProvenanceVerificationRecord, RecoveredVersionProfile } from '../../types';
+import DocumentOriginPanel from './DocumentOriginPanel';
 import DocumentAnnotations, { type AnnotationAnchor, type PassageTarget } from './DocumentAnnotations';
 import { findPassageInText } from './annotationLogic';
 import { ANNOTATION_LIMITS } from '../../types';
@@ -64,6 +65,11 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
   const shareGate = useLatestRequestGate();
   const claimGate = useLatestRequestGate();
   const packGate = useLatestRequestGate();
+  const originGate = useLatestRequestGate();
+  const [originReport, setOriginReport] = useState<DocumentOriginReport | null>(null);
+  const [originFailed, setOriginFailed] = useState(false);
+  const [internalMetadata, setInternalMetadata] = useState<DocumentInternalMetadata | null>(null);
+  const [internalMetadataFailed, setInternalMetadataFailed] = useState(false);
   const [packState, setPackState] = useState<'idle' | 'pending' | 'failed'>('idle');
   const [packError, setPackError] = useState<string | null>(null);
   const [truncatedEntityKinds, setTruncatedEntityKinds] = useState<string[]>([]);
@@ -170,6 +176,34 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
         // No answer leaves the notice hidden; only a recorded truncation is worth stating.
       });
   }, [documentId, portalKey, truncationGate]);
+
+  // Whether a file was added by hand is a statement about that file. A report for document A
+  // arriving under document B would label B with A's origin and A's matches.
+  useEffect(() => {
+    const request = originGate.begin();
+    setOriginReport(null);
+    setOriginFailed(false);
+    setInternalMetadata(null);
+    setInternalMetadataFailed(false);
+    void (async () => {
+      let report: DocumentOriginReport;
+      try {
+        report = await invokeCommand('describe_document_origin', { documentId, portalKey });
+      } catch {
+        if (originGate.isCurrent(request)) setOriginFailed(true);
+        return;
+      }
+      if (!originGate.isCurrent(request)) return;
+      setOriginReport(report);
+      if (report.origin !== 'ADDED_BY_USER') return;
+      try {
+        const metadata = await invokeCommand('read_document_internal_metadata', { documentId, portalKey });
+        if (originGate.isCurrent(request)) setInternalMetadata(metadata);
+      } catch {
+        if (originGate.isCurrent(request)) setInternalMetadataFailed(true);
+      }
+    })();
+  }, [documentId, originGate, portalKey]);
 
   useEffect(() => { setTextPage(0); setActiveMatch(0); }, [characterOffset, textContent]);
 
@@ -397,6 +431,14 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
         {shareStatus && <span role="status" className="text-success">{shareStatus}</span>}
         {briefingStatus && <span role="status" className="text-success">{briefingStatus}</span>}
       </div>
+      {originFailed && (
+        <p role="alert" className="border-b border-line px-4 py-2 text-caption text-warning">
+          Could not determine whether this file was collected from a source or added by hand.
+        </p>
+      )}
+      {originReport?.origin === 'ADDED_BY_USER' && (
+        <DocumentOriginPanel report={originReport} metadata={internalMetadata} metadataFailed={internalMetadataFailed} />
+      )}
       {manifestForActiveDocument && manifestForActiveDocument.claimGraph.claims.length > 0 && (
         <ProvenanceGraphPanel graph={manifestForActiveDocument.claimGraph} />
       )}

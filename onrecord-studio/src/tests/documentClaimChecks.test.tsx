@@ -19,6 +19,7 @@ const bridge = vi.hoisted(() => ({
 vi.mock('../ipc', () => ({
   invokeCommand: (command: string, args?: { documentId?: number }) => {
     if (command === 'get_document_entity_truncations') return Promise.resolve([]);
+    if (command === 'describe_document_origin') return Promise.resolve({ origin: 'COLLECTED_FROM_SOURCE', heldRelation: null });
     if (command === 'export_claim_query_pack') {
       const documentId = args?.documentId ?? 0;
       bridge.packRequests.push(documentId);
