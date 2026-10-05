@@ -1374,6 +1374,11 @@ precise request to file when it cannot, and track each request through submissio
 follow-up; and (2) check an organisation's public filings, not have a session read them once.
 Nothing here is built yet.
 
+Both must work for other subjects and places, not only San Diego homelessness (owner, same day):
+gap definitions are data keyed to what a lead read, not code about one city; the custodian,
+portal and statute come from the source the lead's table or document came from; the seed set
+below is the first content, not the design. The organisation check takes any EIN.
+
 The owner's five hypotheses, which rank the gaps to seed first (to test, not to assume): police
 spending on homelessness enforcement buys little; the City and police do not follow their own
 rules on storing belongings and returning them; sweeps accomplish little and make stability
