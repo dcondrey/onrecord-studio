@@ -228,6 +228,11 @@ export const PLAIN_FINDING_TEXT: Record<FindingKind, PlainText> = {
     notShown: 'It does not show that a deadline was missed. The requester may have agreed to installments or changed the request.',
     next: "Read the request's correspondence for a production schedule or a change of scope.",
   },
+  POLICE_STOP_LEAD: {
+    observed: "A count from a police department's published stop records: how often people an officer perceived as unhoused were stopped, arrested, cited or had property seized, and the recorded reasons.",
+    notShown: "It does not show unequal treatment. Rates are not adjusted for where stops were made, and perception is the officer's entry.",
+    next: 'Ask the department for the stops by reason, beat and warrant status, and for its property log.',
+  },
   SERVICE_REPORT_LEAD: {
     observed: "A count from a publisher's table of service reports: reports still open, an area slower than the others, a place reported many times, or reports that left the open file.",
     notShown: 'It does not show that a problem persists or that work was not done. The table records no inspections, repairs or crews.',

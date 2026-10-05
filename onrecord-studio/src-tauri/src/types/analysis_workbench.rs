@@ -169,6 +169,11 @@ pub enum CityDataset {
     TransitStops,
     /// Every published year of the operating budget in one file.
     OperatingBudget,
+    /// SDPD stop records (RIPA): one row per person stopped.
+    RipaStops,
+    RipaStopReasons,
+    RipaStopResults,
+    RipaPropertySeizureBasis,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

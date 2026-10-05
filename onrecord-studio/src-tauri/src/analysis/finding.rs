@@ -240,6 +240,12 @@ pub enum FindingKind {
     /// discovery feed's SQL and recorded as sent; a count of the publisher's rows, not a finding
     /// that a duty was breached.
     ServiceReportLead,
+    /// A count read from a police department's published stop records (RIPA): how often people
+    /// the officer perceived as unhoused were stopped, arrested, cited or had property seized,
+    /// and for what recorded reasons. Counted by the discovery feed's SQL and recorded as sent.
+    /// A difference in rates is not adjusted for the reason for the stop and is not a finding of
+    /// unequal treatment.
+    PoliceStopLead,
 }
 
 impl FindingKind {
@@ -287,6 +293,7 @@ impl FindingKind {
             Self::RedactionInconsistentAcrossReleases => "REDACTION_INCONSISTENT_ACROSS_RELEASES",
             Self::RollingProduction => "ROLLING_PRODUCTION",
             Self::ServiceReportLead => "SERVICE_REPORT_LEAD",
+            Self::PoliceStopLead => "POLICE_STOP_LEAD",
         }
     }
 
@@ -334,6 +341,7 @@ impl FindingKind {
             Self::RedactionInconsistentAcrossReleases,
             Self::RollingProduction,
             Self::ServiceReportLead,
+            Self::PoliceStopLead,
         ]
         .into_iter()
         .find(|candidate| candidate.as_str() == value)
@@ -436,6 +444,8 @@ impl FindingKind {
             Self::RollingProduction => false,
             // Counts of a publisher's rows. The table records no inspections, work or duty.
             Self::ServiceReportLead => false,
+            // Counts of the department's own stop records, compared without adjustment.
+            Self::PoliceStopLead => false,
         }
     }
 }

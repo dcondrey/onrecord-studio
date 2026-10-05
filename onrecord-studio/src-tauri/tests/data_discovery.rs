@@ -372,3 +372,109 @@ async fn service_report_checks_run_on_real_imported_rows() {
         }
     }
 }
+
+#[tokio::test]
+async fn stop_record_checks_run_on_imported_tables_with_the_publishers_headers() {
+    let fixture: Value = serde_json::from_str(include_str!("fixtures/stop-leads.json")).unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let db = DuckDbRepository::new(temp.path().join("stops.db")).unwrap();
+    db.run_migrations(include_str!("../migrations/0001_initial_schema.sql"))
+        .await
+        .unwrap();
+    let mut tables = Vec::new();
+    for name in ["stops", "results", "reasons", "property"] {
+        let path = temp.path().join(format!("{name}.csv"));
+        std::fs::write(&path, fixture["csv"][name].as_str().unwrap()).unwrap();
+        let kind = if name == "stops" {
+            "RIPA_STOPS"
+        } else {
+            "REGIONAL_DATA"
+        };
+        let input: AnalyticalImportRequest = serde_json::from_value(json!({ "datasetKind":kind, "displayName":name, "localPath":path, "sourceUri":format!("https://example.test/{name}.csv"), "partialDataset":true })).unwrap();
+        let imported = db.import_analytical_csv(input).await.unwrap();
+        assert_eq!(imported.rejected_rows, 0, "{name}");
+        tables.push((format!("analysis_stop_{name}"), imported.table_name));
+    }
+    let count = |result: &SqlQueryResult, row: usize, name: &str| -> i64 {
+        let value = cell(result, row, name);
+        value
+            .as_i64()
+            .or_else(|| value.as_str().and_then(|text| text.parse().ok()))
+            .unwrap_or_else(|| panic!("{name} is not a count: {value}"))
+    };
+    let row_of = |result: &SqlQueryResult, column: &str, value: Value| -> usize {
+        (0..result.row_count)
+            .find(|row| cell(result, *row, column) == &value)
+            .unwrap_or_else(|| panic!("no row with {column} = {value}"))
+    };
+    for query in fixture["queries"].as_array().unwrap() {
+        let id = query["id"].as_str().unwrap();
+        let mut sql = query["sql"].as_str().unwrap().to_string();
+        for (placeholder, table) in &tables {
+            sql = sql.replace(placeholder, table);
+        }
+        let result = db
+            .execute_restricted_sql(&sql, 100)
+            .await
+            .unwrap_or_else(|e| panic!("{id}: {e}"));
+        match id {
+            "stops_unhoused_outcomes" => {
+                assert_eq!(result.row_count, 3);
+                let unhoused = row_of(&result, "perceived", json!("unhoused"));
+                // One warrant arrest, one arrest without a warrant whose person was also cited.
+                for (column, expected) in [
+                    ("persons", 3),
+                    ("arrested", 2),
+                    ("arrested_on_warrant", 1),
+                    ("arrested_without_warrant", 1),
+                    ("cited", 1),
+                    ("no_result_row", 0),
+                    ("property_seized", 1),
+                ] {
+                    assert_eq!(count(&result, unhoused, column), expected, "{column}");
+                }
+                // The year-23 stop date is not the first stop.
+                assert_eq!(cell(&result, unhoused, "first_stop"), &json!("2025-02-01"));
+                let others = row_of(&result, "perceived", json!("not unhoused"));
+                // Two persons in one stop are two persons; one has no result row.
+                for (column, expected) in [
+                    ("persons", 3),
+                    ("arrested", 0),
+                    ("cited", 2),
+                    ("no_result_row", 1),
+                    ("property_seized", 1),
+                ] {
+                    assert_eq!(count(&result, others, column), expected, "{column}");
+                }
+                // The older "0" entry is neither group.
+                assert_eq!(
+                    count(
+                        &result,
+                        row_of(&result, "perceived", Value::Null),
+                        "persons"
+                    ),
+                    1
+                );
+            }
+            "stops_unhoused_reasons" => {
+                assert_eq!(result.row_count, 2);
+                assert!(cell(&result, 0, "reason")
+                    .as_str()
+                    .unwrap()
+                    .starts_with("647(E)"));
+                assert_eq!(count(&result, 0, "unhoused_persons"), 2);
+                // The warrant arrest is not an arrest without a warrant.
+                assert_eq!(count(&result, 0, "unhoused_arrested"), 1);
+                assert_eq!(count(&result, 0, "other_persons"), 1);
+                assert_eq!(count(&result, 0, "other_arrested"), 0);
+            }
+            "stops_unhoused_property" => {
+                // The seizure from a person not perceived as unhoused is not listed.
+                assert_eq!(result.row_count, 2);
+                assert_eq!(cell(&result, 0, "basis"), &json!("Evidence"));
+                assert_eq!(count(&result, 0, "persons"), 1);
+            }
+            _ => panic!("Unverified query {id}"),
+        }
+    }
+}

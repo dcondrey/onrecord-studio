@@ -1,5 +1,6 @@
 import type { AnalyticalDatasetSummary, AnalyticalSchema, ServiceLeadInput, SqlQueryResult } from '../types';
 import { buildDiscoveryPlan, discoveryDefaults, type DiscoveryQuery, type DiscoverySelection } from './dataDiscovery';
+import { stopCompanions, stopLeads, stopQueries } from './stopLeads';
 import { backlogChangeLeads, budgetTable, recurringServiceLeads, serviceAccountabilityLeads, serviceAccountabilityQueries, serviceCompanions, serviceRequestRoles } from './serviceAccountability';
 
 export interface DiscoveryObservation {
@@ -13,6 +14,8 @@ export interface DiscoveryObservation {
   question: string;
   query?: DiscoveryQuery;
   selection?: DiscoverySelection;
+  /** Set on a lead: the published records it was counted from. */
+  family?: ServiceLeadInput['family'];
 }
 export interface AutomaticProfile {
   fingerprint: string;
@@ -35,7 +38,8 @@ export function snapshotFingerprint(schema: AnalyticalSchema, dataset: Analytica
   const companions = serviceCompanions(schema, dataset);
   const columns = schema.columns.filter((column) => column.tableName === dataset.tableName);
   return JSON.stringify([dataset, columns, companions ? [companions.earlier, ...companions.outcomes].map((table) => table.snapshotId) : [],
-    serviceRequestRoles(columns)?.group ? budgetTable(schema)?.snapshotId ?? null : null]);
+    serviceRequestRoles(columns)?.group ? budgetTable(schema)?.snapshotId ?? null : null,
+    Object.values(stopCompanions(schema, dataset) ?? {}).map((table) => table.snapshotId)]);
 }
 
 export function automaticProfileQuery(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary): DiscoveryQuery {
@@ -55,7 +59,7 @@ export function automaticFollowups(schema: AnalyticalSchema, dataset: Analytical
   // One consistent counting unit, no inferred sums, rates, or cross-publisher joins.
   const plan = buildDiscoveryPlan(schema, selection);
   return [...plan.queries.filter((query) => (query.id === 'coverage' && selection.period) || (query.id === 'groups' && selection.dimension) || (query.id === 'changes' && selection.period)),
-    ...serviceAccountabilityQueries(schema, dataset)];
+    ...serviceAccountabilityQueries(schema, dataset), ...stopQueries(schema, dataset)];
 }
 
 export function metadataObservations(dataset: AnalyticalDatasetSummary): DiscoveryObservation[] {
@@ -82,10 +86,11 @@ export function metadataObservations(dataset: AnalyticalDatasetSummary): Discove
 }
 
 export function profileObservations(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary, profile: AutomaticProfile): DiscoveryObservation[] {
-  const observations: DiscoveryObservation[] = serviceAccountabilityLeads(profile.results).map((lead) => ({
-    id: `${dataset.snapshotId}:${lead.key}`, snapshotId: dataset.snapshotId, kind: 'lead', priority: lead.priority,
-    title: lead.title, detail: lead.detail, question: lead.question, query: lead.query,
-  }));
+  const lead = (family: ServiceLeadInput['family']) => (item: ReturnType<typeof stopLeads>[number]): DiscoveryObservation => ({
+    id: `${dataset.snapshotId}:${item.key}`, snapshotId: dataset.snapshotId, kind: 'lead', family, priority: item.priority,
+    title: item.title, detail: item.detail, question: item.question, query: item.query,
+  });
+  const observations: DiscoveryObservation[] = [...serviceAccountabilityLeads(profile.results).map(lead('SERVICE_REPORTS')), ...stopLeads(profile.results).map(lead('POLICE_STOPS'))];
   const get = (id: string) => profile.results.find((entry) => entry.query.id === id);
   // A column's missing-value rate describes the source table's own completeness, not the subject
   // of the investigation; it stays on the import/quality screen rather than "what stands out".
@@ -130,7 +135,7 @@ export function profileObservations(schema: AnalyticalSchema, dataset: Analytica
 export function recurringObservations(schema: AnalyticalSchema, profiles: Record<string, AutomaticProfile>): DiscoveryObservation[] {
   const tables = schema.datasets.flatMap((dataset) => profiles[dataset.snapshotId] ? [{ snapshotId: dataset.snapshotId, displayName: dataset.displayName, sourceUri: dataset.sourceUri, retrievedAt: dataset.retrievedAt, results: profiles[dataset.snapshotId].results }] : []);
   return [...backlogChangeLeads(tables), ...recurringServiceLeads(tables)].map((lead) => ({
-    id: `${lead.snapshotId}:${lead.key}`, snapshotId: lead.snapshotId, kind: 'lead', priority: lead.priority,
+    id: `${lead.snapshotId}:${lead.key}`, snapshotId: lead.snapshotId, kind: 'lead', family: 'SERVICE_REPORTS', priority: lead.priority,
     title: lead.title, detail: lead.detail, question: lead.question, query: lead.query,
   }));
 }
@@ -139,9 +144,9 @@ export function recurringObservations(schema: AnalyticalSchema, profiles: Record
  * without error: a lead missing from an unfinished pass has not stopped holding. */
 export function storedLeads(schema: AnalyticalSchema, profiles: Record<string, AutomaticProfile>): { leads: ServiceLeadInput[]; complete: boolean } {
   const observations = [...schema.datasets.flatMap((dataset) => profiles[dataset.snapshotId] ? profileObservations(schema, dataset, profiles[dataset.snapshotId]) : []),
-    ...recurringObservations(schema, profiles)].filter((item) => item.kind === 'lead' && item.query);
+    ...recurringObservations(schema, profiles)].filter((item) => item.kind === 'lead' && item.query && item.family);
   return {
-    leads: observations.map((item) => ({ key: item.id, snapshotId: item.snapshotId, title: item.title, detail: item.detail, question: item.question, method: item.query!.method })),
+    leads: observations.map((item) => ({ family: item.family!, key: item.id, snapshotId: item.snapshotId, title: item.title, detail: item.detail, question: item.question, method: item.query!.method })),
     complete: schema.datasets.every((dataset) => profiles[dataset.snapshotId]?.results.every((entry) => !entry.error)),
   };
 }

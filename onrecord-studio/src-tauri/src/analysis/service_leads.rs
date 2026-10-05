@@ -26,9 +26,27 @@ const MAX_KEY_CHARS: usize = 400;
 const MAX_TITLE_CHARS: usize = 600;
 const MAX_TEXT_CHARS: usize = 6_000;
 
+/// Which published records a lead was counted from; decides the finding kind it is stored as.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum LeadFamily {
+    ServiceReports,
+    PoliceStops,
+}
+
+impl LeadFamily {
+    const fn kind(self) -> FindingKind {
+        match self {
+            Self::ServiceReports => FindingKind::ServiceReportLead,
+            Self::PoliceStops => FindingKind::PoliceStopLead,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ServiceLeadInput {
+    pub family: LeadFamily,
     /// The feed's own identifier for the lead, stable while its evidence is.
     pub key: String,
     pub snapshot_id: String,
@@ -90,7 +108,7 @@ pub fn to_findings(
             let subject = FindingSubject::default();
             Ok(Finding {
                 id: finding_id(
-                    FindingKind::ServiceReportLead,
+                    lead.family.kind(),
                     SLUG,
                     &subject,
                     &[
@@ -101,7 +119,7 @@ pub fn to_findings(
                         &lead.detail,
                     ],
                 ),
-                kind: FindingKind::ServiceReportLead,
+                kind: lead.family.kind(),
                 severity: FindingSeverity::Notable,
                 confidence: FindingConfidence::Unassessed,
                 subject,
@@ -177,6 +195,11 @@ mod tests {
 
     fn lead(key: &str, snapshot_id: &str) -> ServiceLeadInput {
         ServiceLeadInput {
+            family: if key.starts_with("b:") {
+                LeadFamily::PoliceStops
+            } else {
+                LeadFamily::ServiceReports
+            },
             key: key.into(),
             snapshot_id: snapshot_id.into(),
             title: format!("{key}: 12 of 40 open reports have been open more than a year"),
@@ -204,7 +227,10 @@ mod tests {
                     .expect("list")
                     .into_iter()
                     .map(|finding| {
-                        assert_eq!(finding.kind, FindingKind::ServiceReportLead);
+                        assert_eq!(
+                            finding.kind == FindingKind::PoliceStopLead,
+                            finding.headline.starts_with("b:")
+                        );
                         assert_eq!(finding.confidence, FindingConfidence::Unassessed);
                         assert!(finding.explanation.contains("sha256 abababababababab"));
                         finding.headline.split(':').next().unwrap().to_string()

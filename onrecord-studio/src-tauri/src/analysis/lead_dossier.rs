@@ -339,6 +339,10 @@ pub fn falsification_for(kind: FindingKind) -> DossierFalsification {
             "The reports were handled and the table was not updated, or the difference reflects what was reported rather than how it was handled.",
             &["the work orders or inspection records for the reports counted", "the department's published service schedule and staffing for the service"],
         ),
+        FindingKind::PoliceStopLead => (
+            "The difference follows from why and where the stops were made, not from who was stopped.",
+            &["the stop records broken down by reason for the stop, beat and assignment", "the department's property and evidence log for the items seized"],
+        ),
         FindingKind::RollingProduction => (
             "The requester narrowed or added to the request, agreed to installments, or the records were found and reviewed in stages.",
             &["the request's correspondence on scope and schedule", "any production schedule or extension notice the agency sent"],

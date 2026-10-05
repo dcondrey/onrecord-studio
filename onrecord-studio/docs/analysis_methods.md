@@ -331,3 +331,20 @@ A lead is a count of the publisher's records and carries no legal claim. An open
 
 ### E. Leads stored as findings
 Once every imported table has been profiled, `DiscoveryController` sends the feed's leads to `record_service_leads` (`analysis/service_leads.rs`), which stores each as a finding of kind `SERVICE_REPORT_LEAD` under the detector slug `service_report_leads`. The native side does not recount: it refuses a lead whose snapshot is not in the catalog, writes the source line (display name, file digest, retrieval date) from the catalog's own record, and stores the lead with no confidence score (`Unassessed`) and `is_legal_claim` false. The finding id covers the snapshot, its digest, the lead's key, title and detail, so changed counts make a new finding. Earlier leads that are not sent again are removed only when every imported table was checked without error; an unfinished or failed pass leaves them in place, and a dismissed lead stays dismissed. A set is sent once per change; a failed store is retried after five minutes. These findings name no portal agency, so `research::meetings` (§11) does not yet match them to agenda items.
+
+## 18. Police Stop Leads
+
+`src/utils/stopLeads.ts`, run by automatic discovery like §17 and stored as `POLICE_STOP_LEAD` findings (§17 E; `ServiceLeadInput.family` selects the kind). Verified natively by `tests/data_discovery.rs::stop_record_checks_run_on_imported_tables_with_the_publishers_headers`, which imports four tables with the publisher's upper-case headers.
+
+### A. Which tables are read
+A persons table is one with `id`, `pid` and `perceivedunhoused` columns (SDPD's RIPA stops file). Companion tables carry `id`, `pid` and one of `result`, `reasonforstopcodetext` or `basisforpropertyseizure`, and no `perceivedunhoused`; the latest imported of each is used. Persons are matched on stop and person number, compared as whole numbers because the tables import them with different types. Without a results table nothing is computed. `dataGaps.ts` asks for each missing companion (`RIPA_STOP_RESULTS`, `RIPA_STOP_REASONS`, `RIPA_PROPERTY_SEIZURE_BASIS`), and for the persons table (`RIPA_STOPS`) when an open Get It Done copy lists Encampment reports and no persons table is imported.
+
+### B. What is counted
+* **Groups**: `perceivedunhoused` true or false. Any other value (the publisher's older `0`) is a third group that is counted and left out of every rate.
+* **Outcomes**: per group, persons; persons with a result naming a custodial arrest; of those on an outstanding warrant and without a warrant, each counted apart; persons with a citation or an in-field cite and release; persons with a property-seizure row; persons with no result row. A lead needs 100 persons in each group. The first stop date ignores dates before 2000 (the file has a year-23 entry).
+* **Reasons**: the forty reason code texts with the most persons perceived as unhoused, with both groups' persons and arrests without a warrant for each. A reason is compared when both groups have 100 persons, and called higher at 1.5 times the other group's rate and at least three percentage points, tested by cross-multiplication. Warrant arrests are left out of this comparison because a warrant arrest follows from the warrant, not the stop.
+* **Property**: persons perceived as unhoused per recorded basis for seizure.
+
+### C. What a lead does and does not claim
+Perception is the officer's entry, not housing status. A person can have several results and several reasons and is counted under each. Rates are not adjusted for where officers were assigned. A difference in rates is not a finding of unequal treatment, and the lead says so. The property table records a basis, not where property was kept or whether it was returned or discarded.
+

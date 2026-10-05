@@ -1003,6 +1003,52 @@ The detectors now produce 0 findings on this corpus. Next, in order:
    measured only against San Diego's wording; other NextRequest portals' notices will show as
    not classified until a rule names them.
 
+## Owner focus: homelessness accountability (2026-10-04)
+
+Decision (owner, 2026-10-04): leads should concern homeless sweeps, shelter beds, encampment
+enforcement, public restrooms, housing, property stored and returned versus discarded, human
+rights, poor or ineffective spending, and unfair treatment, not generic service backlogs.
+"NextRequest files are probably most relevant."
+
+Built 2026-10-04: leads from SDPD's published stop records (methods §18), fetched by the app
+(`RIPA_STOPS` and three companion tables). Measured with the app's SQL on the files published
+2026-10-04 (stops 2024-01-01 to 2026-09-28):
+- 38,041 of 263,488 persons stopped were perceived as unhoused. Custodial arrest 28.8% against
+  13.4% of others; on an outstanding warrant 14.2% against 3.6%; without a warrant 17.0% against
+  10.5%; citation 14.3% against 41.8%; property seized 7.4% against 2.2%.
+- Most recorded reasons: local ordinance infraction 5,841, local ordinance misdemeanour 2,835,
+  647(e) lodging 2,362, encroachment (1460(b) SH) 859.
+- For the same recorded reason, arrest without a warrant was higher for people perceived as
+  unhoused in 2 of 38 reasons compared (petty theft, battery). Counting warrant arrests it was 9
+  of 38. The gap is mostly warrant arrests, which the lead states.
+- Property seized from people perceived as unhoused: evidence 1,810, contraband 1,501, vehicle
+  impound 212, safekeeping 151, abandoned property 32. Nothing published says where it went.
+
+Measured, not built:
+- Open Encampment reports in Get It Done (2026-09-14 copy): 2,036; median age 7 to 14 days in
+  eight districts and 903.5 days in District 4 (158 reports); 850 days for the 29 held by DSD.
+- The owner's library holds 3 requests from sandiego.nextrequest.com. The 142-request encampment
+  collection measured on 2026-10-03 was made by `ingestion::live_evaluation` into a separate
+  directory and is not in the library.
+- Closure times by year (2016 to 2018 closed files) cannot be read as a slowdown: files are keyed
+  by close year and the programme began 2016-05-20, so early years cannot hold old reports.
+- Where referred reports went is recorded in Get It Done's `referred` column (closed 2018:
+  Environmental Services 12,598, Police abandoned vehicles 4,038, Caltrans 1,341); no check reads it.
+
+Next, in order:
+1. Collect the owner's subjects from sandiego.nextrequest.com into the library from inside the
+   app (the live evaluation's collection by subject, as a user action), then read the released
+   tables: abatement logs, stored-property logs, citation exports, shelter capacity reports.
+   Role-based checks need real released files to be designed against; none is in the library.
+2. Stored versus discarded property: no published table records it. The stop records give the
+   seizure basis only. The check has to come from released abatement and storage logs (item 1).
+3. Encampment reports by area and staff group as their own lead (District 4, above).
+4. Homelessness spending against outcomes: Homelessness Strategies and Solutions department lines
+   in the operating budget against shelter capacity and exits, which need SDHC and RTFH tables
+   that the source catalogs list only as pages and PDFs.
+5. Local ordinance codes 65000 and 65002 do not name the ordinance; the stop records'
+   `reasonforstopexplanation` text may. Not read yet.
+
 ## Leads from service-report tables (2026-10-04)
 
 Decision: "What stands out" shows leads about the subject of the records; facts about a table

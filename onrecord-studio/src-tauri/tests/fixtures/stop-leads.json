@@ -1,0 +1,231 @@
+{
+  "csv": {
+    "stops": "UID,ID,PID,STOPDATE,PERCEIVEDUNHOUSED\n1c,1,1,2025-02-01,True\n2c,2,1,2025-03-01,True\n3c,3,1,0023-11-27,True\n4c,4,1,2025-01-15,False\n4c,4,2,2025-01-15,False\n5c,5,1,2025-04-01,0\n6c,6,1,2025-05-01,False\n",
+    "results": "UID,ID,PID,RESULT\n1c,1,1,Custodial Arrest pursuant to outstanding warrant\n2c,2,1,Custodial Arrest without warrant\n2c,2,1,Citation for infraction\n3c,3,1,Field interview card completed\n4c,4,1,Citation for infraction\n4c,4,2,In-field cite and release\n",
+    "reasons": "UID,ID,PID,REASONFORSTOPCODETEXT\n1c,1,1,647(E) PC - DIS CON:LODGE W/O CONSENT (M) 32111\n2c,2,1,647(E) PC - DIS CON:LODGE W/O CONSENT (M) 32111\n4c,4,1,647(E) PC - DIS CON:LODGE W/O CONSENT (M) 32111\n3c,3,1,65002 ZZ - LOCAL ORDINANCE VIOL (I) 65002\n",
+    "property": "UID,ID,PID,BASISFORPROPERTYSEIZURE\n1c,1,1,Safekeeping as allowed by law/statute\n1c,1,1,Evidence\n4c,4,1,Contraband\n"
+  },
+  "schema": {
+    "datasets": [
+      {
+        "snapshotId": "stops",
+        "datasetKind": "RIPA_STOPS",
+        "displayName": "Stop fixture, stops",
+        "tableName": "analysis_stop_stops",
+        "importedRows": 7,
+        "rejectedRows": 0,
+        "sourceUri": "https://example.test/stops.csv",
+        "sourceSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "retrievedAt": "2026-10-04T00:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}"
+      },
+      {
+        "snapshotId": "results",
+        "datasetKind": "REGIONAL_DATA",
+        "displayName": "Stop fixture, results",
+        "tableName": "analysis_stop_results",
+        "importedRows": 6,
+        "rejectedRows": 0,
+        "sourceUri": "https://example.test/results.csv",
+        "sourceSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "retrievedAt": "2026-10-04T00:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}"
+      },
+      {
+        "snapshotId": "reasons",
+        "datasetKind": "REGIONAL_DATA",
+        "displayName": "Stop fixture, reasons",
+        "tableName": "analysis_stop_reasons",
+        "importedRows": 4,
+        "rejectedRows": 0,
+        "sourceUri": "https://example.test/reasons.csv",
+        "sourceSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "retrievedAt": "2026-10-04T00:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}"
+      },
+      {
+        "snapshotId": "property",
+        "datasetKind": "REGIONAL_DATA",
+        "displayName": "Stop fixture, property",
+        "tableName": "analysis_stop_property",
+        "importedRows": 3,
+        "rejectedRows": 0,
+        "sourceUri": "https://example.test/property.csv",
+        "sourceSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "retrievedAt": "2026-10-04T00:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}"
+      }
+    ],
+    "templates": [],
+    "columns": [
+      {
+        "tableName": "analysis_stop_stops",
+        "columnName": "uid",
+        "logicalType": "CATEGORY",
+        "originalName": "UID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_stop_stops",
+        "columnName": "id",
+        "logicalType": "CATEGORY",
+        "originalName": "ID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_stop_stops",
+        "columnName": "pid",
+        "logicalType": "CATEGORY",
+        "originalName": "PID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_stop_stops",
+        "columnName": "stopdate",
+        "logicalType": "CATEGORY",
+        "originalName": "STOPDATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_stop_stops",
+        "columnName": "perceivedunhoused",
+        "logicalType": "CATEGORY",
+        "originalName": "PERCEIVEDUNHOUSED",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_stop_results",
+        "columnName": "uid",
+        "logicalType": "CATEGORY",
+        "originalName": "UID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_stop_results",
+        "columnName": "id",
+        "logicalType": "CATEGORY",
+        "originalName": "ID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_stop_results",
+        "columnName": "pid",
+        "logicalType": "CATEGORY",
+        "originalName": "PID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_stop_results",
+        "columnName": "result",
+        "logicalType": "CATEGORY",
+        "originalName": "RESULT",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_stop_reasons",
+        "columnName": "uid",
+        "logicalType": "CATEGORY",
+        "originalName": "UID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_stop_reasons",
+        "columnName": "id",
+        "logicalType": "CATEGORY",
+        "originalName": "ID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_stop_reasons",
+        "columnName": "pid",
+        "logicalType": "CATEGORY",
+        "originalName": "PID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_stop_reasons",
+        "columnName": "reasonforstopcodetext",
+        "logicalType": "CATEGORY",
+        "originalName": "REASONFORSTOPCODETEXT",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_stop_property",
+        "columnName": "uid",
+        "logicalType": "CATEGORY",
+        "originalName": "UID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_stop_property",
+        "columnName": "id",
+        "logicalType": "CATEGORY",
+        "originalName": "ID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_stop_property",
+        "columnName": "pid",
+        "logicalType": "CATEGORY",
+        "originalName": "PID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_stop_property",
+        "columnName": "basisforpropertyseizure",
+        "logicalType": "CATEGORY",
+        "originalName": "BASISFORPROPERTYSEIZURE",
+        "nullable": true,
+        "dictionary": null
+      }
+    ]
+  },
+  "queries": [
+    {
+      "id": "stops_unhoused_outcomes",
+      "title": "Stops of people perceived as unhoused, and what they resulted in",
+      "method": "Persons in Stop fixture, stops by the officer's perceived-unhoused entry, joined on stop and person number to Stop fixture, results and Stop fixture, property. Arrested means a result naming a custodial arrest; arrests on an outstanding warrant and arrests without a warrant are also counted apart, since a warrant arrest follows from the warrant rather than the stop. Cited means a citation or an in-field cite and release. A person can have several results. Perceived unhoused is the officer's entry for each person stopped; rows where it is neither true nor false are counted apart. Rates are not adjusted for the reason for the stop.",
+      "sql": "WITH stop_persons AS (\n SELECT DISTINCT CAST(TRY_CAST(TRY_CAST(CAST(\"id\" AS VARCHAR) AS DOUBLE) AS BIGINT) AS VARCHAR) || ':' || CAST(TRY_CAST(TRY_CAST(CAST(\"pid\" AS VARCHAR) AS DOUBLE) AS BIGINT) AS VARCHAR) AS person, CASE LOWER(TRIM(CAST(\"perceivedunhoused\" AS VARCHAR))) WHEN 'true' THEN 'unhoused' WHEN 'false' THEN 'not unhoused' END AS perceived, TRY_CAST(CAST(\"stopdate\" AS VARCHAR) AS DATE) AS stopped_on\n FROM \"analysis_stop_stops\"\n), stop_results AS (\n SELECT CAST(TRY_CAST(TRY_CAST(CAST(\"id\" AS VARCHAR) AS DOUBLE) AS BIGINT) AS VARCHAR) || ':' || CAST(TRY_CAST(TRY_CAST(CAST(\"pid\" AS VARCHAR) AS DOUBLE) AS BIGINT) AS VARCHAR) AS person, BOOL_OR(CONTAINS(LOWER(TRIM(CAST(\"result\" AS VARCHAR))), 'custodial arrest')) AS arrested, BOOL_OR(CONTAINS(LOWER(TRIM(CAST(\"result\" AS VARCHAR))), 'arrest without warrant')) AS warrantless, BOOL_OR(CONTAINS(LOWER(TRIM(CAST(\"result\" AS VARCHAR))), 'outstanding warrant')) AS on_warrant,\n  BOOL_OR(CONTAINS(LOWER(TRIM(CAST(\"result\" AS VARCHAR))), 'citation') OR CONTAINS(LOWER(TRIM(CAST(\"result\" AS VARCHAR))), 'cite and release')) AS cited\n FROM \"analysis_stop_results\" GROUP BY 1\n), stop_seized AS (SELECT DISTINCT CAST(TRY_CAST(TRY_CAST(CAST(\"id\" AS VARCHAR) AS DOUBLE) AS BIGINT) AS VARCHAR) || ':' || CAST(TRY_CAST(TRY_CAST(CAST(\"pid\" AS VARCHAR) AS DOUBLE) AS BIGINT) AS VARCHAR) AS person FROM \"analysis_stop_property\")\nSELECT perceived, COUNT(*) AS persons, COUNT(*) FILTER (WHERE arrested) AS arrested, COUNT(*) FILTER (WHERE on_warrant) AS arrested_on_warrant, COUNT(*) FILTER (WHERE warrantless) AS arrested_without_warrant, COUNT(*) FILTER (WHERE cited) AS cited,\n COUNT(*) FILTER (WHERE stop_results.person IS NULL) AS no_result_row,\n COUNT(*) FILTER (WHERE stop_seized.person IS NOT NULL) AS property_seized,\n CAST(MIN(stopped_on) FILTER (WHERE stopped_on >= DATE '2000-01-01') AS VARCHAR) AS first_stop, CAST(MAX(stopped_on) AS VARCHAR) AS last_stop\nFROM stop_persons LEFT JOIN stop_results ON stop_results.person = stop_persons.person LEFT JOIN stop_seized ON stop_seized.person = stop_persons.person\nGROUP BY perceived ORDER BY perceived"
+    },
+    {
+      "id": "stops_unhoused_reasons",
+      "title": "Why people perceived as unhoused were stopped, and arrests for the same reason",
+      "method": "The recorded reason code text from Stop fixture, reasons for each person stopped, with how many persons perceived as unhoused and how many others were stopped for it and how many of each were arrested without a warrant (a result naming a custodial arrest without warrant), so an outstanding warrant does not explain the arrest. The forty reasons with the most persons perceived as unhoused are read. A person with two reasons is counted under each. Perceived unhoused is the officer's entry for each person stopped; rows where it is neither true nor false are counted apart.",
+      "sql": "WITH stop_persons AS (\n SELECT DISTINCT CAST(TRY_CAST(TRY_CAST(CAST(\"id\" AS VARCHAR) AS DOUBLE) AS BIGINT) AS VARCHAR) || ':' || CAST(TRY_CAST(TRY_CAST(CAST(\"pid\" AS VARCHAR) AS DOUBLE) AS BIGINT) AS VARCHAR) AS person, CASE LOWER(TRIM(CAST(\"perceivedunhoused\" AS VARCHAR))) WHEN 'true' THEN 'unhoused' WHEN 'false' THEN 'not unhoused' END AS perceived, TRY_CAST(CAST(\"stopdate\" AS VARCHAR) AS DATE) AS stopped_on\n FROM \"analysis_stop_stops\"\n), stop_results AS (\n SELECT CAST(TRY_CAST(TRY_CAST(CAST(\"id\" AS VARCHAR) AS DOUBLE) AS BIGINT) AS VARCHAR) || ':' || CAST(TRY_CAST(TRY_CAST(CAST(\"pid\" AS VARCHAR) AS DOUBLE) AS BIGINT) AS VARCHAR) AS person, BOOL_OR(CONTAINS(LOWER(TRIM(CAST(\"result\" AS VARCHAR))), 'custodial arrest')) AS arrested, BOOL_OR(CONTAINS(LOWER(TRIM(CAST(\"result\" AS VARCHAR))), 'arrest without warrant')) AS warrantless, BOOL_OR(CONTAINS(LOWER(TRIM(CAST(\"result\" AS VARCHAR))), 'outstanding warrant')) AS on_warrant,\n  BOOL_OR(CONTAINS(LOWER(TRIM(CAST(\"result\" AS VARCHAR))), 'citation') OR CONTAINS(LOWER(TRIM(CAST(\"result\" AS VARCHAR))), 'cite and release')) AS cited\n FROM \"analysis_stop_results\" GROUP BY 1\n), stop_reasons AS (\n SELECT DISTINCT CAST(TRY_CAST(TRY_CAST(CAST(\"id\" AS VARCHAR) AS DOUBLE) AS BIGINT) AS VARCHAR) || ':' || CAST(TRY_CAST(TRY_CAST(CAST(\"pid\" AS VARCHAR) AS DOUBLE) AS BIGINT) AS VARCHAR) AS person, NULLIF(TRIM(CAST(\"reasonforstopcodetext\" AS VARCHAR)), '') AS reason FROM \"analysis_stop_reasons\"\n)\nSELECT reason, COUNT(*) FILTER (WHERE perceived = 'unhoused') AS unhoused_persons, COUNT(*) FILTER (WHERE perceived = 'unhoused' AND warrantless) AS unhoused_arrested,\n COUNT(*) FILTER (WHERE perceived = 'not unhoused') AS other_persons, COUNT(*) FILTER (WHERE perceived = 'not unhoused' AND warrantless) AS other_arrested\nFROM stop_persons JOIN stop_reasons ON stop_reasons.person = stop_persons.person LEFT JOIN stop_results ON stop_results.person = stop_persons.person\nWHERE reason IS NOT NULL GROUP BY reason ORDER BY unhoused_persons DESC, reason LIMIT 40"
+    },
+    {
+      "id": "stops_unhoused_property",
+      "title": "Why property was seized from people perceived as unhoused",
+      "method": "Persons perceived as unhoused with a row in Stop fixture, property, by the recorded basis for the seizure. A person with two bases is counted under each. The table records that property was seized, not where it was kept or whether it was returned.",
+      "sql": "WITH stop_persons AS (\n SELECT DISTINCT CAST(TRY_CAST(TRY_CAST(CAST(\"id\" AS VARCHAR) AS DOUBLE) AS BIGINT) AS VARCHAR) || ':' || CAST(TRY_CAST(TRY_CAST(CAST(\"pid\" AS VARCHAR) AS DOUBLE) AS BIGINT) AS VARCHAR) AS person, CASE LOWER(TRIM(CAST(\"perceivedunhoused\" AS VARCHAR))) WHEN 'true' THEN 'unhoused' WHEN 'false' THEN 'not unhoused' END AS perceived, TRY_CAST(CAST(\"stopdate\" AS VARCHAR) AS DATE) AS stopped_on\n FROM \"analysis_stop_stops\"\n), stop_results AS (\n SELECT CAST(TRY_CAST(TRY_CAST(CAST(\"id\" AS VARCHAR) AS DOUBLE) AS BIGINT) AS VARCHAR) || ':' || CAST(TRY_CAST(TRY_CAST(CAST(\"pid\" AS VARCHAR) AS DOUBLE) AS BIGINT) AS VARCHAR) AS person, BOOL_OR(CONTAINS(LOWER(TRIM(CAST(\"result\" AS VARCHAR))), 'custodial arrest')) AS arrested, BOOL_OR(CONTAINS(LOWER(TRIM(CAST(\"result\" AS VARCHAR))), 'arrest without warrant')) AS warrantless, BOOL_OR(CONTAINS(LOWER(TRIM(CAST(\"result\" AS VARCHAR))), 'outstanding warrant')) AS on_warrant,\n  BOOL_OR(CONTAINS(LOWER(TRIM(CAST(\"result\" AS VARCHAR))), 'citation') OR CONTAINS(LOWER(TRIM(CAST(\"result\" AS VARCHAR))), 'cite and release')) AS cited\n FROM \"analysis_stop_results\" GROUP BY 1\n), stop_basis AS (\n SELECT DISTINCT CAST(TRY_CAST(TRY_CAST(CAST(\"id\" AS VARCHAR) AS DOUBLE) AS BIGINT) AS VARCHAR) || ':' || CAST(TRY_CAST(TRY_CAST(CAST(\"pid\" AS VARCHAR) AS DOUBLE) AS BIGINT) AS VARCHAR) AS person, NULLIF(TRIM(CAST(\"basisforpropertyseizure\" AS VARCHAR)), '') AS basis FROM \"analysis_stop_property\"\n)\nSELECT basis, COUNT(*) AS persons FROM stop_persons JOIN stop_basis ON stop_basis.person = stop_persons.person\nWHERE perceived = 'unhoused' AND basis IS NOT NULL GROUP BY basis ORDER BY persons DESC, basis"
+    }
+  ]
+}
