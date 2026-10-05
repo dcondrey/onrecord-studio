@@ -1240,6 +1240,27 @@ by the file's maker and unverified. Not built: marking findings drawn from an im
 origin file was hand-added, and excluding hand-added files from redaction-inference corroboration
 (architecture doc section 5).
 
+Built 2026-10-05: follow-up letter after a determination deadline passes with no recorded response
+(methods §33). For a saved casework request, `draft_overdue_follow_up` states the recorded
+submission date, the deadline computed under Government Code § 7922.535 with the court calendar,
+and the calendar days since, and asks for the determination; it refuses with a shown reason on the
+deadline day and earlier, with no submission date, or with any recorded response. The casework
+panel offers it under the request's scheduled follow-ups. After a first draft the user may pick a
+library agency (portal plus agency id, at least 10 closed requests) to add one counted paragraph:
+closed requests held, sourced determinations and how many of those were after the computed
+deadline, and no-records closure notices with a recorded earlier similar release. The lead dossier
+now shows a table lead's tables (name, source, retrieval date, SHA-256) and SQL on screen.
+Verified by tests: the boundary day and the day after, a valid and a defective extension, a
+deadline on 1 January, each refusal, the paragraph at 9, 10 and 11 closed requests, zero numerators
+against unmeasured ones, two portals sharing an agency id, the wording check, the stale-result
+guard (proved by removing it), and the dossier with and without a table lead. Section 7923.000
+was read at leginfo.legislature.ca.gov through a text-extraction tool. Not verified: anything in
+the running app; the counts against a real library. Not built: the letter for a tracked request in
+My requests (`tracker/deadline.rs` holds the same evaluation and an extension notice, so the
+drafting function would accept it; no UI was added there); an extension field on a casework
+request, so that path always counts ten days and says no extension is recorded; remembering the
+chosen agency on the case; replacing the generic `followUpDraft` text.
+
 Round one merged and gated 2026-10-05 (main at 02366f6: fmt, clippy, 1,328 lib tests, 8
 data-discovery tests, tsc, eslint, 645 frontend tests, IPC and help checks all exit 0): order
 items 1 to 4 above. Nothing in round one has been checked in the running app.

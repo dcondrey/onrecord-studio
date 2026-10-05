@@ -154,6 +154,7 @@ export interface NativeCommandMap {
   draft_appeal_from_finding: { args: { findingId: string; jurisdiction?: string | null }; result: Types.DraftedArtifact };
   draft_availability_for_finding: { args: { findingId: string }; result: Types.DraftAvailability };
   draft_appeal_from_statutory_deadline: { args: { portalKey: string; requestId: number; jurisdiction?: string | null }; result: Types.DraftedArtifact };
+  draft_overdue_follow_up: { args: { caseId: string; requestId: string; agency?: Types.AgencyIdentity | null }; result: Types.OverdueFollowUpDraft };
   export_verifiable_report: { args: { request: Types.VerifiableReportRequest }; result: Types.VerifiableReportExportResult };
   export_evidence_packet: { args: { request: Types.EvidencePacketRequest }; result: Types.EvidencePacketExportResult };
   preview_packet_annotations: { args: { request: Types.PacketAnnotationPreviewRequest }; result: Types.AnnotationPreview };

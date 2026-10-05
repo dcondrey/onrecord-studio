@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import type { CaseworkCase, CaseworkImportPreview, CaseworkState, CompromisedImportWarning } from "../types/casework";
 import type { CaseEvidencePackageResult } from "../types/investigation";
 const bridge=vi.hoisted(()=>({invoke:vi.fn()}));
-vi.mock("../ipc",()=>({invokeCommand:bridge.invoke}));
+vi.mock("../ipc",()=>({invokeCommand:bridge.invoke,formatNativeError:(reason:unknown)=>reason instanceof Error?reason.message:String(reason)}));
 vi.mock("@tauri-apps/api/core",()=>({isTauri:()=>true}));
 vi.mock("../components/dashboard/useContributors",()=>({
   groupKeyId:(id:string)=>id,
@@ -46,6 +46,17 @@ describe("persistent casework",()=>{
     await openA();const read=vi.fn();
     fireEvent.change(screen.getByLabelText("Open a shared case file"), { target: { files: [{name:"large-case.json",size:8*1024*1024+1,text:read}] } });
     expect(screen.getByText(/Case files must be at most 8 MB/)).toBeTruthy();expect(read).not.toHaveBeenCalled();
+  });
+  it("offers the overdue follow-up letter only where nothing is recorded, and shows a refusal instead of letter text",async()=>{
+    const plan={statuteCitation:"California Government Code § 7922.535",evaluatedAt:"2026-09-05",filedOn:"2026-09-01",determinationDueOn:"2026-09-11",calendarDaysElapsed:4,allowedCalendarDays:10,determinationBasis:"OBSERVATION_WITHOUT_RECORDED_ACTIVITY" as const,measuredTo:null,deadlinePassedWithoutRecordedResponse:false,followUps:[]};
+    const filed=(id:string,measuredTo:string|null)=>({...caseA.requests[0],id,state:"SUBMITTED",submittedAt:"2026-09-01",filingPlan:{...plan,measuredTo}});
+    bridge.invoke.mockImplementation(async(name:string)=>{if(name==="draft_overdue_follow_up")throw new Error("the determination is due on 2026-09-11 and that date has not passed as of 2026-09-05");return {...state,cases:[{...caseA,requests:[filed("r1",null),filed("r2","2026-09-08")]},caseB]};});
+    await openA();
+    const buttons=screen.getAllByRole("button",{name:"Draft overdue follow-up letter"});expect(buttons).toHaveLength(1);
+    fireEvent.click(buttons[0]);
+    expect((await screen.findByText(/has not passed as of 2026-09-05/)).getAttribute("role")).toBe("alert");
+    expect(bridge.invoke).toHaveBeenCalledWith("draft_overdue_follow_up",expect.objectContaining({caseId:"case-a",requestId:"r1",agency:null}));
+    expect(screen.queryByLabelText(/drafted artifact text/i)).toBeNull();
   });
   it("shows unresolved production gaps and does not equate a passed commitment date with failure",async()=>{
     bridge.invoke.mockResolvedValue({...state,cases:[{...caseA,commitments:[{id:"c1",promise:"Publish monthly reports",responsibleParty:"Department",dueDate:"2020-01-01",completionTest:"A public release contains the months",state:"UNKNOWN",assessment:"",citationIds:["e1"],completionCitationIds:[]}]},caseB]});await openA();

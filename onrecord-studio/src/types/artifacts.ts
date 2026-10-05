@@ -13,7 +13,40 @@ export type ArtifactKind = 'FOLLOWUP_REQUEST' | 'APPEAL';
 export type DraftEvidenceBasis =
   | 'PATTERN_OBSERVATION'
   | 'COUNTED_POLICY_COMPARISON'
-  | 'COUNTED_STATUTORY_DEADLINE';
+  | 'COUNTED_STATUTORY_DEADLINE'
+  | 'DEADLINE_PASSED_WITHOUT_RECORDED_RESPONSE';
+
+/** An agency is a portal plus an id; the same id on another portal is another agency. */
+export interface AgencyIdentity {
+  portalKey: string;
+  agencyId: number;
+}
+
+export interface AgencyRecordOption extends AgencyIdentity {
+  agencyName: string | null;
+  closedRequests: number;
+}
+
+/** Counts over one agency's closed requests in the library. Mirrors `artifacts/agency_record.rs`. */
+export interface AgencyRecord extends AgencyIdentity {
+  agencyName: string | null;
+  closedRequests: number;
+  sourcedDeterminations: number;
+  lateSourcedDeterminations: number;
+  noRecordsClosures: number;
+  noRecordsWithRecordedEarlierRelease: number;
+  /** Earliest and latest received date among the closed requests; `null` when there are none. */
+  period: [string, string] | null;
+}
+
+export interface OverdueFollowUpDraft {
+  artifact: DraftedArtifact;
+  /** `null` when no agency was chosen. */
+  agencyRecord: AgencyRecord | null;
+  /** False with a record present: the library holds too few closed requests for the paragraph. */
+  agencyParagraphIncluded: boolean;
+  agencyOptions: AgencyRecordOption[];
+}
 
 export interface CitedAuthority {
   statute: string;
