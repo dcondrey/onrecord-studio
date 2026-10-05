@@ -44,6 +44,7 @@ pub mod practice_departure;
 mod public_documents;
 pub mod redaction_inconsistency;
 pub mod regenerated_response;
+pub mod release_timing;
 pub mod response_time_claim;
 pub mod rolling_production;
 pub mod spending_cases;
@@ -221,6 +222,7 @@ pub async fn refresh_all_findings_with_embeddings(
     run_detector!(repository, summary, run_started, budget_line_comparison);
     run_detector!(repository, summary, run_started, encampment_notice);
     run_detector!(repository, summary, run_started, rolling_production);
+    run_detector!(repository, summary, run_started, release_timing);
     // Last: correlates the settled output of every detector above.
     run_detector!(repository, summary, run_started, correlated_findings);
 
@@ -256,6 +258,102 @@ mod tests {
         assert_eq!(
             summary.stale_cleared, 0,
             "nothing to clear on first run against empty corpus"
+        );
+    }
+
+    /// One records release and five hand-added imports hold the same text: a numbering gap and a
+    /// stock denial repeated across five requests. Each import is its own source with one
+    /// synthetic request, which is how `start_local_files` stores it.
+    #[tokio::test]
+    async fn a_hand_added_file_is_never_reported_as_something_an_agency_released() {
+        const DENIAL: &str = "After a diligent search the department has determined that there \
+            are no responsive records for this request. The department does not maintain the \
+            material described and considers the request closed as of the date of this letter.";
+        let repo = fresh_repo().await;
+        {
+            let conn = repo.analytics_connection().await.unwrap();
+            let insert_document = |portal: &str, request: i64, id: i64, text: &str| {
+                conn.execute(
+                    "INSERT INTO documents (id, request_id, portal_subdomain, file_name,
+                        visibility, created_at, updated_at, extracted_text_sha256)
+                     VALUES (?1, ?2, ?3, ?4, 'public', '2026-01-01T00:00:00Z',
+                        '2026-01-01T00:00:00Z', 'aa')",
+                    duckdb::params![id, request, portal, format!("doc-{id}.pdf")],
+                )
+                .unwrap();
+                conn.execute(
+                    "INSERT INTO documents_fts (document_id, portal_subdomain, file_name, extracted_text)
+                     VALUES (?1, ?2, ?3, ?4)",
+                    duckdb::params![id, portal, format!("doc-{id}.pdf"), text],
+                )
+                .unwrap();
+            };
+            let insert_source = |portal: &str, kind: &str| {
+                conn.execute(
+                    "INSERT INTO portals (subdomain, display_name, base_url, source_kind)
+                     VALUES (?1, ?1, 'https://example.test', ?2)",
+                    duckdb::params![portal, kind],
+                )
+                .unwrap();
+            };
+            let insert_request = |portal: &str, id: i64, title: &str, status: &str| {
+                conn.execute(
+                    "INSERT INTO requests (id, portal_subdomain, title, status, created_at, updated_at)
+                     VALUES (?1, ?2, ?3, ?4, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+                    duckdb::params![id, portal, title, status],
+                )
+                .unwrap();
+            };
+            let invoices = [(1_i64, 101), (2, 102), (3, 104), (4, 105), (5, 106)];
+
+            insert_source("release", "NEXT_REQUEST");
+            insert_request("release", 7, "Invoices", "closed");
+            for (id, number) in invoices {
+                insert_document("release", 7, id, &format!("Invoice #{number} approved."));
+            }
+            for index in 0..5_i64 {
+                insert_request("release", 20 + index, &format!("Topic {index}"), "closed");
+                insert_document("release", 20 + index, 20 + index, DENIAL);
+            }
+
+            for index in 0..5_i64 {
+                let portal = format!("source-local-{index}");
+                insert_source(&portal, "LOCAL_FILE");
+                insert_request(&portal, 7, &format!("upload-{index}.pdf"), "imported");
+                insert_document(&portal, 7, 40 + index, DENIAL);
+                if index == 0 {
+                    for (id, number) in invoices {
+                        insert_document(&portal, 7, id, &format!("Invoice #{number} approved."));
+                    }
+                }
+            }
+        }
+
+        let summary = refresh_all_findings(&repo).await.expect("refresh runs");
+        assert_eq!(summary.detectors_failed, 0);
+
+        let conn = repo.analytics_connection().await.unwrap();
+        let rows: Vec<(String, String)> = conn
+            .prepare(
+                "SELECT source_detector,
+                        concat_ws(' ', subject_portal_key, headline, explanation, citations_json)
+                 FROM findings",
+            )
+            .unwrap()
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        for detector in [absence_of_records::SLUG, boilerplate_denial::SLUG] {
+            assert!(
+                rows.iter()
+                    .any(|(slug, text)| slug == detector && text.contains("release")),
+                "{detector} must still report the release: {rows:#?}"
+            );
+        }
+        assert!(
+            rows.iter().all(|(_, text)| !text.contains("source-local")),
+            "no finding may cite a hand-added file: {rows:#?}"
         );
     }
 }

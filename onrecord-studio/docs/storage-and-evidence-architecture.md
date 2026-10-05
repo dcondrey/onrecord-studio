@@ -260,6 +260,50 @@ the same as a recorded low-confidence result and must never be displayed as one.
 The manifest and log writes for one verification share a transaction, so the log can never point at
 manifest state that was not committed.
 
+### A file the user added is not an agency release
+
+`start_local_files` and `start_pasted_content` store what the user supplies under its own source
+(`portals.source_kind` `LOCAL_FILE` or `PASTED_CONTENT`, address `onrecord://local/...`) and one
+synthetic request (status `imported`, no agency, no determination). Nothing was fetched, so the
+application has no observation of where the file came from.
+
+`documents.visibility` is not the place that distinction lives. It is the access label a portal
+puts on a record (`public`, `staff_only`), and `public` is the gate every reader applies before a
+document may be opened, searched, exported, indexed or imported as a table. A hand-added file is
+stored `public` because the user may read their own file; changing that would remove it from the
+viewer, search and automatic table import. "Released by an agency" is answered from the source
+kind instead, in one place: `SourceKind::USER_SUPPLIED`, from which the migration generates the
+`user_supplied_sources` view (after the `source_kind` shim, because a view binds its columns when
+created and the base script can run against a `portals` table that predates the column). No stored
+value changes; a source that predates `source_kind` reads `NEXT_REQUEST` and is not in the view.
+
+Every detector query that selects documents without requiring an agency, a determination date or
+a statutory extension excludes that view, directly or through
+`detectors::public_documents::load_public_documents`; the detectors that do require one of those
+exclude a hand-added file by its synthetic request. `absence_of_records` reads records releases
+only. `a_hand_added_file_is_never_reported_as_something_an_agency_released` runs the whole registry
+over a release and hand-added copies of the same text and requires that no finding cites a
+hand-added file.
+
+`describe_document_origin` reports the origin and, for a hand-added file, three comparisons with
+collected documents: the same `raw_file_sha256`; the same `extracted_text_sha256` in a file that is
+not an exact copy; and near-duplicate text from the corpus index's LSH bands and SimHash distance,
+the mechanism and threshold `query_patterns` uses. Each comparison is either `COMPARED` with its
+matches and the number of documents it was drawn from, or `NOT_COMPARED` with the reason (no file
+digest recorded, no text extracted, not in the similarity index). An empty match list never stands
+for a comparison that did not run. A match states that the user's file equals or resembles a file a
+source served. It is not evidence that the user's file is authentic, and no match is not evidence
+that it is fabricated: the corpus holds what was collected, not everything an agency released.
+
+`read_document_internal_metadata` returns what `pdf_metadata_signals` and `ooxml_docprops` read
+from the file, each field a value or not recorded, and `NOT_READ` with a reason when the file is
+missing, is not a PDF or Office package, or does not parse as one. Those fields are written by
+whoever produced the file and are not verified by anything here.
+
+Not covered: findings computed from imported tables (`budget_line_comparison`,
+`claim_data_mismatch`, `spending_cases`) do not record whether the table's origin file was added
+by hand, and `redaction_inference` may count a hand-added file among its corroborating documents.
+
 ## 6. Migration rules
 
 - `0001_initial_schema.sql` is idempotent and re-executed on **every** launch. Every statement is
@@ -573,7 +617,11 @@ recorded`. "What this does not show" is generated only from what was observed fo
 (unchecked or withheld excerpt, missing digest or URL, no citation, no assessed confidence), plus
 the fixed limit of its basis. The download URL is taken from `documents.download_url`, for public
 documents only, with the query string and fragment removed because a signed query string can be a
-bearer token. No per-document retrieval time is stored, so none is claimed.
+bearer token. A retrieval time is stored: `document_acquisitions.retrieved_at`, one row per network
+fetch of a document, with the requested and resolved URL, redirect chain, HTTP status, ETag,
+Last-Modified and the digest received. Nothing reads it back: only the insert, the purge paths and
+the integrity check touch that table, so no command, packet or view surfaces a retrieval time and
+the packet claims none. A file the user added by hand has no acquisition row.
 
 **Gaps are never claims.** `PacketGap` shares no field with `PacketClaim` (no basis, severity or
 confidence), renders under its own heading, and is not counted in the claim total. Gaps come from

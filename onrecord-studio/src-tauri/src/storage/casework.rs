@@ -1386,6 +1386,24 @@ if case.report_id!=prior.report_id||case.topic!=prior.topic{return Err(invalid("
         })
         .await
     }
+    /// One records request as last saved, for a letter drafted from the saved record rather than
+    /// from an unsaved edit.
+    pub(crate) async fn saved_casework_request(
+        &self,
+        case_id: String,
+        request_id: String,
+    ) -> Result<CaseworkRequest, AppError> {
+        self.query_connection("Load saved records request", move |conn| {
+            conn.execute_batch(SCHEMA).map_err(storage)?;
+            read_case(conn, &case_id)?
+                .ok_or_else(|| invalid("Case not found."))?
+                .requests
+                .into_iter()
+                .find(|r| r.id == request_id)
+                .ok_or_else(|| invalid("This case has no such records request."))
+        })
+        .await
+    }
     /// Signs a filing record for one records request, reading the case fresh so the record carries
     /// the request text, scope and clock the repository itself computed rather than whatever the
     /// caller's copy held.
@@ -2564,6 +2582,56 @@ mod tests {
             .identifying_sources
             .iter()
             .all(|source| !source.source_sha256.is_empty()));
+    }
+    #[tokio::test]
+    async fn the_overdue_letter_is_drafted_from_the_saved_request_and_only_after_its_deadline() {
+        use crate::analysis::artifacts::overdue_followup::draft_for_saved_casework_request;
+        use crate::profile::DisclosureContext;
+        let db = setup(true).await;
+        let mut case = db.create_casework_case("report-1".into()).await.unwrap();
+        let (case_id, request_id) = (case.id.clone(), case.requests[0].id.clone());
+        let at = |day: &str| {
+            chrono::DateTime::parse_from_rfc3339(&format!("{day}T12:00:00Z"))
+                .unwrap()
+                .to_utc()
+        };
+        let draft = |day: &'static str| {
+            draft_for_saved_casework_request(
+                &db,
+                case_id.clone(),
+                request_id.clone(),
+                None,
+                &DisclosureContext::unset(),
+                at(day),
+            )
+        };
+        // Nothing saved yet records a submission, so there is no date to count from.
+        let unfiled = draft("2026-09-12").await.unwrap_err().to_string();
+        assert!(unfiled.contains("no submission date is recorded"), "{unfiled}");
+
+        case.requests[0].state = "SUBMITTED".into();
+        case.requests[0].submitted_at = Some("2026-09-01".into());
+        let case = db
+            .save_casework_case(case, 1, "Reporter".into())
+            .await
+            .unwrap();
+        assert_eq!(
+            case.requests[0]
+                .filing_plan
+                .as_ref()
+                .unwrap()
+                .determination_due_on,
+            "2026-09-11"
+        );
+        let on_the_day = draft("2026-09-11").await.unwrap_err().to_string();
+        assert!(on_the_day.contains("due on 2026-09-11"), "{on_the_day}");
+        let letter = draft("2026-09-12").await.unwrap();
+        assert!(letter
+            .artifact
+            .generated_text
+            .contains("1 calendar day has passed since that deadline"));
+        assert!(letter.agency_record.is_none() && !letter.agency_paragraph_included);
+        assert!(letter.agency_options.is_empty());
     }
     #[tokio::test]
     async fn productions_reconcile_fields_and_periods_and_prepare_specific_unsent_followup() {

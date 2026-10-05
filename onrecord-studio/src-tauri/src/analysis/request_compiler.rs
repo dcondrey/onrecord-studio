@@ -159,13 +159,25 @@ pub fn plan_filing(
     omissions: &[String],
     observed_at: &str,
 ) -> Result<RequestFilingPlan, AppError> {
+    let analysis = evaluate_filing(position, filed_on, responses_on, observed_at)?;
+    Ok(build_plan(&analysis, omissions, observed_at))
+}
+
+/// The evaluation a filing plan is built from, exposed so a letter drafted for the same request
+/// counts from the same dates under the same rule as the plan that scheduled it.
+pub fn evaluate_filing(
+    position: u64,
+    filed_on: &str,
+    responses_on: &[String],
+    observed_at: &str,
+) -> Result<StatutoryComplianceAnalysis, AppError> {
     let earliest_response = responses_on
         .iter()
         .map(|value| value.trim())
         .filter(|value| !value.is_empty())
         .min()
         .map(day_start);
-    let analysis = evaluate_statutory_compliance_with_determination_at(
+    evaluate_statutory_compliance_with_determination_at(
         position,
         &day_start(filed_on),
         earliest_response.as_deref(),
@@ -176,8 +188,7 @@ pub fn plan_filing(
         None,
         None,
         observed_at,
-    )?;
-    Ok(build_plan(&analysis, omissions, observed_at))
+    )
 }
 
 fn day_start(date: &str) -> String {

@@ -1035,6 +1035,37 @@ paths still point at the original temp directory; files are under `downloads/obj
 holds SDPD arrest and citation exports (26-6187, 25-7080, 22-2226 with race) and Urban Corps
 cleanup invoices with labour cost and tonnage per day (25-8547); none is read by a check yet.
 
+Built 2026-10-04: the feed proposes the records collection. When an imported open-reports file
+lists Encampment reports and no abatement log is imported, "What stands out" offers to collect
+sandiego.nextrequest.com for "encampment, abatement, homeless shelter, public restroom, stored
+property" (`dataGaps.ts`, `collect`; started through `start_data_source`). It starts only when
+asked, never under automatic upkeep. The two released .xlsx logs import through the same call
+Data upkeep makes and reproduce the figures above
+(`tests/data_discovery.rs::released_abatement_spreadsheets_import_and_reproduce_the_measured_hours`,
+ignored; needs `ONRECORD_ENCAMPMENT_COLLECTION=/Volumes/A/onrecord-eval/eval-encampment-2`). Not
+verified: the collection itself in the running app.
+
+Built 2026-10-04: leads from released arrest and citation logs (methods §20). Measured with the
+app's SQL on 26-6187 (2025-01-01 to 2026-06-22): 82,054 arrests and citations; 2,349 cite an
+encampment, encroachment, lodging or public urination section (encroachment 1,704, encampment 268,
+urination 206, lodging 194); 1,894 citations and 455 arrests, 259 of the arrests on those sections
+alone. Recorded race among the 2,349 against all in the file: White 41.3% and 34.0%, Black 26.7%
+and 14.9%, Hispanic 24.5% and 30.6%. 22-2226 holds only 56.55 citations (1,564, 2017 to 2021), so
+it has counts and no comparison. 25-7080 overlaps 26-6187 in dates and is counted alone.
+
+Built 2026-10-04: shared denial wording (methods §23). The three detectors now identify an
+agency by portal and id (same-numbered agencies on two portals were merged or pooled; reproduced
+by a test in each detector before the fix), name the agencies from `agencies.name`, and cite each
+passage by its character range in the stored text. Every phrase occurrence is a passage (up to 8
+per document, cut to its paragraph), so two reused paragraphs in one letter are two clusters.
+`cross_corpus_shared_language` also reports reworded reuse across three or more agencies (60% of
+content words shared, under 85% of five-word sequences), with no confidence because the 60% floor
+is unmeasured. Statute-like phrases count only near wording that addresses a requester. Pairs
+come from MinHash bands: on 16,000 synthetic passages the index and banded pass took 0.4 s
+(shingles) and 1.3 s (word sets) where the all-pairs pass took 259 s and 94 s, with the same
+groups. The cap stays at the newest 2,000 documents (the paraphrase detector's rose from 800).
+Not verified: the detectors on a real collection, and the phrase lists' precision and recall.
+
 Measured, not built:
 - Open Encampment reports in Get It Done (2026-09-14 copy): 2,036; median age 7 to 14 days in
   eight districts and 903.5 days in District 4 (158 reports); 850 days for the 29 held by DSD.
@@ -1077,6 +1108,206 @@ Next, in order:
    that the source catalogs list only as pages and PDFs.
 5. Local ordinance codes 65000 and 65002 do not name the ordinance; the stop records'
    `reasonforstopexplanation` text may. Not read yet.
+
+## Cross-source accountability build (2026-10-04)
+
+Decision (owner, 2026-10-04): implement the cross-source comparisons, evasion profiling, escalation,
+briefing, displacement, provenance and change-detection ideas the owner supplied, finding data
+sources where the library lacks them. Settled constraints, so they are not reopened: every output
+is a count or a quoted statement with its source; no output says an agency intended, hid, or
+broke anything unless a counted statutory deadline supports it; a comparison between sources is
+not a causal claim. Not built, by decision: an anonymous source drop with automatic release (a
+desktop app cannot provide source anonymity; a provenance manifest on a file stripped of
+identifying marks attests receipt, not authenticity), a predicted settlement probability or
+liability index (no data supports the figure), a verdict that new ordinance text conflicts with
+state law (the app reports what the text changed), and anchoring hashes to an outside ledger by
+default (opt-in only, and never submitted without the owner's confirmation).
+
+Audited 2026-10-04 (file references in the session's audit reports; the facts that shape the work):
+- A lead cites one snapshot and stores no citations, SHA-256 or SQL (`service_leads.rs`), so a
+  cross-table lead cannot cite its numbers yet. (Fixed 2026-10-04, below.)
+- The operating budget file has no council-district or programme column, and no published City
+  table gives budget or spending by district. District-level funding statements can only be
+  checked against a document that states them.
+- Shelter capacity: UCSD Homelessness Hub ArcGIS layer `HIC_ES_2014_2024` (one row per
+  emergency-shelter project per year 2014 to 2026, city, address, coordinates, beds, utilisation;
+  sourced from RTFH's Housing Inventory Count; no licence stated). RTFH's own yearly workbooks
+  cover every project type but change layout and URL each year. HUD's per-CoC PDFs are the
+  reference totals (CA-601 emergency shelter year-round beds: 4,386 in 2023, 3,746 in 2024, 3,587
+  in 2025). SDHC occupancy exists only as Tableau and PDF.
+- Release timing: `documents.created_at` holds the portal's timestamp with offset; no detector
+  reads weekday, hour or holidays; PDF and OOXML timestamps are compared only with the request's
+  determination time.
+- Redaction corroboration never searches imported tables and rechecks only the newest 200
+  documents.
+- Budget: no under-spending, adopted-without-actuals or transfer finding; operating actuals are
+  not fetched by the app.
+- Change detection: a source re-check records both hashes and discards the new bytes; nothing
+  detects a request or document dropping out of a portal listing; no row or column comparison
+  between dataset snapshots.
+- Council dockets: fetchable from the City's OnBase agenda pages (meeting list, agenda body, item
+  detail, attachments); the system publishes no posting time, so a revision is only visible by
+  comparing the app's own successive copies. Settlements over 50,000 dollars are Council
+  resolutions (paged index, one scanned PDF each); no payout table is published.
+- Hand-imported files are stored with `visibility = public` and one detector counts them as an
+  agency release.
+- Escalation: no draft for a deadline that passed with no response, no draft cites other
+  findings or the agency's record, no petition draft.
+- Signed exports exist (Ed25519, self-managed key); nothing is signed per document, and the
+  architecture doc's "no per-document retrieval time is stored" conflicts with
+  `document_acquisitions.retrieved_at`.
+
+Built 2026-10-04: leads cite their tables. Each stored lead lists every table it read (its own
+first) with display name, source address, retrieval date and full SHA-256, then the SQL that
+produced it (`service_leads.rs`, methods §17 E). The Findings inbox shows the text as written and
+the dossier's Markdown export carries it. No citation rows or columns were added.
+
+Built 2026-10-04: budget, Encampment reports and shelter beds by fiscal year (methods §21;
+`SHELTER_INVENTORY` fetch, `capacityLeads.ts`, `CAPACITY_COMPARISON_LEAD`). Measured with the
+app's SQL in the DuckDB CLI on files retrieved 2026-10-04 (budget_operating_datasd.csv; Get It
+Done open and closed 2020 to 2026; HIC_ES_2014_2024, 719 rows, 384 for the City of San Diego):
+
+| fiscal year | adopted expense, Homelessness Strategies & Solutions | Encampment reports filed | year-round emergency shelter beds (all beds), January count |
+|---|---|---|---|
+| 2021 | 64,235,899 | 34,288 | 3,225 (3,239) |
+| 2022 | 18,071,824 | 47,364 | 2,434 (2,529) |
+| 2023 | 25,157,607 | 60,005 | 2,517 (2,632) |
+| 2024 | 44,007,454 | 69,987 | 2,476 (2,618) |
+| 2025 | 53,916,571 | 48,135 | 1,970 (2,124) |
+
+First to latest: budget down 16.1%, reports up 40.4%, year-round beds down 38.9%. In the 2025
+count 2 of 37 projects record no year-round count and 1 no total. Not compared: fiscal 2018 to
+2020 (no department with "homeless" in its name in the budget file) and fiscal 2026 (its budget
+rows carry no budget cycle; 43,758 reports, 2,055 year-round beds). Also measured: 335,087
+Encampment reports across the open and closed 2018 to 2026 files with no id repeated and none
+without a filing date; none sits in a closed file earlier than the year it was filed; closed 2016
+and 2017 hold no Encampment reports. The endpoints matter: the adopted amount fell from fiscal
+2021 to 2022 and rose each year after, so the lead lists every year. Not verified: the fetch and
+the lead in the running app (the native test imports fixture files with the publishers' headers,
+not the downloads); whether the fiscal 2021 amount includes one-time funds; HUD's CA-601 totals
+cover the whole county and were not compared.
+
+Order of work:
+1. Done 2026-10-04 (two paragraphs above): leads that cite several tables with snapshot, SHA-256
+   and SQL; shelter inventory fetch; a lead setting homelessness budget, encampment reports and
+   shelter beds side by side by year.
+2. Shared denial language: agency identity fix, agency names and passage offsets, paraphrase
+   across agencies.
+3. Release timing against the portal's own distribution, weekends and court holidays.
+4. Hand-imported files labelled apart from agency releases and compared with held documents.
+5. Budget under-spending, adopted lines without actuals, operating actuals fetch.
+6. Redaction corroboration from imported tables and for older documents when new material arrives.
+7. Re-check keeps changed bytes and shows the difference; listing drop-outs; snapshot row and
+   column comparison (on the peer's watchlist storage, no second diff store).
+8. Docket copies over time with revision differences; settlement resolutions as a table.
+9. Draft for an overdue request with no response, citing the agency's counted record.
+10. Briefing export with every figure's source; place-level counts; reports after abatements in
+    nearby places; a signed receipt for one document.
+
+Built 2026-10-04 (order item 3): `RELEASE_TIMING_CONCENTRATION` (methods §22). Per agency and
+portal, the share of releases that began at or after 3 p.m. on the last working day before a
+weekend or California court holiday, against the portal's other releases; a release is one
+request's files uploaded less than 60 minutes apart. The audit line above is corrected:
+`documents.created_at` is the portal's upload time only for a listed file whose portal gave one;
+it is the request's opening time, its closing time (closure notices) or the app's first-seen time
+on other paths, and those rows are left out or not read. `held_back_response` and
+`regenerated_response` time a file by its own upload time when it has one. Measured on
+`eval-encampment-2` (142 sandiego.nextrequest.com requests, read-only DuckDB CLI, 2026-10-04; SQL
+equivalent of the detector's grouping, weekends only, no holiday calendar): 771 documents, of
+which 142 are closure notices and 629 listed files, all with an upload time; 215 releases from
+2020-06-18 to 2026-09-10, the largest of 168 files. By weekday: Monday 38, Tuesday 45, Wednesday
+35, Thursday 46, Friday 48, Saturday 3, Sunday 0. By starting hour: 5 a.m. 3, 6 a.m. 14, 7 a.m.
+17, 8 a.m. 18, 9 a.m. 14, 10 a.m. 19, 11 a.m. 26, noon 19, 1 p.m. 21, 2 p.m. 25, 3 p.m. 26,
+4 p.m. 12, 5 p.m. 1. At or after 3 p.m.: 39 (18.1%); on a Friday at or after 3 p.m.: 9 (4.2%).
+The agency with most releases has 77, 4 of them Friday from 3 p.m. (5.2%); the next two have 50
+and 21, with none and 1; no other agency has 20, so by these counts nothing would be reported
+there. Not measured: the
+detector itself on that collection (it is opened only by the CLI), and its file ages. That
+collection has no `request_release_events` table and no request with a determination time, so the
+two older detectors do not run on it.
+
+Built 2026-10-04: a file or pasted text the user adds is no longer read as an agency release.
+`documents.visibility` stays `public` (it is the access gate for the viewer, search and table
+import, not a statement of origin); origin is answered from `portals.source_kind` through the
+`user_supplied_sources` view, which every detector query that selects documents without requiring
+an agency or a determination now excludes, and `absence_of_records` reads records releases only.
+No stored value changed. The document viewer labels such a file "Added by you. Not downloaded from
+an agency source", and `describe_document_origin` compares it with collected documents: same file
+SHA-256, same extracted text in a different file, and near-duplicate text from the existing corpus
+index, each either compared or not compared with the reason. `read_document_internal_metadata`
+shows the PDF Info/XMP or Office docProps fields, each a value or not recorded, stated as written
+by the file's maker and unverified. Not built: marking findings drawn from an imported table whose
+origin file was hand-added, and excluding hand-added files from redaction-inference corroboration
+(architecture doc section 5).
+
+Built 2026-10-05: follow-up letter after a determination deadline passes with no recorded response
+(methods §33). For a saved casework request, `draft_overdue_follow_up` states the recorded
+submission date, the deadline computed under Government Code § 7922.535 with the court calendar,
+and the calendar days since, and asks for the determination; it refuses with a shown reason on the
+deadline day and earlier, with no submission date, or with any recorded response. The casework
+panel offers it under the request's scheduled follow-ups. After a first draft the user may pick a
+library agency (portal plus agency id, at least 10 closed requests) to add one counted paragraph:
+closed requests held, sourced determinations and how many of those were after the computed
+deadline, and no-records closure notices with a recorded earlier similar release. The lead dossier
+now shows a table lead's tables (name, source, retrieval date, SHA-256) and SQL on screen.
+Verified by tests: the boundary day and the day after, a valid and a defective extension, a
+deadline on 1 January, each refusal, the paragraph at 9, 10 and 11 closed requests, zero numerators
+against unmeasured ones, two portals sharing an agency id, the wording check, the stale-result
+guard (proved by removing it), and the dossier with and without a table lead. Section 7923.000
+was read at leginfo.legislature.ca.gov through a text-extraction tool. Not verified: anything in
+the running app; the counts against a real library. Not built: the letter for a tracked request in
+My requests (`tracker/deadline.rs` holds the same evaluation and an extension notice, so the
+drafting function would accept it; no UI was added there); an extension field on a casework
+request, so that path always counts ten days and says no extension is recorded; remembering the
+chosen agency on the case; replacing the generic `followUpDraft` text.
+
+Round one merged and gated 2026-10-05 (main at 02366f6: fmt, clippy, 1,328 lib tests, 8
+data-discovery tests, tsc, eslint, 645 frontend tests, IPC and help checks all exit 0): order
+items 1 to 4 above. Nothing in round one has been checked in the running app.
+
+Round two, in progress: (a) operating actuals fetch with under-spending, adopted-without-actuals
+and settlement-account leads, and overtime from the State Controller pay file; (b) a registry of
+meeting bodies (`docs/data-sources/meeting-bodies.md`) with posting time from each file's
+`Last-Modified` and differences between successive copies of an agenda; (c) redaction
+corroboration from imported tables and for older documents when new material arrives; (d) a
+draft for a request whose deadline passed with no response, citing the agency's counted record.
+After that: disclosure-portal reader and export import, settlement resolutions as a table,
+re-check that keeps changed bytes (on the peer's watchlist storage), reports after abatements in
+nearby places, a signed receipt for one document, and the data packs in `docs/data-packs.md`.
+
+Built 2026-10-05 (round two a): adopted against actual spending, settlement accounts and overtime
+paid (methods §24; `OPERATING_ACTUALS` fetch, `spendingLeads.ts`, `SPENDING_RECORD_LEAD`, a data
+gap offering the actuals when only a budget is imported). Measured with the app's three SQL
+statements in the DuckDB CLI on `budget_operating_datasd.csv` and `actuals_operating_datasd.csv`
+retrieved 2026-10-05 (actuals SHA-256 53cfc748..., 663,858 rows, fiscal 2011 to 2023) and the
+owner's copy of the State Controller 2024 city file:
+
+| fiscal year | adopted expense, Homelessness Strategies & Solutions | actual expense | below adopted |
+|---|---|---|---|
+| 2021 | 64,235,899 | 57,879,044 | 9.9% |
+| 2022 | 18,071,824 | 9,815,698 | 45.7% |
+| 2023 | 25,157,607 | 22,920,122 | 8.9% |
+
+Only fiscal 2022 meets the yardstick (10% and 1,000,000 dollars). Environmental Services meets it
+in fiscal 2012 and 2013 (10.3% each) and in no year since; Police in none. Of 813 department-years
+with adopted expense in fiscal 2011 to 2023, 14 have no actual rows under that name, 6 of them
+with an adopted amount above zero (General Fund Appropriated Reserve 2011, 2013, 2014; Business
+Office 2011 to 2013), the latest in fiscal 2014. Settlement and public-liability claim accounts,
+fiscal 2019 to 2023: 4.2, 4.4, 5.1, 4.3 and 36.6 million dollars from 10, 10, 6, 1 and 38
+departments, so the lead states each year and compares none. Pay file, San Diego: 14,570
+positions, 160,052,249 overtime (15.3% of regular pay), 211 positions at 100,000 or more;
+Fire-Rescue 61.5 million overtime beside 48.4 and 44.8 million adopted for fiscal 2024 and 2025,
+Police 54.2 million beside 49.3 and 46.4 million; the homelessness department 2,005 dollars and
+no adopted overtime row. With the whole state file imported the lead also describes Los Angeles
+and San Francisco, without a budget. Measured by a separate query, not the app's: across all
+departments 110 of the 813 department-years meet the yardstick; the app reports the three
+followed departments only. The three downloads were also imported once through
+`import_analytical_csv` and the statements run through the restricted SQL boundary (a one-off
+native run, not kept as a test): the same 43, 17 and 17 rows and the same figures; the pay file
+imported 345,776 rows and rejected 68 (it has 78 byte sequences that are not UTF-8, none in San
+Diego's 14,570 rows), so another city's sums can be short by its rejected rows. Not verified: the
+fetch and the leads in the running app; whether the fiscal 2022 difference is a transfer or a
+carry-forward; the pay file for any year but 2024.
 
 ## Leads from service-report tables (2026-10-04)
 

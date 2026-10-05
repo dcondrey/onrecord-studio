@@ -532,3 +532,517 @@ async fn abatement_logs_pair_one_notice_with_one_abatement_in_the_released_forma
     }
     assert_eq!(cell(&result, 0, "last_posted"), &json!("2025-07-10"));
 }
+
+#[tokio::test]
+async fn charge_log_checks_count_arrests_and_citations_not_charge_rows() {
+    let fixture: Value = serde_json::from_str(include_str!("fixtures/charge-leads.json")).unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let db = DuckDbRepository::new(temp.path().join("charges.db")).unwrap();
+    db.run_migrations(include_str!("../migrations/0001_initial_schema.sql"))
+        .await
+        .unwrap();
+    let path = temp.path().join("charges.csv");
+    std::fs::write(&path, fixture["csv"].as_str().unwrap()).unwrap();
+    let input: AnalyticalImportRequest = serde_json::from_value(json!({ "datasetKind":"REGIONAL_DATA", "displayName":"charges", "localPath":path, "sourceUri":"https://example.test/charges.csv", "partialDataset":true })).unwrap();
+    let imported = db.import_analytical_csv(input).await.unwrap();
+    assert_eq!((imported.imported_rows, imported.rejected_rows), (9, 0));
+    let run = |index: usize| {
+        let sql = fixture["queries"][index]["sql"]
+            .as_str()
+            .unwrap()
+            .replace("analysis_charge_log", &imported.table_name);
+        let db = &db;
+        async move { db.execute_restricted_sql(&sql, 100).await.unwrap() }
+    };
+    let count = |result: &SqlQueryResult, row: usize, name: &str| -> i64 {
+        let value = cell(result, row, name);
+        value
+            .as_i64()
+            .or_else(|| value.as_f64().map(|number| number as i64))
+            .or_else(|| value.as_str().and_then(|text| text.parse().ok()))
+            .unwrap_or_else(|| panic!("{name} is not a count: {value}"))
+    };
+    let counts = run(0).await;
+    assert_eq!(counts.row_count, 1);
+    for (column, expected) in [
+        // Nine charge rows are eight arrests and citations.
+        ("activities", 8),
+        ("counted_activities", 5),
+        ("arrests", 2),
+        ("citations", 3),
+        // The arrest that also cites battery is not on these sections alone.
+        ("arrests_on_these_alone", 1),
+        ("encampment", 1),
+        // 54.011 and 54.0110 are one section.
+        ("encroachment", 2),
+        // 647(F) is not 647(E).
+        ("lodging", 1),
+        ("urination", 1),
+    ] {
+        assert_eq!(count(&counts, 0, column), expected, "{column}");
+    }
+    assert_eq!(cell(&counts, 0, "first_date"), &json!("2025-01-01"));
+    assert_eq!(cell(&counts, 0, "last_date"), &json!("2025-02-02"));
+    let races = run(1).await;
+    // The citation whose race is the publisher's "NULL" is in neither column.
+    let rows: Vec<(String, i64, i64, i64, i64)> = (0..races.row_count)
+        .map(|row| {
+            (
+                cell(&races, row, "race").as_str().unwrap().to_string(),
+                count(&races, row, "counted_activities"),
+                count(&races, row, "activities"),
+                count(&races, row, "all_counted_activities"),
+                count(&races, row, "all_activities"),
+            )
+        })
+        .collect();
+    assert_eq!(
+        rows,
+        vec![
+            ("BLACK".to_string(), 2, 2, 4, 7),
+            ("WHITE".to_string(), 2, 3, 4, 7),
+            ("HISPANIC".to_string(), 0, 2, 4, 7),
+        ]
+    );
+}
+
+/// The shelter inventory as GeoJSON, the operating budget and the Get It Done open and closed-year
+/// files, each with the publisher's own header, read together by the comparison's SQL.
+#[tokio::test]
+async fn capacity_comparison_counts_each_series_per_fiscal_year_and_keeps_absence_apart() {
+    let fixture: Value =
+        serde_json::from_str(include_str!("fixtures/capacity-leads.json")).unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let db = DuckDbRepository::new(temp.path().join("capacity.db")).unwrap();
+    db.run_migrations(include_str!("../migrations/0001_initial_schema.sql"))
+        .await
+        .unwrap();
+    let mut sql = fixture["queries"][0]["sql"].as_str().unwrap().to_string();
+    let mut files = vec![
+        (
+            "shelter".to_string(),
+            "hic.geojson".to_string(),
+            &fixture["inventory"],
+        ),
+        (
+            "budget".to_string(),
+            "budget.csv".to_string(),
+            &fixture["budget"],
+        ),
+    ];
+    for (name, text) in fixture["reports"].as_object().unwrap() {
+        let snapshot = if name == "open" {
+            name.clone()
+        } else {
+            format!("closed_{name}")
+        };
+        files.push((snapshot, format!("reports_{name}.csv"), text));
+    }
+    for (snapshot, file_name, text) in files {
+        let path = temp.path().join(&file_name);
+        std::fs::write(&path, text.as_str().unwrap()).unwrap();
+        let input: AnalyticalImportRequest = serde_json::from_value(json!({ "datasetKind":"REGIONAL_DATA", "displayName":snapshot, "localPath":path, "sourceUri":format!("https://example.test/{file_name}"), "partialDataset":true })).unwrap();
+        let imported = db.import_analytical_csv(input).await.unwrap();
+        assert_eq!(imported.rejected_rows, 0, "{snapshot}");
+        sql = sql.replace(
+            &format!("\"analysis_{snapshot}\""),
+            &format!("\"{}\"", imported.table_name),
+        );
+    }
+    let result = db.execute_restricted_sql(&sql, 100).await.unwrap();
+    let number = |row: usize, name: &str| -> Option<i64> {
+        let value = cell(&result, row, name);
+        value
+            .as_i64()
+            .or_else(|| value.as_f64().map(|number| number as i64))
+            .or_else(|| value.as_str().and_then(|text| text.parse().ok()))
+    };
+    let rows: Vec<[Option<i64>; 9]> = (0..result.row_count)
+        .map(|row| {
+            [
+                "fiscal_year",
+                "adopted_rows",
+                "department_rows",
+                "adopted_expense",
+                "encampment_reports",
+                "year_round_beds",
+                "total_beds",
+                "shelter_projects",
+                "projects_without_year_round",
+            ]
+            .map(|name| number(row, name))
+        })
+        .collect();
+    assert_eq!(
+        rows,
+        vec![
+            // Adopted rows exist for fiscal 2023 and none names the department: no amount, not
+            // zero. Its reports are not counted because the 2022 closed file is not imported.
+            [
+                Some(2023),
+                Some(1),
+                Some(0),
+                None,
+                None,
+                Some(80),
+                Some(85),
+                Some(1),
+                Some(0)
+            ],
+            // Revenue and proposed lines are left out of 1,500. Three reports were filed from
+            // 1 July 2023 through 30 June 2024, the last at 23:50 on 30 June.
+            [
+                Some(2024),
+                Some(4),
+                Some(3),
+                Some(1500),
+                Some(3),
+                Some(150),
+                Some(170),
+                Some(2),
+                Some(0)
+            ],
+            // Report 9001 is in the open file and the 2025 closed file and is counted once;
+            // Homeless Outreach is another service. One project records no year-round count.
+            [
+                Some(2025),
+                Some(1),
+                Some(1),
+                Some(2000),
+                Some(4),
+                Some(120),
+                Some(170),
+                Some(2),
+                Some(1)
+            ],
+            // Fiscal 2026 rows carry no budget cycle, so no row is adopted.
+            [
+                Some(2026),
+                None,
+                None,
+                None,
+                Some(1),
+                Some(90),
+                Some(95),
+                Some(1),
+                Some(0)
+            ],
+        ]
+    );
+    assert_eq!(
+        cell(&result, 1, "departments"),
+        &json!("Homelessness Strategies & Solutions")
+    );
+}
+
+/// The two logs as the City released them (PRA 25-5806 notices, 26-772 abatements), read from a
+/// collection's object store the way Data upkeep reads them: no extension on disk, the format
+/// taken from the released file name.
+#[tokio::test]
+#[ignore = "Needs ONRECORD_ENCAMPMENT_COLLECTION, a directory holding the 2026-10-03 encampment collection"]
+async fn released_abatement_spreadsheets_import_and_reproduce_the_measured_hours() {
+    let collection = std::path::PathBuf::from(
+        std::env::var("ONRECORD_ENCAMPMENT_COLLECTION").expect("ONRECORD_ENCAMPMENT_COLLECTION"),
+    );
+    let fixture: Value =
+        serde_json::from_str(include_str!("fixtures/abatement-leads.json")).unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let db = DuckDbRepository::new(temp.path().join("abatement.db")).unwrap();
+    db.run_migrations(include_str!("../migrations/0001_initial_schema.sql"))
+        .await
+        .unwrap();
+    let mut sql = fixture["queries"][0]["sql"].as_str().unwrap().to_string();
+    for (name, file_name, sha256, rows) in [
+        (
+            "posted",
+            "PRA #25-5806 - ESD.xlsx",
+            "ed2b8da8521d761ddc03403a0452b22e6c5df223a7356448ab328c52bd9c74e2",
+            11_090,
+        ),
+        (
+            "completed",
+            "Copy of Abatements Completed 7.31.23 to 1.28.26.xlsx",
+            "ba47308323e283fef3a1f2c4174059793eddde98a34bcecef9cf1bb98004a428",
+            14_000,
+        ),
+    ] {
+        let path = collection
+            .join("downloads/objects")
+            .join(&sha256[..2])
+            .join(sha256);
+        let input: AnalyticalImportRequest = serde_json::from_value(json!({ "datasetKind":"REGIONAL_DATA", "displayName":file_name, "localPath":path, "sourceUri":format!("https://example.test/{name}"), "partialDataset":true, "sourceFileName":file_name, "expectedSourceSha256":sha256 })).unwrap();
+        let imported = db.import_analytical_csv(input).await.unwrap();
+        assert_eq!(
+            (imported.imported_rows, imported.rejected_rows),
+            (rows, 0),
+            "{name}"
+        );
+        sql = sql.replace(&format!("analysis_abatement_{name}"), &imported.table_name);
+    }
+    let result = db.execute_restricted_sql(&sql, 100).await.unwrap();
+    let number = |name: &str| -> f64 {
+        let value = cell(&result, 0, name);
+        value
+            .as_f64()
+            .or_else(|| value.as_str().and_then(|text| text.parse().ok()))
+            .unwrap_or_else(|| panic!("{name} is not numeric: {value}"))
+    };
+    for (column, expected) in [
+        ("posted_notices", 11_090.0),
+        ("completed_abatements", 14_000.0),
+        ("paired_places", 2_067.0),
+        ("completed_before_posted", 11.0),
+        ("under_3_hours", 22.0),
+        ("under_24_hours", 101.0),
+        ("from_24_to_72_hours", 1_811.0),
+        ("over_72_hours", 144.0),
+        ("median_hours", 29.3),
+        ("abatements_in_notice_period", 11_104.0),
+        ("abatements_without_notice_in_log", 214.0),
+    ] {
+        assert_eq!(number(column), expected, "{column}");
+    }
+}
+
+/// The operating budget, the operating actuals and the State Controller's city pay file, each with
+/// the publisher's own header, read by the spending leads' SQL.
+#[tokio::test]
+async fn spending_checks_keep_no_rows_apart_from_zero_and_tie_a_budget_to_one_employer() {
+    let fixture: Value =
+        serde_json::from_str(include_str!("fixtures/spending-leads.json")).unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let db = DuckDbRepository::new(temp.path().join("spending.db")).unwrap();
+    db.run_migrations(include_str!("../migrations/0001_initial_schema.sql"))
+        .await
+        .unwrap();
+    let mut tables = Vec::new();
+    for snapshot in ["budget", "actuals", "pay"] {
+        let path = temp.path().join(format!("{snapshot}.csv"));
+        std::fs::write(&path, fixture[snapshot].as_str().unwrap()).unwrap();
+        let input: AnalyticalImportRequest = serde_json::from_value(json!({ "datasetKind":"REGIONAL_DATA", "displayName":snapshot, "localPath":path, "sourceUri":format!("https://example.test/{snapshot}.csv"), "partialDataset":true })).unwrap();
+        let imported = db.import_analytical_csv(input).await.unwrap();
+        assert_eq!(imported.rejected_rows, 0, "{snapshot}");
+        tables.push((format!("\"analysis_{snapshot}\""), imported.table_name));
+    }
+    let mut results = Vec::new();
+    for query in fixture["queries"].as_array().unwrap() {
+        let mut sql = query["sql"].as_str().unwrap().to_string();
+        for (placeholder, table_name) in &tables {
+            sql = sql.replace(placeholder, &format!("\"{table_name}\""));
+        }
+        let result = db.execute_restricted_sql(&sql, 100).await.unwrap();
+        assert!(!result.truncated, "{}", query["id"]);
+        results.push(result);
+    }
+    let [compared, settled, paid] = &results[..] else {
+        panic!("three spending queries");
+    };
+    let number = |result: &SqlQueryResult, row: usize, name: &str| -> Option<i64> {
+        let value = cell(result, row, name);
+        value
+            .as_i64()
+            .or_else(|| value.as_f64().map(|number| number as i64))
+            .or_else(|| value.as_str().and_then(|text| text.parse().ok()))
+    };
+    let rows =
+        |result: &SqlQueryResult, label: &str, names: &[&str]| -> Vec<(String, Vec<Option<i64>>)> {
+            (0..result.row_count)
+                .map(|row| {
+                    (
+                        cell(result, row, label).as_str().unwrap_or("").to_string(),
+                        names.iter().map(|name| number(result, row, name)).collect(),
+                    )
+                })
+                .collect()
+        };
+    let line = |label: &str, values: &[Option<i64>]| (label.to_string(), values.to_vec());
+
+    // Fiscal 2024 is adopted and not in the actuals file, so only 2022 and 2023 are read. Revenue
+    // and proposed lines are in neither sum. A department-year with no actual rows has no count
+    // and no amount, not zero.
+    assert_eq!(
+        rows(
+            compared,
+            "department",
+            &[
+                "fiscal_year",
+                "adopted_expense",
+                "actual_rows",
+                "actual_expense"
+            ]
+        ),
+        vec![
+            line(
+                "Business Office",
+                &[Some(2022), Some(1_000_000), None, None]
+            ),
+            line(
+                "Environmental Services",
+                &[Some(2022), Some(50_000_000), Some(1), Some(49_000_000)]
+            ),
+            line(
+                "Environmental Services",
+                &[Some(2023), Some(51_000_000), None, None]
+            ),
+            line(
+                "Homelessness Strategies & Solutions",
+                &[Some(2022), Some(18_000_000), Some(2), Some(9_000_000)]
+            ),
+            line(
+                "Homelessness Strategies & Solutions",
+                &[Some(2023), Some(25_000_000), Some(2), Some(22_650_000)]
+            ),
+            line(
+                "Police",
+                &[Some(2022), Some(100_000_000), Some(1), Some(101_000_000)]
+            ),
+            line(
+                "Police",
+                &[Some(2023), Some(100_000_000), Some(3), Some(90_000_000)]
+            ),
+        ]
+    );
+    assert_eq!(
+        [
+            "first_covered_year",
+            "last_covered_year",
+            "department_years"
+        ]
+        .map(|name| number(compared, 0, name)),
+        [Some(2022), Some(2023), Some(8)]
+    );
+
+    // Fiscal 2021 has rows and none in a settlement account. The lease settlement is left out.
+    assert_eq!(
+        rows(
+            settled,
+            "department",
+            &[
+                "fiscal_year",
+                "departments_in_table",
+                "departments_reporting",
+                "year_amount",
+                "department_amount"
+            ]
+        ),
+        vec![
+            line(
+                "Police",
+                &[
+                    Some(2023),
+                    Some(3),
+                    Some(3),
+                    Some(2_450_000),
+                    Some(2_100_000)
+                ]
+            ),
+            line(
+                "Library",
+                &[Some(2023), Some(3), Some(3), Some(2_450_000), Some(300_000)]
+            ),
+            line(
+                "Homelessness Strategies & Solutions",
+                &[Some(2023), Some(3), Some(3), Some(2_450_000), Some(50_000)]
+            ),
+            line(
+                "Library",
+                &[Some(2022), Some(4), Some(1), Some(-5_000), Some(-5_000)]
+            ),
+            line("", &[Some(2021), Some(1), None, None, None]),
+        ]
+    );
+
+    // Smallville's 99 positions are one short; Oceanside has exactly 100. Overtime of exactly
+    // 100,000 is counted and 99,999 is not. Oceanside's Police is not set beside this budget.
+    let pay_columns = [
+        "positions",
+        "overtime_pay",
+        "high_overtime_positions",
+        "positions_without_overtime",
+        "budget_departments_matched",
+        "department_overtime_pay",
+        "adopted_overtime_same_year",
+        "adopted_overtime_next_year",
+    ];
+    let san_diego = |overtime: i64, same: Option<i64>, next: Option<i64>| {
+        vec![
+            Some(113),
+            Some(2_921_999),
+            Some(2),
+            Some(1),
+            Some(20),
+            Some(overtime),
+            same,
+            next,
+        ]
+    };
+    let oceanside = |overtime: i64| {
+        vec![
+            Some(100),
+            Some(640_000),
+            Some(0),
+            Some(0),
+            Some(1),
+            Some(overtime),
+            None,
+            None,
+        ]
+    };
+    assert_eq!(
+        (0..paid.row_count)
+            .map(|row| (
+                cell(paid, row, "employer").as_str().unwrap().to_string(),
+                cell(paid, row, "department").as_str().unwrap().to_string(),
+                pay_columns
+                    .iter()
+                    .map(|name| number(paid, row, name))
+                    .collect::<Vec<_>>()
+            ))
+            .collect::<Vec<_>>(),
+        vec![
+            (
+                "San Diego".to_string(),
+                "Fire-Rescue".to_string(),
+                san_diego(1_500_000, None, None)
+            ),
+            (
+                "San Diego".to_string(),
+                "Police".to_string(),
+                san_diego(1_419_999, Some(49_000_000), Some(46_000_000))
+            ),
+            (
+                "San Diego".to_string(),
+                "Homelessness Strategies & Solutions".to_string(),
+                san_diego(2_000, None, None)
+            ),
+            (
+                "San Diego".to_string(),
+                "City Attorney".to_string(),
+                san_diego(0, None, None)
+            ),
+            (
+                "San Diego".to_string(),
+                "City Auditor".to_string(),
+                san_diego(0, None, None)
+            ),
+            (
+                "Oceanside".to_string(),
+                "Police".to_string(),
+                oceanside(600_000)
+            ),
+            (
+                "Oceanside".to_string(),
+                "Harbor".to_string(),
+                oceanside(40_000)
+            ),
+        ]
+    );
+    assert_eq!(
+        [
+            cell(paid, 0, "budget_city"),
+            cell(paid, 5, "budget_city"),
+            cell(paid, 0, "overtime_departments_same_year")
+        ],
+        [&json!(true), &json!(false), &json!(1)]
+    );
+}

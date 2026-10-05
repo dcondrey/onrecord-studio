@@ -122,6 +122,7 @@ async fn load_targets(repository: &DuckDbRepository) -> Result<Vec<SweepTarget>,
                         ON documents_fts.document_id = documents.id \
                        AND documents_fts.portal_subdomain = documents.portal_subdomain \
                      WHERE LOWER(TRIM(documents.visibility)) = 'public' \
+                       AND documents.portal_subdomain NOT IN (SELECT subdomain FROM user_supplied_sources) \
                        AND LENGTH(documents_fts.extracted_text) > 0 \
                        AND strlen(documents_fts.extracted_text) <= ?2 \
                      ORDER BY documents.id DESC \

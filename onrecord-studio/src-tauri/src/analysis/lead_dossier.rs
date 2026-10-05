@@ -343,6 +343,14 @@ pub fn falsification_for(kind: FindingKind) -> DossierFalsification {
             "The notice was given earlier or by another route than the posting the log records, or the two rows are different events at one place.",
             &["the notices as posted, with their posting times", "the abatement work orders and the stored-property log for the same places"],
         ),
+        FindingKind::ChargeLogLead => (
+            "The sections were charged against people who are housed, or alongside conduct the log does not record.",
+            &["the arrest and citation reports for the activity numbers counted", "the prosecutor's filing decision and case outcome for each charge"],
+        ),
+        FindingKind::CapacityComparisonLead => (
+            "The three series measure different things over different periods: the department's adopted amount is not all homelessness spending, and the bed count is one night each January.",
+            &["the department's adopted and actual expenditure by programme for the years compared", "the Housing Commission's shelter contracts and nightly occupancy reports for the same years"],
+        ),
         FindingKind::PoliceStopLead => (
             "The difference follows from why and where the stops were made, not from who was stopped.",
             &["the stop records broken down by reason for the stop, beat and assignment", "the department's property and evidence log for the items seized"],
@@ -350,6 +358,14 @@ pub fn falsification_for(kind: FindingKind) -> DossierFalsification {
         FindingKind::RollingProduction => (
             "The requester narrowed or added to the request, agreed to installments, or the records were found and reviewed in stages.",
             &["the request's correspondence on scope and schedule", "any production schedule or extension notice the agency sent"],
+        ),
+        FindingKind::SpendingRecordLead => (
+            "The budget was revised after adoption, the amount was transferred or carried forward, or the City recorded the payment under another department or account.",
+            &["the year-end budget monitoring report and mid-year budget amendments for the department and year", "the department's overtime and vacancy reports, or the settlement resolutions, for the same year"],
+        ),
+        FindingKind::ReleaseTimingConcentration => (
+            "Staff finish and post work at the end of the week, or the requests released then fell due then.",
+            &["the request log with each request's due date and assigned staff", "the portal's document activity log showing when each file was uploaded and when it was made public"],
         ),
         FindingKind::RedactionInconsistentAcrossReleases => (
             "The two copies are different versions of the record, or the later release applied an exemption the earlier one did not.",

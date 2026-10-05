@@ -8,7 +8,9 @@ export interface DiscoveryTransport {
   patterns(): Promise<CorpusPattern[]>;
   query(sql: string): Promise<SqlQueryResult>;
   maintain?(): Promise<DataMaintenanceStatus>;
-  fetch?(request: DataGap['fetch']): Promise<unknown>;
+  fetch?(request: NonNullable<DataGap['fetch']>): Promise<unknown>;
+  /** Starts collecting from a records portal for a subject; resolves once the collection has started. */
+  collect?(request: NonNullable<DataGap['collect']>): Promise<unknown>;
   /** Stores the feed's leads as findings; `complete` permits dropping earlier leads not sent. */
   record?(leads: ServiceLeadInput[], complete: boolean): Promise<unknown>;
 }
@@ -68,13 +70,14 @@ export class DiscoveryController {
   /** Fetch one missing table now, whether or not automatic upkeep is on. */
   fill = (key: string) => { this.requestedGaps.add(key); this.schedule(0); };
   gaps = (): DataGap[] => this.state.schema ? dataGaps(this.state.schema, this.state.profiles, new Date(this.now()).toISOString()) : [];
-  /** Missing tables are fetched one at a time, automatically only under the owner's upkeep policy. */
+  /** Missing tables are fetched one at a time, automatically only under the owner's upkeep policy.
+   * A collection from a records portal downloads many files, so it starts only when asked for. */
   private nextGap(): DataGap | undefined {
-    if (!this.transport.fetch) return undefined;
     const policy = this.state.maintenance?.policy;
     const automatic = Boolean(policy?.enabled && policy.autoRefresh);
-    return this.gaps().find((gap) => !['fetching', 'fetched'].includes(this.state.gapStatus[gap.key])
-      && (this.requestedGaps.has(gap.key) || (automatic && this.now() >= (this.gapRetryAt.get(gap.key) ?? 0))));
+    return this.gaps().find((gap) => (gap.fetch ? this.transport.fetch : this.transport.collect)
+      && !['fetching', 'fetched'].includes(this.state.gapStatus[gap.key])
+      && (this.requestedGaps.has(gap.key) || (gap.fetch && automatic && this.now() >= (this.gapRetryAt.get(gap.key) ?? 0))));
   }
   inspect = (sql: string) => this.publish({ inspection: { sql, sequence: (this.state.inspection?.sequence ?? 0) + 1 } });
   hold = () => {
@@ -187,7 +190,7 @@ export class DiscoveryController {
           this.publish({ gapStatus: { ...this.state.gapStatus, [gap.key]: 'fetching' } });
           // Recorded even if the controller stopped meanwhile: the outcome is keyed by its own gap,
           // and a restart that forgot it would download the same file twice.
-          const outcome = await this.transport.fetch!(gap.fetch).then(() => 'fetched', (reason) => String(reason));
+          const outcome = await (gap.fetch ? this.transport.fetch!(gap.fetch) : this.transport.collect!(gap.collect!)).then(() => 'fetched', (reason) => String(reason));
           if (outcome !== 'fetched') this.gapRetryAt.set(gap.key, this.now() + 21_600_000);
           else this.forceRefresh = true;
           this.publish({ gapStatus: { ...this.state.gapStatus, [gap.key]: outcome } });

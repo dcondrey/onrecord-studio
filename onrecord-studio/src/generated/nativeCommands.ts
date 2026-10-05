@@ -154,6 +154,7 @@ export interface NativeCommandMap {
   draft_appeal_from_finding: { args: { findingId: string; jurisdiction?: string | null }; result: Types.DraftedArtifact };
   draft_availability_for_finding: { args: { findingId: string }; result: Types.DraftAvailability };
   draft_appeal_from_statutory_deadline: { args: { portalKey: string; requestId: number; jurisdiction?: string | null }; result: Types.DraftedArtifact };
+  draft_overdue_follow_up: { args: { caseId: string; requestId: string; agency?: Types.AgencyIdentity | null }; result: Types.OverdueFollowUpDraft };
   export_verifiable_report: { args: { request: Types.VerifiableReportRequest }; result: Types.VerifiableReportExportResult };
   export_evidence_packet: { args: { request: Types.EvidencePacketRequest }; result: Types.EvidencePacketExportResult };
   preview_packet_annotations: { args: { request: Types.PacketAnnotationPreviewRequest }; result: Types.AnnotationPreview };
@@ -193,6 +194,8 @@ export interface NativeCommandMap {
   import_annotation_packet: { args: { payload: string; packetSha256: string }; result: Types.AnnotationImportResult };
   resolve_page_regions: { args: { portalKey: string; documentId: number; originalSha256: string; pageCount: number }; result: Types.ResolvedPageRegion[] };
   read_document_original: { args: { documentId: number; portalKey: string }; result: ArrayBuffer };
+  describe_document_origin: { args: { documentId: number; portalKey: string }; result: Types.DocumentOriginReport };
+  read_document_internal_metadata: { args: { documentId: number; portalKey: string }; result: Types.DocumentInternalMetadata };
   list_claimed_requests: { args: NoArgs; result: Types.ClaimedRequest[] };
   claim_request: { args: { input: Types.ClaimRequestInput }; result: Types.ClaimedRequest };
   update_claimed_request: { args: { input: Types.UpdateClaimedRequestInput }; result: Types.ClaimedRequest };

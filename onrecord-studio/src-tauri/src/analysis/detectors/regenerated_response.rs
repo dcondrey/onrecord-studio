@@ -36,6 +36,8 @@ use crate::parsers::ooxml_docprops::read_ooxml_docprops;
 use crate::parsers::pdf_metadata_signals::read_pdf_metadata_signals;
 use crate::storage::DuckDbRepository;
 
+use super::release_timing::{portal_upload_time, ReleaseBasis, PORTAL_LISTED_FILE};
+
 pub const SLUG: &str = "regenerated_response";
 
 const MAX_CANDIDATES: i64 = 500;
@@ -60,6 +62,7 @@ struct Candidate {
     local_path: String,
     content_type: Option<String>,
     release_at: DateTime<Utc>,
+    release_basis: ReleaseBasis,
 }
 
 pub async fn run(repository: &DuckDbRepository) -> Result<Vec<Finding>, AppError> {
@@ -78,19 +81,21 @@ async fn load_candidates(repository: &DuckDbRepository) -> Result<Vec<Candidate>
     repository
         .query_connection("Regenerated-response candidate query", move |conn| {
             let mut statement = conn
-                .prepare(
+                .prepare(&format!(
                     "SELECT d.id, d.portal_subdomain, d.request_id, d.file_name, d.local_path,
-                        d.content_type, r.determination_at
+                        d.content_type, r.determination_at,
+                        CASE WHEN {PORTAL_LISTED_FILE} THEN d.created_at END, r.created_at
                      FROM documents d
                      JOIN requests r
                         ON r.id = d.request_id
                        AND r.portal_subdomain = d.portal_subdomain
+                     LEFT JOIN portals p ON p.subdomain = d.portal_subdomain
                      WHERE d.local_path IS NOT NULL
                        AND LOWER(TRIM(d.visibility)) = 'public'
                        AND r.determination_at IS NOT NULL
                      ORDER BY r.determination_at DESC
-                     LIMIT ?1",
-                )
+                     LIMIT ?1"
+                ))
                 .map_err(|error| {
                     AppError::Storage(format!(
                         "Failed to prepare regenerated-response query: {error}"
@@ -106,6 +111,8 @@ async fn load_candidates(repository: &DuckDbRepository) -> Result<Vec<Candidate>
                         row.get::<_, String>(4)?,
                         row.get::<_, Option<String>>(5)?,
                         row.get::<_, String>(6)?,
+                        row.get::<_, Option<String>>(7)?,
+                        row.get::<_, String>(8)?,
                     ))
                 })
                 .map_err(|error| {
@@ -123,11 +130,26 @@ async fn load_candidates(repository: &DuckDbRepository) -> Result<Vec<Candidate>
                     local_path,
                     content_type,
                     determination_at,
+                    portal_file_time,
+                    request_created_at,
                 ) = row.map_err(|error| {
                     AppError::Storage(format!("Failed to decode candidate row: {error}"))
                 })?;
-                let Ok(release_at) = DateTime::parse_from_rfc3339(&determination_at) else {
-                    continue;
+                // The file's own upload time when the portal recorded one; the request's
+                // determination time otherwise.
+                let uploaded = portal_file_time
+                    .and_then(|value| portal_upload_time(&value, &request_created_at));
+                let (release_at, release_basis) = match uploaded {
+                    Some(uploaded) => (uploaded.with_timezone(&Utc), ReleaseBasis::DocumentUpload),
+                    None => {
+                        let Ok(determined) = DateTime::parse_from_rfc3339(&determination_at) else {
+                            continue;
+                        };
+                        (
+                            determined.with_timezone(&Utc),
+                            ReleaseBasis::RequestDetermination,
+                        )
+                    }
                 };
                 candidates.push(Candidate {
                     document_id,
@@ -136,7 +158,8 @@ async fn load_candidates(repository: &DuckDbRepository) -> Result<Vec<Candidate>
                     file_name,
                     local_path,
                     content_type,
-                    release_at: release_at.with_timezone(&Utc),
+                    release_at,
+                    release_basis,
                 });
             }
             Ok(candidates)
@@ -256,13 +279,14 @@ fn evaluate(candidate: &Candidate, inspection: &Inspection) -> Option<Finding> {
         plural = if backdate_days == 1 { "" } else { "s" }
     );
     let explanation = format!(
-        "\"{file_name}\" (request {request_id}) was released on {release} but its {source} \
+        "\"{file_name}\" (request {request_id}) was released on {release} ({basis}) but its {source} \
          reports its most recent edit as {edit} — {backdate_days} day{plural} earlier. \
          The metadata is {rung_label} (basis {basis_points} bp), so the gap between edit and \
          release cannot be explained by a same-cycle drafting pass. Consistent with a canned \
          document dropped in as the response.",
         request_id = candidate.request_id,
         release = format_short(candidate.release_at),
+        basis = candidate.release_basis.describe(),
         source = inspection.signal_source,
         edit = format_short(edit),
         plural = if backdate_days == 1 { "" } else { "s" },
@@ -325,6 +349,7 @@ mod tests {
             local_path: "/tmp/x.pdf".into(),
             content_type: Some("application/pdf".into()),
             release_at,
+            release_basis: ReleaseBasis::RequestDetermination,
         }
     }
 
@@ -452,5 +477,36 @@ mod tests {
         assert!(is_ooxml_mime("application/msword"));
         assert!(!is_ooxml_mime("application/pdf"));
         assert!(!is_ooxml_mime(""));
+    }
+
+    #[tokio::test]
+    async fn a_file_is_timed_by_its_own_upload_and_by_the_determination_only_without_one() {
+        let repository = super::super::release_timing::repository_with_one_dated_upload().await;
+        let candidates = load_candidates(&repository).await.expect("load");
+        let timed = |id: i64| {
+            let candidate = candidates
+                .iter()
+                .find(|candidate| candidate.document_id == id)
+                .expect("candidate");
+            (candidate.release_at, candidate.release_basis)
+        };
+        let determined = dt("2026-03-05T20:00:00Z");
+        assert_eq!(
+            timed(1),
+            (dt("2026-03-04T23:30:00Z"), ReleaseBasis::DocumentUpload)
+        );
+        assert_eq!(timed(2), (determined, ReleaseBasis::RequestDetermination));
+        assert_eq!(timed(3), (determined, ReleaseBasis::RequestDetermination));
+        let stated = evaluate(
+            &Candidate {
+                release_basis: ReleaseBasis::DocumentUpload,
+                ..candidate(dt("2026-05-01T10:00:00Z"))
+            },
+            &self_consistent(dt("2026-04-15T10:00:00Z")),
+        )
+        .expect("fires");
+        assert!(stated
+            .explanation
+            .contains("(the portal's recorded upload time of this file)"));
     }
 }

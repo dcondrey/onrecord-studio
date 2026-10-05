@@ -1,0 +1,65 @@
+[
+  {
+    "id": "finding-release-timing",
+    "title": "Releases late before a weekend or holiday",
+    "group": "Finding kinds",
+    "keywords": [
+      "release timing",
+      "friday",
+      "weekend",
+      "holiday",
+      "upload time",
+      "afternoon",
+      "file age",
+      "modification time"
+    ],
+    "summary": "A larger share of one agency's releases began at or after 3 p.m. on the last working day before a weekend or California court holiday than of the other releases on the same portal.",
+    "sections": [
+      {
+        "heading": "What it shows",
+        "paragraphs": [
+          "The time read is the portal's own recorded upload time of each public file, at the offset the portal recorded it with. A release is the files uploaded to one request with less than 60 minutes between one file and the next, timed at its first file: fifty files uploaded in a minute are one release.",
+          "A release is late when it began at or after 3:00 p.m. local time on a working day whose next day is a Saturday, a Sunday or a California judicial holiday. A Wednesday before a Thursday holiday counts, and when a Friday is itself a holiday the Thursday before it counts and the Friday does not.",
+          "The finding gives the agency's count of late releases and of all releases, the dates they span, the same two counts for every other release on the portal, both shares, and how many files were left out because no usable upload time is recorded."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "Why the uploads fall where they do. Staff often finish and post work at the end of a week or before a holiday, and requests that fall due then are released then. The portal records when a file was uploaded, not when a file uploaded earlier was made public.",
+          "Holidays are California judicial holidays. Days proclaimed for one occasion are not modeled, and an agency elsewhere keeps a different calendar."
+        ]
+      },
+      {
+        "heading": "When it is reported",
+        "paragraphs": [
+          "The agency needs 20 releases and the rest of the portal 40. Late releases must fall on at least three dates, and several late releases on one date count once, so a single large batch cannot produce the finding. The agency's share must be at least twice the share of the portal's other releases and at least ten percentage points above it.",
+          "An agency is one agency of one portal. The same agency number on another portal is a different agency."
+        ]
+      },
+      {
+        "heading": "Files left out",
+        "paragraphs": [
+          "A file is left out, and counted as left out, when its stored time is the request's opening time (stored when the portal gave no upload date), has no time of day or no local offset, or is exactly midnight. A date without a time is never read as midnight. Closure notices, files you imported and files from sources other than a records portal are not read at all: their stored time is not an upload time."
+        ]
+      },
+      {
+        "heading": "How old the files were",
+        "paragraphs": [
+          "For the files in the late releases (the 50 most recent), the internal modification time of each PDF or Office file is compared with its upload time. The finding counts files last modified less than a day, one to six days, and seven or more days before upload, and each cited file states its own figure.",
+          "A modification time later than the upload time is reported as a contradiction between the file and the portal's clock (a clock or metadata error, or a file rewritten after upload). It is not an age. A file with no internal modification time is reported as not recorded, never as zero."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is not assessed: the finding restates counted upload times and infers nothing to score. No request draft is offered."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": ["RELEASE_TIMING_CONCENTRATION"],
+    "commandGroups": [],
+    "related": ["finding-rolling-production", "legal-vs-pattern", "findings-inbox"]
+  }
+]

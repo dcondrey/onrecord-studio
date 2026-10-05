@@ -19,6 +19,8 @@ use std::sync::{mpsc as std_mpsc, Arc};
 use tokio::sync::{mpsc, oneshot, Semaphore};
 
 const CORPUS_ALGORITHM_VERSION: &str = "deterministic-corpus-v3";
+/// Largest SimHash distance, in bits, at which two texts are reported as near duplicates.
+const NEAR_DUPLICATE_MAXIMUM_DISTANCE: u32 = 8;
 /// Shape of the tables in [`CORPUS_SCHEMA`]. Bump this whenever a column type, key, or constraint
 /// changes; an index written under any other version is discarded and rebuilt rather than migrated.
 /// 3: every integer column widened to `BIGINT`. DuckDB's `INTEGER` is 32-bit, and a real source
@@ -62,6 +64,8 @@ const CORPUS_SCHEMA_VERSION: i64 = 12;
 
 #[path = "corpus_identifiers.rs"]
 mod identifiers;
+#[path = "corpus_near_duplicates.rs"]
+pub mod near_duplicates;
 #[path = "corpus_neighbors.rs"]
 pub mod neighbors;
 #[path = "corpus_registry.rs"]
@@ -3734,7 +3738,7 @@ fn load_near_duplicate_patterns(
             AppError::Storage(format!("Failed to decode near duplicate: {error}"))
         })?;
         let distance = (left.simhash ^ right.simhash).count_ones();
-        if distance > 8 {
+        if distance > NEAR_DUPLICATE_MAXIMUM_DISTANCE {
             continue;
         }
         let confidence = 9_500_u16.saturating_sub((distance as u16).saturating_mul(500));

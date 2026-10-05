@@ -1,0 +1,53 @@
+[
+  {
+    "id": "finding-capacity-comparison-lead",
+    "title": "Budget, Encampment reports and shelter beds by year",
+    "group": "Finding kinds",
+    "keywords": [
+      "budget",
+      "homelessness",
+      "encampment",
+      "shelter",
+      "beds",
+      "capacity",
+      "fiscal year",
+      "inventory",
+      "Get It Done"
+    ],
+    "summary": "Three counts for the City of San Diego set side by side for each fiscal year: the adopted operating budget of the homelessness department, Encampment reports residents filed through Get It Done, and emergency shelter beds in the January inventory.",
+    "sections": [
+      {
+        "heading": "What it shows",
+        "paragraphs": [
+          "For each fiscal year (1 July to 30 June) in which all three are available, the lead lists the adopted operating expense of the City department with \"homeless\" in its name, the number of Encampment reports filed in that year, and the year-round emergency shelter beds counted that January, with the count of beds of every kind beside it. It then gives each series for the first and the latest of those years and the difference between them.",
+          "Every figure comes from an imported table. The finding lists each table it read with its source address, the date it was retrieved and its SHA-256 digest, followed by the SQL that produced the figures."
+        ]
+      },
+      {
+        "heading": "Which years are counted",
+        "paragraphs": [
+          "The City files a closed report under the year it was closed, not the year it was filed. The reports filed in one fiscal year are therefore spread over the open-reports file and every closed-year file from then on. A fiscal year's reports are counted only when all of those files are imported; otherwise the year is listed as not counted, never as a smaller number.",
+          "A year in which the budget file lists no homelessness department is listed as having no such department, which is not a budget of zero. The shelter inventory is a count made on one night each January, so the January 2025 count is set beside fiscal year 2025, seven months into it. Inventory years before 2018 are not used because the year-round and seasonal columns were filled differently then."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "Why any of the three moved. The series come from three publishers and are set beside each other, not explained by each other.",
+          "All homelessness spending: the budget figure is the amount adopted for one City department. The San Diego Housing Commission and the County spend separately, and an adopted amount is not an amount spent. All shelter or housing: the beds are emergency shelter only, without transitional or permanent housing. How many people were living outdoors: the reports are complaints residents filed, and one place can be reported many times.",
+          "The inventory was compiled by the UCSD Homelessness Hub from the Regional Task Force on Homelessness Housing Inventory Count and states no licence."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is not assessed: the finding restates counts and infers nothing to score."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": ["CAPACITY_COMPARISON_LEAD"],
+    "commandGroups": [],
+    "related": ["legal-vs-pattern", "findings-inbox", "finding-service-report-lead", "finding-charge-log-lead"]
+  }
+]

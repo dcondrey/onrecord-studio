@@ -451,7 +451,7 @@ function FindingRow({
           aria-describedby={`finding-${finding.id}-explanation`}
         >
           <p className="text-label font-semibold text-fg">{finding.headline}</p>
-          <p id={`finding-${finding.id}-explanation`} className="mt-1 text-label leading-relaxed text-muted">{finding.explanation}</p>
+          <p id={`finding-${finding.id}-explanation`} className="mt-1 whitespace-pre-line break-words text-label leading-relaxed text-muted">{finding.explanation}</p>
           <p className="mt-1 text-caption uppercase tracking-wider text-muted">
             {severityLabel(finding.severity)} · {formatRelativeTime(finding.lastSeenAt)}
           </p>

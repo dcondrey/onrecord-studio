@@ -55,7 +55,11 @@ export type FindingKind =
   | 'ROLLING_PRODUCTION'
   | 'SERVICE_REPORT_LEAD'
   | 'POLICE_STOP_LEAD'
-  | 'ABATEMENT_LOG_LEAD';
+  | 'ABATEMENT_LOG_LEAD'
+  | 'CHARGE_LOG_LEAD'
+  | 'CAPACITY_COMPARISON_LEAD'
+  | 'SPENDING_RECORD_LEAD'
+  | 'RELEASE_TIMING_CONCENTRATION';
 
 /**
  * How a finding's confidence was derived. `UNASSESSED` distinguishes an unmeasured rung from a
@@ -128,9 +132,13 @@ export interface EvidenceGapView {
 /** One discovery-feed lead sent to `record_service_leads`. Mirrors `analysis/service_leads.rs`. */
 export interface ServiceLeadInput {
   /** Which published records the lead was counted from; decides the finding kind. */
-  family: 'SERVICE_REPORTS' | 'POLICE_STOPS' | 'ABATEMENT_LOGS';
+  family: 'SERVICE_REPORTS' | 'POLICE_STOPS' | 'ABATEMENT_LOGS' | 'CHARGE_LOGS' | 'CAPACITY_COMPARISON' | 'SPENDING_RECORDS';
   key: string;
   snapshotId: string;
+  /** Every table the SQL read, `snapshotId` first; each is cited in the stored finding. */
+  snapshotIds: string[];
+  /** The statement whose result the lead's figures were read from. */
+  sql: string;
   title: string;
   detail: string;
   question: string;

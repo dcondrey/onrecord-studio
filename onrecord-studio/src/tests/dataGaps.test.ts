@@ -49,9 +49,66 @@ describe('the budget behind a backlog', () => {
     expect(keys(catalog(latest), 'TSW')).toEqual(['budget:latest']);
     expect(keys(catalog(latest), 'Parking')).toEqual([]);
     expect(keys(catalog(latest), null)).toEqual([]);
+    // With the budget imported, the next table offered is what was spent against it.
     const withBudget = catalog(latest);
     const budget = base.datasets.find((dataset) => dataset.snapshotId === 'budget')!;
-    expect(keys({ ...withBudget, datasets: [...withBudget.datasets, budget], columns: [...withBudget.columns, ...base.columns.filter((column) => column.tableName === budget.tableName)] }, 'TSW')).toEqual([]);
+    expect(keys({ ...withBudget, datasets: [...withBudget.datasets, budget], columns: [...withBudget.columns, ...base.columns.filter((column) => column.tableName === budget.tableName)] }, 'TSW')).toEqual(['actuals:budget']);
+  });
+});
+
+describe('released records behind encampment reports', () => {
+  const latest = table('latest', open, '2026-10-04T00:00:00Z');
+  const reports = (category: string): Record<string, AutomaticProfile> => ({ latest: { fingerprint: 'f', checkedAt: 'now', results: [{ query: query('service_backlog'), result: response(['category'], [[category]]) }] } });
+  const collections = (schema: AnalyticalSchema, category: string) => dataGaps(schema, reports(category), '2026-10-04T12:00:00Z').flatMap((gap) => gap.collect ?? []);
+
+  it('proposes the records collection only while encampment reports are open and no abatement log is imported', () => {
+    expect(collections(catalog(latest), 'Encampment')).toEqual([{ url: 'https://sandiego.nextrequest.com', subject: expect.stringContaining('encampment') }]);
+    expect(collections(catalog(latest), 'Pothole')).toEqual([]);
+    const schema = catalog(latest);
+    const log = { ...latest, snapshotId: 'log', tableName: 'analysis_log', sourceUri: null };
+    const column = (columnName: string) => ({ ...base.columns[0], tableName: log.tableName, columnName });
+    expect(collections({ ...schema, datasets: [...schema.datasets, log], columns: [...schema.columns, ...['date_posted', 'address', 'latitude', 'longitude'].map(column)] }, 'Encampment')).toEqual([]);
+  });
+
+  it('asks for the shelter inventory, then one closed year at a time until a fiscal year of reports can be counted', () => {
+    const fetches = (schema: AnalyticalSchema, category = 'Encampment') => dataGaps(schema, reports(category), '2026-10-04T12:00:00Z').flatMap((gap) => gap.fetch ?? []);
+    const shelter = { dataset: 'SHELTER_INVENTORY', year: null };
+    expect(fetches(catalog(latest))).toContainEqual(shelter);
+    expect(fetches(catalog(latest), 'Pothole')).not.toContainEqual(shelter);
+    const added = (schema: AnalyticalSchema, snapshotId: string, names: string[]): AnalyticalSchema => ({ ...schema, datasets: [...schema.datasets, { ...latest, snapshotId, tableName: `analysis_${snapshotId}`, sourceUri: null }],
+      columns: [...schema.columns, ...names.map((columnName) => ({ ...base.columns[0], tableName: `analysis_${snapshotId}`, columnName }))] });
+    const inventory = (schema: AnalyticalSchema) => added(schema, 'shelter', ['year', 'city', 'year_round_beds', 'total_beds']);
+    const budget = (schema: AnalyticalSchema) => added(schema, 'budget', ['dept_name', 'report_fy', 'budget_cycle', 'amount', 'account_number']);
+    const closed = (year: number, retrievedAt = '2026-10-04T00:00:00Z') => table(`closed${year}`, closed2026.replace('2026', String(year)), retrievedAt, JSON.stringify({ derivedSubset: { filter: "service_name = 'Encampment'" } }));
+    const yearly = (schema: AnalyticalSchema) => fetches(schema).filter((fetch) => fetch.dataset === 'GET_IT_DONE_ENCAMPMENTS');
+    expect(fetches(inventory(catalog(latest)))).not.toContainEqual(shelter);
+    // Without the budget table there is nothing to set a year of reports beside.
+    expect(yearly(inventory(catalog(latest)))).toEqual([]);
+    expect(yearly(budget(inventory(catalog(latest))))).toEqual([{ dataset: 'GET_IT_DONE_ENCAMPMENTS', year: 2026 }]);
+    expect(yearly(budget(inventory(catalog(latest, closed(2026)))))).toEqual([{ dataset: 'GET_IT_DONE_ENCAMPMENTS', year: 2025 }]);
+    // This year's closed file must not be older than the open copy.
+    expect(yearly(budget(inventory(catalog(latest, closed(2026, '2026-10-03T00:00:00Z')))))).toEqual([{ dataset: 'GET_IT_DONE_ENCAMPMENTS', year: 2026 }]);
+    // The budget file names no homelessness department before fiscal 2021, so 2019 is not asked for.
+    expect(yearly(budget(inventory(catalog(latest, ...[2026, 2025, 2024, 2023, 2022, 2021, 2020].map((year) => closed(year))))))).toEqual([]);
+  });
+
+  it('never starts the collection on its own, even when upkeep fetches missing tables', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-04T12:00:00Z'));
+    const fetch = vi.fn(async () => ({}));
+    const collect = vi.fn(async () => ({}));
+    const controller = new DiscoveryController({ schema: async () => catalog(latest), candidates: async () => [], patterns: async () => [],
+      query: async () => response(['column_name', 'category'], [['status', 'Encampment']]), fetch, collect });
+    try {
+      controller.start();
+      controller.setMaintenance({ policy: { enabled: true, autoImport: true, autoRefresh: true, refreshHours: 24, retentionMode: 'ORIGINALS', retainedFileBudgetBytes: 10 * 1024 ** 3 }, effectiveAt: '2026-09-14T00:00:00Z', retainedFileBytes: 0, referencedDocuments: 0, reclaimedFileBytes: 0, events: [] });
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(fetch).toHaveBeenCalledWith({ dataset: 'RIPA_STOPS', year: null });
+      expect(collect).not.toHaveBeenCalled();
+      controller.fill('records:latest');
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(collect).toHaveBeenCalledTimes(1);
+      expect(controller.snapshot().gapStatus['records:latest']).toBe('fetched');
+    } finally { controller.stop(); vi.useRealTimers(); }
   });
 });
 

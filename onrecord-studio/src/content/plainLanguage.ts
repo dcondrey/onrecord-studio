@@ -30,7 +30,7 @@ export const PLAIN_FINDING_TEXT: Record<FindingKind, PlainText> = {
   },
   BOILERPLATE_DENIAL: {
     observed: 'Nearly identical denial wording appears in responses to unrelated requests.',
-    notShown: 'It does not show that any denial was wrong. Agencies often use standard wording for standard reasons.',
+    notShown: 'It does not show that any denial was wrong or that a request was not reviewed individually. Agencies often use standard wording for standard reasons.',
     next: 'Read two of the cited denials side by side and check whether each explains its own request.',
   },
   JUST_IN_TIME_COMPLIANCE: {
@@ -79,7 +79,7 @@ export const PLAIN_FINDING_TEXT: Record<FindingKind, PlainText> = {
     next: 'Compare the request wording with the other documents, and consider asking the agency to re-check its search.',
   },
   EVASION_PARAPHRASED_DENIALS: {
-    observed: 'Denials on different topics share the same underlying reasons in different words.',
+    observed: 'Denials from one agency on different topics use much the same vocabulary in different wording.',
     notShown: 'It does not show the wording was chosen for any purpose. Similar reasons can produce similar letters.',
     next: 'Read the denial letters together and check whether the reasons fit each request.',
   },
@@ -104,8 +104,8 @@ export const PLAIN_FINDING_TEXT: Record<FindingKind, PlainText> = {
     next: 'Treat it as a lead only. Do not repeat the name as fact, and confirm through a record the agency releases.',
   },
   CROSS_CORPUS_SHARED_LANGUAGE: {
-    observed: 'The same paragraph appears in responses from more than one agency.',
-    notShown: 'It does not show the agencies coordinated. A shared template or common legal text is a likely cause.',
+    observed: 'The same paragraph, or a reworded version of it, appears in responses from three or more agencies.',
+    notShown: 'It does not show the agencies coordinated or that any request was not reviewed individually. A shared template or common legal text is a likely cause.',
     next: 'Find the source of the paragraph, such as a statute or model policy, before drawing a conclusion.',
   },
   CROSS_CORPUS_TEMPORAL_SHIFT: {
@@ -228,10 +228,30 @@ export const PLAIN_FINDING_TEXT: Record<FindingKind, PlainText> = {
     notShown: 'It does not show that a deadline was missed. The requester may have agreed to installments or changed the request.',
     next: "Read the request's correspondence for a production schedule or a change of scope.",
   },
+  RELEASE_TIMING_CONCENTRATION: {
+    observed: "A larger share of this agency's releases began late on the last working day before a weekend or court holiday than of the other releases on the same portal.",
+    notShown: 'It does not show why. Work is often finished and posted at the end of a week, and the portal records when a file was uploaded, not when it was made public.',
+    next: "Read the counts, both shares and the cited files. If it matters to your work, ask the agency for the requests' due dates and the portal's document activity log.",
+  },
+  SPENDING_RECORD_LEAD: {
+    observed: "Sums from published spending tables set beside each other: a department's actual expense against its adopted amount, settlement and claim accounts by year, or overtime paid by department.",
+    notShown: 'It does not show why. Adopted is the original appropriation, not the revised budget; an amount not spent may have been transferred or carried forward, and the tables do not say whether overtime was authorised.',
+    next: "Ask the department for its revised budget and year-end report for the year named, or its overtime and vacancy reports, and read the Council's settlement resolutions.",
+  },
   ABATEMENT_LOG_LEAD: {
     observed: "A count from an agency's released encampment abatement logs: the hours between a notice being posted and the abatement at the same place, and abatements at places with no notice in the log.",
     notShown: 'It does not show that too little notice was given. The logs do not record the notice period that applied, whether anyone was present, or what was done with belongings.',
     next: "Ask the agency for its abatement procedure, the notices as posted and the stored-property log for the places listed.",
+  },
+  CHARGE_LOG_LEAD: {
+    observed: "A count from a police department's released arrest and citation log: arrests and citations citing an encampment, encroachment, lodging or public urination section, and arrests on those sections alone.",
+    notShown: 'It does not show that the people charged had no housing, or why they were charged. The log records the section, not whether shelter was offered or what became of the charge.',
+    next: "Ask the department for the reports behind the arrests made on these sections alone, and the prosecutor for what became of the charges.",
+  },
+  CAPACITY_COMPARISON_LEAD: {
+    observed: "Three counts set side by side for each fiscal year: the City department's adopted homelessness budget, Encampment reports residents filed, and emergency shelter beds in the January inventory.",
+    notShown: "It does not show why any of the three moved. The budget is one department's adopted amount, not all homelessness spending; the beds are emergency shelter only; the reports are complaints filed, not people.",
+    next: "Ask the department which programmes each year's adopted amount paid for, and the Housing Commission for its shelter agreements and occupancy in the same years.",
   },
   POLICE_STOP_LEAD: {
     observed: "A count from a police department's published stop records: how often people an officer perceived as unhoused were stopped, arrested, cited or had property seized, and the recorded reasons.",

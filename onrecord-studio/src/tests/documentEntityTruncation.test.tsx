@@ -20,6 +20,7 @@ vi.mock('../ipc', () => ({
       const gate = bridge.gates.get(documentId);
       return gate ? gate.then(() => answer) : Promise.resolve(answer);
     }
+    if (command === 'describe_document_origin') return Promise.resolve({ origin: 'COLLECTED_FROM_SOURCE', heldRelation: null });
     return Promise.reject(new Error(`unexpected command ${command}`));
   },
 }));

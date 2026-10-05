@@ -6,6 +6,7 @@ pub mod annotations;
 pub mod collaboration;
 pub mod corpus;
 pub mod dispositions;
+pub mod document_origin;
 pub mod export;
 pub mod ingest;
 pub mod investigation;

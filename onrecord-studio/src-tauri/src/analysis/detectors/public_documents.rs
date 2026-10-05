@@ -1,4 +1,11 @@
-//! Shared bounded sweep over public documents that have extracted text.
+//! Shared bounded sweep over public documents that have extracted text and were collected from a
+//! source.
+//!
+//! A file the user added by hand (`user_supplied_sources`) is never evidence of what an agency
+//! released, withheld, redacted or said, so no detector may read one as such. Every detector query
+//! that selects documents excludes that view or goes through [`load_public_documents`], unless it
+//! already requires a fact a hand-added file's synthetic request never has (an agency, a
+//! determination date, a statutory extension).
 
 use crate::{error::AppError, storage::DuckDbRepository};
 use duckdb::params;
@@ -32,6 +39,7 @@ pub(super) async fn load_public_documents(
                         ON documents_fts.document_id = documents.id
                        AND documents_fts.portal_subdomain = documents.portal_subdomain
                      WHERE LOWER(TRIM(documents.visibility)) = 'public'
+                       AND documents.portal_subdomain NOT IN (SELECT subdomain FROM user_supplied_sources)
                        AND COALESCE(documents.extracted_text_sha256, '') <> ''
                        AND LENGTH(documents_fts.extracted_text) > 0
                        AND strlen(documents_fts.extracted_text) <= ?2

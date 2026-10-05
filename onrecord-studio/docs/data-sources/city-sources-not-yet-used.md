@@ -1,0 +1,28 @@
+# City of San Diego and local sources not yet used
+
+Checked 2026-10-04 through a summarising fetcher. Open-data CSVs are PDDL, no login. "Seen" means a
+row or page was read; large year files were not opened. Ranked by use to the owner's subjects.
+
+| # | Source | Where | Grain and columns | Answers |
+|---|---|---|---|---|
+| 1 | Police calls for service (SDPD) | `seshat.datasd.org/police_calls_for_service/pd_calls_for_service_<2015..2026>_datasd.csv`; lookups `pd_cfs_calltypes_datasd.csv`, `pd_dispo_codes_datasd.csv`, `gis_police_beats/pd_beat_codes_list_datasd.csv` | one incident: incident_num, date_time, block address, call_type, disposition, beat, priority; daily. Call types seen: SLEEPER, CW (check the welfare), SELENF, 1151, 5150, 602. Dispositions: A arrest, K no report, U unfounded. No encampment call type | where police are sent to sleeper and welfare calls and how they end |
+| 2 | Housing Commission staff reports | `sdhc.org/wp-json/wp/v2/media?search=<kw>&mime_type=application/pdf&orderby=date&order=desc&_fields=id,date_gmt,title,source_url` (bare host) | PDF per report with operator, programme, amount, term, funding source, beds. Seen: HCR26-016, Father Joe's Villages, 2,865,640 dollars for 2026-07-01 to 2027-06-30, up to 112 beds. Also ACFR, single audit, MTW annual report, shelter dashboard PDF (fixed URL, overwritten) | who is paid how much to run which shelter |
+| 3 | Independent Budget Analyst reports | `sandiego.gov/iba/reports/reports<YY>` (2006 to 2026) | PDF. Report 26-19 REV (2026-08-13) has programme by funding source in thousands (General Fund, Measure C, HHAP, CDBG-ESG, other); grand total 234,460.6 | homelessness dollars by programme and source |
+| 4 | City Auditor | `sandiego.gov/auditor/reports`; follow-up at `/auditor/recommendation-follow-dashboard` (JavaScript) and semiannual PDFs | PDFs; per-recommendation tables (number, department, status, target date) not verified. Encampment audit: `/sites/default/files/2026-04/performance-audit-of-the-city-s-response-to-homeless-encampments-since-the-unsafe-camping-ordinance.pdf` | what auditors found, which fixes are overdue |
+| 5 | UCSD Homelessness Hub layers (244 items, no licence stated) | list: `arcgis.com/sharing/rest/search?q=owner:HHub_SanDiego&num=100&f=json`; data: `services1.arcgis.com/eGSDp8lpKe5izqVc/arcgis/rest/services/<name>/FeatureServer/0/query?where=1=1&outFields=*&f=json` | `20xx_Sheriff_Evictions_WFL1` 2018 to 2024 (File_Number, Date, Status_1, Address); `311_Encampment_Reports_2024`; `Safe_Parking_Sites`; not opened: `2024_Filing_Rates_by_Zip_Code_WFL1`, `HUD_Subsidized_Projects_2025`, `DSDP_Unhoused_Count_-_2026_Q3`, `PITC_2024_TractCounts` | evictions by address, downtown counts, tract counts |
+| 6 | City property leases and inventory | `seshat.datasd.org/city_owned_properties_leases/city_property_leases_datasd.csv`; `seshat.datasd.org/city_owned_properties/city_property_details_datasd.csv` | leases: lessee, description, status, location, nonprofit flag, dates, amount (seen: "HOMELESS HOUSING" at 1801 Logan Ave; safe parking at Aero Dr); inventory: site, managing dept, designated use, acres | which City land hosts shelters and on what terms |
+| 7 | Commission on Police Practices cases | `seshat.datasd.org/cpp_complaints_evaluated_2025/cpp_cases_CY2025_datasd.csv` plus allegations, complainants, body-camera siblings; 2019 to 2024 sets | one case: dates, days, address, division, beat, council district, `sol_benchmark_met` | complaint review timeliness by district |
+| 8 | Contract award tables | `sandiego.gov/purchasing/bids-contracts/contracts<2023..2027>`; `/cip/reports/consultantcontracts`, `/constructioncontracts`, `/minor-repair-contracts` | HTML tables: contract number (PDF link), type, name, award date, amount, contractor. No homelessness operators (those go through SDHC and Council) | vendor, amount, date |
+| 9 | Pay with overtime (third party) | `transparentcalifornia.com/salaries/2024/san-diego/` | 14,570 rows: title, department, base, overtime, total; CSV named on page, not fetched; terms not checked. No City payroll dataset exists | overtime by department and job |
+| 10 | Parking citations | `seshat.datasd.org/parking_citations/parking_citations_<YYYY>_part<1\|2>_datasd.csv`, 2012 to 2026 | citation_id, date_issue, location, vio_code, vio_desc, vio_fine | vehicle-habitation and oversize-vehicle ticketing by place (inferred) |
+| 11 | SDPD procedures | `sandiego.gov/police/data-transparency/policies-procedures/procedures?page=N` | title, last-modified date, PDF | what procedure applied on a date |
+| 12 | Fire and EMS incidents | `seshat.datasd.org/fire_ems_incidents/fd_incidents_<2016..2026>_datasd.csv` | call_category, problem, date_response, ZIP | ZIP-level only |
+| 13 | Indexes | Ethics stipulations `/ethics/documents/stipulations`; City Attorney opinions `/city-clerk/officialdocs/legal-opinions`; SB 272 system catalogue `seshat.datasd.org/enterprise_system_information/it_sb272_datasd.csv` (names internal systems to ask for in a records request); storage centres page (two sites, 90-day discard rule, no figures) | | |
+
+Not published anywhere found: City tables for abatements, belongings stored or discarded, Safe
+Sleeping use, outreach team activity, or beds unavailable; a vendor-payment or purchase-order
+dataset; SDPD use-of-force or overtime data. These need records requests.
+
+Dead ends: MuckRock API (403 and CAPTCHA to the fetcher; untested from a normal client); State
+Controller pay site (403); PlanetBids portals (JavaScript, no rows); SDHC contract-awards page
+(404); code enforcement dataset (metadata says 2015 to 2018).

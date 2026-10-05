@@ -251,6 +251,29 @@ pub enum FindingKind {
     /// notice in the log. Counted by the discovery feed's SQL and recorded as sent. The logs do
     /// not record the notice period that applied, so this is not a finding that notice fell short.
     AbatementLogLead,
+    /// A count read from a police department's released arrest and citation log: arrests and
+    /// citations citing an encampment, encroachment, lodging or public urination section, and
+    /// arrests on those sections alone. Counted by the discovery feed's SQL and recorded as sent.
+    /// The log records the charge, not housing status, so this is not a finding about who was
+    /// charged or why.
+    ChargeLogLead,
+    /// Three counted series set side by side per fiscal year: a department's adopted operating
+    /// expense, Encampment reports residents filed, and emergency shelter beds in the January
+    /// inventory. Counted by the discovery feed's SQL and recorded as sent. A comparison between
+    /// sources, not a statement that one series moved another.
+    CapacityComparisonLead,
+    /// An agency's releases began at or after 3 p.m. on the last working day before a weekend or
+    /// California court holiday at a share at least twice, and ten points above, that of the
+    /// other releases on the same portal. A count of the portal's recorded upload times. It does
+    /// not show why the uploads fall where they do: work is often finished and posted at the end
+    /// of a week, and the portal does not record when an uploaded file was made public.
+    ReleaseTimingConcentration,
+    /// Counts from published spending tables set beside each other: a department's actual
+    /// operating expense against its adopted amount, an adopted amount with no actual rows,
+    /// settlement and claim accounts per year, or overtime in the State Controller's pay file.
+    /// Counted by the discovery feed's SQL and recorded as sent. Adopted is the original
+    /// appropriation, so none of these is an appropriation test or a statement about use.
+    SpendingRecordLead,
 }
 
 impl FindingKind {
@@ -300,6 +323,10 @@ impl FindingKind {
             Self::ServiceReportLead => "SERVICE_REPORT_LEAD",
             Self::PoliceStopLead => "POLICE_STOP_LEAD",
             Self::AbatementLogLead => "ABATEMENT_LOG_LEAD",
+            Self::ChargeLogLead => "CHARGE_LOG_LEAD",
+            Self::CapacityComparisonLead => "CAPACITY_COMPARISON_LEAD",
+            Self::ReleaseTimingConcentration => "RELEASE_TIMING_CONCENTRATION",
+            Self::SpendingRecordLead => "SPENDING_RECORD_LEAD",
         }
     }
 
@@ -349,6 +376,10 @@ impl FindingKind {
             Self::ServiceReportLead,
             Self::PoliceStopLead,
             Self::AbatementLogLead,
+            Self::ChargeLogLead,
+            Self::CapacityComparisonLead,
+            Self::ReleaseTimingConcentration,
+            Self::SpendingRecordLead,
         ]
         .into_iter()
         .find(|candidate| candidate.as_str() == value)
@@ -456,6 +487,14 @@ impl FindingKind {
             // Two recorded times with no stated minimum to count them against;
             // `EncampmentNoticeShortfall` is the kind that has one.
             Self::AbatementLogLead => false,
+            // Counts of charges as the department recorded them.
+            Self::ChargeLogLead => false,
+            // Counts from three publishers beside each other; no rule is applied to them.
+            Self::CapacityComparisonLead => false,
+            // Two shares of counted upload times. When work is posted breaks no rule.
+            Self::ReleaseTimingConcentration => false,
+            // Sums of two publishers' tables beside each other; no rule is applied to them.
+            Self::SpendingRecordLead => false,
         }
     }
 }

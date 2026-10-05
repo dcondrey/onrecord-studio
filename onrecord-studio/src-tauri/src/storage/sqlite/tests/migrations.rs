@@ -449,6 +449,16 @@ async fn migrations_restore_columns_missing_from_an_older_database() {
     assert_eq!(pointer, "/requests");
     assert_eq!(health, "verified");
     assert_eq!(kind, "NEXT_REQUEST");
+    // The view reads `source_kind`, which this table did not have until the shim above ran.
+    let user_supplied: i64 = connection
+        .query_row("SELECT COUNT(*) FROM user_supplied_sources", [], |row| {
+            row.get(0)
+        })
+        .expect("the view must bind on a portals table that predates source_kind");
+    assert_eq!(
+        user_supplied, 0,
+        "a source that predates source_kind was collected, not added by hand"
+    );
     let scheduler_counts: (i64, i64) = connection
         .query_row(
             "SELECT crawl_pages_started, resources_started

@@ -23,6 +23,11 @@ function logRoles(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary, t
   return roles.time && roles.address && roles.latitude && roles.longitude && !serviceRequestRoles(columns) ? roles as LogRoles : null;
 }
 
+/** Whether any imported table is a log of posted notices or of completed abatements. */
+export function holdsAbatementLog(schema: AnalyticalSchema): boolean {
+  return schema.datasets.some((dataset) => logRoles(schema, dataset, names.posted) || logRoles(schema, dataset, names.completed));
+}
+
 /** The latest imported log of completed abatements, for a table of posted notices. */
 export function abatementCompanion(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary): AnalyticalDatasetSummary | null {
   if (!logRoles(schema, dataset, names.posted)) return null;

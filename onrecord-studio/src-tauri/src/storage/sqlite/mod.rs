@@ -1,5 +1,6 @@
 //! Thread-safe DuckDB repository layer managing persistent storage and data indexing.
 
+mod agency_record;
 mod analytical;
 mod analytical_import;
 mod row_store;

@@ -624,13 +624,10 @@ fn cell(value: &Value) -> String {
     }
 }
 
-fn json_table(value: Value) -> Result<PreparedTable, AppError> {
-    if let Some(error) = value.get("error") {
-        return Err(invalid(format!(
-            "Provider returned an error instead of rows: {error}"
-        )));
-    }
-    let partial = value
+/// Whether a JSON response says the server holds rows it did not send: ArcGIS sets
+/// `exceededTransferLimit` (under `properties` in GeoJSON), paged APIs a `next` link.
+pub(crate) fn reports_more_rows(value: &Value) -> bool {
+    value
         .get("exceededTransferLimit")
         .and_then(Value::as_bool)
         .unwrap_or(false)
@@ -638,7 +635,16 @@ fn json_table(value: Value) -> Result<PreparedTable, AppError> {
             .pointer("/properties/exceededTransferLimit")
             .and_then(Value::as_bool)
             .unwrap_or(false)
-        || value.get("next").is_some_and(|v| !v.is_null());
+        || value.get("next").is_some_and(|v| !v.is_null())
+}
+
+fn json_table(value: Value) -> Result<PreparedTable, AppError> {
+    if let Some(error) = value.get("error") {
+        return Err(invalid(format!(
+            "Provider returned an error instead of rows: {error}"
+        )));
+    }
+    let partial = reports_more_rows(&value);
     let features = value.get("features").and_then(Value::as_array);
     let mut objects = Vec::new();
     let mut headers = Vec::new();
