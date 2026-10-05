@@ -359,7 +359,7 @@ describe('AnalysisWorkbench City dataset fetch', () => {
     // The fetch refuses a year for a table published as one file.
     const year = expect.any(Number);
     expect(sent).toEqual({ NIBRS_OFFENSES: year, GET_IT_DONE_ENCAMPMENTS: year, GET_IT_DONE_OUTCOMES: year, GET_IT_DONE_OPEN: null, SCHOOLS: null, TRANSIT_STOPS: null, OPERATING_BUDGET: null,
-      RIPA_STOPS: null, RIPA_STOP_REASONS: null, RIPA_STOP_RESULTS: null, RIPA_PROPERTY_SEIZURE_BASIS: null, SHELTER_INVENTORY: null });
+      RIPA_STOPS: null, RIPA_STOP_REASONS: null, RIPA_STOP_RESULTS: null, RIPA_PROPERTY_SEIZURE_BASIS: null, SHELTER_INVENTORY: null, OPERATING_ACTUALS: null });
   });
 });
 

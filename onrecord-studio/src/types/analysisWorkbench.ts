@@ -10,7 +10,8 @@ export type AnalyticalDatasetKind =
 
 export type CityDataset = 'NIBRS_OFFENSES' | 'GET_IT_DONE_ENCAMPMENTS' | 'GET_IT_DONE_OPEN' | 'GET_IT_DONE_OUTCOMES' | 'SCHOOLS' | 'TRANSIT_STOPS' | 'OPERATING_BUDGET'
   | 'RIPA_STOPS' | 'RIPA_STOP_REASONS' | 'RIPA_STOP_RESULTS' | 'RIPA_PROPERTY_SEIZURE_BASIS'
-  | 'SHELTER_INVENTORY';
+  | 'SHELTER_INVENTORY'
+  | 'OPERATING_ACTUALS';
 
 export interface AnalyticalImportRequest {
   datasetKind: AnalyticalDatasetKind;

@@ -4,6 +4,7 @@ import { abatementCompanion, abatementLeads, abatementQueries } from './abatemen
 import { stopCompanions, stopLeads, stopQueries } from './stopLeads';
 import { chargeLeads, chargeQueries } from './chargeLeads';
 import { capacityCompanions, capacityLeads, capacityQueries } from './capacityLeads';
+import { spendingCompanion, spendingLeads, spendingQueries } from './spendingLeads';
 import { backlogChangeLeads, budgetTable, recurringServiceLeads, serviceAccountabilityLeads, serviceAccountabilityQueries, serviceCompanions, serviceRequestRoles } from './serviceAccountability';
 
 export interface DiscoveryObservation {
@@ -46,7 +47,8 @@ export function snapshotFingerprint(schema: AnalyticalSchema, dataset: Analytica
   return JSON.stringify([dataset, columns, companions ? [companions.earlier, ...companions.outcomes].map((table) => table.snapshotId) : [],
     serviceRequestRoles(columns)?.group ? budgetTable(schema)?.snapshotId ?? null : null,
     Object.values(stopCompanions(schema, dataset) ?? {}).map((table) => table.snapshotId), abatementCompanion(schema, dataset)?.snapshotId ?? null,
-    capacity ? [capacity.budget, capacity.reports.open, ...capacity.reports.closed].map((table) => table.snapshotId) : []]);
+    capacity ? [capacity.budget, capacity.reports.open, ...capacity.reports.closed].map((table) => table.snapshotId) : [],
+    spendingCompanion(schema, dataset)?.snapshotId ?? null]);
 }
 
 export function automaticProfileQuery(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary): DiscoveryQuery {
@@ -66,7 +68,8 @@ export function automaticFollowups(schema: AnalyticalSchema, dataset: Analytical
   // One consistent counting unit, no inferred sums, rates, or cross-publisher joins.
   const plan = buildDiscoveryPlan(schema, selection);
   return [...plan.queries.filter((query) => (query.id === 'coverage' && selection.period) || (query.id === 'groups' && selection.dimension) || (query.id === 'changes' && selection.period)),
-    ...serviceAccountabilityQueries(schema, dataset), ...stopQueries(schema, dataset), ...abatementQueries(schema, dataset), ...chargeQueries(schema, dataset), ...capacityQueries(schema, dataset)];
+    ...serviceAccountabilityQueries(schema, dataset), ...stopQueries(schema, dataset), ...abatementQueries(schema, dataset), ...chargeQueries(schema, dataset), ...capacityQueries(schema, dataset),
+    ...spendingQueries(schema, dataset)];
 }
 
 export function metadataObservations(dataset: AnalyticalDatasetSummary): DiscoveryObservation[] {
@@ -99,7 +102,7 @@ export function profileObservations(schema: AnalyticalSchema, dataset: Analytica
   });
   const observations: DiscoveryObservation[] = [...serviceAccountabilityLeads(profile.results).map(lead('SERVICE_REPORTS')), ...stopLeads(profile.results).map(lead('POLICE_STOPS')),
     ...abatementLeads(profile.results).map(lead('ABATEMENT_LOGS')), ...chargeLeads(profile.results).map(lead('CHARGE_LOGS')),
-    ...capacityLeads(profile.results).map(lead('CAPACITY_COMPARISON'))];
+    ...capacityLeads(profile.results).map(lead('CAPACITY_COMPARISON')), ...spendingLeads(profile.results).map(lead('SPENDING_RECORDS'))];
   const get = (id: string) => profile.results.find((entry) => entry.query.id === id);
   // A column's missing-value rate describes the source table's own completeness, not the subject
   // of the investigation; it stays on the import/quality screen rather than "what stands out".

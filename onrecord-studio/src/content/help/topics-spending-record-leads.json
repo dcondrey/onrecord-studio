@@ -1,0 +1,62 @@
+[
+  {
+    "id": "finding-spending-record-lead",
+    "title": "Adopted and actual spending, settlement accounts and overtime paid",
+    "group": "Finding kinds",
+    "keywords": [
+      "budget",
+      "actuals",
+      "adopted",
+      "spending",
+      "department",
+      "settlement",
+      "claims",
+      "overtime",
+      "pay",
+      "State Controller",
+      "fiscal year"
+    ],
+    "summary": "Counts from published spending tables set beside each other: what a City of San Diego department spent against what was adopted for it, departments with an adopted amount and no actual rows, settlement and claim accounts by year, and overtime in the State Controller's pay file.",
+    "sections": [
+      {
+        "heading": "Adopted against actual",
+        "paragraphs": [
+          "For each fiscal year (1 July to 30 June) that both the operating budget and the operating actuals tables cover, the lead sets a department's adopted operating expense beside its actual expense. It is raised for a department with \"homeless\" in its name, Police and Environmental Services, when actual expense in a year is at least 10% and at least $1,000,000 below the adopted amount. Every year both tables cover is listed for that department, not only the years that meet the yardstick.",
+          "A second lead lists any department with an adopted amount for a year and no rows at all under its name in the actuals table. That is stated as no rows, never as spending of zero. A year the actuals table does not reach is not counted.",
+          "Adopted is the original appropriation, not the revised budget. A transfer or a change made during the year is in neither figure, and an amount not spent may have been carried forward, moved to another department or returned to its fund. The tables do not say which."
+        ]
+      },
+      {
+        "heading": "Settlement and claim accounts",
+        "paragraphs": [
+          "For the five latest fiscal years in the actuals table, the lead gives the amount booked to the Negotiated Settlement and public-liability claim accounts, the number of departments with a row in those accounts, and the number of departments in the table that year.",
+          "The years are not compared with each other. The number of departments recording these accounts changes sharply from year to year, so a larger figure can be a change in where the City records a payment. The accounts do not name the cases, the claimants or the reasons."
+        ]
+      },
+      {
+        "heading": "Overtime in the State Controller's pay file",
+        "paragraphs": [
+          "The State Controller publishes one row per position held in each city, without names. Its site does not allow the app to download the file, so you download the yearly city file in a browser and import it. The table is recognised by its column names.",
+          "For an employer with at least 100 positions, the lead gives overtime paid, overtime as a share of regular pay for the departments with most overtime, and the number of positions with overtime of $100,000 or more. When an operating budget table is imported and the employer's department names are the budget's own, each department's overtime is set beside its adopted overtime accounts.",
+          "The pay file covers a calendar year and the budget a fiscal year: calendar 2024 is the second half of fiscal 2024 and the first half of fiscal 2025. Both fiscal years are shown and neither is the same period as the pay file. Positions with overtime above regular pay are not counted, because a low regular figure can be part of a year in the position."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "Why an amount was not spent, why overtime was worked, or whether either was authorised. Each figure is a sum from a published table, and the finding lists every table it read with its source address, retrieval date and SHA-256 digest, followed by the SQL."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is not assessed: the finding restates sums and infers nothing to score."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": ["SPENDING_RECORD_LEAD"],
+    "commandGroups": [],
+    "related": ["legal-vs-pattern", "findings-inbox", "finding-capacity-comparison-lead", "finding-service-report-lead"]
+  }
+]

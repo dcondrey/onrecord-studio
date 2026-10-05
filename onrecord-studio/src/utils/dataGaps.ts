@@ -4,6 +4,7 @@ import { budgetTable, serviceCompanions, staffGroupDepartments } from './service
 import { missingStopCompanions } from './stopLeads';
 import { holdsAbatementLog } from './abatementLeads';
 import { closedReports, encampmentReportCoverage, OPEN_REPORTS, shelterInventoryTable } from './capacityLeads';
+import { actualsTable } from './spendingLeads';
 
 /** A question the imported tables cannot answer, and what would answer it: one published table to
  * fetch, or a records portal to collect from for a subject. */
@@ -40,6 +41,12 @@ export function dataGaps(schema: AnalyticalSchema, profiles: Record<string, Auto
       detail: `${dataset.displayName} lists the persons stopped. The publisher keeps ${missing.holds} in a separate table, matched on stop and person number.`,
     });
   }
+  const budget = budgetTable(schema);
+  if (budget && !actualsTable(schema)) gaps.push({
+    key: `actuals:${budget.snapshotId}`, snapshotId: budget.snapshotId, fetch: { dataset: 'OPERATING_ACTUALS', year: null },
+    title: 'The operating actuals would show what each department spent against what was adopted',
+    detail: `${budget.displayName} lists adopted amounts and no table of actual spending is imported. The City publishes actual revenue and expense by department, fund and account for each closed fiscal year.`,
+  });
   const latest = schema.datasets.filter((dataset) => dataset.sourceUri === OPEN_REPORTS).sort((a, b) => a.retrievedAt.localeCompare(b.retrievedAt)).at(-1);
   if (!latest) return gaps;
   const result = (id: string) => profiles[latest.snapshotId]?.results.find((entry) => entry.query.id === id)?.result;

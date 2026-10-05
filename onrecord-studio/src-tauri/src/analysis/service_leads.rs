@@ -38,6 +38,7 @@ pub enum LeadFamily {
     AbatementLogs,
     ChargeLogs,
     CapacityComparison,
+    SpendingRecords,
 }
 
 impl LeadFamily {
@@ -48,6 +49,7 @@ impl LeadFamily {
             Self::AbatementLogs => FindingKind::AbatementLogLead,
             Self::ChargeLogs => FindingKind::ChargeLogLead,
             Self::CapacityComparison => FindingKind::CapacityComparisonLead,
+            Self::SpendingRecords => FindingKind::SpendingRecordLead,
         }
     }
 }

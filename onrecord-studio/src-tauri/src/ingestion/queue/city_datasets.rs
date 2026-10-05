@@ -14,6 +14,9 @@ const GET_IT_DONE_OPEN_URI: &str =
 const OPERATING_BUDGET_URI: &str =
     "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv";
 
+const OPERATING_ACTUALS_URI: &str =
+    "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv";
+
 /// UCSD Homelessness Hub's layer of emergency-shelter projects per year, compiled from the
 /// Regional Task Force on Homelessness Housing Inventory Count. GeoJSON, as the SANDAG layers are.
 const SHELTER_INVENTORY_URI: &str = "https://services1.arcgis.com/eGSDp8lpKe5izqVc/arcgis/rest/services/HIC_ES_2014_2024/FeatureServer/0/query?where=1%3D1&outFields=*&returnGeometry=false&f=geojson";
@@ -225,6 +228,20 @@ fn city_dataset_spec(
                 partial: true,
                 row_filter: None,
                 refuse_truncated: true,
+            }
+        }
+        CityDataset::OperatingActuals => {
+            unsplit("The City operating actuals")?;
+            CityDatasetSpec {
+                url: OPERATING_ACTUALS_URI.into(),
+                // Not the budget kind: these rows carry no budget cycle.
+                kind: AnalyticalDatasetKind::RegionalData,
+                display_name: "City operating actuals (all published years)".into(),
+                file_name: "actuals_operating_datasd.csv".into(),
+                // The publisher adds a fiscal year after it closes.
+                partial: true,
+                row_filter: None,
+                refuse_truncated: false,
             }
         }
     })
@@ -463,6 +480,15 @@ mod tests {
         assert!(spec(CityDataset::ShelterInventory, Some(2025)).is_err());
         let shelter = spec(CityDataset::ShelterInventory, None).unwrap();
         assert!(shelter.refuse_truncated && shelter.url.ends_with("f=geojson"));
+        assert!(spec(CityDataset::OperatingActuals, Some(2023)).is_err());
+        let actuals = spec(CityDataset::OperatingActuals, None).unwrap();
+        assert_eq!(
+            (actuals.url.as_str(), actuals.kind),
+            (
+                "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv",
+                AnalyticalDatasetKind::RegionalData
+            )
+        );
     }
 
     #[test]

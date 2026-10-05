@@ -50,6 +50,7 @@ const cityDatasets: { value: CityDataset; label: string; yearly?: true }[] = [
   { value: 'RIPA_STOP_RESULTS', label: 'SDPD stop records (RIPA): results of the stop' },
   { value: 'RIPA_PROPERTY_SEIZURE_BASIS', label: 'SDPD stop records (RIPA): basis for property seizure' },
   { value: 'SHELTER_INVENTORY', label: 'Emergency shelter inventory (UCSD Homelessness Hub, all years)' },
+  { value: 'OPERATING_ACTUALS', label: 'City operating actuals (all years)' },
 ];
 
 export default function AnalysisWorkbench() {

@@ -268,6 +268,12 @@ pub enum FindingKind {
     /// not show why the uploads fall where they do: work is often finished and posted at the end
     /// of a week, and the portal does not record when an uploaded file was made public.
     ReleaseTimingConcentration,
+    /// Counts from published spending tables set beside each other: a department's actual
+    /// operating expense against its adopted amount, an adopted amount with no actual rows,
+    /// settlement and claim accounts per year, or overtime in the State Controller's pay file.
+    /// Counted by the discovery feed's SQL and recorded as sent. Adopted is the original
+    /// appropriation, so none of these is an appropriation test or a statement about use.
+    SpendingRecordLead,
 }
 
 impl FindingKind {
@@ -320,6 +326,7 @@ impl FindingKind {
             Self::ChargeLogLead => "CHARGE_LOG_LEAD",
             Self::CapacityComparisonLead => "CAPACITY_COMPARISON_LEAD",
             Self::ReleaseTimingConcentration => "RELEASE_TIMING_CONCENTRATION",
+            Self::SpendingRecordLead => "SPENDING_RECORD_LEAD",
         }
     }
 
@@ -372,6 +379,7 @@ impl FindingKind {
             Self::ChargeLogLead,
             Self::CapacityComparisonLead,
             Self::ReleaseTimingConcentration,
+            Self::SpendingRecordLead,
         ]
         .into_iter()
         .find(|candidate| candidate.as_str() == value)
@@ -485,6 +493,8 @@ impl FindingKind {
             Self::CapacityComparisonLead => false,
             // Two shares of counted upload times. When work is posted breaks no rule.
             Self::ReleaseTimingConcentration => false,
+            // Sums of two publishers' tables beside each other; no rule is applied to them.
+            Self::SpendingRecordLead => false,
         }
     }
 }

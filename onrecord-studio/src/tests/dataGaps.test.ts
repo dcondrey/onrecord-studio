@@ -49,9 +49,10 @@ describe('the budget behind a backlog', () => {
     expect(keys(catalog(latest), 'TSW')).toEqual(['budget:latest']);
     expect(keys(catalog(latest), 'Parking')).toEqual([]);
     expect(keys(catalog(latest), null)).toEqual([]);
+    // With the budget imported, the next table offered is what was spent against it.
     const withBudget = catalog(latest);
     const budget = base.datasets.find((dataset) => dataset.snapshotId === 'budget')!;
-    expect(keys({ ...withBudget, datasets: [...withBudget.datasets, budget], columns: [...withBudget.columns, ...base.columns.filter((column) => column.tableName === budget.tableName)] }, 'TSW')).toEqual([]);
+    expect(keys({ ...withBudget, datasets: [...withBudget.datasets, budget], columns: [...withBudget.columns, ...base.columns.filter((column) => column.tableName === budget.tableName)] }, 'TSW')).toEqual(['actuals:budget']);
   });
 });
 
