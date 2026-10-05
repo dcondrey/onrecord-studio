@@ -395,14 +395,25 @@ pub(crate) fn purge_automatic_origins(
         if others > 0 {
             continue;
         }
-        let table: Option<String> = conn
+        let tables: Option<(String, Option<String>)> = conn
             .query_row(
-                "SELECT table_name FROM analytical_snapshots WHERE snapshot_id = ?1",
+                "SELECT table_name, json_extract_string(validation_summary_json, '$.rowStore') FROM analytical_snapshots WHERE snapshot_id = ?1",
                 params![snapshot],
-                |row| row.get(0),
+                |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .optional()
             .map_err(storage)?;
+        let (table, row_store) = tables.unzip();
+        if let Some(Some(row_store)) = row_store {
+            conn.execute(
+                &format!(
+                    "DROP TABLE IF EXISTS \"{}\"",
+                    row_store.replace('"', "\"\"")
+                ),
+                [],
+            )
+            .map_err(storage)?;
+        }
         if let Some(table) = table {
             let views = {
                 let mut query = conn.prepare("SELECT view_name FROM duckdb_views() WHERE schema_name = 'main' AND starts_with(view_name, 'analysis_') AND contains(sql, ?1)").map_err(storage)?;
@@ -420,7 +431,7 @@ pub(crate) fn purge_automatic_origins(
             conn.execute(&format!("DROP TABLE IF EXISTS {}", quote(&table)), [])
                 .map_err(storage)?;
         }
-        for table in ["analytical_rows", "analytical_columns"] {
+        for table in ["analytical_row_ledger", "analytical_columns"] {
             conn.execute(
                 &format!("DELETE FROM {table} WHERE snapshot_id = ?1"),
                 params![snapshot],
@@ -429,6 +440,7 @@ pub(crate) fn purge_automatic_origins(
         }
         retired.push(snapshot);
     }
+    super::sqlite::rebuild_row_view(conn)?;
     Ok(retired)
 }
 

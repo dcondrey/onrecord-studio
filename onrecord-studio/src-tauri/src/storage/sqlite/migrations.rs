@@ -20,6 +20,7 @@ impl DuckDbRepository {
         // are compatibility shims for databases created by older, partially versioned builds.
         prepare_legacy_legal_schema(conn)?;
         reject_narrow_identifier_core(conn)?;
+        super::row_store::move_legacy_ledger(conn)?;
         conn.execute_batch(migration_sql).map_err(|e| {
             AppError::Internal(format!(
                 "Failed to execute initialization migrations: {}",
@@ -295,6 +296,7 @@ impl DuckDbRepository {
         // them in the background, and a search refuses while the count is above zero.
         let pending = count_pending_search_index_documents(conn)?;
         verify_logical_relations(conn)?;
+        super::row_store::rebuild_row_view(conn)?;
         Ok(pending)
     }
 }

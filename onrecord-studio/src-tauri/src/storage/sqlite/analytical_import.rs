@@ -14,6 +14,7 @@ use super::analytical::{
     quote_ident, schema_warnings_for, slash_date_fields, unique_column_alias, validation_notes_for,
     DateOrder, ANALYTICAL_PARSER_VERSION,
 };
+use super::row_store;
 use super::*;
 use crate::storage::tabular::{TableSource, TypeEvidence};
 use crate::types::{AnalyticalImportRequest, AnalyticalImportResult};
@@ -218,6 +219,7 @@ impl DuckDbRepository {
             kind.as_str().to_ascii_lowercase(),
             &identity_hash[..24]
         );
+        let source_table = format!("analysis_src_{}", &identity_hash[..24]);
         let latest_view_name = if kind == AnalyticalDatasetKind::RegionalData {
             let source_identity = request.source_uri.as_deref().unwrap_or(&request.local_path);
             let key = sha256_hex(
@@ -266,6 +268,7 @@ impl DuckDbRepository {
                     WriteTarget {
                         snapshot_id: &snapshot,
                         table_name: &table,
+                        source_table: &source_table,
                         latest_view: &view,
                         source_sha256: &source_sha256,
                         expected_rows,
@@ -298,6 +301,7 @@ impl DuckDbRepository {
 struct WriteTarget<'a> {
     snapshot_id: &'a str,
     table_name: &'a str,
+    source_table: &'a str,
     latest_view: &'a str,
     source_sha256: &'a str,
     expected_rows: usize,
@@ -335,14 +339,24 @@ fn write_snapshot(
         .map(|plan| format!("{} {}", quote_ident(&plan.alias), duckdb_type(plan.logical)))
         .collect::<Vec<_>>()
         .join(", ");
+    let source_store = quote_ident(target.source_table);
+    let source_cells = plans
+        .iter()
+        .map(|plan| format!("{} VARCHAR", quote_ident(&plan.alias)))
+        .collect::<Vec<_>>()
+        .join(", ");
     tx.execute_batch(&format!(
         "DROP TABLE IF EXISTS {table};
-         CREATE TABLE {table} ({create_columns});"
+         CREATE TABLE {table} ({create_columns}, _source_row BIGINT NOT NULL);
+         DROP TABLE IF EXISTS {source_store};
+         CREATE TABLE {source_store} (_row BIGINT NOT NULL, _row_hash VARCHAR NOT NULL,
+             _field_count INTEGER NOT NULL, _malformed BOOLEAN NOT NULL, _parse_error VARCHAR,
+             _messages VARCHAR NOT NULL, {source_cells}, _surplus VARCHAR);"
     ))
     .map_err(|error| AppError::Storage(format!("Failed to create analytical table: {error}")))?;
     let request = target.request;
     for statement in [
-        "DELETE FROM analytical_rows WHERE snapshot_id = ?1",
+        "DELETE FROM analytical_row_ledger WHERE snapshot_id = ?1",
         "DELETE FROM analytical_columns WHERE snapshot_id = ?1",
         "DELETE FROM analytical_snapshots WHERE snapshot_id = ?1",
     ] {
@@ -390,7 +404,7 @@ fn write_snapshot(
         })?;
     }
     let mut typed = tx.appender(target.table_name).map_err(read_failed)?;
-    let mut ledger = tx.appender("analytical_rows").map_err(read_failed)?;
+    let mut originals = tx.appender(target.source_table).map_err(read_failed)?;
     let mut malformed_rows = 0usize;
     let mut repaired_trailing_rows = 0usize;
     let mut repair_row_numbers = Vec::new();
@@ -400,16 +414,15 @@ fn write_snapshot(
     let mut unconverted = vec![0usize; plans.len()];
     let second_read = source.read(|_, row_index, record| {
         let row_number = row_index + 1;
-        let (original, values, errors, notes) = match record {
+        let fields = record.ok();
+        let parse_error = record.err().map(str::to_owned);
+        let (values, errors, notes) = match record {
             Err(error) => (
-                serde_json::Value::Null,
                 Vec::new(),
                 vec![format!("CSV row parse failed: {error}")],
                 Vec::new(),
             ),
             Ok(record) => {
-                // Position retains duplicate headers and surplus fields in malformed rows.
-                let original = serde_json::json!(record.iter().collect::<Vec<_>>());
                 let mut values = Vec::with_capacity(plans.len());
                 let mut notes = Vec::new();
                 for (index, plan) in plans.iter().enumerate() {
@@ -453,7 +466,7 @@ fn write_snapshot(
                         duplicate_key_rows += 1;
                     }
                 }
-                (original, values, errors, notes)
+                (values, errors, notes)
             }
         };
         let malformed = !errors.is_empty();
@@ -462,47 +475,49 @@ fn write_snapshot(
         } else {
             typed
                 .append_row(duckdb::appender_params_from_iter(
-                    values.iter().map(json_to_sql_value),
+                    values.iter().map(json_to_sql_value).chain(std::iter::once(
+                        duckdb::types::Value::BigInt(row_number as i64),
+                    )),
                 ))
                 .map_err(read_failed)?;
         }
-        let normalized = serde_json::Value::Object(
-            plans
-                .iter()
-                .zip(values)
-                .map(|(plan, value)| (plan.alias.clone(), value))
-                .collect(),
-        );
-        let payload = if original.is_null() {
-            original.to_string()
-        } else {
-            serde_json::json!({"headers": first_headers, "values": original}).to_string()
-        };
-        let normalized_payload = normalized.to_string();
         let messages = if malformed { errors } else { notes };
-        let messages_json = serde_json::Value::Array(
-            messages
-                .into_iter()
-                .map(serde_json::Value::String)
-                .collect(),
-        )
-        .to_string();
-        let row_hash = sha256_hex(format!("{payload}\n{normalized_payload}").as_bytes());
-        ledger
-            .append_row(duckdb::params![
-                target.snapshot_id,
-                row_number as i64,
-                row_hash,
-                payload,
-                normalized_payload,
-                i64::from(malformed),
-                messages_json,
-            ])
+        let text = |value: Option<&str>| {
+            value.map_or(duckdb::types::Value::Null, |v| {
+                duckdb::types::Value::Text(v.to_owned())
+            })
+        };
+        let field_count = fields.map_or(0, csv::StringRecord::len);
+        // A JSON array: the appender cannot bind a list, and the view casts it back.
+        let surplus = fields
+            .filter(|record| record.len() > plans.len())
+            .map(|record| {
+                duckdb::types::Value::Text(
+                    serde_json::to_string(&record.iter().skip(plans.len()).collect::<Vec<_>>())
+                        .expect("strings always serialize"),
+                )
+            })
+            .unwrap_or(duckdb::types::Value::Null);
+        let row = [
+            duckdb::types::Value::BigInt(row_number as i64),
+            duckdb::types::Value::Text(row_store::row_hash(fields)),
+            duckdb::types::Value::Int(field_count as i32),
+            duckdb::types::Value::Boolean(malformed),
+            text(parse_error.as_deref()),
+            duckdb::types::Value::Text(
+                serde_json::to_string(&messages).expect("strings always serialize"),
+            ),
+        ]
+        .into_iter()
+        .chain((0..plans.len()).map(|index| text(fields.and_then(|record| record.get(index)))))
+        .chain(std::iter::once(surplus));
+        originals
+            .append_row(duckdb::appender_params_from_iter(row))
             .map_err(read_failed)
     })?;
     typed.flush().map_err(read_failed)?;
-    ledger.flush().map_err(read_failed)?;
-    drop((typed, ledger));
+    originals.flush().map_err(read_failed)?;
+    drop((typed, originals));
     if second_read.sha256 != target.source_sha256
         || second_read.rows != target.expected_rows
         || second_read.headers != first_headers
@@ -536,6 +551,7 @@ fn write_snapshot(
         "warnings": warnings,
         "nullCounts": plans.iter().zip(&null_counts).map(|(plan, n)| (plan.alias.clone(), *n)).collect::<BTreeMap<_, _>>(),
         "notes": validation_notes_for(&request.dataset_kind),
+        (row_store::ROW_STORE_KEY): target.source_table,
         "derivedSubset": request.derived_subset.as_ref().map(|subset| serde_json::json!({
             "publisherSha256": subset.publisher_sha256,
             "publisherRows": subset.publisher_rows,
@@ -546,7 +562,7 @@ fn write_snapshot(
     let imported_rows = rows - malformed_rows;
     tx.execute(
         &format!(
-            "CREATE OR REPLACE VIEW {} AS SELECT * FROM {table}",
+            "CREATE OR REPLACE VIEW {} AS SELECT * EXCLUDE (_source_row) FROM {table}",
             quote_ident(target.latest_view)
         ),
         [],
@@ -566,6 +582,7 @@ fn write_snapshot(
         ],
     )
     .map_err(|error| AppError::Storage(format!("Failed to record analytical snapshot: {error}")))?;
+    row_store::rebuild_row_view(&tx)?;
     if let Some((portal_key, document_id)) = target.origin {
         tx.execute(
             "INSERT INTO data_maintenance_origins VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING",
@@ -791,6 +808,7 @@ mod tests {
                     WriteTarget {
                         snapshot_id: "s",
                         table_name: "analysis_regional_data_s",
+                        source_table: "analysis_src_s",
                         latest_view: "analysis_regional_s_latest",
                         source_sha256: &"0".repeat(64),
                         expected_rows: 1,
@@ -813,7 +831,7 @@ mod tests {
         let left = repo
             .query_connection("test", |conn| {
                 conn.query_row(
-                    "SELECT (SELECT COUNT(*) FROM analytical_snapshots) + (SELECT COUNT(*) FROM analytical_rows) + (SELECT COUNT(*) FROM information_schema.tables WHERE table_name LIKE 'analysis_regional%' OR table_name LIKE 'import_ledger%')",
+                    "SELECT (SELECT COUNT(*) FROM analytical_snapshots) + (SELECT COUNT(*) FROM analytical_rows) + (SELECT COUNT(*) FROM information_schema.tables WHERE table_name LIKE 'analysis_regional%' OR table_name LIKE 'analysis_src%')",
                     [],
                     |row| row.get::<_, i64>(0),
                 )

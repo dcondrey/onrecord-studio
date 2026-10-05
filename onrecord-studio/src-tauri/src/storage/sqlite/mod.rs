@@ -2,6 +2,8 @@
 
 mod analytical;
 mod analytical_import;
+mod row_store;
+pub(crate) use row_store::rebuild_row_view;
 mod connection;
 mod documents;
 mod frontier;

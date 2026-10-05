@@ -893,10 +893,10 @@ mod tests {
         conn.execute("INSERT INTO analytical_snapshots(snapshot_id,dataset_kind,display_name,table_name,source_uri,local_path,source_sha256,retrieved_at,validation_summary_json) VALUES ('geo','generic','Public restroom operating hours','geo_fixture','https://www.sandiego.gov/riverbed.pdf','',?1,'2026-09-26','{}')",params!["a".repeat(64)]).unwrap();
         conn.execute_batch("INSERT INTO analytical_columns(snapshot_id,table_name,column_name,original_name,logical_type,ordinal) VALUES ('geo','geo_fixture','latitude','latitude','DOUBLE',0)").unwrap();
         let unsupported = r#"{"latitude":32.75,"longitude":-117.1,"name":"Public restroom"}"#;
-        conn.execute("INSERT INTO analytical_rows SELECT 'geo',row_number,?1,?2,?2,0,'[]' FROM range(1,501) t(row_number)", params![sha256_hex(unsupported.as_bytes()), unsupported]).unwrap();
+        conn.execute("INSERT INTO analytical_row_ledger SELECT 'geo',row_number,?1,?2,?2,0,'[]' FROM range(1,501) t(row_number)", params![sha256_hex(unsupported.as_bytes()), unsupported]).unwrap();
         let supported = r#"{"latitude":32.75,"longitude":-117.1,"name":"Public restroom","observed_on":"2026-09-26","weekly_hours":56}"#;
         conn.execute(
-            "INSERT INTO analytical_rows VALUES ('geo',501,?1,?2,?2,0,'[]')",
+            "INSERT INTO analytical_row_ledger VALUES ('geo',501,?1,?2,?2,0,'[]')",
             params![sha256_hex(supported.as_bytes()), supported],
         )
         .unwrap();
@@ -941,7 +941,7 @@ mod tests {
         for (row, date, hours) in [(1, "2026-09-01", 56.0), (2, "2026-09-15", 28.0)] {
             let raw=serde_json::json!({"name":"Public restroom","observed_on":date,"latitude":32.75,"longitude":-117.1,"weekly_hours":hours}).to_string();
             conn.execute(
-                "INSERT INTO analytical_rows VALUES ('geo',?1,?2,?3,?3,0,'[]')",
+                "INSERT INTO analytical_row_ledger VALUES ('geo',?1,?2,?3,?3,0,'[]')",
                 params![row, sha256_hex(raw.as_bytes()), raw],
             )
             .unwrap();

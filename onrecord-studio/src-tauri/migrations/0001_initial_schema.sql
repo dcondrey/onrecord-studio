@@ -630,7 +630,9 @@ CREATE TABLE IF NOT EXISTS analytical_columns (
     FOREIGN KEY (snapshot_id) REFERENCES analytical_snapshots(snapshot_id)
 );
 
-CREATE TABLE IF NOT EXISTS analytical_rows (
+-- Rows of snapshots imported before per-snapshot column stores. Readers query the
+-- `analytical_rows` view, which the application rebuilds over this table and every column store.
+CREATE TABLE IF NOT EXISTS analytical_row_ledger (
     snapshot_id TEXT NOT NULL,
     row_number BIGINT NOT NULL,
     row_hash TEXT NOT NULL,
@@ -665,7 +667,7 @@ CREATE INDEX IF NOT EXISTS idx_legal_provisions_statute ON legal_provisions(stat
 CREATE INDEX IF NOT EXISTS idx_legal_mandates_statute ON legal_mandates(statute_id, enabled);
 CREATE INDEX IF NOT EXISTS idx_statutory_violations_request ON statutory_violations(request_id, portal_subdomain, review_status);
 CREATE INDEX IF NOT EXISTS idx_statutory_violations_statute ON statutory_violations(matched_statute_id, classification, evaluated_at DESC);
-CREATE INDEX IF NOT EXISTS idx_analytical_rows_snapshot_hash ON analytical_rows(snapshot_id, row_hash);
+CREATE INDEX IF NOT EXISTS idx_analytical_row_ledger_snapshot_hash ON analytical_row_ledger(snapshot_id, row_hash);
 
 -- Durable maintenance choices, retries and crash-recoverable reference-retention receipts.
 CREATE TABLE IF NOT EXISTS data_maintenance_policy (
