@@ -409,7 +409,7 @@ impl DuckDbRepository {
 
     async fn import_monitoring_geo_rows(&self) -> Result<(), AppError> {
         self.query_connection("Read explicitly geocoded public table observations",|conn|{
-            let mut statement=conn.prepare("SELECT r.snapshot_id,r.row_number,r.row_hash,r.normalized_payload_json,s.display_name,d.portal_subdomain,d.id,s.source_uri,s.source_sha256 FROM analytical_rows r JOIN analytical_snapshots s ON s.snapshot_id=r.snapshot_id JOIN documents d ON d.download_url=s.source_uri AND d.raw_file_sha256=s.source_sha256 JOIN portals p ON p.subdomain=d.portal_subdomain WHERE r.malformed=0 AND lower(trim(d.visibility))='public' AND p.lifecycle_state<>'REMOVED' AND EXISTS(SELECT 1 FROM analytical_columns c WHERE c.snapshot_id=s.snapshot_id AND lower(c.column_name) IN ('latitude','lat')) AND NOT EXISTS(SELECT 1 FROM monitor_geo_progress g WHERE g.snapshot_id=r.snapshot_id AND g.last_row_number>=r.row_number) ORDER BY s.retrieved_at DESC,r.row_number LIMIT 500").map_err(err)?;
+            let mut statement=conn.prepare("SELECT r.snapshot_id,r.row_number,r.row_hash,r.normalized_payload_json,s.display_name,d.portal_subdomain,d.id,s.source_uri,s.source_sha256 FROM analytical_rows r JOIN analytical_snapshots s ON s.snapshot_id=r.snapshot_id JOIN documents d ON d.download_url=s.source_uri AND d.raw_file_sha256=s.source_sha256 JOIN portals p ON p.subdomain=d.portal_subdomain WHERE r.malformed=0 AND lower(trim(d.visibility))='public' AND p.lifecycle_state<>'REMOVED' AND EXISTS(SELECT 1 FROM analytical_columns c WHERE c.snapshot_id=s.snapshot_id AND lower(c.column_name) IN ('latitude','lat')) AND NOT EXISTS(SELECT 1 FROM monitor_geo_progress g WHERE g.snapshot_id=r.snapshot_id AND g.last_row_number>=r.row_number) AND NOT EXISTS(SELECT 1 FROM analytical_snapshots o JOIN monitor_observations m ON m.id=o.snapshot_id||':'||CAST(r.row_number AS VARCHAR) WHERE o.snapshot_id<>s.snapshot_id AND o.source_sha256=s.source_sha256 AND o.source_uri IS NOT DISTINCT FROM s.source_uri) ORDER BY s.retrieved_at DESC,r.row_number LIMIT 500").map_err(err)?;
             let rows=statement.query_map([],|r|Ok((r.get::<_,String>(0)?,r.get::<_,u64>(1)?,r.get::<_,String>(2)?,r.get::<_,String>(3)?,r.get::<_,String>(4)?,r.get::<_,String>(5)?,r.get::<_,u64>(6)?,r.get::<_,String>(7)?,r.get::<_,String>(8)?))).map_err(err)?.collect::<Result<Vec<_>,_>>().map_err(err)?;drop(statement);
             let tx = conn.transaction().map_err(err)?;
             for (snapshot,row,hash,raw,title,portal,id,url,source_hash) in rows {
@@ -929,6 +929,44 @@ mod tests {
                 .unwrap(),
             0
         );
+    }
+
+    /// A re-import of the same file under a newer parser is a new snapshot of the same rows. A row
+    /// already observed from the earlier snapshot must not come back as a second, unreviewed
+    /// observation; a row only the new snapshot holds still does.
+    #[tokio::test]
+    async fn a_reimported_file_does_not_observe_the_same_row_twice() {
+        let db = setup().await;
+        let conn = db.analytics_connection().await.unwrap();
+        insert(&conn, "Public restroom operating inventory and schedules.");
+        let row = |date: &str| {
+            serde_json::json!({"name":"Public restroom","observed_on":date,"latitude":32.75,"longitude":-117.1,"weekly_hours":56}).to_string()
+        };
+        for (snapshot, retrieved_at, rows) in [("v3", "2026-09-01", 1), ("v4", "2026-10-01", 2)] {
+            conn.execute("INSERT INTO analytical_snapshots(snapshot_id,dataset_kind,display_name,table_name,source_uri,local_path,source_sha256,retrieved_at,validation_summary_json) VALUES (?1,'generic','Public restroom operating hours','geo_fixture','https://www.sandiego.gov/riverbed.pdf','',?2,?3,'{}')", params![snapshot, "a".repeat(64), retrieved_at]).unwrap();
+            conn.execute("INSERT INTO analytical_columns(snapshot_id,table_name,column_name,original_name,logical_type,ordinal) VALUES (?1,'geo_fixture','latitude','latitude','DOUBLE',0)", params![snapshot]).unwrap();
+            for number in 1..=rows {
+                let raw = row(&format!("2026-09-0{number}"));
+                conn.execute(
+                    "INSERT INTO analytical_row_ledger VALUES (?1,?2,?3,?4,?4,0,'[]')",
+                    params![snapshot, number, sha256_hex(raw.as_bytes()), raw],
+                )
+                .unwrap();
+            }
+            if snapshot == "v3" {
+                db.initialize_monitoring().await.unwrap();
+                db.import_monitoring_geo_rows().await.unwrap();
+            }
+        }
+        db.import_monitoring_geo_rows().await.unwrap();
+        let observed = conn
+            .prepare("SELECT id FROM monitor_observations ORDER BY id")
+            .unwrap()
+            .query_map([], |r| r.get::<_, String>(0))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(observed, ["v3:1", "v4:2"]);
     }
 
     #[tokio::test]
