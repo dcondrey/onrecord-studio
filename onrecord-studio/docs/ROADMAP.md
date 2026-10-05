@@ -1240,6 +1240,20 @@ by the file's maker and unverified. Not built: marking findings drawn from an im
 origin file was hand-added, and excluding hand-added files from redaction-inference corroboration
 (architecture doc section 5).
 
+Round one merged and gated 2026-10-05 (main at 02366f6: fmt, clippy, 1,328 lib tests, 8
+data-discovery tests, tsc, eslint, 645 frontend tests, IPC and help checks all exit 0): order
+items 1 to 4 above. Nothing in round one has been checked in the running app.
+
+Round two, in progress: (a) operating actuals fetch with under-spending, adopted-without-actuals
+and settlement-account leads, and overtime from the State Controller pay file; (b) a registry of
+meeting bodies (`docs/data-sources/meeting-bodies.md`) with posting time from each file's
+`Last-Modified` and differences between successive copies of an agenda; (c) redaction
+corroboration from imported tables and for older documents when new material arrives; (d) a
+draft for a request whose deadline passed with no response, citing the agency's counted record.
+After that: disclosure-portal reader and export import, settlement resolutions as a table,
+re-check that keeps changed bytes (on the peer's watchlist storage), reports after abatements in
+nearby places, a signed receipt for one document, and the data packs in `docs/data-packs.md`.
+
 ## Leads from service-report tables (2026-10-04)
 
 Decision: "What stands out" shows leads about the subject of the records; facts about a table
