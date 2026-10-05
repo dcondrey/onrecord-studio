@@ -1366,6 +1366,65 @@ place-days; earlier count 296,235 then 304,996 and 2,722,122 then 2,707,555). Th
 statement now takes 12.3 seconds from CSV in the DuckDB CLI; its time inside the app against the
 30-second limit is not verified. Not built: the weekly profile.
 
+## Gaps to requests, and organisation filings (2026-10-05)
+
+Decision (owner, 2026-10-05): the app itself, for every user, must (1) surface the record gaps
+behind each exploration, try to fill them from public records requests already made, suggest the
+precise request to file when it cannot, and track each request through submission, response and
+follow-up; and (2) check an organisation's public filings, not have a session read them once.
+Nothing here is built yet.
+
+The owner's five hypotheses, which rank the gaps to seed first (to test, not to assume): police
+spending on homelessness enforcement buys little; the City and police do not follow their own
+rules on storing belongings and returning them; sweeps accomplish little and make stability
+harder; police response to homeless people is outsized beside response to open drug dealing and
+prostitution; almost no help exists for people who are not veterans or HIV positive, and shelter
+and safe-sleeping rules push people away. Measured so far: reports do not rise around an
+abatement (above), so "sweeps move people next door" is not supported; repeat abatement at the
+same places is.
+
+### 1. Gap to request chain
+Exists: `CaseworkRequest` (gap, custodian, draft, state, submitted_at, response_due, productions,
+unresolved_omissions, follow_up_draft, compiled_draft, filing plan), `request_compiler`
+(`compile_cpra_request`, `plan_filing`), the overdue follow-up letter, `analysis/gaps.rs`
+(`EvidenceGap`, `GapRole`, `GapStatus`, `collect`, `resolve`) for financial roles, and
+`dataGaps.ts` (`fetch` and `collect` remedies) for the discovery feed.
+To build, in order:
+a. A record-gap definition a lead can carry: what record would answer the lead's question, the
+   custodian, the period and identifiers from the lead's own result (addresses, dates, activity
+   numbers), the fields wanted, and search terms. Seed set: stored versus discarded belongings and
+   retrievals (storage site intake and release logs, abatement work orders); abatement cost per
+   day and place (contractor invoices); units dispatched per call (CAD unit history) for named
+   places and dates; shelter referrals with no bed available; safe-sleeping site rules, incident
+   and grievance logs; case outcomes for encampment, encroachment and lodging charges; the
+   written procedures themselves.
+b. Mine first: search requests already in the library and, through the existing collection
+   path, the portal for requests whose text matches the gap; show the matches with their release
+   status; offer to collect one. A gap is "answered by a release" only when a released file is
+   imported and the lead's check then runs on it, never because a request with similar words exists.
+c. Suggest: when nothing is found, a drafted request naming record type, custodian, period,
+   identifiers and fields, using the City's SB 272 system catalogue to name the system of record.
+d. Track: accepting a suggestion creates the casework request; submission, response, productions
+   and follow-ups use what exists. The feed shows each gap's state: not asked, found in a release,
+   requested (with days to the deadline), overdue, produced, answered.
+e. Close: when a production imports and the check runs, the gap clears and the lead is recomputed.
+
+### 2. Organisation filings
+For any tax-exempt organisation the user names (by name or EIN): fetch its Form 990 history and
+report, per year, as stated on the filing and nothing more: revenue, expenses, assets, officer
+compensation; whether Part VI line 5 reports a significant diversion of assets; current and
+former officers and key employees with reportable compensation (Part VII, Schedule J, including
+severance); transactions with interested persons (Schedule L); and, where the organisation spent
+federal money, its single audits and findings (Federal Audit Clearinghouse, by EIN). Then set
+beside it the public money it received from the agencies in the library (contracts, leases,
+grants). Sources to verify before building: ProPublica Nonprofit Explorer API v2
+(`/nonprofits/api/v2/search.json`, `/organizations/<ein>.json`; summary fields only; terms and
+attribution), the IRS e-file XML for the full return (location and index not yet verified),
+`api.fac.gov` (free key). Rules: a filing's own answer is quoted as the filing's statement; a
+payment to a former officer is reported as a payment, never characterised; an allegation from
+any source is not stored as a finding; no finding kind asserts wrongdoing. Verified 2026-10-05:
+the summary endpoint returns filing years 2011 to 2023 with those summary fields for one EIN.
+
 ## Leads from service-report tables (2026-10-04)
 
 Decision: "What stands out" shows leads about the subject of the records; facts about a table
