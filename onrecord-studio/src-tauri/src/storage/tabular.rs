@@ -10,9 +10,11 @@ pub(crate) const MAX_SOURCE_BYTES: u64 = 96 * 1024 * 1024;
 const MAX_ROWS: usize = 750_000;
 const MAX_COLUMNS: usize = 512;
 const MAX_CELLS: usize = 6_000_000;
-/// Delimited text is streamed, so these bound disk use and import time, not memory.
-pub(crate) const MAX_STREAMED_BYTES: u64 = 2 * 1024 * 1024 * 1024;
-const MAX_STREAMED_ROWS: usize = 20_000_000;
+/// Delimited text is streamed, but DuckDB holds an import's rows until its transaction commits:
+/// measured peaks were 50-80 bytes per cell (CFS 2025, 6.5M cells, 379 MB; Get It Done 2025,
+/// 8.7M cells, 707 MB). Twenty million cells bounds one import near 1.5 GB.
+pub(crate) const MAX_STREAMED_BYTES: u64 = 1024 * 1024 * 1024;
+const MAX_STREAMED_CELLS: usize = 20_000_000;
 
 pub(crate) struct PreparedTable {
     pub headers: Vec<String>,
@@ -308,7 +310,7 @@ impl TableSource {
                     match reader.read_record(&mut record) {
                         Ok(false) => break,
                         Ok(true) => {
-                            check_streamed_size(rows + 1)?;
+                            check_streamed_size(rows + 1, headers.len())?;
                             each(&headers, rows, Ok(&record))?;
                         }
                         Err(error) => {
@@ -317,7 +319,7 @@ impl TableSource {
                                     "ANALYTICAL_READ_FAILED: {error}"
                                 )));
                             }
-                            check_streamed_size(rows + 1)?;
+                            check_streamed_size(rows + 1, headers.len())?;
                             each(&headers, rows, Err(&error.to_string()))?;
                         }
                     }
@@ -380,9 +382,9 @@ fn check_headers(headers: &[String]) -> Result<(), AppError> {
     Ok(())
 }
 
-fn check_streamed_size(rows: usize) -> Result<(), AppError> {
-    if rows > MAX_STREAMED_ROWS {
-        return Err(invalid(format!("Delimited import supports up to {MAX_STREAMED_ROWS} rows. Split this export into smaller tables.")));
+fn check_streamed_size(rows: usize, columns: usize) -> Result<(), AppError> {
+    if rows.saturating_mul(columns) > MAX_STREAMED_CELLS {
+        return Err(invalid(format!("Delimited import supports up to {MAX_STREAMED_CELLS} cells. Split this export into smaller tables.")));
     }
     Ok(())
 }
@@ -721,6 +723,12 @@ pub(crate) fn exact_decimal(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_streamed_import_stops_at_its_cell_bound() {
+        assert!(check_streamed_size(MAX_STREAMED_CELLS / 4 - 1, 4).is_ok());
+        assert!(check_streamed_size(MAX_STREAMED_CELLS / 4, 4).is_ok());
+        assert!(check_streamed_size(MAX_STREAMED_CELLS / 4 + 1, 4).is_err());
+    }
     #[test]
     fn explicit_unicode_encoding_and_dialect_repairs_preserve_cell_values() {
         let text = "city;count\n\"San Diego; Central\";3\nMálaga;4";
