@@ -1,0 +1,55 @@
+[
+  {
+    "id": "meetings-posting-and-revisions",
+    "title": "Agenda posting times and revised agendas",
+    "group": "Concepts",
+    "keywords": [
+      "posting time",
+      "posted",
+      "last-modified",
+      "72 hours",
+      "agenda revision",
+      "revised agenda",
+      "what changed",
+      "boards and commissions",
+      "committees",
+      "meeting bodies"
+    ],
+    "summary": "What the Meetings view shows about when an agenda file was posted, how long before the meeting that was, what changed between two copies of an agenda, and which City boards can be collected.",
+    "sections": [
+      {
+        "heading": "Which bodies",
+        "paragraphs": [
+          "The source catalogue lists City of San Diego boards, commissions and Council committees under Boards and commissions, each by the name its publisher uses and the page where it posts agendas. The starter set City boards and commissions adds, in one step, every body whose page was opened and found to link agendas. Bodies whose address was only read from the City's roster are in the catalogue with a note that the page has not been opened; add those one at a time.",
+          "Nothing is collected until you add a source. A body's meetings appear in the calendar only after its agendas are collected, and only when the agenda's own heading names the body."
+        ]
+      },
+      {
+        "heading": "Posted (per the file's Last-Modified header)",
+        "paragraphs": [
+          "When the app fetches a file, the server may send a Last-Modified header. The calendar shows that time beside each agenda, minutes or video file, in UTC. It is the server's statement about the file. It is not proof of when the public could first read the file: a file can be uploaded before the page links to it, replaced without notice, or stamped by a server whose clock is wrong.",
+          "A header is shown only when it can be told apart from the time of the request. It is shown as not recorded, with the reason, when no fetch of the file is recorded (for example a file you added by hand), when the server sent no header, when the host is one measured to report the request time (the City's OnBase docket pages), when the header equals the server's own Date for the response, or when the response Date was not kept for an older fetch and the header falls within an hour of the fetch."
+        ]
+      },
+      {
+        "heading": "Time before the meeting",
+        "paragraphs": [
+          "Hours and minutes from the header time to the meeting start are shown only when the agenda heading states a start time directly after its date and the file has a recorded header time. The stated start is read as Pacific time, and only for San Diego and State of California publishers. When agendas for one meeting state different start times, none is used.",
+          "Above the calendar, a count gives how many agenda files with both times were posted less than 72 hours before the meeting, per the file's Last-Modified header. It is a count of header times. The app does not evaluate any notice requirement, does not label a file late, and draws no conclusion from the count: whether a notice rule applied and was met is a legal question that depends on facts a header does not carry."
+        ]
+      },
+      {
+        "heading": "Agenda copies compared",
+        "paragraphs": [
+          "When the app holds two or more copies of one meeting's agenda, it compares consecutive copies by item number. An item in only the later copy is Added; in only the earlier copy, Removed; in both with a different title, Title reworded, with both titles; in both with the same title and different text beneath it, Text changed below the title. When nothing differs, it says so.",
+          "Copies are ordered by their Last-Modified header when every copy has a recorded one; otherwise by the order in which the app collected them, and the card says which. Items are recognized only by explicit Item N: headings. The last item's title is compared only when the agenda marks where it ends, and a number that appears twice in one copy is not compared.",
+          "Only copies held at different addresses can be compared, which is how sandiego.gov publishes an original and a revised file. A revised docket on the City's OnBase pages, and the Civil Service Commission agenda, reuse one address: collecting again replaces the earlier text, so the card reports how many fetches of that address returned different bytes and compares nothing. A difference between copies is a difference in the files; it does not say why an agenda was changed."
+        ]
+      }
+    ],
+    "views": ["meetings"],
+    "findingKinds": [],
+    "commandGroups": [],
+    "related": ["view-meetings", "starter-sets"]
+  }
+]

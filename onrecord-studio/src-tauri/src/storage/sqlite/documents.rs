@@ -1063,11 +1063,11 @@ pub(super) fn insert_document_acquisition(
         "INSERT INTO document_acquisitions (
             portal_subdomain, document_id, sync_run_id, requested_url, resolved_url,
             redirect_chain_json, http_status, content_type, etag, last_modified,
-            raw_file_sha256, file_size, previous_raw_file_sha256, retrieved_at
+            raw_file_sha256, file_size, previous_raw_file_sha256, retrieved_at, response_date
          ) VALUES (
             ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12,
             (SELECT raw_file_sha256 FROM documents WHERE id = ?2 AND portal_subdomain = ?1),
-            ?13
+            ?13, ?14
          )",
         params![
             portal_subdomain,
@@ -1083,6 +1083,7 @@ pub(super) fn insert_document_acquisition(
             raw_file_sha256,
             file_size,
             acquisition.retrieved_at,
+            acquisition.response_date,
         ],
     )
     .map_err(|error| {

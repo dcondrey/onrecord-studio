@@ -2,12 +2,16 @@ import { useCallback, useEffect, useState } from 'react';
 import { invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type {
+  AgendaItemChangeKind,
+  AgendaRevision,
   CalendarMeeting,
   FindingCitation,
   MeetingCalendar,
+  MeetingDocument,
   MeetingDocumentRole,
   MeetingSuggestion,
   MeetingTiming,
+  PostingAbsence,
   SuggestionBasis,
   SuggestionReasonKind,
 } from '../../types';
@@ -30,6 +34,88 @@ const REASON_TEXT: Record<SuggestionReasonKind, string> = {
   EVIDENCE_GAP: 'Evidence gap (untested)',
   CHECKABLE_FIGURE: 'Stated figure',
 };
+
+const ABSENCE_TEXT: Record<PostingAbsence, string> = {
+  NO_FETCH_RECORD: 'no fetch of this file is recorded',
+  NO_HEADER: 'the server sent no Last-Modified header',
+  UNREADABLE_HEADER: 'the Last-Modified header is not a readable date',
+  REQUEST_TIME_HOST: 'this host reports the time of the request as Last-Modified',
+  HEADER_IS_REQUEST_TIME: 'the Last-Modified header equals the time of the request',
+  REQUEST_TIME_NOT_RULED_OUT: 'the header is too close to the fetch to tell it from the time of the request',
+};
+
+const CHANGE_TEXT: Record<AgendaItemChangeKind, string> = {
+  ADDED: 'Added',
+  REMOVED: 'Removed',
+  REWORDED: 'Title reworded',
+  TEXT_CHANGED: 'Text changed below the title',
+};
+
+/** Whole hours and minutes between the header time and the stated start; never rounded across the hour. */
+function describeLeadTime(minutes: number): string {
+  const size = Math.abs(minutes);
+  const span = `${Math.floor(size / 60)} h ${size % 60} min`;
+  return minutes < 0 ? `${span} after the stated start` : `${span} before the stated start`;
+}
+
+function Posting({ document }: { document: MeetingDocument }) {
+  const { posting } = document;
+  return (
+    <div className="text-label text-muted">
+      {posting.state === 'RECORDED' ? (
+        <>
+          Posted (per the file’s Last-Modified header): {posting.lastModified.slice(0, 10)} {posting.lastModified.slice(11, 16)} UTC
+          {document.minutesBeforeMeeting !== null && ` · ${describeLeadTime(document.minutesBeforeMeeting)}`}
+        </>
+      ) : (
+        <>Posted: not recorded ({ABSENCE_TEXT[posting.reason]})</>
+      )}
+      {document.differingFetches > 0 && (
+        <div>
+          {document.differingFetches === 1 ? '1 fetch' : `${document.differingFetches} fetches`} of this address returned different bytes. The earlier
+          text was not kept, so those copies are not compared.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Revision({ revision }: { revision: AgendaRevision }) {
+  return (
+    <li className="rounded border border-line p-2 text-label text-fg-secondary">
+      <div>
+        {revision.earlierLabel} → {revision.laterLabel}{' '}
+        <span className="text-muted">
+          ({revision.orderBasis === 'LAST_MODIFIED' ? 'ordered by Last-Modified header' : 'ordered by when the app collected them; no posting time on one copy'})
+        </span>
+      </div>
+      {revision.changes.length === 0 ? (
+        <p className="mt-1 text-muted">No item was added, removed or changed between these copies.</p>
+      ) : (
+        <ul className="mt-1 flex flex-col gap-1">
+          {revision.changes.map((change) => (
+            <li key={`${change.kind}:${change.item}`}>
+              <span className="font-semibold text-fg">{CHANGE_TEXT[change.kind]}: {change.item}</span>
+              {change.kind === 'REWORDED' ? (
+                <div>
+                  <div>Earlier: “{change.before}”</div>
+                  <div>Later: “{change.after}”</div>
+                </div>
+              ) : (
+                (change.before ?? change.after) && <span> “{change.before ?? change.after}”</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {revision.titlesNotCompared.length > 0 && (
+        <p className="mt-1 text-muted">
+          Wording not compared (the title has no proven end, or the item number repeats): {revision.titlesNotCompared.join(', ')}.
+        </p>
+      )}
+    </li>
+  );
+}
 
 function Locator({ citation }: { citation: FindingCitation }) {
   const range =
@@ -97,18 +183,32 @@ function MeetingCard({ meeting, selected, onSelect, drafts, onDraft }: {
 }) {
   return (
     <article className="rounded-xl border border-line-strong p-4" aria-label={`${meeting.body} ${meeting.date ?? 'date not recorded'}`}>
-      <div className="text-label leading-4 text-accent">{meeting.date ?? 'Date not recorded'}</div>
+      <div className="text-label leading-4 text-accent">
+        {meeting.date ?? 'Date not recorded'}
+        {meeting.date && (meeting.startTime ? ` · ${meeting.startTime} as the agenda states` : ' · start time not recorded')}
+      </div>
       <h4 className="mt-1 text-sm font-semibold text-fg">{meeting.body}</h4>
       <div className="text-label text-muted">{meeting.jurisdiction}</div>
       {meeting.dateNote && <p className="mt-1 text-label text-warning">{meeting.dateNote}</p>}
-      <ul className="mt-2 flex flex-wrap gap-2 text-label">
+      <ul className="mt-2 flex flex-col gap-2 text-label">
         {meeting.documents.map((document) => (
           <li key={`${document.portalKey}:${document.documentId}`} className="rounded border border-line px-2 py-0.5 text-fg-secondary">
             {ROLE_TEXT[document.role]}:{' '}
             {document.sourceUrl ? <a className="underline" href={document.sourceUrl} target="_blank" rel="noreferrer">{document.label}</a> : document.label}
+            <Posting document={document} />
           </li>
         ))}
       </ul>
+      {meeting.revisions.length > 0 && (
+        <div className="mt-3" aria-label="Agenda copies compared">
+          <div className="app-eyebrow">Agenda copies compared</div>
+          <ul className="mt-1 flex flex-col gap-2">
+            {meeting.revisions.map((revision) => (
+              <Revision key={`${revision.earlierDocumentId}:${revision.laterDocumentId}`} revision={revision} />
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="mt-2 text-label text-fg-secondary">
         Comment deadline:{' '}
         {meeting.commentDeadlines.length === 0 ? <span className="text-muted">not recorded</span> : <Quote citation={meeting.commentDeadlines[0]} />}
@@ -181,6 +281,17 @@ export default function MeetingsView() {
         Meetings, bodies and dates come only from agendas, minutes and videos already collected. Suggestions quote the agenda and
         name what they rest on. They are leads to read, not conclusions about an item. Today counts as upcoming.
       </p>
+      <p className="mt-2 max-w-3xl text-label leading-relaxed text-muted">
+        A posting time is the Last-Modified header the server sent with the file. It is the server’s statement about the file, not proof of
+        when the public could first read it, and no notice requirement is evaluated here.
+      </p>
+      {calendar && calendar.postingCounts.agendaFilesWithBothTimes > 0 && (
+        <p className="mt-2 max-w-3xl text-label leading-relaxed text-fg-secondary" aria-label="Posting time counts">
+          {calendar.postingCounts.under72HoursBeforeStart} of {calendar.postingCounts.agendaFilesWithBothTimes} agenda files with a recorded posting
+          time and a stated start time were posted less than 72 hours before the meeting, per the file’s Last-Modified header.
+          {calendar.postingCounts.afterMeetingStart > 0 && ` ${calendar.postingCounts.afterMeetingStart} carry a header later than the stated start.`}
+        </p>
+      )}
       <div className="mt-3">
         <button type="button" className="analysis-button" onClick={load}>
           {loading ? 'Reading documents…' : 'Refresh'}
