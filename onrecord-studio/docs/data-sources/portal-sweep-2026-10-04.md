@@ -58,3 +58,25 @@ Public domain or dedicated: City open data (ODC-PDDL), County Socrata and civicd
 public domain: HUD, CDE. Attribution required: Inside Airbnb. Unclear: Regional Data Library
 packages, SANDAG Socrata sets, SANDAG and SanGIS layers taken directly, UCSD Homelessness Hub
 layers. The City's terms page was read only in summary; read it in full before publishing a pack.
+
+## Public restrooms: Project for Sanitation Justice (SDSU)
+
+The best restroom inventory found. The site has no download link, but the map's layer is queryable:
+`https://services1.arcgis.com/SIYkiqjmENweC50g/arcgis/rest/services/V2_Public_Restrooms_in_San_Diego_093022/FeatureServer/0`
+(802 rows countywide, one per restroom, 2,000 records per call; item last modified about September
+2024). Fields: ID_4Digit, Name, Latitude, Longitude, Address, Advertised_Hours, Confirmed_Hours_,
+Showers, Menstrual_Products, ADA_Accessible, Baby_Changing, Gender_Neutral, Restroom_Open_Status,
+Restroom_Assessed, Category, Operated_By, Notes, assess_date. Most coded fields are integers with
+no published code list; no cleanliness column. Seen: 1321, Pacific Beach Law Street, 4861 Ocean
+Blvd, advertised 24/7, operated by City of San Diego, assessed June 2022.
+
+Transit sub-study layers on the same host, with text values: `MTS_Restrooms__Open_Access`,
+`MTS_Restrooms_Closed`, `MTS_Restrooms_Subjective_Access`, `MTS_Restrooms__Excluded` (facility
+status, trolley station within a quarter mile, operator, advertised and confirmed hours).
+Catalogue: `arcgis.com/sharing/rest/search?q=owner:mswayne_SDSUGeo&num=50&f=json` (43 items).
+
+Method: Swayne, Calzo, Felner, Welsh-Carroll, PLoS ONE 18(7) e0288525 (2023), CC BY: 669 public
+restrooms countywide at publication; 57 community planning areas averaged five, range 0 to 33;
+of seven Pacific Beach restrooms assessed in 2022, posted hours were found at two.
+Licence: none on the layers; the paper says the location data is freely available. Confirm with
+the team before republishing. The layer is editable upstream, so snapshot it.
