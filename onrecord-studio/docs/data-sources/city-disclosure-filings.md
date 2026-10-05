@@ -16,15 +16,15 @@ any "deep link", "page-scrape", "robot", "spider" or other automatic device to a
 monitor any portion of the site, or to obtain information "through any means not made purposely
 available through the website", and prohibit use "for advertising or commercial purposes". There is
 no robots.txt. The export routes below are the ones the site itself offers as download buttons.
-Decision (2026-10-04, delegated by the owner): the app ships no automated client for this portal.
-The terms bar automated access outright, the operator is a private vendor, and OnRecord is a paid
-app, so a built-in fetcher would put the owner's access and the product at risk for data a person
-can download in a few clicks. Built instead: import of the files the portal's own export buttons
-produce (agency reports, statements of economic interests, campaign search, lobbyist filings, and
-the yearly campaign bulk workbook), recognised by their headers, with checks on the imported
-tables. A request to the City Clerk for a data feed or written permission is drafted for the owner
-to send; if granted, a fetcher can feed the same tables. The routes below stay documented for that
-case and are not called by the app.
+Decision (owner, 2026-10-04): build a reader for this portal despite the terms; the owner
+accepts that risk. The reader is not disguised. It makes the same requests the portal's own pages
+make, only when the user starts a fetch, one request at a time with a pause between them, and it
+keeps what it has fetched so nothing is requested twice. No measures to imitate a browser or a
+person, and none to avoid being identified or blocked: if the operator blocks the app, the app
+reports that and the export files can still be imported by hand. Import of the portal's own
+export files (agency reports, statements of economic interests, campaign search, lobbyist
+filings, yearly campaign bulk workbook), recognised by their headers, is built alongside so both
+routes feed the same tables.
 
 ## Routes
 
