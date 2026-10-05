@@ -24,6 +24,26 @@ Two names survive for compatibility and neither means SQLite is involved:
 and lets modules mix the two freely. A wrapper struct would compile and then fail at runtime on
 state lookup. Prefer `DuckDbRepository` in new code; both are exported from `storage`.
 
+### Analytical imports
+
+`storage::sqlite::analytical_import` reads a delimited file twice from disk (profile, then write),
+hashing each read; the two digests must agree or the transaction stores nothing. Workbooks and
+JSON are parsed whole and keep the in-memory caps in `storage::tabular`. A row is rejected only when
+the file makes it unreadable (parse failure, or a field count other than the header's beyond empty
+trailing fields). A cell that does not convert to its column's type is NULL in the typed table,
+kept as written, and counted in `validationSummary.unconvertedByColumn`; finance, budget-line and
+facility gates count those cells in the columns they read, so a NULL never passes as complete
+coverage. A documented column type is dropped to text only when no value converts. `n/n/yyyy`
+dates convert only when the column's own values settle day and month order.
+
+Original cells live per snapshot in `analysis_src_<id>`, one text column per source column, keyed
+by `_row`; the typed table carries `_source_row` (its latest view excludes it). Snapshots imported
+before this keep one JSON document per row in `analytical_row_ledger`. `analytical_rows` is a
+**view** over both, rebuilt by `row_store::rebuild_row_view` at startup and in every transaction
+that adds or removes a snapshot; never write to it. Its row hash for a column-store snapshot is the
+SHA-256 of the row's original fields as a JSON array; ledger rows keep the hash they were stored
+with.
+
 ## 2. Derived projections
 
 Everything below is rebuildable from the core. None of it is evidence in its own right.
