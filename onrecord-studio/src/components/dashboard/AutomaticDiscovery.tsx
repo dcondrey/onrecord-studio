@@ -64,9 +64,9 @@ export default function AutomaticDiscovery() {
     </div>
     {gaps.map((gap) => { const status = state.gapStatus[gap.key]; return <p key={gap.key} role="status" className="rounded-xl border border-line p-3 text-label leading-4 text-fg-secondary">
       <span className="font-semibold text-fg">Missing data: {gap.title}.</span> {gap.detail}{' '}
-      {status === 'fetching' ? 'Fetching it now…' : status === 'fetched' ? 'Fetched; the checks are running again.' : <>
+      {status === 'fetching' ? (gap.collect ? 'Starting the collection…' : 'Fetching it now…') : status === 'fetched' ? (gap.collect ? 'Collection started; the source is listed in the sidebar.' : 'Fetched; the checks are running again.') : <>
         {status && <span className="text-warning">The last attempt failed: {status}. </span>}
-        {automatic && !status ? 'It will be fetched automatically. ' : ''}<button type="button" className="text-accent underline" onClick={() => controller.fill(gap.key)}>Fetch it now</button></>}
+        {automatic && !status && gap.fetch ? 'It will be fetched automatically. ' : ''}<button type="button" className="text-accent underline" onClick={() => controller.fill(gap.key)}>{gap.collect ? 'Collect them now' : 'Fetch it now'}</button></>}
     </p>; })}
     {leads.length > 6 && <button type="button" className="analysis-button" onClick={() => setShowAll((value) => !value)}>{showAll ? 'Show fewer observations' : 'Show more observations'}</button>}
     {state.candidates.length > 0 && <p className="text-label leading-4 text-fg-secondary">{state.candidates.length} acquired tables are available for analysis. <button type="button" className="text-accent underline" onClick={openAnalysis}>Review acquired tables</button></p>}

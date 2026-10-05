@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useSyncExternalStore, t
 import { invokeCommand } from '../../ipc';
 import { useAppStore } from '../../store/useAppStore';
 import { DiscoveryController } from '../../utils/discoveryController';
+import { guidanceForSubject } from '../../utils/sourceGuidance';
 
 const Context = createContext<DiscoveryController | null>(null);
 export function AutomaticDiscoveryProvider({ children }: { children: ReactNode }) {
@@ -14,6 +15,7 @@ export function AutomaticDiscoveryProvider({ children }: { children: ReactNode }
     maintain: () => invokeCommand('run_data_maintenance', {}),
     query: (sql) => invokeCommand('run_analytical_sql', { sql, limit: 100 }),
     fetch: (request) => invokeCommand('fetch_city_dataset', request),
+    collect: ({ url, subject }) => invokeCommand('start_data_source', { url, guidance: guidanceForSubject(subject) }),
     record: (leads, complete) => invokeCommand('record_service_leads', { leads, complete }).then((outcome) => {
       if (outcome.findingsRecorded + outcome.staleCleared > 0) useAppStore.getState().requestFindingsRefresh();
     }),

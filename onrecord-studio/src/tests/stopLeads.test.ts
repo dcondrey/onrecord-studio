@@ -17,7 +17,7 @@ describe('leads from police stop records', () => {
     expect(stopQueries(schema, schema.datasets[1])).toEqual([]);
     expect(stopQueries(without('results'), stops)).toEqual([]);
     expect(stopQueries(without('property'), stops).find((item) => item.id === 'stops_unhoused_outcomes')!.sql).toContain('NULL AS property_seized');
-    const gaps = (catalog: AnalyticalSchema) => dataGaps(catalog, {}, '2026-10-04T00:00:00Z').map((gap) => gap.fetch.dataset);
+    const gaps = (catalog: AnalyticalSchema) => dataGaps(catalog, {}, '2026-10-04T00:00:00Z').map((gap) => gap.fetch?.dataset);
     expect(gaps(schema)).toEqual([]);
     expect(gaps(without('results'))).toEqual(['RIPA_STOP_RESULTS']);
     expect(gaps({ ...schema, datasets: [stops] })).toEqual(['RIPA_STOP_RESULTS', 'RIPA_STOP_REASONS', 'RIPA_PROPERTY_SEIZURE_BASIS']);

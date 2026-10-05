@@ -2,14 +2,17 @@ import type { AnalyticalDatasetSummary, AnalyticalSchema, CityDataset } from '..
 import type { AutomaticProfile } from './automaticDiscovery';
 import { budgetTable, serviceCompanions, staffGroupDepartments } from './serviceAccountability';
 import { missingStopCompanions } from './stopLeads';
+import { holdsAbatementLog } from './abatementLeads';
 
-/** A question the imported tables cannot answer, and the published table that would answer it. */
+/** A question the imported tables cannot answer, and what would answer it: one published table to
+ * fetch, or a records portal to collect from for a subject. */
 export interface DataGap {
   key: string;
   snapshotId: string;
   title: string;
   detail: string;
-  fetch: { dataset: CityDataset; year: number | null };
+  fetch?: { dataset: CityDataset; year: number | null };
+  collect?: { url: string; subject: string };
 }
 
 const GET_IT_DONE = 'https://seshat.datasd.org/get_it_done_reports/';
@@ -17,6 +20,9 @@ const OPEN_REPORTS = `${GET_IT_DONE}get_it_done_requests_open_datasd.csv`;
 const closedReports = (year: number) => `${GET_IT_DONE}get_it_done_requests_closed_${year}_datasd.csv`;
 /** The publisher replaces the open file daily; a copy this old is worth comparing with a new one. */
 const RECOPY_DAYS = 7;
+const CITY_RECORDS = 'https://sandiego.nextrequest.com';
+/** One portal search per comma-separated entry. */
+const ENCAMPMENT_RECORDS = 'encampment, abatement, homeless shelter, public restroom, stored property';
 
 const day = (dataset: AnalyticalDatasetSummary) => dataset.retrievedAt.slice(0, 10);
 /** A closed-reports import filtered to one service cannot say what became of other services' reports. */
@@ -40,9 +46,15 @@ export function dataGaps(schema: AnalyticalSchema, profiles: Record<string, Auto
   if (!latest) return gaps;
   const result = (id: string) => profiles[latest.snapshotId]?.results.find((entry) => entry.query.id === id)?.result;
   const services = result('service_backlog');
+  const encampmentReports = Boolean(services?.rows.some((row) => /encampment/i.test(String(row[services.columns.indexOf('category')]))));
+  // The City publishes no abatement log; the ones that exist were released to records requests.
+  if (encampmentReports && !holdsAbatementLog(schema)) gaps.push({
+    key: `records:${latest.snapshotId}`, snapshotId: latest.snapshotId, collect: { url: CITY_RECORDS, subject: ENCAMPMENT_RECORDS },
+    title: 'Released City records would show when encampment notices were posted and abatements carried out',
+    detail: `Encampment reports are open in the imported file, and no log of posted notices or completed abatements is imported. The City has released such logs, arrest and citation exports and contractor invoices to public records requests. Collecting searches ${new URL(CITY_RECORDS).host} for ${ENCAMPMENT_RECORDS} and downloads what was released; a released spreadsheet becomes a table when Data upkeep imports it.`,
+  });
   // Encampment reports say where residents complained; the stop records say what enforcement followed.
-  if (!schema.columns.some((column) => column.columnName === 'perceivedunhoused')
-    && services?.rows.some((row) => /encampment/i.test(String(row[services.columns.indexOf('category')])))) gaps.push({
+  if (!schema.columns.some((column) => column.columnName === 'perceivedunhoused') && encampmentReports) gaps.push({
     key: `stops:${latest.snapshotId}`, snapshotId: latest.snapshotId, fetch: { dataset: 'RIPA_STOPS', year: null },
     title: 'The police stop records would show enforcement against people perceived as unhoused',
     detail: 'Encampment reports are open in the imported file. SDPD publishes each person stopped with the officer’s perceived-unhoused entry, the reason, the result and property seized.',

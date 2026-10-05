@@ -55,6 +55,40 @@ describe('the budget behind a backlog', () => {
   });
 });
 
+describe('released records behind encampment reports', () => {
+  const latest = table('latest', open, '2026-10-04T00:00:00Z');
+  const reports = (category: string): Record<string, AutomaticProfile> => ({ latest: { fingerprint: 'f', checkedAt: 'now', results: [{ query: query('service_backlog'), result: response(['category'], [[category]]) }] } });
+  const collections = (schema: AnalyticalSchema, category: string) => dataGaps(schema, reports(category), '2026-10-04T12:00:00Z').flatMap((gap) => gap.collect ?? []);
+
+  it('proposes the records collection only while encampment reports are open and no abatement log is imported', () => {
+    expect(collections(catalog(latest), 'Encampment')).toEqual([{ url: 'https://sandiego.nextrequest.com', subject: expect.stringContaining('encampment') }]);
+    expect(collections(catalog(latest), 'Pothole')).toEqual([]);
+    const schema = catalog(latest);
+    const log = { ...latest, snapshotId: 'log', tableName: 'analysis_log', sourceUri: null };
+    const column = (columnName: string) => ({ ...base.columns[0], tableName: log.tableName, columnName });
+    expect(collections({ ...schema, datasets: [...schema.datasets, log], columns: [...schema.columns, ...['date_posted', 'address', 'latitude', 'longitude'].map(column)] }, 'Encampment')).toEqual([]);
+  });
+
+  it('never starts the collection on its own, even when upkeep fetches missing tables', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-04T12:00:00Z'));
+    const fetch = vi.fn(async () => ({}));
+    const collect = vi.fn(async () => ({}));
+    const controller = new DiscoveryController({ schema: async () => catalog(latest), candidates: async () => [], patterns: async () => [],
+      query: async () => response(['column_name', 'category'], [['status', 'Encampment']]), fetch, collect });
+    try {
+      controller.start();
+      controller.setMaintenance({ policy: { enabled: true, autoImport: true, autoRefresh: true, refreshHours: 24, retentionMode: 'ORIGINALS', retainedFileBudgetBytes: 10 * 1024 ** 3 }, effectiveAt: '2026-09-14T00:00:00Z', retainedFileBytes: 0, referencedDocuments: 0, reclaimedFileBytes: 0, events: [] });
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(fetch).toHaveBeenCalledWith({ dataset: 'RIPA_STOPS', year: null });
+      expect(collect).not.toHaveBeenCalled();
+      controller.fill('records:latest');
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(collect).toHaveBeenCalledTimes(1);
+      expect(controller.snapshot().gapStatus['records:latest']).toBe('fetched');
+    } finally { controller.stop(); vi.useRealTimers(); }
+  });
+});
+
 describe('fetching a missing table', () => {
   const upkeep = (autoRefresh: boolean): DataMaintenanceStatus => ({ policy: { enabled: true, autoImport: true, autoRefresh, refreshHours: 24, retentionMode: 'ORIGINALS', retainedFileBudgetBytes: 10 * 1024 ** 3 }, effectiveAt: '2026-09-14T00:00:00Z', retainedFileBytes: 0, referencedDocuments: 0, reclaimedFileBytes: 0, events: [] });
   const schema = catalog(table('first', open, '2026-09-01T17:00:00Z'));
