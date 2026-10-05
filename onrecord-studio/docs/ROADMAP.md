@@ -1293,69 +1293,25 @@ Round one merged and gated 2026-10-05 (main at 02366f6: fmt, clippy, 1,328 lib t
 data-discovery tests, tsc, eslint, 645 frontend tests, IPC and help checks all exit 0): order
 items 1 to 4 above. Nothing in round one has been checked in the running app.
 
-Round two, in progress: (a) operating actuals fetch with under-spending, adopted-without-actuals
-and settlement-account leads, and overtime from the State Controller pay file; (b) a registry of
-meeting bodies (`docs/data-sources/meeting-bodies.md`) with posting time from each file's
-`Last-Modified` and differences between successive copies of an agenda; (c) redaction
-corroboration from imported tables and for older documents when new material arrives; (d) a
-draft for a request whose deadline passed with no response, citing the agency's counted record.
-After that: disclosure-portal reader and export import, settlement resolutions as a table,
-re-check that keeps changed bytes (on the peer's watchlist storage), reports after abatements in
-nearby places, a signed receipt for one document, and the data packs in `docs/data-packs.md`.
+Round two merged and gated 2026-10-05 (fmt, clippy, 1,369 lib tests, 9 data-discovery tests,
+tsc, eslint, 666 frontend tests, IPC contract with 48 finding kinds, help coverage, all exit 0):
+operating actuals fetch and spending-record leads; the meeting-body registry, posting time and
+revision comparison between copies at different addresses; anchored redaction context across
+documents and imported tables; the follow-up letter for a request overdue with no response and
+a lead's tables and SQL in the dossier. "Built" paragraphs for each are below. Nothing in rounds
+one or two has been checked in the running app.
 
-Built 2026-10-05 (round two a): adopted against actual spending, settlement accounts and overtime
-paid (methods §24; `OPERATING_ACTUALS` fetch, `spendingLeads.ts`, `SPENDING_RECORD_LEAD`, a data
-gap offering the actuals when only a budget is imported). Measured with the app's three SQL
-statements in the DuckDB CLI on `budget_operating_datasd.csv` and `actuals_operating_datasd.csv`
-retrieved 2026-10-05 (actuals SHA-256 53cfc748..., 663,858 rows, fiscal 2011 to 2023) and the
-owner's copy of the State Controller 2024 city file:
+Left open by round two: comparing agenda versions at one address (the earlier text is
+overwritten on re-fetch; needs extracted text kept per document and raw SHA-256 in the peer's
+re-check or watchlist storage); Housing Commission upload times; five meeting bodies (Status of
+Women, Franchise Compliance, Otay Mesa financing authority, community planning groups, retirement
+board); redaction sweep timing in an optimised build and on a real corpus.
 
-| fiscal year | adopted expense, Homelessness Strategies & Solutions | actual expense | below adopted |
-|---|---|---|---|
-| 2021 | 64,235,899 | 57,879,044 | 9.9% |
-| 2022 | 18,071,824 | 9,815,698 | 45.7% |
-| 2023 | 25,157,607 | 22,920,122 | 8.9% |
-
-Only fiscal 2022 meets the yardstick (10% and 1,000,000 dollars). Environmental Services meets it
-in fiscal 2012 and 2013 (10.3% each) and in no year since; Police in none. Of 813 department-years
-with adopted expense in fiscal 2011 to 2023, 14 have no actual rows under that name, 6 of them
-with an adopted amount above zero (General Fund Appropriated Reserve 2011, 2013, 2014; Business
-Office 2011 to 2013), the latest in fiscal 2014. Settlement and public-liability claim accounts,
-fiscal 2019 to 2023: 4.2, 4.4, 5.1, 4.3 and 36.6 million dollars from 10, 10, 6, 1 and 38
-departments, so the lead states each year and compares none. Pay file, San Diego: 14,570
-positions, 160,052,249 overtime (15.3% of regular pay), 211 positions at 100,000 or more;
-Fire-Rescue 61.5 million overtime beside 48.4 and 44.8 million adopted for fiscal 2024 and 2025,
-Police 54.2 million beside 49.3 and 46.4 million; the homelessness department 2,005 dollars and
-no adopted overtime row. With the whole state file imported the lead also describes Los Angeles
-and San Francisco, without a budget. Measured by a separate query, not the app's: across all
-departments 110 of the 813 department-years meet the yardstick; the app reports the three
-followed departments only. The three downloads were also imported once through
-`import_analytical_csv` and the statements run through the restricted SQL boundary (a one-off
-native run, not kept as a test): the same 43, 17 and 17 rows and the same figures; the pay file
-imported 345,776 rows and rejected 68 (it has 78 byte sequences that are not UTF-8, none in San
-Diego's 14,570 rows), so another city's sums can be short by its rejected rows. Not verified: the
-fetch and the leads in the running app; whether the fiscal 2022 difference is a transfer or a
-carry-forward; the pay file for any year but 2024.
-
-Built 2026-10-05: redaction context matched across documents and imported tables (methods §30).
-The automatic detector no longer uses the ranked lexical engine. It reports a redaction mark only
-when the same words on both sides of it stand around text in another collected document or in one
-row of an imported table, cites both passages by character range (a table by name, source
-address, SHA-256, row and column), and never prints that text or says what the redaction covers.
-Every eligible document is taken in once, so the old newest-200 window is gone, a document is
-portal plus id throughout, and hand-added files are read on neither side.
-Verified by tests on fresh databases: text outside the anchors is not a match; a match in another
-portal is cited on both sides by ranges that slice back to the text; a table cell is cited by
-snapshot, row and column and a value across two cells is refused; a redacted document older than
-the former window meets a source that arrives later; two portals sharing document ids are kept
-apart; hand-added files are excluded in the sweep and in both on-demand engines; work past each
-bound is done by the next run; a core without the sweep tables is swept after upgrade.
-Measured: 2026-10-05, debug build, one run on a loaded machine (`table_scan_cost`): a run that took in 500 one-mark documents and read a 300,000-row, five-column imported table against those 500 marks took 12.7 s, row assembly by the `analytical_rows` view included. An optimised build is not measured.
-Not verified: any run on a real corpus (match rate, false positives from reused wording, and
-time on real text are unmeasured); the semantic path of the on-demand panel now searches every
-portal, tested only at its result filter because the embedding model is not loaded in tests; the
-person-name rule rests on a capitalised-words shape and a short list of lead-in phrases, whose
-misses are unmeasured. A mark with fewer than three words on either side is not compared.
+Next, done in the main session against the one shared cargo target (no parallel worktree builds;
+see the owner's feedback on agent cost): disclosure-portal reader and export import
+(`docs/data-sources/city-disclosure-filings.md`), settlement resolutions as a table, reports
+after abatements in nearby places, a signed receipt for one document, and the data packs in
+`docs/data-packs.md`.
 
 ## Leads from service-report tables (2026-10-04)
 
