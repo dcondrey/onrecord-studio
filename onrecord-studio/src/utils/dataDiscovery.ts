@@ -23,7 +23,7 @@ export interface DiscoveryReport { version: 1; createdAt: string; plan: Discover
 
 export const quoteIdentifier = (value: string) => `"${value.replace(/"/g, '""')}"`;
 const literal = (value: string) => `'${value.replace(/'/g, "''")}'`;
-export const isNumericColumn = (column: AnalyticalColumnSummary) => /^(INTEGER|NUMBER|DECIMAL)$/.test(column.logicalType);
+export const isNumericColumn = (column: AnalyticalColumnSummary) => /^(INTEGER|NUMBER|DECIMAL|FLOAT)$/.test(column.logicalType);
 
 export function discoveryDefaults(schema: AnalyticalSchema, snapshotId: string): DiscoverySelection {
   const dataset = schema.datasets.find((item) => item.snapshotId === snapshotId);

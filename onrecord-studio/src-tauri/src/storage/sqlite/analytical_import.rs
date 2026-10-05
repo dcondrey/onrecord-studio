@@ -1,7 +1,8 @@
-//! Turns a table file into an analytical snapshot in two reads of the source. The first profiles
-//! every column outside the database lock; the second converts and writes rows inside one
-//! transaction. Neither read keeps more than one record of delimited text in memory, and the two
-//! must agree on the source's SHA-256 or nothing is committed.
+//! Turns a table file into an analytical snapshot with one read of the source. That read hashes
+//! the bytes, stores every record's original fields in the snapshot's column store and profiles
+//! each column; the typed table is then built from the stored originals. So the stored cells come
+//! from exactly the bytes that were hashed, and no format is parsed twice. Everything happens in
+//! one transaction.
 //!
 //! A row is rejected only when the file itself makes it unreadable: the parser failed, or its
 //! field count differs from the header's (beyond empty trailing fields). A cell that does not
@@ -20,7 +21,7 @@ use crate::storage::tabular::{TableSource, TypeEvidence};
 use crate::types::{AnalyticalImportRequest, AnalyticalImportResult};
 use std::collections::{BTreeMap, HashSet};
 
-/// What the first read learned about one column.
+/// What the read learned about one column.
 #[derive(Default)]
 struct ColumnProfile {
     evidence: TypeEvidence,
@@ -50,22 +51,15 @@ fn is_text(logical: &str) -> bool {
 fn plan_columns(
     kind: &AnalyticalDatasetKind,
     headers: &[String],
+    aliases: Vec<String>,
     profiles: &[ColumnProfile],
     warnings: &mut Vec<String>,
 ) -> Vec<ColumnPlan> {
-    let mut aliases = std::collections::BTreeSet::new();
     headers
         .iter()
+        .zip(aliases)
         .zip(profiles)
-        .enumerate()
-        .map(|(index, (header, profile))| {
-            let base = unique_column_alias(header, index, headers);
-            let mut alias = base.clone();
-            let mut suffix = 2;
-            while !aliases.insert(alias.clone()) {
-                alias = format!("{base}_{suffix}");
-                suffix += 1;
-            }
+        .map(|((header, alias), profile)| {
             let order = DateOrder::decided_by(profile.first_over_12, profile.second_over_12);
             let documented = *kind != AnalyticalDatasetKind::RegionalData;
             let mut logical = if documented {
@@ -121,43 +115,95 @@ fn key_digest(key: &str) -> u128 {
     )
 }
 
-impl DuckDbRepository {
-    pub(crate) async fn import_analytical_table(
-        &self,
-        request: AnalyticalImportRequest,
-        automatic_origin: Option<(String, u64)>,
-    ) -> Result<AnalyticalImportResult, AppError> {
-        let kind = request.dataset_kind.clone();
-        let format_name = request
-            .source_file_name
-            .clone()
-            .unwrap_or_else(|| request.local_path.clone());
-        let (path, worksheet) = (request.local_path.clone(), request.worksheet.clone());
-        let profile_kind = kind.clone();
-        let (source, first_read, profiles) = crate::blocking::spawn("Profile table", move || {
-            let source = TableSource::open(
-                std::path::Path::new(&path),
-                &format_name,
-                worksheet.as_deref(),
-            )?;
-            let hints_for = |headers: &[String]| -> Vec<Option<&'static str>> {
-                headers
-                    .iter()
-                    .map(|header| {
-                        Some(logical_type_for(&profile_kind, header)).filter(|logical| {
-                            profile_kind != AnalyticalDatasetKind::RegionalData && !is_text(logical)
-                        })
+/// Converted values are built from the stored originals this many rows at a time.
+const CONVERT_BATCH_ROWS: i64 = 50_000;
+
+fn storage(context: &str) -> impl Fn(duckdb::Error) -> AppError + '_ {
+    move |error| AppError::Storage(format!("{context}: {error}"))
+}
+
+/// What the read stored and measured, before column types are known.
+struct ReadOutcome {
+    headers: Vec<String>,
+    aliases: Vec<String>,
+    profiles: Vec<ColumnProfile>,
+    sha256: String,
+    rows: usize,
+    malformed_rows: usize,
+    duplicate_key_rows: usize,
+    repaired_trailing_rows: usize,
+    repair_row_numbers: Vec<usize>,
+}
+
+fn column_aliases(headers: &[String]) -> Vec<String> {
+    let mut seen = std::collections::BTreeSet::new();
+    headers
+        .iter()
+        .enumerate()
+        .map(|(index, header)| {
+            let base = unique_column_alias(header, index, headers);
+            let mut alias = base.clone();
+            let mut suffix = 2;
+            while !seen.insert(alias.clone()) {
+                alias = format!("{base}_{suffix}");
+                suffix += 1;
+            }
+            alias
+        })
+        .collect()
+}
+
+fn create_originals(tx: &Connection, table: &str, aliases: &[String]) -> Result<(), AppError> {
+    let cells = aliases
+        .iter()
+        .map(|alias| format!("{} VARCHAR", quote_ident(alias)))
+        .collect::<Vec<_>>()
+        .join(", ");
+    tx.execute_batch(&format!(
+        "CREATE TABLE {} (_row BIGINT NOT NULL, _row_hash VARCHAR NOT NULL,
+             _field_count INTEGER NOT NULL, _malformed BOOLEAN NOT NULL, _parse_error VARCHAR,
+             _messages VARCHAR NOT NULL, {cells}, _surplus VARCHAR)",
+        quote_ident(table)
+    ))
+    .map_err(storage("Failed to create the original-cell store"))
+}
+
+/// The one read of the source: every record's original fields go to `staging` as text while each
+/// column is profiled. Whether a row is readable is known here; how its cells convert is not, since
+/// that depends on types the whole column decides.
+fn read_once(
+    tx: &Connection,
+    source: &TableSource,
+    kind: &AnalyticalDatasetKind,
+    staging: &str,
+) -> Result<ReadOutcome, AppError> {
+    let mut originals: Option<duckdb::Appender<'_>> = None;
+    let (mut aliases, mut hints, mut profiles) = (Vec::new(), Vec::new(), Vec::new());
+    let (mut malformed_rows, mut duplicate_key_rows, mut repaired_trailing_rows) = (0, 0, 0);
+    let mut repair_row_numbers = Vec::new();
+    let mut seen_keys = HashSet::new();
+    let read = source.read(|headers, row_index, record| {
+        if originals.is_none() {
+            aliases = column_aliases(headers);
+            hints = headers
+                .iter()
+                .map(|header| {
+                    Some(logical_type_for(kind, header)).filter(|logical| {
+                        *kind != AnalyticalDatasetKind::RegionalData && !is_text(logical)
                     })
-                    .collect()
-            };
-            let mut hints = Vec::new();
-            let mut profiles: Vec<ColumnProfile> = Vec::new();
-            let read = source.read(|headers, _, record| {
-                if hints.is_empty() {
-                    hints = hints_for(headers);
-                    profiles = headers.iter().map(|_| ColumnProfile::default()).collect();
-                }
-                let Ok(record) = record else { return Ok(()) };
+                })
+                .collect();
+            profiles = headers.iter().map(|_| ColumnProfile::default()).collect();
+            create_originals(tx, staging, &aliases)?;
+            originals = Some(tx.appender(staging).map_err(read_failed)?);
+        }
+        let width = aliases.len();
+        let row_number = row_index + 1;
+        let fields = record.ok();
+        let mut errors = Vec::new();
+        match record {
+            Err(error) => errors.push(format!("CSV row parse failed: {error}")),
+            Ok(record) => {
                 for (index, profile) in profiles.iter_mut().enumerate() {
                     let raw = record.get(index).unwrap_or("").trim();
                     profile.evidence.observe(raw);
@@ -178,322 +224,36 @@ impl DuckDbRepository {
                         }
                     }
                 }
-                Ok(())
-            })?;
-            // A header-only table never reached the callback.
-            profiles.resize_with(read.headers.len(), ColumnProfile::default);
-            Ok((source, read, profiles))
-        })
-        .await??;
-        if request
-            .expected_source_sha256
-            .as_ref()
-            .is_some_and(|expected| !expected.eq_ignore_ascii_case(&first_read.sha256))
-        {
-            return Err(AppError::DataParsing(
-                "The acquired file no longer matches its recorded SHA-256; import stopped.".into(),
-            ));
-        }
-        let source_sha256 = first_read.sha256.clone();
-        // Equal bytes from different publishers or worksheets are distinct acquisitions.
-        let identity_hash = sha256_hex(
-            serde_json::json!([
-                ANALYTICAL_PARSER_VERSION,
-                source_sha256,
-                request.source_uri,
-                request.worksheet,
-                request.observation_period_start,
-                request.observation_period_end,
-                request.partial_dataset
-            ])
-            .to_string()
-            .as_bytes(),
-        );
-        let snapshot_id = format!(
-            "{}-{}",
-            kind.as_str().to_ascii_lowercase().replace('_', "-"),
-            &identity_hash[..24]
-        );
-        let table_name = format!(
-            "analysis_{}_{}",
-            kind.as_str().to_ascii_lowercase(),
-            &identity_hash[..24]
-        );
-        let source_table = format!("analysis_src_{}", &identity_hash[..24]);
-        let latest_view_name = if kind == AnalyticalDatasetKind::RegionalData {
-            let source_identity = request.source_uri.as_deref().unwrap_or(&request.local_path);
-            let key = sha256_hex(
-                serde_json::json!([source_identity, request.worksheet])
-                    .to_string()
-                    .as_bytes(),
-            );
-            format!("analysis_regional_{}_latest", &key[..16])
-        } else {
-            format!("analysis_{}_latest", kind.as_str().to_ascii_lowercase())
-        };
-        let headers = first_read.headers;
-        let mut schema_warnings = schema_warnings_for(&headers, &kind);
-        schema_warnings.extend(source.warnings().iter().cloned());
-        if headers
-            .iter()
-            .collect::<std::collections::BTreeSet<_>>()
-            .len()
-            != headers.len()
-        {
-            schema_warnings.push("Duplicate column headers were assigned distinct SQL names; raw rows are retained by column position.".into());
-        }
-        let plans = plan_columns(&kind, &headers, &profiles, &mut schema_warnings);
-        let declares_partial = source.declares_partial();
-        if declares_partial {
-            schema_warnings.push(
-                "The source declares additional pages or worksheets; this snapshot is partial."
-                    .into(),
-            );
-        }
-        let partial = request.partial_dataset || declares_partial;
-        let expected_rows = first_read.rows;
-        let request_for_tx = request.clone();
-        let (snapshot, table, view) = (
-            snapshot_id.clone(),
-            table_name.clone(),
-            latest_view_name.clone(),
-        );
-        let outcome = self
-            .query_connection("Analytical table import", move |conn| {
-                write_snapshot(
-                    conn,
-                    &source,
-                    &plans,
-                    &headers,
-                    WriteTarget {
-                        snapshot_id: &snapshot,
-                        table_name: &table,
-                        source_table: &source_table,
-                        latest_view: &view,
-                        source_sha256: &source_sha256,
-                        expected_rows,
-                        partial,
-                        format: source.format(),
-                        declares_partial,
-                        warnings: schema_warnings,
-                        request: &request_for_tx,
-                        origin: automatic_origin.as_ref(),
-                    },
-                )
-            })
-            .await?;
-        Ok(AnalyticalImportResult {
-            snapshot_id,
-            dataset_kind: kind,
-            display_name: request.display_name,
-            table_name,
-            imported_rows: outcome.imported_rows,
-            rejected_rows: outcome.malformed_rows,
-            malformed_rows: outcome.malformed_rows,
-            duplicate_key_rows: outcome.duplicate_key_rows,
-            unconverted_cells: outcome.unconverted_cells,
-            schema_warnings: outcome.warnings,
-            source_sha256: first_read.sha256,
-        })
-    }
-}
-
-struct WriteTarget<'a> {
-    snapshot_id: &'a str,
-    table_name: &'a str,
-    source_table: &'a str,
-    latest_view: &'a str,
-    source_sha256: &'a str,
-    expected_rows: usize,
-    partial: bool,
-    format: &'static str,
-    declares_partial: bool,
-    warnings: Vec<String>,
-    request: &'a AnalyticalImportRequest,
-    origin: Option<&'a (String, u64)>,
-}
-
-struct WriteOutcome {
-    imported_rows: usize,
-    malformed_rows: usize,
-    duplicate_key_rows: usize,
-    unconverted_cells: usize,
-    warnings: Vec<String>,
-}
-
-/// The second read. The snapshot row is written first so the row ledger's foreign key holds while
-/// rows are appended; its counts and summary are filled in once the read has finished.
-fn write_snapshot(
-    conn: &mut Connection,
-    source: &TableSource,
-    plans: &[ColumnPlan],
-    first_headers: &[String],
-    target: WriteTarget<'_>,
-) -> Result<WriteOutcome, AppError> {
-    let tx = conn.transaction().map_err(|error| {
-        AppError::Storage(format!("Failed to begin analytical import: {error}"))
-    })?;
-    let table = quote_ident(target.table_name);
-    let create_columns = plans
-        .iter()
-        .map(|plan| format!("{} {}", quote_ident(&plan.alias), duckdb_type(plan.logical)))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let source_store = quote_ident(target.source_table);
-    let source_cells = plans
-        .iter()
-        .map(|plan| format!("{} VARCHAR", quote_ident(&plan.alias)))
-        .collect::<Vec<_>>()
-        .join(", ");
-    tx.execute_batch(&format!(
-        "DROP TABLE IF EXISTS {table};
-         CREATE TABLE {table} ({create_columns}, _source_row BIGINT NOT NULL);
-         DROP TABLE IF EXISTS {source_store};
-         CREATE TABLE {source_store} (_row BIGINT NOT NULL, _row_hash VARCHAR NOT NULL,
-             _field_count INTEGER NOT NULL, _malformed BOOLEAN NOT NULL, _parse_error VARCHAR,
-             _messages VARCHAR NOT NULL, {source_cells}, _surplus VARCHAR);"
-    ))
-    .map_err(|error| AppError::Storage(format!("Failed to create analytical table: {error}")))?;
-    let request = target.request;
-    for statement in [
-        "DELETE FROM analytical_row_ledger WHERE snapshot_id = ?1",
-        "DELETE FROM analytical_columns WHERE snapshot_id = ?1",
-        "DELETE FROM analytical_snapshots WHERE snapshot_id = ?1",
-    ] {
-        tx.execute(statement, params![target.snapshot_id])
-            .map_err(|error| AppError::Storage(format!("Failed to replace snapshot: {error}")))?;
-    }
-    tx.execute(
-        "INSERT INTO analytical_snapshots (
-            snapshot_id, dataset_kind, display_name, table_name, source_uri, local_path,
-            source_sha256, retrieved_at, observation_period_start, observation_period_end,
-            partial_dataset, validation_summary_json
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7,
-            strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'), ?8, ?9, ?10, '{}')",
-        params![
-            target.snapshot_id,
-            request.dataset_kind.as_str(),
-            request.display_name,
-            target.table_name,
-            request.source_uri,
-            request.local_path,
-            target.source_sha256,
-            request.observation_period_start,
-            request.observation_period_end,
-            i64::from(target.partial),
-        ],
-    )
-    .map_err(|error| AppError::Storage(format!("Failed to record analytical snapshot: {error}")))?;
-    for (ordinal, plan) in plans.iter().enumerate() {
-        tx.execute(
-            "INSERT INTO analytical_columns (
-                snapshot_id, table_name, column_name, original_name, logical_type,
-                nullable, dictionary, ordinal
-             ) VALUES (?1, ?2, ?3, ?4, ?5, 1, NULL, ?6)",
-            params![
-                target.snapshot_id,
-                target.table_name,
-                plan.alias,
-                plan.header,
-                plan.logical,
-                ordinal as i64
-            ],
-        )
-        .map_err(|error| {
-            AppError::Storage(format!("Failed to record analytical column: {error}"))
-        })?;
-    }
-    let mut typed = tx.appender(target.table_name).map_err(read_failed)?;
-    let mut originals = tx.appender(target.source_table).map_err(read_failed)?;
-    let mut malformed_rows = 0usize;
-    let mut repaired_trailing_rows = 0usize;
-    let mut repair_row_numbers = Vec::new();
-    let mut duplicate_key_rows = 0usize;
-    let mut seen_keys = HashSet::new();
-    let mut null_counts = vec![0usize; plans.len()];
-    let mut unconverted = vec![0usize; plans.len()];
-    let second_read = source.read(|_, row_index, record| {
-        let row_number = row_index + 1;
-        let fields = record.ok();
-        let parse_error = record.err().map(str::to_owned);
-        let (values, errors, notes) = match record {
-            Err(error) => (
-                Vec::new(),
-                vec![format!("CSV row parse failed: {error}")],
-                Vec::new(),
-            ),
-            Ok(record) => {
-                let mut values = Vec::with_capacity(plans.len());
-                let mut notes = Vec::new();
-                for (index, plan) in plans.iter().enumerate() {
-                    let raw = record.get(index).unwrap_or("").trim();
-                    match normalize_csv_value(raw, plan.logical, plan.order) {
-                        Ok(value) => {
-                            if value.is_null() {
-                                null_counts[index] += 1;
-                            }
-                            values.push(value);
-                        }
-                        Err(error) => {
-                            unconverted[index] += 1;
-                            notes.push(format!("{}: {error}", plan.header));
-                            values.push(serde_json::Value::Null);
-                        }
-                    }
-                }
-                let mut errors = Vec::new();
-                if record.len() > plans.len()
-                    && record
-                        .iter()
-                        .skip(plans.len())
-                        .all(|cell| cell.trim().is_empty())
+                if record.len() > width
+                    && record.iter().skip(width).all(|cell| cell.trim().is_empty())
                 {
                     repaired_trailing_rows += 1;
                     if repair_row_numbers.len() < 1000 {
                         repair_row_numbers.push(row_number);
                     }
-                } else if record.len() != plans.len() {
-                    errors.push(format!(
-                        "Expected {} fields, found {}",
-                        plans.len(),
-                        record.len()
-                    ));
+                } else if record.len() != width {
+                    errors.push(format!("Expected {width} fields, found {}", record.len()));
                 }
-                if let Some(key) =
-                    analytical_counting_key(&target.request.dataset_kind, first_headers, record)
-                {
+                if let Some(key) = analytical_counting_key(kind, headers, record) {
                     if !seen_keys.insert(key_digest(&key)) {
                         duplicate_key_rows += 1;
                     }
                 }
-                (values, errors, notes)
             }
-        };
-        let malformed = !errors.is_empty();
-        if malformed {
-            malformed_rows += 1;
-        } else {
-            typed
-                .append_row(duckdb::appender_params_from_iter(
-                    values.iter().map(json_to_sql_value).chain(std::iter::once(
-                        duckdb::types::Value::BigInt(row_number as i64),
-                    )),
-                ))
-                .map_err(read_failed)?;
         }
-        let messages = if malformed { errors } else { notes };
+        let malformed = !errors.is_empty();
+        malformed_rows += usize::from(malformed);
         let text = |value: Option<&str>| {
             value.map_or(duckdb::types::Value::Null, |v| {
                 duckdb::types::Value::Text(v.to_owned())
             })
         };
-        let field_count = fields.map_or(0, csv::StringRecord::len);
-        // A JSON array: the appender cannot bind a list, and the view casts it back.
+        // A JSON array: the appender cannot bind a list, and the row view casts it back.
         let surplus = fields
-            .filter(|record| record.len() > plans.len())
+            .filter(|record| record.len() > width)
             .map(|record| {
                 duckdb::types::Value::Text(
-                    serde_json::to_string(&record.iter().skip(plans.len()).collect::<Vec<_>>())
+                    serde_json::to_string(&record.iter().skip(width).collect::<Vec<_>>())
                         .expect("strings always serialize"),
                 )
             })
@@ -501,57 +261,298 @@ fn write_snapshot(
         let row = [
             duckdb::types::Value::BigInt(row_number as i64),
             duckdb::types::Value::Text(row_store::row_hash(fields)),
-            duckdb::types::Value::Int(field_count as i32),
+            duckdb::types::Value::Int(fields.map_or(0, csv::StringRecord::len) as i32),
             duckdb::types::Value::Boolean(malformed),
-            text(parse_error.as_deref()),
+            text(record.err()),
             duckdb::types::Value::Text(
-                serde_json::to_string(&messages).expect("strings always serialize"),
+                serde_json::to_string(&errors).expect("strings always serialize"),
             ),
         ]
         .into_iter()
-        .chain((0..plans.len()).map(|index| text(fields.and_then(|record| record.get(index)))))
+        .chain((0..width).map(|index| text(fields.and_then(|record| record.get(index)))))
         .chain(std::iter::once(surplus));
         originals
+            .as_mut()
+            .expect("created on the first record")
             .append_row(duckdb::appender_params_from_iter(row))
             .map_err(read_failed)
     })?;
-    typed.flush().map_err(read_failed)?;
-    originals.flush().map_err(read_failed)?;
-    drop((typed, originals));
-    if second_read.sha256 != target.source_sha256
-        || second_read.rows != target.expected_rows
-        || second_read.headers != first_headers
+    match originals {
+        Some(mut appender) => appender.flush().map_err(read_failed)?,
+        // A header-only table never reached the callback.
+        None => {
+            aliases = column_aliases(&read.headers);
+            profiles = read
+                .headers
+                .iter()
+                .map(|_| ColumnProfile::default())
+                .collect();
+            create_originals(tx, staging, &aliases)?;
+        }
+    }
+    Ok(ReadOutcome {
+        headers: read.headers,
+        aliases,
+        profiles,
+        sha256: read.sha256,
+        rows: read.rows,
+        malformed_rows,
+        duplicate_key_rows,
+        repaired_trailing_rows,
+        repair_row_numbers,
+    })
+}
+
+/// Converts every readable row from the stored originals into the typed table, in bounded
+/// batches, and returns per-column empty and unconverted counts. A row whose cells did not all
+/// convert gets the reasons recorded beside its originals.
+fn convert_rows(
+    tx: &Connection,
+    originals: &str,
+    typed: &str,
+    plans: &[ColumnPlan],
+    rows: usize,
+    token: &str,
+) -> Result<(Vec<usize>, Vec<usize>), AppError> {
+    let mut null_counts = vec![0usize; plans.len()];
+    let mut unconverted = vec![0usize; plans.len()];
+    let notes_table = format!("analysis_src_notes_{token}");
+    tx.execute_batch(&format!(
+        "CREATE TABLE {} (_row BIGINT NOT NULL, _messages VARCHAR NOT NULL)",
+        quote_ident(&notes_table)
+    ))
+    .map_err(storage("Failed to stage conversion notes"))?;
+    let cells = plans
+        .iter()
+        .map(|plan| quote_ident(&plan.alias))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let batch_sql = format!(
+        "SELECT _row, {cells} FROM {} WHERE NOT _malformed AND _row > ?1 AND _row <= ?2 ORDER BY _row",
+        quote_ident(originals)
+    );
+    // `_row` numbers every source row from 1, malformed ones included, so a fixed range scans one
+    // batch of the store rather than sorting everything after the previous batch.
+    for after in (0..rows as i64).step_by(CONVERT_BATCH_ROWS as usize) {
+        let batch = {
+            let mut statement = tx.prepare(&batch_sql).map_err(read_failed)?;
+            let converted = statement
+                .query_map(params![after, after + CONVERT_BATCH_ROWS], |row| {
+                    let cells = (1..=plans.len())
+                        .map(|index| row.get::<_, Option<String>>(index))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    Ok((row.get::<_, i64>(0)?, cells))
+                })
+                .map_err(read_failed)?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(read_failed)?;
+            converted
+        };
+        let mut typed_rows = tx.appender(typed).map_err(read_failed)?;
+        let mut notes_rows = tx.appender(&notes_table).map_err(read_failed)?;
+        for (row, cells) in batch {
+            let mut notes = Vec::new();
+            let values = plans
+                .iter()
+                .zip(cells)
+                .enumerate()
+                .map(|(index, (plan, cell))| {
+                    let raw = cell.as_deref().unwrap_or("").trim();
+                    match normalize_csv_value(raw, plan.logical, plan.order) {
+                        Ok(value) => {
+                            null_counts[index] += usize::from(value.is_null());
+                            value
+                        }
+                        Err(error) => {
+                            unconverted[index] += 1;
+                            notes.push(format!("{}: {error}", plan.header));
+                            serde_json::Value::Null
+                        }
+                    }
+                });
+            let values = values.collect::<Vec<_>>();
+            typed_rows
+                .append_row(duckdb::appender_params_from_iter(
+                    values
+                        .iter()
+                        .map(json_to_sql_value)
+                        .chain(std::iter::once(duckdb::types::Value::BigInt(row))),
+                ))
+                .map_err(read_failed)?;
+            if !notes.is_empty() {
+                notes_rows
+                    .append_row(params![
+                        row,
+                        serde_json::to_string(&notes).expect("strings always serialize")
+                    ])
+                    .map_err(read_failed)?;
+            }
+        }
+        typed_rows.flush().map_err(read_failed)?;
+        notes_rows.flush().map_err(read_failed)?;
+    }
+    tx.execute_batch(&format!(
+        "UPDATE {originals} SET _messages = n._messages FROM {notes} n WHERE {originals}._row = n._row;
+         DROP TABLE {notes};",
+        originals = quote_ident(originals),
+        notes = quote_ident(&notes_table),
+    ))
+    .map_err(storage("Failed to record conversion notes"))?;
+    Ok((null_counts, unconverted))
+}
+
+impl DuckDbRepository {
+    pub(crate) async fn import_analytical_table(
+        &self,
+        request: AnalyticalImportRequest,
+        automatic_origin: Option<(String, u64)>,
+    ) -> Result<AnalyticalImportResult, AppError> {
+        self.query_connection("Analytical table import", move |conn| {
+            import_table(conn, request, automatic_origin)
+        })
+        .await
+    }
+}
+
+fn import_table(
+    conn: &mut Connection,
+    request: AnalyticalImportRequest,
+    origin: Option<(String, u64)>,
+) -> Result<AnalyticalImportResult, AppError> {
+    let kind = request.dataset_kind.clone();
+    let format_name = request
+        .source_file_name
+        .clone()
+        .unwrap_or_else(|| request.local_path.clone());
+    let source = TableSource::open(
+        std::path::Path::new(&request.local_path),
+        &format_name,
+        request.worksheet.as_deref(),
+    )?;
+    // Every write below commits together or not at all, staging tables included.
+    let tx = conn
+        .transaction()
+        .map_err(storage("Failed to begin analytical import"))?;
+    let token = uuid::Uuid::new_v4().simple().to_string();
+    let staging = format!("analysis_src_import_{token}");
+    let read = read_once(&tx, &source, &kind, &staging)?;
+    if request
+        .expected_source_sha256
+        .as_ref()
+        .is_some_and(|expected| !expected.eq_ignore_ascii_case(&read.sha256))
     {
         return Err(AppError::DataParsing(
-            "The source changed between its two reads; import stopped and nothing was stored."
-                .into(),
+            "The acquired file no longer matches its recorded SHA-256; import stopped.".into(),
         ));
     }
-    let rows = second_read.rows;
+    // Equal bytes from different publishers or worksheets are distinct acquisitions.
+    let identity_hash = sha256_hex(
+        serde_json::json!([
+            ANALYTICAL_PARSER_VERSION,
+            read.sha256,
+            request.source_uri,
+            request.worksheet,
+            request.observation_period_start,
+            request.observation_period_end,
+            request.partial_dataset
+        ])
+        .to_string()
+        .as_bytes(),
+    );
+    let snapshot_id = format!(
+        "{}-{}",
+        kind.as_str().to_ascii_lowercase().replace('_', "-"),
+        &identity_hash[..24]
+    );
+    let table_name = format!(
+        "analysis_{}_{}",
+        kind.as_str().to_ascii_lowercase(),
+        &identity_hash[..24]
+    );
+    let originals = format!("analysis_src_{}", &identity_hash[..24]);
+    let latest_view = if kind == AnalyticalDatasetKind::RegionalData {
+        let source_identity = request.source_uri.as_deref().unwrap_or(&request.local_path);
+        let key = sha256_hex(
+            serde_json::json!([source_identity, request.worksheet])
+                .to_string()
+                .as_bytes(),
+        );
+        format!("analysis_regional_{}_latest", &key[..16])
+    } else {
+        format!("analysis_{}_latest", kind.as_str().to_ascii_lowercase())
+    };
+    let mut warnings = schema_warnings_for(&read.headers, &kind);
+    warnings.extend(source.warnings().iter().cloned());
+    if read
+        .headers
+        .iter()
+        .collect::<std::collections::BTreeSet<_>>()
+        .len()
+        != read.headers.len()
+    {
+        warnings.push("Duplicate column headers were assigned distinct SQL names; raw rows are retained by column position.".into());
+    }
+    let plans = plan_columns(
+        &kind,
+        &read.headers,
+        read.aliases,
+        &read.profiles,
+        &mut warnings,
+    );
+    let declares_partial = source.declares_partial();
+    if declares_partial {
+        warnings.push(
+            "The source declares additional pages or worksheets; this snapshot is partial.".into(),
+        );
+    }
+    let partial = request.partial_dataset || declares_partial;
+    let (table, store) = (quote_ident(&table_name), quote_ident(&originals));
+    let create_columns = plans
+        .iter()
+        .map(|plan| format!("{} {}", quote_ident(&plan.alias), duckdb_type(plan.logical)))
+        .collect::<Vec<_>>()
+        .join(", ");
+    tx.execute_batch(&format!(
+        "DROP TABLE IF EXISTS {table};
+         DROP TABLE IF EXISTS {store};
+         ALTER TABLE {} RENAME TO {store};
+         CREATE TABLE {table} ({create_columns}, _source_row BIGINT NOT NULL);",
+        quote_ident(&staging)
+    ))
+    .map_err(storage("Failed to create analytical table"))?;
+    for statement in [
+        "DELETE FROM analytical_row_ledger WHERE snapshot_id = ?1",
+        "DELETE FROM analytical_columns WHERE snapshot_id = ?1",
+        "DELETE FROM analytical_snapshots WHERE snapshot_id = ?1",
+    ] {
+        tx.execute(statement, params![snapshot_id])
+            .map_err(storage("Failed to replace snapshot"))?;
+    }
+    let (null_counts, unconverted) =
+        convert_rows(&tx, &originals, &table_name, &plans, read.rows, &token)?;
     let unconverted_cells = unconverted.iter().sum::<usize>();
-    let mut warnings = target.warnings;
-    if repaired_trailing_rows > 0 {
-        warnings.push(format!("Format repair: ignored only empty surplus trailing fields in {repaired_trailing_rows} rows; all original field values remain in the row ledger."));
+    if read.repaired_trailing_rows > 0 {
+        warnings.push(format!("Format repair: ignored only empty surplus trailing fields in {} rows; all original field values remain in the row ledger.", read.repaired_trailing_rows));
     }
     if unconverted_cells > 0 {
         warnings.push(format!("{unconverted_cells} cells did not convert to their column's type; they are NULL in the table and kept as written in the row ledger."));
     }
     let validation_summary = serde_json::json!({
-        "malformedRows": malformed_rows,
-        "duplicateKeyRows": duplicate_key_rows,
-        "rejectedRows": malformed_rows,
+        "malformedRows": read.malformed_rows,
+        "duplicateKeyRows": read.duplicate_key_rows,
+        "rejectedRows": read.malformed_rows,
         "unconvertedCells": unconverted_cells,
         "unconvertedByColumn": plans.iter().zip(&unconverted).filter(|(_, n)| **n > 0).map(|(plan, n)| (plan.alias.clone(), *n)).collect::<BTreeMap<_, _>>(),
         "dateOrder": plans.iter().filter(|plan| matches!(plan.logical, "DATE" | "TIMESTAMP")).map(|plan| (plan.alias.clone(), plan.order.as_str())).collect::<BTreeMap<_, _>>(),
-        "repairs": { "emptyTrailingFields": { "rowCount": repaired_trailing_rows, "rowNumbers": repair_row_numbers, "rowNumbersTruncated": repaired_trailing_rows > 1000 } },
+        "repairs": { "emptyTrailingFields": { "rowCount": read.repaired_trailing_rows, "rowNumbers": read.repair_row_numbers, "rowNumbersTruncated": read.repaired_trailing_rows > 1000 } },
         "parserVersion": ANALYTICAL_PARSER_VERSION,
-        "sourceFormat": target.format,
-        "sourceDeclaresPartial": target.declares_partial,
+        "sourceFormat": source.format(),
+        "sourceDeclaresPartial": declares_partial,
         "worksheet": request.worksheet,
         "warnings": warnings,
         "nullCounts": plans.iter().zip(&null_counts).map(|(plan, n)| (plan.alias.clone(), *n)).collect::<BTreeMap<_, _>>(),
-        "notes": validation_notes_for(&request.dataset_kind),
-        (row_store::ROW_STORE_KEY): target.source_table,
+        "notes": validation_notes_for(&kind),
+        (row_store::ROW_STORE_KEY): originals,
         "derivedSubset": request.derived_subset.as_ref().map(|subset| serde_json::json!({
             "publisherSha256": subset.publisher_sha256,
             "publisherRows": subset.publisher_rows,
@@ -559,50 +560,79 @@ fn write_snapshot(
             "note": "sourceSha256 is the digest of this filtered subset, not of the publisher's file.",
         })),
     });
-    let imported_rows = rows - malformed_rows;
+    let imported_rows = read.rows - read.malformed_rows;
     tx.execute(
-        &format!(
-            "CREATE OR REPLACE VIEW {} AS SELECT * EXCLUDE (_source_row) FROM {table}",
-            quote_ident(target.latest_view)
-        ),
-        [],
-    )
-    .map_err(|error| {
-        AppError::Storage(format!("Failed to refresh latest analytical view: {error}"))
-    })?;
-    tx.execute(
-        "UPDATE analytical_snapshots SET imported_rows = ?2, rejected_rows = ?3, malformed_rows = ?3,
-            duplicate_key_rows = ?4, validation_summary_json = ?5 WHERE snapshot_id = ?1",
+        "INSERT INTO analytical_snapshots (
+            snapshot_id, dataset_kind, display_name, table_name, source_uri, local_path,
+            source_sha256, retrieved_at, observation_period_start, observation_period_end,
+            partial_dataset, imported_rows, rejected_rows, malformed_rows,
+            duplicate_key_rows, validation_summary_json
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7,
+            strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'), ?8, ?9, ?10, ?11, ?12, ?12, ?13, ?14)",
         params![
-            target.snapshot_id,
+            snapshot_id,
+            kind.as_str(),
+            request.display_name,
+            table_name,
+            request.source_uri,
+            request.local_path,
+            read.sha256,
+            request.observation_period_start,
+            request.observation_period_end,
+            i64::from(partial),
             imported_rows as i64,
-            malformed_rows as i64,
-            duplicate_key_rows as i64,
+            read.malformed_rows as i64,
+            read.duplicate_key_rows as i64,
             validation_summary.to_string(),
         ],
     )
-    .map_err(|error| AppError::Storage(format!("Failed to record analytical snapshot: {error}")))?;
+    .map_err(storage("Failed to record analytical snapshot"))?;
+    for (ordinal, plan) in plans.iter().enumerate() {
+        tx.execute(
+            "INSERT INTO analytical_columns (
+                snapshot_id, table_name, column_name, original_name, logical_type,
+                nullable, dictionary, ordinal
+             ) VALUES (?1, ?2, ?3, ?4, ?5, 1, NULL, ?6)",
+            params![
+                snapshot_id,
+                table_name,
+                plan.alias,
+                plan.header,
+                plan.logical,
+                ordinal as i64
+            ],
+        )
+        .map_err(storage("Failed to record analytical column"))?;
+    }
+    tx.execute_batch(&format!(
+        "CREATE OR REPLACE VIEW {} AS SELECT * EXCLUDE (_source_row) FROM {table}",
+        quote_ident(&latest_view)
+    ))
+    .map_err(storage("Failed to refresh latest analytical view"))?;
     row_store::rebuild_row_view(&tx)?;
-    if let Some((portal_key, document_id)) = target.origin {
+    if let Some((portal_key, document_id)) = &origin {
         tx.execute(
             "INSERT INTO data_maintenance_origins VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING",
-            params![target.snapshot_id, portal_key, document_id],
+            params![snapshot_id, portal_key, document_id],
         )
-        .map_err(|error| {
-            AppError::Storage(format!(
-                "Failed to record the automatic-import origin receipt: {error}"
-            ))
-        })?;
+        .map_err(storage(
+            "Failed to record the automatic-import origin receipt",
+        ))?;
     }
-    tx.commit().map_err(|error| {
-        AppError::Storage(format!("Failed to commit analytical import: {error}"))
-    })?;
-    Ok(WriteOutcome {
+    tx.commit()
+        .map_err(storage("Failed to commit analytical import"))?;
+    Ok(AnalyticalImportResult {
+        snapshot_id,
+        dataset_kind: kind,
+        display_name: request.display_name,
+        table_name,
         imported_rows,
-        malformed_rows,
-        duplicate_key_rows,
+        rejected_rows: read.malformed_rows,
+        malformed_rows: read.malformed_rows,
+        duplicate_key_rows: read.duplicate_key_rows,
         unconverted_cells,
-        warnings,
+        schema_warnings: warnings,
+        source_sha256: read.sha256,
     })
 }
 
@@ -683,6 +713,44 @@ mod tests {
         let schema = repo.analytical_schema().await.unwrap();
         assert_eq!(schema.datasets[0].unconverted_in(["occured_on"]), 1);
         assert_eq!(schema.datasets[0].unconverted_in(["case_number"]), 0);
+    }
+
+    #[tokio::test]
+    async fn every_readable_row_reaches_the_typed_table_across_conversion_batches() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("nibrs.csv");
+        let batch = CONVERT_BATCH_ROWS as usize;
+        let mut csv = String::from("nibrs_uniq,case_number,ibr_offense,occured_on\n");
+        for row in 1..=batch + 1 {
+            if row == batch - 1 {
+                csv.push_str("unreadable\n");
+            } else {
+                csv.push_str(&format!("{row},{row},90Z,2025-01-02\n"));
+            }
+        }
+        std::fs::write(&path, csv).unwrap();
+        let repo = repository().await;
+        let result = repo
+            .import_analytical_csv(request(&path, AnalyticalDatasetKind::NibrsOffenses))
+            .await
+            .unwrap();
+        assert_eq!((result.imported_rows, result.rejected_rows), (batch, 1));
+        let rows = query(
+            &repo,
+            &format!(
+                "SELECT count(*), count(DISTINCT nibrs_uniq), min(nibrs_uniq::BIGINT),
+                        max(nibrs_uniq::BIGINT),
+                        count(*) FILTER (WHERE nibrs_uniq IN ('{}', '{batch}', '{}'))
+                 FROM analysis_nibrs_offenses_latest",
+                batch - 2,
+                batch + 1
+            ),
+        )
+        .await;
+        assert_eq!(
+            rows[0],
+            [batch, batch, 1, batch + 1, 3].map(|n| serde_json::json!(n))
+        );
     }
 
     #[tokio::test]
@@ -777,68 +845,26 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn nothing_is_stored_when_the_two_reads_disagree() {
+    async fn an_import_refused_after_its_read_leaves_nothing_behind() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("rows.csv");
         std::fs::write(&path, "a,b\n1,2\n").unwrap();
-        let source = TableSource::open(&path, "rows.csv", None).unwrap();
         let repo = repository().await;
-        let request = request(&path, AnalyticalDatasetKind::RegionalData);
-        let plans = vec![
-            ColumnPlan {
-                header: "a".into(),
-                alias: "a".into(),
-                logical: "INTEGER",
-                order: DateOrder::Undetermined,
-            },
-            ColumnPlan {
-                header: "b".into(),
-                alias: "b".into(),
-                logical: "INTEGER",
-                order: DateOrder::Undetermined,
-            },
-        ];
-        let error = repo
-            .query_connection("test", move |conn| {
-                write_snapshot(
-                    conn,
-                    &source,
-                    &plans,
-                    &["a".into(), "b".into()],
-                    WriteTarget {
-                        snapshot_id: "s",
-                        table_name: "analysis_regional_data_s",
-                        source_table: "analysis_src_s",
-                        latest_view: "analysis_regional_s_latest",
-                        source_sha256: &"0".repeat(64),
-                        expected_rows: 1,
-                        partial: false,
-                        format: "CSV",
-                        declares_partial: false,
-                        warnings: Vec::new(),
-                        request: &request,
-                        origin: None,
-                    },
-                )
-                .map(|_| ())
-            })
-            .await
-            .unwrap_err();
-        assert!(
-            error.to_string().contains("changed between its two reads"),
-            "{error}"
-        );
+        let mut input = request(&path, AnalyticalDatasetKind::RegionalData);
+        input.expected_source_sha256 = Some("0".repeat(64));
+        let error = repo.import_analytical_csv(input).await.unwrap_err();
+        assert!(error.to_string().contains("no longer matches"), "{error}");
         let left = repo
             .query_connection("test", |conn| {
                 conn.query_row(
-                    "SELECT (SELECT COUNT(*) FROM analytical_snapshots) + (SELECT COUNT(*) FROM analytical_rows) + (SELECT COUNT(*) FROM information_schema.tables WHERE table_name LIKE 'analysis_regional%' OR table_name LIKE 'analysis_src%')",
+                    "SELECT string_agg(table_name, ',') FROM (SELECT table_name FROM information_schema.tables WHERE table_name LIKE 'analysis_src%' OR table_name LIKE 'analysis_regional%' UNION ALL SELECT snapshot_id FROM analytical_snapshots)",
                     [],
-                    |row| row.get::<_, i64>(0),
+                    |row| row.get::<_, Option<String>>(0),
                 )
                 .map_err(|error| AppError::Storage(error.to_string()))
             })
             .await
             .unwrap();
-        assert_eq!(left, 0);
+        assert_eq!(left, None);
     }
 }

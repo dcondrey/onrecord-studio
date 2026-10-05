@@ -114,13 +114,15 @@ pub fn extract_spreadsheet_layers<P: AsRef<Path>>(file_path: P) -> Result<String
         // wrong, and absent entirely in a hand-built file -- so measure the real extent by
         // streaming the cells first. The streaming reader allocates nothing per cell.
         if let calamine::Sheets::Xlsx(xlsx) = &mut workbook {
-            let extent = measure_xlsx_extent(xlsx, &sheet_name).map_err(|error| {
-                AppError::DataParsing(format!(
-                    "EXCEL_SHEET_READ_FAILED: failed to measure sheet '{}' in '{}': {error}",
-                    sanitize_text_field(&sheet_name),
-                    path.display()
-                ))
-            })?;
+            let extent = xlsx_value_bounds(xlsx, &sheet_name)
+                .map(|bounds| bounds.map_or(0, |b| b.cells()))
+                .map_err(|error| {
+                    AppError::DataParsing(format!(
+                        "EXCEL_SHEET_READ_FAILED: failed to measure sheet '{}' in '{}': {error}",
+                        sanitize_text_field(&sheet_name),
+                        path.display()
+                    ))
+                })?;
             if extent > MAX_CELLS as u64 {
                 return Err(AppError::DataParsing(format!(
                     "SPREADSHEET_CELL_COUNT_EXCEEDED: sheet '{}' in '{}' spans {extent} cells; \
@@ -202,38 +204,64 @@ pub fn extract_spreadsheet_layers<P: AsRef<Path>>(file_path: P) -> Result<String
     Ok(sheet_blocks.join("\n\n"))
 }
 
-/// Returns the number of cells the sheet's true bounding box spans, without materializing it.
+/// The box spanned by a sheet's cells that hold a value, measured without materializing it, and
+/// whether those cells are stored in row order. Empty cells are skipped as calamine's dense
+/// `worksheet_range` skips them, so `cells()` is the size that range would allocate.
 ///
 /// Measured by streaming the cell records rather than reading the declared `<dimension>`, because
 /// that attribute is advisory: real government workbooks frequently disagree with it, and a
 /// hand-crafted file can omit it entirely.
-pub(crate) fn measure_xlsx_extent<RS>(
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct XlsxBounds {
+    pub first_row: u32,
+    pub first_column: u32,
+    pub last_row: u32,
+    pub last_column: u32,
+    pub in_row_order: bool,
+}
+
+impl XlsxBounds {
+    pub fn cells(&self) -> u64 {
+        u64::from(self.last_row - self.first_row + 1)
+            * u64::from(self.last_column - self.first_column + 1)
+    }
+}
+
+pub(crate) fn xlsx_value_bounds<RS>(
     workbook: &mut calamine::Xlsx<RS>,
     sheet_name: &str,
-) -> Result<u64, calamine::XlsxError>
+) -> Result<Option<XlsxBounds>, calamine::XlsxError>
 where
     RS: std::io::Read + std::io::Seek,
 {
     let mut reader = workbook.worksheet_cells_reader(sheet_name)?;
-    let mut bounds: Option<(u32, u32, u32, u32)> = None;
+    let mut bounds: Option<XlsxBounds> = None;
+    let mut previous = None;
     while let Some(cell) = reader.next_cell()? {
+        if matches!(cell.get_value(), calamine::DataRef::Empty) {
+            continue;
+        }
         let (row, column) = cell.get_position();
+        let ordered = previous.is_none_or(|at| (row, column) > at);
+        previous = Some((row, column));
         bounds = Some(match bounds {
-            None => (row, column, row, column),
-            Some((min_row, min_column, max_row, max_column)) => (
-                min_row.min(row),
-                min_column.min(column),
-                max_row.max(row),
-                max_column.max(column),
-            ),
+            None => XlsxBounds {
+                first_row: row,
+                first_column: column,
+                last_row: row,
+                last_column: column,
+                in_row_order: true,
+            },
+            Some(b) => XlsxBounds {
+                first_row: b.first_row.min(row),
+                first_column: b.first_column.min(column),
+                last_row: b.last_row.max(row),
+                last_column: b.last_column.max(column),
+                in_row_order: b.in_row_order && ordered,
+            },
         });
     }
-    Ok(match bounds {
-        None => 0,
-        Some((min_row, min_column, max_row, max_column)) => {
-            u64::from(max_row - min_row + 1) * u64::from(max_column - min_column + 1)
-        }
-    })
+    Ok(bounds)
 }
 
 #[cfg(test)]

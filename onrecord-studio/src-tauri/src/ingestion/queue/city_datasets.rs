@@ -201,46 +201,58 @@ fn city_dataset_spec(
     })
 }
 
-/// Copies the header and every record whose `column` value satisfies `keep`. Returns the
-/// publisher's record count. Field values are copied byte for byte; only quoting may change.
+/// Copies the header and every record whose `column` value satisfies `keep`, read through the
+/// same table reader every import uses. Returns the publisher's record count. A record the reader
+/// cannot parse stops the copy: dropping it would make the subset claim rows it does not hold.
 fn keep_matching_rows(
     source: &Path,
     destination: &Path,
     column: &str,
     keep: impl Fn(&[u8]) -> bool,
 ) -> Result<usize, AppError> {
-    let csv_error = |error: csv::Error| AppError::DataParsing(format!("Publisher CSV: {error}"));
-    let mut reader = csv::ReaderBuilder::new()
-        .flexible(true)
-        .from_path(source)
-        .map_err(csv_error)?;
-    let headers = reader.byte_headers().map_err(csv_error)?.clone();
-    let index = headers
-        .iter()
-        .position(|header| header == column.as_bytes())
-        .ok_or_else(|| {
-            AppError::DataParsing(format!(
-                "The publisher's file no longer has a '{column}' column; nothing was imported"
-            ))
-        })?;
+    let table = crate::storage::tabular::TableSource::open(source, "publisher.csv", None)?;
     let file = std::fs::File::create(destination)
         .map_err(|error| AppError::Storage(format!("Failed to stage filtered rows: {error}")))?;
     let mut writer = csv::Writer::from_writer(file);
-    writer.write_byte_record(&headers).map_err(csv_error)?;
-    let mut record = csv::ByteRecord::new();
-    let mut publisher_rows = 0;
-    while reader.read_byte_record(&mut record).map_err(csv_error)? {
-        publisher_rows += 1;
-        if record.get(index).is_some_and(&keep) {
-            writer.write_byte_record(&record).map_err(csv_error)?;
+    let write_error =
+        |error: csv::Error| AppError::Storage(format!("Failed to write filtered rows: {error}"));
+    let mut index = None;
+    let read = table.read(|headers, row, record| {
+        let position = match index {
+            Some(position) => position,
+            None => {
+                let position = headers.iter().position(|header| header == column).ok_or_else(|| {
+                    AppError::DataParsing(format!(
+                        "The publisher's file no longer has a '{column}' column; nothing was imported"
+                    ))
+                })?;
+                writer.write_record(headers).map_err(write_error)?;
+                index = Some(position);
+                position
+            }
+        };
+        let record = record.map_err(|error| {
+            AppError::DataParsing(format!("Publisher row {} could not be read: {error}", row + 1))
+        })?;
+        if record.get(position).is_some_and(|field| keep(field.as_bytes())) {
+            writer.write_record(record).map_err(write_error)?;
         }
+        Ok(())
+    })?;
+    if index.is_none() && !read.headers.iter().any(|header| header == column) {
+        return Err(AppError::DataParsing(format!(
+            "The publisher's file no longer has a '{column}' column; nothing was imported"
+        )));
+    }
+    if index.is_none() {
+        writer.write_record(&read.headers).map_err(write_error)?;
     }
     writer
         .into_inner()
         .map_err(|error| AppError::Storage(format!("Failed to write filtered rows: {error}")))?
         .sync_all()
         .map_err(|error| AppError::Storage(format!("Failed to sync filtered rows: {error}")))?;
-    Ok(publisher_rows)
+    Ok(read.rows)
 }
 
 impl QueueManager {

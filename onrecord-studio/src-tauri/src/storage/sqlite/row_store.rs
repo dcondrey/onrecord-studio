@@ -175,6 +175,39 @@ mod tests {
         .rows
     }
 
+    /// Values recorded when the column store shipped. Duplicate detection and row citations
+    /// compare these digests, so the bytes hashed must not change.
+    #[test]
+    fn row_hashes_match_those_already_stored() {
+        let record = csv::StringRecord::from(vec!["1", " padded ", "", "O'Brien, Jr."]);
+        assert_eq!(
+            row_hash(Some(&record)),
+            "aaf032ad070fb9f2b6a51d5852b4d351c576af881b322e5ade74961c486346eb"
+        );
+        assert_eq!(
+            row_hash(None),
+            "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        );
+    }
+
+    /// A snapshot's id is its identity across re-imports: the same file must land on the same id.
+    #[tokio::test]
+    async fn a_snapshot_id_matches_the_one_already_stored_for_the_same_file() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("rows.csv");
+        std::fs::write(&path, "a,b\n1,2\n").unwrap();
+        let repo = DuckDbRepository::new(":memory:").unwrap();
+        repo.run_migrations(SCHEMA).await.unwrap();
+        let mut input = request(&path);
+        input.dataset_kind = AnalyticalDatasetKind::RegionalData;
+        let result = repo.import_analytical_csv(input).await.unwrap();
+        assert_eq!(
+            result.source_sha256,
+            "492d5ea496056f1a6a6592241032fab764c321596317930b4fa0e1e8bc3b7470"
+        );
+        assert_eq!(result.snapshot_id, "regional-data-30c4330af2925520decf8b0b");
+    }
+
     /// Every field of every row, rejected or not, comes back from the column store exactly as the
     /// source wrote it: that is what lets a released source file be represented by its snapshot.
     #[tokio::test]

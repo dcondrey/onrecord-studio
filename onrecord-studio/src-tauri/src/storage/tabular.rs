@@ -152,10 +152,11 @@ pub(crate) fn prepare(
 /// How many leading bytes decide a file's format and delimiter.
 const SNIFF_BYTES: u64 = 1024 * 1024;
 
-/// A table to import. Delimited text is never held whole: it is read from disk once to profile
-/// and once to write, each read hashed, so its bound is the file size and row count rather than
-/// memory. Workbooks and JSON are parsed whole by their libraries and keep the in-memory caps,
-/// which are also what stop a small compressed workbook from describing an unbounded sheet.
+/// A table to import. Delimited text and XLSX worksheets are never held whole: each is parsed
+/// once from disk (an XLSX after one hashing pass over its bytes), so its bound is the file size
+/// and cell count rather than memory. XLS, XLSB, ODS and JSON are parsed whole by their libraries
+/// and keep the in-memory caps, which are also what stop a small compressed workbook from
+/// describing an unbounded sheet.
 pub(crate) enum TableSource {
     Delimited {
         path: std::path::PathBuf,
@@ -166,6 +167,79 @@ pub(crate) enum TableSource {
         table: PreparedTable,
         sha256: String,
     },
+    /// An XLSX worksheet, read cell by cell. `bounds` is the box its values span; the first row
+    /// of the box is the header, and a row with no value inside it is an empty row.
+    Worksheet {
+        path: std::path::PathBuf,
+        sheet: String,
+        bounds: crate::parsers::excel::XlsxBounds,
+        warnings: Vec<String>,
+        partial: bool,
+    },
+}
+
+fn choose_sheet(names: &[String], worksheet: Option<&str>) -> Result<String, AppError> {
+    match worksheet.filter(|s| !s.trim().is_empty()) {
+        Some(name) if names.iter().any(|n| n == name) => Ok(name.to_string()),
+        Some(_) => Err(invalid(format!(
+            "Worksheet not found. Available sheets: {}",
+            names.join(", ")
+        ))),
+        None if names.len() == 1 => Ok(names[0].clone()),
+        _ => Err(invalid(format!(
+            "Choose a worksheet to import. Available sheets: {}",
+            names.join(", ")
+        ))),
+    }
+}
+
+fn render(data: &Data) -> String {
+    match data {
+        Data::Empty => String::new(),
+        Data::DateTime(date) => date
+            .as_datetime()
+            .map(|d| d.format("%Y-%m-%d %H:%M:%S").to_string())
+            .unwrap_or_else(|| date.to_string()),
+        other => other.to_string(),
+    }
+}
+
+fn worksheet_error(error: impl std::fmt::Display) -> AppError {
+    invalid(format!("Worksheet: {error}"))
+}
+
+/// An XLSX worksheet read cell by cell, or `None` when the file is not XLSX (ODS shares its
+/// container signature) and must go to the loader for the other workbook formats.
+fn streamed_worksheet(
+    path: &std::path::Path,
+    worksheet: Option<&str>,
+) -> Result<Option<TableSource>, AppError> {
+    let (file, opened) =
+        crate::parsers::source::open_regular_file(path, "ANALYTICAL", MAX_STREAMED_BYTES)?;
+    let Ok(mut book) = calamine::Xlsx::new(std::io::BufReader::new(&file)) else {
+        return Ok(None);
+    };
+    let names = book.sheet_names().to_vec();
+    let sheet = choose_sheet(&names, worksheet)?;
+    let bounds = crate::parsers::excel::xlsx_value_bounds(&mut book, &sheet)
+        .map_err(worksheet_error)?
+        .ok_or_else(|| invalid("Worksheet is empty"))?;
+    crate::parsers::source::ensure_unchanged(&file, &opened, path, "ANALYTICAL")?;
+    if !bounds.in_row_order {
+        return Err(invalid("This worksheet stores its cells out of row order, which spreadsheet applications do not write. Open and save it again in a spreadsheet application, then import it."));
+    }
+    check_headers_width((bounds.last_column - bounds.first_column + 1) as usize)?;
+    check_streamed_size(
+        (bounds.last_row - bounds.first_row) as usize,
+        (bounds.last_column - bounds.first_column + 1) as usize,
+    )?;
+    Ok(Some(TableSource::Worksheet {
+        path: path.to_path_buf(),
+        warnings: vec![format!("Imported worksheet '{sheet}'. Formula cells use the workbook’s cached values; formulas were not recalculated.")],
+        partial: names.len() > 1,
+        sheet,
+        bounds,
+    }))
 }
 
 /// What one complete read of a source found. `sha256` covers every byte read, so two reads that
@@ -203,6 +277,11 @@ impl TableSource {
             || sample.starts_with(&[0xff, 0xfe])
             || sample.starts_with(&[0xfe, 0xff])
             || matches!(first, Some(b'{' | b'[')));
+        if sample.starts_with(b"PK\x03\x04") && extension != "ods" {
+            if let Some(source) = streamed_worksheet(path, worksheet)? {
+                return Ok(source);
+            }
+        }
         if !delimited {
             let bytes =
                 crate::parsers::source::read_regular_file(path, "ANALYTICAL", MAX_SOURCE_BYTES)?;
@@ -240,6 +319,7 @@ impl TableSource {
         match self {
             Self::Delimited { warnings, .. } => warnings,
             Self::Loaded { table, .. } => &table.warnings,
+            Self::Worksheet { warnings, .. } => warnings,
         }
     }
 
@@ -248,11 +328,16 @@ impl TableSource {
             Self::Delimited { delimiter, .. } if *delimiter == b'\t' => "TSV",
             Self::Delimited { .. } => "CSV",
             Self::Loaded { table, .. } => table.format,
+            Self::Worksheet { .. } => "Workbook",
         }
     }
 
     pub(crate) fn declares_partial(&self) -> bool {
-        matches!(self, Self::Loaded { table, .. } if table.partial)
+        match self {
+            Self::Loaded { table, .. } => table.partial,
+            Self::Worksheet { partial, .. } => *partial,
+            Self::Delimited { .. } => false,
+        }
     }
 
     /// Passes every record in order with the header row and its zero-based index. A record the
@@ -275,6 +360,83 @@ impl TableSource {
                     headers: table.headers.clone(),
                     sha256: sha256.clone(),
                     rows: table.records.len(),
+                })
+            }
+            Self::Worksheet {
+                path,
+                sheet,
+                bounds,
+                ..
+            } => {
+                let (first_row, first_column, last_row, last_column) = (
+                    &bounds.first_row,
+                    &bounds.first_column,
+                    &bounds.last_row,
+                    &bounds.last_column,
+                );
+                let (file, opened) = crate::parsers::source::open_regular_file(
+                    path,
+                    "ANALYTICAL",
+                    MAX_STREAMED_BYTES,
+                )?;
+                let mut hashing = HashingReader::new(&file);
+                std::io::copy(&mut hashing, &mut std::io::sink()).map_err(|error| {
+                    AppError::Storage(format!("ANALYTICAL_READ_FAILED: {error}"))
+                })?;
+                let sha256 = hashing.finish();
+                std::io::Seek::rewind(&mut &file).map_err(|error| {
+                    AppError::Storage(format!("ANALYTICAL_READ_FAILED: {error}"))
+                })?;
+                let mut book = calamine::Xlsx::new(std::io::BufReader::new(&file))
+                    .map_err(|e| invalid(format!("Workbook: {e}")))?;
+                let mut reader = book
+                    .worksheet_cells_reader(sheet)
+                    .map_err(worksheet_error)?;
+                let width = (last_column - first_column + 1) as usize;
+                let mut headers: Option<Vec<String>> = None;
+                let mut row = vec![String::new(); width];
+                let mut current = *first_row;
+                let mut rows = 0;
+                // Emits every row from `current` up to, not including, `until`; the first is the
+                // header, and rows with no value inside the box are emitted empty, as a loaded
+                // worksheet's dense range has them.
+                let mut emit = |until: u32, row: &mut Vec<String>, current: &mut u32| {
+                    while *current < until {
+                        let cells = std::mem::replace(row, vec![String::new(); width]);
+                        match &headers {
+                            None => {
+                                check_headers(&cells)?;
+                                headers = Some(cells);
+                            }
+                            Some(headers) => {
+                                check_streamed_size(rows + 1, width)?;
+                                each(headers, rows, Ok(&csv::StringRecord::from(cells)))?;
+                                rows += 1;
+                            }
+                        }
+                        *current += 1;
+                    }
+                    Ok::<_, AppError>(())
+                };
+                while let Some(cell) = reader.next_cell().map_err(worksheet_error)? {
+                    if matches!(cell.get_value(), calamine::DataRef::Empty) {
+                        continue;
+                    }
+                    let (at_row, at_column) = cell.get_position();
+                    if at_row < current || at_row > *last_row {
+                        return Err(invalid("The worksheet changed between its two reads; import stopped and nothing was stored."));
+                    }
+                    emit(at_row, &mut row, &mut current)?;
+                    let data: Data = cell.get_value().clone().into();
+                    row[(at_column - first_column) as usize] = render(&data);
+                }
+                emit(*last_row + 1, &mut row, &mut current)?;
+                drop(reader);
+                crate::parsers::source::ensure_unchanged(&file, &opened, path, "ANALYTICAL")?;
+                Ok(SourceRead {
+                    headers: headers.unwrap_or_default(),
+                    sha256,
+                    rows,
                 })
             }
             Self::Delimited {
@@ -370,12 +532,17 @@ impl<R: std::io::Read> std::io::Read for HashingReader<R> {
     }
 }
 
-fn check_headers(headers: &[String]) -> Result<(), AppError> {
-    if headers.len() > MAX_COLUMNS {
+fn check_headers_width(columns: usize) -> Result<(), AppError> {
+    if columns > MAX_COLUMNS {
         return Err(invalid(format!(
             "Analytical import supports up to {MAX_COLUMNS} columns."
         )));
     }
+    Ok(())
+}
+
+fn check_headers(headers: &[String]) -> Result<(), AppError> {
+    check_headers_width(headers.len())?;
     if headers.is_empty() || headers.iter().all(|h| h.trim().is_empty()) {
         return Err(invalid("Table has no column headers"));
     }
@@ -579,52 +746,16 @@ fn workbook(bytes: &[u8], worksheet: Option<&str>) -> Result<PreparedTable, AppE
     let mut book = calamine::open_workbook_auto_from_rs(Cursor::new(bytes))
         .map_err(|e| invalid(format!("Workbook: {e}")))?;
     let names = book.sheet_names().to_vec();
-    let name = match worksheet.filter(|s| !s.trim().is_empty()) {
-        Some(name) if names.iter().any(|n| n == name) => name.to_string(),
-        Some(_) => {
-            return Err(invalid(format!(
-                "Worksheet not found. Available sheets: {}",
-                names.join(", ")
-            )))
-        }
-        None if names.len() == 1 => names[0].clone(),
-        _ => {
-            return Err(invalid(format!(
-                "Choose a worksheet to import. Available sheets: {}",
-                names.join(", ")
-            )))
-        }
-    };
-    // `worksheet_range` allocates a dense matrix spanning the sheet's bounding box before it
-    // returns, so `check_size` below runs far too late for xlsx: a two-cell sheet holding only
-    // A1 and XFD1048576 spans over 17 billion cells, and the allocation failure aborts the whole
-    // process rather than raising a catchable error. Measure the real extent by streaming cells
-    // first (allocates nothing per cell) and reject before calling `worksheet_range` at all. xls/
-    // xlsb/ods expose no streaming reader and build the same dense matrix regardless, but their
-    // formats cap the legacy grid at 65,536 x 256, bounding the worst case near 536 MB rather
-    // than unbounded, so `check_size` after allocation is an acceptable (if slower) backstop
-    // there — matching the same tradeoff already made in `parsers::excel`.
-    if let calamine::Sheets::Xlsx(xlsx) = &mut book {
-        let extent = crate::parsers::excel::measure_xlsx_extent(xlsx, &name)
-            .map_err(|e| invalid(format!("Worksheet: {e}")))?;
-        if extent > MAX_CELLS as u64 {
-            return Err(invalid(format!(
-                "Worksheet spans {extent} cells; limit is {MAX_CELLS}"
-            )));
-        }
-    }
+    let name = choose_sheet(&names, worksheet)?;
+    // XLSX is streamed by `streamed_worksheet`. The formats loaded here (XLS, XLSB, ODS) expose no
+    // streaming reader and build a dense matrix, but cap their grid at 65,536 x 256, bounding the
+    // worst case near 536 MB; `check_size` after allocation is the backstop, as in
+    // `parsers::excel`.
     let range = book
         .worksheet_range(&name)
         .map_err(|e| invalid(format!("Worksheet: {e}")))?;
     check_size(range.height(), range.width())?;
-    let stringify = |data: &Data| match data {
-        Data::Empty => String::new(),
-        Data::DateTime(date) => date
-            .as_datetime()
-            .map(|d| d.format("%Y-%m-%d %H:%M:%S").to_string())
-            .unwrap_or_else(|| date.to_string()),
-        other => other.to_string(),
-    };
+    let stringify = render;
     let mut rows = range.rows();
     let headers = rows
         .next()
@@ -649,6 +780,7 @@ pub(crate) struct TypeEvidence {
     any: bool,
     integer: bool,
     number: bool,
+    float: bool,
     date: bool,
 }
 
@@ -658,6 +790,7 @@ impl Default for TypeEvidence {
             any: false,
             integer: true,
             number: true,
+            float: true,
             date: true,
         }
     }
@@ -678,6 +811,7 @@ impl TypeEvidence {
                 .is_some_and(u8::is_ascii_digit);
         self.integer &= !leading_zero && value.parse::<i64>().is_ok();
         self.number &= !leading_zero && exact_decimal(value);
+        self.float &= !leading_zero && plain_decimal(value);
         self.date &= chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d").is_ok();
     }
 
@@ -699,12 +833,27 @@ impl TypeEvidence {
             "INTEGER"
         } else if self.number {
             "NUMBER"
+        } else if self.float {
+            "FLOAT"
         } else if self.date {
             "DATE"
         } else {
             "CATEGORY"
         }
     }
+}
+
+/// `-12.345` notation with any number of digits: what a decimal exceeding [`exact_decimal`]'s
+/// scale looks like (coordinates published to 15 places). Exponents, `inf` and `NaN` are refused.
+pub(crate) fn plain_decimal(value: &str) -> bool {
+    let value = value.strip_prefix(['-', '+']).unwrap_or(value);
+    let mut parts = value.splitn(2, '.');
+    let whole = parts.next().unwrap_or_default();
+    !whole.is_empty()
+        && whole.bytes().all(|b| b.is_ascii_digit())
+        && parts.next().is_none_or(|fraction| {
+            !fraction.is_empty() && fraction.bytes().all(|b| b.is_ascii_digit())
+        })
 }
 
 pub(crate) fn exact_decimal(value: &str) -> bool {
@@ -723,6 +872,123 @@ pub(crate) fn exact_decimal(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_decimal_beyond_exact_scale_is_approximate_and_other_notations_stay_text() {
+        let typed = |values: &[&str]| {
+            let mut evidence = TypeEvidence::default();
+            values.iter().for_each(|value| evidence.observe(value));
+            evidence.inferred("value")
+        };
+        assert_eq!(typed(&["0.5", "12.0123456789"]), "NUMBER");
+        assert_eq!(typed(&["32.716267940000002", "-117.1"]), "FLOAT");
+        for other in ["1e5", "inf", "NaN", ".5", "5.", "012.5"] {
+            assert_eq!(typed(&["32.716267940000002", other]), "CATEGORY", "{other}");
+        }
+    }
+    fn workbook_file(directory: &std::path::Path, sheet_data: &str) -> std::path::PathBuf {
+        use std::io::Write;
+        let path = directory.join("sheet.xlsx");
+        let mut writer = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+        let options: zip::write::FileOptions<()> =
+            zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        let sheet = format!(
+            r#"<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>{sheet_data}</sheetData></worksheet>"#
+        );
+        for (name, body) in [
+            (
+                "[Content_Types].xml",
+                r#"<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>"#,
+            ),
+            (
+                "_rels/.rels",
+                r#"<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#,
+            ),
+            (
+                "xl/workbook.xml",
+                r#"<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Data" sheetId="1" r:id="rId1"/></sheets></workbook>"#,
+            ),
+            (
+                "xl/_rels/workbook.xml.rels",
+                r#"<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>"#,
+            ),
+            ("xl/worksheets/sheet1.xml", sheet.as_str()),
+        ] {
+            writer.start_file(name, options).unwrap();
+            writer.write_all(body.as_bytes()).unwrap();
+        }
+        writer.finish().unwrap();
+        path
+    }
+
+    fn all_rows(source: &TableSource) -> (Vec<String>, Vec<Vec<String>>) {
+        let mut rows = Vec::new();
+        let read = source
+            .read(|_, _, record| {
+                rows.push(record.unwrap().iter().map(str::to_owned).collect());
+                Ok(())
+            })
+            .unwrap();
+        (read.headers, rows)
+    }
+
+    /// The box starts at the first value, a row with no value inside it is an empty row, and a
+    /// missing cell is "": the shape calamine's dense range gives a loaded workbook.
+    #[test]
+    fn a_worksheet_is_read_as_the_box_its_values_span() {
+        let directory = tempfile::tempdir().unwrap();
+        let inline = |cell: &str, text: &str| {
+            format!(r#"<c r="{cell}" t="inlineStr"><is><t>{text}</t></is></c>"#)
+        };
+        let data = format!(
+            r#"<row r="2">{}{}</row><row r="3">{}<c r="C3"><v>12.5</v></c></row><row r="5"><c r="C5"><v>7</v></c></row><row r="6">{}</row>"#,
+            inline("B2", "name"),
+            inline("C2", "amount"),
+            inline("B3", "Vista"),
+            inline("B6", "Escondido"),
+        );
+        let path = workbook_file(directory.path(), &data);
+        let streamed = TableSource::open(&path, "sheet.xlsx", None).unwrap();
+        assert!(matches!(streamed, TableSource::Worksheet { .. }));
+        let (headers, rows) = all_rows(&streamed);
+        let row = |cells: [&str; 2]| cells.map(str::to_owned).to_vec();
+        assert_eq!(headers, row(["name", "amount"]));
+        assert_eq!(
+            rows,
+            vec![
+                row(["Vista", "12.5"]),
+                row(["", ""]),
+                row(["", "7"]),
+                row(["Escondido", ""])
+            ]
+        );
+
+        // Cells out of row order are refused with a way forward, not read in a different order.
+        let path = workbook_file(
+            directory.path(),
+            &format!(
+                r#"<row r="2">{}</row><row r="1">{}</row>"#,
+                inline("A2", "x"),
+                inline("A1", "h")
+            ),
+        );
+        let refused = TableSource::open(&path, "sheet.xlsx", None).err().unwrap();
+        assert!(
+            refused.to_string().contains("out of row order"),
+            "{refused}"
+        );
+
+        // A box wider than the column limit is refused before any row is read.
+        let path = workbook_file(
+            directory.path(),
+            &format!(
+                r#"<row r="1">{}{}</row>"#,
+                inline("A1", "a"),
+                inline("XFD1", "b")
+            ),
+        );
+        assert!(TableSource::open(&path, "sheet.xlsx", None).is_err());
+    }
+
     #[test]
     fn a_streamed_import_stops_at_its_cell_bound() {
         assert!(check_streamed_size(MAX_STREAMED_CELLS / 4 - 1, 4).is_ok());

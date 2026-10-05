@@ -387,6 +387,12 @@ pub(super) fn logical_type_for(kind: &AnalyticalDatasetKind, header: &str) -> &'
             _ => "CATEGORY",
         };
     }
+    if matches!(
+        header.as_str(),
+        "latitude" | "longitude" | "lat" | "lon" | "lng"
+    ) {
+        return "FLOAT";
+    }
     // CFS `DATE_TIME` is a Pacific wall-clock reading with no zone; stored zone-less so it is
     // never asserted to be UTC.
     if header.contains("date") && header.contains("time") {
@@ -419,6 +425,7 @@ pub(super) fn duckdb_type(logical: &str) -> &'static str {
     match logical {
         "INTEGER" => "BIGINT",
         "NUMBER" => "DECIMAL(38,10)",
+        "FLOAT" => "DOUBLE",
         "DATE" => "DATE",
         "TIMESTAMP" => "TIMESTAMP",
         "LOCAL_TIMESTAMP" => "TIMESTAMP",
@@ -475,6 +482,14 @@ pub(super) fn normalize_csv_value(
             Ok(serde_json::Value::String(raw.to_string()))
         }
         "NUMBER" => Err(format!("could not parse exact decimal '{raw}'")),
+        // Approximate by declaration: the original text stays in the snapshot's column store.
+        "FLOAT" if crate::storage::tabular::plain_decimal(raw) => raw
+            .parse::<f64>()
+            .ok()
+            .and_then(serde_json::Number::from_f64)
+            .map(serde_json::Value::Number)
+            .ok_or_else(|| format!("could not parse decimal '{raw}'")),
+        "FLOAT" => Err(format!("could not parse decimal '{raw}'")),
         "DATE" => normalize_date(raw, order)
             .map(serde_json::Value::String)
             .ok_or_else(|| format!("could not parse date '{raw}'")),
