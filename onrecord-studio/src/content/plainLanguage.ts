@@ -233,6 +233,11 @@ export const PLAIN_FINDING_TEXT: Record<FindingKind, PlainText> = {
     notShown: 'It does not show why. Work is often finished and posted at the end of a week, and the portal records when a file was uploaded, not when it was made public.',
     next: "Read the counts, both shares and the cited files. If it matters to your work, ask the agency for the requests' due dates and the portal's document activity log.",
   },
+  SPENDING_RECORD_LEAD: {
+    observed: "Sums from published spending tables set beside each other: a department's actual expense against its adopted amount, settlement and claim accounts by year, or overtime paid by department.",
+    notShown: 'It does not show why. Adopted is the original appropriation, not the revised budget; an amount not spent may have been transferred or carried forward, and the tables do not say whether overtime was authorised.',
+    next: "Ask the department for its revised budget and year-end report for the year named, or its overtime and vacancy reports, and read the Council's settlement resolutions.",
+  },
   ABATEMENT_LOG_LEAD: {
     observed: "A count from an agency's released encampment abatement logs: the hours between a notice being posted and the abatement at the same place, and abatements at places with no notice in the log.",
     notShown: 'It does not show that too little notice was given. The logs do not record the notice period that applied, whether anyone was present, or what was done with belongings.',

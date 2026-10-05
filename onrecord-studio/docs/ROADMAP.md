@@ -1254,6 +1254,40 @@ After that: disclosure-portal reader and export import, settlement resolutions a
 re-check that keeps changed bytes (on the peer's watchlist storage), reports after abatements in
 nearby places, a signed receipt for one document, and the data packs in `docs/data-packs.md`.
 
+Built 2026-10-05 (round two a): adopted against actual spending, settlement accounts and overtime
+paid (methods §24; `OPERATING_ACTUALS` fetch, `spendingLeads.ts`, `SPENDING_RECORD_LEAD`, a data
+gap offering the actuals when only a budget is imported). Measured with the app's three SQL
+statements in the DuckDB CLI on `budget_operating_datasd.csv` and `actuals_operating_datasd.csv`
+retrieved 2026-10-05 (actuals SHA-256 53cfc748..., 663,858 rows, fiscal 2011 to 2023) and the
+owner's copy of the State Controller 2024 city file:
+
+| fiscal year | adopted expense, Homelessness Strategies & Solutions | actual expense | below adopted |
+|---|---|---|---|
+| 2021 | 64,235,899 | 57,879,044 | 9.9% |
+| 2022 | 18,071,824 | 9,815,698 | 45.7% |
+| 2023 | 25,157,607 | 22,920,122 | 8.9% |
+
+Only fiscal 2022 meets the yardstick (10% and 1,000,000 dollars). Environmental Services meets it
+in fiscal 2012 and 2013 (10.3% each) and in no year since; Police in none. Of 813 department-years
+with adopted expense in fiscal 2011 to 2023, 14 have no actual rows under that name, 6 of them
+with an adopted amount above zero (General Fund Appropriated Reserve 2011, 2013, 2014; Business
+Office 2011 to 2013), the latest in fiscal 2014. Settlement and public-liability claim accounts,
+fiscal 2019 to 2023: 4.2, 4.4, 5.1, 4.3 and 36.6 million dollars from 10, 10, 6, 1 and 38
+departments, so the lead states each year and compares none. Pay file, San Diego: 14,570
+positions, 160,052,249 overtime (15.3% of regular pay), 211 positions at 100,000 or more;
+Fire-Rescue 61.5 million overtime beside 48.4 and 44.8 million adopted for fiscal 2024 and 2025,
+Police 54.2 million beside 49.3 and 46.4 million; the homelessness department 2,005 dollars and
+no adopted overtime row. With the whole state file imported the lead also describes Los Angeles
+and San Francisco, without a budget. Measured by a separate query, not the app's: across all
+departments 110 of the 813 department-years meet the yardstick; the app reports the three
+followed departments only. The three downloads were also imported once through
+`import_analytical_csv` and the statements run through the restricted SQL boundary (a one-off
+native run, not kept as a test): the same 43, 17 and 17 rows and the same figures; the pay file
+imported 345,776 rows and rejected 68 (it has 78 byte sequences that are not UTF-8, none in San
+Diego's 14,570 rows), so another city's sums can be short by its rejected rows. Not verified: the
+fetch and the leads in the running app; whether the fiscal 2022 difference is a transfer or a
+carry-forward; the pay file for any year but 2024.
+
 ## Leads from service-report tables (2026-10-04)
 
 Decision: "What stands out" shows leads about the subject of the records; facts about a table

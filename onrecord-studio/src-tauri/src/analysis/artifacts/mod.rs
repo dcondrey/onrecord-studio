@@ -153,6 +153,7 @@ impl DraftFamily {
             // A description of how a release was spread out; it identifies no gap to ask about.
             | FindingKind::RollingProduction
             // A count of when uploads were recorded; it identifies no gap in the records.
+            | FindingKind::SpendingRecordLead
             | FindingKind::ReleaseTimingConcentration => Self::NoDraft,
         }
     }
@@ -428,6 +429,7 @@ mod tests {
             RedactionInconsistentAcrossReleases,
             RollingProduction,
             ReleaseTimingConcentration,
+            SpendingRecordLead,
         ]
     }
 

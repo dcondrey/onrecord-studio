@@ -359,6 +359,10 @@ pub fn falsification_for(kind: FindingKind) -> DossierFalsification {
             "The requester narrowed or added to the request, agreed to installments, or the records were found and reviewed in stages.",
             &["the request's correspondence on scope and schedule", "any production schedule or extension notice the agency sent"],
         ),
+        FindingKind::SpendingRecordLead => (
+            "The budget was revised after adoption, the amount was transferred or carried forward, or the City recorded the payment under another department or account.",
+            &["the year-end budget monitoring report and mid-year budget amendments for the department and year", "the department's overtime and vacancy reports, or the settlement resolutions, for the same year"],
+        ),
         FindingKind::ReleaseTimingConcentration => (
             "Staff finish and post work at the end of the week, or the requests released then fell due then.",
             &["the request log with each request's due date and assigned staff", "the portal's document activity log showing when each file was uploaded and when it was made public"],

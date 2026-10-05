@@ -803,3 +803,246 @@ async fn released_abatement_spreadsheets_import_and_reproduce_the_measured_hours
         assert_eq!(number(column), expected, "{column}");
     }
 }
+
+/// The operating budget, the operating actuals and the State Controller's city pay file, each with
+/// the publisher's own header, read by the spending leads' SQL.
+#[tokio::test]
+async fn spending_checks_keep_no_rows_apart_from_zero_and_tie_a_budget_to_one_employer() {
+    let fixture: Value =
+        serde_json::from_str(include_str!("fixtures/spending-leads.json")).unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let db = DuckDbRepository::new(temp.path().join("spending.db")).unwrap();
+    db.run_migrations(include_str!("../migrations/0001_initial_schema.sql"))
+        .await
+        .unwrap();
+    let mut tables = Vec::new();
+    for snapshot in ["budget", "actuals", "pay"] {
+        let path = temp.path().join(format!("{snapshot}.csv"));
+        std::fs::write(&path, fixture[snapshot].as_str().unwrap()).unwrap();
+        let input: AnalyticalImportRequest = serde_json::from_value(json!({ "datasetKind":"REGIONAL_DATA", "displayName":snapshot, "localPath":path, "sourceUri":format!("https://example.test/{snapshot}.csv"), "partialDataset":true })).unwrap();
+        let imported = db.import_analytical_csv(input).await.unwrap();
+        assert_eq!(imported.rejected_rows, 0, "{snapshot}");
+        tables.push((format!("\"analysis_{snapshot}\""), imported.table_name));
+    }
+    let mut results = Vec::new();
+    for query in fixture["queries"].as_array().unwrap() {
+        let mut sql = query["sql"].as_str().unwrap().to_string();
+        for (placeholder, table_name) in &tables {
+            sql = sql.replace(placeholder, &format!("\"{table_name}\""));
+        }
+        let result = db.execute_restricted_sql(&sql, 100).await.unwrap();
+        assert!(!result.truncated, "{}", query["id"]);
+        results.push(result);
+    }
+    let [compared, settled, paid] = &results[..] else {
+        panic!("three spending queries");
+    };
+    let number = |result: &SqlQueryResult, row: usize, name: &str| -> Option<i64> {
+        let value = cell(result, row, name);
+        value
+            .as_i64()
+            .or_else(|| value.as_f64().map(|number| number as i64))
+            .or_else(|| value.as_str().and_then(|text| text.parse().ok()))
+    };
+    let rows =
+        |result: &SqlQueryResult, label: &str, names: &[&str]| -> Vec<(String, Vec<Option<i64>>)> {
+            (0..result.row_count)
+                .map(|row| {
+                    (
+                        cell(result, row, label).as_str().unwrap_or("").to_string(),
+                        names.iter().map(|name| number(result, row, name)).collect(),
+                    )
+                })
+                .collect()
+        };
+    let line = |label: &str, values: &[Option<i64>]| (label.to_string(), values.to_vec());
+
+    // Fiscal 2024 is adopted and not in the actuals file, so only 2022 and 2023 are read. Revenue
+    // and proposed lines are in neither sum. A department-year with no actual rows has no count
+    // and no amount, not zero.
+    assert_eq!(
+        rows(
+            compared,
+            "department",
+            &[
+                "fiscal_year",
+                "adopted_expense",
+                "actual_rows",
+                "actual_expense"
+            ]
+        ),
+        vec![
+            line(
+                "Business Office",
+                &[Some(2022), Some(1_000_000), None, None]
+            ),
+            line(
+                "Environmental Services",
+                &[Some(2022), Some(50_000_000), Some(1), Some(49_000_000)]
+            ),
+            line(
+                "Environmental Services",
+                &[Some(2023), Some(51_000_000), None, None]
+            ),
+            line(
+                "Homelessness Strategies & Solutions",
+                &[Some(2022), Some(18_000_000), Some(2), Some(9_000_000)]
+            ),
+            line(
+                "Homelessness Strategies & Solutions",
+                &[Some(2023), Some(25_000_000), Some(2), Some(22_650_000)]
+            ),
+            line(
+                "Police",
+                &[Some(2022), Some(100_000_000), Some(1), Some(101_000_000)]
+            ),
+            line(
+                "Police",
+                &[Some(2023), Some(100_000_000), Some(3), Some(90_000_000)]
+            ),
+        ]
+    );
+    assert_eq!(
+        [
+            "first_covered_year",
+            "last_covered_year",
+            "department_years"
+        ]
+        .map(|name| number(compared, 0, name)),
+        [Some(2022), Some(2023), Some(8)]
+    );
+
+    // Fiscal 2021 has rows and none in a settlement account. The lease settlement is left out.
+    assert_eq!(
+        rows(
+            settled,
+            "department",
+            &[
+                "fiscal_year",
+                "departments_in_table",
+                "departments_reporting",
+                "year_amount",
+                "department_amount"
+            ]
+        ),
+        vec![
+            line(
+                "Police",
+                &[
+                    Some(2023),
+                    Some(3),
+                    Some(3),
+                    Some(2_450_000),
+                    Some(2_100_000)
+                ]
+            ),
+            line(
+                "Library",
+                &[Some(2023), Some(3), Some(3), Some(2_450_000), Some(300_000)]
+            ),
+            line(
+                "Homelessness Strategies & Solutions",
+                &[Some(2023), Some(3), Some(3), Some(2_450_000), Some(50_000)]
+            ),
+            line(
+                "Library",
+                &[Some(2022), Some(4), Some(1), Some(-5_000), Some(-5_000)]
+            ),
+            line("", &[Some(2021), Some(1), None, None, None]),
+        ]
+    );
+
+    // Smallville's 99 positions are one short; Oceanside has exactly 100. Overtime of exactly
+    // 100,000 is counted and 99,999 is not. Oceanside's Police is not set beside this budget.
+    let pay_columns = [
+        "positions",
+        "overtime_pay",
+        "high_overtime_positions",
+        "positions_without_overtime",
+        "budget_departments_matched",
+        "department_overtime_pay",
+        "adopted_overtime_same_year",
+        "adopted_overtime_next_year",
+    ];
+    let san_diego = |overtime: i64, same: Option<i64>, next: Option<i64>| {
+        vec![
+            Some(113),
+            Some(2_921_999),
+            Some(2),
+            Some(1),
+            Some(20),
+            Some(overtime),
+            same,
+            next,
+        ]
+    };
+    let oceanside = |overtime: i64| {
+        vec![
+            Some(100),
+            Some(640_000),
+            Some(0),
+            Some(0),
+            Some(1),
+            Some(overtime),
+            None,
+            None,
+        ]
+    };
+    assert_eq!(
+        (0..paid.row_count)
+            .map(|row| (
+                cell(paid, row, "employer").as_str().unwrap().to_string(),
+                cell(paid, row, "department").as_str().unwrap().to_string(),
+                pay_columns
+                    .iter()
+                    .map(|name| number(paid, row, name))
+                    .collect::<Vec<_>>()
+            ))
+            .collect::<Vec<_>>(),
+        vec![
+            (
+                "San Diego".to_string(),
+                "Fire-Rescue".to_string(),
+                san_diego(1_500_000, None, None)
+            ),
+            (
+                "San Diego".to_string(),
+                "Police".to_string(),
+                san_diego(1_419_999, Some(49_000_000), Some(46_000_000))
+            ),
+            (
+                "San Diego".to_string(),
+                "Homelessness Strategies & Solutions".to_string(),
+                san_diego(2_000, None, None)
+            ),
+            (
+                "San Diego".to_string(),
+                "City Attorney".to_string(),
+                san_diego(0, None, None)
+            ),
+            (
+                "San Diego".to_string(),
+                "City Auditor".to_string(),
+                san_diego(0, None, None)
+            ),
+            (
+                "Oceanside".to_string(),
+                "Police".to_string(),
+                oceanside(600_000)
+            ),
+            (
+                "Oceanside".to_string(),
+                "Harbor".to_string(),
+                oceanside(40_000)
+            ),
+        ]
+    );
+    assert_eq!(
+        [
+            cell(paid, 0, "budget_city"),
+            cell(paid, 5, "budget_city"),
+            cell(paid, 0, "overtime_departments_same_year")
+        ],
+        [&json!(true), &json!(false), &json!(1)]
+    );
+}
