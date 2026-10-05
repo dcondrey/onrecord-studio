@@ -906,6 +906,8 @@ impl DuckDbRepository {
         let mut lines = vec![];
         let mut notes = vec![];
         let mut searched = false;
+        // (role, dataset, vendor column name, vendor expr, amount expr, fiscal year expr)
+        let mut sources: Vec<(String, &FinancialDataset, String, String, String, String)> = vec![];
         for mapping in workspace.mappings.iter().filter(|m| {
             VENDOR_ROLES.contains(&m.role.as_str())
                 && m.columns.contains_key("vendor_id")
@@ -918,30 +920,64 @@ impl DuckDbRepository {
             else {
                 continue;
             };
-            searched = true;
-            let fiscal_year = if mapping.columns.contains_key("fy") {
-                expression(mapping, "fy")
-            } else {
-                "NULL".into()
-            };
-            let sql = format!(
-                "WITH mapped AS (SELECT {} AS vendor, {fiscal_year} AS fy, {} AS amount FROM {}) SELECT vendor, CAST(fy AS VARCHAR) AS fy, COUNT(*) AS source_rows, CAST(CASE WHEN COUNT(*)=COUNT(amount) THEN SUM(amount) END AS VARCHAR) AS amount FROM mapped WHERE trim(regexp_replace(lower(vendor),'[^a-z0-9]+',' ','g')) LIKE {} GROUP BY vendor, fy ORDER BY fy, vendor",
+            sources.push((
+                mapping.role.clone(),
+                dataset,
+                mapping.columns["vendor_id"].clone(),
                 expression(mapping, "vendor_id"),
                 expression(mapping, "amount"),
+                if mapping.columns.contains_key("fy") {
+                    expression(mapping, "fy")
+                } else {
+                    "NULL".into()
+                },
+            ));
+        }
+        for mapping in self.organisation_payment_mappings().await? {
+            let Some(dataset) = workspace
+                .datasets
+                .iter()
+                .find(|d| d.snapshot_id == mapping.snapshot_id)
+            else {
+                continue;
+            };
+            sources.push((
+                "payee table".into(),
+                dataset,
+                mapping.vendor_column.clone(),
+                format!(
+                    "NULLIF(trim(CAST({} AS VARCHAR)), '')",
+                    quote(&mapping.vendor_column)
+                ),
+                format!(
+                    "TRY_CAST({} AS DECIMAL(28,4))",
+                    quote(&mapping.amount_column)
+                ),
+                mapping
+                    .fiscal_year_column
+                    .as_ref()
+                    .map(|c| format!("NULLIF(trim(CAST({} AS VARCHAR)), '')", quote(c)))
+                    .unwrap_or_else(|| "NULL".into()),
+            ));
+        }
+        for (role, dataset, vendor_column, vendor, amount, fiscal_year) in sources {
+            searched = true;
+            let sql = format!(
+                "WITH mapped AS (SELECT {vendor} AS vendor, {fiscal_year} AS fy, {amount} AS amount FROM {}) SELECT vendor, CAST(fy AS VARCHAR) AS fy, COUNT(*) AS source_rows, CAST(CASE WHEN COUNT(*)=COUNT(amount) THEN SUM(amount) END AS VARCHAR) AS amount FROM mapped WHERE trim(regexp_replace(lower(vendor),'[^a-z0-9]+',' ','g')) LIKE {} GROUP BY vendor, fy ORDER BY fy, vendor",
                 quote(&dataset.table_name),
                 literal(&format!("%{needle}%")),
             );
             let result = self.execute_restricted_sql(&sql, 500).await?;
             if result.rows.is_empty() {
                 notes.push(format!(
-                    "No row of {} ({}) has a vendor value containing the organisation's name. That table identifies vendors by its column {}.",
-                    dataset.name, mapping.role, mapping.columns["vendor_id"]
+                    "No row of {} ({role}) has a vendor value containing the organisation's name. That table identifies vendors by its column {vendor_column}.",
+                    dataset.name
                 ));
             }
             if result.truncated {
                 notes.push(format!(
-                    "{} ({}) matched more vendor and year groups than the 500 shown.",
-                    dataset.name, mapping.role
+                    "{} ({role}) matched more vendor and year groups than the 500 shown.",
+                    dataset.name
                 ));
             }
             for row in result.rows {
@@ -949,7 +985,7 @@ impl DuckDbRepository {
                     continue;
                 };
                 lines.push(PublicMoneyLine {
-                    role: mapping.role.clone(),
+                    role: role.clone(),
                     dataset_name: dataset.name.clone(),
                     source_url: dataset.source_url.clone(),
                     vendor_value,
@@ -960,7 +996,7 @@ impl DuckDbRepository {
             }
         }
         if !searched {
-            notes.push("No contract, amendment or payment table with vendor and amount columns is mapped under Spending and outcomes, so no payments were looked up.".into());
+            notes.push("No table is mapped for payments: map a payee table here, or a contract, amendment or payment table under Spending and outcomes.".into());
         }
         Ok((lines, notes))
     }

@@ -121,6 +121,10 @@ pub struct Form990Statement {
     pub schedule_l_attached: bool,
     pub schedule_l_transactions: Vec<ScheduleLTransaction>,
     pub schedule_l_explanations: Vec<FilingExplanation>,
+    /// Every Schedule O explanation, quoted whole. The form requires one for a Yes on Part VI
+    /// line 5; which paragraph that is, is left to the reader rather than guessed from its label.
+    #[serde(default)]
+    pub schedule_o_explanations: Vec<FilingExplanation>,
 }
 
 /// One return the IRS index lists for the organisation.
@@ -198,8 +202,20 @@ pub struct SingleAuditHistory {
     pub retrieved_at: String,
 }
 
-/// Rows of one mapped contract, amendment or payment table whose vendor value contains the
-/// organisation's name.
+/// A table the user imported that lists payees and amounts, named by its columns alone, so a
+/// plain payment list is searched without the full spending-role mapping.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct OrganisationPaymentMapping {
+    pub snapshot_id: String,
+    pub vendor_column: String,
+    pub amount_column: String,
+    #[serde(default)]
+    pub fiscal_year_column: Option<String>,
+}
+
+/// Rows of one mapped contract, amendment, payment or payee table whose vendor value contains
+/// the organisation's name.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PublicMoneyLine {

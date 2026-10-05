@@ -2,13 +2,14 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type {
-  FilingExplanation, Form990Statement, OrganisationCheckSummary, OrganisationFilings, OrganisationMatch,
-  OrganisationReturn, ScheduleLPart, SingleAuditHistory,
+  AnalyticalSchema, FilingExplanation, Form990Statement, OrganisationCheckSummary, OrganisationFilings, OrganisationMatch,
+  OrganisationPaymentMapping, OrganisationReturn, ScheduleLPart, SingleAuditHistory,
 } from '../../types';
+import { save } from '@tauri-apps/plugin-dialog';
+import { portfolioCsv, portfolioRow, type PortfolioRow } from '../../utils/organisationPortfolio';
 
 const dollars = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const NOT_STATED = 'not stated';
-const money = (value: number | null) => value === null ? NOT_STATED : dollars.format(value);
 const answer = (value: boolean | null) => value === null ? 'The return carries no answer.' : `The return answers "${value ? 'Yes' : 'No'}".`;
 const period = (value: string) => value.length === 6 ? `${value.slice(0, 4)}-${value.slice(4)}` : value;
 const isEin = (value: string) => /^\d{2}-?\d{7}$/.test(value.trim());
@@ -20,12 +21,20 @@ const SCHEDULE_L_PARTS: Record<ScheduleLPart, string> = {
   BUSINESS_TRANSACTION: 'Part IV, business transactions involving interested persons',
 };
 
+const money = (value: number | null) => value === null ? NOT_STATED : dollars.format(value);
+/** A stored decimal string, shown with cents only when it has them. */
+const decimalMoney = (value: string) => {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: Number.isInteger(amount) ? 0 : 2 }).format(amount) : value;
+};
+let tableSequence = 0;
+// The caption sits outside the scrolling container so a wide table does not clip it on a phone.
 function Table({ caption, head, rows }: { caption: string; head: string[]; rows: ReactNode[][] }) {
-  return <div className="overflow-x-auto"><table className="w-full text-left text-label leading-4">
-    <caption className="pb-1 text-left text-muted">{caption}</caption>
+  const [id] = useState(() => `organisation-table-${++tableSequence}`);
+  return <div><p id={id} className="pb-1 text-label leading-4 text-muted">{caption}</p><div className="overflow-x-auto"><table aria-labelledby={id} className="w-full text-left text-label leading-4">
     <thead><tr>{head.map((label) => <th key={label} scope="col" className="pr-4 pb-1 font-normal text-muted">{label}</th>)}</tr></thead>
     <tbody>{rows.map((row, index) => <tr key={index} className="border-t border-line-strong align-top">{row.map((cell, at) => <td key={at} className="pr-4 py-1 text-fg-secondary">{cell}</td>)}</tr>)}</tbody>
-  </table></div>;
+  </table></div></div>;
 }
 
 function Explanations({ items }: { items: FilingExplanation[] }) {
@@ -66,6 +75,10 @@ function Statement({ statement }: { statement: Form990Statement }) {
         : <p className="text-label leading-4 text-muted">A Schedule L is attached and lists no transaction rows.</p>}
       <Explanations items={statement.scheduleLExplanations} />
     </div> : <p className="text-label leading-4 text-muted">No Schedule L is attached to this return.</p>}
+    {statement.scheduleOExplanations.length > 0 && <details open={statement.significantDiversionReported === true}>
+      <summary className="text-label leading-4 text-accent">Schedule O: the filer's explanations ({statement.scheduleOExplanations.length}){statement.significantDiversionReported === true ? '. The form requires one here for the Yes on Part VI line 5.' : ''}</summary>
+      <div className="mt-2"><Explanations items={statement.scheduleOExplanations} /></div>
+    </details>}
   </div>;
 }
 
@@ -122,10 +135,102 @@ function Record({ filings }: { filings: OrganisationFilings }) {
       <h3 className="text-sm font-semibold text-fg">Public money in your library</h3>
       {filings.publicMoney.length > 0 && <Table caption="Rows of your mapped contract, amendment and payment tables whose vendor value contains this organisation's name. The tables carry no EIN, so confirm each vendor value is this organisation."
         head={['Record', 'Table', 'Vendor as written', 'Fiscal year', 'Rows', 'Amount']}
-        rows={filings.publicMoney.map((line) => [line.role, line.sourceUrl ? <a className="text-accent underline" href={line.sourceUrl} target="_blank" rel="noreferrer">{line.datasetName}</a> : line.datasetName, line.vendorValue, line.fiscalYear ?? NOT_STATED, String(line.rows), line.amount ?? 'not summed: an amount could not be read'])} />}
+        rows={filings.publicMoney.map((line) => [line.role, line.sourceUrl ? <a className="text-accent underline" href={line.sourceUrl} target="_blank" rel="noreferrer">{line.datasetName}</a> : line.datasetName, line.vendorValue, line.fiscalYear ?? NOT_STATED, String(line.rows), line.amount === null ? 'not summed: an amount could not be read' : decimalMoney(line.amount)])} />}
       {filings.publicMoneyNotes.map((note) => <p key={note} className="text-label leading-4 text-muted">{note}</p>)}
     </section>
   </div>;
+}
+
+/** Checks several organisations one after another; each result is stored by the check itself, so
+ * the portfolio is reloaded once at the end. */
+function BatchCheck({ auditKey, onDone }: { auditKey: string; onDone: () => void }) {
+  const [text, setText] = useState('');
+  const [progress, setProgress] = useState<{ done: number; total: number; failed: string[] } | undefined>(undefined);
+  const gate = useLatestRequestGate();
+  const eins = text.split(/[\s,;]+/).map((value) => value.trim()).filter(isEin);
+  const start = async () => {
+    const request = gate.begin();
+    const failed: string[] = [];
+    setProgress({ done: 0, total: eins.length, failed });
+    for (const [index, ein] of eins.entries()) {
+      try { await invokeCommand('check_organisation_filings', { ein: ein.replace('-', ''), auditKey: auditKey.trim() || null }); }
+      catch (reason) { failed.push(`${ein}: ${String(reason)}`); }
+      if (!gate.isCurrent(request)) return;
+      setProgress({ done: index + 1, total: eins.length, failed: [...failed] });
+    }
+    onDone();
+  };
+  const running = progress !== undefined && progress.done < progress.total;
+  return <details className="rounded-lg border border-line-strong p-3">
+    <summary className="text-label leading-4 text-accent">Check a list of organisations</summary>
+    <form className="mt-2 space-y-2" onSubmit={(event) => { event.preventDefault(); void start(); }}>
+      <label className="block text-label leading-4 text-fg-secondary">EINs, one per line or separated by commas
+        <textarea className="analysis-input mt-1 block w-full" rows={3} value={text} onChange={(event) => setText(event.target.value)} placeholder={'33-0215585\n33-0492302'} /></label>
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="submit" className="analysis-button" disabled={running || eins.length === 0}>{running ? 'Checking' : `Check ${eins.length} ${eins.length === 1 ? 'organisation' : 'organisations'}`}</button>
+        {progress && <p role="status" className="text-label leading-4 text-muted">{progress.done} of {progress.total} checked{progress.failed.length ? `, ${progress.failed.length} failed` : ''}.</p>}
+      </div>
+      {progress && progress.failed.length > 0 && <ul role="alert" className="list-disc pl-5 text-label leading-4 text-warning">{progress.failed.map((line) => <li key={line}>{line}</li>)}</ul>}
+    </form>
+  </details>;
+}
+
+function Portfolio({ rows, onOpen }: { rows: PortfolioRow[]; onOpen: (row: PortfolioRow) => void }) {
+  const [message, setMessage] = useState('');
+  if (!rows.length) return null;
+  const exportCsv = async () => {
+    try {
+      const outputPath = await save({ defaultPath: 'organisations-checked.csv', filters: [{ name: 'CSV', extensions: ['csv'] }] });
+      if (!outputPath) return;
+      await invokeCommand('export_organisation_portfolio_csv', { outputPath, content: portfolioCsv(rows) });
+      setMessage(`Written to ${outputPath}.`);
+    } catch (reason) { setMessage(String(reason)); }
+  };
+  return <section aria-label="Checked organisations" className="space-y-2">
+    <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold text-fg">Checked organisations</h3><button type="button" className="analysis-button" onClick={() => { void exportCsv(); }}>Export CSV</button></div>
+    {message && <p role="status" className="text-label leading-4 text-muted">{message}</p>}
+    <Table caption="Each organisation's latest read return, its single audits and the payments your tables record, as stated. Select a name to open its record."
+      head={['Organisation', 'Latest return', 'Total revenue', 'Government grants', 'Diversion of assets (Part VI 5)', 'Former listed (Part VII 3)', 'Severance (Sch J 4a)', 'Sch L rows', 'Single audits', 'Audit finding rows', 'Payments in library', 'Not read']}
+      rows={rows.map((row) => [
+        <button type="button" className="text-left text-accent underline" onClick={() => onOpen(row)}>{row.name}</button>,
+        row.latestPeriod ?? 'none read', money(row.totalRevenue), money(row.governmentGrants), row.significantDiversion, row.formerListed, row.severance,
+        row.scheduleLRows === null ? 'not read' : String(row.scheduleLRows),
+        row.audits === null ? 'no lookup' : `${row.audits}${row.latestAuditYear ? `, latest ${row.latestAuditYear}` : ''}`,
+        row.auditFindingRows === null ? 'no lookup' : String(row.auditFindingRows),
+        row.paymentRows === 0 ? 'none matched' : row.paymentsTotal === null ? `${row.paymentRows} rows, not summed` : `${dollars.format(row.paymentsTotal)} (${row.paymentRows} rows)`,
+        row.unread.join(', ') || '',
+      ])} />
+  </section>;
+}
+
+function PaymentTables({ schema, mappings, onChange }: { schema: AnalyticalSchema | undefined; mappings: OrganisationPaymentMapping[]; onChange: (mappings: OrganisationPaymentMapping[]) => void }) {
+  const [snapshotId, setSnapshotId] = useState('');
+  const [vendorColumn, setVendorColumn] = useState('');
+  const [amountColumn, setAmountColumn] = useState('');
+  const [fiscalYearColumn, setFiscalYearColumn] = useState('');
+  const [error, setError] = useState('');
+  const gate = useLatestRequestGate();
+  const datasets = schema?.datasets ?? [];
+  const dataset = datasets.find((d) => d.snapshotId === snapshotId);
+  const columns = dataset ? (schema?.columns ?? []).filter((c) => c.tableName === dataset.tableName).map((c) => c.columnName) : [];
+  const run = (work: Promise<OrganisationPaymentMapping[]>) => {
+    const request = gate.begin();
+    work.then((saved) => { if (gate.isCurrent(request)) { onChange(saved); setError(''); } }, (reason) => { if (gate.isCurrent(request)) setError(String(reason)); });
+  };
+  const nameOf = (id: string) => datasets.find((d) => d.snapshotId === id)?.displayName ?? id;
+  return <details className="rounded-lg border border-line-strong p-3">
+    <summary className="text-label leading-4 text-accent">Tables searched for payments ({mappings.length} payee {mappings.length === 1 ? 'table' : 'tables'})</summary>
+    <p className="mt-2 text-label leading-4 text-muted">A table you imported in Analysis that lists payees and amounts, such as a contract or grant payment list, is searched by the organisation's name once you name its columns here. Contract, amendment and payment tables mapped under Spending and outcomes are searched as well.</p>
+    {mappings.length > 0 && <ul className="mt-2 space-y-1 text-label leading-4 text-fg-secondary">{mappings.map((mapping) => <li key={mapping.snapshotId}>{nameOf(mapping.snapshotId)}: vendor {mapping.vendorColumn}, amount {mapping.amountColumn}{mapping.fiscalYearColumn ? `, fiscal year ${mapping.fiscalYearColumn}` : ''} <button type="button" className="text-accent underline" onClick={() => run(invokeCommand('remove_organisation_payment_mapping', { snapshotId: mapping.snapshotId }))}>Remove</button></li>)}</ul>}
+    {error && <p role="alert" className="mt-2 text-label leading-4 text-danger">{error}</p>}
+    {datasets.length === 0 ? <p className="mt-2 text-label leading-4 text-muted">No table has been imported in Analysis yet.</p>
+      : <form className="mt-3 flex flex-wrap items-end gap-3" onSubmit={(event) => { event.preventDefault(); run(invokeCommand('save_organisation_payment_mapping', { mapping: { snapshotId, vendorColumn, amountColumn, fiscalYearColumn: fiscalYearColumn || null } })); }}>
+        <label className="text-label leading-4 text-fg-secondary">Table<select className="analysis-input mt-1 block" value={snapshotId} onChange={(e) => { setSnapshotId(e.target.value); setVendorColumn(''); setAmountColumn(''); setFiscalYearColumn(''); }}><option value="">Choose a table</option>{datasets.map((d) => <option key={d.snapshotId} value={d.snapshotId}>{d.displayName}</option>)}</select></label>
+        {([['Payee or vendor column', vendorColumn, setVendorColumn, true], ['Amount column', amountColumn, setAmountColumn, true], ['Fiscal year column (optional)', fiscalYearColumn, setFiscalYearColumn, false]] as const).map(([label, value, set, required]) =>
+          <label key={label} className="text-label leading-4 text-fg-secondary">{label}<select className="analysis-input mt-1 block" value={value} onChange={(e) => set(e.target.value)} disabled={!dataset} required={required}><option value="">{required ? 'Choose a column' : 'None'}</option>{columns.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>)}
+        <button type="submit" className="analysis-button" disabled={!snapshotId || !vendorColumn || !amountColumn}>Search this table</button>
+      </form>}
+  </details>;
 }
 
 /** An organisation's public filings, each shown as the statement of the document it was read from. */
@@ -134,6 +239,9 @@ export default function OrganisationFilingsPanel() {
   const [auditKey, setAuditKey] = useState('');
   const [matches, setMatches] = useState<OrganisationMatch[] | undefined>(undefined);
   const [checked, setChecked] = useState<OrganisationCheckSummary[]>([]);
+  const [portfolio, setPortfolio] = useState<PortfolioRow[]>([]);
+  const [mappings, setMappings] = useState<OrganisationPaymentMapping[]>([]);
+  const [schema, setSchema] = useState<AnalyticalSchema | undefined>(undefined);
   const [selected, setSelected] = useState<{ ein: string; name: string | null } | undefined>(undefined);
   const [filings, setFilings] = useState<OrganisationFilings | null | undefined>(undefined);
   const [busy, setBusy] = useState<'search' | 'load' | 'check' | ''>('');
@@ -142,11 +250,25 @@ export default function OrganisationFilingsPanel() {
   const recordGate = useLatestRequestGate();
   const listGate = useLatestRequestGate();
 
+  // The portfolio is read from stored records only; a check that is still running is not in it
+  // until it is saved and this runs again.
   const loadChecked = useCallback(() => {
     const request = listGate.begin();
-    invokeCommand('list_organisation_checks', {}).then((list) => { if (listGate.isCurrent(request)) setChecked(list); }, () => undefined);
+    invokeCommand('list_organisation_checks', {}).then(async (list) => {
+      if (!listGate.isCurrent(request)) return;
+      setChecked(list);
+      const records = await Promise.all(list.map((item) => invokeCommand('get_organisation_filings', { ein: item.ein })));
+      if (!listGate.isCurrent(request)) return;
+      setPortfolio(records.flatMap((record) => record ? [portfolioRow(record)] : []));
+    }, () => undefined);
   }, [listGate]);
   useEffect(() => { loadChecked(); return listGate.invalidate; }, [listGate, loadChecked]);
+  useEffect(() => {
+    let current = true;
+    void invokeCommand('list_organisation_payment_mappings', {}).then((saved) => { if (current) setMappings(saved); }, () => undefined);
+    void invokeCommand('get_analytical_schema', {}).then((read) => { if (current) setSchema(read); }, () => undefined);
+    return () => { current = false; };
+  }, []);
 
   // One gate for both reads and checks of the record: whichever organisation was chosen last owns the view.
   const show = (organisation: { ein: string; name: string | null }, work: 'load' | 'check') => {
@@ -194,15 +316,18 @@ export default function OrganisationFilingsPanel() {
       {matches.map((match) => <li key={match.ein}><button type="button" className="text-left text-label leading-4 text-accent underline" onClick={() => show(match, 'load')}>{match.name}</button><span className="text-label leading-4 text-muted"> {[match.city, match.state].filter(Boolean).join(', ')} · EIN {match.ein}</span></li>)}
       {matches.length > 0 && <li className="text-label leading-4 text-muted">Name search by ProPublica Nonprofit Explorer.</li>}
     </ul>}
-    {checked.length > 0 && <div className="flex flex-wrap items-center gap-2 text-label leading-4"><span className="text-muted">Checked before:</span>{checked.map((item) => <button type="button" key={item.ein} className="rounded border border-control px-2 py-1 text-fg-secondary" onClick={() => show(item, 'load')}>{item.name ?? item.ein}</button>)}</div>}
+    <BatchCheck auditKey={auditKey} onDone={loadChecked} />
+    <PaymentTables schema={schema} mappings={mappings} onChange={(saved) => { setMappings(saved); loadChecked(); if (selected && filings) show(selected, 'load'); }} />
+    <Portfolio rows={portfolio} onOpen={(row) => show({ ein: row.ein, name: row.name }, 'load')} />
+    {checked.length > 0 && portfolio.length === 0 && <div className="flex flex-wrap items-center gap-2 text-label leading-4"><span className="text-muted">Checked before:</span>{checked.map((item) => <button type="button" key={item.ein} className="rounded border border-control px-2 py-1 text-fg-secondary" onClick={() => show(item, 'load')}>{item.name ?? item.ein}</button>)}</div>}
     {selected && <div className="space-y-4 border-t border-line-strong pt-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><h3 className="text-base font-semibold text-fg">{filings?.name ?? selected.name ?? `EIN ${selected.ein}`}</h3>
           <p className="text-label leading-4 text-muted">EIN {selected.ein}{filings ? ` · checked ${filings.checkedAt.slice(0, 10)}` : ''}</p></div>
         <button type="button" className="analysis-button" disabled={busy === 'check' || busy === 'load'} onClick={() => show(selected, 'check')}>{busy === 'check' ? 'Checking' : filings ? 'Check again' : 'Check filings'}</button>
       </div>
-      {busy === 'check' && <p role="status" className="text-label leading-4 text-muted">Reading the IRS e-file index for each year not yet held (about 90 MB a year, downloaded and discarded) and this organisation's returns. This can take several minutes.</p>}
-      {filings === null && busy === '' && <p className="text-label leading-4 text-muted">Nothing is held for this organisation yet. Checking downloads the IRS e-file index for each year from 2024 (about 90 MB a year), keeps only this organisation's rows, and reads its returns.</p>}
+      {busy === 'check' && <p role="status" className="text-label leading-4 text-muted">Reading the IRS e-file index for each year your library does not hold yet (about 90 MB a year, kept for every organisation) and this organisation's returns. A first check can take several minutes.</p>}
+      {filings === null && busy === '' && <p className="text-label leading-4 text-muted">Nothing is held for this organisation yet. Checking reads the IRS e-file index for each year from 2024 (about 90 MB a year, downloaded once for every organisation) and this organisation's returns.</p>}
       {filings && <Record filings={filings} />}
     </div>}
   </section>;

@@ -296,6 +296,9 @@ pub fn parse_form_990(xml: &str) -> Result<Form990Statement, AppError> {
             .transpose()?
             .unwrap_or_default(),
         schedule_l_explanations: schedule_l_node.map(explanations).unwrap_or_default(),
+        schedule_o_explanations: child(data, "IRS990ScheduleO")
+            .map(explanations)
+            .unwrap_or_default(),
     })
 }
 
@@ -345,6 +348,10 @@ mod tests {
             .any(|e| e.line_reference.as_deref() == Some("PART I, LINE 4A")
                 && e.text.contains("SEVERANCE PAYMENT OF $104,981")));
 
+        assert!(statement
+            .schedule_o_explanations
+            .iter()
+            .any(|e| e.line_reference.as_deref() == Some("FORM 990, PART VI, SECTION A, LINE 2")));
         assert_eq!(statement.schedule_l_transactions.len(), 1);
         let grant = &statement.schedule_l_transactions[0];
         assert_eq!(grant.part, ScheduleLPart::GrantOrAssistance);

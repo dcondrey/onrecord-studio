@@ -79,6 +79,7 @@ export interface Form990Statement {
   scheduleLAttached: boolean;
   scheduleLTransactions: ScheduleLTransaction[];
   scheduleLExplanations: FilingExplanation[];
+  scheduleOExplanations: FilingExplanation[];
 }
 
 export interface OrganisationReturn {
@@ -172,4 +173,11 @@ export interface OrganisationCheckSummary {
   ein: string;
   name: string | null;
   checkedAt: string;
+}
+
+export interface OrganisationPaymentMapping {
+  snapshotId: string;
+  vendorColumn: string;
+  amountColumn: string;
+  fiscalYearColumn: string | null;
 }
