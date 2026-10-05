@@ -1414,6 +1414,14 @@ d. Track: accepting a suggestion creates the casework request; submission, respo
    requested (with days to the deadline), overdue, produced, answered.
 e. Close: when a production imports and the check runs, the gap clears and the lead is recomputed.
 
+Built 2026-10-05 (methods §33 F): gap definitions as data with eight seeds (`recordGaps.ts`); the
+feed lists each lead's gaps with their state; a user-started search of held requests and of the
+table's own portal; the drafted request; tracking as a casework request in a case opened for the
+lead (`request_record_gap`); the stored-property check that answers the first gap
+(`belongingsLeads.ts`). Not built: a statute other than the CPRA in the compiled request, the
+SB 272 catalogue lookup, checks for the other seven definitions, and the stored-property check has
+never read a real released log (its column names are assumed).
+
 ### 2. Organisation filings
 For any tax-exempt organisation the user names (by name or EIN): fetch its Form 990 history and
 report, per year, as stated on the filing and nothing more: revenue, expenses, assets, officer
@@ -1429,6 +1437,18 @@ attribution), the IRS e-file XML for the full return (location and index not yet
 payment to a former officer is reported as a payment, never characterised; an allegation from
 any source is not stored as a finding; no finding kind asserts wrongdoing. Verified 2026-10-05:
 the summary endpoint returns filing years 2011 to 2023 with those summary fields for one EIN.
+Verified later the same day, by request from this machine: the IRS publishes one index per
+submission year at `https://apps.irs.gov/pub/epostcard/990/xml/<year>/index_<year>.csv` (2024:
+91 MB; columns RETURN_ID, FILING_TYPE, EIN, TAX_PERIOD, SUB_DATE, TAXPAYER_NAME, RETURN_TYPE, DLN,
+OBJECT_ID, XML_BATCH_ID) and the returns inside batch archives
+`<year>/<XML_BATCH_ID>.zip` (`2024_TEOS_XML_01A.zip`: 105 MB, `accept-ranges: bytes`), so one
+return can be read by ranged requests for the archive's directory and one member rather than the
+whole archive (a ranged request returned 206; members are named
+`<XML_BATCH_ID>/<OBJECT_ID>_public.xml`). ProPublica's
+`/nonprofits/download-xml?object_id=` answers 403 with a browser security check and is not to be
+used. `api.fac.gov/general?auditee_ein=eq.<ein>` answers 403 without an `X-Api-Key`. Open design
+question: an EIN's history needs every year's index (about 90 MB each); fetch them only when the
+user asks for an organisation, and keep only the rows for EINs asked about.
 
 ## Leads from service-report tables (2026-10-04)
 

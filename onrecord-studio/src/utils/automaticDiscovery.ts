@@ -1,12 +1,13 @@
 import type { AnalyticalDatasetSummary, AnalyticalSchema, ServiceLeadInput, SqlQueryResult } from '../types';
 import { buildDiscoveryPlan, discoveryDefaults, quoteIdentifier, type DiscoveryQuery, type DiscoverySelection } from './dataDiscovery';
 import { abatementCompanion, abatementLeads, abatementQueries, reportsAroundAbatements } from './abatementLeads';
+import { belongingsLeads, belongingsQueries } from './belongingsLeads';
 import { stopCompanions, stopLeads, stopQueries } from './stopLeads';
 import { chargeLeads, chargeQueries } from './chargeLeads';
 import { disclosureLeads, disclosureQueries } from './disclosureLeads';
 import { capacityCompanions, capacityLeads, capacityQueries } from './capacityLeads';
 import { spendingCompanion, spendingLeads, spendingQueries } from './spendingLeads';
-import { backlogChangeLeads, budgetTable, recurringServiceLeads, serviceAccountabilityLeads, serviceAccountabilityQueries, serviceCompanions, serviceRequestRoles } from './serviceAccountability';
+import { backlogChangeLeads, budgetTable, recurringServiceLeads, serviceAccountabilityLeads, serviceAccountabilityQueries, serviceCompanions, serviceRequestRoles, type LeadScope } from './serviceAccountability';
 
 export interface DiscoveryObservation {
   id: string;
@@ -23,6 +24,8 @@ export interface DiscoveryObservation {
   family?: ServiceLeadInput['family'];
   /** Set on a lead built from other tables' results as well: the tables its query does not name. */
   reads?: string[];
+  /** Set on a lead whose result names a period or places a follow-up record should cover. */
+  scope?: LeadScope;
 }
 export interface AutomaticProfile {
   fingerprint: string;
@@ -69,7 +72,7 @@ export function automaticFollowups(schema: AnalyticalSchema, dataset: Analytical
   // One consistent counting unit, no inferred sums, rates, or cross-publisher joins.
   const plan = buildDiscoveryPlan(schema, selection);
   return [...plan.queries.filter((query) => (query.id === 'coverage' && selection.period) || (query.id === 'groups' && selection.dimension) || (query.id === 'changes' && selection.period)),
-    ...serviceAccountabilityQueries(schema, dataset), ...stopQueries(schema, dataset), ...abatementQueries(schema, dataset), ...disclosureQueries(schema, dataset), ...chargeQueries(schema, dataset), ...capacityQueries(schema, dataset),
+    ...serviceAccountabilityQueries(schema, dataset), ...stopQueries(schema, dataset), ...abatementQueries(schema, dataset), ...belongingsQueries(schema, dataset), ...disclosureQueries(schema, dataset), ...chargeQueries(schema, dataset), ...capacityQueries(schema, dataset),
     ...spendingQueries(schema, dataset)];
 }
 
@@ -99,10 +102,10 @@ export function metadataObservations(dataset: AnalyticalDatasetSummary): Discove
 export function profileObservations(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary, profile: AutomaticProfile): DiscoveryObservation[] {
   const lead = (family: ServiceLeadInput['family']) => (item: ReturnType<typeof stopLeads>[number]): DiscoveryObservation => ({
     id: `${dataset.snapshotId}:${item.key}`, snapshotId: dataset.snapshotId, kind: 'lead', family, priority: item.priority,
-    title: item.title, detail: item.detail, question: item.question, query: item.query,
+    title: item.title, detail: item.detail, question: item.question, query: item.query, scope: item.scope,
   });
   const observations: DiscoveryObservation[] = [...serviceAccountabilityLeads(profile.results).map(lead('SERVICE_REPORTS')), ...stopLeads(profile.results).map(lead('POLICE_STOPS')),
-    ...abatementLeads(profile.results).map(lead('ABATEMENT_LOGS')), ...chargeLeads(profile.results).map(lead('CHARGE_LOGS')), ...disclosureLeads(profile.results).map(lead('DISCLOSURE_FILINGS')),
+    ...abatementLeads(profile.results).map(lead('ABATEMENT_LOGS')), ...belongingsLeads(profile.results).map(lead('ABATEMENT_LOGS')), ...chargeLeads(profile.results).map(lead('CHARGE_LOGS')), ...disclosureLeads(profile.results).map(lead('DISCLOSURE_FILINGS')),
     ...capacityLeads(profile.results).map(lead('CAPACITY_COMPARISON')), ...spendingLeads(profile.results).map(lead('SPENDING_RECORDS'))];
   const get = (id: string) => profile.results.find((entry) => entry.query.id === id);
   // A column's missing-value rate describes the source table's own completeness, not the subject

@@ -154,6 +154,41 @@ pub struct CaseworkState {
     pub events: Vec<CaseworkEvent>,
     pub leads: Vec<CaseworkLead>,
 }
+/// A drafted records request for one record gap behind a table lead. `gap_key` and `lead_ref`
+/// are the feed's own identifiers; the repository derives the request and case identities from
+/// them, so sending the same gap twice tracks one request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RecordGapRequestInput {
+    pub gap_key: String,
+    pub lead_ref: String,
+    pub lead_title: String,
+    pub lead_question: String,
+    pub title: String,
+    pub custodian: String,
+    pub gap: String,
+    pub resolves: String,
+    pub draft: String,
+    pub record_types: Vec<String>,
+    pub fields: Vec<String>,
+    pub period: String,
+}
+/// Where a record gap's tracked request stands, with its clock counted to the read instant.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordGapRequestStatus {
+    pub gap_key: String,
+    pub case_id: String,
+    pub report_id: String,
+    pub request_id: String,
+    pub state: String,
+    /// `None` until the operator records a submission: an unfiled request has no clock.
+    pub submitted_at: Option<String>,
+    pub determination_due_on: Option<String>,
+    pub deadline_passed_without_recorded_response: bool,
+    pub productions: usize,
+    pub remaining_omissions: usize,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CaseworkPacket {

@@ -51,6 +51,14 @@
         "paragraphs": [
           "Basis: Pattern signal, not a legal claim. Confidence is not assessed: the finding restates recorded times and infers nothing to score. A notice document compared with the agency's own stated minimum is a different finding kind."
         ]
+      },
+      {
+        "heading": "Records that would answer a lead",
+        "paragraphs": [
+          "Under What stands out, each lead lists the records its tables cannot supply, such as the stored-property log, the work orders or the contractor's invoices. Search held requests looks through the requests already in your library for those words and shows each match with the released files you hold. Collect searches the portal the table came from. Neither search answers the gap: similar words in a request are not the record.",
+          "Track this request stores the drafted request as a casework request under a case opened for the lead. The draft names the record, the period and places from the lead's own result, and the table it was identified from. Nothing is sent; file it yourself and record the submission date in casework, after which the feed shows the days to the determination date or that it has passed.",
+          "A gap is answered only when the produced record is imported as a table and its own check has run. A stored-property log with an intake date and a disposition column is counted by disposition exactly as the agency wrote it; releases are counted only when the log has a release date column."
+        ]
       }
     ],
     "views": [],

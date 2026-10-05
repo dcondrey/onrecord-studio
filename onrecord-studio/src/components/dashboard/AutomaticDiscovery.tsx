@@ -5,6 +5,8 @@ import { focusSourceComposer } from '../../utils/sanDiego';
 import { useAutomaticDiscovery } from './AutomaticDiscoveryProvider';
 import Icon from '../ui/icons';
 import DataMaintenance from './DataMaintenance';
+import RecordGaps from './RecordGaps';
+import { recordGaps } from '../../utils/recordGaps';
 
 export default function AutomaticDiscovery() {
   const { controller, state } = useAutomaticDiscovery();
@@ -25,6 +27,7 @@ export default function AutomaticDiscovery() {
   // than once), not an observation about the investigation's subject; it stays off this feed.
   const standoutPatterns = state.patterns.filter((pattern) => pattern.kind !== 'EXACT_DUPLICATE');
   const gaps = controller.gaps();
+  const records = state.schema ? recordGaps(state.schema, leads, state.profiles) : [];
   const automatic = Boolean(state.maintenance?.policy.enabled && state.maintenance.policy.autoRefresh);
   const profileErrors = Object.values(state.profiles).flatMap((profile) => profile.results.filter((entry) => entry.error));
   const stage = (url: string) => { store.getState().setPortalUrlDraft(url); focusSourceComposer(); };
@@ -68,6 +71,7 @@ export default function AutomaticDiscovery() {
         {status && <span className="text-warning">The last attempt failed: {status}. </span>}
         {automatic && !status && gap.fetch ? 'It will be fetched automatically. ' : ''}<button type="button" className="text-accent underline" onClick={() => controller.fill(gap.key)}>{gap.collect ? 'Collect them now' : 'Fetch it now'}</button></>}
     </p>; })}
+    <RecordGaps gaps={records} />
     {leads.length > 6 && <button type="button" className="analysis-button" onClick={() => setShowAll((value) => !value)}>{showAll ? 'Show fewer observations' : 'Show more observations'}</button>}
     {state.candidates.length > 0 && <p className="text-label leading-4 text-fg-secondary">{state.candidates.length} acquired tables are available for analysis. <button type="button" className="text-accent underline" onClick={openAnalysis}>Review acquired tables</button></p>}
     {!datasets.length && !standoutPatterns.length && <div className="grid gap-3 text-label leading-4 sm:grid-cols-2">

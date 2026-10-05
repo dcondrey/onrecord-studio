@@ -608,3 +608,33 @@ Minimum N is 10 (`MINIMUM_CLOSED_REQUESTS`), tested at 9, 10 and 11. Below it th
 
 ### E. Table leads in the dossier
 `src/utils/tableLeadSources.ts` is the only reader of the "Tables read:" and "SQL:" tail that `service_leads.rs` appends to a table lead's stored explanation. The on-screen dossier shows, per table, its name, source address, retrieval date and full SHA-256, then the query. A line whose parts cannot be separated is shown as stored. An explanation without the tail yields no section.
+
+### F. Record gaps behind a table lead
+
+Source: `src/utils/recordGaps.ts`, `src/utils/belongingsLeads.ts`, `storage/casework.rs`
+(`request_record_gap`, `record_gap_requests`).
+
+A gap definition is data: a record, the checks (by query id) whose leads leave it open, the record
+types and fields to ask for, search terms, and the check that reads the record once imported. It
+names no place or agency. The period and identifiers come from the lead's own result; the
+custodian is the saved source whose host the table was retrieved from, else that host, else left
+blank. One gap exists per definition, check and source address, so a newer copy of a table does
+not ask again.
+
+States: not asked; found (held requests matching a search term that have released files, which
+is not an answer); drafted (tracked, no submission date, so no clock); requested and overdue (the
+CPRA determination clock `plan_filing` already models, counted at read time); produced; closed;
+answered. Answered requires the definition's check to have returned rows on an imported table.
+
+Tracking stores a `CaseworkRequest` whose id is derived from the gap key, in a case whose
+`report_id` is `lead:` plus a digest of the check and source. That case cites no document and has
+topic `general`. Sending the same gap again changes nothing.
+
+The stored-property check counts rows by the disposition text as written, blank apart, and
+entries with a non-blank release date. With no release column the release count is NULL, not
+zero. Its column names are assumed; no released stored-property log has been imported, so the
+check is untested against a real one.
+
+Not built: the request compiled by casework always cites the CPRA, whatever jurisdiction the
+table came from; the SB 272 catalogue is not consulted to name the system of record; only the
+stored-property definition has a check, so the other definitions cannot reach answered.

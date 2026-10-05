@@ -89,3 +89,15 @@ export interface CaseScope {
   requests: { portalKey: string; requestId: number }[];
   findingIds: string[];
 }
+/** The drafted request for one record gap behind a table lead. */
+export interface RecordGapRequestInput {
+  gapKey: string; leadRef: string; leadTitle: string; leadQuestion: string;
+  title: string; custodian: string; gap: string; resolves: string; draft: string;
+  recordTypes: string[]; fields: string[]; period: string;
+}
+/** Where a gap's tracked request stands. No `submittedAt` means unfiled: no clock, not a clock at zero. */
+export interface RecordGapRequestStatus {
+  gapKey: string; caseId: string; reportId: string; requestId: string; state: string;
+  submittedAt: string | null; determinationDueOn: string | null; deadlinePassedWithoutRecordedResponse: boolean;
+  productions: number; remainingOmissions: number;
+}

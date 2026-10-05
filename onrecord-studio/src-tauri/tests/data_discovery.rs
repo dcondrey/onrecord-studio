@@ -480,6 +480,51 @@ async fn stop_record_checks_run_on_imported_tables_with_the_publishers_headers()
 }
 
 #[tokio::test]
+async fn a_stored_property_log_is_counted_by_disposition_as_written_and_releases_only_when_recorded(
+) {
+    let fixture: Value =
+        serde_json::from_str(include_str!("fixtures/belongings-leads.json")).unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let db = DuckDbRepository::new(temp.path().join("belongings.db")).unwrap();
+    db.run_migrations(include_str!("../migrations/0001_initial_schema.sql"))
+        .await
+        .unwrap();
+    for (position, name) in ["released", "bare"].into_iter().enumerate() {
+        let path = temp.path().join(format!("{name}.csv"));
+        std::fs::write(&path, fixture["csv"][name].as_str().unwrap()).unwrap();
+        let input: AnalyticalImportRequest = serde_json::from_value(json!({ "datasetKind":"REGIONAL_DATA", "displayName":name, "localPath":path, "sourceUri":format!("https://example.test/{name}.csv"), "partialDataset":true })).unwrap();
+        let imported = db.import_analytical_csv(input).await.unwrap();
+        let sql = fixture["queries"][position]["sql"]
+            .as_str()
+            .unwrap()
+            .replace(&format!("analysis_belongings_{name}"), &imported.table_name);
+        let result = db.execute_restricted_sql(&sql, 100).await.unwrap();
+        let count = |row: usize, column: &str| -> i64 {
+            let value = cell(&result, row, column);
+            value
+                .as_i64()
+                .or_else(|| value.as_str().and_then(|text| text.parse().ok()))
+                .unwrap_or_else(|| panic!("{column} is not a count: {value}"))
+        };
+        assert_eq!(result.row_count, 3, "{name}");
+        assert_eq!(cell(&result, 0, "disposition"), &json!("Discarded"));
+        assert_eq!((count(0, "entries"), count(0, "all_entries")), (3, 6));
+        assert_eq!(count(1, "entries"), 2);
+        // The entry with a blank disposition is counted apart, not dropped or merged.
+        assert!(cell(&result, 2, "disposition").is_null());
+        assert_eq!(count(2, "entries"), 1);
+        assert_eq!(cell(&result, 0, "first_taken"), &json!("2024-12-02"));
+        assert_eq!(cell(&result, 0, "last_taken"), &json!("2025-07-08"));
+        if name == "released" {
+            assert_eq!(count(0, "released_entries"), 1);
+        } else {
+            // No release column: nothing was counted, which is not a count of zero.
+            assert!(cell(&result, 0, "released_entries").is_null());
+        }
+    }
+}
+
+#[tokio::test]
 async fn abatement_logs_pair_one_notice_with_one_abatement_in_the_released_format() {
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/abatement-leads.json")).unwrap();
