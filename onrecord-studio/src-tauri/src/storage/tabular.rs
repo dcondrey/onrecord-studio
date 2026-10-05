@@ -167,15 +167,195 @@ pub(crate) enum TableSource {
         table: PreparedTable,
         sha256: String,
     },
-    /// An XLSX worksheet, read cell by cell. `bounds` is the box its values span; the first row
-    /// of the box is the header, and a row with no value inside it is an empty row.
+    /// An XLSX worksheet, read cell by cell as the box its values span: the first row with a
+    /// value is the header, and a row with no value inside the box is an empty row.
     Worksheet {
         path: std::path::PathBuf,
         sheet: String,
-        bounds: crate::parsers::excel::XlsxBounds,
         warnings: Vec<String>,
         partial: bool,
     },
+}
+
+/// What [`TableSource::read`] passes its callback.
+pub(crate) enum TableRow<'a> {
+    /// One record, counted from 0, and the headers it is read under. A record the parser cannot
+    /// read is passed as its error.
+    Record {
+        headers: &'a [String],
+        index: usize,
+        record: Result<&'a csv::StringRecord, &'a str>,
+    },
+    /// Every record passed so far is void, and the read starts again from the first.
+    Restart,
+}
+
+/// How a worksheet read ended.
+enum WorksheetRead {
+    Done {
+        headers: Vec<String>,
+        rows: usize,
+    },
+    /// A value lies outside the header row's columns, so the box is wider than assumed.
+    Wider,
+}
+
+const OUT_OF_ROW_ORDER: &str = "This worksheet stores its cells out of row order, which spreadsheet applications do not write. Open and save it again in a spreadsheet application, then import it.";
+
+/// Reads `sheet` once as its value box. Without `bounds`, the box's columns are taken from the
+/// header row, which holds for nearly every export; a value outside them ends the read as
+/// [`WorksheetRead::Wider`] so the caller can measure the box and read again with it.
+fn read_worksheet<RS: std::io::Read + std::io::Seek>(
+    book: &mut calamine::Xlsx<RS>,
+    sheet: &str,
+    bounds: Option<&crate::parsers::excel::XlsxBounds>,
+    each: &mut impl FnMut(TableRow<'_>) -> Result<(), AppError>,
+) -> Result<WorksheetRead, AppError> {
+    let changed = || {
+        invalid(
+            "The worksheet changed between its two reads; import stopped and nothing was stored.",
+        )
+    };
+    let mut reader = book
+        .worksheet_cells_reader(sheet)
+        .map_err(worksheet_error)?;
+    let mut previous: Option<(u32, u32)> = None;
+    let mut header_row: Option<u32> = None;
+    let mut header_cells: Vec<(u32, String)> = Vec::new();
+    // The box's first column and width, and the headers, once the header row is complete.
+    let mut layout: Option<(u32, usize, Vec<String>)> = None;
+    let mut row: Vec<String> = Vec::new();
+    // The sheet row `row` holds, while it has values not yet passed on.
+    let mut pending: Option<u32> = None;
+    let mut rows = 0;
+    let finish_header =
+        |header_cells: &[(u32, String)]| -> Result<(u32, usize, Vec<String>), AppError> {
+            let (first_column, width) = match bounds {
+                Some(bounds) => (
+                    bounds.first_column,
+                    (bounds.last_column - bounds.first_column + 1) as usize,
+                ),
+                // In row order, the header row's cells arrive left to right.
+                None => {
+                    let first = header_cells.first().map_or(0, |(column, _)| *column);
+                    let last = header_cells.last().map_or(0, |(column, _)| *column);
+                    (first, (last - first + 1) as usize)
+                }
+            };
+            let mut headers = vec![String::new(); width];
+            for (column, text) in header_cells {
+                let slot = column.checked_sub(first_column).map(|slot| slot as usize);
+                match slot.filter(|slot| *slot < width) {
+                    Some(slot) => headers[slot] = text.clone(),
+                    None => return Err(changed()),
+                }
+            }
+            check_headers(&headers)?;
+            Ok((first_column, width, headers))
+        };
+    // Passes rows from `from` up to, not including, `until`; rows with no value inside the box
+    // are passed empty, as a loaded worksheet's dense range has them.
+    let mut pass = |row: &mut Vec<String>,
+                    from: u32,
+                    until: u32,
+                    width: usize,
+                    headers: &[String],
+                    rows: &mut usize|
+     -> Result<(), AppError> {
+        for _ in from..until {
+            let cells = std::mem::replace(row, vec![String::new(); width]);
+            check_streamed_size(*rows + 1, width)?;
+            each(TableRow::Record {
+                headers,
+                index: *rows,
+                record: Ok(&csv::StringRecord::from(cells)),
+            })?;
+            *rows += 1;
+        }
+        Ok(())
+    };
+    while let Some(cell) = reader.next_cell().map_err(worksheet_error)? {
+        if matches!(cell.get_value(), calamine::DataRef::Empty) {
+            continue;
+        }
+        let (at_row, at_column) = cell.get_position();
+        if previous.is_some_and(|at| (at_row, at_column) <= at) {
+            return Err(invalid(OUT_OF_ROW_ORDER));
+        }
+        previous = Some((at_row, at_column));
+        let text = render(&cell.get_value().clone().into());
+        match header_row {
+            None => {
+                if bounds.is_some_and(|bounds| bounds.first_row != at_row) {
+                    return Err(changed());
+                }
+                header_row = Some(at_row);
+                header_cells.push((at_column, text));
+                continue;
+            }
+            Some(header) if header == at_row => {
+                header_cells.push((at_column, text));
+                continue;
+            }
+            Some(_) => {}
+        }
+        if layout.is_none() {
+            layout = Some(finish_header(&header_cells)?);
+        }
+        let (first_column, width, headers) = layout.as_ref().expect("set above");
+        if at_column < *first_column || (at_column - first_column) as usize >= *width {
+            return match bounds {
+                Some(_) => Err(changed()),
+                None => Ok(WorksheetRead::Wider),
+            };
+        }
+        if bounds.is_some_and(|bounds| at_row > bounds.last_row) {
+            return Err(changed());
+        }
+        if pending != Some(at_row) {
+            let from = match pending {
+                Some(sheet_row) => {
+                    pass(
+                        &mut row,
+                        sheet_row,
+                        sheet_row + 1,
+                        *width,
+                        headers,
+                        &mut rows,
+                    )?;
+                    sheet_row + 1
+                }
+                None => {
+                    row = vec![String::new(); *width];
+                    header_row.expect("set before any data row") + 1
+                }
+            };
+            pass(&mut row, from, at_row, *width, headers, &mut rows)?;
+            pending = Some(at_row);
+        }
+        row[(at_column - first_column) as usize] = text;
+    }
+    let Some(header_row) = header_row else {
+        return Err(invalid("Worksheet is empty"));
+    };
+    let (_, width, headers) = match layout {
+        Some(layout) => layout,
+        None => finish_header(&header_cells)?,
+    };
+    if let Some(sheet_row) = pending {
+        pass(
+            &mut row,
+            sheet_row,
+            sheet_row + 1,
+            width,
+            &headers,
+            &mut rows,
+        )?;
+    }
+    if bounds.is_some_and(|bounds| pending.unwrap_or(header_row) != bounds.last_row) {
+        return Err(changed());
+    }
+    Ok(WorksheetRead::Done { headers, rows })
 }
 
 fn choose_sheet(names: &[String], worksheet: Option<&str>) -> Result<String, AppError> {
@@ -216,29 +396,17 @@ fn streamed_worksheet(
 ) -> Result<Option<TableSource>, AppError> {
     let (file, opened) =
         crate::parsers::source::open_regular_file(path, "ANALYTICAL", MAX_STREAMED_BYTES)?;
-    let Ok(mut book) = calamine::Xlsx::new(std::io::BufReader::new(&file)) else {
+    let Ok(book) = calamine::Xlsx::new(std::io::BufReader::new(&file)) else {
         return Ok(None);
     };
     let names = book.sheet_names().to_vec();
     let sheet = choose_sheet(&names, worksheet)?;
-    let bounds = crate::parsers::excel::xlsx_value_bounds(&mut book, &sheet)
-        .map_err(worksheet_error)?
-        .ok_or_else(|| invalid("Worksheet is empty"))?;
     crate::parsers::source::ensure_unchanged(&file, &opened, path, "ANALYTICAL")?;
-    if !bounds.in_row_order {
-        return Err(invalid("This worksheet stores its cells out of row order, which spreadsheet applications do not write. Open and save it again in a spreadsheet application, then import it."));
-    }
-    check_headers_width((bounds.last_column - bounds.first_column + 1) as usize)?;
-    check_streamed_size(
-        (bounds.last_row - bounds.first_row) as usize,
-        (bounds.last_column - bounds.first_column + 1) as usize,
-    )?;
     Ok(Some(TableSource::Worksheet {
         path: path.to_path_buf(),
         warnings: vec![format!("Imported worksheet '{sheet}'. Formula cells use the workbook’s cached values; formulas were not recalculated.")],
         partial: names.len() > 1,
         sheet,
-        bounds,
     }))
 }
 
@@ -342,19 +510,19 @@ impl TableSource {
 
     /// Passes every record in order with the header row and its zero-based index. A record the
     /// parser cannot read is passed as its error and the read continues, as the row-level
-    /// validator expects.
+    /// validator expects. After [`TableRow::Restart`], records are passed again from the first.
     pub(crate) fn read(
         &self,
-        mut each: impl FnMut(&[String], usize, Result<&csv::StringRecord, &str>) -> Result<(), AppError>,
+        mut each: impl FnMut(TableRow<'_>) -> Result<(), AppError>,
     ) -> Result<SourceRead, AppError> {
         match self {
             Self::Loaded { table, sha256 } => {
                 for (index, record) in table.records.iter().enumerate() {
-                    each(
-                        &table.headers,
+                    each(TableRow::Record {
+                        headers: &table.headers,
                         index,
-                        record.as_ref().map_err(String::as_str),
-                    )?;
+                        record: record.as_ref().map_err(String::as_str),
+                    })?;
                 }
                 Ok(SourceRead {
                     headers: table.headers.clone(),
@@ -362,18 +530,7 @@ impl TableSource {
                     rows: table.records.len(),
                 })
             }
-            Self::Worksheet {
-                path,
-                sheet,
-                bounds,
-                ..
-            } => {
-                let (first_row, first_column, last_row, last_column) = (
-                    &bounds.first_row,
-                    &bounds.first_column,
-                    &bounds.last_row,
-                    &bounds.last_column,
-                );
+            Self::Worksheet { path, sheet, .. } => {
                 let (file, opened) = crate::parsers::source::open_regular_file(
                     path,
                     "ANALYTICAL",
@@ -389,54 +546,28 @@ impl TableSource {
                 })?;
                 let mut book = calamine::Xlsx::new(std::io::BufReader::new(&file))
                     .map_err(|e| invalid(format!("Workbook: {e}")))?;
-                let mut reader = book
-                    .worksheet_cells_reader(sheet)
-                    .map_err(worksheet_error)?;
-                let width = (last_column - first_column + 1) as usize;
-                let mut headers: Option<Vec<String>> = None;
-                let mut row = vec![String::new(); width];
-                let mut current = *first_row;
-                let mut rows = 0;
-                // Emits every row from `current` up to, not including, `until`; the first is the
-                // header, and rows with no value inside the box are emitted empty, as a loaded
-                // worksheet's dense range has them.
-                let mut emit = |until: u32, row: &mut Vec<String>, current: &mut u32| {
-                    while *current < until {
-                        let cells = std::mem::replace(row, vec![String::new(); width]);
-                        match &headers {
-                            None => {
-                                check_headers(&cells)?;
-                                headers = Some(cells);
-                            }
-                            Some(headers) => {
-                                check_streamed_size(rows + 1, width)?;
-                                each(headers, rows, Ok(&csv::StringRecord::from(cells)))?;
-                                rows += 1;
-                            }
+                let read = match read_worksheet(&mut book, sheet, None, &mut each)? {
+                    WorksheetRead::Done { headers, rows } => (headers, rows),
+                    WorksheetRead::Wider => {
+                        let bounds = crate::parsers::excel::xlsx_value_bounds(&mut book, sheet)
+                            .map_err(worksheet_error)?
+                            .ok_or_else(|| invalid("Worksheet is empty"))?;
+                        if !bounds.in_row_order {
+                            return Err(invalid(OUT_OF_ROW_ORDER));
                         }
-                        *current += 1;
+                        each(TableRow::Restart)?;
+                        match read_worksheet(&mut book, sheet, Some(&bounds), &mut each)? {
+                            WorksheetRead::Done { headers, rows } => (headers, rows),
+                            // A measured box holds every value unless the sheet changed.
+                            WorksheetRead::Wider => return Err(invalid("The worksheet changed between its two reads; import stopped and nothing was stored.")),
+                        }
                     }
-                    Ok::<_, AppError>(())
                 };
-                while let Some(cell) = reader.next_cell().map_err(worksheet_error)? {
-                    if matches!(cell.get_value(), calamine::DataRef::Empty) {
-                        continue;
-                    }
-                    let (at_row, at_column) = cell.get_position();
-                    if at_row < current || at_row > *last_row {
-                        return Err(invalid("The worksheet changed between its two reads; import stopped and nothing was stored."));
-                    }
-                    emit(at_row, &mut row, &mut current)?;
-                    let data: Data = cell.get_value().clone().into();
-                    row[(at_column - first_column) as usize] = render(&data);
-                }
-                emit(*last_row + 1, &mut row, &mut current)?;
-                drop(reader);
                 crate::parsers::source::ensure_unchanged(&file, &opened, path, "ANALYTICAL")?;
                 Ok(SourceRead {
-                    headers: headers.unwrap_or_default(),
+                    headers: read.0,
                     sha256,
-                    rows,
+                    rows: read.1,
                 })
             }
             Self::Delimited {
@@ -473,7 +604,11 @@ impl TableSource {
                         Ok(false) => break,
                         Ok(true) => {
                             check_streamed_size(rows + 1, headers.len())?;
-                            each(&headers, rows, Ok(&record))?;
+                            each(TableRow::Record {
+                                headers: &headers,
+                                index: rows,
+                                record: Ok(&record),
+                            })?;
                         }
                         Err(error) => {
                             if matches!(error.kind(), csv::ErrorKind::Io(_)) {
@@ -482,7 +617,11 @@ impl TableSource {
                                 )));
                             }
                             check_streamed_size(rows + 1, headers.len())?;
-                            each(&headers, rows, Err(&error.to_string()))?;
+                            each(TableRow::Record {
+                                headers: &headers,
+                                index: rows,
+                                record: Err(&error.to_string()),
+                            })?;
                         }
                     }
                     rows += 1;
@@ -880,7 +1019,7 @@ pub(crate) fn exact_decimal(value: &str) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     #[test]
     fn a_decimal_beyond_exact_scale_is_approximate_and_other_notations_stay_text() {
@@ -895,7 +1034,10 @@ mod tests {
             assert_eq!(typed(&["32.716267940000002", other]), "CATEGORY", "{other}");
         }
     }
-    fn workbook_file(directory: &std::path::Path, sheet_data: &str) -> std::path::PathBuf {
+    pub(crate) fn workbook_file(
+        directory: &std::path::Path,
+        sheet_data: &str,
+    ) -> std::path::PathBuf {
         use std::io::Write;
         let path = directory.join("sheet.xlsx");
         let mut writer = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
@@ -933,8 +1075,13 @@ mod tests {
     fn all_rows(source: &TableSource) -> (Vec<String>, Vec<Vec<String>>) {
         let mut rows = Vec::new();
         let read = source
-            .read(|_, _, record| {
-                rows.push(record.unwrap().iter().map(str::to_owned).collect());
+            .read(|row| {
+                match row {
+                    TableRow::Restart => rows.clear(),
+                    TableRow::Record { record, .. } => {
+                        rows.push(record.unwrap().iter().map(str::to_owned).collect())
+                    }
+                }
                 Ok(())
             })
             .unwrap();
@@ -981,22 +1128,85 @@ mod tests {
                 inline("A1", "h")
             ),
         );
-        let refused = TableSource::open(&path, "sheet.xlsx", None).err().unwrap();
+        let refused = TableSource::open(&path, "sheet.xlsx", None)
+            .unwrap()
+            .read(|_| Ok(()))
+            .err()
+            .unwrap();
         assert!(
             refused.to_string().contains("out of row order"),
             "{refused}"
         );
 
-        // A box wider than the column limit is refused before any row is read.
+        // A box wider than the column limit is refused before any row is passed on.
         let path = workbook_file(
             directory.path(),
             &format!(
-                r#"<row r="1">{}{}</row>"#,
+                r#"<row r="1">{}{}</row><row r="2">{}</row>"#,
                 inline("A1", "a"),
-                inline("XFD1", "b")
+                inline("XFD1", "b"),
+                inline("A2", "x")
             ),
         );
-        assert!(TableSource::open(&path, "sheet.xlsx", None).is_err());
+        let mut passed = 0;
+        let refused = TableSource::open(&path, "sheet.xlsx", None)
+            .unwrap()
+            .read(|_| {
+                passed += 1;
+                Ok(())
+            });
+        assert!(refused.is_err());
+        assert_eq!(passed, 0);
+    }
+
+    /// The box's columns are first taken from the header row. A value outside them widens the
+    /// box, so the rows passed so far are voided and the sheet is read again as the measured box:
+    /// the result is the box a full measurement gives, with blank headers where none was written.
+    #[test]
+    fn a_value_outside_the_header_columns_widens_the_box() {
+        let directory = tempfile::tempdir().unwrap();
+        let inline = |cell: &str, text: &str| {
+            format!(r#"<c r="{cell}" t="inlineStr"><is><t>{text}</t></is></c>"#)
+        };
+        let data = format!(
+            r#"<row r="1">{}{}</row><row r="2">{}{}</row><row r="3">{}{}</row>"#,
+            inline("B1", "name"),
+            inline("C1", "amount"),
+            inline("B2", "Vista"),
+            inline("C2", "4"),
+            inline("A3", "note"),
+            inline("D3", "late"),
+        );
+        let path = workbook_file(directory.path(), &data);
+        let mut restarts = 0;
+        let mut rows = Vec::new();
+        let read = TableSource::open(&path, "sheet.xlsx", None)
+            .unwrap()
+            .read(|row| {
+                match row {
+                    TableRow::Restart => {
+                        restarts += 1;
+                        rows.clear();
+                    }
+                    TableRow::Record { record, .. } => rows.push(
+                        record
+                            .unwrap()
+                            .iter()
+                            .map(str::to_owned)
+                            .collect::<Vec<_>>(),
+                    ),
+                }
+                Ok(())
+            })
+            .unwrap();
+        let row = |cells: [&str; 4]| cells.map(str::to_owned).to_vec();
+        assert_eq!(restarts, 1);
+        assert_eq!(read.headers, row(["", "name", "amount", ""]));
+        assert_eq!(
+            rows,
+            vec![row(["", "Vista", "4", ""]), row(["note", "", "", "late"])]
+        );
+        assert_eq!(read.rows, 2);
     }
 
     #[test]

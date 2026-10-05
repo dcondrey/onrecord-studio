@@ -34,7 +34,9 @@ profiling and conversion each run on a second thread, while the thread that owns
 reads and appends, since a DuckDB connection and its appender stay on one thread.
 Delimited text and XLSX worksheets are streamed from disk, through one XLSX reader
 (`parsers::excel::xlsx_value_bounds`) shared with document extraction; a worksheet that stores its
-cells out of row order is refused with a way forward. XLS, XLSB, ODS and JSON are parsed whole and
+cells out of row order is refused with a way forward. A worksheet is read once, taking the box's
+columns from its header row; a value outside them voids the rows read so far, and the sheet is
+measured and read again as the wider box. XLS, XLSB, ODS and JSON are parsed whole and
 keep the in-memory caps in `storage::tabular`. A row is rejected only when
 the file makes it unreadable (parse failure, or a field count other than the header's beyond empty
 trailing fields). A cell that does not convert to its column's type is NULL in the typed table,

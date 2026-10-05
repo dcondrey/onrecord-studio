@@ -17,7 +17,7 @@ use super::analytical::{
 };
 use super::row_store;
 use super::*;
-use crate::storage::tabular::{TableSource, TypeEvidence};
+use crate::storage::tabular::{TableRow, TableSource, TypeEvidence};
 use crate::types::{AnalyticalImportRequest, AnalyticalImportResult};
 use duckdb::arrow::array::{
     Array, ArrayBuilder, ArrayRef, AsArray, BooleanBuilder, Float64Builder, Int32Builder,
@@ -252,6 +252,8 @@ enum ReadMessage {
     /// The store's column aliases, sent before the first batch.
     Columns(Vec<String>),
     Batch(Vec<ArrayRef>),
+    /// Every batch sent so far is void; columns and batches follow again.
+    Restart,
 }
 
 /// The one read of the source: every record's original fields go to `staging` as text while each
@@ -281,6 +283,12 @@ fn read_once(
                         appender.as_mut().expect("columns arrive before any batch"),
                         columns,
                     )?,
+                    ReadMessage::Restart => {
+                        if appender.take().is_some() {
+                            tx.execute_batch(&format!("DROP TABLE {}", quote_ident(staging)))
+                                .map_err(storage("Failed to restart the original-cell store"))?;
+                        }
+                    }
                 }
             }
             match appender.as_mut() {
@@ -316,7 +324,21 @@ fn read_and_profile(
     let mut repair_row_numbers = Vec::new();
     let mut seen_keys = HashSet::new();
     let documented = *kind != AnalyticalDatasetKind::RegionalData;
-    let read = source.read(|headers, row_index, record| {
+    let read = source.read(|event| {
+        let (headers, row_index, record) = match event {
+            TableRow::Record {
+                headers,
+                index,
+                record,
+            } => (headers, index, record),
+            TableRow::Restart => {
+                batch = None;
+                (malformed_rows, duplicate_key_rows, repaired_trailing_rows) = (0, 0, 0);
+                repair_row_numbers.clear();
+                seen_keys.clear();
+                return sender.send(ReadMessage::Restart).map_err(stopped);
+            }
+        };
         if batch.is_none() {
             aliases = column_aliases(headers);
             hints = headers
@@ -1010,6 +1032,62 @@ mod tests {
         assert_eq!(
             rows[0],
             [batch, batch, 1, batch + 1, 3].map(|n| serde_json::json!(n))
+        );
+    }
+
+    /// A worksheet whose values reach past its header row's columns is read again as the wider
+    /// box; nothing from the first attempt may survive in the store or the counts.
+    #[tokio::test]
+    async fn a_widened_worksheet_is_stored_once_as_the_wider_box() {
+        let directory = tempfile::tempdir().unwrap();
+        let inline = |cell: &str, text: &str| {
+            format!(r#"<c r="{cell}" t="inlineStr"><is><t>{text}</t></is></c>"#)
+        };
+        // Row 3 repeats row 2's key before row 4 widens the box: the key must count once.
+        let path = crate::storage::tabular::tests::workbook_file(
+            directory.path(),
+            &format!(
+                r#"<row r="1">{}{}</row><row r="2">{}{}</row><row r="3">{}{}</row><row r="4">{}{}</row>"#,
+                inline("A1", "nibrs_uniq"),
+                inline("B1", "case_number"),
+                inline("A2", "1"),
+                inline("B2", "10"),
+                inline("A3", "1"),
+                inline("B3", "11"),
+                inline("A4", "2"),
+                inline("C4", "late"),
+            ),
+        );
+        let repo = repository().await;
+        let mut input = request(&path, AnalyticalDatasetKind::NibrsOffenses);
+        input.source_file_name = Some("sheet.xlsx".into());
+        let result = repo.import_analytical_csv(input).await.unwrap();
+        assert_eq!(
+            (
+                result.imported_rows,
+                result.rejected_rows,
+                result.duplicate_key_rows
+            ),
+            (3, 0, 1)
+        );
+        let stored = query(
+            &repo,
+            &format!(
+                "SELECT row_number, source_payload_json FROM analytical_rows
+                 WHERE snapshot_id = '{}' ORDER BY row_number",
+                result.snapshot_id
+            ),
+        )
+        .await;
+        assert_eq!(stored.len(), 3);
+        assert_eq!(
+            stored[2],
+            vec![
+                serde_json::json!(3),
+                serde_json::json!(
+                    r#"{"headers":["nibrs_uniq","case_number",""],"values":["2","","late"]}"#
+                )
+            ]
         );
     }
 

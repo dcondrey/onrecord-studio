@@ -269,14 +269,28 @@ fn keep_matching_rows(
     column: &str,
     keep: impl Fn(&[u8]) -> bool,
 ) -> Result<usize, AppError> {
-    let table = crate::storage::tabular::TableSource::open(source, "publisher.csv", None)?;
-    let file = std::fs::File::create(destination)
-        .map_err(|error| AppError::Storage(format!("Failed to stage filtered rows: {error}")))?;
-    let mut writer = csv::Writer::from_writer(file);
+    use crate::storage::tabular::{TableRow, TableSource};
+    let table = TableSource::open(source, "publisher.csv", None)?;
+    let create = || {
+        std::fs::File::create(destination)
+            .map(csv::Writer::from_writer)
+            .map_err(|error| AppError::Storage(format!("Failed to stage filtered rows: {error}")))
+    };
+    let mut writer = create()?;
     let write_error =
         |error: csv::Error| AppError::Storage(format!("Failed to write filtered rows: {error}"));
     let mut index = None;
-    let read = table.read(|headers, row, record| {
+    let read = table.read(|event| {
+        let TableRow::Record {
+            headers,
+            index: row,
+            record,
+        } = event
+        else {
+            writer = create()?;
+            index = None;
+            return Ok(());
+        };
         let position = match index {
             Some(position) => position,
             None => {
