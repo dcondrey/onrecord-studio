@@ -192,6 +192,26 @@ column or table here before anything is published.
 5. **Later.** Fetch only what was published after a pack's build date, using the recorded
    freshness markers; the remaining PD packs; ASK tables once permission is in writing.
 
+## From the research blueprint (owner's file, 2026-10-06)
+
+`San_Diego_Research_Blueprint.xlsx` (10 investigations, 13 proposed datasets, 56 sources) adds
+City open-data sources that fit the Money pack under the same licence, and two dataset designs the
+rules above already need:
+
+- **Money pack additions (City open data, PDDL):** Capital Improvements Program budget and actuals
+  by fiscal year (F03, F04); Goods and Services contracts (F13); awarded CIP construction contracts
+  (F14, E10); cumulative amounts paid to vendors by fiscal year (F15); City-owned properties,
+  parcels and leases (R02 to R04). Next after the first slice; each needs an entry in
+  `ingestion::queue::city_datasets` first, since the builder reads only that list.
+- **Other City open data it names:** development permits (H01), completed paving and street
+  segments (E07, E08), stormwater conveyance GIS (E02).
+- **D13, source snapshots and change history,** is rule 7 plus the manifest's freshness markers.
+- **D08, verified entities and record crosswalks,** is the `organisations` reference table: one
+  evidenced identity or identifier relation over time (vendor ids, EINs, APNs, CIP numbers).
+- Its investigations I06 (encampment interventions beyond report closure) and I08/I09 (contract
+  lifecycle, payment timing) use the Enforcement and Money packs; its records that are documents
+  (DS-450 forms, Housing Commission packets, audit reports) are collected sources, not pack tables.
+
 ## Open
 
 - Written permission, or a stated licence, from the UCSD Homelessness Hub, the SDSU sanitation
