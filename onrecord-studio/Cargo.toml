@@ -9,3 +9,7 @@ codegen-units = 1
 incremental = false
 strip = "symbols"
 panic = "abort"
+
+# calamine 0.36.1 with a fast path in `XlsxCellReader::next_cell` (vendor/calamine/PATCHED.md).
+[patch.crates-io]
+calamine = { path = "vendor/calamine" }
