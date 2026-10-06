@@ -13,6 +13,7 @@ mod file_name;
 pub mod ingestion;
 mod integrity;
 pub mod licensing;
+pub mod packs;
 mod normalization;
 pub mod parsers;
 pub mod profile;
