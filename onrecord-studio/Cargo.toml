@@ -10,6 +10,11 @@ incremental = false
 strip = "symbols"
 panic = "abort"
 
+# Build-time code (proc macros, build scripts) is never shipped. Stripping it produced proc-macro
+# dylibs macOS 27 refuses to load ("mis-aligned LINKEDIT string pool"), failing the release build.
+[profile.release.build-override]
+strip = false
+
 # calamine 0.36.1 with a fast path in `XlsxCellReader::next_cell` (vendor/calamine/PATCHED.md).
 [patch.crates-io]
 calamine = { path = "vendor/calamine" }
