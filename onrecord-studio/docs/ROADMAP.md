@@ -1476,6 +1476,21 @@ Also built the same day for that use: a payee-table mapping (any imported table'
 and fiscal-year columns) searched beside the spending-role tables, and a one-row-per-organisation
 portfolio table over everything checked, and a pasted list of names or EINs (or the payees of the mapped payment tables) looked up and
 checked one after another; a name is taken on its own only on an exact match.
+Also connected 2026-10-06: a spending chain's vendor value opens the organisation view with that
+value looked up (`ProfessionalWorkbench` hands it over as `initialQuery`). No lead carries a vendor
+name yet (the abatement logs name no contractor), so there is no lead-to-organisation link to make
+until a table with contractor or payee names is imported and read by a lead.
+
+For the peer (watchlists, evidence packets), what an organisation record offers: the stored
+document is `OrganisationFilings` (`get_organisation_filings(ein)`; `list_organisation_checks`),
+with per-return `xml_sha256`, `archive_url` and `member_name` as its provenance, the summary and
+audit `source_url`/`retrieved_at`, and `check_organisation_filings(ein, audit_key)` to refresh.
+A watchlist entry for an EIN would re-run the check on its cadence and compare `returns` by
+`object_id` (a new return listed), `significant_diversion_reported`, `former_listed`,
+`severance_payment_reported`, `schedule_l_transactions.len()` and `single_audits.audits.len()`;
+a packet entry would quote the statement fields with the return's hash and archive member. No
+field of the record is a finding; a change is reported as "the newer return states".
+
 Not built: returns from index years before 2024 (no archive named; would need every archive's
 directory for a year, about 150 MB); Forms 990-EZ, 990-PF and 990-T; Schedule R; single-audit finding text; saving the clearinghouse key (it is
 typed each session); payments matched by anything but vendor name; progress reporting during a check; watchlist or packet integration

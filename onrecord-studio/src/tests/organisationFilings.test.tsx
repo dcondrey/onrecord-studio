@@ -125,4 +125,13 @@ describe('organisation filings', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Open casework' }));
     expect(bridge.open).toHaveBeenCalledWith('lead:x');
   });
+
+  it('looks a vendor value handed over from another view up as soon as it opens', async () => {
+    bridge.invoke.mockImplementation((name: string) => Promise.resolve(
+      name === 'search_organisations' ? [{ ein: '330215585', name: 'Alpha Project For The Homeless', city: 'San Diego', state: 'CA' }]
+        : name === 'get_analytical_schema' ? { datasets: [], columns: [], templates: [] } : []));
+    render(<OrganisationFilingsPanel initialQuery="ALPHA PROJECT FOR THE HOMELESS INC" />);
+    expect(await screen.findByRole('button', { name: 'Alpha Project For The Homeless' })).toBeTruthy();
+    expect(bridge.invoke).toHaveBeenCalledWith('search_organisations', { query: 'ALPHA PROJECT FOR THE HOMELESS INC' });
+  });
 });

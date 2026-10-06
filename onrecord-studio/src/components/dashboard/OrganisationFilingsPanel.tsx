@@ -381,9 +381,10 @@ function PaymentTables({ schema, mappings, onChange }: { schema: AnalyticalSchem
   </details>;
 }
 
-/** An organisation's public filings, each shown as the statement of the document it was read from. */
-export default function OrganisationFilingsPanel() {
-  const [query, setQuery] = useState('');
+/** An organisation's public filings, each shown as the statement of the document it was read from.
+ * An `initialQuery` (a vendor value handed over from another view) is looked up on mount. */
+export default function OrganisationFilingsPanel({ initialQuery = '' }: { initialQuery?: string } = {}) {
+  const [query, setQuery] = useState(initialQuery);
   const [auditKey, setAuditKey] = useState('');
   const [matches, setMatches] = useState<OrganisationMatch[] | undefined>(undefined);
   const [checked, setChecked] = useState<OrganisationCheckSummary[]>([]);
@@ -434,8 +435,7 @@ export default function OrganisationFilingsPanel() {
       .finally(() => { if (recordGate.isCurrent(request)) setBusy(''); });
   };
 
-  const search = () => {
-    const text = query.trim();
+  const search = (text = query.trim()) => {
     if (!text) return;
     if (isEin(text)) { setMatches(undefined); show({ ein: text, name: null }, 'load'); return; }
     const request = searchGate.begin();
@@ -445,6 +445,9 @@ export default function OrganisationFilingsPanel() {
       .finally(() => { if (searchGate.isCurrent(request)) setBusy((current) => current === 'search' ? '' : current); });
   };
 
+  const handedOver = initialQuery.trim();
+  // Runs once per handed-over value; the host keys the panel by it.
+  useEffect(() => { if (handedOver) search(handedOver); }, [handedOver]);
   return <section aria-label="Organisation filings" className="space-y-4">
     <div>
       <h3 className="text-sm font-semibold text-fg">Organisation filings</h3>
