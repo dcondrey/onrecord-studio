@@ -992,9 +992,11 @@ impl DuckDbRepository {
         &self,
         name: &str,
     ) -> Result<(Vec<PublicMoneyLine>, Vec<String>), AppError> {
+        // An apostrophe joins a word ("Joe's" is "joes"), as the vendor values are compared below.
         let needle = name
             .to_lowercase()
             .chars()
+            .filter(|c| !matches!(c, '\'' | '\u{2019}'))
             .map(|c| if c.is_ascii_alphanumeric() { c } else { ' ' })
             .collect::<String>()
             .split_whitespace()
@@ -1020,7 +1022,7 @@ impl DuckDbRepository {
             } = source;
             searched = true;
             let sql = format!(
-                "WITH mapped AS (SELECT {vendor} AS vendor, {fiscal_year} AS fy, {amount} AS amount FROM {}) SELECT vendor, CAST(fy AS VARCHAR) AS fy, COUNT(*) AS source_rows, CAST(CASE WHEN COUNT(*)=COUNT(amount) THEN SUM(amount) END AS VARCHAR) AS amount FROM mapped WHERE trim(regexp_replace(lower(vendor),'[^a-z0-9]+',' ','g')) LIKE {} GROUP BY vendor, fy ORDER BY fy, vendor",
+                "WITH mapped AS (SELECT {vendor} AS vendor, {fiscal_year} AS fy, {amount} AS amount FROM {}) SELECT vendor, CAST(fy AS VARCHAR) AS fy, COUNT(*) AS source_rows, CAST(CASE WHEN COUNT(*)=COUNT(amount) THEN SUM(amount) END AS VARCHAR) AS amount FROM mapped WHERE trim(regexp_replace(regexp_replace(lower(vendor),'[''’]','','g'),'[^a-z0-9]+',' ','g')) LIKE {} GROUP BY vendor, fy ORDER BY fy, vendor",
                 quote(&dataset.table_name),
                 literal(&format!("%{needle}%")),
             );
