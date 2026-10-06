@@ -11,13 +11,19 @@ use ed25519_dalek::VerifyingKey;
 use serde::{Deserialize, Serialize};
 use std::path::{Component, Path, PathBuf};
 
+#[cfg(feature = "pack-builder")]
+pub mod builder;
+
 /// The manifest's file name inside a pack directory.
 pub(crate) const PACK_MANIFEST_FILE: &str = "manifest.json";
 
 /// Pinned pack publisher keys as `(kid, hex of the 32-byte Ed25519 key)`. Separate from the
 /// per-installation export key and the entitlement keys; rotation adds an entry. There is no
 /// runtime route to add a key: tests pass their own keys to [`verify_pack`].
-pub(crate) const PACK_PUBLIC_KEYS: &[(&str, &str)] = &[];
+pub(crate) const PACK_PUBLIC_KEYS: &[(&str, &str)] = &[(
+    "pack-2026-1",
+    "b42202850cd9ecda4ab2b96548891d3a2a8275f74dde76bba2153826089ca8ff",
+)];
 
 /// The licence a pack's files are published under, with the publisher's required disclaimer.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -45,6 +51,8 @@ pub(crate) struct PackFile {
     pub rows: u64,
     /// The publisher's year for a table split by year.
     pub year: Option<u16>,
+    /// The file covers a period not yet over, so later rows may still be published.
+    pub partial: bool,
     /// The publisher's freshness markers as served, used to fetch only what changed later.
     pub last_modified: Option<String>,
     pub etag: Option<String>,
@@ -98,7 +106,7 @@ pub(crate) fn pinned_pack_keys() -> Vec<VerifyingKey> {
 }
 
 fn decode_hex(hex: &str) -> Option<Vec<u8>> {
-    if hex.len() % 2 != 0 {
+    if !hex.len().is_multiple_of(2) {
         return None;
     }
     (0..hex.len())
@@ -208,6 +216,7 @@ mod tests {
                 bytes,
                 rows: 1,
                 year: Some(2025),
+                partial: false,
                 last_modified: None,
                 etag: None,
             }],
@@ -270,6 +279,20 @@ mod tests {
         )
         .unwrap();
         assert!(verify_pack(directory.path(), &[key.verifying_key()]).is_err());
+    }
+
+    /// Checks a pack the builder produced (`ONRECORD_PACK_DIR`) against the key this app pins.
+    #[test]
+    #[ignore = "needs ONRECORD_PACK_DIR"]
+    fn a_built_pack_verifies_against_the_pinned_key() {
+        let directory = std::env::var("ONRECORD_PACK_DIR").unwrap();
+        let pack = verify_pack(Path::new(&directory), &pinned_pack_keys()).unwrap();
+        assert!(!pack.manifest.files.is_empty());
+        assert!(pack
+            .manifest
+            .files
+            .iter()
+            .all(|file| pack.path_of(file).is_file()));
     }
 
     #[test]

@@ -1,6 +1,8 @@
 //! Bounded, portal-isolated ingestion scheduling and document extraction.
 
 mod city_datasets;
+#[cfg(feature = "pack-builder")]
+pub(crate) use city_datasets::dataset_source;
 mod crawl;
 mod extraction;
 mod frontier;

@@ -46,6 +46,19 @@ struct CityDatasetSpec {
     refuse_truncated: bool,
 }
 
+/// A City dataset's whole published file, as the pack builder retrieves it: its URL and the
+/// publisher's file name. Any row filter the app applies to its own fetch is not applied, since a
+/// pack keeps every row the publisher served. `partial` is true for a year not yet over.
+#[cfg(feature = "pack-builder")]
+pub(crate) fn dataset_source(
+    dataset: CityDataset,
+    year: Option<u16>,
+    current_year: i32,
+) -> Result<(String, String, bool), AppError> {
+    city_dataset_spec(dataset, year, current_year)
+        .map(|spec| (spec.url, spec.file_name, spec.partial))
+}
+
 /// The URL is always built here from a fixed template; years outside the publisher's series are
 /// refused rather than guessed at.
 fn city_dataset_spec(

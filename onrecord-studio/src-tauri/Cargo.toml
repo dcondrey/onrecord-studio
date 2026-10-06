@@ -8,6 +8,11 @@ edition = "2021"
 name = "onrecord-studio"
 path = "src/main.rs"
 
+[[bin]]
+name = "onrecord-pack-builder"
+path = "src/bin/pack_builder.rs"
+required-features = ["pack-builder"]
+
 [features]
 default = []
 # Exposes `test_support` to the crate's integration tests (enabled by its own dev-dependency).
@@ -21,6 +26,9 @@ app-store = []
 # The signed updater and its restart plugin are linked only here, so the App Store build cannot
 # self-update. An update replaces the binary and never touches the license.
 direct-license = ["dep:tauri-plugin-updater", "dep:tauri-plugin-process"]
+# The data-pack builder (`onrecord-pack-builder`): Keychain access for the publisher key and
+# Parquet writing. Never enabled for the app.
+pack-builder = ["dep:security-framework", "duckdb/parquet"]
 
 [dependencies]
 tauri = { version = "2.11.5", features = [] }
@@ -59,6 +67,7 @@ xz2 = { version = "0.1.7", features = ["static"] }
 zstd = "0.13"
 sha2 = "0.11.0"
 ed25519-dalek = "2.2.0"
+security-framework = { version = "3.7", optional = true }
 rand = "0.8"
 regex = "1"
 aho-corasick = "1"

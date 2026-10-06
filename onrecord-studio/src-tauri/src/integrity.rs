@@ -118,7 +118,7 @@ pub(crate) fn relocate_legacy_signing_keys(
 /// Draws directly from the OS CSPRNG (`OsRng`), not from hashing UUIDs and a timestamp: a UUIDv4
 /// already derives from an RNG the OS or libc provides, so hashing it added an indirection without
 /// adding entropy, and made the actual entropy source harder to audit.
-fn generate_signing_key_seed() -> [u8; 32] {
+pub(crate) fn generate_signing_key_seed() -> [u8; 32] {
     let mut seed = [0u8; 32];
     rand::rngs::OsRng.fill_bytes(&mut seed);
     seed
