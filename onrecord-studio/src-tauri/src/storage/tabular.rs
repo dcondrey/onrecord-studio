@@ -255,6 +255,8 @@ fn read_worksheet<RS: std::io::Read + std::io::Seek>(
         };
     // Passes rows from `from` up to, not including, `until`; rows with no value inside the box
     // are passed empty, as a loaded worksheet's dense range has them.
+    // One record, refilled for every row passed on.
+    let mut record = csv::StringRecord::new();
     let mut pass = |row: &mut Vec<String>,
                     from: u32,
                     until: u32,
@@ -263,12 +265,16 @@ fn read_worksheet<RS: std::io::Read + std::io::Seek>(
                     rows: &mut usize|
      -> Result<(), AppError> {
         for _ in from..until {
-            let cells = std::mem::replace(row, vec![String::new(); width]);
             check_streamed_size(*rows + 1, width)?;
+            record.clear();
+            for cell in row.iter_mut() {
+                record.push_field(cell);
+                cell.clear();
+            }
             each(TableRow::Record {
                 headers,
                 index: *rows,
-                record: Ok(&csv::StringRecord::from(cells)),
+                record: Ok(&record),
             })?;
             *rows += 1;
         }
@@ -283,17 +289,20 @@ fn read_worksheet<RS: std::io::Read + std::io::Seek>(
             return Err(invalid(OUT_OF_ROW_ORDER));
         }
         previous = Some((at_row, at_column));
-        let text = render(&cell.get_value().clone().into());
         match header_row {
             None => {
                 if bounds.is_some_and(|bounds| bounds.first_row != at_row) {
                     return Err(changed());
                 }
                 header_row = Some(at_row);
+                let mut text = String::new();
+                render_into(cell.get_value(), &mut text);
                 header_cells.push((at_column, text));
                 continue;
             }
             Some(header) if header == at_row => {
+                let mut text = String::new();
+                render_into(cell.get_value(), &mut text);
                 header_cells.push((at_column, text));
                 continue;
             }
@@ -333,7 +342,10 @@ fn read_worksheet<RS: std::io::Read + std::io::Seek>(
             pass(&mut row, from, at_row, *width, headers, &mut rows)?;
             pending = Some(at_row);
         }
-        row[(at_column - first_column) as usize] = text;
+        render_into(
+            cell.get_value(),
+            &mut row[(at_column - first_column) as usize],
+        );
     }
     let Some(header_row) = header_row else {
         return Err(invalid("Worksheet is empty"));
@@ -373,14 +385,45 @@ fn choose_sheet(names: &[String], worksheet: Option<&str>) -> Result<String, App
     }
 }
 
+/// A loaded workbook cell's text, by the same rule as a streamed one's.
 fn render(data: &Data) -> String {
-    match data {
-        Data::Empty => String::new(),
-        Data::DateTime(date) => date
-            .as_datetime()
-            .map(|d| d.format("%Y-%m-%d %H:%M:%S").to_string())
-            .unwrap_or_else(|| date.to_string()),
-        other => other.to_string(),
+    use calamine::DataRef;
+    let value = match data {
+        Data::Empty => DataRef::Empty,
+        Data::Int(value) => DataRef::Int(*value),
+        Data::Float(value) => DataRef::Float(*value),
+        Data::Bool(value) => DataRef::Bool(*value),
+        Data::String(text) => DataRef::SharedString(text),
+        Data::DateTime(date) => DataRef::DateTime(*date),
+        Data::DateTimeIso(text) => DataRef::DateTimeIso(text.clone()),
+        Data::DurationIso(text) => DataRef::DurationIso(text.clone()),
+        Data::Error(error) => DataRef::Error(error.clone()),
+    };
+    let mut out = String::new();
+    render_into(&value, &mut out);
+    out
+}
+
+/// Writes a worksheet cell's text into `out`: its `Display` text, except that a date and time
+/// is written as `%Y-%m-%d %H:%M:%S`.
+fn render_into(value: &calamine::DataRef<'_>, out: &mut String) {
+    use calamine::DataRef;
+    use std::fmt::Write;
+    match value {
+        DataRef::Empty => {}
+        DataRef::String(text) | DataRef::DateTimeIso(text) | DataRef::DurationIso(text) => {
+            out.push_str(text)
+        }
+        DataRef::SharedString(text) => out.push_str(text),
+        DataRef::DateTime(date) => match date.as_datetime() {
+            Some(at) => write!(out, "{}", at.format("%Y-%m-%d %H:%M:%S")),
+            None => write!(out, "{date}"),
+        }
+        .expect("writing to a String cannot fail"),
+        DataRef::Int(value) => write!(out, "{value}").expect("writing to a String cannot fail"),
+        DataRef::Float(value) => write!(out, "{value}").expect("writing to a String cannot fail"),
+        DataRef::Bool(value) => write!(out, "{value}").expect("writing to a String cannot fail"),
+        DataRef::Error(value) => write!(out, "{value}").expect("writing to a String cannot fail"),
     }
 }
 
