@@ -1,6 +1,6 @@
 # Data packs: design and data dictionary
 
-Draft, 2026-10-04. Decision (owner): pre-acquire what publishers offer today, compile it into
+Draft 2026-10-04; build order and settled items 2026-10-06. Decision (owner): pre-acquire what publishers offer today, compile it into
 versioned datasets, publish them on Hugging Face, and have the app import a pack and then fetch
 only what was published after the pack's build date. Nothing is uploaded until the owner says so.
 Source details and what was actually seen of each file are in `docs/data-sources/`.
@@ -151,11 +151,50 @@ column or table here before anything is published.
 12. Vendors receiving a contract within a year of a behested payment or gift report naming them.
     *Uses the Influence pack, which is not published.*
 
-## Open before the first build
+## Settled (2026-10-06)
+
+- **City open data licence.** Each City dataset page links ODC-PDDL 1.0
+  (`https://opendefinition.org/licenses/odc-pddl/`). The City Open Data Policy (effective
+  2015-01-01, `https://www.sandiego.gov/sites/default/files/open-data-policy.pdf`, SHA-256
+  `71c27bfb…a3569`) places no restriction on lawful use (s. 3.5), allows commercial use (s. 2.7),
+  and requires a disclaimer: informational only, no warranty, no City liability. A pack manifest
+  carries the licence id, licence URL and that disclaimer; no attribution field is needed.
+- **Publisher key.** Ed25519, signed and verified with `integrity::sign_package` /
+  `verify_package` over canonical manifest bytes. The private seed is kept in the macOS Keychain
+  (service `com.onrecord.pack-publisher`), never in the repository; the public key is pinned in the
+  app as `PACK_PUBLIC_KEYS`, separate from the per-installation export key and the entitlement keys.
+- **Hugging Face.** Account `davidcondrey`, organisation `Writerslogic`; packs publish to
+  `Writerslogic/onrecord-<pack>`. Creating a repository or uploading waits for the owner.
+- **Pack origin.** A snapshot imported from a pack keeps the identity the analytical import gives
+  it; the pack is recorded beside it (pack, version, build time, file SHA-256), so the same bytes
+  fetched by the user and shipped in a pack are one snapshot with two recorded origins, and the
+  builder's retrieval is labelled as the builder's.
+
+## Build order
+
+1. **First slice: Money and What residents report, City open data only.** Tables
+   `budget_adopted`, `budget_actuals`, `service_reports` (closed years and one dated open
+   snapshot) and `police_calls` (by year). Acceptance: question 1 without shelter beds
+   (`shelter_inventory` is ASK), answered by a query that names every table and file it read.
+2. **Builder.** In the app library behind the `pack-builder` Cargo feature, with a thin binary,
+   so the app's feature set and binary are unchanged. It takes URLs, years and filters from
+   `ingestion::queue::city_datasets` (one source list), writes originals with SHA-256, records the
+   publisher's freshness markers (year, `Last-Modified`, `ETag`), writes Parquet copies (DuckDB's
+   `parquet` feature is enabled only by `pack-builder`), and signs the manifest.
+3. **Conformed layer.** One module generates the standard columns from an imported table; the
+   builder uses it for the Parquet copies and the app after importing originals. First slice:
+   identity, provenance and time groups (`fiscal_year` for question 1). Place waits for the
+   pre-2021 district lines.
+4. **App import.** Verify the signature and every file hash before writing anything; then import
+   originals through the analytical import, one table and year at a time, chosen by the user
+   (`MAX_STREAMED_CELLS` is per import). Tamper tests: one byte changed in a file, and in the
+   manifest, each refused.
+5. **Later.** Fetch only what was published after a pack's build date, using the recorded
+   freshness markers; the remaining PD packs; ASK tables once permission is in writing.
+
+## Open
 
 - Written permission, or a stated licence, from the UCSD Homelessness Hub, the SDSU sanitation
   project and the Regional Data Library.
-- A full read of the City's open-data terms page (read only in summary so far).
 - Pre-2021 council district boundaries.
-- The publisher signing key and where it is kept.
-- The Hugging Face account or organisation name.
+- Owner's go-ahead to create the Hugging Face repositories and upload.
