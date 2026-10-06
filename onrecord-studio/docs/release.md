@@ -11,10 +11,12 @@ installer package (this document). The Developer ID build is notarized and self-
 ## Distribution contract
 
 - Product and bundle identifier: `OnRecord Studio` / `com.onrecord.studio`.
-- Current version: `1.0.0-beta.3` in `package.json`, `src-tauri/Cargo.toml`, and
-  `src-tauri/tauri.conf.json`. The pre-release suffix is for the direct channel; the App Store
-  build needs a numeric version, so drop the suffix in all three files before an App Store
-  submission (`prepare-app-store.mjs --check` requires them to agree).
+- Current version: `1.0.0` in `package.json`, `src-tauri/Cargo.toml`, and
+  `src-tauri/tauri.conf.json`. A pre-release suffix is for the direct channel only; the App Store
+  build needs a numeric version (`prepare-app-store.mjs --check` requires the three to agree).
+  The App Store build number is `bundle.macOS.bundleVersion` in `src-tauri/tauri.appstore.conf.json`
+  (the build date, `YYYY.M.D`); raise it for every upload, since App Store Connect refuses a build
+  number it has already received.
 - Development and ordinary desktop builds use the default Rust feature set. They identify their
   license state as `DEVELOPMENT` and do not pretend to be paid App Store artifacts.
 - Paid macOS builds use the `app-store` Cargo feature and

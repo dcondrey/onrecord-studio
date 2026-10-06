@@ -5,6 +5,7 @@
     "category": "Productivity",
     "macOS": {
       "minimumSystemVersion": "13.0",
+      "bundleVersion": "2026.10.6",
       "hardenedRuntime": true,
       "entitlements": "./Entitlements.appstore.plist",
       "infoPlist": "./Info.appstore.plist",

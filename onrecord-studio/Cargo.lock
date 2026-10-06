@@ -4574,7 +4574,7 @@ dependencies = [
 
 [[package]]
 name = "onrecord-studio-lib"
-version = "1.0.0-beta.3"
+version = "1.0.0"
 dependencies = [
  "aho-corasick",
  "base64 0.22.1",

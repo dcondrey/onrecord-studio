@@ -3,6 +3,43 @@
 Notable, user-visible changes. The in-app Help topic *What's next* lists planned enhancements;
 `docs/ROADMAP.md` holds the engineering record.
 
+## 1.0.0 (2026-10-06)
+
+### Added
+
+- City datasets fetched by name and year: SDPD calls for service, NIBRS offenses, arrests and
+  citations, Get It Done reports, operating budget and actuals, the emergency shelter inventory,
+  schools and transit stops. Leads from them cite every table and the SQL behind them.
+- Leads about homelessness enforcement and services: encampment ordinance observations, hours
+  between a posted abatement notice and the abatement, reports around abatements, stops, arrests
+  and property seizures of people perceived as unhoused, spending records, and shelter capacity
+  set beside budget and Encampment reports by year.
+- Organisation records: Form 990 returns, single audits and recorded payments by EIN, people across
+  returns, a checked-organisations portfolio, and links to held documents and requests.
+- Meeting bodies: a registry of City bodies, agenda posting times and differences between agenda
+  copies.
+- Record gaps behind each lead, with a drafted request to fill one; a follow-up letter for a request
+  overdue with no response.
+- Hand-added files are labelled and compared with collected documents instead of being read as
+  agency releases; behested payment reports are counted from the disclosure portal's export.
+
+### Changed
+
+- Table imports read the file once and keep every row's original cells; a cell that does not
+  convert is kept as written and counted, not dropped with its row. Imports are faster and use less
+  memory, XLSX worksheets are streamed, and a worksheet whose cells are stored out of row order is
+  refused with a way forward.
+- On first launch the core and corpus databases are rewritten once to compressed storage, and
+  automatic tables are re-imported under the new import rules; large libraries take longer to open
+  that once.
+
+### Fixed
+
+- An organisation's name now matches vendor values written without its apostrophe.
+- A re-imported table's rows are no longer reported again, unreviewed, by area monitoring.
+- Redaction findings come only from explicit marks; blank form fields are not redactions.
+- Rate-limited portals no longer stop a collection partway; queued tasks are no longer abandoned.
+
 ## 1.0.0-beta.3 (2026-10-02)
 
 ### Fixed
