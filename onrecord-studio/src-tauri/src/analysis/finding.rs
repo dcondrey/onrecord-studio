@@ -290,6 +290,10 @@ pub enum FindingKind {
     /// locations with most. Counted by the discovery feed's SQL and recorded as sent. A citation
     /// records the vehicle and the place, not whether anyone lived in it.
     ParkingCitationLead,
+    /// A count from a city's published development approvals: dwelling units on the building
+    /// permits issued in a year by income tier, with density-bonus units and ADUs apart, once per
+    /// job. Counted by the discovery feed's SQL and recorded as sent. No housing target is applied.
+    HousingApprovalLead,
 }
 
 impl FindingKind {
@@ -346,6 +350,7 @@ impl FindingKind {
             Self::SpendingRecordLead => "SPENDING_RECORD_LEAD",
             Self::PoliceCallLead => "POLICE_CALL_LEAD",
             Self::ParkingCitationLead => "PARKING_CITATION_LEAD",
+            Self::HousingApprovalLead => "HOUSING_APPROVAL_LEAD",
         }
     }
 
@@ -402,6 +407,7 @@ impl FindingKind {
             Self::SpendingRecordLead,
             Self::PoliceCallLead,
             Self::ParkingCitationLead,
+            Self::HousingApprovalLead,
         ]
         .into_iter()
         .find(|candidate| candidate.as_str() == value)
@@ -523,6 +529,8 @@ impl FindingKind {
             Self::PoliceCallLead => false,
             // Counts of citations as the City recorded them.
             Self::ParkingCitationLead => false,
+            // Sums of units as the permit records state them; no target is applied.
+            Self::HousingApprovalLead => false,
         }
     }
 }

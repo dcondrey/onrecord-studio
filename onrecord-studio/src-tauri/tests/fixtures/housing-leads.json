@@ -1,0 +1,2264 @@
+{
+  "csv": {
+    "approvals_issued_2024": "\"DEVELOPMENT_ID\",\"PROJECT_ID\",\"PROJECT_TYPE\",\"PROJECT_STATUS\",\"PROJECT_PROCESSING_CODE\",\"PROJECT_CREATE_DATE\",\"PROJECT_DEEMEDCOMPLETE_DATE\",\"PROJECT_TRUST_ACCOUNT_NO\",\"PROJECT_TITLE\",\"PROJECT_SCOPE\",\"JOB_ID\",\"JOB_DRAWING_NUMBER\",\"GIS_ADDRESS\",\"GIS_APN\",\"JOB_BC_CODE\",\"JOB_BC_CODE_DESCRIPTION\",\"GIS_LATITUDE\",\"GIS_LONGITUDE\",\"APPROVAL_ID\",\"APPROVAL_CATEGORY_CODE\",\"APPROVAL_PROCESSING_CODE\",\"APPROVAL_TYPE\",\"APPROVAL_STATUS\",\"APPROVAL_SCOPE\",\"APPROVAL_CREATE_DATE\",\"APPROVAL_ISSUE_DATE\",\"APPROVAL_CLOSE_DATE\",\"APPROVAL_EXPIRE_DATE\",\"APPROVAL_VALUATION\",\"APPROVAL_DU_NET_CHANGE\",\"APPROVAL_STORIES\",\"APPROVAL_FLOOR_AREA\",\"APPROVAL_DU_EXTREMELY_LOW\",\"APPROVAL_DU_VERY_LOW\",\"APPROVAL_DU_LOW\",\"APPROVAL_DU_MODERATE\",\"APPROVAL_DU_ABOVE_MODERATE\",\"APPROVAL_DU_FUTURE_DEMO\",\"APPROVAL_DU_BONUS\",\"APPROVAL_ADU_EXTREMELY_LOW\",\"APPROVAL_ADU_VERY_LOW\",\"APPROVAL_ADU_LOW\",\"APPROVAL_ADU_MODERATE\",\"APPROVAL_ADU_ABOVE_MODERATE\",\"APPROVAL_ADU_BONUS\",\"APPROVAL_ADU_TOTAL\",\"APPROVAL_JADU_EXTREMELY_LOW\",\"APPROVAL_JADU_VERY_LOW\",\"APPROVAL_JADU_LOW\",\"APPROVAL_JADU_MODERATE\",\"APPROVAL_JADU_ABOVE_MODERATE\",\"APPROVAL_JADU_BONUS\",\"APPROVAL_JADU_TOTAL\",\"APPROVAL_PERMIT_HOLDER\"\n\"DEV-0900001\",\"PRJ-0900001\",,,,,,,,,\"JOB-240001\",,,,,,,,\"PMT-2400001\",,,\"Building Permit\",\"Issued\",,\"2024-03-04\",\"2024-03-04\",,,,,,,,,,,,,,,,,,,,,,,,,,,,\n\"DEV-0900002\",\"PRJ-0900002\",,,,,,,,,\"JOB-240002\",,,,,,,,\"PMT-2400002\",,,\"Combination Building Permit\",\"Issued\",,\"2024-06-11\",\"2024-06-11\",,,,,,,,,,,,,,,,,,,,,,,,,,,,\n\"DEV-0900005\",\"PRJ-0900005\",,,,,,,,,\"JOB-100005\",,,,,,,,\"PMT-2400005\",,,\"Building Permit\",\"Issued\",,\"2024-12-20\",\"2024-12-20\",,,,,,,,,,,,,,,,,,,,,,,,,,,,\n",
+    "approvals_prior_2025": "\"DEVELOPMENT_ID\",\"PROJECT_ID\",\"PROJECT_TYPE\",\"PROJECT_STATUS\",\"PROJECT_PROCESSING_CODE\",\"PROJECT_CREATE_DATE\",\"PROJECT_DEEMEDCOMPLETE_DATE\",\"PROJECT_TRUST_ACCOUNT_NO\",\"PROJECT_TITLE\",\"PROJECT_SCOPE\",\"JOB_ID\",\"JOB_DRAWING_NUMBER\",\"GIS_ADDRESS\",\"GIS_APN\",\"JOB_BC_CODE\",\"JOB_BC_CODE_DESCRIPTION\",\"GIS_LATITUDE\",\"GIS_LONGITUDE\",\"APPROVAL_ID\",\"APPROVAL_CATEGORY_CODE\",\"APPROVAL_PROCESSING_CODE\",\"APPROVAL_TYPE\",\"APPROVAL_STATUS\",\"APPROVAL_SCOPE\",\"APPROVAL_CREATE_DATE\",\"APPROVAL_ISSUE_DATE\",\"APPROVAL_CLOSE_DATE\",\"APPROVAL_EXPIRE_DATE\",\"APPROVAL_VALUATION\",\"APPROVAL_DU_NET_CHANGE\",\"APPROVAL_STORIES\",\"APPROVAL_FLOOR_AREA\",\"APPROVAL_DU_EXTREMELY_LOW\",\"APPROVAL_DU_VERY_LOW\",\"APPROVAL_DU_LOW\",\"APPROVAL_DU_MODERATE\",\"APPROVAL_DU_ABOVE_MODERATE\",\"APPROVAL_DU_FUTURE_DEMO\",\"APPROVAL_DU_BONUS\",\"APPROVAL_ADU_EXTREMELY_LOW\",\"APPROVAL_ADU_VERY_LOW\",\"APPROVAL_ADU_LOW\",\"APPROVAL_ADU_MODERATE\",\"APPROVAL_ADU_ABOVE_MODERATE\",\"APPROVAL_ADU_BONUS\",\"APPROVAL_ADU_TOTAL\",\"APPROVAL_JADU_EXTREMELY_LOW\",\"APPROVAL_JADU_VERY_LOW\",\"APPROVAL_JADU_LOW\",\"APPROVAL_JADU_MODERATE\",\"APPROVAL_JADU_ABOVE_MODERATE\",\"APPROVAL_JADU_BONUS\",\"APPROVAL_JADU_TOTAL\",\"APPROVAL_PERMIT_HOLDER\"\n\"DEV-0900009\",\"PRJ-0900009\",,,,,,,,,\"JOB-100009\",,,,,,,,\"PMT-3000009\",,,\"Building Permit\",\"Issued\",,\"2025-02-01\",\"2025-02-01\",,,,,,,\"50\",\"50\",\"50\",\"50\",\"50\",\"0\",\"50\",,,,,,,\"50\",,,,,,,,\n",
+    "approvals_issued_2025": "\"DEVELOPMENT_ID\",\"PROJECT_ID\",\"PROJECT_TYPE\",\"PROJECT_STATUS\",\"PROJECT_PROCESSING_CODE\",\"PROJECT_CREATE_DATE\",\"PROJECT_DEEMEDCOMPLETE_DATE\",\"PROJECT_TRUST_ACCOUNT_NO\",\"PROJECT_TITLE\",\"PROJECT_SCOPE\",\"JOB_ID\",\"JOB_DRAWING_NUMBER\",\"GIS_ADDRESS\",\"GIS_APN\",\"JOB_BC_CODE\",\"JOB_BC_CODE_DESCRIPTION\",\"GIS_LATITUDE\",\"GIS_LONGITUDE\",\"APPROVAL_ID\",\"APPROVAL_CATEGORY_CODE\",\"APPROVAL_PROCESSING_CODE\",\"APPROVAL_TYPE\",\"APPROVAL_STATUS\",\"APPROVAL_SCOPE\",\"APPROVAL_CREATE_DATE\",\"APPROVAL_ISSUE_DATE\",\"APPROVAL_CLOSE_DATE\",\"APPROVAL_EXPIRE_DATE\",\"APPROVAL_VALUATION\",\"APPROVAL_DU_NET_CHANGE\",\"APPROVAL_STORIES\",\"APPROVAL_FLOOR_AREA\",\"APPROVAL_DU_EXTREMELY_LOW\",\"APPROVAL_DU_VERY_LOW\",\"APPROVAL_DU_LOW\",\"APPROVAL_DU_MODERATE\",\"APPROVAL_DU_ABOVE_MODERATE\",\"APPROVAL_DU_FUTURE_DEMO\",\"APPROVAL_DU_BONUS\",\"APPROVAL_ADU_EXTREMELY_LOW\",\"APPROVAL_ADU_VERY_LOW\",\"APPROVAL_ADU_LOW\",\"APPROVAL_ADU_MODERATE\",\"APPROVAL_ADU_ABOVE_MODERATE\",\"APPROVAL_ADU_BONUS\",\"APPROVAL_ADU_TOTAL\",\"APPROVAL_JADU_EXTREMELY_LOW\",\"APPROVAL_JADU_VERY_LOW\",\"APPROVAL_JADU_LOW\",\"APPROVAL_JADU_MODERATE\",\"APPROVAL_JADU_ABOVE_MODERATE\",\"APPROVAL_JADU_BONUS\",\"APPROVAL_JADU_TOTAL\",\"APPROVAL_PERMIT_HOLDER\"\n\"DEV-0696585\",\"PRJ-0696585\",,,,,,,,,\"JOB-060768\",,,,,,,,\"PMT-3000001\",,,\"Coastal Development\",\"Issued\",,\"2025-04-02\",\"2025-04-02\",,,,,,,\"0\",\"0\",\"0\",\"0\",\"224\",\"0\",\"0\",,,,,,,\"0\",,,,,,,,\n\"DEV-0696585\",\"PRJ-0696585\",,,,,,,,,\"JOB-060768\",,,,,,,,\"PMT-3000002\",,,\"Site  Development Permit\",\"Issued\",,\"2025-04-02\",\"2025-04-02\",,,,,,,\"0\",\"0\",\"0\",\"0\",\"224\",\"0\",\"0\",,,,,,,\"0\",,,,,,,,\n\"DEV-0900003\",\"PRJ-0900003\",,,,,,,,,\"JOB-100001\",,,,,,,,\"PMT-3000003\",,,\"Building Permit\",\"Issued\",,\"2025-05-06\",\"2025-05-06\",,,,,,,\"2\",\"3\",\"4\",\"5\",\"10\",\"0\",\"6\",,,,,,,\"1\",,,,,,,,\n\"DEV-0900003\",\"PRJ-0900003\",,,,,,,,,\"JOB-100001\",,,,,,,,\"PMT-3000004\",,,\"Building Permit\",\"Issued\",,\"2025-05-07\",\"2025-05-07\",,,,,,,\"2\",\"3\",\"4\",\"5\",\"10\",\"0\",\"6\",,,,,,,\"1\",,,,,,,,\n\"DEV-0900004\",\"PRJ-0900004\",,,,,,,,,\"JOB-100002\",,,,,,,,\"PMT-3000005\",,,\" Combination Building Permit \",\"Issued\",,\"2025-07-08\",\"2025-07-08\",,,,,,,\"0\",\"0\",\"0\",\"0\",\"1\",\"0\",\"0\",,,,,,,\"1\",,,,,,,,\n\"DEV-0900006\",\"PRJ-0900006\",,,,,,,,,\"JOB-100003\",,,,,,,,\"PMT-3000006\",,,\"Combination Building Permit\",\"Issued\",,\"2025-08-09\",\"2025-08-09\",,,,,,,,,,,,,,,,,,,,,,,,,,,,\n\"DEV-0900005\",\"PRJ-0900005\",,,,,,,,,\"JOB-100005\",,,,,,,,\"PMT-3000007\",,,\"Building Permit\",\"Issued\",,\"2025-01-10\",\"2025-01-10\",,,,,,,,,,,,,,,,,,,,,,,,,,,,\n\"DEV-0900007\",\"PRJ-0900007\",,,,,,,,,,,,,,,,,\"PMT-3000008\",,,\"Combination Building Permit\",\"Issued\",,\"2025-09-10\",\"2025-09-10\",,,,,,,\"0\",\"0\",\"0\",\"0\",\"7\",\"0\",\"0\",,,,,,,\"0\",,,,,,,,\n\"DEV-0900008\",\"PRJ-0900008\",,,,,,,,,\"JOB-100008\",,,,,,,,\"PMT-3000009\",,,\"Electrical Pmt\",\"Issued\",,\"2025-09-11\",\"2025-09-11\",,,,,,,,,,,,,,,,,,,,,,,,,,,,\n",
+    "approvals_created_2025": "\"DEVELOPMENT_ID\",\"PROJECT_ID\",\"PROJECT_TYPE\",\"PROJECT_STATUS\",\"PROJECT_PROCESSING_CODE\",\"PROJECT_CREATE_DATE\",\"PROJECT_DEEMEDCOMPLETE_DATE\",\"PROJECT_TRUST_ACCOUNT_NO\",\"PROJECT_TITLE\",\"PROJECT_SCOPE\",\"JOB_ID\",\"JOB_DRAWING_NUMBER\",\"GIS_ADDRESS\",\"GIS_APN\",\"JOB_BC_CODE\",\"JOB_BC_CODE_DESCRIPTION\",\"GIS_LATITUDE\",\"GIS_LONGITUDE\",\"APPROVAL_ID\",\"APPROVAL_CATEGORY_CODE\",\"APPROVAL_PROCESSING_CODE\",\"APPROVAL_TYPE\",\"APPROVAL_STATUS\",\"APPROVAL_SCOPE\",\"APPROVAL_CREATE_DATE\",\"APPROVAL_ISSUE_DATE\",\"APPROVAL_CLOSE_DATE\",\"APPROVAL_EXPIRE_DATE\",\"APPROVAL_VALUATION\",\"APPROVAL_DU_NET_CHANGE\",\"APPROVAL_STORIES\",\"APPROVAL_FLOOR_AREA\",\"APPROVAL_DU_EXTREMELY_LOW\",\"APPROVAL_DU_VERY_LOW\",\"APPROVAL_DU_LOW\",\"APPROVAL_DU_MODERATE\",\"APPROVAL_DU_ABOVE_MODERATE\",\"APPROVAL_DU_FUTURE_DEMO\",\"APPROVAL_DU_BONUS\",\"APPROVAL_ADU_EXTREMELY_LOW\",\"APPROVAL_ADU_VERY_LOW\",\"APPROVAL_ADU_LOW\",\"APPROVAL_ADU_MODERATE\",\"APPROVAL_ADU_ABOVE_MODERATE\",\"APPROVAL_ADU_BONUS\",\"APPROVAL_ADU_TOTAL\",\"APPROVAL_JADU_EXTREMELY_LOW\",\"APPROVAL_JADU_VERY_LOW\",\"APPROVAL_JADU_LOW\",\"APPROVAL_JADU_MODERATE\",\"APPROVAL_JADU_ABOVE_MODERATE\",\"APPROVAL_JADU_BONUS\",\"APPROVAL_JADU_TOTAL\",\"APPROVAL_PERMIT_HOLDER\"\n\"DEV-0900003\",\"PRJ-0900003\",,,,,,,,,\"JOB-100001\",,,,,,,,\"PMT-3000003\",,,\"Building Permit\",\"Issued\",,\"2025-05-06\",\"2025-05-06\",,,,,,,\"2\",\"3\",\"4\",\"5\",\"10\",\"0\",\"6\",,,,,,,\"1\",,,,,,,,\n",
+    "approvals_closed_2025": "\"DEVELOPMENT_ID\",\"PROJECT_ID\",\"PROJECT_TYPE\",\"PROJECT_STATUS\",\"PROJECT_PROCESSING_CODE\",\"PROJECT_CREATE_DATE\",\"PROJECT_DEEMEDCOMPLETE_DATE\",\"PROJECT_TRUST_ACCOUNT_NO\",\"PROJECT_TITLE\",\"PROJECT_SCOPE\",\"JOB_ID\",\"JOB_DRAWING_NUMBER\",\"GIS_ADDRESS\",\"GIS_APN\",\"JOB_BC_CODE\",\"JOB_BC_CODE_DESCRIPTION\",\"GIS_LATITUDE\",\"GIS_LONGITUDE\",\"APPROVAL_ID\",\"APPROVAL_CATEGORY_CODE\",\"APPROVAL_PROCESSING_CODE\",\"APPROVAL_TYPE\",\"APPROVAL_STATUS\",\"APPROVAL_SCOPE\",\"APPROVAL_CREATE_DATE\",\"APPROVAL_ISSUE_DATE\",\"APPROVAL_CLOSE_DATE\",\"APPROVAL_EXPIRE_DATE\",\"APPROVAL_VALUATION\",\"APPROVAL_DU_NET_CHANGE\",\"APPROVAL_STORIES\",\"APPROVAL_FLOOR_AREA\",\"APPROVAL_DU_EXTREMELY_LOW\",\"APPROVAL_DU_VERY_LOW\",\"APPROVAL_DU_LOW\",\"APPROVAL_DU_MODERATE\",\"APPROVAL_DU_ABOVE_MODERATE\",\"APPROVAL_DU_FUTURE_DEMO\",\"APPROVAL_DU_BONUS\",\"APPROVAL_ADU_EXTREMELY_LOW\",\"APPROVAL_ADU_VERY_LOW\",\"APPROVAL_ADU_LOW\",\"APPROVAL_ADU_MODERATE\",\"APPROVAL_ADU_ABOVE_MODERATE\",\"APPROVAL_ADU_BONUS\",\"APPROVAL_ADU_TOTAL\",\"APPROVAL_JADU_EXTREMELY_LOW\",\"APPROVAL_JADU_VERY_LOW\",\"APPROVAL_JADU_LOW\",\"APPROVAL_JADU_MODERATE\",\"APPROVAL_JADU_ABOVE_MODERATE\",\"APPROVAL_JADU_BONUS\",\"APPROVAL_JADU_TOTAL\",\"APPROVAL_PERMIT_HOLDER\"\n\"DEV-0900003\",\"PRJ-0900003\",,,,,,,,,\"JOB-100001\",,,,,,,,\"PMT-3000003\",,,\"Building Permit\",\"Issued\",,\"2025-05-06\",\"2025-05-06\",,,,,,,\"2\",\"3\",\"4\",\"5\",\"10\",\"0\",\"6\",,,,,,,\"1\",,,,,,,,\n"
+  },
+  "schema": {
+    "datasets": [
+      {
+        "snapshotId": "approvals_issued_2024",
+        "datasetKind": "REGIONAL_DATA",
+        "displayName": "Development approvals issued in 2024",
+        "tableName": "analysis_approvals_issued_2024",
+        "importedRows": 3,
+        "rejectedRows": 0,
+        "sourceUri": "https://seshat.datasd.org/development_permits/approvals_issued_2024_datasd.csv",
+        "sourceSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "retrievedAt": "2026-10-01T00:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}",
+        "unconvertedByColumn": {}
+      },
+      {
+        "snapshotId": "approvals_prior_2025",
+        "datasetKind": "REGIONAL_DATA",
+        "displayName": "Development approvals issued in 2025",
+        "tableName": "analysis_approvals_prior_2025",
+        "importedRows": 1,
+        "rejectedRows": 0,
+        "sourceUri": "https://seshat.datasd.org/development_permits/approvals_issued_2025_datasd.csv",
+        "sourceSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "retrievedAt": "2026-09-01T00:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}",
+        "unconvertedByColumn": {}
+      },
+      {
+        "snapshotId": "approvals_issued_2025",
+        "datasetKind": "REGIONAL_DATA",
+        "displayName": "Development approvals issued in 2025",
+        "tableName": "analysis_approvals_issued_2025",
+        "importedRows": 9,
+        "rejectedRows": 0,
+        "sourceUri": "https://seshat.datasd.org/development_permits/approvals_issued_2025_datasd.csv",
+        "sourceSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "retrievedAt": "2026-10-07T00:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}",
+        "unconvertedByColumn": {}
+      },
+      {
+        "snapshotId": "approvals_created_2025",
+        "datasetKind": "REGIONAL_DATA",
+        "displayName": "Development approvals created in 2025",
+        "tableName": "analysis_approvals_created_2025",
+        "importedRows": 1,
+        "rejectedRows": 0,
+        "sourceUri": "https://seshat.datasd.org/development_permits/approvals_created_2025_datasd.csv",
+        "sourceSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "retrievedAt": "2026-10-07T00:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}",
+        "unconvertedByColumn": {}
+      },
+      {
+        "snapshotId": "approvals_closed_2025",
+        "datasetKind": "REGIONAL_DATA",
+        "displayName": "Development approvals closed in 2025",
+        "tableName": "analysis_approvals_closed_2025",
+        "importedRows": 1,
+        "rejectedRows": 0,
+        "sourceUri": "https://seshat.datasd.org/development_permits/approvals_closed_2025_datasd.csv",
+        "sourceSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "retrievedAt": "2026-10-07T00:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}",
+        "unconvertedByColumn": {}
+      }
+    ],
+    "templates": [],
+    "columns": [
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "development_id",
+        "logicalType": "CATEGORY",
+        "originalName": "DEVELOPMENT_ID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "project_id",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_ID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "project_type",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_TYPE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "project_status",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_STATUS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "project_processing_code",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_PROCESSING_CODE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "project_create_date",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_CREATE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "project_deemedcomplete_date",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_DEEMEDCOMPLETE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "project_trust_account_no",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_TRUST_ACCOUNT_NO",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "project_title",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_TITLE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "project_scope",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_SCOPE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "job_id",
+        "logicalType": "CATEGORY",
+        "originalName": "JOB_ID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "job_drawing_number",
+        "logicalType": "CATEGORY",
+        "originalName": "JOB_DRAWING_NUMBER",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "gis_address",
+        "logicalType": "CATEGORY",
+        "originalName": "GIS_ADDRESS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "gis_apn",
+        "logicalType": "CATEGORY",
+        "originalName": "GIS_APN",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "job_bc_code",
+        "logicalType": "CATEGORY",
+        "originalName": "JOB_BC_CODE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "job_bc_code_description",
+        "logicalType": "CATEGORY",
+        "originalName": "JOB_BC_CODE_DESCRIPTION",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "gis_latitude",
+        "logicalType": "CATEGORY",
+        "originalName": "GIS_LATITUDE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "gis_longitude",
+        "logicalType": "CATEGORY",
+        "originalName": "GIS_LONGITUDE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_id",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_category_code",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_CATEGORY_CODE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_processing_code",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_PROCESSING_CODE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_type",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_TYPE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_status",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_STATUS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_scope",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_SCOPE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_create_date",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_CREATE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_issue_date",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ISSUE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_close_date",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_CLOSE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_expire_date",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_EXPIRE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_valuation",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_VALUATION",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_du_net_change",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_NET_CHANGE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_stories",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_STORIES",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_floor_area",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_FLOOR_AREA",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_du_extremely_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_EXTREMELY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_du_very_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_VERY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_du_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_du_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_du_above_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_ABOVE_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_du_future_demo",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_FUTURE_DEMO",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_du_bonus",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_BONUS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_adu_extremely_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_EXTREMELY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_adu_very_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_VERY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_adu_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_adu_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_adu_above_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_ABOVE_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_adu_bonus",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_BONUS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_adu_total",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_TOTAL",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_jadu_extremely_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_EXTREMELY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_jadu_very_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_VERY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_jadu_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_jadu_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_jadu_above_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_ABOVE_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_jadu_bonus",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_BONUS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_jadu_total",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_TOTAL",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2024",
+        "columnName": "approval_permit_holder",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_PERMIT_HOLDER",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "development_id",
+        "logicalType": "CATEGORY",
+        "originalName": "DEVELOPMENT_ID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "project_id",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_ID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "project_type",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_TYPE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "project_status",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_STATUS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "project_processing_code",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_PROCESSING_CODE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "project_create_date",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_CREATE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "project_deemedcomplete_date",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_DEEMEDCOMPLETE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "project_trust_account_no",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_TRUST_ACCOUNT_NO",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "project_title",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_TITLE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "project_scope",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_SCOPE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "job_id",
+        "logicalType": "CATEGORY",
+        "originalName": "JOB_ID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "job_drawing_number",
+        "logicalType": "CATEGORY",
+        "originalName": "JOB_DRAWING_NUMBER",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "gis_address",
+        "logicalType": "CATEGORY",
+        "originalName": "GIS_ADDRESS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "gis_apn",
+        "logicalType": "CATEGORY",
+        "originalName": "GIS_APN",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "job_bc_code",
+        "logicalType": "CATEGORY",
+        "originalName": "JOB_BC_CODE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "job_bc_code_description",
+        "logicalType": "CATEGORY",
+        "originalName": "JOB_BC_CODE_DESCRIPTION",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "gis_latitude",
+        "logicalType": "CATEGORY",
+        "originalName": "GIS_LATITUDE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "gis_longitude",
+        "logicalType": "CATEGORY",
+        "originalName": "GIS_LONGITUDE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_id",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_category_code",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_CATEGORY_CODE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_processing_code",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_PROCESSING_CODE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_type",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_TYPE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_status",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_STATUS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_scope",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_SCOPE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_create_date",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_CREATE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_issue_date",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ISSUE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_close_date",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_CLOSE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_expire_date",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_EXPIRE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_valuation",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_VALUATION",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_du_net_change",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_NET_CHANGE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_stories",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_STORIES",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_floor_area",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_FLOOR_AREA",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_du_extremely_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_EXTREMELY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_du_very_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_VERY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_du_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_du_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_du_above_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_ABOVE_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_du_future_demo",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_FUTURE_DEMO",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_du_bonus",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_BONUS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_adu_extremely_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_EXTREMELY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_adu_very_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_VERY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_adu_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_adu_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_adu_above_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_ABOVE_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_adu_bonus",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_BONUS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_adu_total",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_TOTAL",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_jadu_extremely_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_EXTREMELY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_jadu_very_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_VERY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_jadu_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_jadu_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_jadu_above_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_ABOVE_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_jadu_bonus",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_BONUS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_jadu_total",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_TOTAL",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_prior_2025",
+        "columnName": "approval_permit_holder",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_PERMIT_HOLDER",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "development_id",
+        "logicalType": "CATEGORY",
+        "originalName": "DEVELOPMENT_ID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "project_id",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_ID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "project_type",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_TYPE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "project_status",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_STATUS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "project_processing_code",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_PROCESSING_CODE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "project_create_date",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_CREATE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "project_deemedcomplete_date",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_DEEMEDCOMPLETE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "project_trust_account_no",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_TRUST_ACCOUNT_NO",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "project_title",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_TITLE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "project_scope",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_SCOPE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "job_id",
+        "logicalType": "CATEGORY",
+        "originalName": "JOB_ID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "job_drawing_number",
+        "logicalType": "CATEGORY",
+        "originalName": "JOB_DRAWING_NUMBER",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "gis_address",
+        "logicalType": "CATEGORY",
+        "originalName": "GIS_ADDRESS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "gis_apn",
+        "logicalType": "CATEGORY",
+        "originalName": "GIS_APN",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "job_bc_code",
+        "logicalType": "CATEGORY",
+        "originalName": "JOB_BC_CODE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "job_bc_code_description",
+        "logicalType": "CATEGORY",
+        "originalName": "JOB_BC_CODE_DESCRIPTION",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "gis_latitude",
+        "logicalType": "CATEGORY",
+        "originalName": "GIS_LATITUDE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "gis_longitude",
+        "logicalType": "CATEGORY",
+        "originalName": "GIS_LONGITUDE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_id",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_category_code",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_CATEGORY_CODE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_processing_code",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_PROCESSING_CODE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_type",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_TYPE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_status",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_STATUS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_scope",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_SCOPE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_create_date",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_CREATE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_issue_date",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ISSUE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_close_date",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_CLOSE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_expire_date",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_EXPIRE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_valuation",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_VALUATION",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_du_net_change",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_NET_CHANGE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_stories",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_STORIES",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_floor_area",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_FLOOR_AREA",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_du_extremely_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_EXTREMELY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_du_very_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_VERY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_du_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_du_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_du_above_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_ABOVE_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_du_future_demo",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_FUTURE_DEMO",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_du_bonus",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_BONUS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_adu_extremely_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_EXTREMELY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_adu_very_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_VERY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_adu_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_adu_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_adu_above_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_ABOVE_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_adu_bonus",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_BONUS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_adu_total",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_TOTAL",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_jadu_extremely_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_EXTREMELY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_jadu_very_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_VERY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_jadu_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_jadu_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_jadu_above_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_ABOVE_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_jadu_bonus",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_BONUS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_jadu_total",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_TOTAL",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_issued_2025",
+        "columnName": "approval_permit_holder",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_PERMIT_HOLDER",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "development_id",
+        "logicalType": "CATEGORY",
+        "originalName": "DEVELOPMENT_ID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "project_id",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_ID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "project_type",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_TYPE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "project_status",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_STATUS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "project_processing_code",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_PROCESSING_CODE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "project_create_date",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_CREATE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "project_deemedcomplete_date",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_DEEMEDCOMPLETE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "project_trust_account_no",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_TRUST_ACCOUNT_NO",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "project_title",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_TITLE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "project_scope",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_SCOPE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "job_id",
+        "logicalType": "CATEGORY",
+        "originalName": "JOB_ID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "job_drawing_number",
+        "logicalType": "CATEGORY",
+        "originalName": "JOB_DRAWING_NUMBER",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "gis_address",
+        "logicalType": "CATEGORY",
+        "originalName": "GIS_ADDRESS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "gis_apn",
+        "logicalType": "CATEGORY",
+        "originalName": "GIS_APN",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "job_bc_code",
+        "logicalType": "CATEGORY",
+        "originalName": "JOB_BC_CODE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "job_bc_code_description",
+        "logicalType": "CATEGORY",
+        "originalName": "JOB_BC_CODE_DESCRIPTION",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "gis_latitude",
+        "logicalType": "CATEGORY",
+        "originalName": "GIS_LATITUDE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "gis_longitude",
+        "logicalType": "CATEGORY",
+        "originalName": "GIS_LONGITUDE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_id",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_category_code",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_CATEGORY_CODE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_processing_code",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_PROCESSING_CODE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_type",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_TYPE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_status",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_STATUS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_scope",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_SCOPE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_create_date",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_CREATE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_issue_date",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ISSUE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_close_date",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_CLOSE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_expire_date",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_EXPIRE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_valuation",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_VALUATION",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_du_net_change",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_NET_CHANGE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_stories",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_STORIES",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_floor_area",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_FLOOR_AREA",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_du_extremely_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_EXTREMELY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_du_very_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_VERY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_du_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_du_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_du_above_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_ABOVE_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_du_future_demo",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_FUTURE_DEMO",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_du_bonus",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_BONUS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_adu_extremely_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_EXTREMELY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_adu_very_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_VERY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_adu_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_adu_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_adu_above_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_ABOVE_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_adu_bonus",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_BONUS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_adu_total",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_TOTAL",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_jadu_extremely_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_EXTREMELY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_jadu_very_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_VERY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_jadu_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_jadu_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_jadu_above_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_ABOVE_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_jadu_bonus",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_BONUS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_jadu_total",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_TOTAL",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_created_2025",
+        "columnName": "approval_permit_holder",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_PERMIT_HOLDER",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "development_id",
+        "logicalType": "CATEGORY",
+        "originalName": "DEVELOPMENT_ID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "project_id",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_ID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "project_type",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_TYPE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "project_status",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_STATUS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "project_processing_code",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_PROCESSING_CODE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "project_create_date",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_CREATE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "project_deemedcomplete_date",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_DEEMEDCOMPLETE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "project_trust_account_no",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_TRUST_ACCOUNT_NO",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "project_title",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_TITLE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "project_scope",
+        "logicalType": "CATEGORY",
+        "originalName": "PROJECT_SCOPE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "job_id",
+        "logicalType": "CATEGORY",
+        "originalName": "JOB_ID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "job_drawing_number",
+        "logicalType": "CATEGORY",
+        "originalName": "JOB_DRAWING_NUMBER",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "gis_address",
+        "logicalType": "CATEGORY",
+        "originalName": "GIS_ADDRESS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "gis_apn",
+        "logicalType": "CATEGORY",
+        "originalName": "GIS_APN",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "job_bc_code",
+        "logicalType": "CATEGORY",
+        "originalName": "JOB_BC_CODE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "job_bc_code_description",
+        "logicalType": "CATEGORY",
+        "originalName": "JOB_BC_CODE_DESCRIPTION",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "gis_latitude",
+        "logicalType": "CATEGORY",
+        "originalName": "GIS_LATITUDE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "gis_longitude",
+        "logicalType": "CATEGORY",
+        "originalName": "GIS_LONGITUDE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_id",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ID",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_category_code",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_CATEGORY_CODE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_processing_code",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_PROCESSING_CODE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_type",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_TYPE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_status",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_STATUS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_scope",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_SCOPE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_create_date",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_CREATE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_issue_date",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ISSUE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_close_date",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_CLOSE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_expire_date",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_EXPIRE_DATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_valuation",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_VALUATION",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_du_net_change",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_NET_CHANGE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_stories",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_STORIES",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_floor_area",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_FLOOR_AREA",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_du_extremely_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_EXTREMELY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_du_very_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_VERY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_du_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_du_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_du_above_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_ABOVE_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_du_future_demo",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_FUTURE_DEMO",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_du_bonus",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_DU_BONUS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_adu_extremely_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_EXTREMELY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_adu_very_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_VERY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_adu_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_adu_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_adu_above_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_ABOVE_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_adu_bonus",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_BONUS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_adu_total",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_ADU_TOTAL",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_jadu_extremely_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_EXTREMELY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_jadu_very_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_VERY_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_jadu_low",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_LOW",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_jadu_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_jadu_above_moderate",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_ABOVE_MODERATE",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_jadu_bonus",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_BONUS",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_jadu_total",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_JADU_TOTAL",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_approvals_closed_2025",
+        "columnName": "approval_permit_holder",
+        "logicalType": "CATEGORY",
+        "originalName": "APPROVAL_PERMIT_HOLDER",
+        "nullable": true,
+        "dictionary": null
+      }
+    ]
+  },
+  "queries": [
+    {
+      "id": "housing_units_by_tier",
+      "title": "Dwelling units on building permits issued, by income tier and issue year",
+      "method": "Building Permit and Combination Building Permit approvals in Development approvals issued in 2025, Development approvals issued in 2024, counted once per JOB_ID; approvals with no JOB_ID are counted apart and in no total. A job is counted in the year of its earliest APPROVAL_ISSUE_DATE, so a job whose permits span two issue years is counted in the first. A job with several building permits is counted once, at the largest figure any of its permits records for each tier. Units are summed by income tier (APPROVAL_DU_EXTREMELY_LOW, _VERY_LOW, _LOW, _MODERATE, _ABOVE_MODERATE) as the permits record them; a blank tier is not a zero, and a tier no job in a year records has no total. Density-bonus units (APPROVAL_DU_BONUS) and ADUs (APPROVAL_ADU_TOTAL) are reported apart because the file does not say whether they are inside the tiers; the JADU columns are not read. APPROVAL_DU_NET_CHANGE is blank in the published file and is not read. Discretionary approvals such as Site Development and Coastal Development permits are left out because their units recur on the building permit. No target is applied.",
+      "sql": "WITH permits AS (\n SELECT NULLIF(TRIM(CAST(\"job_id\" AS VARCHAR)), '') AS job, TRY_CAST(TRIM(CAST(\"approval_issue_date\" AS VARCHAR)) AS DATE) AS issued,\n  TRY_CAST(TRIM(CAST(\"approval_du_extremely_low\" AS VARCHAR)) AS DOUBLE) AS extremely_low, TRY_CAST(TRIM(CAST(\"approval_du_very_low\" AS VARCHAR)) AS DOUBLE) AS very_low, TRY_CAST(TRIM(CAST(\"approval_du_low\" AS VARCHAR)) AS DOUBLE) AS low, TRY_CAST(TRIM(CAST(\"approval_du_moderate\" AS VARCHAR)) AS DOUBLE) AS moderate, TRY_CAST(TRIM(CAST(\"approval_du_above_moderate\" AS VARCHAR)) AS DOUBLE) AS above_moderate, TRY_CAST(TRIM(CAST(\"approval_du_bonus\" AS VARCHAR)) AS DOUBLE) AS bonus, TRY_CAST(TRIM(CAST(\"approval_adu_total\" AS VARCHAR)) AS DOUBLE) AS adu\n FROM \"analysis_approvals_issued_2025\" WHERE TRIM(CAST(\"approval_type\" AS VARCHAR)) IN ('Building Permit', 'Combination Building Permit')\n UNION ALL\n SELECT NULLIF(TRIM(CAST(\"job_id\" AS VARCHAR)), '') AS job, TRY_CAST(TRIM(CAST(\"approval_issue_date\" AS VARCHAR)) AS DATE) AS issued,\n  TRY_CAST(TRIM(CAST(\"approval_du_extremely_low\" AS VARCHAR)) AS DOUBLE) AS extremely_low, TRY_CAST(TRIM(CAST(\"approval_du_very_low\" AS VARCHAR)) AS DOUBLE) AS very_low, TRY_CAST(TRIM(CAST(\"approval_du_low\" AS VARCHAR)) AS DOUBLE) AS low, TRY_CAST(TRIM(CAST(\"approval_du_moderate\" AS VARCHAR)) AS DOUBLE) AS moderate, TRY_CAST(TRIM(CAST(\"approval_du_above_moderate\" AS VARCHAR)) AS DOUBLE) AS above_moderate, TRY_CAST(TRIM(CAST(\"approval_du_bonus\" AS VARCHAR)) AS DOUBLE) AS bonus, TRY_CAST(TRIM(CAST(\"approval_adu_total\" AS VARCHAR)) AS DOUBLE) AS adu\n FROM \"analysis_approvals_issued_2024\" WHERE TRIM(CAST(\"approval_type\" AS VARCHAR)) IN ('Building Permit', 'Combination Building Permit')\n), jobs AS (\n SELECT job, YEAR(MIN(issued)) AS issued_year, COUNT(*) AS permits, MAX(extremely_low) AS extremely_low, MAX(very_low) AS very_low, MAX(low) AS low, MAX(moderate) AS moderate, MAX(above_moderate) AS above_moderate, MAX(bonus) AS bonus, MAX(adu) AS adu\n FROM permits WHERE job IS NOT NULL GROUP BY job\n)\nSELECT issued_year, COUNT(*) AS jobs, COUNT(*) FILTER (WHERE extremely_low IS NOT NULL OR very_low IS NOT NULL OR low IS NOT NULL OR moderate IS NOT NULL OR above_moderate IS NOT NULL) AS tiered_jobs,\n COUNT(*) FILTER (WHERE permits > 1) AS multi_permit_jobs, SUM(extremely_low) AS extremely_low, SUM(very_low) AS very_low, SUM(low) AS low, SUM(moderate) AS moderate, SUM(above_moderate) AS above_moderate, SUM(bonus) AS bonus, SUM(adu) AS adu,\n (SELECT COUNT(*) FROM permits WHERE job IS NULL) AS no_job_permits\nFROM jobs GROUP BY issued_year ORDER BY issued_year NULLS LAST"
+    }
+  ]
+}

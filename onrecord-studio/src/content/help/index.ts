@@ -33,6 +33,7 @@ import releaseTiming from './topics-release-timing.json';
 import spendingRecordLeads from './topics-spending-record-leads.json';
 import policeCallLeads from './topics-police-call-leads.json';
 import parkingCitationLeads from './topics-parking-citation-leads.json';
+import housingApprovalLeads from './topics-housing-approval-leads.json';
 import overdueFollowUp from './topics-overdue-follow-up.json';
 import meetingPosting from './topics-meeting-posting.json';
 import dataPacks from './topics-data-packs.json';
@@ -120,6 +121,7 @@ const ALL_HELP_TOPICS = [
   ...spendingRecordLeads,
   ...policeCallLeads,
   ...parkingCitationLeads,
+  ...housingApprovalLeads,
   ...overdueFollowUp,
   ...meetingPosting,
   ...dataPacks,

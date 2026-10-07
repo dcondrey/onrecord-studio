@@ -263,6 +263,11 @@ export const PLAIN_FINDING_TEXT: Record<FindingKind, PlainText> = {
     notShown: "It does not show that anyone was unhoused or what officers did. The call type is the dispatcher's label, a no-report code does not mean no service was given, and the file records no arrival or clear time.",
     next: 'Ask the department for the CAD event narratives and the incident and arrest reports for the calls and beats named.',
   },
+  HOUSING_APPROVAL_LEAD: {
+    observed: "A count from a city's published development approvals: dwelling units on the building permits issued in a year, by income tier, with density-bonus units and ADUs apart, counted once per job.",
+    notShown: 'It does not show whether the City met a housing target. Units are as the permits record them, on permits issued rather than homes built, and a job with no tier recorded is in no tier.',
+    next: "Ask for the City's Annual Progress Report table A2 for the same year, its RHNA allocation by income tier, and the affordability agreements for the jobs counted.",
+  },
   PARKING_CITATION_LEAD: {
     observed: "A count from a city's published parking citations: citations under the oversized or recreational vehicle section and the 72-hour section, how many police wrote, the fines written on them, and the locations with most.",
     notShown: 'It does not show that anyone lived in a vehicle. A citation records the vehicle and the place; the fine is the amount written, not what was paid.',

@@ -375,6 +375,10 @@ pub fn falsification_for(kind: FindingKind) -> DossierFalsification {
             "The vehicles were stored or abandoned, not lived in.",
             &["the citing officers' notes for the citations counted", "the tow and impound records for the blocks named"],
         ),
+        FindingKind::HousingApprovalLead => (
+            "Income tiers are recorded only for projects with an affordability agreement, so units on other permits are in no tier.",
+            &["the City's Annual Progress Report for the year counted", "the affordability agreements for the jobs counted"],
+        ),
         FindingKind::ReleaseTimingConcentration => (
             "Staff finish and post work at the end of the week, or the requests released then fell due then.",
             &["the request log with each request's due date and assigned staff", "the portal's document activity log showing when each file was uploaded and when it was made public"],

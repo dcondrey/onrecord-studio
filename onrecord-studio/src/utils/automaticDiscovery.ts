@@ -9,6 +9,7 @@ import { capacityCompanions, capacityLeads, capacityQueries } from './capacityLe
 import { spendingCompanion, spendingLeads, spendingQueries } from './spendingLeads';
 import { callCompanions, callLeads, callQueries } from './callLeads';
 import { parkingLeads, parkingQueries } from './parkingLeads';
+import { housingCompanions, housingLeads, housingQueries } from './housingLeads';
 import { backlogChangeLeads, budgetTable, recurringServiceLeads, serviceAccountabilityLeads, serviceAccountabilityQueries, serviceCompanions, serviceRequestRoles, type LeadScope } from './serviceAccountability';
 
 export interface DiscoveryObservation {
@@ -56,7 +57,8 @@ export function snapshotFingerprint(schema: AnalyticalSchema, dataset: Analytica
     Object.values(stopCompanions(schema, dataset) ?? {}).map((table) => table.snapshotId), abatementCompanion(schema, dataset)?.snapshotId ?? null, reportsAroundAbatements(schema, dataset)?.tables.map((table) => table.snapshotId) ?? null,
     capacity ? [capacity.budget, capacity.reports.open, ...capacity.reports.closed].map((table) => table.snapshotId) : [],
     spendingCompanion(schema, dataset)?.snapshotId ?? null,
-    calls ? [...calls.years, calls.dispositions, calls.beats].flatMap((table) => table ? [table.snapshotId] : []) : []]);
+    calls ? [...calls.years, calls.dispositions, calls.beats].flatMap((table) => table ? [table.snapshotId] : []) : [],
+    housingCompanions(schema, dataset)?.map((table) => table.snapshotId) ?? []]);
 }
 
 export function automaticProfileQuery(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary): DiscoveryQuery {
@@ -77,7 +79,7 @@ export function automaticFollowups(schema: AnalyticalSchema, dataset: Analytical
   const plan = buildDiscoveryPlan(schema, selection);
   return [...plan.queries.filter((query) => (query.id === 'coverage' && selection.period) || (query.id === 'groups' && selection.dimension) || (query.id === 'changes' && selection.period)),
     ...serviceAccountabilityQueries(schema, dataset), ...stopQueries(schema, dataset), ...abatementQueries(schema, dataset), ...belongingsQueries(schema, dataset), ...disclosureQueries(schema, dataset), ...chargeQueries(schema, dataset), ...capacityQueries(schema, dataset),
-    ...spendingQueries(schema, dataset), ...callQueries(schema, dataset), ...parkingQueries(schema, dataset)];
+    ...spendingQueries(schema, dataset), ...callQueries(schema, dataset), ...parkingQueries(schema, dataset), ...housingQueries(schema, dataset)];
 }
 
 export function metadataObservations(dataset: AnalyticalDatasetSummary): DiscoveryObservation[] {
@@ -111,7 +113,8 @@ export function profileObservations(schema: AnalyticalSchema, dataset: Analytica
   const observations: DiscoveryObservation[] = [...serviceAccountabilityLeads(profile.results).map(lead('SERVICE_REPORTS')), ...stopLeads(profile.results).map(lead('POLICE_STOPS')),
     ...abatementLeads(profile.results).map(lead('ABATEMENT_LOGS')), ...belongingsLeads(profile.results).map(lead('ABATEMENT_LOGS')), ...chargeLeads(profile.results).map(lead('CHARGE_LOGS')), ...disclosureLeads(profile.results).map(lead('DISCLOSURE_FILINGS')),
     ...capacityLeads(profile.results).map(lead('CAPACITY_COMPARISON')), ...spendingLeads(profile.results).map(lead('SPENDING_RECORDS')),
-    ...callLeads(profile.results).map(lead('POLICE_CALLS')), ...parkingLeads(profile.results).map(lead('PARKING_CITATIONS'))];
+    ...callLeads(profile.results).map(lead('POLICE_CALLS')), ...parkingLeads(profile.results).map(lead('PARKING_CITATIONS')),
+    ...housingLeads(profile.results).map(lead('HOUSING_APPROVALS'))];
   const get = (id: string) => profile.results.find((entry) => entry.query.id === id);
   // A column's missing-value rate describes the source table's own completeness, not the subject
   // of the investigation; it stays on the import/quality screen rather than "what stands out".

@@ -42,6 +42,7 @@ pub enum LeadFamily {
     SpendingRecords,
     PoliceCalls,
     ParkingCitations,
+    HousingApprovals,
 }
 
 impl LeadFamily {
@@ -56,6 +57,7 @@ impl LeadFamily {
             Self::SpendingRecords => FindingKind::SpendingRecordLead,
             Self::PoliceCalls => FindingKind::PoliceCallLead,
             Self::ParkingCitations => FindingKind::ParkingCitationLead,
+            Self::HousingApprovals => FindingKind::HousingApprovalLead,
         }
     }
 }
@@ -407,5 +409,17 @@ mod tests {
             serde_json::json!("PARKING_CITATIONS")
         );
         assert_eq!(family.kind().as_str(), "PARKING_CITATION_LEAD");
+    }
+
+    #[test]
+    fn the_housing_family_the_feed_sends_is_stored_as_a_housing_approval_lead() {
+        let family: LeadFamily =
+            serde_json::from_value(serde_json::json!("HOUSING_APPROVALS")).unwrap();
+        assert_eq!(family, LeadFamily::HousingApprovals);
+        assert_eq!(
+            serde_json::to_value(family).unwrap(),
+            serde_json::json!("HOUSING_APPROVALS")
+        );
+        assert_eq!(family.kind().as_str(), "HOUSING_APPROVAL_LEAD");
     }
 }

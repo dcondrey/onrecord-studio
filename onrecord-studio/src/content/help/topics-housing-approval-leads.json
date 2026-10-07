@@ -1,0 +1,53 @@
+[
+  {
+    "id": "finding-housing-approval-lead",
+    "title": "Housing approval leads",
+    "group": "Finding kinds",
+    "keywords": [
+      "development approvals",
+      "building permits",
+      "housing",
+      "affordable housing",
+      "income tier",
+      "extremely low income",
+      "very low income",
+      "density bonus",
+      "ADU",
+      "RHNA",
+      "Annual Progress Report"
+    ],
+    "summary": "Dwelling units on the building permits the City issued in a year, by income tier (extremely low, very low, low, moderate, above moderate), with density-bonus units and ADUs reported apart, counted once per job from the imported Development approvals issued files.",
+    "sections": [
+      {
+        "heading": "What is counted",
+        "paragraphs": [
+          "Only the issued files are read, recognized by the address they were fetched from: the created, issued and closed files share one header and list the same approvals, so reading all three would count an approval up to three times. Where one year's issued file was fetched more than once, only the latest copy is read.",
+          "Only Building Permit and Combination Building Permit approvals are counted. Discretionary approvals such as Site Development and Coastal Development permits are left out because their units recur on the building permit. Each job is counted once, in the year of its earliest issue date; a job with several building permits is counted at the largest figure any of them records for each tier. Building permits with no job recorded are counted apart and are in no total.",
+          "Units are summed by income tier as the permits record them. A blank tier is not a zero: a tier no job in a year records is shown as not recorded. Density-bonus units and ADUs are reported apart because the file does not say whether they are inside the tiers; the JADU columns are not read. The file's net-change column is blank throughout and is not read."
+        ]
+      },
+      {
+        "heading": "When it is raised",
+        "paragraphs": [
+          "One lead is raised for each issue year with at least 30 jobs that have an income tier recorded. With two or more such years, each lead lists every year's extremely-low and very-low units side by side; no rate or trend is computed."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "The counts are units on permits issued, not homes built or occupied, and no target is applied: no housing need figure is imported. The City's Annual Progress Report and its RHNA allocation by tier are the documents to set them beside. The finding lists every table it read with its source address, retrieval date and SHA-256 digest, followed by the SQL."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is not assessed: the finding restates counts and infers nothing to score."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": ["HOUSING_APPROVAL_LEAD"],
+    "commandGroups": [],
+    "related": ["legal-vs-pattern", "findings-inbox", "finding-capacity-comparison-lead"]
+  }
+]

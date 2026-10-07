@@ -167,6 +167,7 @@ impl DraftFamily {
             | FindingKind::SpendingRecordLead
             | FindingKind::PoliceCallLead
             | FindingKind::ParkingCitationLead
+            | FindingKind::HousingApprovalLead
             | FindingKind::ReleaseTimingConcentration => Self::NoDraft,
         }
     }
@@ -414,7 +415,7 @@ mod tests {
     use super::*;
     use crate::analysis::finding::{FindingSeverity, FindingSubject};
 
-    pub(crate) fn all_kinds() -> [FindingKind; 30] {
+    pub(crate) fn all_kinds() -> [FindingKind; 31] {
         use FindingKind::*;
         [
             HeldBackResponse,
@@ -447,6 +448,7 @@ mod tests {
             SpendingRecordLead,
             PoliceCallLead,
             ParkingCitationLead,
+            HousingApprovalLead,
         ]
     }
 
