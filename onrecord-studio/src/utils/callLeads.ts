@@ -156,7 +156,7 @@ export function callLeads(results: Entry[], currentYear = new Date().getUTCFullY
       const undated = rows.filter((item) => item.type === 'SLEEPER' && item.year === null).reduce((sum, item) => sum + sent(item), 0);
       leads.push({ key: 'calls_outcomes', priority: 98, query: outcomes.query,
         title: `${shown(sent(latest))} calls dispatched as SLEEPER in ${year}${soFar}: ${shown(latest.arrest)} ended in arrest, ${shown(latest.crisis)} with the Crisis Response Team, ${shown(latest.noReport)} with no report required`,
-        detail: `SLEEPER in ${year}${soFar}: ${shown(latest.calls)} calls, ${split(latest)} Cancelled and duplicate calls (${CANCELLED.join(', ')}) are left out of the calls counted, and calls with no disposition are not counted as no report required. A code ending HR is counted both under the Crisis Response Team and under its first letter, so the figures overlap.${others.map((item) => ` ${CALL_NAMES[item.type] ?? item.type} in ${year}: ${shown(item.calls)} calls, ${split(item)}`).join('')}${earlier.length ? ` SLEEPER in other years: ${earlier.map((item) => `${item.year}: ${shown(sent(item))} calls not cancelled, ${shown(item.arrest)} ended in arrest`).join('; ')}.` : ''}${undated ? ` ${shown(undated)} SLEEPER calls have no readable date and are in no year.` : ''} ${CAVEAT}`,
+        detail: `SLEEPER in ${year}${soFar}: ${shown(latest.calls)} calls, ${split(latest)} Cancelled and duplicate calls (${CANCELLED.join(', ')}) are left out of the calls counted, and calls with no disposition are not counted as no report required. A code ending HR is counted both under the Crisis Response Team and under its first letter, so the figures overlap.${others.map((item) => ` ${CALL_NAMES[item.type] ?? item.type} in ${year}: ${shown(item.calls)} calls, ${split(item)}`).join('')}${earlier.length ? ` SLEEPER in other years: ${earlier.map((item) => `${item.year}${item.year! >= currentYear ? ' so far' : ''}: ${shown(sent(item))} calls not cancelled, ${shown(item.arrest)} ended in arrest`).join('; ')}.` : ''}${undated ? ` ${shown(undated)} SLEEPER calls have no readable date and are in no year.` : ''} ${CAVEAT}`,
         question: 'What did the officers record on the SLEEPER calls that ended in arrest, and what was each arrest for? The CAD event narratives and arrest reports for these incidents would show it.',
       });
     }
@@ -168,11 +168,13 @@ export function callLeads(results: Entry[], currentYear = new Date().getUTCFullY
     const place = (row: Record<string, unknown>, word = 'beat') => `${word} ${String(row.beat)}${typeof row.neighborhood === 'string' && row.neighborhood ? ` (${row.neighborhood})` : ''}`;
     const first = count(top.first_year); const last = count(top.last_year);
     const span = first === null || last === null ? '' : first === last ? ` in ${first}` : ` from ${first} to ${last}`;
+    const spanSoFar = span && last! >= currentYear ? `${span} so far` : span;
     const noBeat = count(top.no_beat) ?? 0;
     const unnamed = places.rows.some((row) => row.neighborhood == null);
+    const listed = places.query.sql.includes('LEFT JOIN places');
     leads.push({ key: 'calls_sleeper_beats', priority: 95, query: places.query,
-      title: `${shown(count(top.calls) ?? 0)} of ${shown(citywide)} SLEEPER calls${span} were to addresses in ${place(top)}`,
-      detail: `${places.rows.map((row) => `${place(row, 'Beat')}: ${shown(count(row.calls) ?? 0)} (${percent(count(row.calls) ?? 0, citywide)}).`).join(' ')}${noBeat ? ` ${shown(noBeat)} calls have no beat recorded.` : ''}${unnamed ? ' A beat with no neighborhood named is not in the imported beat list.' : ''} Cancelled and duplicate calls are left out. A beat's count is of calls to addresses in it, not a count of people. ${CAVEAT}`,
+      title: `${shown(count(top.calls) ?? 0)} of ${shown(citywide)} SLEEPER calls${spanSoFar} were to addresses in ${place(top)}`,
+      detail: `${places.rows.map((row) => `${place(row, 'Beat')}: ${shown(count(row.calls) ?? 0)} (${percent(count(row.calls) ?? 0, citywide)}).`).join(' ')}${noBeat ? ` ${shown(noBeat)} calls have no beat recorded.` : ''}${unnamed ? listed ? ' A beat with no neighborhood named is not in the imported beat list.' : ' No beat list is imported, so beats are named by code.' : ''} Cancelled and duplicate calls are left out. A beat's count is of calls to addresses in it, not a count of people. ${CAVEAT}`,
       question: 'Which units answered the SLEEPER calls in these beats, and what did they record? The CAD event narratives and incident reports for the beats named would show it.',
     });
   }

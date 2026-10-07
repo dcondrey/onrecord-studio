@@ -30,7 +30,7 @@ describe('leads from police stop records', () => {
         [null, 7, 0, 0, 0, 0, 7, 0, 'Stop results', seized, null, null]]) });
     expect(stopLeads([outcomes(99, 5)])).toEqual([]);
     const [lead] = stopLeads([outcomes(100, 5)]);
-    expect(lead.title).toBe('30.0% of people perceived as unhoused were arrested when stopped, against 10.0% of others');
+    expect(lead.title).toBe('30.0% of people perceived as unhoused with a recorded result were arrested when stopped, against 10.0% of others with one');
     expect(lead.detail).toContain('100 of 1,100 persons in the stop records, 2024-01-02 to 2026-09-28 were perceived as unhoused.');
     expect(lead.detail).toContain('Arrest on an outstanding warrant: 15 of 100 (15.0%) against 30 of 1,000 (3.0%).');
     expect(lead.detail).toContain('7 persons have no perception recorded and are left out.');
@@ -45,13 +45,13 @@ describe('leads from police stop records', () => {
     expect(stopLeads([outcomes(99)])).toEqual([]);
     expect(stopLeads([outcomes(100)])).toHaveLength(1);
     const [lead] = stopLeads([outcomes(200)]);
-    expect(lead.title).toBe('20.0% of people perceived as unhoused were arrested when stopped, against 10.0% of others');
+    expect(lead.title).toBe('20.0% of people perceived as unhoused with a recorded result were arrested when stopped, against 10.0% of others with one');
     expect(lead.detail).toContain('400 of 800 persons in the stop records were perceived as unhoused. 200 persons perceived as unhoused and 0 others have no row in Stop results;');
     expect(lead.detail).toContain('Custodial arrest: 40 of 200 (20.0%) against 40 of 400 (10.0%).');
     expect(lead.detail).toContain('Property seized: 8 of 400 (2.0%) against 8 of 400 (2.0%).');
     expect(stopLeads([outcomes(400, 99, 20)])).toEqual([]);
     const [othersUnrowed] = stopLeads([outcomes(400, 200, 20)]);
-    expect(othersUnrowed.title).toBe('10.0% of people perceived as unhoused were arrested when stopped, against 10.0% of others');
+    expect(othersUnrowed.title).toBe('10.0% of people perceived as unhoused with a recorded result were arrested when stopped, against 10.0% of others with one');
     expect(othersUnrowed.detail).toContain('Custodial arrest: 40 of 400 (10.0%) against 20 of 200 (10.0%).');
   });
 

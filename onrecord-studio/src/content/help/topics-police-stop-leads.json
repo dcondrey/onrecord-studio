@@ -20,7 +20,7 @@
         "heading": "What it shows",
         "paragraphs": [
           "California's Racial and Identity Profiling Act requires each stop to be recorded, with the officer's perception of the person, the reason for the stop, the result and any property seized. The publisher keeps these in separate tables matched on stop and person number.",
-          "The app counts how many persons were perceived as unhoused, how many were arrested, cited or had property seized, the most recorded reasons, and, for each reason with at least 100 persons in both groups, the rate of arrest without a warrant in each group for that same reason.",
+          "The app counts how many persons were perceived as unhoused, how many were arrested, cited or had property seized, the most recorded reasons, and, for each reason with at least 100 persons with a recorded result in both groups, the rate of arrest without a warrant in each group for that same reason. Arrest and citation rates are over persons with a row in the results table; property seizure is over all persons.",
           "When the persons table is imported without its companion tables, the app fetches them under your Data upkeep settings."
         ]
       },
