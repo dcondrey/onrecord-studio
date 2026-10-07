@@ -43,6 +43,12 @@ describe('leads from police calls for service', () => {
     expect(callLeads([outcomes([ended('SLEEPER', 100)])], 2025)[0].title).toMatch(/^100 calls dispatched as SLEEPER in 2025 so far: /);
   });
 
+  it('keeps an incident whose entries disagree out of the calls with a disposition and says how many', () => {
+    const [lead] = callLeads([outcomes([ended('SLEEPER', 100, { conflicting: 3, other: 100 - 5 - 3 - 12 - 8 - 40 - 3 })])], 2026);
+    expect(lead.detail).toContain('of the 92 with a disposition, 12 (13.0%) ended in arrest');
+    expect(lead.detail).toContain('5 have no disposition recorded, 3 were entered with different dispositions at the same time and are counted under none, and 20 were cancelled');
+  });
+
   it('describes another call type beside SLEEPER only at 100 calls not cancelled', () => {
     const detail = (welfare: number) => callLeads([outcomes([ended('SLEEPER', 100), ended('CW', welfare)])], 2026)[0].detail;
     expect(detail(99)).not.toContain('CW (check the welfare)');

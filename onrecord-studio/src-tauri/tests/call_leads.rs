@@ -88,14 +88,16 @@ async fn call_checks_count_each_incident_once_from_the_latest_copy_of_each_year(
                 assert_eq!(result.row_count, 5);
                 // E25001 is entered twice and counted once, as its later arrest; the lower-case
                 // sleeper is a SLEEPER call. AHR is an arrest and a Crisis Response Team call.
+                // E25011's two entries share a time but not a disposition: conflicting, not A.
                 let sleeper_2025 = row_of(
                     &result,
                     &[("call_year", json!(2025)), ("call_type", json!("SLEEPER"))],
                 );
                 for (column, expected) in [
-                    ("calls", 6),
+                    ("calls", 7),
                     ("cancelled_duplicate", 1),
                     ("blank", 1),
+                    ("conflicting", 1),
                     ("arrest", 2),
                     ("report", 0),
                     ("no_report", 2),
@@ -118,6 +120,7 @@ async fn call_checks_count_each_incident_once_from_the_latest_copy_of_each_year(
                     ("calls", 6),
                     ("cancelled_duplicate", 2),
                     ("blank", 0),
+                    ("conflicting", 0),
                     ("arrest", 0),
                     ("report", 1),
                     ("no_report", 2),
@@ -152,7 +155,8 @@ async fn call_checks_count_each_incident_once_from_the_latest_copy_of_each_year(
                 // A beat missing from the list keeps its calls and has no neighborhood.
                 assert_eq!(cell(&result, 2, "beat"), &json!("999"));
                 assert!(cell(&result, 2, "neighborhood").is_null());
-                assert_eq!(count(&result, 0, "citywide_calls"), 9);
+                assert_eq!(count(&result, 2, "calls"), 2);
+                assert_eq!(count(&result, 0, "citywide_calls"), 10);
                 assert_eq!(count(&result, 0, "no_beat"), 1);
             }
             _ => panic!("Unverified query {id}"),

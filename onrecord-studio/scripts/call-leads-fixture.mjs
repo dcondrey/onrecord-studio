@@ -20,12 +20,14 @@ const lookupCsv = (lines) => `﻿${lines.join('\r\n')}\r\n`;
 const year = (number) => `https://seshat.datasd.org/police_calls_for_service/pd_calls_for_service_${number}_datasd.csv`;
 const tables = {
   // E25001 is repeated; its later entry (A) is kept. The lower-case sleeper is SLEEPER; 5150V and
-  // 415 are not read. E25005 has no disposition, E25006 no beat.
+  // 415 are not read. E25005 has no disposition, E25006 no beat. E25011 is entered twice at the
+  // same time as K and A, so neither is kept as its outcome.
   cfs_2025: { uri: year(2025), retrievedAt: '2026-10-01T00:00:00Z', csv: yearCsv([
     ['E25001', '2025-03-01 10:00:00', 'SLEEPER', 'K', '521'], ['E25001', '2025-03-01 11:00:00', 'SLEEPER', 'A', '521'], ['E25002', '2025-04-01 09:00:00', 'SLEEPER', 'AHR', '521'],
     ['E25003', '2025-05-01 09:00:00', ' sleeper ', 'K', '524'], ['E25004', '2025-06-01 09:00:00', 'SLEEPER', 'CAN', '524'], ['E25005', '2025-07-01 09:00:00', 'SLEEPER', '', '999'],
     ['E25006', '2025-08-01 09:00:00', 'SLEEPER', 'KHR', ''], ['E25007', '2025-08-02 09:00:00', 'CW', 'U', '521'], ['E25008', '2025-08-03 09:00:00', '5150V', 'A', '521'],
-    ['E25009', '2025-08-04 09:00:00', '602', 'R', '524'], ['E25010', '2025-08-05 09:00:00', '415', 'A', '521']]) },
+    ['E25009', '2025-08-04 09:00:00', '602', 'R', '524'], ['E25010', '2025-08-05 09:00:00', '415', 'A', '521'],
+    ['E25011', '2025-09-01 09:00:00', 'SLEEPER', 'K', '999'], ['E25011', '2025-09-01 09:00:00', 'SLEEPER', 'A', '999']]) },
   // An earlier copy of the current year: E26001 was later re-coded K, and E26099 left the file.
   cfs_prior_2026: { uri: year(2026), retrievedAt: '2026-09-01T00:00:00Z', csv: yearCsv([
     ['E26001', '2026-01-05 09:00:00', 'SLEEPER', 'A', '521'], ['E26002', '2026-02-01 09:00:00', 'SLEEPER', 'X', '521'], ['E26003', '2026-03-01 09:00:00', 'SLEEPER', 'R', '524'],
