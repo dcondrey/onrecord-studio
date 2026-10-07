@@ -75,6 +75,7 @@ ASK = no licence stated, permission needed before publishing; COUNTS = publish a
 | `settlement_resolutions` | Council resolutions index and PDFs | one settlement over 50,000 dollars | PD |
 | `shelter_contracts` | Housing Commission staff reports | operator, programme, amount, term, beds | PD |
 | `city_leases` | City-owned property leases | lease or permit on a site, dated snapshot | PD |
+| `budget_accounts`, `budget_departments`, `budget_funds` | City budget reference files | account, funds center, fund | PD |
 | `state_homelessness_grants` | HHAP fiscal snapshot, Encampment Resolution Fund status | grantee by round or site | PD |
 | `federal_awards` | USAspending, HUD CoC award lists, single audits | award, audit, finding | PD |
 
@@ -83,11 +84,16 @@ ASK = no licence stated, permission needed before publishing; COUNTS = publish a
 |---|---|---|---|
 | `service_reports` | Get It Done, all services, every closed year plus dated open snapshots | report | PD |
 | `police_calls` | Calls for service 2015 on, with call-type and disposition lookups | incident | PD |
+| `call_types`, `call_dispositions`, `police_beats` | The calls' lookup files | code | PD |
+| `fire_ems_incidents` | Fire-Rescue responses 2007 on | response | PD |
 
 ### Enforcement
 | Table | Source | Grain | Licence |
 |---|---|---|---|
 | `police_stops` and companions | SDPD stop records | person stopped | PD |
+| `police_offenses` | SDPD NIBRS offences 2020 on | offence on a case | PD |
+| `traffic_collisions`, `traffic_collision_people` | SDPD collision reports 2015 on | report; person in a report | PD |
+| `hate_crimes` | SDPD hate crimes | case | PD |
 | `arrests_regional` | ARJIS Group B arrests | arrest-offence, block address | ASK |
 | `charge_counts` | Released SDPD arrest and citation exports | counts by section, month, beat, race | COUNTS |
 | `abatement_notices`, `abatements_completed` | Released logs (25-5806, 26-772) | notice, abatement | PD |
@@ -106,6 +112,7 @@ ASK = no licence stated, permission needed before publishing; COUNTS = publish a
 | `homeless_students` | State education department | school by year by dwelling type | PD |
 | `housing_production` | State housing progress reports | project by year | PD |
 | `short_term_rentals` | City licence registry (dated snapshots, without host contact fields) | licence | PD |
+| `approvals_created`, `approvals_issued`, `approvals_closed` | City development approvals 2024 on, by the year of each stage | approval | PD |
 
 ### Decisions
 | Table | Source | Grain | Licence |
@@ -199,7 +206,15 @@ column or table here before anything is published.
 5. **First-run fetch (done).** On a library with no imported tables, the app offers to fetch the
    core City tables (operating budget and actuals, Get It Done open and Encampment reports, calls
    for service) straight from their publishers; it does not read a pack.
-6. **Later.** Fetch only what was published after a pack's build date, using the recorded
+6. **Coverage (2026-10-07).** Every City open-data table above that the source list fetches is in a
+   pack: `san-diego-money`, `san-diego-reports`, `san-diego-enforcement` (stops and companions,
+   offences, parking citations 2012 on, collisions, hate crimes) and `san-diego-capacity`
+   (development approvals). Each table has a conformed definition: a publisher key only where the
+   publisher's column is unique per row, and a time column, or none for a reference list or a
+   holdings snapshot. Not packed: SANDAG schools and transit stops (no stated licence), the
+   short-term rental registry (its original carries host names and phones, and a pack ships
+   originals byte for byte), and Commission on Police Practices cases (file names differ by year).
+7. **Later.** Fetch only what was published after a pack's build date, using the recorded
    freshness markers; the remaining PD packs; ASK tables once permission is in writing.
 
 ## From the research blueprint (owner's file, 2026-10-06)

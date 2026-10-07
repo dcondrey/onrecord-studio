@@ -29,6 +29,18 @@ const MONEY: &[PackTable] = &[
         dataset: CityDataset::CapitalActuals,
     },
     PackTable {
+        table: "budget_accounts",
+        dataset: CityDataset::BudgetAccounts,
+    },
+    PackTable {
+        table: "budget_departments",
+        dataset: CityDataset::BudgetDepartments,
+    },
+    PackTable {
+        table: "budget_funds",
+        dataset: CityDataset::BudgetFunds,
+    },
+    PackTable {
         table: "city_properties",
         dataset: CityDataset::CityProperties,
     },
@@ -55,17 +67,103 @@ const REPORTS: &[PackTable] = &[
         table: "police_calls",
         dataset: CityDataset::CallsForService,
     },
+    PackTable {
+        table: "call_types",
+        dataset: CityDataset::CallTypes,
+    },
+    PackTable {
+        table: "call_dispositions",
+        dataset: CityDataset::DispositionCodes,
+    },
+    PackTable {
+        table: "police_beats",
+        dataset: CityDataset::BeatCodes,
+    },
+    PackTable {
+        table: "fire_ems_incidents",
+        dataset: CityDataset::FireEmsIncidents,
+    },
+];
+
+const ENFORCEMENT: &[PackTable] = &[
+    PackTable {
+        table: "police_stops",
+        dataset: CityDataset::RipaStops,
+    },
+    PackTable {
+        table: "police_stop_reasons",
+        dataset: CityDataset::RipaStopReasons,
+    },
+    PackTable {
+        table: "police_stop_results",
+        dataset: CityDataset::RipaStopResults,
+    },
+    PackTable {
+        table: "police_stop_seizure_basis",
+        dataset: CityDataset::RipaPropertySeizureBasis,
+    },
+    PackTable {
+        table: "police_offenses",
+        dataset: CityDataset::NibrsOffenses,
+    },
+    PackTable {
+        table: "parking_citations",
+        dataset: CityDataset::ParkingCitationsFirstHalf,
+    },
+    PackTable {
+        table: "parking_citations",
+        dataset: CityDataset::ParkingCitationsSecondHalf,
+    },
+    PackTable {
+        table: "traffic_collisions",
+        dataset: CityDataset::TrafficCollisions,
+    },
+    PackTable {
+        table: "traffic_collision_people",
+        dataset: CityDataset::TrafficCollisionPeople,
+    },
+    PackTable {
+        table: "hate_crimes",
+        dataset: CityDataset::HateCrimes,
+    },
+];
+
+const CAPACITY: &[PackTable] = &[
+    PackTable {
+        table: "approvals_created",
+        dataset: CityDataset::ApprovalsCreated,
+    },
+    PackTable {
+        table: "approvals_issued",
+        dataset: CityDataset::ApprovalsIssued,
+    },
+    PackTable {
+        table: "approvals_closed",
+        dataset: CityDataset::ApprovalsClosed,
+    },
+];
+
+/// Every pack by name. Each holds only City open data published under ODC-PDDL.
+const PACKS: &[(&str, &[PackTable])] = &[
+    ("san-diego-money", MONEY),
+    ("san-diego-reports", REPORTS),
+    ("san-diego-enforcement", ENFORCEMENT),
+    ("san-diego-capacity", CAPACITY),
 ];
 
 /// The City open-data tables of `pack`.
 pub(crate) fn pack_tables(pack: &str) -> Result<&'static [PackTable], AppError> {
-    match pack {
-        "san-diego-money" => Ok(MONEY),
-        "san-diego-reports" => Ok(REPORTS),
-        other => Err(AppError::DataParsing(format!(
-            "Unknown pack '{other}'; packs are san-diego-money and san-diego-reports"
-        ))),
-    }
+    PACKS
+        .iter()
+        .find(|(name, _)| *name == pack)
+        .map(|(_, tables)| *tables)
+        .ok_or_else(|| {
+            let names = PACKS.iter().map(|(name, _)| *name).collect::<Vec<_>>();
+            AppError::DataParsing(format!(
+                "Unknown pack '{pack}'; packs are {}",
+                names.join(", ")
+            ))
+        })
 }
 
 /// The kind the app imports a pack's original file as: that of the source-list dataset that
@@ -96,6 +194,27 @@ pub(crate) fn original_kind(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A table the builder cannot conform, or a dataset with no published file, fails a build only
+    /// after every earlier file has been downloaded.
+    #[test]
+    fn every_pack_table_is_published_and_has_a_conformed_definition() {
+        for (pack, tables) in PACKS {
+            for entry in *tables {
+                assert!(
+                    super::super::conformed::has_definition(entry.table),
+                    "{pack} {}",
+                    entry.table
+                );
+                assert!(
+                    dataset_source(entry.dataset, None, 2026).is_ok()
+                        || dataset_source(entry.dataset, Some(2025), 2026).is_ok(),
+                    "{pack} {:?}",
+                    entry.dataset
+                );
+            }
+        }
+    }
 
     const ACTUALS: &str =
         "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv";

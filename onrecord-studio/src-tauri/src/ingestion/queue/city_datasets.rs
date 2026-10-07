@@ -350,6 +350,135 @@ fn city_dataset_spec(
                 refuse_truncated: false,
             }
         }
+        CityDataset::CallTypes
+        | CityDataset::DispositionCodes
+        | CityDataset::BeatCodes
+        | CityDataset::BudgetAccounts
+        | CityDataset::BudgetDepartments
+        | CityDataset::BudgetFunds
+        | CityDataset::TrafficCollisions
+        | CityDataset::TrafficCollisionPeople
+        | CityDataset::HateCrimes => {
+            let (folder, stem, kind, display_name) = match dataset {
+                CityDataset::CallTypes => (
+                    "police_calls_for_service",
+                    "pd_cfs_calltypes",
+                    AnalyticalDatasetKind::CallsCodebook,
+                    "SDPD call types",
+                ),
+                CityDataset::DispositionCodes => (
+                    "police_calls_for_service",
+                    "pd_dispo_codes",
+                    AnalyticalDatasetKind::CallsCodebook,
+                    "SDPD call dispositions",
+                ),
+                CityDataset::BeatCodes => (
+                    "gis_police_beats",
+                    "pd_beat_codes_list",
+                    AnalyticalDatasetKind::RegionalData,
+                    "SDPD beats",
+                ),
+                CityDataset::BudgetAccounts => (
+                    "accounts_city_budget",
+                    "budget_reference_accounts",
+                    AnalyticalDatasetKind::BudgetDimension,
+                    "City budget accounts",
+                ),
+                CityDataset::BudgetDepartments => (
+                    "departments_city_budget",
+                    "budget_reference_depts",
+                    AnalyticalDatasetKind::BudgetDimension,
+                    "City budget departments",
+                ),
+                CityDataset::BudgetFunds => (
+                    "funds_city_budget",
+                    "budget_reference_funds",
+                    AnalyticalDatasetKind::BudgetDimension,
+                    "City budget funds",
+                ),
+                CityDataset::TrafficCollisions => (
+                    "traffic_collisions",
+                    "pd_collisions",
+                    AnalyticalDatasetKind::RegionalData,
+                    "SDPD traffic collisions (all published years)",
+                ),
+                CityDataset::TrafficCollisionPeople => (
+                    "traffic_collision_details",
+                    "pd_collisions_details",
+                    AnalyticalDatasetKind::RegionalData,
+                    "SDPD traffic collisions, people involved (all published years)",
+                ),
+                _ => (
+                    "hate_crimes",
+                    "hate_crimes",
+                    AnalyticalDatasetKind::RegionalData,
+                    "SDPD hate crimes",
+                ),
+            };
+            unsplit(display_name)?;
+            let file_name = format!("{stem}_datasd.csv");
+            CityDatasetSpec {
+                url: format!("https://seshat.datasd.org/{folder}/{file_name}"),
+                kind,
+                display_name: display_name.into(),
+                file_name,
+                // The publisher replaces each file when it adds or corrects rows.
+                partial: true,
+                row_filter: None,
+                refuse_truncated: false,
+            }
+        }
+        CityDataset::ParkingCitationsFirstHalf | CityDataset::ParkingCitationsSecondHalf => {
+            let (part, half) = match dataset {
+                CityDataset::ParkingCitationsFirstHalf => (1, "January to June"),
+                _ => (2, "July to December"),
+            };
+            let year = yearly(2012, "Parking citations")?;
+            let file_name = format!("parking_citations_{year}_part{part}_datasd.csv");
+            CityDatasetSpec {
+                url: format!("https://seshat.datasd.org/parking_citations/{file_name}"),
+                kind: AnalyticalDatasetKind::RegionalData,
+                display_name: format!("Parking citations {year}, {half}"),
+                file_name,
+                partial: year >= current_year,
+                row_filter: None,
+                refuse_truncated: false,
+            }
+        }
+        CityDataset::FireEmsIncidents => {
+            let year = yearly(2007, "Fire-Rescue incidents")?;
+            let file_name = format!("fd_incidents_{year}_datasd.csv");
+            CityDatasetSpec {
+                url: format!("https://seshat.datasd.org/fire_ems_incidents/{file_name}"),
+                kind: AnalyticalDatasetKind::RegionalData,
+                display_name: format!("Fire-Rescue incidents {year}"),
+                file_name,
+                partial: year >= current_year,
+                row_filter: None,
+                refuse_truncated: false,
+            }
+        }
+        CityDataset::ApprovalsCreated
+        | CityDataset::ApprovalsIssued
+        | CityDataset::ApprovalsClosed => {
+            let stage = match dataset {
+                CityDataset::ApprovalsCreated => "created",
+                CityDataset::ApprovalsIssued => "issued",
+                _ => "closed",
+            };
+            let year = yearly(2024, "Development approvals")?;
+            let file_name = format!("approvals_{stage}_{year}_datasd.csv");
+            CityDatasetSpec {
+                url: format!("https://seshat.datasd.org/development_permits/{file_name}"),
+                kind: AnalyticalDatasetKind::RegionalData,
+                display_name: format!("Development approvals {stage} in {year}"),
+                file_name,
+                // An approval created in a year is updated as it is issued and closed later.
+                partial: true,
+                row_filter: None,
+                refuse_truncated: false,
+            }
+        }
     })
 }
 

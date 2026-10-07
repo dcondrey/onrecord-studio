@@ -192,6 +192,30 @@ pub enum CityDataset {
     CityParcels,
     /// Leases and permits on City-owned property.
     CityLeases,
+    /// The SDPD call types a call for service names.
+    CallTypes,
+    /// The SDPD dispositions a call for service ends with.
+    DispositionCodes,
+    /// SDPD beats and the neighbourhood each covers.
+    BeatCodes,
+    BudgetAccounts,
+    BudgetDepartments,
+    BudgetFunds,
+    /// Parking citations issued January to June, one published file per year.
+    ParkingCitationsFirstHalf,
+    /// Parking citations issued July to December, one published file per year.
+    ParkingCitationsSecondHalf,
+    /// Fire-Rescue responses, one published file per year.
+    FireEmsIncidents,
+    /// Development approvals by the year the approval was created.
+    ApprovalsCreated,
+    ApprovalsIssued,
+    ApprovalsClosed,
+    /// SDPD collision reports since 2015 in one file.
+    TrafficCollisions,
+    /// One row per person in an SDPD collision report.
+    TrafficCollisionPeople,
+    HateCrimes,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

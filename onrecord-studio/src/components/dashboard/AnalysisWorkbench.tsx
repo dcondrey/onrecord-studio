@@ -58,6 +58,21 @@ const cityDatasets: { value: CityDataset; label: string; yearly?: true }[] = [
   { value: 'CITY_PROPERTIES', label: 'City-owned properties (today)' },
   { value: 'CITY_PARCELS', label: 'City-owned property parcels (today)' },
   { value: 'CITY_LEASES', label: 'City property leases and permits (today)' },
+  { value: 'CALL_TYPES', label: 'SDPD call types' },
+  { value: 'DISPOSITION_CODES', label: 'SDPD call dispositions' },
+  { value: 'BEAT_CODES', label: 'SDPD beats' },
+  { value: 'BUDGET_ACCOUNTS', label: 'City budget accounts' },
+  { value: 'BUDGET_DEPARTMENTS', label: 'City budget departments' },
+  { value: 'BUDGET_FUNDS', label: 'City budget funds' },
+  { value: 'PARKING_CITATIONS_FIRST_HALF', label: 'Parking citations, January to June (by year)', yearly: true },
+  { value: 'PARKING_CITATIONS_SECOND_HALF', label: 'Parking citations, July to December (by year)', yearly: true },
+  { value: 'FIRE_EMS_INCIDENTS', label: 'Fire-Rescue incidents (by year)', yearly: true },
+  { value: 'APPROVALS_CREATED', label: 'Development approvals created (by year)', yearly: true },
+  { value: 'APPROVALS_ISSUED', label: 'Development approvals issued (by year)', yearly: true },
+  { value: 'APPROVALS_CLOSED', label: 'Development approvals closed (by year)', yearly: true },
+  { value: 'TRAFFIC_COLLISIONS', label: 'SDPD traffic collisions (all years)' },
+  { value: 'TRAFFIC_COLLISION_PEOPLE', label: 'SDPD traffic collisions, people involved (all years)' },
+  { value: 'HATE_CRIMES', label: 'SDPD hate crimes' },
 ];
 
 export default function AnalysisWorkbench() {

@@ -22,6 +22,8 @@ enum TimeColumn {
     /// A City fiscal year published as its last two digits (`23` is the year ending June 2023).
     /// It names no day, so `occurred_at`, `occurred_on` and `calendar_year` stay NULL.
     FiscalYear(&'static str),
+    /// A reference list or a holdings snapshot: its rows record no event time.
+    Undated,
 }
 
 struct ConformedSpec {
@@ -31,7 +33,9 @@ struct ConformedSpec {
     time: TimeColumn,
 }
 
-/// The first slice's tables; headers as the publisher's files spell them.
+/// Every pack table; headers as the publisher's files spell them, matched without regard to case.
+/// A key is named only where the publisher's column is unique per row: a repeated key would give
+/// two rows one `record_id`.
 const SPECS: &[ConformedSpec] = &[
     ConformedSpec {
         table: "budget_adopted",
@@ -44,6 +48,46 @@ const SPECS: &[ConformedSpec] = &[
         time: TimeColumn::FiscalYear("report_fy"),
     },
     ConformedSpec {
+        table: "capital_budget",
+        key: None,
+        time: TimeColumn::FiscalYear("report_fy"),
+    },
+    ConformedSpec {
+        table: "capital_actuals",
+        key: None,
+        time: TimeColumn::FiscalYear("report_fy"),
+    },
+    ConformedSpec {
+        table: "budget_accounts",
+        key: Some("account_number"),
+        time: TimeColumn::Undated,
+    },
+    ConformedSpec {
+        table: "budget_departments",
+        key: None,
+        time: TimeColumn::Undated,
+    },
+    ConformedSpec {
+        table: "budget_funds",
+        key: Some("fund_number"),
+        time: TimeColumn::Undated,
+    },
+    ConformedSpec {
+        table: "city_properties",
+        key: None,
+        time: TimeColumn::Undated,
+    },
+    ConformedSpec {
+        table: "city_parcels",
+        key: None,
+        time: TimeColumn::Undated,
+    },
+    ConformedSpec {
+        table: "city_leases",
+        key: None,
+        time: TimeColumn::RecordedAt("date_effective"),
+    },
+    ConformedSpec {
         table: "service_reports",
         key: Some("service_request_id"),
         time: TimeColumn::RecordedAt("date_requested"),
@@ -52,6 +96,86 @@ const SPECS: &[ConformedSpec] = &[
         table: "police_calls",
         key: Some("incident_num"),
         time: TimeColumn::RecordedAt("date_time"),
+    },
+    ConformedSpec {
+        table: "call_types",
+        key: Some("call_type"),
+        time: TimeColumn::Undated,
+    },
+    ConformedSpec {
+        table: "call_dispositions",
+        key: Some("dispo_code"),
+        time: TimeColumn::Undated,
+    },
+    ConformedSpec {
+        table: "police_beats",
+        key: Some("beat"),
+        time: TimeColumn::Undated,
+    },
+    ConformedSpec {
+        table: "fire_ems_incidents",
+        key: None,
+        time: TimeColumn::RecordedAt("date_response"),
+    },
+    ConformedSpec {
+        table: "police_stops",
+        key: None,
+        time: TimeColumn::RecordedAt("stopdate"),
+    },
+    ConformedSpec {
+        table: "police_stop_reasons",
+        key: None,
+        time: TimeColumn::Undated,
+    },
+    ConformedSpec {
+        table: "police_stop_results",
+        key: None,
+        time: TimeColumn::Undated,
+    },
+    ConformedSpec {
+        table: "police_stop_seizure_basis",
+        key: None,
+        time: TimeColumn::Undated,
+    },
+    ConformedSpec {
+        table: "police_offenses",
+        key: Some("nibrs_uniq"),
+        time: TimeColumn::RecordedAt("occured_on"),
+    },
+    ConformedSpec {
+        table: "parking_citations",
+        key: Some("citation_id"),
+        time: TimeColumn::RecordedAt("date_issue"),
+    },
+    ConformedSpec {
+        table: "traffic_collisions",
+        key: Some("report_id"),
+        time: TimeColumn::RecordedAt("date_time"),
+    },
+    ConformedSpec {
+        table: "traffic_collision_people",
+        key: None,
+        time: TimeColumn::RecordedAt("date_time"),
+    },
+    ConformedSpec {
+        table: "hate_crimes",
+        key: None,
+        time: TimeColumn::RecordedAt("date"),
+    },
+    ConformedSpec {
+        table: "approvals_created",
+        key: Some("approval_id"),
+        time: TimeColumn::RecordedAt("approval_create_date"),
+    },
+    ConformedSpec {
+        table: "approvals_issued",
+        key: Some("approval_id"),
+        time: TimeColumn::RecordedAt("approval_issue_date"),
+    },
+    ConformedSpec {
+        table: "approvals_closed",
+        key: Some("approval_id"),
+        time: TimeColumn::RecordedAt("approval_close_date"),
     },
 ];
 
@@ -91,6 +215,10 @@ pub(super) fn literal(value: Option<&str>) -> String {
 
 fn storage(context: &'static str) -> impl Fn(duckdb::Error) -> AppError {
     move |error| AppError::Storage(format!("{context}: {error}"))
+}
+
+pub(super) fn has_definition(table: &str) -> bool {
+    SPECS.iter().any(|spec| spec.table == table)
 }
 
 fn spec(table: &str) -> Result<&'static ConformedSpec, AppError> {
@@ -172,19 +300,32 @@ pub fn conformed_select(
     };
     let (time_header, occurred_at, occurred_on, fiscal_year) = match spec.time {
         TimeColumn::RecordedAt(header) => (
-            header,
+            Some(header),
             "try_strptime(__time, ['%Y-%m-%d %H:%M:%S.%g', '%Y-%m-%d %H:%M:%S'])",
-            "COALESCE(CAST(occurred_at AS DATE), CAST(try_strptime(__time, '%Y-%m-%d') AS DATE))",
+            "COALESCE(CAST(occurred_at AS DATE),
+                CAST(try_strptime(__time, ['%Y-%m-%d', '%m/%d/%Y']) AS DATE))",
             "CAST(year(occurred_on) + CASE WHEN month(occurred_on) >= 7 THEN 1 ELSE 0 END AS INTEGER)",
         ),
         TimeColumn::FiscalYear(header) => (
-            header,
+            Some(header),
             "CAST(NULL AS TIMESTAMP)",
             "CAST(NULL AS DATE)",
             "CASE WHEN regexp_full_match(__time, '[0-9]{2}') THEN 2000 + CAST(__time AS INTEGER) END",
         ),
+        TimeColumn::Undated => (
+            None,
+            "CAST(NULL AS TIMESTAMP)",
+            "CAST(NULL AS DATE)",
+            "NULL",
+        ),
     };
-    let time_alias = column_alias(conn, snapshot_id, time_header)?;
+    let time = match time_header {
+        Some(header) => format!(
+            "NULLIF(trim(s.{}), '')",
+            quote_ident(&column_alias(conn, snapshot_id, header)?)
+        ),
+        None => "CAST(NULL AS VARCHAR)".into(),
+    };
     // A keyless record is named by its row's hash and its place among the file's identical rows,
     // numbered over every stored row so the name depends on the file's bytes alone.
     Ok(format!(
@@ -204,7 +345,7 @@ pub fn conformed_select(
             CASE WHEN fiscal_year IS NOT NULL THEN {time_basis} END AS time_basis
          FROM (
             SELECT t.*, s._row_hash AS __row_hash, s.__row_ordinal, {key} AS __key,
-                   NULLIF(trim(s.{time}), '') AS __time
+                   {time} AS __time
             FROM {typed} t JOIN (
                 SELECT *, row_number() OVER (PARTITION BY _row_hash ORDER BY _row) AS __row_ordinal
                 FROM {store}
@@ -215,8 +356,7 @@ pub fn conformed_select(
         retrieved_at = literal(origin.retrieved_at.as_deref()),
         source_sha256 = literal(Some(&source_sha256)),
         pack_version = literal(origin.pack_version.as_deref()),
-        time_basis = literal(Some(time_header)),
-        time = quote_ident(&time_alias),
+        time_basis = literal(time_header),
         typed = quote_ident(&typed),
         store = quote_ident(&store),
     ))
@@ -341,10 +481,12 @@ mod tests {
                 signer_key_id: "pack-test".into(),
                 file_path,
                 file_sha256: crate::integrity::sha256_hex(csv.as_bytes()),
+                retrieved_at: built_at.into(),
             },
         )
         .await
         .unwrap()
+        .0
         .snapshot_id
     }
 
@@ -443,6 +585,25 @@ mod tests {
         assert_eq!(
             budget,
             [[json!(null), json!(null), json!(2023), json!("report_fy")]]
+        );
+    }
+
+    /// The City's lease file writes dates month first without padding.
+    #[tokio::test]
+    async fn a_month_first_date_names_its_day_and_fiscal_year() {
+        let (_, leases) = conformed(
+            AnalyticalDatasetKind::RegionalData,
+            "city_leases",
+            "site_code,date_effective\nA001WR,4/18/2019\nA002,7/1/2019\n",
+            "CAST(occurred_on AS VARCHAR), fiscal_year, time_basis",
+        )
+        .await;
+        assert_eq!(
+            leases,
+            [
+                [json!("2019-04-18"), json!(2019), json!("date_effective")],
+                [json!("2019-07-01"), json!(2020), json!("date_effective")],
+            ]
         );
     }
 
