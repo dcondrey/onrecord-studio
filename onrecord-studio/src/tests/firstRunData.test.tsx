@@ -22,6 +22,7 @@ const bridge = vi.hoisted(() => ({
 }));
 const discovery = vi.hoisted(() => ({
   state: { schema: null as { datasets: unknown[]; columns: unknown[] } | null },
+  reserved: [] as unknown[],
   released: 0,
   refreshed: 0,
 }));
@@ -33,12 +34,12 @@ vi.mock('@tauri-apps/api/core', () => ({ invoke: (name: string, args: { dataset:
 vi.mock('../components/dashboard/AutomaticDiscoveryProvider', () => ({
   useAutomaticDiscovery: () => ({
     state: discovery.state,
-    controller: { hold: () => () => { discovery.released += 1; }, refresh: () => { discovery.refreshed += 1; } },
+    controller: { reserve: (tables: unknown[]) => { discovery.reserved = tables; return () => { discovery.released += 1; }; }, refresh: () => { discovery.refreshed += 1; } },
   }),
 }));
 import FirstRunData from '../components/dashboard/FirstRunData';
 import { useAppStore } from '../store/useAppStore';
-import { firstRunTables, useFirstRunDataStore } from '../store/useFirstRunDataStore';
+import { firstRunTables, retryTables, useFirstRunDataStore } from '../store/useFirstRunDataStore';
 import { capacityCompanions, closedReports, encampmentReportCoverage, OPEN_REPORTS } from '../utils/capacityLeads';
 
 const imported = (rows: number) => Promise.resolve({ importedRows: rows, rejectedRows: 0, malformedRows: 0, duplicateKeyRows: 0, unconvertedCells: 0, tableName: 't', schemaWarnings: [] });
@@ -53,6 +54,7 @@ beforeEach(() => {
   useAppStore.setState({ firstRunDataSettled: false, workspaceView: 'overview' });
   useFirstRunDataStore.setState({ running: false, tables: [], statuses: {}, unfetched: [] });
   discovery.state = { schema: { datasets: [], columns: [] } };
+  discovery.reserved = [];
   discovery.released = 0;
   discovery.refreshed = 0;
   bridge.respond = () => imported(10);
@@ -122,12 +124,14 @@ describe('first-run core data', () => {
     expect(useAppStore.getState().workspaceView).toBe('overview');
     expect(discovery.released).toBe(1);
 
-    // A retry fetches only what is missing, and a full library closes the card.
+    // A retry fetches only what is missing, plus the current-year closed file the new open copy
+    // would otherwise postdate, and a full library closes the card.
     bridge.calls.length = 0;
     bridge.respond = () => imported(10);
     fireEvent.click(screen.getByRole('button', { name: 'Get the missing tables' }));
     await waitFor(() => expect(screen.queryByRole('region')).toBeNull());
-    expect(bridge.calls).toEqual([{ dataset: 'GET_IT_DONE_OPEN', year: null }]);
+    expect(bridge.calls).toEqual([{ dataset: 'GET_IT_DONE_OPEN', year: null }, { dataset: 'GET_IT_DONE_ENCAMPMENTS', year: 2026 }]);
+    expect(discovery.reserved).toEqual(bridge.calls);
     expect(window.localStorage.getItem(UNFETCHED_KEY)).toBeNull();
   });
 
@@ -140,7 +144,10 @@ describe('first-run core data', () => {
     view.unmount();
     useAppStore.getState().setWorkspaceView('evidence');
     const total = firstRunTables(TODAY).length;
+    expect(discovery.reserved).toEqual(firstRunTables(TODAY));
+    // Discovery rereads the library after each import, so leads from early tables need not wait for the last.
     for (let index = 0; index < total; index += 1) {
+      expect(discovery.refreshed).toBe(index);
       await act(async () => { pending.shift()!(); });
     }
     await waitFor(() => expect(useFirstRunDataStore.getState().running).toBe(false));
@@ -148,7 +155,16 @@ describe('first-run core data', () => {
     expect(useAppStore.getState().workspaceView).toBe('evidence');
     expect(useAppStore.getState().firstRunDataSettled).toBe(true);
     expect(discovery.released).toBe(1);
-    expect(discovery.refreshed).toBe(1);
+    expect(discovery.refreshed).toBe(total + 1);
+  });
+
+  it('retries a missing open copy together with a current-year closed file no older than it', () => {
+    const open = { dataset: 'GET_IT_DONE_OPEN', year: null } as const;
+    const closed = (year: number) => ({ dataset: 'GET_IT_DONE_ENCAMPMENTS', year }) as const;
+    const budget = { dataset: 'OPERATING_BUDGET', year: null } as const;
+    expect(retryTables([budget, closed(2025)], TODAY)).toEqual([budget, closed(2025)]);
+    expect(retryTables([budget, open], TODAY)).toEqual([budget, open, closed(2026)]);
+    expect(retryTables([closed(2026), budget, open, closed(2025)], TODAY)).toEqual([budget, open, closed(2026), closed(2025)]);
   });
 
   it('reports a run the app closed during as a partial library on the next launch', async () => {

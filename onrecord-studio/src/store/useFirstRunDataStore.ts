@@ -50,6 +50,18 @@ export function firstRunTables(now = new Date()): FirstRunTable[] {
   ];
 }
 
+/**
+ * The tables a retry fetches. A new open copy makes every current-year closed file already imported
+ * older than it, so the current-year closed file is fetched again right after it (`firstRunTables`).
+ */
+export function retryTables(unfetched: FirstRunTable[], now = new Date()): FirstRunTable[] {
+  if (!unfetched.some((table) => table.dataset === 'GET_IT_DONE_OPEN')) return unfetched;
+  const closed: FirstRunTable = { dataset: 'GET_IT_DONE_ENCAMPMENTS', year: now.getUTCFullYear() };
+  return unfetched
+    .filter((table) => firstRunTableKey(table) !== firstRunTableKey(closed))
+    .flatMap((table) => table.dataset === 'GET_IT_DONE_OPEN' ? [table, closed] : [table]);
+}
+
 const UNFETCHED_STORAGE_KEY = 'onrecord-first-run-unfetched';
 const FETCHED_DATASETS = new Set<string>(['OPERATING_BUDGET', 'OPERATING_ACTUALS', 'GET_IT_DONE_OPEN', 'GET_IT_DONE_ENCAMPMENTS', 'CALLS_FOR_SERVICE']);
 
@@ -84,7 +96,7 @@ interface FirstRunDataState {
    * closed. Persisted from the start of a run, so an interrupted run is still reported. */
   unfetched: FirstRunTable[];
   /** Runs the unfetched tables when a run left some, otherwise every core table. */
-  run: (controller: Pick<DiscoveryController, 'hold' | 'refresh'> | null) => Promise<void>;
+  run: (controller: Pick<DiscoveryController, 'reserve' | 'refresh'> | null) => Promise<void>;
   /** Settles the offer and drops the partial record once the operator has seen it. */
   dismiss: () => void;
 }
@@ -100,13 +112,14 @@ export const useFirstRunDataStore = create<FirstRunDataState>((set, get) => ({
   unfetched: readUnfetched(),
   run: async (controller) => {
     if (get().running) return;
-    const tables = get().unfetched.length ? get().unfetched : firstRunTables();
+    const tables = get().unfetched.length ? retryTables(get().unfetched) : firstRunTables();
     const remaining = new Set(tables.map(firstRunTableKey));
     const unfetched = () => tables.filter((table) => remaining.has(firstRunTableKey(table)));
     writeUnfetched(tables);
     set({ running: true, tables, unfetched: tables, statuses: Object.fromEntries(tables.map((table) => [firstRunTableKey(table), { state: 'waiting' } as const])) });
     const mark = (table: FirstRunTable, status: FirstRunTableStatus) => set((state) => ({ statuses: { ...state.statuses, [firstRunTableKey(table)]: status } }));
-    const release = controller?.hold();
+    // Only these tables are kept from discovery: it profiles and records leads from each one imported.
+    const release = controller?.reserve(tables);
     const app = useAppStore.getState();
     try {
       for (const table of tables) {
@@ -118,6 +131,7 @@ export const useFirstRunDataStore = create<FirstRunDataState>((set, get) => ({
         if (outcome.state === 'done') {
           remaining.delete(firstRunTableKey(table));
           writeUnfetched(unfetched());
+          controller?.refresh();
         } else {
           app.appendSyncLog(`First-run data: ${table.dataset}${table.year === null ? '' : ` ${table.year}`} not imported. ${outcome.error}`);
         }

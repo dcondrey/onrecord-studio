@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fixture from '../../src-tauri/tests/fixtures/automatic-discovery.json';
+import accountability from '../../src-tauri/tests/fixtures/service-accountability.json';
 import type { AnalyticalSchema, DataMaintenanceStatus, SqlQueryResult } from '../types';
 import { automaticFollowups, automaticProfileQuery, metadataObservations, profileObservations, rankObservations, snapshotFingerprint } from '../utils/automaticDiscovery';
 import { DiscoveryController, type DiscoveryTransport } from '../utils/discoveryController';
@@ -106,6 +107,27 @@ describe('automatic discovery lifecycle', () => {
     await vi.advanceTimersByTimeAsync(2000); expect(bridge.query).not.toHaveBeenCalled();
     release(); release(); await vi.advanceTimersByTimeAsync(1600);
     expect(bridge.query).toHaveBeenCalledTimes(4);
+  });
+  it('leaves a reserved table to its reserver while fetching every other missing table', async () => {
+    // An open-reports copy with encampment reports lacks the stop records and the shelter inventory.
+    const base = accountability.schema as AnalyticalSchema;
+    const open = { ...base.datasets[0], snapshotId: 'latest', tableName: 'analysis_latest', sourceUri: 'https://seshat.datasd.org/get_it_done_reports/get_it_done_requests_open_datasd.csv', retrievedAt: '2026-09-14T00:00:00Z' };
+    const catalog = { ...base, datasets: [open], columns: base.columns.filter((c) => c.tableName === 'analysis_fixture').map((c) => ({ ...c, tableName: 'analysis_latest' })) };
+    const fetch = vi.fn(async () => ({}));
+    const bridge = { ...transport(catalog), query: vi.fn(async () => response(['column_name', 'category'], [['status', 'Encampment']])), fetch };
+    const controller = start(bridge);
+    const stops = { dataset: 'RIPA_STOPS' as const, year: null };
+    const first = controller.reserve([stops]);
+    const second = controller.reserve([stops]);
+    controller.setMaintenance(upkeep);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetch).toHaveBeenCalledWith({ dataset: 'SHELTER_INVENTORY', year: null });
+    first(); first();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetch).not.toHaveBeenCalledWith(stops);
+    second();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetch).toHaveBeenCalledWith(stops);
   });
   it('discards an in-flight result after teardown and completes safely after restart', async () => {
     let resolve!: (result: SqlQueryResult) => void;

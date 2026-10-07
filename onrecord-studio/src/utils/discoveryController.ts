@@ -2,6 +2,10 @@ import type { AnalyticalImportCandidate, AnalyticalSchema, CorpusPattern, DataMa
 import { automaticFollowups, automaticProfileQuery, snapshotFingerprint, storedLeads, type AutomaticProfile } from './automaticDiscovery';
 import { dataGaps, type DataGap } from './dataGaps';
 
+type FetchRequest = NonNullable<DataGap['fetch']>;
+/** Same format as `firstRunTableKey`. */
+const fetchKey = (request: FetchRequest) => `${request.dataset}:${request.year ?? 'all'}`;
+
 export interface DiscoveryTransport {
   schema(): Promise<AnalyticalSchema>;
   candidates(): Promise<AnalyticalImportCandidate[]>;
@@ -44,6 +48,7 @@ export class DiscoveryController {
   private refreshedAt = 0;
   private maintainedAt = 0;
   private holds = 0;
+  private reserved = new Map<string, number>();
   private failures = new Map<string, number>();
   private secondaryInFlight = new Set<'candidates' | 'patterns'>();
   private gapRetryAt = new Map<string, number>();
@@ -77,6 +82,7 @@ export class DiscoveryController {
     const automatic = Boolean(policy?.enabled && policy.autoRefresh);
     return this.gaps().find((gap) => (gap.fetch ? this.transport.fetch : this.transport.collect)
       && !['fetching', 'fetched'].includes(this.state.gapStatus[gap.key])
+      && !(gap.fetch && this.reserved.has(fetchKey(gap.fetch)))
       && (this.requestedGaps.has(gap.key) || (gap.fetch && automatic && this.now() >= (this.gapRetryAt.get(gap.key) ?? 0))));
   }
   inspect = (sql: string) => this.publish({ inspection: { sql, sequence: (this.state.inspection?.sequence ?? 0) + 1 } });
@@ -84,6 +90,20 @@ export class DiscoveryController {
     this.holds += 1; this.publish({ paused: true });
     let released = false;
     return () => { if (released) return; released = true; this.holds = Math.max(0, this.holds - 1); this.publish({ paused: this.holds > 0 }); this.schedule(0); };
+  };
+  /** Keeps gap fetches of these tables to the caller, which is fetching them itself; everything else runs. */
+  reserve = (fetches: FetchRequest[]) => {
+    const keys = fetches.map(fetchKey);
+    for (const key of keys) this.reserved.set(key, (this.reserved.get(key) ?? 0) + 1);
+    let released = false;
+    return () => {
+      if (released) return; released = true;
+      for (const key of keys) {
+        const count = (this.reserved.get(key) ?? 0) - 1;
+        if (count > 0) this.reserved.set(key, count); else this.reserved.delete(key);
+      }
+      this.schedule(0);
+    };
   };
   private schedule(delay: number) {
     clearTimeout(this.timer);
