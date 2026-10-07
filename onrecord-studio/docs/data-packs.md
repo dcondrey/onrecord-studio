@@ -32,7 +32,7 @@ Source details and what was actually seen of each file are in `docs/data-sources
 
 | Group | Columns |
 |---|---|
-| Identity | `record_id` (publisher key, else a hash of the raw row), `publisher_record_id` |
+| Identity | `record_id` (publisher key, numbered when the file repeats it, else a hash of the raw row), `publisher_record_id` |
 | Provenance | `source_id`, `source_url`, `retrieved_at`, `source_sha256`, `source_row`, `pack_version` |
 | Time | `occurred_at` as recorded with its offset, `occurred_on`, `calendar_year`, `fiscal_year` (City fiscal year, named by the year it ends), `time_basis` |
 | Place | `address_recorded`, `latitude_recorded`, `longitude_recorded`, `council_district`, `council_district_basis`, `community_plan_area`, `census_tract_2020`, `zip`, `place_basis` |
@@ -209,9 +209,11 @@ column or table here before anything is published.
 6. **Coverage (2026-10-07).** Every City open-data table above that the source list fetches is in a
    pack: `san-diego-money`, `san-diego-reports`, `san-diego-enforcement` (stops and companions,
    offences, parking citations 2012 on, collisions, hate crimes) and `san-diego-capacity`
-   (development approvals). Each table has a conformed definition: a publisher key only where the
-   publisher's column is unique per row, and a time column, or none for a reference list or a
-   holdings snapshot. Not packed: SANDAG schools and transit stops (no stated licence), the
+   (development approvals). Each table has a conformed definition: the publisher's key where it
+   has one, and a time column, or none for a reference list or a holdings snapshot. Publishers
+   repeat their keys inside a file (2.6% of 2025 calls for service, 8 call types, a few
+   approvals), so a repeated key's `record_id` is numbered `key:n` in file order and
+   `publisher_record_id` keeps the key as published. Not packed: SANDAG schools and transit stops (no stated licence), the
    short-term rental registry (its original carries host names and phones, and a pack ships
    originals byte for byte), and Commission on Police Practices cases (file names differ by year).
 7. **Later.** Fetch only what was published after a pack's build date, using the recorded

@@ -34,8 +34,6 @@ struct ConformedSpec {
 }
 
 /// Every pack table; headers as the publisher's files spell them, matched without regard to case.
-/// A key is named only where the publisher's column is unique per row: a repeated key would give
-/// two rows one `record_id`.
 const SPECS: &[ConformedSpec] = &[
     ConformedSpec {
         table: "budget_adopted",
@@ -217,6 +215,7 @@ fn storage(context: &'static str) -> impl Fn(duckdb::Error) -> AppError {
     move |error| AppError::Storage(format!("{context}: {error}"))
 }
 
+#[cfg(test)]
 pub(super) fn has_definition(table: &str) -> bool {
     SPECS.iter().any(|spec| spec.table == table)
 }
@@ -327,10 +326,16 @@ pub fn conformed_select(
         None => "CAST(NULL AS VARCHAR)".into(),
     };
     // A keyless record is named by its row's hash and its place among the file's identical rows,
-    // numbered over every stored row so the name depends on the file's bytes alone.
+    // numbered over every stored row so the name depends on the file's bytes alone. Publishers
+    // repeat their own keys (a call listed twice, an approval on two jobs), so a key that recurs in
+    // the file is numbered by file order.
     Ok(format!(
         "SELECT * EXCLUDE (_source_row, __row_hash, __row_ordinal, __key, __time),
-            COALESCE(__key, 'row:' || __row_hash || ':' || __row_ordinal) AS record_id,
+            CASE
+                WHEN __key IS NULL THEN 'row:' || __row_hash || ':' || __row_ordinal
+                WHEN count(*) OVER (PARTITION BY __key) = 1 THEN __key
+                ELSE __key || ':' || row_number() OVER (PARTITION BY __key ORDER BY _source_row)
+            END AS record_id,
             __key AS publisher_record_id,
             {source_id} AS source_id,
             {source_url} AS source_url,
@@ -638,7 +643,8 @@ mod tests {
         let (repo, rows) = conformed(
             AnalyticalDatasetKind::CallsForService,
             "police_calls",
-            "INCIDENT_NUM,DATE_TIME\nE1,2025-01-01 00:00:00.000\n,2025-01-01 00:00:00.000\n",
+            "INCIDENT_NUM,DATE_TIME\nE1,2025-01-01 00:00:00.000\n,2025-01-01 00:00:00.000\n\
+             E2,2025-01-01 00:00:00.000\nE2,2025-01-01 00:00:01.000\n",
             "record_id, publisher_record_id",
         )
         .await;
@@ -670,6 +676,9 @@ mod tests {
             [
                 [json!("E1"), json!("E1")],
                 [json!(format!("row:{stored_hash}:1")), json!(null)],
+                // The publisher repeats a key: each repeat is numbered in file order.
+                [json!("E2:1"), json!("E2")],
+                [json!("E2:2"), json!("E2")],
             ]
         );
     }
