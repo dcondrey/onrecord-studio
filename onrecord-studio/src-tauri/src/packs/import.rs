@@ -290,8 +290,8 @@ mod tests {
         assert_eq!(written(&repository).await, (0, 0));
     }
 
-    /// The same bytes fetched by the user and imported from a pack are one snapshot; the pack is
-    /// recorded beside it and survives the user's later re-fetch of the same bytes.
+    /// The same bytes fetched by the user and then imported from a pack are one snapshot that
+    /// keeps the user's acquisition record and gains the pack beside it.
     #[tokio::test]
     async fn the_same_bytes_fetched_and_from_a_pack_are_one_snapshot_with_the_pack_recorded() {
         let directory = signed_pack();
@@ -310,15 +310,12 @@ mod tests {
             expected_source_sha256: Some(sha256_hex(ACTUALS)),
             derived_subset: None,
         };
-        let outcomes = import(&repository, directory.path()).await.unwrap();
-        let from_pack = outcomes[0].result.as_ref().unwrap();
-        assert!(from_pack
-            .display_name
-            .ends_with("retrieved by the pack builder on 2026-10-06"));
         let user = repository.import_analytical_csv(fetched()).await.unwrap();
-        assert_eq!(user.snapshot_id, from_pack.snapshot_id);
-        let again = import(&repository, directory.path()).await.unwrap();
-        assert_eq!(again[0].error, None);
+        let outcomes = import(&repository, directory.path()).await.unwrap();
+        assert_eq!(outcomes[0].error, None);
+        let from_pack = outcomes[0].result.as_ref().unwrap();
+        assert_eq!(from_pack.snapshot_id, user.snapshot_id);
+        assert_eq!(from_pack.display_name, user.display_name);
         assert_eq!(written(&repository).await, (1, 1));
         let snapshot = user.snapshot_id.clone();
         let origin = repository
@@ -367,7 +364,45 @@ mod tests {
             .expect("an older core must open");
         let directory = signed_pack();
         let outcomes = import(&repository, directory.path()).await.unwrap();
-        assert_eq!(outcomes[0].error, None);
+        assert!(outcomes[0]
+            .result
+            .as_ref()
+            .unwrap()
+            .display_name
+            .ends_with("retrieved by the pack builder on 2026-10-06"));
         assert_eq!(written(&repository).await, (1, 1));
+    }
+
+    /// Imports every original of a pack the builder produced (`ONRECORD_PACK_DIR`), verified
+    /// against the key this app pins.
+    #[tokio::test]
+    #[ignore = "needs ONRECORD_PACK_DIR"]
+    async fn a_built_pack_imports_against_the_pinned_key() {
+        let directory = PathBuf::from(std::env::var("ONRECORD_PACK_DIR").unwrap());
+        let summary = inspect(directory.clone(), crate::packs::pinned_pack_keys())
+            .await
+            .unwrap();
+        let files = summary
+            .tables
+            .iter()
+            .filter(|table| table.dataset_kind.is_some())
+            .flat_map(|table| table.files.iter().map(|file| file.path.clone()))
+            .collect::<Vec<_>>();
+        let repository = repository().await;
+        let outcomes = import_files(
+            &repository,
+            directory,
+            files,
+            crate::packs::pinned_pack_keys(),
+        )
+        .await
+        .unwrap();
+        for outcome in &outcomes {
+            assert_eq!(outcome.error, None, "{}", outcome.path);
+        }
+        assert_eq!(
+            written(&repository).await,
+            (outcomes.len() as i64, outcomes.len() as i64)
+        );
     }
 }

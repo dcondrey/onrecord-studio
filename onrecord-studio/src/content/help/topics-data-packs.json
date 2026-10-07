@@ -43,7 +43,7 @@
         "heading": "Where a snapshot came from",
         "items": [
           "The pack, its version, build time, signing key, file path and SHA-256 are recorded beside the snapshot.",
-          "If you fetch the same file from the City and its bytes are identical, it stays one snapshot with both origins recorded, so the two are never counted twice."
+          "A file whose bytes are identical to one already imported from the same address stays one snapshot, so the two are never counted twice. The snapshot keeps the record of whichever import came first, and the pack is recorded beside it either way."
         ]
       },
       {

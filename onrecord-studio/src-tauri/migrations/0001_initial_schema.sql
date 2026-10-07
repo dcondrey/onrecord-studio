@@ -701,7 +701,8 @@ CREATE TABLE IF NOT EXISTS data_maintenance_origins (
 
 -- The data pack a snapshot's bytes were imported from. Beside the snapshot, never part of its
 -- identity, so the same bytes fetched by the user and shipped in a pack stay one snapshot with
--- both origins. No foreign key: re-importing the same bytes deletes and re-inserts the snapshot.
+-- both origins. No foreign key: DuckDB has no ON DELETE action, so one would refuse every path
+-- that retires a snapshot.
 CREATE TABLE IF NOT EXISTS pack_origins (
     snapshot_id TEXT NOT NULL,
     pack TEXT NOT NULL,
