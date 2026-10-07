@@ -194,6 +194,7 @@ pub async fn build(pack: &str, out: &Path) -> Result<PathBuf, AppError> {
                 sha256: downloaded.sha256,
                 bytes: downloaded.byte_count,
                 rows,
+                excluded_rows: None,
                 year,
                 partial,
                 last_modified: downloaded.acquisition.last_modified,
@@ -241,8 +242,8 @@ impl Drop for ScratchDatabase {
 
 /// Imports `original` from `out` through the app's analytical import into `scratch`, writes its
 /// conformed rows in file order to `parquet/<table>/<file stem>.parquet`, and returns that file's
-/// manifest entry. Its rows are the rows the import kept: a row the file makes unreadable is not
-/// in the copy.
+/// manifest entry. Its rows are the rows the import kept; the rows it rejected as unreadable are
+/// not in the copy, and the entry counts them.
 async fn write_conformed_parquet(
     scratch: &DuckDbRepository,
     out: &Path,
@@ -284,14 +285,14 @@ async fn write_conformed_parquet(
         .to_str()
         .ok_or_else(|| AppError::Storage(format!("{} is not UTF-8", path.display())))?
         .to_owned();
-    let table = original.table.clone();
+    let (table, snapshot_id) = (original.table.clone(), imported.snapshot_id);
     let origin = ConformedOrigin {
         retrieved_at: Some(original.retrieved_at.clone()),
         pack_version: Some(pack_version.into()),
     };
     let rows = scratch
         .query_connection("Parquet copy", move |conn| {
-            let select = conformed_select(conn, &table, &imported.snapshot_id, &origin)?;
+            let select = conformed_select(conn, &table, &snapshot_id, &origin)?;
             let copy_failed =
                 |error: duckdb::Error| AppError::Storage(format!("Parquet copy: {error}"));
             conn.execute_batch(&format!(
@@ -318,6 +319,7 @@ async fn write_conformed_parquet(
         sha256,
         bytes,
         rows,
+        excluded_rows: Some(imported.rejected_rows as u64),
         ..original.clone()
     })
 }
@@ -330,7 +332,7 @@ mod tests {
     async fn a_parquet_copy_is_listed_as_the_file_written_and_holds_the_conformed_rows() {
         let out = tempfile::tempdir().unwrap();
         let original_bytes: &[u8] =
-            b"amount,report_fy,budget_cycle\n10,23,adopted\n20,24,adopted\n";
+            b"amount,report_fy,budget_cycle\n10,23,adopted\n20,24,proposed\n30,24,\n40,25,adopted,x\n";
         let path = out.path().join("originals/budget_adopted/budget.csv");
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, original_bytes).unwrap();
@@ -344,6 +346,7 @@ mod tests {
             bytes: original_bytes.len() as u64,
             // Not the copy's count, so a copy listing the original's would be caught.
             rows: 99,
+            excluded_rows: None,
             year: None,
             partial: false,
             last_modified: None,
@@ -371,13 +374,14 @@ mod tests {
             copy.sha256,
             crate::integrity::sha256_file(&written).unwrap()
         );
-        assert_eq!(copy.rows, 2);
+        assert_eq!((copy.rows, copy.excluded_rows), (3, Some(1)));
         let target = written.to_str().unwrap().to_owned();
         let rows = scratch
             .query_connection("read copy", move |conn| {
                 let mut statement = conn
                     .prepare(
-                        "SELECT fiscal_year, retrieved_at, pack_version FROM read_parquet(?1)
+                        "SELECT fiscal_year, retrieved_at, pack_version, budget_cycle
+                         FROM read_parquet(?1)
                          ORDER BY source_row",
                     )
                     .unwrap();
@@ -387,6 +391,7 @@ mod tests {
                             row.get::<_, i32>(0)?,
                             row.get::<_, String>(1)?,
                             row.get::<_, String>(2)?,
+                            row.get::<_, Option<String>>(3)?,
                         ))
                     })
                     .unwrap()
@@ -396,11 +401,23 @@ mod tests {
             .await
             .unwrap();
         let stamp = ("2026-10-06T00:00:00Z".to_owned(), "2026.10.6".to_owned());
+        let cycle = |cycle: Option<&str>| cycle.map(str::to_owned);
         assert_eq!(
             rows,
             [
-                (2023, stamp.0.clone(), stamp.1.clone()),
-                (2024, stamp.0, stamp.1)
+                (
+                    2023,
+                    stamp.0.clone(),
+                    stamp.1.clone(),
+                    cycle(Some("adopted"))
+                ),
+                (
+                    2024,
+                    stamp.0.clone(),
+                    stamp.1.clone(),
+                    cycle(Some("proposed"))
+                ),
+                (2024, stamp.0, stamp.1, cycle(None)),
             ]
         );
     }

@@ -51,6 +51,10 @@ pub(crate) struct PackFile {
     pub sha256: String,
     pub bytes: u64,
     pub rows: u64,
+    /// For a Parquet copy, the original's rows the import rejected as unreadable, which the copy
+    /// lacks. Absent on an original: nothing was excluded from it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub excluded_rows: Option<u64>,
     /// The publisher's year for a table split by year.
     pub year: Option<u16>,
     /// The file covers a period not yet over, so later rows may still be published.
@@ -217,6 +221,7 @@ mod tests {
                 sha256,
                 bytes,
                 rows: 1,
+                excluded_rows: None,
                 year: Some(2025),
                 partial: false,
                 last_modified: None,
