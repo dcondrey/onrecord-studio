@@ -285,7 +285,9 @@ All five are imported as regional data, which types each column from its values,
 budget's `budget_cycle` stays a category. The budget kind is kept for the operating budget alone:
 every import of that kind repoints `analysis_operating_budget_latest`, which the budget comparison
 reads. The capital budget is marked partial like the actuals: the file is rewritten as fiscal
-years are added (FY2026 not yet present in July 2026). Importing the five files
+years are added (FY2026 not yet present in July 2026). The import below was measured with the
+capital budget as the budget kind; as regional data no cell can be unconverted, since each
+inferred type fits every value. Importing the five files
 downloaded 2026-10-06 through the app's analytical import rejected no row and left no cell
 unconverted (2,193; 469,677; 4,095; 4,187; 810 rows). The M/D/YYYY date columns
 (`date_effective`, `date_sched_termination`, `date_reso_ord`) are kept as recorded text, not dates.

@@ -187,12 +187,12 @@ column or table here before anything is published.
    `parquet` feature is enabled only by `pack-builder`), and signs the manifest. Built as
    `packs::builder` and `onrecord-pack-builder`, packs `san-diego-money` and `san-diego-reports`.
 3. **Conformed layer (builder side done).** One module generates the standard columns from an
-   imported table; the builder uses it for the Parquet copies and the app after importing
+   imported table, for the builder's Parquet copies and, once wired, for the app after importing
    originals. First slice:
    identity, provenance and time groups (`fiscal_year` for question 1). Place waits for the
    pre-2021 district lines. `packs::conformed` generates identity, provenance and time for the
    builder's Parquet copies; the app does not yet run it after importing originals.
-4. **App import (done).** Verify the signature and every file hash before writing anything; then import
+4. **App import (done for the first-slice tables).** Verify the signature and every file hash before writing anything; then import
    originals through the analytical import, one table and year at a time, chosen by the user
    (`MAX_STREAMED_CELLS` is per import). Tamper tests: one byte changed in a file, and in the
    manifest, each refused. Built as `packs::import` and the data pack import panel.
