@@ -42,6 +42,7 @@ const rows = [
   ['70000016', '2022-10-06', '2022-10-06', '7700 SIEMPRE VIVA RD', 'CSD I PARKING ENF', 'SDMC 86.0137(G)', UNMOVED, '53.50'],
   // The earlier numbers of 86.0137(G) and 86.0137(F), as written in the 2012 and 2016 files.
   ['70000017', '2022-10-07', '2022-10-07', '7700 SIEMPRE VIVA RD', 'CSD (S) POLICE', '86.23(G)SDMC', 'VEHICLE NOT MOVED 1/10 MILE IN 72 HOURS', '53.5'],
+  // Constructed, not seen in a file: a warning under the shorter earlier number.
   ['70000018', '2022-10-08', '2022-10-08', '7700 SIEMPRE VIVA RD', 'CSD (S) POLICE', '86.23(G)_W', 'VEHICLE NOT MOVED 1/10 MILE IN 72 HOURS/WARNING', '0.0'],
   ['70000019', '2022-10-09', '2022-10-09', '600 W BROADWAY', 'CSD (S) POLICE', '86.23(F)SDMC', 'LIVING IN VEHICLE PARKED ON STREET', '52.5'],
 ];
