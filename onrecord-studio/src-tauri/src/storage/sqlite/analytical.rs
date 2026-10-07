@@ -350,7 +350,7 @@ pub(crate) fn unconverted_by_column(
         .unwrap_or_default()
 }
 
-pub(super) fn quote_ident(value: &str) -> String {
+pub(crate) fn quote_ident(value: &str) -> String {
     format!("\"{}\"", value.replace('"', "\"\""))
 }
 

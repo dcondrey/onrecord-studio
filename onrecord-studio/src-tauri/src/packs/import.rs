@@ -214,6 +214,7 @@ mod tests {
                 sha256: sha256_hex(ACTUALS),
                 bytes: ACTUALS.len() as u64,
                 rows: 2,
+                excluded_rows: None,
                 year: None,
                 partial: true,
                 last_modified: None,

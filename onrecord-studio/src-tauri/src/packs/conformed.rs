@@ -1,7 +1,8 @@
 //! The conformed layer of `docs/data-packs.md`: one SELECT over an imported analytical snapshot
 //! that keeps every typed publisher column and adds the standard Identity, Provenance and Time
 //! columns. The pack builder copies it to Parquet; the app creates `analysis_conformed_<table>`
-//! from it. Place waits for the pre-2021 council district lines.
+//! over every snapshot imported from a pack file of that table. Place waits for the pre-2021
+//! council district lines.
 //!
 //! Standard columns are read from the snapshot's stored original cells, not its typed columns: a
 //! regional table's types are inferred per file, while the original text is what the publisher
@@ -9,6 +10,7 @@
 //! is.
 
 use crate::error::AppError;
+use crate::storage::sqlite::quote_ident;
 use crate::storage::DuckDbRepository;
 use duckdb::{params, Connection, OptionalExt};
 
@@ -78,10 +80,6 @@ pub struct ConformedOrigin {
     pub retrieved_at: Option<String>,
     /// The data pack the file came from, if it came from one.
     pub pack_version: Option<String>,
-}
-
-fn ident(name: &str) -> String {
-    format!("\"{}\"", name.replace('"', "\"\""))
 }
 
 pub(super) fn literal(value: Option<&str>) -> String {
@@ -168,7 +166,7 @@ pub fn conformed_select(
     let key = match spec.key {
         Some(header) => format!(
             "NULLIF(trim(s.{}), '')",
-            ident(&column_alias(conn, snapshot_id, header)?)
+            quote_ident(&column_alias(conn, snapshot_id, header)?)
         ),
         None => "CAST(NULL AS VARCHAR)".into(),
     };
@@ -187,9 +185,11 @@ pub fn conformed_select(
         ),
     };
     let time_alias = column_alias(conn, snapshot_id, time_header)?;
+    // A keyless record is named by its row's hash and its place among the file's identical rows,
+    // numbered over every stored row so the name depends on the file's bytes alone.
     Ok(format!(
-        "SELECT * EXCLUDE (_source_row, __row_hash, __key, __time),
-            COALESCE(__key, 'row:' || __row_hash) AS record_id,
+        "SELECT * EXCLUDE (_source_row, __row_hash, __row_ordinal, __key, __time),
+            COALESCE(__key, 'row:' || __row_hash || ':' || __row_ordinal) AS record_id,
             __key AS publisher_record_id,
             {source_id} AS source_id,
             {source_url} AS source_url,
@@ -203,9 +203,12 @@ pub fn conformed_select(
             CAST({fiscal_year} AS INTEGER) AS fiscal_year,
             CASE WHEN fiscal_year IS NOT NULL THEN {time_basis} END AS time_basis
          FROM (
-            SELECT t.*, s._row_hash AS __row_hash, {key} AS __key,
+            SELECT t.*, s._row_hash AS __row_hash, s.__row_ordinal, {key} AS __key,
                    NULLIF(trim(s.{time}), '') AS __time
-            FROM {typed} t JOIN {store} s ON s._row = t._source_row
+            FROM {typed} t JOIN (
+                SELECT *, row_number() OVER (PARTITION BY _row_hash ORDER BY _row) AS __row_ordinal
+                FROM {store}
+            ) s ON s._row = t._source_row
          )",
         source_id = literal(Some(snapshot_id)),
         source_url = literal(source_url.as_deref()),
@@ -213,30 +216,76 @@ pub fn conformed_select(
         source_sha256 = literal(Some(&source_sha256)),
         pack_version = literal(origin.pack_version.as_deref()),
         time_basis = literal(Some(time_header)),
-        time = ident(&time_alias),
-        typed = ident(&typed),
-        store = ident(&store),
+        time = quote_ident(&time_alias),
+        typed = quote_ident(&typed),
+        store = quote_ident(&store),
     ))
 }
 
-impl DuckDbRepository {
-    /// Creates or replaces `analysis_conformed_<table>` over the imported snapshot
-    /// `snapshot_id`, and returns the view's name.
-    pub async fn create_conformed_view(
-        &self,
-        table: String,
-        snapshot_id: String,
-        origin: ConformedOrigin,
-    ) -> Result<String, AppError> {
-        self.query_connection("Conformed view", move |conn| {
-            let select = conformed_select(conn, &table, &snapshot_id, &origin)?;
-            let view = format!("analysis_conformed_{}", spec(&table)?.table);
-            conn.execute_batch(&format!(
-                "CREATE OR REPLACE VIEW {} AS {select}",
-                ident(&view)
-            ))
+/// Recreates `analysis_conformed_<table>` over every live snapshot imported from a pack file of
+/// `table`, or drops it when there is none, and returns the view's name if one exists. A pack
+/// file's table is the second segment of its `originals/<table>/<file>` path. Each pack path
+/// contributes the snapshot of its latest build, so a refreshed file replaces its earlier copy
+/// rather than repeating its rows. `pack_origins` does not record retrieval, so `retrieved_at` is
+/// NULL here.
+pub(crate) fn rebuild_conformed_view(
+    conn: &Connection,
+    table: &str,
+) -> Result<Option<String>, AppError> {
+    let view = quote_ident(&format!("analysis_conformed_{}", spec(table)?.table));
+    let members = conn
+        .prepare(
+            "SELECT o.snapshot_id, o.pack_version
+             FROM pack_origins o JOIN analytical_snapshots s USING (snapshot_id)
+             WHERE split_part(o.file_path, '/', 1) = 'originals'
+                 AND split_part(o.file_path, '/', 2) = ?1
+                 AND EXISTS (SELECT 1 FROM duckdb_tables() t WHERE t.schema_name = 'main'
+                         AND t.table_name = s.table_name)
+             QUALIFY row_number() OVER (
+                 PARTITION BY o.file_path ORDER BY o.built_at DESC, o.snapshot_id) = 1
+             ORDER BY o.file_path",
+        )
+        .map_err(storage("Conformed view members"))?
+        .query_map(params![table], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(storage("Conformed view members"))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(storage("Conformed view members"))?;
+    let mut selects: Vec<String> = Vec::with_capacity(members.len());
+    let mut seen = std::collections::BTreeSet::new();
+    for (snapshot_id, pack_version) in members {
+        if !seen.insert(snapshot_id.clone()) {
+            continue;
+        }
+        let origin = ConformedOrigin {
+            retrieved_at: None,
+            pack_version: Some(pack_version),
+        };
+        selects.push(format!(
+            "({})",
+            conformed_select(conn, table, &snapshot_id, &origin)?
+        ));
+    }
+    if selects.is_empty() {
+        conn.execute_batch(&format!("DROP VIEW IF EXISTS {view}"))
             .map_err(storage("Conformed view"))?;
-            Ok(view)
+        return Ok(None);
+    }
+    // By name: each file's columns are typed and ordered as that file has them.
+    conn.execute_batch(&format!(
+        "CREATE OR REPLACE VIEW {view} AS {}",
+        selects.join(" UNION ALL BY NAME ")
+    ))
+    .map_err(storage("Conformed view"))?;
+    Ok(Some(format!("analysis_conformed_{table}")))
+}
+
+impl DuckDbRepository {
+    /// [`rebuild_conformed_view`] on its own connection.
+    pub async fn create_conformed_view(&self, table: String) -> Result<Option<String>, AppError> {
+        self.query_connection("Conformed view", move |conn| {
+            rebuild_conformed_view(conn, &table)
         })
         .await
     }
@@ -245,57 +294,117 @@ impl DuckDbRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::packs::import::PackOrigin;
     use crate::types::{AnalyticalDatasetKind, AnalyticalImportRequest};
     use serde_json::{json, Value};
 
-    /// Imports `csv` as `kind` through the analytical import, creates the conformed view of
-    /// `table`, and returns `columns` of it in file order.
+    async fn repository() -> DuckDbRepository {
+        let repo = DuckDbRepository::new(":memory:").unwrap();
+        repo.run_migrations(include_str!("../../migrations/0001_initial_schema.sql"))
+            .await
+            .unwrap();
+        repo
+    }
+
+    /// Imports `csv` as `kind` from a pack file `originals/<table>/<file_name>` built at
+    /// `built_at`, and returns its snapshot id.
+    async fn import(
+        repo: &DuckDbRepository,
+        kind: AnalyticalDatasetKind,
+        table: &str,
+        file_name: &str,
+        built_at: &str,
+        csv: &str,
+    ) -> String {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join(file_name);
+        std::fs::write(&path, csv).unwrap();
+        let file_path = format!("originals/{table}/{file_name}");
+        repo.import_analytical_csv_from_pack(
+            AnalyticalImportRequest {
+                dataset_kind: kind,
+                display_name: file_path.clone(),
+                source_uri: Some(format!("https://seshat.datasd.org/{file_name}")),
+                local_path: path.to_string_lossy().into_owned(),
+                observation_period_start: None,
+                observation_period_end: None,
+                partial_dataset: false,
+                worksheet: None,
+                source_file_name: Some(file_name.into()),
+                expected_source_sha256: None,
+                derived_subset: None,
+            },
+            PackOrigin {
+                pack: "san-diego-reports".into(),
+                pack_version: built_at[..10].into(),
+                built_at: built_at.into(),
+                signer_key_id: "pack-test".into(),
+                file_path,
+                file_sha256: crate::integrity::sha256_hex(csv.as_bytes()),
+            },
+        )
+        .await
+        .unwrap()
+        .snapshot_id
+    }
+
+    async fn rows(repo: &DuckDbRepository, table: &str, columns: &str) -> Vec<Vec<Value>> {
+        let view = repo
+            .create_conformed_view(table.into())
+            .await
+            .unwrap()
+            .unwrap();
+        repo.execute_restricted_sql(
+            &format!("SELECT {columns} FROM {view} ORDER BY source_id, source_row"),
+            100,
+        )
+        .await
+        .unwrap()
+        .rows
+    }
+
+    /// Imports `csv` as the only file of `table` and returns `columns` of its conformed rows.
     async fn conformed(
         kind: AnalyticalDatasetKind,
         table: &str,
         csv: &str,
         columns: &str,
     ) -> (DuckDbRepository, Vec<Vec<Value>>) {
-        let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("source.csv");
-        std::fs::write(&path, csv).unwrap();
-        let repo = DuckDbRepository::new(":memory:").unwrap();
-        repo.run_migrations(include_str!("../../migrations/0001_initial_schema.sql"))
-            .await
-            .unwrap();
-        let imported = repo
-            .import_analytical_csv(AnalyticalImportRequest {
-                dataset_kind: kind,
-                display_name: "fixture".into(),
-                source_uri: Some("https://seshat.datasd.org/fixture.csv".into()),
-                local_path: path.to_string_lossy().into_owned(),
-                observation_period_start: None,
-                observation_period_end: None,
-                partial_dataset: false,
-                worksheet: None,
-                source_file_name: None,
-                expected_source_sha256: None,
-                derived_subset: None,
-            })
-            .await
-            .unwrap();
-        let view = repo
-            .create_conformed_view(
-                table.into(),
-                imported.snapshot_id,
-                ConformedOrigin::default(),
-            )
-            .await
-            .unwrap();
-        let rows = repo
-            .execute_restricted_sql(
-                &format!("SELECT {columns} FROM {view} ORDER BY source_row"),
-                100,
-            )
-            .await
-            .unwrap()
-            .rows;
+        let repo = repository().await;
+        import(
+            &repo,
+            kind,
+            table,
+            "source.csv",
+            "2026-10-06T00:00:00Z",
+            csv,
+        )
+        .await;
+        let rows = rows(&repo, table, columns).await;
         (repo, rows)
+    }
+
+    async fn refusal(table: &str, csv: &str, tamper: &'static str) -> String {
+        let repo = repository().await;
+        import(
+            &repo,
+            AnalyticalDatasetKind::CallsForService,
+            table,
+            "source.csv",
+            "2026-10-06T00:00:00Z",
+            csv,
+        )
+        .await;
+        repo.query_connection("tamper", move |conn| {
+            conn.execute_batch(tamper).unwrap();
+            Ok(())
+        })
+        .await
+        .unwrap();
+        repo.create_conformed_view(table.into())
+            .await
+            .unwrap_err()
+            .to_string()
     }
 
     #[tokio::test]
@@ -349,6 +458,20 @@ mod tests {
         assert_eq!(rows, [vec![Value::Null; 5]]);
     }
 
+    /// The City's times are zone-less local readings; one that carries an offset is not shifted
+    /// into a local time it was not recorded as.
+    #[tokio::test]
+    async fn a_time_with_an_offset_is_not_read_rather_than_shifted() {
+        let (_, rows) = conformed(
+            AnalyticalDatasetKind::CallsForService,
+            "police_calls",
+            "INCIDENT_NUM,DATE_TIME\nE1,2025-01-01 00:00:00-08:00\n",
+            "occurred_at, occurred_on, calendar_year, fiscal_year, time_basis",
+        )
+        .await;
+        assert_eq!(rows, [vec![Value::Null; 5]]);
+    }
+
     #[tokio::test]
     async fn the_record_id_is_the_publisher_key_when_one_is_recorded() {
         let (repo, rows) = conformed(
@@ -370,7 +493,10 @@ mod tests {
                     .unwrap();
                 Ok(conn
                     .query_row(
-                        &format!("SELECT _row_hash FROM {} WHERE _row = 2", ident(&store)),
+                        &format!(
+                            "SELECT _row_hash FROM {} WHERE _row = 2",
+                            quote_ident(&store)
+                        ),
                         [],
                         |row| row.get::<_, String>(0),
                     )
@@ -382,8 +508,134 @@ mod tests {
             rows,
             [
                 [json!("E1"), json!("E1")],
-                [json!(format!("row:{stored_hash}")), json!(null)],
+                [json!(format!("row:{stored_hash}:1")), json!(null)],
             ]
+        );
+    }
+
+    #[tokio::test]
+    async fn identical_keyless_rows_keep_distinct_record_ids() {
+        let (_, rows) = conformed(
+            AnalyticalDatasetKind::OperatingBudget,
+            "budget_adopted",
+            "amount,report_fy,budget_cycle\n1,23,adopted\n1,23,adopted\n",
+            "record_id",
+        )
+        .await;
+        assert_eq!(rows.len(), 2);
+        assert_ne!(rows[0], rows[1]);
+    }
+
+    #[tokio::test]
+    async fn the_view_covers_every_year_imported_and_drops_a_retired_one() {
+        let repo = repository().await;
+        let kind = AnalyticalDatasetKind::CallsForService;
+        let earlier = import(
+            &repo,
+            kind.clone(),
+            "police_calls",
+            "pd_calls_for_service_2024_datasd.csv",
+            "2026-10-06T00:00:00Z",
+            "INCIDENT_NUM,DATE_TIME\nE24,2024-03-01 08:00:00.000\n",
+        )
+        .await;
+        import(
+            &repo,
+            kind,
+            "police_calls",
+            "pd_calls_for_service_2025_datasd.csv",
+            "2026-10-06T00:00:00Z",
+            "DATE_TIME,PRIORITY,INCIDENT_NUM\n2025-03-01 08:00:00.000,2,E25\n",
+        )
+        .await;
+        let mut both = rows(
+            &repo,
+            "police_calls",
+            "publisher_record_id, priority, fiscal_year",
+        )
+        .await;
+        both.sort_by_key(|row| row[0].to_string());
+        assert_eq!(
+            both,
+            [
+                [json!("E24"), json!(null), json!(2024)],
+                [json!("E25"), json!("2"), json!(2025)],
+            ]
+        );
+        repo.query_connection("retire", move |conn| {
+            let typed: String = conn
+                .query_row(
+                    "SELECT table_name FROM analytical_snapshots WHERE snapshot_id = ?1",
+                    params![earlier],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            conn.execute_batch(&format!("DROP TABLE {}", quote_ident(&typed)))
+                .unwrap();
+            Ok(())
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            rows(&repo, "police_calls", "publisher_record_id").await,
+            [[json!("E25")]]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_refreshed_pack_file_replaces_its_earlier_build() {
+        let repo = repository().await;
+        for (built_at, csv) in [
+            (
+                "2026-09-30T00:00:00Z",
+                "INCIDENT_NUM,DATE_TIME\nE1,2026-01-01 00:00:00.000\n",
+            ),
+            (
+                "2026-10-06T00:00:00Z",
+                "INCIDENT_NUM,DATE_TIME\nE1,2026-01-01 00:00:00.000\nE2,2026-02-01 00:00:00.000\n",
+            ),
+        ] {
+            import(
+                &repo,
+                AnalyticalDatasetKind::CallsForService,
+                "police_calls",
+                "pd_calls_for_service_2026_datasd.csv",
+                built_at,
+                csv,
+            )
+            .await;
+        }
+        assert_eq!(
+            rows(&repo, "police_calls", "publisher_record_id, pack_version").await,
+            [
+                [json!("E1"), json!("2026-10-06")],
+                [json!("E2"), json!("2026-10-06")]
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_snapshot_without_stored_original_cells_is_refused() {
+        let error = refusal(
+            "police_calls",
+            "INCIDENT_NUM,DATE_TIME\nE1,2025-01-01 00:00:00.000\n",
+            "UPDATE analytical_snapshots SET validation_summary_json = '{}'",
+        )
+        .await;
+        assert!(error.contains("predates stored original cells"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn a_publisher_column_named_like_a_standard_column_is_refused() {
+        let error = refusal(
+            "police_calls",
+            "INCIDENT_NUM,DATE_TIME,record_id\nE1,2025-01-01 00:00:00.000,x\n",
+            "SELECT 1",
+        )
+        .await;
+        assert!(
+            error.contains("named like standard columns: record_id"),
+            "{error}"
         );
     }
 }
