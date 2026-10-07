@@ -2,7 +2,8 @@ import type { AnalyticalDatasetKind, AnalyticalImportResult } from './analysisWo
 
 /**
  * A data pack whose signed manifest verified against a pinned publisher key. From a local folder
- * every listed file verified too; from a published pack none has been downloaded yet.
+ * every listed file verified too; from a published pack only the manifest has, and each file is
+ * checked when it is downloaded.
  */
 export interface DataPackSummary {
   pack: string;

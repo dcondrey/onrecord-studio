@@ -175,8 +175,8 @@ column or table here before anything is published.
   (service `com.onrecord.pack-publisher`), never in the repository; the public key is pinned in the
   app as `PACK_PUBLIC_KEYS`, separate from the per-installation export key and the entitlement keys.
 - **Hugging Face.** Account `davidcondrey`, organisation `Writerslogic`; packs publish to
-  `Writerslogic/onrecord-<pack>` (public datasets; `san-diego-money` and `san-diego-reports`
-  published 2026-10-07, enforcement and capacity to follow). The app fetches published packs from
+  `Writerslogic/onrecord-<pack>` (public datasets; all four packs' manifests resolved on
+  2026-10-07). The app fetches published packs from
   there: `https://huggingface.co/datasets/Writerslogic/onrecord-<pack>/resolve/main/<path>`.
 - **Pack origin.** A snapshot imported from a pack keeps the identity the analytical import gives
   it; the pack is recorded beside it (pack, version, build time, file SHA-256), so the same bytes

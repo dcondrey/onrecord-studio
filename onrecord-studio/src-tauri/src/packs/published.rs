@@ -23,7 +23,7 @@ use std::path::{Component, Path, PathBuf};
 
 const PUBLISHER: &str = "Writerslogic";
 const HUB: &str = "https://huggingface.co/";
-/// A manifest lists a pack's files; the largest published one is under 100 KB.
+/// A manifest lists a pack's files; `san-diego-reports` 2026.10.7 (94 files) is 123,432 bytes.
 const MAX_MANIFEST_BYTES: usize = 4 * 1024 * 1024;
 
 /// The app-managed directory published packs are downloaded into, `<app data>/packs`. A pack's

@@ -2,7 +2,8 @@ use super::analysis_workbench::{AnalyticalDatasetKind, AnalyticalImportResult};
 use serde::{Deserialize, Serialize};
 
 /// A data pack whose signed manifest has verified against a pinned publisher key. From a local
-/// folder every listed file has verified too; from a published pack none has been downloaded yet.
+/// folder every listed file has verified too; from a published pack only the manifest has, and
+/// each file is checked when it is downloaded.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct DataPackSummary {

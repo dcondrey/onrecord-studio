@@ -136,10 +136,14 @@ function PublishedPacks({ onImported }: { onImported?: () => void }) {
 
   useEffect(() => {
     const request = listGate.begin();
-    invokeCommand('list_published_packs', {}).then(
-      (list) => { if (listGate.isCurrent(request)) setPacks(list); },
-      (reason: unknown) => { if (listGate.isCurrent(request)) setListError(formatNativeError(reason)); },
-    );
+    void (async () => {
+      try {
+        const list = await invokeCommand('list_published_packs', {});
+        if (listGate.isCurrent(request)) setPacks(list);
+      } catch (reason) {
+        if (listGate.isCurrent(request)) setListError(formatNativeError(reason));
+      }
+    })();
   }, [listGate]);
 
   const choosePack = (pack: string) => {
@@ -192,7 +196,7 @@ function PublishedPacks({ onImported }: { onImported?: () => void }) {
         <div className="mt-3 space-y-3 text-label leading-relaxed">
           <div>
             <p className="font-semibold text-fg">{summary.pack} {summary.packVersion}</p>
-            <p className="text-fg-secondary">Manifest verified: signed by publisher key {summary.signerKeyId.slice(0, 16)}. Built {summary.builtAt}; schema {summary.schemaVersion}. No file has been downloaded yet.</p>
+            <p className="text-fg-secondary">Manifest verified: signed by publisher key {summary.signerKeyId.slice(0, 16)}. Built {summary.builtAt}; schema {summary.schemaVersion}. Each file you choose is checked against this manifest when you download it.</p>
             <p className="text-muted">Each file was retrieved by the pack builder on the date it lists, not by you. Anything published after that is not in it.</p>
           </div>
           <Licence summary={summary} />
