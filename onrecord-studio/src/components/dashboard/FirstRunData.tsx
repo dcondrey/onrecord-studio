@@ -62,16 +62,15 @@ export default function FirstRunData() {
     try {
       for (const table of tables) {
         mark(table.key, { state: 'fetching' });
-        try {
-          const result = await invokeCommand('fetch_city_dataset', { dataset: table.dataset, year: table.year });
-          if (!gate.isCurrent(request)) return;
-          imported += 1;
-          mark(table.key, { state: 'done', rows: result.importedRows, rejected: result.rejectedRows });
-        } catch (reason) {
-          if (!gate.isCurrent(request)) return;
-          failed += 1;
-          mark(table.key, { state: 'failed', error: formatNativeError(reason) });
-        }
+        const outcome: TableStatus = await invokeCommand('fetch_city_dataset', { dataset: table.dataset, year: table.year }).then(
+          (result) => ({ state: 'done', rows: result.importedRows, rejected: result.rejectedRows }),
+          (reason) => ({ state: 'failed', error: formatNativeError(reason) }),
+        );
+        // Counted before the gate: a table that landed after unmount still needs discovery to see it.
+        if (outcome.state === 'done') imported += 1;
+        if (!gate.isCurrent(request)) return;
+        if (outcome.state === 'failed') failed += 1;
+        mark(table.key, outcome);
       }
       if (failed === 0) useAppStore.getState().setWorkspaceView('analysis');
       else setPhase('finished');

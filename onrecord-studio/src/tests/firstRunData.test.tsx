@@ -115,5 +115,6 @@ describe('first-run core data', () => {
     expect(useAppStore.getState().workspaceView).toBe('overview');
     // The discovery hold must still be released, or automatic checks stay paused for good.
     expect(discovery.released).toBe(1);
+    expect(discovery.refreshed).toBe(1);
   });
 });
