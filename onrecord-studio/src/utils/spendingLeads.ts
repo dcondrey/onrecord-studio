@@ -304,7 +304,7 @@ function overtimeLeads(results: Entry[]): ServiceLead[] {
     const latest = reported.at(-1);
     if (!latest) continue;
     const scope = flag(years[0].followed) ? `for every fiscal year both tables cover with an adopted overtime line (${covered})`
-      : `for the fiscal years of ${covered} in which it is among the ${OVERTIME_DEPARTMENT_YEARS_LISTED} department-years with most actual overtime`;
+      : `for the years both tables cover (${covered}) in which it is among the ${OVERTIME_DEPARTMENT_YEARS_LISTED} department-years with most actual overtime`;
     leads.push({ key: `spending_overtime_above_adopted:${department}`, priority: 95, query,
       title: `${department}: actual overtime ${money(latest.actual)} against ${money(latest.adopted)} adopted in FY ${latest.year}, ${percent(latest.actual - latest.adopted, latest.adopted)} above${reported.length > 1 ? `; ${reported.length - 1} other year${reported.length > 2 ? 's' : ''} at least ${ABOVE_ADOPTED_OVERTIME_PERCENT}% above` : ''}`,
       detail: `Overtime of ${department}, adopted against actual, ${scope}. ${lines.join(' ')} At least ${ABOVE_ADOPTED_OVERTIME_PERCENT}% and $${shown(ABOVE_ADOPTED_OVERTIME_DOLLARS)} above adopted overtime: ${reported.map((item) => `FY ${item.year} (${money(item.actual - item.adopted)})`).join(', ')}; both are fixed yardsticks, not a statistical test. Actual overtime in FY ${latest.year} is in ${latest.accounts}. ${OVERTIME_LIMITS}`,
