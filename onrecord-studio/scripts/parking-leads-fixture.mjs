@@ -23,7 +23,7 @@ const rows = [
   ['70000003', '2022-07-03', '2022-07-03', '3500 Sports Arena Blvd ', 'CSD (I) PARKING ENF', '86.0139(A) SDMC', 'OVERSIZED VEH', '112.5'],
   // Corrected later: the earlier entry's blank unit and misspelt place are not read.
   ['70000004', '2022-07-04', '2022-07-04', '3500 SPORTS ARENA BL', '', '86.0139(A)', OVERSIZED, '112.5'],
-  ['70000004', '2022-07-04', '2022-08-15 10:12:00', '3500 SPORTS ARENA BLVD', 'CSD (S) POLICE', '86.0139(A)', OVERSIZED, '112.5'],
+  ['70000004', '2022-07-04', '2022-08-15', '3500 SPORTS ARENA BLVD', 'CSD (S) POLICE', '86.0139(A)', OVERSIZED, '112.5'],
   ['70000005', '2022-07-05', '2022-07-05', '1900 FRONT ST', 'CSD I PARKING ENF', '86.0139(A)', OVERSIZED, 'n/a'],
   ['70000006', '2022-07-06', '2022-07-06', '', '', '86.0139(A)', OVERSIZED, '112.5'],
   ['70000007', '2022-07-07', '2022-07-07', '1900 FRONT ST', 'CSD (W) PARK RANGERS', '86.0139(A)', OVERSIZED, '112.5'],

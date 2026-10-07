@@ -46,7 +46,7 @@ describe('leads from a parking citation file', () => {
 
   it('gives no fine figure when no fine is readable, never $0', () => {
     const { detail } = parkingLeads([sections(30, 12, 0, { fines: null, unread_fines: 30 })])[0];
-    expect(detail).toContain('SDMC 86.0139(A) (oversized, non-motorized or recreational vehicle): 30 citations; 20 written by police, 10 by parking enforcement, 0 by another City unit and 0 with no issuing unit recorded. Issuing units as written: CSD (I) PARKING ENF; CSD (S) POLICE. No fine is recorded in a readable form on them.');
+    expect(detail).toContain('SDMC 86.0139(A) (oversized, non-motorized or recreational vehicle): 30 citations; 20 written by police, 10 by parking enforcement, 0 by another City unit and 0 with no issuing unit recorded. Issuing units as written: CSD (I) PARKING ENF; CSD (S) POLICE. Their fines are not recorded in a readable form.');
     expect(detail).not.toContain('$0');
     expect(parkingLeads([sections(30, 12, 0, { unread_fines: 2, fines: 28 * 112.5 })])[0].detail).toContain('The fines written on them total $3,150.00; 2 have no readable fine and are not in that total.');
   });

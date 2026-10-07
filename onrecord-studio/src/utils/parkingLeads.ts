@@ -102,7 +102,7 @@ const rowsOf = (results: Entry[], id: string) => {
 };
 const span = (row: Record<string, unknown>) => row.first_issue != null && row.last_issue != null ? { text: ` from ${String(row.first_issue)} to ${String(row.last_issue)}`, period: `${String(row.first_issue)} to ${String(row.last_issue)}` } : null;
 const CAVEAT = 'A parking citation records the vehicle and the place, not whether anyone lived in it. The fine is the amount written on the citation, not what was paid.';
-const QUESTION = 'Were people living in these vehicles cited for vehicle habitation under SDMC 86.0137(F) on the same blocks and dates, and how many safe-parking spaces were open then? The police department\'s habitation citations and the safe parking program\'s nightly capacity for the period would show it.';
+const QUESTION = 'Were any of these vehicles, or others on the same blocks and dates, cited for vehicle habitation under SDMC 86.0137(F), and how many safe-parking spaces were open then? The police department\'s habitation citations and the safe parking program\'s nightly capacity for the period would show it.';
 
 function described(key: Section, row: Record<string, unknown> | undefined): string {
   const { label } = SECTIONS[key];
@@ -113,7 +113,7 @@ function described(key: Section, row: Record<string, unknown> | undefined): stri
   const conflicting = count(row.conflicting) ?? 0;
   const unread = count(row.unread_fines) ?? 0;
   const fines = count(row.fines);
-  const fineText = fines == null ? 'No fine is recorded in a readable form on them.'
+  const fineText = fines == null ? 'Their fines are not recorded in a readable form.'
     : `The fines written on them total ${dollars(fines)}${unread ? `; ${shown(unread)} have no readable fine and are not in that total` : ''}${conflicting ? '; the conflicting citations are not in it' : ''}.`;
   return `${label}: ${shown(n)} citations; ${shown(count(row.by_police))} written by police, ${shown(count(row.by_parking))} by parking enforcement, ${shown(count(row.other_sector))} by another City unit and ${shown(count(row.no_sector))} with no issuing unit recorded${conflicting ? `; ${shown(conflicting)} were entered at the same time with different codes, units or fines and are counted under no unit` : ''}.${typeof row.sector_texts === 'string' && row.sector_texts ? ` Issuing units as written: ${row.sector_texts}.` : ''} ${fineText}${warned}`;
 }
