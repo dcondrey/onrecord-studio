@@ -16,7 +16,7 @@ function describe(table: FirstRunTable, currentYear: number): { label: string; l
     case 'GET_IT_DONE_ENCAMPMENTS':
       return { label: `Get It Done Encampment reports closed in ${table.year}${soFar}`, leads: `${CAPACITY}; service-report leads` };
     case 'CALLS_FOR_SERVICE':
-      return { label: `SDPD calls for service, ${table.year}${soFar}`, leads: 'No lead reads it yet; query it in Analysis' };
+      return { label: `SDPD calls for service, ${table.year}${soFar}`, leads: 'How SLEEPER, welfare and trespass calls ended' };
     default:
       return { label: table.dataset, leads: '' };
   }

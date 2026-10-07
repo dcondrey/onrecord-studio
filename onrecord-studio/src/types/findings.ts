@@ -60,6 +60,7 @@ export type FindingKind =
   | 'DISCLOSURE_FILING_LEAD'
   | 'CAPACITY_COMPARISON_LEAD'
   | 'SPENDING_RECORD_LEAD'
+  | 'POLICE_CALL_LEAD'
   | 'RELEASE_TIMING_CONCENTRATION';
 
 /**
@@ -133,7 +134,7 @@ export interface EvidenceGapView {
 /** One discovery-feed lead sent to `record_service_leads`. Mirrors `analysis/service_leads.rs`. */
 export interface ServiceLeadInput {
   /** Which published records the lead was counted from; decides the finding kind. */
-  family: 'SERVICE_REPORTS' | 'POLICE_STOPS' | 'ABATEMENT_LOGS' | 'CHARGE_LOGS' | 'DISCLOSURE_FILINGS' | 'CAPACITY_COMPARISON' | 'SPENDING_RECORDS';
+  family: 'SERVICE_REPORTS' | 'POLICE_STOPS' | 'ABATEMENT_LOGS' | 'CHARGE_LOGS' | 'DISCLOSURE_FILINGS' | 'CAPACITY_COMPARISON' | 'SPENDING_RECORDS' | 'POLICE_CALLS';
   key: string;
   snapshotId: string;
   /** Every table the SQL read, `snapshotId` first; each is cited in the stored finding. */

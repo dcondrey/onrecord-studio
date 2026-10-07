@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fixture from '../../src-tauri/tests/fixtures/service-accountability.json';
+import callFixture from '../../src-tauri/tests/fixtures/call-leads.json';
 import type { AnalyticalSchema, DataMaintenanceStatus, SqlQueryResult } from '../types';
 import type { AutomaticProfile } from '../utils/automaticDiscovery';
 import { dataGaps } from '../utils/dataGaps';
@@ -90,6 +91,16 @@ describe('released records behind encampment reports', () => {
     expect(yearly(budget(inventory(catalog(latest, closed(2026, '2026-10-03T00:00:00Z')))))).toEqual([{ dataset: 'GET_IT_DONE_ENCAMPMENTS', year: 2026 }]);
     // The budget file names no homelessness department before fiscal 2021, so 2019 is not asked for.
     expect(yearly(budget(inventory(catalog(latest, ...[2026, 2025, 2024, 2023, 2022, 2021, 2020].map((year) => closed(year))))))).toEqual([]);
+  });
+
+  it('asks for the disposition and beat lists once for the latest calls table, and not once both are imported', () => {
+    const calls = callFixture.schema as AnalyticalSchema;
+    const without = (...snapshotIds: string[]): AnalyticalSchema => ({ ...calls, datasets: calls.datasets.filter((dataset) => !snapshotIds.includes(dataset.snapshotId)) });
+    const gaps = (schema: AnalyticalSchema) => dataGaps(schema, {}, '2026-10-04T12:00:00Z').map((gap) => [gap.key, gap.fetch]);
+    expect(gaps(without('cfs_dispositions', 'cfs_beats'))).toEqual([
+      ['calls:cfs_2026:DISPOSITION_CODES', { dataset: 'DISPOSITION_CODES', year: null }], ['calls:cfs_2026:BEAT_CODES', { dataset: 'BEAT_CODES', year: null }]]);
+    expect(gaps(without('cfs_beats'))).toEqual([['calls:cfs_2026:BEAT_CODES', { dataset: 'BEAT_CODES', year: null }]]);
+    expect(gaps(calls)).toEqual([]);
   });
 
   it('never starts the collection on its own, even when upkeep fetches missing tables', async () => {

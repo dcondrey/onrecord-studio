@@ -165,6 +165,7 @@ impl DraftFamily {
             | FindingKind::RollingProduction
             // A count of when uploads were recorded; it identifies no gap in the records.
             | FindingKind::SpendingRecordLead
+            | FindingKind::PoliceCallLead
             | FindingKind::ReleaseTimingConcentration => Self::NoDraft,
         }
     }
@@ -412,7 +413,7 @@ mod tests {
     use super::*;
     use crate::analysis::finding::{FindingSeverity, FindingSubject};
 
-    pub(crate) fn all_kinds() -> [FindingKind; 28] {
+    pub(crate) fn all_kinds() -> [FindingKind; 29] {
         use FindingKind::*;
         [
             HeldBackResponse,
@@ -443,6 +444,7 @@ mod tests {
             RollingProduction,
             ReleaseTimingConcentration,
             SpendingRecordLead,
+            PoliceCallLead,
         ]
     }
 

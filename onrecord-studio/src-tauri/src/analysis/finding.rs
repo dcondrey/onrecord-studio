@@ -280,6 +280,11 @@ pub enum FindingKind {
     /// Counted by the discovery feed's SQL and recorded as sent. Adopted is the original
     /// appropriation, so none of these is an appropriation test or a statement about use.
     SpendingRecordLead,
+    /// A count from a police department's published calls for service: how SLEEPER, check the
+    /// welfare, trespass, 5150 and 647F calls ended by disposition code, and the beats SLEEPER
+    /// calls came from. Counted by the discovery feed's SQL and recorded as sent. A call type is
+    /// the dispatcher's label, not a finding about the person the call was about.
+    PoliceCallLead,
 }
 
 impl FindingKind {
@@ -334,6 +339,7 @@ impl FindingKind {
             Self::CapacityComparisonLead => "CAPACITY_COMPARISON_LEAD",
             Self::ReleaseTimingConcentration => "RELEASE_TIMING_CONCENTRATION",
             Self::SpendingRecordLead => "SPENDING_RECORD_LEAD",
+            Self::PoliceCallLead => "POLICE_CALL_LEAD",
         }
     }
 
@@ -388,6 +394,7 @@ impl FindingKind {
             Self::CapacityComparisonLead,
             Self::ReleaseTimingConcentration,
             Self::SpendingRecordLead,
+            Self::PoliceCallLead,
         ]
         .into_iter()
         .find(|candidate| candidate.as_str() == value)
@@ -505,6 +512,8 @@ impl FindingKind {
             Self::ReleaseTimingConcentration => false,
             // Sums of two publishers' tables beside each other; no rule is applied to them.
             Self::SpendingRecordLead => false,
+            // Counts of dispatch codes as the department recorded them; no rule is applied.
+            Self::PoliceCallLead => false,
         }
     }
 }

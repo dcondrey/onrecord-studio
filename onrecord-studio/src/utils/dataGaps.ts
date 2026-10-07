@@ -5,6 +5,7 @@ import { missingStopCompanions } from './stopLeads';
 import { holdsAbatementLog } from './abatementLeads';
 import { closedReports, encampmentReportCoverage, OPEN_REPORTS, shelterInventoryTable } from './capacityLeads';
 import { actualsTable } from './spendingLeads';
+import { missingCallCompanions } from './callLeads';
 
 /** A question the imported tables cannot answer, and what would answer it: one published table to
  * fetch, or a records portal to collect from for a subject. */
@@ -39,6 +40,13 @@ export function dataGaps(schema: AnalyticalSchema, profiles: Record<string, Auto
       key: `stops:${dataset.snapshotId}:${missing.dataset}`, snapshotId: dataset.snapshotId, fetch: { dataset: missing.dataset, year: null },
       title: 'The stop records need their companion table',
       detail: `${dataset.displayName} lists the persons stopped. The publisher keeps ${missing.holds} in a separate table, matched on stop and person number.`,
+    });
+  }
+  for (const dataset of schema.datasets) for (const missing of missingCallCompanions(schema, dataset)) {
+    gaps.push({
+      key: `calls:${dataset.snapshotId}:${missing.dataset}`, snapshotId: dataset.snapshotId, fetch: { dataset: missing.dataset, year: null },
+      title: 'The calls for service need their code list',
+      detail: `${dataset.displayName} records each call by code. The publisher keeps ${missing.holds} in a separate table.`,
     });
   }
   const budget = budgetTable(schema);

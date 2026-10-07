@@ -367,6 +367,10 @@ pub fn falsification_for(kind: FindingKind) -> DossierFalsification {
             "The budget was revised after adoption, the amount was transferred or carried forward, or the City recorded the payment under another department or account.",
             &["the year-end budget monitoring report and mid-year budget amendments for the department and year", "the department's overtime and vacancy reports, or the settlement resolutions, for the same year"],
         ),
+        FindingKind::PoliceCallLead => (
+            "The call type is the dispatcher's label when the call was entered, not what the officers found, and the disposition code records how the call was closed, not what was done.",
+            &["the CAD event narratives for the calls counted", "the incident and arrest reports for the beats named"],
+        ),
         FindingKind::ReleaseTimingConcentration => (
             "Staff finish and post work at the end of the week, or the requests released then fell due then.",
             &["the request log with each request's due date and assigned staff", "the portal's document activity log showing when each file was uploaded and when it was made public"],
