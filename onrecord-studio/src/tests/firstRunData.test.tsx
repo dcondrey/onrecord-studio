@@ -17,7 +17,7 @@ vi.hoisted(() => {
 });
 const bridge = vi.hoisted(() => ({
   calls: [] as { dataset: string; year: number | null }[],
-  respond: (_args: { dataset: string; year: number | null }): Promise<unknown> => Promise.resolve(null),
+  respond: null as unknown as (args: { dataset: string; year: number | null }) => Promise<unknown>,
 }));
 const discovery = vi.hoisted(() => ({
   state: { schema: null as { datasets: unknown[]; columns: unknown[] } | null },
