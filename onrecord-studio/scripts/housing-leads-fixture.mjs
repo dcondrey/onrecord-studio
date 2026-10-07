@@ -50,6 +50,8 @@ const tables = {
     approval('0900003', 'JOB-100001', 'PMT-3000003', 'Building Permit', '2025-05-06', [2, 3, 4, 5, 10, 6, 1]),
     approval('0900003', 'JOB-100001', 'PMT-3000004', 'Building Permit', '2025-05-07', [2, 3, 4, 5, 10, 6, 1]),
     approval('0900004', 'JOB-100002', 'PMT-3000005', ' Combination Building Permit ', '2025-07-08', [0, 0, 0, 0, 1, 0, 1]),
+    // Non-housing work: every tier recorded as 0.
+    approval('0900010', 'JOB-100010', 'PMT-3000010', 'Building Permit', '2025-10-01', [0, 0, 0, 0, 0, 0, 0]),
     // No tier recorded.
     approval('0900006', 'JOB-100003', 'PMT-3000006', 'Combination Building Permit', '2025-08-09', null),
     approval('0900005', 'JOB-100005', 'PMT-3000007', 'Building Permit', '2025-01-10', null),

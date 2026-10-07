@@ -80,11 +80,13 @@ async fn housing_check_counts_units_once_per_job_on_issued_building_permits() {
     assert_eq!(result.row_count, 2);
     // JOB-060768's 224 units recur on its Coastal and Site Development approvals and are counted
     // nowhere. JOB-100001's two Building Permits count once; the blank job's units are in no total.
-    // JOB-100005 has permits in 2024 and 2025 and is counted in 2024 only.
+    // JOB-100005 has permits in 2024 and 2025 and is counted in 2024 only. JOB-100010 records 0 in
+    // every tier: it has a tier recorded and no unit.
     let issued_2025 = year_row(&result, 2025);
     for (column, expected) in [
-        ("jobs", 3.0),
-        ("tiered_jobs", 2.0),
+        ("jobs", 4.0),
+        ("tiered_jobs", 3.0),
+        ("unit_jobs", 2.0),
         ("multi_permit_jobs", 1.0),
         ("extremely_low", 2.0),
         ("very_low", 3.0),
@@ -105,6 +107,7 @@ async fn housing_check_counts_units_once_per_job_on_issued_building_permits() {
     let issued_2024 = year_row(&result, 2024);
     assert_eq!(number(&result, issued_2024, "jobs"), 3.0);
     assert_eq!(number(&result, issued_2024, "tiered_jobs"), 0.0);
+    assert_eq!(number(&result, issued_2024, "unit_jobs"), 0.0);
     for column in [
         "extremely_low",
         "very_low",

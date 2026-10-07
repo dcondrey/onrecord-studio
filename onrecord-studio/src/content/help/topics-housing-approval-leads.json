@@ -23,13 +23,13 @@
         "paragraphs": [
           "Only the issued files are read, recognized by the address they were fetched from: the created, issued and closed files share one header and list the same approvals, so reading all three would count an approval up to three times. Where one year's issued file was fetched more than once, only the latest copy is read.",
           "Only Building Permit and Combination Building Permit approvals are counted. Discretionary approvals such as Site Development and Coastal Development permits are left out because their units recur on the building permit. Each job is counted once, in the year of its earliest issue date; a job with several building permits is counted at the largest figure any of them records for each tier. Building permits with no job recorded are counted apart and are in no total.",
-          "Units are summed by income tier as the permits record them. A blank tier is not a zero: a tier no job in a year records is shown as not recorded. Density-bonus units and ADUs are reported apart because the file does not say whether they are inside the tiers; the JADU columns are not read. The file's net-change column is blank throughout and is not read."
+          "Units are summed by income tier as the permits record them. A blank tier is not a zero: a tier no job in a year records is shown as not recorded. A job that records no unit above 0 in any tier is counted among the year's jobs and adds nothing to a tier. Density-bonus units and ADUs are reported apart because the file does not say whether they are inside the tiers; the JADU columns are not read. The file's net-change column is blank throughout and is not read."
         ]
       },
       {
         "heading": "When it is raised",
         "paragraphs": [
-          "One lead is raised for each issue year with at least 30 jobs that have an income tier recorded. With two or more such years, each lead lists every year's extremely-low and very-low units side by side; no rate or trend is computed."
+          "One lead is raised for each issue year with at least 30 jobs that record one or more units in an income tier; most building permits are other work that records 0 in every tier, and those are not counted toward the 30. With two or more such years, each lead lists every year's extremely-low and very-low units side by side; no rate or trend is computed."
         ]
       },
       {

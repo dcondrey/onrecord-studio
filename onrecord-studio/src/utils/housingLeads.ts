@@ -19,7 +19,8 @@ const COLUMNS = ['job_id', 'approval_type', 'approval_issue_date', ...TIERS.map(
 /** The approval types that permit construction, as the publisher writes them. Discretionary
  * approvals (Site Development, Coastal Development) repeat the units of the job they belong to. */
 const PERMIT_TYPES = ['Building Permit', 'Combination Building Permit'];
-/** A year is described only with this many jobs that have an income tier recorded. */
+/** A year is described only with this many jobs that record a unit in an income tier. Most
+ * permits are non-housing work that records 0 in every tier, so a recorded tier is not enough. */
 const JOB_MINIMUM = 30;
 
 const has = (schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary) =>
@@ -58,7 +59,7 @@ export function housingQueries(schema: AnalyticalSchema, dataset: AnalyticalData
   if (!tables) return [];
   return [{
     id: 'housing_units_by_tier', title: 'Dwelling units on building permits issued, by income tier and issue year',
-    method: `Building Permit and Combination Building Permit approvals in ${tables.map((table) => table.displayName).join(', ')}, counted once per JOB_ID; approvals with no JOB_ID are counted apart and in no total. A job is counted in the year of its earliest APPROVAL_ISSUE_DATE, so a job whose permits span two issue years is counted in the first. A job with several building permits is counted once, at the largest figure any of its permits records for each tier. Units are summed by income tier (APPROVAL_DU_EXTREMELY_LOW, _VERY_LOW, _LOW, _MODERATE, _ABOVE_MODERATE) as the permits record them; a blank tier is not a zero, and a tier no job in a year records has no total. Density-bonus units (APPROVAL_DU_BONUS) and ADUs (APPROVAL_ADU_TOTAL) are reported apart because the file does not say whether they are inside the tiers; the JADU columns are not read. APPROVAL_DU_NET_CHANGE is blank in the published file and is not read. Discretionary approvals such as Site Development and Coastal Development permits are left out because their units recur on the building permit. No target is applied.`,
+    method: `Building Permit and Combination Building Permit approvals in ${tables.map((table) => table.displayName).join(', ')}, counted once per JOB_ID; approvals with no JOB_ID are counted apart and in no total. A job is counted in the year of its earliest APPROVAL_ISSUE_DATE, so a job whose permits span two issue years is counted in the first. A job with several building permits is counted once, at the largest figure any of its permits records for each tier. Units are summed by income tier (APPROVAL_DU_EXTREMELY_LOW, _VERY_LOW, _LOW, _MODERATE, _ABOVE_MODERATE) as the permits record them; a job that records no unit above 0 in any tier is counted among jobs and adds nothing; a blank tier is not a zero, and a tier no job in a year records has no total. Density-bonus units (APPROVAL_DU_BONUS) and ADUs (APPROVAL_ADU_TOTAL) are reported apart because the file does not say whether they are inside the tiers; the JADU columns are not read. APPROVAL_DU_NET_CHANGE is blank in the published file and is not read. Discretionary approvals such as Site Development and Coastal Development permits are left out because their units recur on the building permit. No target is applied.`,
     sql: `WITH permits AS (
 ${tables.map((table) => ` SELECT NULLIF(TRIM(CAST(${quoteIdentifier('job_id')} AS VARCHAR)), '') AS job, TRY_CAST(TRIM(CAST(${quoteIdentifier('approval_issue_date')} AS VARCHAR)) AS DATE) AS issued,
   ${all.map((item) => `${number(item.column)} AS ${item.key}`).join(', ')}
@@ -68,6 +69,7 @@ ${tables.map((table) => ` SELECT NULLIF(TRIM(CAST(${quoteIdentifier('job_id')} A
  FROM permits WHERE job IS NOT NULL GROUP BY job
 )
 SELECT issued_year, COUNT(*) AS jobs, COUNT(*) FILTER (WHERE ${TIERS.map((tier) => `${tier.key} IS NOT NULL`).join(' OR ')}) AS tiered_jobs,
+ COUNT(*) FILTER (WHERE ${TIERS.map((tier) => `${tier.key} > 0`).join(' OR ')}) AS unit_jobs,
  COUNT(*) FILTER (WHERE permits > 1) AS multi_permit_jobs, ${all.map((item) => `SUM(${item.key}) AS ${item.key}`).join(', ')},
  (SELECT COUNT(*) FROM permits WHERE job IS NULL) AS no_job_permits
 FROM jobs GROUP BY issued_year ORDER BY issued_year NULLS LAST`,
@@ -97,7 +99,7 @@ export function housingLeads(results: Entry[], currentYear = new Date().getUTCFu
   const entry = results.find((item) => item.query.id === 'housing_units_by_tier');
   if (!entry?.result?.rows.length || entry.result.truncated) return [];
   const rows = records(entry.result);
-  const years = rows.filter((row) => count(row.issued_year) !== null && (count(row.tiered_jobs) ?? 0) >= JOB_MINIMUM).sort((a, b) => count(a.issued_year)! - count(b.issued_year)!);
+  const years = rows.filter((row) => count(row.issued_year) !== null && (count(row.unit_jobs) ?? 0) >= JOB_MINIMUM).sort((a, b) => count(a.issued_year)! - count(b.issued_year)!);
   const undated = rows.filter((row) => count(row.issued_year) === null).reduce((sum, row) => sum + (count(row.jobs) ?? 0), 0);
   const noJob = count(rows[0].no_job_permits) ?? 0;
   const soFar = (year: number) => year >= currentYear ? ' so far' : '';
@@ -109,11 +111,11 @@ export function housingLeads(results: Entry[], currentYear = new Date().getUTCFu
     const tiers = TIERS.map((tier) => ({ ...tier, value: count(row[tier.key]) }));
     const tiered = tiers.reduce((sum, tier) => sum + (tier.value ?? 0), 0);
     const lower = lowest(row);
-    const jobs = count(row.jobs) ?? 0; const tieredJobs = count(row.tiered_jobs) ?? 0; const multi = count(row.multi_permit_jobs) ?? 0;
+    const jobs = count(row.jobs) ?? 0; const tieredJobs = count(row.tiered_jobs) ?? 0; const unitJobs = count(row.unit_jobs) ?? 0; const multi = count(row.multi_permit_jobs) ?? 0;
     return {
       key: `housing_units_by_tier:${year}`, priority: 95, query: entry.query, scope: { period: `${year}-01-01 to ${year}-12-31` },
       title: `Building permits issued in ${year}${soFar(year)} ${lower ? `carry ${units(lower.sum)} for ${lower.households}${lower.missing}` : 'record no extremely-low or very-low income tier'}, of ${units(tiered)} with an income tier`,
-      detail: `Building and Combination Building Permits issued in ${year}${soFar(year)}, counted once per job: ${shown(jobs)} jobs, ${shown(tieredJobs)} with an income tier recorded and ${shown(jobs - tieredJobs)} with no tier recorded. Units by income tier: ${tiers.map((tier) => `${tier.name} ${recorded(tier.value)}`).join(', ')}. Reported apart, because the file does not say whether they are inside the tiers: density-bonus units ${recorded(count(row.bonus))}, ADUs ${recorded(count(row.adu))}.${multi ? ` ${shown(multi)} jobs hold more than one building permit; each is counted once, at the largest figure any of its permits records for each tier.` : ''}${side}${undated ? ` ${shown(undated)} jobs have no readable issue date and are in no year.` : ''}${noJob ? ` ${shown(noJob)} building permits have no job recorded and are in no total.` : ''} ${CAVEAT}`,
+      detail: `Building and Combination Building Permits issued in ${year}${soFar(year)}, counted once per job. Of ${shown(jobs)} jobs, ${shown(unitJobs)} record a unit in an income tier, ${shown(tieredJobs - unitJobs)} record no unit above 0 in any tier, and ${shown(jobs - tieredJobs)} have no tier recorded. Units by income tier: ${tiers.map((tier) => `${tier.name} ${recorded(tier.value)}`).join(', ')}. Reported apart, because the file does not say whether they are inside the tiers: density-bonus units ${recorded(count(row.bonus))}, ADUs ${recorded(count(row.adu))}.${multi ? ` ${shown(multi)} jobs hold more than one building permit; each is counted once, at the largest figure any of its permits records for each tier.` : ''}${side}${undated ? ` ${shown(undated)} jobs have no readable issue date and are in no year.` : ''}${noJob ? ` ${shown(noJob)} building permits have no job recorded and are in no total.` : ''} ${CAVEAT}`,
       question: `What does the City's Annual Progress Report table A2 for ${year} record as building permits issued by income tier, and what is the City's RHNA allocation for each tier? The report's table A2 and the allocation would show what the City reported for the same tiers.`,
     };
   });

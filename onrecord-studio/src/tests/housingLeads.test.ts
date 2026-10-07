@@ -11,7 +11,8 @@ const result = (rows: Record<string, unknown>[], truncated = false): SqlQueryRes
   const columns = [...new Set(rows.flatMap((row) => Object.keys(row)))];
   return { columns, rowCount: rows.length, elapsedMs: 1, truncated, provenance: [], rows: rows.map((row) => columns.map((name) => row[name] ?? null)) };
 };
-const year = (issued: number, tiered: number, change: Record<string, unknown> = {}) => ({ issued_year: issued, jobs: tiered + 5, tiered_jobs: tiered, multi_permit_jobs: 0,
+/** Most jobs on a year's permits record 0 in every tier; `unit` of them record a unit. */
+const year = (issued: number, unit: number, change: Record<string, unknown> = {}) => ({ issued_year: issued, jobs: unit + 105, tiered_jobs: unit + 100, unit_jobs: unit, multi_permit_jobs: 0,
   extremely_low: 1, very_low: 2, low: 7, moderate: 10, above_moderate: 20, bonus: 15, adu: 9, no_job_permits: 0, ...change });
 const units = (...rows: Record<string, unknown>[]) => [{ query, result: result(rows) }];
 
@@ -22,10 +23,11 @@ describe('leads from issued development approvals', () => {
     for (const id of ['approvals_issued_2024', 'approvals_prior_2025', 'approvals_created_2025', 'approvals_closed_2025']) expect(housingQueries(schema, table(id))).toEqual([]);
   });
 
-  it('describes a year at 30 jobs with an income tier, not 29', () => {
+  it('describes a year at 30 jobs that record a unit, not 29, however many jobs record 0 in every tier', () => {
     expect(housingLeads(units(year(2025, 29)), 2026)).toEqual([]);
-    for (const tiered of [30, 31]) {
-      const [lead] = housingLeads(units(year(2025, tiered)), 2026);
+    for (const unit of [30, 31]) {
+      const [lead] = housingLeads(units(year(2025, unit)), 2026);
+      expect(lead.detail).toContain(`Of ${unit + 105} jobs, ${unit} record a unit in an income tier, 100 record no unit above 0 in any tier, and 5 have no tier recorded.`);
       expect(lead.title).toBe('Building permits issued in 2025 carry 3 units for extremely-low and very-low income households, of 40 units with an income tier');
       expect(lead.key).toBe('housing_units_by_tier:2025');
     }
@@ -55,7 +57,6 @@ describe('leads from issued development approvals', () => {
     const leads = housingLeads(units(year(2023, 40, { extremely_low: null, very_low: null }), year(2024, 30, { extremely_low: null, very_low: 5 }), year(2025, 30), year(2026, 10)), 2026);
     expect(leads.map((lead) => lead.key)).toEqual(['housing_units_by_tier:2023', 'housing_units_by_tier:2024', 'housing_units_by_tier:2025']);
     expect(leads[2].detail).toContain('Extremely-low and very-low income units on building permits, by issue year: 2023: not recorded; 2024: 5 (no extremely-low tier recorded); 2025: 3.');
-    expect(leads[2].detail).toContain('5 with no tier recorded');
   });
 
   it('gives no lead from a result cut short by the row limit', () => {
