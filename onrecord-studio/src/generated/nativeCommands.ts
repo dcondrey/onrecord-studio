@@ -48,6 +48,8 @@ export interface NativeCommandMap {
   hybrid_search: { args: { query: string; filter?: Types.HybridSearchFilter | null; limit?: number | null }; result: Types.HybridSearchResult[] };
   import_analytical_dataset: { args: { input: Types.AnalyticalImportRequest }; result: Types.AnalyticalImportResult };
   fetch_city_dataset: { args: { dataset: Types.CityDataset; year?: number | null }; result: Types.AnalyticalImportResult };
+  inspect_data_pack: { args: { path: string }; result: Types.DataPackSummary };
+  import_data_pack_files: { args: { path: string; files: string[] }; result: Types.DataPackImportOutcome[] };
   get_encampment_ordinance_report: { args: NoArgs; result: Types.EncampmentOrdinanceReport };
   list_analytical_import_candidates: { args: NoArgs; result: Types.AnalyticalImportCandidate[] };
   get_analytical_schema: { args: NoArgs; result: Types.AnalyticalSchema };

@@ -5,6 +5,7 @@ pub mod analysis_workbench;
 pub mod annotations;
 pub mod collaboration;
 pub mod corpus;
+pub mod data_packs;
 pub mod dispositions;
 pub mod document_origin;
 pub mod export;

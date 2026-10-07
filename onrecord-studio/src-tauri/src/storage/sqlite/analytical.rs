@@ -29,8 +29,27 @@ impl DuckDbRepository {
         request: AnalyticalImportRequest,
         automatic_origin: Option<(String, u64)>,
     ) -> Result<AnalyticalImportResult, AppError> {
-        self.import_analytical_table(request, automatic_origin)
-            .await
+        let origin = automatic_origin.map(|(portal_key, document_id)| {
+            super::analytical_import::ImportOrigin::Maintenance {
+                portal_key,
+                document_id,
+            }
+        });
+        self.import_analytical_table(request, origin).await
+    }
+
+    /// As [`Self::import_analytical_csv`], recording the data pack the file came from beside the
+    /// snapshot in the same transaction.
+    pub(crate) async fn import_analytical_csv_from_pack(
+        &self,
+        request: AnalyticalImportRequest,
+        origin: crate::packs::import::PackOrigin,
+    ) -> Result<AnalyticalImportResult, AppError> {
+        self.import_analytical_table(
+            request,
+            Some(super::analytical_import::ImportOrigin::Pack(origin)),
+        )
+        .await
     }
 
     pub async fn analytical_import_candidates(

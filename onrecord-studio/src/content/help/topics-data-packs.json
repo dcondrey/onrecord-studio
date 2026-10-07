@@ -1,0 +1,65 @@
+[
+  {
+    "id": "data-packs",
+    "title": "Data packs",
+    "group": "Data handling",
+    "summary": "Signed folders of City open-data files, retrieved and compiled by the OnRecord pack builder, that you can import instead of downloading each table yourself.",
+    "keywords": [
+      "data pack",
+      "pack",
+      "signed",
+      "publisher key",
+      "budget",
+      "actuals",
+      "calls for service",
+      "get it done",
+      "open data",
+      "licence",
+      "import"
+    ],
+    "sections": [
+      {
+        "paragraphs": [
+          "A data pack holds the City's published files exactly as the pack builder downloaded them, with a signed manifest listing each file's address, retrieval time, size, SHA-256, row count and licence. Choose Data pack import in Analysis, then choose the pack's folder."
+        ]
+      },
+      {
+        "heading": "Before anything is imported",
+        "items": [
+          "The manifest's signature is checked, and the key that signed it must be the pack publisher key built into this app. A pack signed by any other key is refused.",
+          "Every listed file must be inside the pack folder and match its listed size and SHA-256. One changed byte refuses the whole pack, and nothing from it is imported.",
+          "The pack is checked again when you press Import, and each file's digest once more as it is read, so a file changed after the check is refused too."
+        ]
+      },
+      {
+        "heading": "Choosing and importing",
+        "items": [
+          "Files are listed by table and year. Tick the ones you want; each becomes its own snapshot through the same analytical import as a file you fetch yourself.",
+          "A year marked as not over may gain rows after the pack was built. Its snapshot is recorded as partial.",
+          "Each result names the rows imported and that they were retrieved by the pack builder on the pack's build date, not by you. A file that fails is reported beside the others; the rest still import."
+        ]
+      },
+      {
+        "heading": "Where a snapshot came from",
+        "items": [
+          "The pack, its version, build time, signing key, file path and SHA-256 are recorded beside the snapshot.",
+          "A file whose bytes are identical to one already imported from the same address stays one snapshot, so the two are never counted twice. The snapshot keeps the record of whichever import came first, and the pack is recorded beside it either way."
+        ]
+      },
+      {
+        "heading": "Licence",
+        "items": [
+          "City of San Diego open data is published under the Open Data Commons Public Domain Dedication and License (ODC-PDDL 1.0). The pack shows the licence and the City's disclaimer: the data is informational only, without warranty, and the City is not liable for any deficiency in it."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [
+      "data_packs"
+    ],
+    "related": [
+      "view-analysis"
+    ]
+  }
+]
