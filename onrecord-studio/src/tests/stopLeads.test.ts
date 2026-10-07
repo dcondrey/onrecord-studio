@@ -43,6 +43,7 @@ describe('leads from police stop records', () => {
       ['perceived', 'persons', 'arrested', 'arrested_on_warrant', 'arrested_without_warrant', 'cited', 'persons_with_result', 'no_result_row', 'results_table', 'property_seized', 'first_stop', 'last_stop'],
       [['not unhoused', 400, 40, 0, 40, 0, 400, 0, 'Stop results', 8, null, null], ['unhoused', 400, 40, 0, 40, 0, unhousedWithResult, 400 - unhousedWithResult, 'Stop results', 8, null, null]]) });
     expect(stopLeads([outcomes(99)])).toEqual([]);
+    expect(stopLeads([outcomes(100)])).toHaveLength(1);
     const [lead] = stopLeads([outcomes(200)]);
     expect(lead.title).toBe('20.0% of people perceived as unhoused were arrested when stopped, against 10.0% of others');
     expect(lead.detail).toContain('400 of 800 persons in the stop records were perceived as unhoused. 200 persons perceived as unhoused and 0 others have no row in Stop results;');
@@ -59,6 +60,10 @@ describe('leads from police stop records', () => {
     expect(same(150)!.title).toBe('Stopped for the same recorded reason, people perceived as unhoused were arrested without a warrant more often in 1 of 2 reasons compared');
     expect(same(150)!.detail).toContain('LODGING: 150 of 1,000 (15.0%) against 100 of 1,000 (10.0%).');
     expect(same(300, 90)).toBeUndefined();
+    const unrowed = stopLeads([{ query: query('stops_unhoused_reasons'), result: response(
+      ['reason', 'unhoused_persons', 'unhoused_with_result', 'unhoused_arrested', 'other_persons', 'other_with_result', 'other_arrested'],
+      [['LODGING', 1000, 500, 100, 1000, 1000, 100]]) }]).find((lead) => lead.key === 'stops_same_reason');
+    expect(unrowed!.detail).toContain('LODGING: 100 of 500 (20.0%) against 100 of 1,000 (10.0%).');
   });
 
   it('stores stop leads under their own family', () => {
