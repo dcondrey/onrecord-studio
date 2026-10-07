@@ -114,6 +114,16 @@ export function sinceInstant(preset: SincePreset, previousOpenAt: string | null,
 }
 
 const ACTIVE_CASE_STORAGE_KEY = 'onrecord-active-case';
+const FIRST_RUN_DATA_STORAGE_KEY = 'onrecord-first-run-data';
+
+function readFirstRunDataSettled(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(FIRST_RUN_DATA_STORAGE_KEY) === 'settled';
+  } catch {
+    return false;
+  }
+}
 
 function readActiveCase(): string | null {
   if (typeof window === 'undefined') return null;
@@ -224,6 +234,9 @@ interface AppState {
   /** The case the user is working; persisted. A stored id whose case no longer exists is shown as missing, not silently cleared. */
   activeCaseId: string | null;
   setActiveCase: (caseId: string | null) => void;
+  /** The first-run offer of the City's core tables was taken or skipped; it is not offered again. */
+  firstRunDataSettled: boolean;
+  settleFirstRunData: () => void;
   /** With a case active, views that can be scoped show only what the case covers. */
   scopeToCase: boolean;
   setScopeToCase: (scoped: boolean) => void;
@@ -386,6 +399,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Storage unavailable: the choice lasts for this session only.
     }
     return { activeCaseId };
+  }),
+  firstRunDataSettled: readFirstRunDataSettled(),
+  settleFirstRunData: () => set(() => {
+    try {
+      window.localStorage.setItem(FIRST_RUN_DATA_STORAGE_KEY, 'settled');
+    } catch {
+      // Storage unavailable: the choice lasts for this session only.
+    }
+    return { firstRunDataSettled: true };
   }),
   scopeToCase: true,
   setScopeToCase: (scopeToCase) => set({ scopeToCase }),

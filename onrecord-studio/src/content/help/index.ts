@@ -10,6 +10,7 @@ import account from './topics-account.json';
 import topicPacks from './topics-topic-packs.json';
 import plainLanguage from './topics-plain-language.json';
 import starterSets from './topics-starter-sets.json';
+import firstRunData from './topics-first-run-data.json';
 import evidencePackets from './topics-evidence-packets.json';
 import bundle from './topics-bundle.json';
 import watchlists from './topics-watchlists.json';
@@ -94,6 +95,7 @@ const ALL_HELP_TOPICS = [
   ...topicPacks,
   ...plainLanguage,
   ...starterSets,
+  ...firstRunData,
   ...evidencePackets,
   ...bundle,
   ...watchlists,
