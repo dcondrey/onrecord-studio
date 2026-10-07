@@ -84,10 +84,12 @@ const units = (value: number) => `${shown(value)} unit${Math.round(value) === 1 
 const recorded = (value: number | null) => value === null ? 'not recorded' : shown(value);
 const records = (result: SqlQueryResult) => result.rows.map((row) => Object.fromEntries(result.columns.map((name, i) => [name, row[i]])));
 type Entry = { query: DiscoveryQuery; result?: SqlQueryResult };
-/** A sum no job recorded stays null: it is "not recorded", never 0. */
+/** Extremely-low plus very-low units. A tier no job recorded is named as not recorded, never added as 0. */
 const lowest = (row: Record<string, unknown>) => {
   const eli = count(row.extremely_low); const vli = count(row.very_low);
-  return eli === null && vli === null ? null : (eli ?? 0) + (vli ?? 0);
+  if (eli === null && vli === null) return null;
+  return { sum: (eli ?? 0) + (vli ?? 0), households: eli === null ? 'very-low income households' : vli === null ? 'extremely-low income households' : 'extremely-low and very-low income households',
+    missing: eli === null ? ' (no extremely-low tier recorded)' : vli === null ? ' (no very-low tier recorded)' : '' };
 };
 const CAVEAT = 'Units are as the permits record them: units on permits issued, not units built or occupied. A job with no tier recorded is in no tier total, which is not a count of zero.';
 
@@ -100,21 +102,19 @@ export function housingLeads(results: Entry[], currentYear = new Date().getUTCFu
   const noJob = count(rows[0].no_job_permits) ?? 0;
   const soFar = (year: number) => year >= currentYear ? ' so far' : '';
   const side = years.length >= 2
-    ? ` Extremely-low and very-low income units on building permits, by issue year: ${years.map((row) => `${count(row.issued_year)!}${soFar(count(row.issued_year)!)}: ${recorded(lowest(row))}`).join('; ')}.`
+    ? ` Extremely-low and very-low income units on building permits, by issue year: ${years.map((row) => `${count(row.issued_year)!}${soFar(count(row.issued_year)!)}: ${((lower) => lower ? `${shown(lower.sum)}${lower.missing}` : 'not recorded')(lowest(row))}`).join('; ')}.`
     : '';
   return years.map((row) => {
     const year = count(row.issued_year)!;
     const tiers = TIERS.map((tier) => ({ ...tier, value: count(row[tier.key]) }));
     const tiered = tiers.reduce((sum, tier) => sum + (tier.value ?? 0), 0);
-    const [eli, vli] = tiers;
-    const lower = eli.value === null && vli.value === null ? null
-      : `carry ${units((eli.value ?? 0) + (vli.value ?? 0))} for ${eli.value === null ? 'very-low income households (no extremely-low tier recorded)' : vli.value === null ? 'extremely-low income households (no very-low tier recorded)' : 'extremely-low and very-low income households'}`;
+    const lower = lowest(row);
     const jobs = count(row.jobs) ?? 0; const tieredJobs = count(row.tiered_jobs) ?? 0; const multi = count(row.multi_permit_jobs) ?? 0;
     return {
       key: `housing_units_by_tier:${year}`, priority: 95, query: entry.query, scope: { period: `${year}-01-01 to ${year}-12-31` },
-      title: `Building permits issued in ${year}${soFar(year)} ${lower ?? 'record no extremely-low or very-low income tier'}, of ${units(tiered)} with an income tier`,
+      title: `Building permits issued in ${year}${soFar(year)} ${lower ? `carry ${units(lower.sum)} for ${lower.households}${lower.missing}` : 'record no extremely-low or very-low income tier'}, of ${units(tiered)} with an income tier`,
       detail: `Building and Combination Building Permits issued in ${year}${soFar(year)}, counted once per job: ${shown(jobs)} jobs, ${shown(tieredJobs)} with an income tier recorded and ${shown(jobs - tieredJobs)} with no tier recorded. Units by income tier: ${tiers.map((tier) => `${tier.name} ${recorded(tier.value)}`).join(', ')}. Reported apart, because the file does not say whether they are inside the tiers: density-bonus units ${recorded(count(row.bonus))}, ADUs ${recorded(count(row.adu))}.${multi ? ` ${shown(multi)} jobs hold more than one building permit; each is counted once, at the largest figure any of its permits records for each tier.` : ''}${side}${undated ? ` ${shown(undated)} jobs have no readable issue date and are in no year.` : ''}${noJob ? ` ${shown(noJob)} building permits have no job recorded and are in no total.` : ''} ${CAVEAT}`,
-      question: `What does the City's Annual Progress Report table A2 for ${year} record as building permits issued by income tier, and what is the City's RHNA allocation for each tier? The report and the allocation would set these counts beside what the City reported to the State.`,
+      question: `What does the City's Annual Progress Report table A2 for ${year} record as building permits issued by income tier, and what is the City's RHNA allocation for each tier? The report's table A2 and the allocation would show what the City reported for the same tiers.`,
     };
   });
 }

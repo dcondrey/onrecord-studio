@@ -376,7 +376,7 @@ pub fn falsification_for(kind: FindingKind) -> DossierFalsification {
             &["the citing officers' notes for the citations counted", "the tow and impound records for the blocks named"],
         ),
         FindingKind::HousingApprovalLead => (
-            "Income tiers are recorded only for projects with an affordability agreement, so units on other permits are in no tier.",
+            "A below-market tier is recorded only where an affordability agreement is on file, so restricted units without one are counted as above moderate or in no tier.",
             &["the City's Annual Progress Report for the year counted", "the affordability agreements for the jobs counted"],
         ),
         FindingKind::ReleaseTimingConcentration => (

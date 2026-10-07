@@ -52,10 +52,10 @@ describe('leads from issued development approvals', () => {
   });
 
   it('sets two qualifying years side by side without a trend', () => {
-    const leads = housingLeads(units(year(2024, 40, { extremely_low: null, very_low: null }), year(2025, 30), year(2026, 10)), 2026);
-    expect(leads.map((lead) => lead.key)).toEqual(['housing_units_by_tier:2024', 'housing_units_by_tier:2025']);
-    expect(leads[1].detail).toContain('Extremely-low and very-low income units on building permits, by issue year: 2024: not recorded; 2025: 3.');
-    expect(leads[1].detail).toContain('5 with no tier recorded');
+    const leads = housingLeads(units(year(2023, 40, { extremely_low: null, very_low: null }), year(2024, 30, { extremely_low: null, very_low: 5 }), year(2025, 30), year(2026, 10)), 2026);
+    expect(leads.map((lead) => lead.key)).toEqual(['housing_units_by_tier:2023', 'housing_units_by_tier:2024', 'housing_units_by_tier:2025']);
+    expect(leads[2].detail).toContain('Extremely-low and very-low income units on building permits, by issue year: 2023: not recorded; 2024: 5 (no extremely-low tier recorded); 2025: 3.');
+    expect(leads[2].detail).toContain('5 with no tier recorded');
   });
 
   it('gives no lead from a result cut short by the row limit', () => {
