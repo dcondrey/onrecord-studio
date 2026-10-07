@@ -151,6 +151,11 @@ const PACKS: &[(&str, &[PackTable])] = &[
     ("san-diego-capacity", CAPACITY),
 ];
 
+/// Every pack's name, in the catalog's order.
+pub(crate) fn pack_names() -> impl Iterator<Item = &'static str> {
+    PACKS.iter().map(|(name, _)| *name)
+}
+
 /// The City open-data tables of `pack`.
 pub(crate) fn pack_tables(pack: &str) -> Result<&'static [PackTable], AppError> {
     PACKS

@@ -41,7 +41,10 @@ pub use corpus::{
     CorpusPatternQuery, EntityBroker, EntityPath, EntityPathOutcome, EntityPathStep,
     EntityResolutionBasis, EntityValidationGrade, RelationshipBasis, RelationshipKind,
 };
-pub use data_packs::{DataPackFileSummary, DataPackImportOutcome, DataPackSummary, DataPackTable};
+pub use data_packs::{
+    DataPackFileSummary, DataPackImportOutcome, DataPackSummary, DataPackTable, PublishedPack,
+    PublishedPackSelection,
+};
 pub use document_origin::{
     DocumentInternalMetadata, DocumentOrigin, DocumentOriginReport, HeldComparison,
     HeldDocumentMatch, HeldDocumentRelation, InternalMetadataField, InternalMetadataFormat,

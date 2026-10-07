@@ -2,7 +2,10 @@
 //! and records the pack beside each snapshot (`docs/data-packs.md`, build order step 4).
 
 use super::catalog::original_kind;
-use super::{verify_pack, PackFile, PackFileFormat, PackManifest, VerifiedPack};
+use super::{
+    check_pack_file, verify_manifest, verify_pack, PackFile, PackFileFormat, PackManifest,
+    SignedManifest,
+};
 use crate::error::AppError;
 use crate::integrity::sha256_hex;
 use crate::storage::sqlite::DuckDbRepository;
@@ -29,13 +32,49 @@ pub(crate) struct PackOrigin {
     pub retrieved_at: String,
 }
 
-async fn verify(directory: PathBuf, pinned: Vec<VerifyingKey>) -> Result<VerifiedPack, AppError> {
+async fn verify(directory: PathBuf, pinned: Vec<VerifyingKey>) -> Result<SignedManifest, AppError> {
     crate::blocking::spawn("Verify data pack", move || verify_pack(&directory, &pinned)).await?
+}
+
+/// The manifest in `directory`, unchanged since inspection, and exactly the `selected` originals,
+/// each checked once; files the selection leaves out are not read.
+async fn verify_chosen(
+    directory: PathBuf,
+    inspected_manifest_sha256: String,
+    selected: Vec<String>,
+    pinned: Vec<VerifyingKey>,
+) -> Result<(SignedManifest, Vec<PackFile>), AppError> {
+    crate::blocking::spawn("Verify data pack", move || {
+        let signed = verify_manifest(&directory, &pinned)?;
+        if !manifest_sha256(&signed.manifest)?.eq_ignore_ascii_case(&inspected_manifest_sha256) {
+            return Err(AppError::Provenance(
+                "Data pack refused: its manifest has changed since it was inspected; inspect it again"
+                    .into(),
+            ));
+        }
+        let mut chosen: Vec<PackFile> = Vec::new();
+        for path in &selected {
+            if chosen.iter().any(|file| &file.path == path) {
+                continue;
+            }
+            let file = originals(&signed.manifest)
+                .find(|file| &file.path == path)
+                .ok_or_else(|| {
+                    AppError::DataParsing(format!("{path} is not an original file this pack lists"))
+                })?;
+            chosen.push(file.clone());
+        }
+        for file in &chosen {
+            check_pack_file(&directory.join(&file.path), file)?;
+        }
+        Ok((signed, chosen))
+    })
+    .await?
 }
 
 /// SHA-256 of the manifest's canonical bytes: verification has checked they re-encode to the
 /// signed bytes, so this is the signed manifest's digest.
-fn manifest_sha256(manifest: &PackManifest) -> Result<String, AppError> {
+pub(super) fn manifest_sha256(manifest: &PackManifest) -> Result<String, AppError> {
     serde_json::to_vec(manifest)
         .map(|bytes| sha256_hex(&bytes))
         .map_err(|error| AppError::Internal(format!("Pack manifest: {error}")))
@@ -48,7 +87,7 @@ fn originals(manifest: &PackManifest) -> impl Iterator<Item = &PackFile> {
         .filter(|file| file.format == PackFileFormat::Original)
 }
 
-fn file_kind(manifest: &PackManifest, file: &PackFile) -> Option<AnalyticalDatasetKind> {
+pub(super) fn file_kind(manifest: &PackManifest, file: &PackFile) -> Option<AnalyticalDatasetKind> {
     let file_name = file.path.rsplit('/').next()?;
     original_kind(
         &manifest.pack,
@@ -60,10 +99,14 @@ fn file_kind(manifest: &PackManifest, file: &PackFile) -> Option<AnalyticalDatas
     )
 }
 
-fn summarize(pack: VerifiedPack) -> Result<DataPackSummary, AppError> {
-    let manifest_sha256 = manifest_sha256(&pack.manifest)?;
+/// Describes a verified manifest's original files by table.
+pub(crate) fn summarize(
+    manifest: PackManifest,
+    signer_key_id: &str,
+) -> Result<DataPackSummary, AppError> {
+    let manifest_sha256 = manifest_sha256(&manifest)?;
     let mut tables: Vec<DataPackTable> = Vec::new();
-    for file in originals(&pack.manifest) {
+    for file in originals(&manifest) {
         let summary = DataPackFileSummary {
             path: file.path.clone(),
             year: file.year,
@@ -72,7 +115,7 @@ fn summarize(pack: VerifiedPack) -> Result<DataPackSummary, AppError> {
             partial: file.partial,
             source_url: file.source_url.clone(),
             retrieved_at: file.retrieved_at.clone(),
-            dataset_kind: file_kind(&pack.manifest, file),
+            dataset_kind: file_kind(&manifest, file),
         };
         match tables.iter_mut().find(|table| table.table == file.table) {
             Some(table) => table.files.push(summary),
@@ -82,13 +125,12 @@ fn summarize(pack: VerifiedPack) -> Result<DataPackSummary, AppError> {
             }),
         }
     }
-    let manifest = pack.manifest;
     Ok(DataPackSummary {
         pack: manifest.pack,
         pack_version: manifest.pack_version,
         schema_version: manifest.schema_version,
         built_at: manifest.built_at,
-        signer_key_id: pack.signer_key_id.to_ascii_lowercase(),
+        signer_key_id: signer_key_id.to_ascii_lowercase(),
         licence_id: manifest.licence.id,
         licence_url: manifest.licence.url,
         disclaimer: manifest.licence.disclaimer,
@@ -102,7 +144,8 @@ pub(crate) async fn inspect(
     directory: PathBuf,
     pinned: Vec<VerifyingKey>,
 ) -> Result<DataPackSummary, AppError> {
-    summarize(verify(directory, pinned).await?)
+    let pack = verify(directory, pinned).await?;
+    summarize(pack.manifest, &pack.signer_key_id)
 }
 
 /// The builder's retrieval time in the form the app stores its own.
@@ -132,9 +175,10 @@ fn display_name(manifest: &PackManifest, file: &PackFile, retrieved_at: &str) ->
 }
 
 /// Imports each of `selected` (paths as the manifest lists them) from the pack in `directory`,
-/// only while its manifest is the one inspected (`inspected_manifest_sha256`). Every selection is
-/// checked before the first import; each file is then its own import, so one file's failure is
-/// reported beside the others' results.
+/// only while its manifest is the one inspected (`inspected_manifest_sha256`). The manifest and
+/// every selected file, and only those, are checked before the first import; files the pack lists
+/// but the selection leaves out may be absent. Each file is then its own import, so one file's
+/// failure is reported beside the others' results.
 pub(crate) async fn import_files(
     repository: &DuckDbRepository,
     directory: PathBuf,
@@ -143,24 +187,16 @@ pub(crate) async fn import_files(
     pinned: Vec<VerifyingKey>,
 ) -> Result<Vec<DataPackImportOutcome>, AppError> {
     // Verified again, not trusted from the inspection: the folder may have changed since.
-    let pack = verify(directory, pinned).await?;
-    if !manifest_sha256(&pack.manifest)?.eq_ignore_ascii_case(inspected_manifest_sha256) {
-        return Err(AppError::Provenance(
-            "Data pack refused: its manifest has changed since it was inspected; inspect it again"
-                .into(),
-        ));
-    }
-    let manifest = &pack.manifest;
+    let (signed, files) = verify_chosen(
+        directory.clone(),
+        inspected_manifest_sha256.to_owned(),
+        selected,
+        pinned,
+    )
+    .await?;
+    let manifest = &signed.manifest;
     let mut chosen: Vec<(&PackFile, AnalyticalDatasetKind, String)> = Vec::new();
-    for path in &selected {
-        if chosen.iter().any(|(file, ..)| &file.path == path) {
-            continue;
-        }
-        let file = originals(manifest)
-            .find(|file| &file.path == path)
-            .ok_or_else(|| {
-                AppError::DataParsing(format!("{path} is not an original file this pack lists"))
-            })?;
+    for file in &files {
         let kind = file_kind(manifest, file).ok_or_else(|| {
             AppError::DataParsing(format!("This app cannot import {}", file.path))
         })?;
@@ -177,7 +213,7 @@ pub(crate) async fn import_files(
             dataset_kind: kind,
             display_name: display_name(manifest, file, &retrieved_at),
             source_uri: Some(file.source_url.clone()),
-            local_path: pack.path_of(file).to_string_lossy().into_owned(),
+            local_path: directory.join(&file.path).to_string_lossy().into_owned(),
             observation_period_start: None,
             observation_period_end: None,
             partial_dataset: file.partial,
@@ -191,7 +227,7 @@ pub(crate) async fn import_files(
             pack: manifest.pack.clone(),
             pack_version: manifest.pack_version.clone(),
             built_at: manifest.built_at.clone(),
-            signer_key_id: pack.signer_key_id.to_ascii_lowercase(),
+            signer_key_id: signed.signer_key_id.to_ascii_lowercase(),
             file_path: file.path.clone(),
             file_sha256: file.sha256.to_ascii_lowercase(),
             retrieved_at,
@@ -376,6 +412,27 @@ mod tests {
         assert!(refused.to_string().contains("refused"), "{refused}");
         assert!(refused.to_string().contains("SHA-256"), "{refused}");
         assert_eq!(written(&repository).await, (0, 0));
+    }
+
+    /// A published pack is downloaded only as far as the user chose, so an import checks the
+    /// manifest and the files it imports, not files it leaves out.
+    #[tokio::test]
+    async fn an_import_verifies_only_the_files_it_imports() {
+        let directory = signed_pack();
+        let mut listed = manifest();
+        let mut absent = listed.files[0].clone();
+        absent.path = "originals/budget_adopted/budget_operating_datasd.csv".into();
+        absent.table = "budget_adopted".into();
+        listed.files.push(absent);
+        sign_into(directory.path(), listed.clone());
+        let repository = repository().await;
+        let digest = manifest_sha256(&listed).unwrap();
+        let outcomes = import_as_inspected(&repository, directory.path(), &digest)
+            .await
+            .unwrap();
+        assert_eq!(outcomes.len(), 1);
+        assert_eq!(outcomes[0].error, None);
+        assert_eq!(written(&repository).await, (1, 1));
     }
 
     #[tokio::test]

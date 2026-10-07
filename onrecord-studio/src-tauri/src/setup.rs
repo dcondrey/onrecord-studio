@@ -36,6 +36,8 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
     create_runtime_directory(&report_directory)?;
     let signing_key_directory = app_data_dir.join("signing-keys");
     create_runtime_directory(&signing_key_directory)?;
+    let published_pack_root = app_data_dir.join("packs");
+    create_runtime_directory(&published_pack_root)?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -165,6 +167,9 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
     )));
     app.manage(report_directory);
     app.manage(crate::integrity::SigningKeyDirectory(signing_key_directory));
+    app.manage(crate::packs::published::PublishedPackRoot(
+        published_pack_root,
+    ));
     app.manage(AppInvestigationPaths::new(download_root));
     app.manage(manager);
     app.manage(agency_engine);

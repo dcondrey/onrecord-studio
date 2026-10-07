@@ -1,6 +1,9 @@
 import type { AnalyticalDatasetKind, AnalyticalImportResult } from './analysisWorkbench';
 
-/** A data pack after its signature, publisher key and every file have verified. */
+/**
+ * A data pack whose signed manifest verified against a pinned publisher key. From a local folder
+ * every listed file verified too; from a published pack none has been downloaded yet.
+ */
 export interface DataPackSummary {
   pack: string;
   packVersion: string;
@@ -33,6 +36,18 @@ export interface DataPackFileSummary {
   retrievedAt: string;
   /** `null`: the City source list does not publish this file, so the app does not import it. */
   datasetKind: AnalyticalDatasetKind | null;
+}
+
+/** A pack OnRecord publishes, and the public repository the app fetches it from. */
+export interface PublishedPack {
+  pack: string;
+  repositoryUrl: string;
+}
+
+/** One table of a published pack to download, and its year for a table split by year. */
+export interface PublishedPackSelection {
+  table: string;
+  year: number | null;
 }
 
 /** Exactly one of `result` and `error` is set. */

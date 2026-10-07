@@ -175,7 +175,9 @@ column or table here before anything is published.
   (service `com.onrecord.pack-publisher`), never in the repository; the public key is pinned in the
   app as `PACK_PUBLIC_KEYS`, separate from the per-installation export key and the entitlement keys.
 - **Hugging Face.** Account `davidcondrey`, organisation `Writerslogic`; packs publish to
-  `Writerslogic/onrecord-<pack>`. Creating a repository or uploading waits for the owner.
+  `Writerslogic/onrecord-<pack>` (public datasets; `san-diego-money` and `san-diego-reports`
+  published 2026-10-07, enforcement and capacity to follow). The app fetches published packs from
+  there: `https://huggingface.co/datasets/Writerslogic/onrecord-<pack>/resolve/main/<path>`.
 - **Pack origin.** A snapshot imported from a pack keeps the identity the analytical import gives
   it; the pack is recorded beside it (pack, version, build time, file SHA-256), so the same bytes
   fetched by the user and shipped in a pack are one snapshot with two recorded origins, and the
@@ -202,7 +204,13 @@ column or table here before anything is published.
 4. **App import (done for the first-slice tables).** Verify the signature and every file hash before writing anything; then import
    originals through the analytical import, one table and year at a time, chosen by the user
    (`MAX_STREAMED_CELLS` is per import). Tamper tests: one byte changed in a file, and in the
-   manifest, each refused. Built as `packs::import` and the data pack import panel.
+   manifest, each refused. Built as `packs::import` and the data pack import panel. An import
+   re-verifies the manifest and exactly the files it imports, so unchosen files may be absent.
+   **Published packs (done):** `packs::published` fetches a pack's signed manifest from
+   `Writerslogic/onrecord-<pack>` into `<app data>/packs/<pack>/<packVersion>/`, verifies it
+   without its files, lets the user choose tables and years, downloads only those originals (each
+   bounded by its listed size, kept only when size and SHA-256 match, else deleted), and imports
+   them through the same path.
 5. **First-run fetch (done).** On a library with no imported tables, the app offers to fetch the
    core City tables (operating budget and actuals, Get It Done open and Encampment reports, calls
    for service) straight from their publishers; it does not read a pack.
@@ -217,7 +225,8 @@ column or table here before anything is published.
    short-term rental registry (its original carries host names and phones, and a pack ships
    originals byte for byte), and Commission on Police Practices cases (file names differ by year).
 7. **Later.** Fetch only what was published after a pack's build date, using the recorded
-   freshness markers; the remaining PD packs; ASK tables once permission is in writing.
+   freshness markers (still later: the app fetches a published pack's files, not newer publisher
+   rows); the remaining PD packs; ASK tables once permission is in writing.
 
 ## From the research blueprint (owner's file, 2026-10-06)
 
@@ -248,4 +257,3 @@ rules above already need:
 - Written permission, or a stated licence, from the UCSD Homelessness Hub, the SDSU sanitation
   project and the Regional Data Library.
 - Pre-2021 council district boundaries.
-- Owner's go-ahead to create the Hugging Face repositories and upload.

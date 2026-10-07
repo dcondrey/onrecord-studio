@@ -1,7 +1,8 @@
 use super::analysis_workbench::{AnalyticalDatasetKind, AnalyticalImportResult};
 use serde::{Deserialize, Serialize};
 
-/// A data pack after its signature, publisher key and every file have verified.
+/// A data pack whose signed manifest has verified against a pinned publisher key. From a local
+/// folder every listed file has verified too; from a published pack none has been downloaded yet.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct DataPackSummary {
@@ -41,6 +42,22 @@ pub struct DataPackFileSummary {
     pub retrieved_at: String,
     /// `None`: the City source list does not publish this file, so the app does not import it.
     pub dataset_kind: Option<AnalyticalDatasetKind>,
+}
+
+/// A pack OnRecord publishes, and the public repository the app fetches it from.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PublishedPack {
+    pub pack: String,
+    pub repository_url: String,
+}
+
+/// One table of a published pack to download, and the year of it for a table split by year.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PublishedPackSelection {
+    pub table: String,
+    pub year: Option<u16>,
 }
 
 /// What importing one selected file did: exactly one of `result` and `error` is set.

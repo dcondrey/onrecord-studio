@@ -1222,10 +1222,21 @@ impl ApiClient {
         url: Url,
         destination: &Path,
     ) -> Result<DownloadedPayload, AppError> {
+        self.download_url_to_path_within(url, destination, self.config.max_document_bytes)
+            .await
+    }
+
+    /// [`Self::download_url_to_path`] refusing a body longer than `maximum_bytes`.
+    pub async fn download_url_to_path_within(
+        &self,
+        url: Url,
+        destination: &Path,
+        maximum_bytes: usize,
+    ) -> Result<DownloadedPayload, AppError> {
         validate_remote_url(&self.dns, &url).await?;
         self.execute_with_retries(&url, "Download", || async {
             let result = self
-                .stream_response_to_path(url.clone(), destination, self.config.max_document_bytes)
+                .stream_response_to_path(url.clone(), destination, maximum_bytes)
                 .await;
             if result.is_err() {
                 let _ = tokio::fs::remove_file(destination).await;

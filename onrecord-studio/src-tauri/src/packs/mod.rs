@@ -2,20 +2,22 @@
 //! publisher key, and imported by the app from their original files (`docs/data-packs.md`).
 //!
 //! A pack is a directory holding `manifest.json` (a [`SignedPackage`] of [`PackManifest`]) and the
-//! files it lists. Nothing in a pack is trusted until [`verify_pack`] has checked the signature,
-//! that the key is one this app pins, and the size and SHA-256 of every listed file.
+//! files it lists. Nothing in a pack is trusted until [`verify_manifest`] has checked the
+//! signature and that the key is one this app pins, and no file is used until
+//! [`check_pack_file`] has checked its size and SHA-256 against the manifest.
 
 use crate::error::AppError;
 use crate::integrity::{sha256_file, verify_package_detailed, SignedPackage};
 use ed25519_dalek::VerifyingKey;
 use serde::{Deserialize, Serialize};
-use std::path::{Component, Path, PathBuf};
+use std::path::{Component, Path};
 
 #[cfg(feature = "pack-builder")]
 pub mod builder;
 pub(crate) mod catalog;
 pub mod conformed;
 pub(crate) mod import;
+pub(crate) mod published;
 
 /// The manifest's file name inside a pack directory.
 pub(crate) const PACK_MANIFEST_FILE: &str = "manifest.json";
@@ -86,18 +88,13 @@ pub(crate) struct PackManifest {
     pub files: Vec<PackFile>,
 }
 
-/// A pack whose signature, publisher key and every file have been checked.
+/// A manifest whose signature and publisher key have been checked, and whose every listed path
+/// stays inside the pack. Its files are checked only as [`verify_pack`] or a caller of
+/// [`check_pack_file`] checks them.
 #[derive(Debug)]
-pub(crate) struct VerifiedPack {
-    pub directory: PathBuf,
+pub(crate) struct SignedManifest {
     pub manifest: PackManifest,
     pub signer_key_id: String,
-}
-
-impl VerifiedPack {
-    pub fn path_of(&self, file: &PackFile) -> PathBuf {
-        self.directory.join(&file.path)
-    }
 }
 
 /// The app's pinned publisher keys. A malformed entry is skipped, which can only reduce what
@@ -127,7 +124,7 @@ fn refused(reason: impl Into<String>) -> AppError {
 }
 
 /// A listed path that stays inside the pack: relative, with no `..`, root or prefix part.
-fn pack_relative(path: &str) -> Option<&Path> {
+pub(crate) fn pack_relative(path: &str) -> Option<&Path> {
     let relative = Path::new(path);
     (!path.is_empty()
         && relative
@@ -136,17 +133,13 @@ fn pack_relative(path: &str) -> Option<&Path> {
     .then_some(relative)
 }
 
-/// Checks a pack before anything in it is used: the manifest's signature over its own canonical
-/// bytes, that the signing key is one of `pinned`, and that every listed file is a regular file
-/// inside the pack with the listed size and SHA-256.
-pub(crate) fn verify_pack(
-    directory: &Path,
+/// Checks a signed manifest: its signature over its own canonical bytes, that the signing key is
+/// one of `pinned`, and that every listed path stays inside the pack. Reads no listed file.
+pub(crate) fn verify_manifest_bytes(
+    bytes: &[u8],
     pinned: &[VerifyingKey],
-) -> Result<VerifiedPack, AppError> {
-    let manifest_path = directory.join(PACK_MANIFEST_FILE);
-    let bytes = std::fs::read(&manifest_path)
-        .map_err(|error| refused(format!("its manifest could not be read: {error}")))?;
-    let package: SignedPackage<PackManifest> = serde_json::from_slice(&bytes)
+) -> Result<SignedManifest, AppError> {
+    let package: SignedPackage<PackManifest> = serde_json::from_slice(bytes)
         .map_err(|error| refused(format!("its manifest is not a pack manifest: {error}")))?;
     let checks = verify_package_detailed(&package);
     if !checks.all_passed() {
@@ -163,35 +156,69 @@ pub(crate) fn verify_pack(
             "it is not signed by a pack publisher this app trusts",
         ));
     }
-    for file in &package.manifest.files {
-        let relative = pack_relative(&file.path)
-            .ok_or_else(|| refused(format!("it lists a path outside the pack: {}", file.path)))?;
-        let path = directory.join(relative);
-        let metadata = std::fs::symlink_metadata(&path)
-            .map_err(|error| refused(format!("{} is missing: {error}", file.path)))?;
-        if !metadata.is_file() {
-            return Err(refused(format!("{} is not a regular file", file.path)));
-        }
-        if metadata.len() != file.bytes {
-            return Err(refused(format!(
-                "{} is not the size its manifest lists",
-                file.path
-            )));
-        }
-        let digest = sha256_file(&path)
-            .map_err(|error| refused(format!("{} could not be read: {error}", file.path)))?;
-        if !digest.eq_ignore_ascii_case(&file.sha256) {
-            return Err(refused(format!(
-                "{} does not match its manifest's SHA-256",
-                file.path
-            )));
-        }
+    if let Some(file) = package
+        .manifest
+        .files
+        .iter()
+        .find(|file| pack_relative(&file.path).is_none())
+    {
+        return Err(refused(format!(
+            "it lists a path outside the pack: {}",
+            file.path
+        )));
     }
-    Ok(VerifiedPack {
-        directory: directory.to_path_buf(),
+    Ok(SignedManifest {
         signer_key_id: package.signature.signer_key_id.clone(),
         manifest: package.manifest,
     })
+}
+
+/// [`verify_manifest_bytes`] over the manifest in `directory`.
+pub(crate) fn verify_manifest(
+    directory: &Path,
+    pinned: &[VerifyingKey],
+) -> Result<SignedManifest, AppError> {
+    let bytes = std::fs::read(directory.join(PACK_MANIFEST_FILE))
+        .map_err(|error| refused(format!("its manifest could not be read: {error}")))?;
+    verify_manifest_bytes(&bytes, pinned)
+}
+
+/// Checks that `path` holds `file` as its manifest lists it: a regular file with the listed size
+/// and SHA-256.
+pub(crate) fn check_pack_file(path: &Path, file: &PackFile) -> Result<(), AppError> {
+    let metadata = std::fs::symlink_metadata(path)
+        .map_err(|error| refused(format!("{} is missing: {error}", file.path)))?;
+    if !metadata.is_file() {
+        return Err(refused(format!("{} is not a regular file", file.path)));
+    }
+    if metadata.len() != file.bytes {
+        return Err(refused(format!(
+            "{} is not the size its manifest lists",
+            file.path
+        )));
+    }
+    let digest = sha256_file(path)
+        .map_err(|error| refused(format!("{} could not be read: {error}", file.path)))?;
+    if !digest.eq_ignore_ascii_case(&file.sha256) {
+        return Err(refused(format!(
+            "{} does not match its manifest's SHA-256",
+            file.path
+        )));
+    }
+    Ok(())
+}
+
+/// Checks a pack before anything in it is used: its manifest ([`verify_manifest`]) and every
+/// listed file ([`check_pack_file`]).
+pub(crate) fn verify_pack(
+    directory: &Path,
+    pinned: &[VerifyingKey],
+) -> Result<SignedManifest, AppError> {
+    let signed = verify_manifest(directory, pinned)?;
+    for file in &signed.manifest.files {
+        check_pack_file(&directory.join(&file.path), file)?;
+    }
+    Ok(signed)
 }
 
 #[cfg(test)]
@@ -300,7 +327,39 @@ mod tests {
             .manifest
             .files
             .iter()
-            .all(|file| pack.path_of(file).is_file()));
+            .all(|file| Path::new(&directory).join(&file.path).is_file()));
+    }
+
+    /// A manifest is checked with none of its files present, as before a download: tampered, or
+    /// signed by a key this app does not pin, or listing a path outside the pack, it is refused.
+    #[test]
+    fn a_manifest_alone_verifies_only_untampered_pinned_and_inside_the_pack() {
+        let key = SigningKey::from_bytes(&[5_u8; 32]);
+        let pinned = [key.verifying_key()];
+        let signed = |manifest: PackManifest| {
+            serde_json::to_vec_pretty(&sign_package(manifest, &key).unwrap()).unwrap()
+        };
+        let bytes = signed(manifest("ab".repeat(32), 7));
+        let verified = verify_manifest_bytes(&bytes, &pinned).unwrap();
+        assert_eq!(verified.manifest.files.len(), 1);
+
+        let stranger = [SigningKey::from_bytes(&[6_u8; 32]).verifying_key()];
+        let refused = verify_manifest_bytes(&bytes, &stranger).unwrap_err();
+        assert!(refused.to_string().contains("trusts"), "{refused}");
+
+        let tampered =
+            String::from_utf8(bytes)
+                .unwrap()
+                .replacen("\"bytes\": 7", "\"bytes\": 8", 1);
+        assert!(verify_manifest_bytes(tampered.as_bytes(), &pinned).is_err());
+
+        let mut escaping = manifest("ab".repeat(32), 7);
+        escaping.files[0].path = "originals/../../escape.csv".into();
+        let refused = verify_manifest_bytes(&signed(escaping), &pinned).unwrap_err();
+        assert!(
+            refused.to_string().contains("outside the pack"),
+            "{refused}"
+        );
     }
 
     #[test]

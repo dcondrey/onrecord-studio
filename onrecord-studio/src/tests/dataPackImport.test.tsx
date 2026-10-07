@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { open } from '@tauri-apps/plugin-dialog';
 import { invokeCommand } from '../ipc';
 import DataPackImport from '../components/dashboard/DataPackImport';
-import type { AnalyticalImportResult, DataPackImportOutcome, DataPackSummary } from '../types';
+import type { AnalyticalImportResult, DataPackImportOutcome, DataPackSummary, PublishedPack } from '../types';
 
 vi.mock('../ipc', () => ({ invokeCommand: vi.fn(), formatNativeError: String }));
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn() }));
@@ -68,5 +68,48 @@ describe('DataPackImport', () => {
     expect(items[1]).toContain('No rows imported');
     expect(items[2]).toContain('Nothing imported: these bytes are already stored as analysis_t');
     expect(items[2]).not.toContain('rows imported to');
+  });
+
+  const packs: PublishedPack[] = ['san-diego-money', 'san-diego-reports'].map((pack) => ({
+    pack, repositoryUrl: `https://huggingface.co/datasets/Writerslogic/onrecord-${pack}`,
+  }));
+
+  it('shows a published pack from its signed manifest and downloads only the chosen years', async () => {
+    const file = (year: number, bytes: number) => ({
+      path: `originals/police_calls/${year}.csv`, year, rows: 10, bytes, partial: false, sourceUrl: 'https://example.test/', retrievedAt: '2026-10-05T23:59:15Z', datasetKind: 'REGIONAL_DATA' as const,
+    });
+    const manifest = { ...summary('san-diego-reports'), tables: [{ table: 'police_calls', files: [file(2024, 2_000_000), file(2025, 3_000_000)] }] };
+    vi.mocked(invokeCommand).mockImplementation(((command: string) => Promise.resolve(
+      command === 'list_published_packs' ? packs : command === 'fetch_published_pack_manifest' ? manifest : [],
+    )) as unknown as typeof invokeCommand);
+    await act(async () => { render(<DataPackImport />); });
+    await act(async () => { fireEvent.change(screen.getByRole('combobox', { name: 'Published pack' }), { target: { value: 'san-diego-reports' } }); });
+
+    expect(invokeCommand).toHaveBeenCalledWith('fetch_published_pack_manifest', { pack: 'san-diego-reports' });
+    expect(screen.getByText(/Built 2026-10-06T22:59:25Z/)).toBeTruthy();
+    expect(screen.getByText('Informational only.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('checkbox', { name: /^2025 · 10 rows · 3 MB/ }));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Download and import 3 MB' })); });
+
+    expect(invokeCommand).toHaveBeenCalledWith('fetch_published_pack_files', {
+      pack: 'san-diego-reports', packVersion: '2026.10.6', manifestSha256: 'cd'.repeat(32), selection: [{ table: 'police_calls', year: 2025 }],
+    });
+  });
+
+  it('never shows a published manifest that resolves after another pack was chosen', async () => {
+    const pending = new Map<string, (value: DataPackSummary) => void>();
+    vi.mocked(invokeCommand).mockImplementation(((command: string, args: { pack?: string }) => (command === 'list_published_packs'
+      ? Promise.resolve(packs)
+      : new Promise((resolve) => pending.set(args.pack ?? '', resolve)))) as unknown as typeof invokeCommand);
+    await act(async () => { render(<DataPackImport />); });
+    const choose = (pack: string) => fireEvent.change(screen.getByRole('combobox', { name: 'Published pack' }), { target: { value: pack } });
+
+    await act(async () => { choose('san-diego-money'); });
+    await act(async () => { choose('san-diego-reports'); });
+    await act(async () => { pending.get('san-diego-reports')?.(summary('reports-manifest')); });
+    await act(async () => { pending.get('san-diego-money')?.(summary('money-manifest')); });
+
+    expect(screen.getByText(/reports-manifest/)).toBeTruthy();
+    expect(screen.queryByText(/money-manifest/)).toBeNull();
   });
 });
