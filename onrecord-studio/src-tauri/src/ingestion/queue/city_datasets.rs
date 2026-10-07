@@ -291,12 +291,14 @@ fn city_dataset_spec(
             unsplit("The City capital improvements budget")?;
             CityDatasetSpec {
                 url: CAPITAL_BUDGET_URI.into(),
-                // The budget kind keeps `budget_cycle` (adopted or proposed) a category; any other
-                // kind types a column named for a budget as a number and loses the cycle.
-                kind: AnalyticalDatasetKind::OperatingBudget,
+                // Not the budget kind: every budget-kind import repoints
+                // `analysis_operating_budget_latest`, which the operating budget comparison reads.
+                // Regional data types each column from its values, so `budget_cycle` stays text.
+                kind: AnalyticalDatasetKind::RegionalData,
                 display_name: "City capital improvements budget (all published years)".into(),
                 file_name: "budget_capital_fy_datasd.csv".into(),
-                partial: false,
+                // The publisher adds a fiscal year after it is adopted.
+                partial: true,
                 row_filter: None,
                 refuse_truncated: false,
             }
@@ -565,6 +567,7 @@ impl QueueManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::sqlite::DuckDbRepository;
 
     #[test]
     fn a_year_outside_the_publisher_series_is_refused_and_unsplit_files_take_none() {
@@ -619,34 +622,104 @@ mod tests {
                 AnalyticalDatasetKind::RegionalData
             )
         );
-        assert!(spec(CityDataset::CapitalBudget, Some(2025)).is_err());
-        let capital = spec(CityDataset::CapitalBudget, None).unwrap();
-        assert_eq!(
-            (capital.url.as_str(), capital.kind, capital.partial),
+        for (dataset, url) in [
             (
+                CityDataset::CapitalBudget,
                 "https://seshat.datasd.org/cip_fy_budget/budget_capital_fy_datasd.csv",
-                AnalyticalDatasetKind::OperatingBudget,
-                false
-            )
-        );
-        assert!(spec(CityDataset::CapitalActuals, Some(2025)).is_err());
-        assert_eq!(
-            spec(CityDataset::CapitalActuals, None).unwrap().url,
-            "https://seshat.datasd.org/cip_fy_actuals/actuals_capital_fy_datasd.csv"
-        );
-        assert!(spec(CityDataset::CityLeases, Some(2025)).is_err());
-        let leases = spec(CityDataset::CityLeases, None).unwrap();
-        assert_eq!(
-            (leases.url.as_str(), leases.partial),
+            ),
             (
+                CityDataset::CapitalActuals,
+                "https://seshat.datasd.org/cip_fy_actuals/actuals_capital_fy_datasd.csv",
+            ),
+            (
+                CityDataset::CityProperties,
+                "https://seshat.datasd.org/city_owned_properties/city_property_details_datasd.csv",
+            ),
+            (
+                CityDataset::CityParcels,
+                "https://seshat.datasd.org/city_owned_properties_parcels/city_property_parcels_datasd.csv",
+            ),
+            (
+                CityDataset::CityLeases,
                 "https://seshat.datasd.org/city_owned_properties_leases/city_property_leases_datasd.csv",
-                true
+            ),
+        ] {
+            assert!(spec(dataset, Some(2025)).is_err(), "{dataset:?}");
+            let published = spec(dataset, None).unwrap();
+            assert_eq!(
+                (
+                    published.url.as_str(),
+                    published.file_name.as_str(),
+                    published.kind,
+                    published.partial
+                ),
+                (
+                    url,
+                    url.rsplit('/').next().unwrap(),
+                    AnalyticalDatasetKind::RegionalData,
+                    true
+                ),
+                "{dataset:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn the_capital_budget_leaves_the_operating_budget_latest_view_on_the_operating_table() {
+        let directory = tempfile::tempdir().unwrap();
+        let repository = DuckDbRepository::new(":memory:").unwrap();
+        repository
+            .run_migrations(include_str!("../../../migrations/0001_initial_schema.sql"))
+            .await
+            .unwrap();
+        let import = |dataset, body: &'static str| {
+            let spec = city_dataset_spec(dataset, None, 2026).unwrap();
+            let path = directory.path().join(&spec.file_name);
+            std::fs::write(&path, body).unwrap();
+            AnalyticalImportRequest {
+                dataset_kind: spec.kind,
+                display_name: spec.display_name,
+                source_uri: Some(spec.url),
+                local_path: path.to_string_lossy().into_owned(),
+                observation_period_start: None,
+                observation_period_end: None,
+                partial_dataset: spec.partial,
+                worksheet: None,
+                source_file_name: Some(spec.file_name),
+                expected_source_sha256: None,
+                derived_subset: None,
+            }
+        };
+        repository
+            .import_analytical_csv(import(
+                CityDataset::OperatingBudget,
+                "amount,report_fy,budget_cycle,funds_center_number,account_number,dept_name\n10,25,adopted,1,512,Police\n",
+            ))
+            .await
+            .unwrap();
+        let capital = repository
+            .import_analytical_csv(import(
+                CityDataset::CapitalBudget,
+                "amount,project_number,report_fy,budget_cycle,asset_owning_dept\n99,S1,25,adopted,Parks\n98,S2,25,proposed,Parks\n",
+            ))
+            .await
+            .unwrap();
+        assert_eq!(capital.unconverted_cells, 0);
+        let latest = repository
+            .execute_restricted_sql(
+                "SELECT CAST(amount AS VARCHAR) FROM analysis_operating_budget_latest",
+                10,
             )
-        );
-        assert_eq!(
-            spec(CityDataset::CityParcels, None).unwrap().url,
-            "https://seshat.datasd.org/city_owned_properties_parcels/city_property_parcels_datasd.csv"
-        );
+            .await
+            .unwrap();
+        assert_eq!(latest.rows, vec![vec![serde_json::json!("10.0000000000")]]);
+        let schema = repository.analytical_schema().await.unwrap();
+        let cycle = schema
+            .columns
+            .iter()
+            .find(|c| c.table_name == capital.table_name && c.column_name == "budget_cycle")
+            .unwrap();
+        assert_eq!(cycle.logical_type, "CATEGORY");
     }
 
     #[test]

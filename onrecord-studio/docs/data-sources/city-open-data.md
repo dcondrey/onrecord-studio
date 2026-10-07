@@ -281,8 +281,11 @@ are in `ingestion::queue::city_datasets` and the builder's `san-diego-money` pac
 
 `site_code` joins the three property files. The capital files name the department as
 `asset_owning_dept`, not `dept_name`, so the operating budget and actuals checks never pick them up.
-The capital budget is imported as the budget kind so `budget_cycle` stays a category; capital
-actuals, like operating actuals, are imported as regional data. Importing the five files
+All five are imported as regional data, which types each column from its values, so the capital
+budget's `budget_cycle` stays a category. The budget kind is kept for the operating budget alone:
+every import of that kind repoints `analysis_operating_budget_latest`, which the budget comparison
+reads. The capital budget is marked partial like the actuals: the file is rewritten as fiscal
+years are added (FY2026 not yet present in July 2026). Importing the five files
 downloaded 2026-10-06 through the app's analytical import rejected no row and left no cell
 unconverted (2,193; 469,677; 4,095; 4,187; 810 rows). The M/D/YYYY date columns
 (`date_effective`, `date_sched_termination`, `date_reso_ord`) are kept as recorded text, not dates.

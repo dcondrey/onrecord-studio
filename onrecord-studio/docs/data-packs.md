@@ -66,11 +66,15 @@ ASK = no licence stated, permission needed before publishing; COUNTS = publish a
 |---|---|---|---|
 | `budget_adopted` | City operating budget | fund, department, account, fiscal year, cycle | PD |
 | `budget_actuals` | City operating actuals | fund, department, account, fiscal year | PD |
+| `capital_budget` | City capital improvements budget | project, fund, account, fiscal year, cycle | PD |
+| `capital_actuals` | City capital improvements actuals | parent and child project, fund, account, fiscal year | PD |
+| `city_properties` | City-owned properties | acquisition file within a site, dated snapshot | PD |
+| `city_parcels` | City-owned property parcels | parcel (APN) of a site, dated snapshot | PD |
 | `homelessness_programme_funding` | Budget analyst report 26-19 and successors | programme by funding source | PD |
 | `pay_by_position` | State Controller city pay file, 2017 to 2025 | position held, no names | PD |
 | `settlement_resolutions` | Council resolutions index and PDFs | one settlement over 50,000 dollars | PD |
 | `shelter_contracts` | Housing Commission staff reports | operator, programme, amount, term, beds | PD |
-| `city_leases` | City property leases | lease | PD |
+| `city_leases` | City-owned property leases | lease or permit on a site, dated snapshot | PD |
 | `state_homelessness_grants` | HHAP fiscal snapshot, Encampment Resolution Fund status | grantee by round or site | PD |
 | `federal_awards` | USAspending, HUD CoC award lists, single audits | award, audit, finding | PD |
 
@@ -176,20 +180,26 @@ column or table here before anything is published.
    `budget_adopted`, `budget_actuals`, `service_reports` (closed years and one dated open
    snapshot) and `police_calls` (by year). Acceptance: question 1 without shelter beds
    (`shelter_inventory` is ASK), answered by a query that names every table and file it read.
-2. **Builder.** In the app library behind the `pack-builder` Cargo feature, with a thin binary,
+2. **Builder (done).** In the app library behind the `pack-builder` Cargo feature, with a thin binary,
    so the app's feature set and binary are unchanged. It takes URLs, years and filters from
    `ingestion::queue::city_datasets` (one source list), writes originals with SHA-256, records the
    publisher's freshness markers (year, `Last-Modified`, `ETag`), writes Parquet copies (DuckDB's
-   `parquet` feature is enabled only by `pack-builder`), and signs the manifest.
-3. **Conformed layer.** One module generates the standard columns from an imported table; the
-   builder uses it for the Parquet copies and the app after importing originals. First slice:
+   `parquet` feature is enabled only by `pack-builder`), and signs the manifest. Built as
+   `packs::builder` and `onrecord-pack-builder`, packs `san-diego-money` and `san-diego-reports`.
+3. **Conformed layer (builder side done).** One module generates the standard columns from an
+   imported table; the builder uses it for the Parquet copies and the app after importing
+   originals. First slice:
    identity, provenance and time groups (`fiscal_year` for question 1). Place waits for the
-   pre-2021 district lines.
-4. **App import.** Verify the signature and every file hash before writing anything; then import
+   pre-2021 district lines. `packs::conformed` generates identity, provenance and time for the
+   builder's Parquet copies; the app does not yet run it after importing originals.
+4. **App import (done).** Verify the signature and every file hash before writing anything; then import
    originals through the analytical import, one table and year at a time, chosen by the user
    (`MAX_STREAMED_CELLS` is per import). Tamper tests: one byte changed in a file, and in the
-   manifest, each refused.
-5. **Later.** Fetch only what was published after a pack's build date, using the recorded
+   manifest, each refused. Built as `packs::import` and the data pack import panel.
+5. **First-run fetch (done).** On a library with no imported tables, the app offers to fetch the
+   core City tables (operating budget and actuals, Get It Done open and Encampment reports, calls
+   for service) straight from their publishers; it does not read a pack.
+6. **Later.** Fetch only what was published after a pack's build date, using the recorded
    freshness markers; the remaining PD packs; ASK tables once permission is in writing.
 
 ## From the research blueprint (owner's file, 2026-10-06)
@@ -198,11 +208,15 @@ column or table here before anything is published.
 City open-data sources that fit the Money pack under the same licence, and two dataset designs the
 rules above already need:
 
-- **Money pack additions (City open data, PDDL):** Capital Improvements Program budget and actuals
-  by fiscal year (F03, F04); Goods and Services contracts (F13); awarded CIP construction contracts
-  (F14, E10); cumulative amounts paid to vendors by fiscal year (F15); City-owned properties,
-  parcels and leases (R02 to R04). Next after the first slice; each needs an entry in
-  `ingestion::queue::city_datasets` first, since the builder reads only that list.
+- **Money pack additions (City open data, PDDL), added:** Capital Improvements Program budget and
+  actuals by fiscal year (F03, F04) and City-owned properties, parcels and leases (R02 to R04), as
+  `capital_budget`, `capital_actuals`, `city_properties`, `city_parcels` and `city_leases`
+  (`docs/data-sources/city-open-data.md` section 8).
+- **Not added: Goods and Services contracts (F13), awarded CIP construction contracts (F14, E10),
+  cumulative amounts paid to vendors (F15).** Checked 2026-10-06: none is on data.sandiego.gov or
+  carries the PDDL. The contract lists are HTML tables whose only linked files are per-contract
+  PDFs; the vendor payments are one PDF per fiscal year; the relaunched catalogue (123 datasets)
+  has no contracts or vendor-payment dataset.
 - **Other City open data it names:** development permits (H01), completed paving and street
   segments (E07, E08), stormwater conveyance GIS (E02).
 - **D13, source snapshots and change history,** is rule 7 plus the manifest's freshness markers.

@@ -332,29 +332,34 @@ describe('AnalysisWorkbench SQL result gating', () => {
 
 describe('AnalysisWorkbench City dataset fetch', () => {
   it('sends a year only for the tables the publisher splits by year', async () => {
-    bridge.invoke.mockImplementation(async (name: string) => {
+    const sent: Record<string, unknown> = {};
+    bridge.invoke.mockImplementation(async (name: string, args?: { dataset: string; year: unknown }) => {
       switch (name) {
         case 'get_analytical_schema':
           return { datasets: [], columns: [], templates: [] };
         case 'list_analytical_import_candidates':
-        case 'query_corpus_patterns':
           return [];
         case 'get_data_maintenance_status':
           return upkeep;
+        // Refused, so each fetch ends without the schema reload a successful import triggers.
+        case 'fetch_city_dataset':
+          sent[args!.dataset] = args!.year;
+          throw new Error('offline');
         default:
           return null;
       }
     });
-    render(<Harness />);
+    // Without the discovery provider: the fetch's request does not depend on it, and its refresh
+    // after every fetch is what made this loop slow.
+    render(<AnalysisWorkbench />);
     const select = await screen.findByLabelText('City dataset') as HTMLSelectElement;
-    const sent: Record<string, unknown> = {};
+    const fetch = screen.getByRole('button', { name: 'Fetch and import' });
+    await waitFor(() => expect(fetch).toHaveProperty('disabled', false));
     for (const option of Array.from(select.options)) {
       fireEvent.change(select, { target: { value: option.value } });
-      const fetch = screen.getByRole('button', { name: 'Fetch and import' });
-      await waitFor(() => expect(fetch).toHaveProperty('disabled', false));
       fireEvent.click(fetch);
-      await waitFor(() => expect(bridge.invoke).toHaveBeenCalledWith('fetch_city_dataset', expect.objectContaining({ dataset: option.value })));
-      sent[option.value] = (bridge.invoke.mock.calls.find(([name, args]) => name === 'fetch_city_dataset' && (args as { dataset: string }).dataset === option.value)![1] as { year: unknown }).year;
+      await waitFor(() => expect(fetch).toHaveProperty('disabled', false));
+      expect(sent).toHaveProperty(option.value);
     }
     // The fetch refuses a year for a table published as one file.
     const year = expect.any(Number);
