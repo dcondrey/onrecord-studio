@@ -19,6 +19,7 @@ import type {
 import Icon from '../ui/icons';
 import BudgetComparison from './BudgetComparison';
 import DataDiscovery from './DataDiscovery';
+import DataPackImport from './DataPackImport';
 import FacilityCoveragePanel from './FacilityCoveragePanel';
 import EncampmentOrdinancePanel from './EncampmentOrdinancePanel';
 import { useAppStore } from '../../store/useAppStore';
@@ -303,6 +304,7 @@ export default function AnalysisWorkbench() {
               </div>
             )}
           </Panel>
+          <DataPackImport onImported={() => void refresh().catch((reason) => setError(String(reason)))} />
         </section>
 
         <section className="space-y-4">

@@ -32,6 +32,7 @@ import releaseTiming from './topics-release-timing.json';
 import spendingRecordLeads from './topics-spending-record-leads.json';
 import overdueFollowUp from './topics-overdue-follow-up.json';
 import meetingPosting from './topics-meeting-posting.json';
+import dataPacks from './topics-data-packs.json';
 
 export type HelpGroup =
   | 'Getting started'
@@ -115,6 +116,7 @@ const ALL_HELP_TOPICS = [
   ...spendingRecordLeads,
   ...overdueFollowUp,
   ...meetingPosting,
+  ...dataPacks,
 ] as HelpTopic[];
 
 /**
