@@ -2,12 +2,14 @@
 //! downloader, records what the publisher served, and signs the manifest with the publisher key
 //! kept in the macOS Keychain. Built only with the `pack-builder` feature.
 
+use super::conformed::{conformed_select, literal, ConformedOrigin};
 use super::{PackFile, PackFileFormat, PackLicence, PackManifest, PACK_MANIFEST_FILE};
 use crate::error::AppError;
 use crate::ingestion::client::{ApiClient, HttpClientConfig};
 use crate::ingestion::queue::dataset_source;
 use crate::storage::tabular::{TableSource, MAX_STREAMED_BYTES};
-use crate::types::CityDataset;
+use crate::storage::DuckDbRepository;
+use crate::types::{AnalyticalDatasetKind, AnalyticalImportRequest, CityDataset};
 use chrono::{Datelike, Utc};
 use ed25519_dalek::SigningKey;
 use std::path::{Path, PathBuf};
@@ -22,6 +24,9 @@ const EARLIEST_YEAR: u16 = 2000;
 struct PackTable {
     table: &'static str,
     dataset: CityDataset,
+    /// The kind the app imports this dataset as, so a Parquet copy is typed as the app's import
+    /// of the same file is.
+    kind: AnalyticalDatasetKind,
 }
 
 /// The first slice in `docs/data-packs.md`: City open data only.
@@ -30,24 +35,29 @@ fn pack_tables(pack: &str) -> Result<&'static [PackTable], AppError> {
         PackTable {
             table: "budget_adopted",
             dataset: CityDataset::OperatingBudget,
+            kind: AnalyticalDatasetKind::OperatingBudget,
         },
         PackTable {
             table: "budget_actuals",
             dataset: CityDataset::OperatingActuals,
+            kind: AnalyticalDatasetKind::RegionalData,
         },
     ];
     const REPORTS: &[PackTable] = &[
         PackTable {
             table: "service_reports",
             dataset: CityDataset::GetItDoneEncampments,
+            kind: AnalyticalDatasetKind::RegionalData,
         },
         PackTable {
             table: "service_reports",
             dataset: CityDataset::GetItDoneOpen,
+            kind: AnalyticalDatasetKind::RegionalData,
         },
         PackTable {
             table: "police_calls",
             dataset: CityDataset::CallsForService,
+            kind: AnalyticalDatasetKind::CallsForService,
         },
     ];
     match pack {
@@ -129,6 +139,14 @@ pub async fn build(pack: &str, out: &Path) -> Result<PathBuf, AppError> {
         ..HttpClientConfig::default()
     })?;
     let now = Utc::now();
+    let pack_version = format!("{}.{}.{}", now.year(), now.month(), now.day());
+    let scratch = ScratchDatabase(
+        std::env::temp_dir().join(format!("onrecord-pack-{}.duckdb", uuid::Uuid::new_v4())),
+    );
+    let repository = DuckDbRepository::new(&scratch.0)?;
+    repository
+        .run_migrations(include_str!("../../migrations/0001_initial_schema.sql"))
+        .await?;
     let mut files = Vec::new();
     for table in tables {
         for year in published_years(table.dataset, now.year()) {
@@ -149,7 +167,7 @@ pub async fn build(pack: &str, out: &Path) -> Result<PathBuf, AppError> {
             .map_err(|error| AppError::Internal(format!("Pack row count: {error}")))??
             .rows as u64;
             eprintln!("{relative}: {rows} rows, {} bytes", downloaded.byte_count);
-            files.push(PackFile {
+            let original = PackFile {
                 path: relative,
                 table: table.table.into(),
                 format: PackFileFormat::Original,
@@ -162,12 +180,25 @@ pub async fn build(pack: &str, out: &Path) -> Result<PathBuf, AppError> {
                 partial,
                 last_modified: downloaded.acquisition.last_modified,
                 etag: downloaded.acquisition.etag,
-            });
+            };
+            let parquet = write_conformed_parquet(
+                &repository,
+                out,
+                &original,
+                table.kind.clone(),
+                &pack_version,
+            )
+            .await?;
+            eprintln!(
+                "{}: {} rows, {} bytes",
+                parquet.path, parquet.rows, parquet.bytes
+            );
+            files.extend([original, parquet]);
         }
     }
     let manifest = PackManifest {
         pack: pack.into(),
-        pack_version: format!("{}.{}.{}", now.year(), now.month(), now.day()),
+        pack_version,
         schema_version: "1.0".into(),
         built_at: Utc::now().to_rfc3339(),
         licence: licence(),
@@ -181,4 +212,183 @@ pub async fn build(pack: &str, out: &Path) -> Result<PathBuf, AppError> {
         .await
         .map_err(|error| AppError::Storage(format!("Pack manifest: {error}")))?;
     Ok(manifest_path)
+}
+
+/// The DuckDB file the Parquet copies are made in, removed with its WAL when the build ends.
+struct ScratchDatabase(PathBuf);
+
+impl Drop for ScratchDatabase {
+    fn drop(&mut self) {
+        let mut wal = self.0.clone().into_os_string();
+        wal.push(".wal");
+        let _ = std::fs::remove_file(&self.0);
+        let _ = std::fs::remove_file(wal);
+    }
+}
+
+/// Imports `original` from `out` through the app's analytical import into `scratch`, writes its
+/// conformed rows in file order to `parquet/<table>/<file stem>.parquet`, and returns that file's
+/// manifest entry. Its rows are the rows the import kept: a row the file makes unreadable is not
+/// in the copy.
+async fn write_conformed_parquet(
+    scratch: &DuckDbRepository,
+    out: &Path,
+    original: &PackFile,
+    kind: AnalyticalDatasetKind,
+    pack_version: &str,
+) -> Result<PackFile, AppError> {
+    let source = Path::new(&original.path);
+    let (Some(file_name), Some(stem)) = (
+        source.file_name().and_then(|name| name.to_str()),
+        source.file_stem().and_then(|stem| stem.to_str()),
+    ) else {
+        return Err(AppError::Internal(format!(
+            "Pack original {} has no file name",
+            original.path
+        )));
+    };
+    let imported = scratch
+        .import_analytical_csv(AnalyticalImportRequest {
+            dataset_kind: kind,
+            display_name: original.path.clone(),
+            source_uri: Some(original.source_url.clone()),
+            local_path: out.join(source).to_string_lossy().into_owned(),
+            observation_period_start: None,
+            observation_period_end: None,
+            partial_dataset: original.partial,
+            worksheet: None,
+            source_file_name: Some(file_name.into()),
+            expected_source_sha256: Some(original.sha256.clone()),
+            derived_subset: None,
+        })
+        .await?;
+    let relative = format!("parquet/{}/{stem}.parquet", original.table);
+    let path = out.join(&relative);
+    tokio::fs::create_dir_all(path.parent().expect("a file under parquet"))
+        .await
+        .map_err(|error| AppError::Storage(format!("Pack directory: {error}")))?;
+    let target = path
+        .to_str()
+        .ok_or_else(|| AppError::Storage(format!("{} is not UTF-8", path.display())))?
+        .to_owned();
+    let table = original.table.clone();
+    let origin = ConformedOrigin {
+        retrieved_at: Some(original.retrieved_at.clone()),
+        pack_version: Some(pack_version.into()),
+    };
+    let rows = scratch
+        .query_connection("Parquet copy", move |conn| {
+            let select = conformed_select(conn, &table, &imported.snapshot_id, &origin)?;
+            let copy_failed =
+                |error: duckdb::Error| AppError::Storage(format!("Parquet copy: {error}"));
+            conn.execute_batch(&format!(
+                "COPY (SELECT * FROM ({select}) ORDER BY source_row) TO {} (FORMAT PARQUET)",
+                literal(Some(&target))
+            ))
+            .map_err(copy_failed)?;
+            conn.query_row(
+                "SELECT count(*) FROM read_parquet(?1)",
+                duckdb::params![target],
+                |row| row.get::<_, u64>(0),
+            )
+            .map_err(copy_failed)
+        })
+        .await?;
+    let bytes = std::fs::metadata(&path)
+        .map_err(|error| AppError::Storage(format!("Parquet copy: {error}")))?
+        .len();
+    let sha256 = crate::integrity::sha256_file(&path)
+        .map_err(|error| AppError::Storage(format!("Parquet copy: {error}")))?;
+    Ok(PackFile {
+        path: relative,
+        format: PackFileFormat::Parquet,
+        sha256,
+        bytes,
+        rows,
+        ..original.clone()
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn a_parquet_copy_is_listed_as_the_file_written_and_holds_the_conformed_rows() {
+        let out = tempfile::tempdir().unwrap();
+        let original_bytes: &[u8] =
+            b"amount,report_fy,budget_cycle\n10,23,adopted\n20,24,adopted\n";
+        let path = out.path().join("originals/budget_adopted/budget.csv");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, original_bytes).unwrap();
+        let original = PackFile {
+            path: "originals/budget_adopted/budget.csv".into(),
+            table: "budget_adopted".into(),
+            format: PackFileFormat::Original,
+            source_url: "https://seshat.datasd.org/operating_budget/budget.csv".into(),
+            retrieved_at: "2026-10-06T00:00:00Z".into(),
+            sha256: crate::integrity::sha256_hex(original_bytes),
+            bytes: original_bytes.len() as u64,
+            // Not the copy's count, so a copy listing the original's would be caught.
+            rows: 99,
+            year: None,
+            partial: false,
+            last_modified: None,
+            etag: None,
+        };
+        let scratch = DuckDbRepository::new(":memory:").unwrap();
+        scratch
+            .run_migrations(include_str!("../../migrations/0001_initial_schema.sql"))
+            .await
+            .unwrap();
+        let copy = write_conformed_parquet(
+            &scratch,
+            out.path(),
+            &original,
+            AnalyticalDatasetKind::OperatingBudget,
+            "2026.10.6",
+        )
+        .await
+        .unwrap();
+        let written = out.path().join(&copy.path);
+        assert_eq!(copy.path, "parquet/budget_adopted/budget.parquet");
+        assert_eq!(copy.format, PackFileFormat::Parquet);
+        assert_eq!(copy.bytes, std::fs::metadata(&written).unwrap().len());
+        assert_eq!(
+            copy.sha256,
+            crate::integrity::sha256_file(&written).unwrap()
+        );
+        assert_eq!(copy.rows, 2);
+        let target = written.to_str().unwrap().to_owned();
+        let rows = scratch
+            .query_connection("read copy", move |conn| {
+                let mut statement = conn
+                    .prepare(
+                        "SELECT fiscal_year, retrieved_at, pack_version FROM read_parquet(?1)
+                         ORDER BY source_row",
+                    )
+                    .unwrap();
+                Ok(statement
+                    .query_map(duckdb::params![target], |row| {
+                        Ok((
+                            row.get::<_, i32>(0)?,
+                            row.get::<_, String>(1)?,
+                            row.get::<_, String>(2)?,
+                        ))
+                    })
+                    .unwrap()
+                    .collect::<Result<Vec<_>, _>>()
+                    .unwrap())
+            })
+            .await
+            .unwrap();
+        let stamp = ("2026-10-06T00:00:00Z".to_owned(), "2026.10.6".to_owned());
+        assert_eq!(
+            rows,
+            [
+                (2023, stamp.0.clone(), stamp.1.clone()),
+                (2024, stamp.0, stamp.1)
+            ]
+        );
+    }
 }
