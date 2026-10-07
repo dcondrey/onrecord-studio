@@ -70,7 +70,7 @@ ${tables.map((table) => ` SELECT NULLIF(TRIM(CAST(${quoteIdentifier('job_id')} A
 )
 SELECT issued_year, COUNT(*) AS jobs, COUNT(*) FILTER (WHERE ${TIERS.map((tier) => `${tier.key} IS NOT NULL`).join(' OR ')}) AS tiered_jobs,
  COUNT(*) FILTER (WHERE ${TIERS.map((tier) => `${tier.key} > 0`).join(' OR ')}) AS unit_jobs,
- COUNT(*) FILTER (WHERE permits > 1) AS multi_permit_jobs, ${all.map((item) => `SUM(${item.key}) AS ${item.key}`).join(', ')},
+ COUNT(*) FILTER (WHERE permits > 1) AS multi_permit_jobs, COUNT(*) FILTER (WHERE ${TIERS.map((tier) => `${tier.key} < 0`).join(' OR ')}) AS removal_jobs, ${all.map((item) => `SUM(${item.key}) AS ${item.key}`).join(', ')},
  (SELECT COUNT(*) FROM permits WHERE job IS NULL) AS no_job_permits
 FROM jobs GROUP BY issued_year ORDER BY issued_year NULLS LAST`,
   }];
@@ -111,11 +111,11 @@ export function housingLeads(results: Entry[], currentYear = new Date().getUTCFu
     const tiers = TIERS.map((tier) => ({ ...tier, value: count(row[tier.key]) }));
     const tiered = tiers.reduce((sum, tier) => sum + (tier.value ?? 0), 0);
     const lower = lowest(row);
-    const jobs = count(row.jobs) ?? 0; const tieredJobs = count(row.tiered_jobs) ?? 0; const unitJobs = count(row.unit_jobs) ?? 0; const multi = count(row.multi_permit_jobs) ?? 0;
+    const jobs = count(row.jobs) ?? 0; const tieredJobs = count(row.tiered_jobs) ?? 0; const unitJobs = count(row.unit_jobs) ?? 0; const multi = count(row.multi_permit_jobs) ?? 0; const removals = count(row.removal_jobs) ?? 0;
     return {
       key: `housing_units_by_tier:${year}`, priority: 95, query: entry.query, scope: { period: `${year}-01-01 to ${year}-12-31` },
       title: `Building permits issued in ${year}${soFar(year)} ${lower ? `carry ${units(lower.sum)} for ${lower.households}${lower.missing}` : 'record no extremely-low or very-low income tier'}, of ${units(tiered)} with an income tier`,
-      detail: `Building and Combination Building Permits issued in ${year}${soFar(year)}, counted once per job. Of ${shown(jobs)} jobs, ${shown(unitJobs)} record a unit in an income tier, ${shown(tieredJobs - unitJobs)} record no unit above 0 in any tier, and ${shown(jobs - tieredJobs)} have no tier recorded. Units by income tier: ${tiers.map((tier) => `${tier.name} ${recorded(tier.value)}`).join(', ')}. Reported apart, because the file does not say whether they are inside the tiers: density-bonus units ${recorded(count(row.bonus))}, ADUs ${recorded(count(row.adu))}.${multi ? ` ${shown(multi)} jobs hold more than one building permit; each is counted once, at the largest figure any of its permits records for each tier.` : ''}${side}${undated ? ` ${shown(undated)} jobs have no readable issue date and are in no year.` : ''}${noJob ? ` ${shown(noJob)} building permits have no job recorded and are in no total.` : ''} ${CAVEAT}`,
+      detail: `Building and Combination Building Permits issued in ${year}${soFar(year)}, counted once per job. Of ${shown(jobs)} jobs, ${shown(unitJobs)} record a unit in an income tier, ${shown(tieredJobs - unitJobs)} record no unit above 0 in any tier, and ${shown(jobs - tieredJobs)} have no tier recorded. Units by income tier: ${tiers.map((tier) => `${tier.name} ${recorded(tier.value)}`).join(', ')}. Reported apart, because the file does not say whether they are inside the tiers: density-bonus units ${recorded(count(row.bonus))}, ADUs ${recorded(count(row.adu))}.${multi ? ` ${shown(multi)} jobs hold more than one building permit; each is counted once, at the largest figure any of its permits records for each tier.` : ''}${removals ? ` ${shown(removals)} job${removals === 1 ? ' records' : 's record'} a negative figure in an income tier (units removed); the tier totals are net of ${removals === 1 ? 'it' : 'them'}.` : ''}${side}${undated ? ` ${shown(undated)} jobs have no readable issue date and are in no year.` : ''}${noJob ? ` ${shown(noJob)} building permits have no job recorded and are in no total.` : ''} ${CAVEAT}`,
       question: `What does the City's Annual Progress Report table A2 for ${year} record as building permits issued by income tier, and what is the City's RHNA allocation for each tier? The report's table A2 and the allocation would show what the City reported for the same tiers.`,
     };
   });

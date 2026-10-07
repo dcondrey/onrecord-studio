@@ -33,6 +33,11 @@ describe('leads from issued development approvals', () => {
     }
   });
 
+  it('says when a tier total is net of units a job removes', () => {
+    expect(housingLeads(units(year(2025, 30)), 2026)[0].detail).not.toContain('negative');
+    expect(housingLeads(units(year(2025, 30, { removal_jobs: 2 })), 2026)[0].detail).toContain('2 jobs record a negative figure in an income tier (units removed); the tier totals are net of them.');
+  });
+
   it('marks the current year as so far', () => {
     expect(housingLeads(units(year(2026, 30)), 2026)[0].title).toBe('Building permits issued in 2026 so far carry 3 units for extremely-low and very-low income households, of 40 units with an income tier');
   });
