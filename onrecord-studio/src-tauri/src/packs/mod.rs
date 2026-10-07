@@ -13,6 +13,7 @@ use std::path::{Component, Path, PathBuf};
 
 #[cfg(feature = "pack-builder")]
 pub mod builder;
+pub(crate) mod catalog;
 pub mod conformed;
 pub(crate) mod import;
 

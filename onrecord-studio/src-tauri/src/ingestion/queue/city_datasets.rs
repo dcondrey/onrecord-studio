@@ -72,6 +72,8 @@ pub(crate) fn dataset_source(
 pub(crate) struct DatasetSource {
     pub url: String,
     pub file_name: String,
+    /// Read only by the pack builder.
+    #[cfg_attr(not(feature = "pack-builder"), allow(dead_code))]
     pub partial: bool,
     pub kind: AnalyticalDatasetKind,
 }

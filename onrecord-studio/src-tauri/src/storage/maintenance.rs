@@ -385,9 +385,12 @@ pub(crate) fn purge_automatic_origins(
     };
     conn.execute("DELETE FROM data_maintenance_origins WHERE portal_key = ?1 AND (?2 IS NULL OR document_id = ?2)", params![portal, document]).map_err(storage)?;
     for snapshot in snapshots {
+        // A snapshot a data pack also supplied stays: its bytes did not come only from this
+        // portal, and retiring it would orphan its `pack_origins` rows.
         let others: i64 = conn
             .query_row(
-                "SELECT COUNT(*) FROM data_maintenance_origins WHERE snapshot_id = ?1",
+                "SELECT (SELECT COUNT(*) FROM data_maintenance_origins WHERE snapshot_id = ?1)
+                      + (SELECT COUNT(*) FROM pack_origins WHERE snapshot_id = ?1)",
                 params![snapshot],
                 |row| row.get(0),
             )
@@ -1193,6 +1196,43 @@ mod tests {
                 0
             );
         }
+    }
+
+    #[tokio::test]
+    async fn purging_a_portal_keeps_a_snapshot_a_data_pack_also_supplied() {
+        let (root, db) = setup().await;
+        seed(&db, root.path(), 1, "counts.csv", b"city,count\nVista,3").await;
+        db.maintain_one_table().await.unwrap();
+        let snapshot = db.analytical_schema().await.unwrap().datasets[0]
+            .snapshot_id
+            .clone();
+        let recorded = snapshot.clone();
+        db.query_connection("Record a pack origin", move |conn| {
+            conn.execute(
+                "INSERT INTO pack_origins VALUES (?1, 'san-diego-money', '2026.10.6',
+                 '2026-10-06T00:00:00Z', repeat('a', 64), 'originals/t/counts.csv',
+                 repeat('b', 64), '2026-10-05T00:00:00Z', false, '2026-10-07T00:00:00Z')",
+                params![recorded],
+            )
+            .map_err(storage)
+        })
+        .await
+        .unwrap();
+        db.purge_document("fixture", 1).await.unwrap();
+        let datasets = db.analytical_schema().await.unwrap().datasets;
+        assert_eq!(datasets.len(), 1);
+        assert_eq!(datasets[0].snapshot_id, snapshot);
+        let conn = db.analytics_connection().await.unwrap();
+        let orphans: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pack_origins p
+                 LEFT JOIN analytical_snapshots s ON s.snapshot_id = p.snapshot_id
+                 WHERE s.snapshot_id IS NULL",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(orphans, 0);
     }
 
     #[tokio::test]

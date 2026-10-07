@@ -16,7 +16,9 @@ impl DuckDbRepository {
         &self,
         request: AnalyticalImportRequest,
     ) -> Result<AnalyticalImportResult, AppError> {
-        self.import_analytical_table(request, None).await
+        self.import_analytical_table(request, None)
+            .await
+            .map(|(result, _)| result)
     }
 
     /// As [`Self::import_analytical_csv`], and also records the `data_maintenance_origins`
@@ -35,16 +37,18 @@ impl DuckDbRepository {
                 document_id,
             }
         });
-        self.import_analytical_table(request, origin).await
+        self.import_analytical_table(request, origin)
+            .await
+            .map(|(result, _)| result)
     }
 
     /// As [`Self::import_analytical_csv`], recording the data pack the file came from beside the
-    /// snapshot in the same transaction.
+    /// snapshot in the same transaction. Also returns whether the snapshot was already stored.
     pub(crate) async fn import_analytical_csv_from_pack(
         &self,
         request: AnalyticalImportRequest,
         origin: crate::packs::import::PackOrigin,
-    ) -> Result<AnalyticalImportResult, AppError> {
+    ) -> Result<(AnalyticalImportResult, bool), AppError> {
         self.import_analytical_table(
             request,
             Some(super::analytical_import::ImportOrigin::Pack(origin)),

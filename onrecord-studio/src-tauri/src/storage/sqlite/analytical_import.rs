@@ -695,11 +695,13 @@ pub(crate) enum ImportOrigin {
 }
 
 impl DuckDbRepository {
+    /// Also returns whether the snapshot was already stored, so this import only recorded its
+    /// origin beside it.
     pub(crate) async fn import_analytical_table(
         &self,
         request: AnalyticalImportRequest,
         origin: Option<ImportOrigin>,
-    ) -> Result<AnalyticalImportResult, AppError> {
+    ) -> Result<(AnalyticalImportResult, bool), AppError> {
         self.query_connection("Analytical table import", move |conn| {
             import_table(conn, request, origin)
         })
@@ -711,7 +713,7 @@ fn import_table(
     conn: &mut Connection,
     request: AnalyticalImportRequest,
     origin: Option<ImportOrigin>,
-) -> Result<AnalyticalImportResult, AppError> {
+) -> Result<(AnalyticalImportResult, bool), AppError> {
     let kind = request.dataset_kind.clone();
     let format_name = request
         .source_file_name
@@ -777,7 +779,8 @@ fn import_table(
     // The same identity is the same bytes read by the same parser, so the stored snapshot is what
     // this import would build; it keeps its first acquisition's record and gains this origin.
     // Rebuilding it is not possible either: DuckDB refuses to delete a parent row in the
-    // transaction that deleted its children.
+    // transaction that deleted its children. The one exception is a row a pack created: this
+    // installation's own acquisition takes the row over, and the pack stays in `pack_origins`.
     let stored = tx
         .query_row(
             "SELECT display_name, table_name, imported_rows, rejected_rows, malformed_rows,
@@ -825,10 +828,35 @@ fn import_table(
             quote_ident(&result.table_name)
         ))
         .map_err(storage("Failed to refresh latest analytical view"))?;
-        record_origin(&tx, &snapshot_id, origin.as_ref())?;
+        if !matches!(origin, Some(ImportOrigin::Pack(_))) {
+            let taken_over = tx
+                .execute(
+                    "UPDATE analytical_snapshots
+                     SET display_name = ?2, local_path = ?3,
+                         retrieved_at = strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')
+                     WHERE snapshot_id = ?1 AND EXISTS (
+                         SELECT 1 FROM pack_origins
+                         WHERE snapshot_id = ?1 AND describes_snapshot)",
+                    params![snapshot_id, request.display_name, request.local_path],
+                )
+                .map_err(storage(
+                    "Failed to record this acquisition of a pack's snapshot",
+                ))?;
+            if taken_over > 0 {
+                tx.execute(
+                    "UPDATE pack_origins SET describes_snapshot = false WHERE snapshot_id = ?1",
+                    params![snapshot_id],
+                )
+                .map_err(storage(
+                    "Failed to record this acquisition of a pack's snapshot",
+                ))?;
+                result.display_name = request.display_name;
+            }
+        }
+        record_origin(&tx, &snapshot_id, origin.as_ref(), false)?;
         tx.commit()
             .map_err(storage("Failed to commit analytical import"))?;
-        return Ok(result);
+        return Ok((result, true));
     }
     let mut warnings = schema_warnings_for(&read.headers, &kind);
     warnings.extend(source.warnings().iter().cloned());
@@ -909,6 +937,10 @@ fn import_table(
         })),
     });
     let imported_rows = read.rows - read.malformed_rows;
+    let retrieved_at = match &origin {
+        Some(ImportOrigin::Pack(pack)) => Some(pack.retrieved_at.as_str()),
+        _ => None,
+    };
     tx.execute(
         "INSERT INTO analytical_snapshots (
             snapshot_id, dataset_kind, display_name, table_name, source_uri, local_path,
@@ -916,7 +948,8 @@ fn import_table(
             partial_dataset, imported_rows, rejected_rows, malformed_rows,
             duplicate_key_rows, validation_summary_json
          ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7,
-            strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'), ?8, ?9, ?10, ?11, ?12, ?12, ?13, ?14)",
+            COALESCE(?15, strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')),
+            ?8, ?9, ?10, ?11, ?12, ?12, ?13, ?14)",
         params![
             snapshot_id,
             kind.as_str(),
@@ -932,6 +965,7 @@ fn import_table(
             read.malformed_rows as i64,
             read.duplicate_key_rows as i64,
             validation_summary.to_string(),
+            retrieved_at,
         ],
     )
     .map_err(storage("Failed to record analytical snapshot"))?;
@@ -958,10 +992,10 @@ fn import_table(
     ))
     .map_err(storage("Failed to refresh latest analytical view"))?;
     row_store::rebuild_row_view(&tx)?;
-    record_origin(&tx, &snapshot_id, origin.as_ref())?;
+    record_origin(&tx, &snapshot_id, origin.as_ref(), true)?;
     tx.commit()
         .map_err(storage("Failed to commit analytical import"))?;
-    Ok(AnalyticalImportResult {
+    let result = AnalyticalImportResult {
         snapshot_id,
         dataset_kind: kind,
         display_name: request.display_name,
@@ -973,13 +1007,16 @@ fn import_table(
         unconverted_cells,
         schema_warnings: warnings,
         source_sha256: read.sha256,
-    })
+    };
+    Ok((result, false))
 }
 
+/// `created`: this import wrote the snapshot row, so a pack origin is what the row describes.
 fn record_origin(
     tx: &Connection,
     snapshot_id: &str,
     origin: Option<&ImportOrigin>,
+    created: bool,
 ) -> Result<(), AppError> {
     match origin {
         Some(ImportOrigin::Maintenance {
@@ -998,8 +1035,9 @@ fn record_origin(
             tx.execute(
                 "INSERT INTO pack_origins (
                     snapshot_id, pack, pack_version, built_at, signer_key_id, file_path,
-                    file_sha256, imported_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'))
+                    file_sha256, retrieved_at, describes_snapshot, imported_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9,
+                    strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'))
                  ON CONFLICT DO NOTHING",
                 params![
                     snapshot_id,
@@ -1008,7 +1046,9 @@ fn record_origin(
                     pack.built_at,
                     pack.signer_key_id,
                     pack.file_path,
-                    pack.file_sha256
+                    pack.file_sha256,
+                    pack.retrieved_at,
+                    created
                 ],
             )
             .map_err(storage("Failed to record the data pack origin"))?;

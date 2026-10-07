@@ -2,6 +2,7 @@
 //! downloader, records what the publisher served, and signs the manifest with the publisher key
 //! kept in the macOS Keychain. Built only with the `pack-builder` feature.
 
+use super::catalog::pack_tables;
 use super::conformed::{conformed_select, literal, ConformedOrigin};
 use super::{PackFile, PackFileFormat, PackLicence, PackManifest, PACK_MANIFEST_FILE};
 use crate::error::AppError;
@@ -19,67 +20,6 @@ const KEYCHAIN_ACCOUNT: &str = "publisher-seed-v1";
 /// The earliest year asked of a table split by year; the source list refuses years before its
 /// publisher's series, and those are skipped.
 const EARLIEST_YEAR: u16 = 2000;
-
-/// One conformed table of a pack and the City dataset it is built from.
-struct PackTable {
-    table: &'static str,
-    dataset: CityDataset,
-}
-
-/// The packs' City open-data tables (`docs/data-packs.md`).
-fn pack_tables(pack: &str) -> Result<&'static [PackTable], AppError> {
-    const MONEY: &[PackTable] = &[
-        PackTable {
-            table: "budget_adopted",
-            dataset: CityDataset::OperatingBudget,
-        },
-        PackTable {
-            table: "budget_actuals",
-            dataset: CityDataset::OperatingActuals,
-        },
-        PackTable {
-            table: "capital_budget",
-            dataset: CityDataset::CapitalBudget,
-        },
-        PackTable {
-            table: "capital_actuals",
-            dataset: CityDataset::CapitalActuals,
-        },
-        PackTable {
-            table: "city_properties",
-            dataset: CityDataset::CityProperties,
-        },
-        PackTable {
-            table: "city_parcels",
-            dataset: CityDataset::CityParcels,
-        },
-        PackTable {
-            table: "city_leases",
-            dataset: CityDataset::CityLeases,
-        },
-    ];
-    const REPORTS: &[PackTable] = &[
-        PackTable {
-            table: "service_reports",
-            dataset: CityDataset::GetItDoneEncampments,
-        },
-        PackTable {
-            table: "service_reports",
-            dataset: CityDataset::GetItDoneOpen,
-        },
-        PackTable {
-            table: "police_calls",
-            dataset: CityDataset::CallsForService,
-        },
-    ];
-    match pack {
-        "san-diego-money" => Ok(MONEY),
-        "san-diego-reports" => Ok(REPORTS),
-        other => Err(AppError::DataParsing(format!(
-            "Unknown pack '{other}'; packs are san-diego-money and san-diego-reports"
-        ))),
-    }
-}
 
 fn licence() -> PackLicence {
     PackLicence {

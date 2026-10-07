@@ -11,13 +11,13 @@ export interface DataPackSummary {
   licenceId: string;
   licenceUrl: string;
   disclaimer: string;
+  /** SHA-256 of the verified manifest; an import names it, so it imports only this manifest. */
+  manifestSha256: string;
   tables: DataPackTable[];
 }
 
 export interface DataPackTable {
   table: string;
-  /** `null`: this app has no analytical import for the table. */
-  datasetKind: AnalyticalDatasetKind | null;
   files: DataPackFileSummary[];
 }
 
@@ -29,7 +29,10 @@ export interface DataPackFileSummary {
   bytes: number;
   partial: boolean;
   sourceUrl: string;
+  /** When the pack builder retrieved the file from its publisher. */
   retrievedAt: string;
+  /** `null`: the City source list does not publish this file, so the app does not import it. */
+  datasetKind: AnalyticalDatasetKind | null;
 }
 
 /** Exactly one of `result` and `error` is set. */
@@ -37,6 +40,10 @@ export interface DataPackImportOutcome {
   path: string;
   table: string;
   year: number | null;
+  /** The manifest's retrieval time for this file. */
+  retrievedAt: string;
   result: AnalyticalImportResult | null;
+  /** Set with `result`: the bytes were already a stored snapshot; the pack was recorded beside it. */
+  alreadyStored: boolean | null;
   error: string | null;
 }
