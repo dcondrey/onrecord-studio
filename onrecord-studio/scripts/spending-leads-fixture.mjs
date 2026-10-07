@@ -19,6 +19,8 @@ const toCsv = (header, rows) => `${[header, ...rows].map((row) => row.map(quote)
 const actualsHeader = ['amount', 'report_fy', 'fund_type', 'fund_number', 'dept_name', 'funds_center_number', 'account', 'account_number'];
 const budgetHeader = [...actualsHeader.slice(0, 2), 'budget_cycle', ...actualsHeader.slice(2)];
 const WAGES = ['Salaried Wages', '500011']; const REVENUE = ['Charges for Services', '420000']; const OVERTIME = ['Overtime Budgeted', '500128'];
+// The actuals file can label an overtime account number otherwise; the number is what matches.
+const PREMIUM = ['Premium Pay Sworn', '500128'];
 const SETTLEMENT = ['Negotiated Settlement', '512182']; const CLAIM = ['Claims-Pub Liab Vehicle Body Injury', '512004']; const LEASE = ['Lease Settlement Expense', '512052'];
 const homelessness = 'Homelessness Strategies & Solutions';
 // Twenty departments the pay file's San Diego rows share with the budget, one position each.
@@ -27,11 +29,14 @@ const offices = ['City Attorney', 'City Auditor', 'City Clerk', 'City Treasurer'
 const adopted = (amount, fy, department, [account, number], cycle = 'adopted') => [amount, fy, cycle, 'General Fund', '100000', department, '1001000011', account, number];
 // Fiscal 2024 is adopted and not in the actuals file, so it is not compared. A revenue account and
 // a proposed line are not adopted expense. Environmental Services has no actual rows in fiscal
-// 2023, and Business Office none in 2022.
+// 2023, and Business Office none in 2022. Overtime is adopted for fiscal 2022 and 2023 beside the
+// pay file's 2024 and 2025: Police actual overtime is above adopted in 2022 and less than
+// $1,000,000 above in 2023; Homelessness has rows and none in overtime; Environmental Services none.
 const budget = toCsv(budgetHeader, [
   adopted(18_000_000, '22', homelessness, WAGES), adopted(9_999_999, '22', homelessness, REVENUE), adopted(25_000_000, '23', homelessness, WAGES),
   adopted(7_777_777, '23', homelessness, WAGES, 'proposed'), adopted(44_000_000, '24', homelessness, WAGES),
-  adopted(100_000_000, '22', 'Police', WAGES), adopted(100_000_000, '23', 'Police', WAGES), adopted(49_000_000, '24', 'Police', OVERTIME), adopted(46_000_000, '25', 'Police', OVERTIME),
+  adopted(100_000_000, '22', 'Police', WAGES), adopted(100_000_000, '23', 'Police', WAGES), adopted(4_000_000, '22', 'Police', OVERTIME), adopted(5_000_000, '23', 'Police', OVERTIME),
+  adopted(300_000, '23', homelessness, OVERTIME), adopted(2_000_000, '23', 'Environmental Services', OVERTIME), adopted(49_000_000, '24', 'Police', OVERTIME), adopted(46_000_000, '25', 'Police', OVERTIME),
   adopted(50_000_000, '22', 'Environmental Services', WAGES), adopted(51_000_000, '23', 'Environmental Services', WAGES),
   adopted(1_000_000, '22', 'Business Office', WAGES), adopted(5_000_000, '22', 'Library', WAGES),
   ...offices.map((office) => adopted(10_000, '24', office, WAGES))]);
@@ -42,7 +47,8 @@ const actuals = toCsv(actualsHeader, [
   actual(100, '21', 'Library', WAGES),
   actual(9_000_000, '22', homelessness, WAGES), actual(500, '22', homelessness, REVENUE), actual(101_000_000, '22', 'Police', WAGES),
   actual(49_000_000, '22', 'Environmental Services', WAGES), actual(1_000_000, '22', 'Library', WAGES), actual(-5_000, '22', 'Library', SETTLEMENT),
-  actual(22_600_000, '23', homelessness, WAGES), actual(50_000, '23', homelessness, SETTLEMENT), actual(87_900_000, '23', 'Police', WAGES),
+  actual(22_600_000, '23', homelessness, WAGES), actual(50_000, '23', homelessness, SETTLEMENT), actual(87_900_000, '23', 'Police', WAGES), actual(6_000_000, '22', 'Police', OVERTIME),
+  actual(3_000_000, '23', 'Police', OVERTIME), actual(2_600_000, '23', 'Police', PREMIUM),
   actual(2_000_000, '23', 'Police', SETTLEMENT), actual(100_000, '23', 'Police', CLAIM), actual(300_000, '23', 'Library', SETTLEMENT), actual(777, '23', 'Library', LEASE)]);
 
 const payHeader = ['Year', 'EmployerType', 'EmployerName', 'DepartmentOrSubdivision', 'Position', 'ElectedOfficial', 'Judicial', 'OtherPositions', 'MinPositionSalary', 'MaxPositionSalary', 'ReportedBaseWage',

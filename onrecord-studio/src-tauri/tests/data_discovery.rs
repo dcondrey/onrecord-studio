@@ -1022,8 +1022,8 @@ async fn spending_checks_keep_no_rows_apart_from_zero_and_tie_a_budget_to_one_em
         assert!(!result.truncated, "{}", query["id"]);
         results.push(result);
     }
-    let [compared, settled, paid] = &results[..] else {
-        panic!("three spending queries");
+    let [compared, overtime, settled, paid] = &results[..] else {
+        panic!("four spending queries");
     };
     let number = |result: &SqlQueryResult, row: usize, name: &str| -> Option<i64> {
         let value = cell(result, row, name);
@@ -1070,7 +1070,7 @@ async fn spending_checks_keep_no_rows_apart_from_zero_and_tie_a_budget_to_one_em
             ),
             line(
                 "Environmental Services",
-                &[Some(2023), Some(51_000_000), None, None]
+                &[Some(2023), Some(53_000_000), None, None]
             ),
             line(
                 "Homelessness Strategies & Solutions",
@@ -1078,15 +1078,15 @@ async fn spending_checks_keep_no_rows_apart_from_zero_and_tie_a_budget_to_one_em
             ),
             line(
                 "Homelessness Strategies & Solutions",
-                &[Some(2023), Some(25_000_000), Some(2), Some(22_650_000)]
+                &[Some(2023), Some(25_300_000), Some(2), Some(22_650_000)]
             ),
             line(
                 "Police",
-                &[Some(2022), Some(100_000_000), Some(1), Some(101_000_000)]
+                &[Some(2022), Some(104_000_000), Some(2), Some(107_000_000)]
             ),
             line(
                 "Police",
-                &[Some(2023), Some(100_000_000), Some(3), Some(90_000_000)]
+                &[Some(2023), Some(105_000_000), Some(5), Some(95_600_000)]
             ),
         ]
     );
@@ -1098,6 +1098,57 @@ async fn spending_checks_keep_no_rows_apart_from_zero_and_tie_a_budget_to_one_em
         ]
         .map(|name| number(compared, 0, name)),
         [Some(2022), Some(2023), Some(8)]
+    );
+
+    // Overtime accounts are matched by number: Police's FY 2023 row labelled "Premium Pay Sworn"
+    // is counted. Environmental Services has no actual rows and Homelessness no overtime rows;
+    // neither is an amount of zero. The FY 2024 and 2025 lines are not in a covered year.
+    assert_eq!(
+        rows(
+            overtime,
+            "department",
+            &[
+                "fiscal_year",
+                "adopted_overtime",
+                "actual_rows",
+                "actual_ot_rows",
+                "actual_overtime"
+            ]
+        ),
+        vec![
+            line(
+                "Environmental Services",
+                &[Some(2023), Some(2_000_000), None, None, None]
+            ),
+            line(
+                "Homelessness Strategies & Solutions",
+                &[Some(2023), Some(300_000), Some(2), Some(0), None]
+            ),
+            line(
+                "Police",
+                &[
+                    Some(2022),
+                    Some(4_000_000),
+                    Some(2),
+                    Some(1),
+                    Some(6_000_000)
+                ]
+            ),
+            line(
+                "Police",
+                &[
+                    Some(2023),
+                    Some(5_000_000),
+                    Some(5),
+                    Some(2),
+                    Some(5_600_000)
+                ]
+            ),
+        ]
+    );
+    assert_eq!(
+        cell(overtime, 3, "actual_accounts"),
+        &json!("500128 Overtime Budgeted, 500128 Premium Pay Sworn")
     );
 
     // Fiscal 2021 has rows and none in a settlement account. The lease settlement is left out.

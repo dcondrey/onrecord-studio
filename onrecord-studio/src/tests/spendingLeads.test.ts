@@ -3,11 +3,11 @@ import fixture from '../../src-tauri/tests/fixtures/spending-leads.json';
 import type { AnalyticalSchema, SqlQueryResult } from '../types';
 import { storedLeads } from '../utils/automaticDiscovery';
 import { dataGaps } from '../utils/dataGaps';
-import { actualsTable, PAY_MINIMUM_POSITIONS, spendingLeads, spendingQueries } from '../utils/spendingLeads';
+import { ABOVE_ADOPTED_OVERTIME_DOLLARS, ABOVE_ADOPTED_OVERTIME_PERCENT, actualsTable, PAY_MINIMUM_POSITIONS, spendingLeads, spendingQueries } from '../utils/spendingLeads';
 
 const schema = fixture.schema as AnalyticalSchema;
 const [actuals, budget, pay] = schema.datasets;
-const [comparedQuery, settledQuery, payQuery] = fixture.queries;
+const [comparedQuery, overtimeActualQuery, settledQuery, payQuery] = fixture.queries;
 const without = (...snapshotIds: string[]): AnalyticalSchema => ({ ...schema, datasets: schema.datasets.filter((dataset) => !snapshotIds.includes(dataset.snapshotId)) });
 const result = (rows: Record<string, unknown>[], truncated = false): SqlQueryResult => {
   const columns = [...new Set(rows.flatMap((row) => Object.keys(row)))];
@@ -74,13 +74,65 @@ describe('adopted against actual operating expense', () => {
   it('needs both tables, tells them apart by budget_cycle, and is offered the actuals when only a budget is imported', () => {
     expect(actualsTable(schema)?.snapshotId).toBe('actuals');
     expect(actualsTable(without('actuals'))).toBeNull();
-    expect(spendingQueries(schema, actuals).map((query) => query.id)).toEqual(['spending_adopted_actual', 'spending_settlements']);
+    expect(spendingQueries(schema, actuals).map((query) => query.id)).toEqual(['spending_adopted_actual', 'spending_overtime_actual', 'spending_settlements']);
     expect(spendingQueries(without('budget'), actuals).map((query) => query.id)).toEqual(['spending_settlements']);
     expect(spendingQueries(schema, budget)).toEqual([]);
     const fetches = (catalog: AnalyticalSchema) => dataGaps(catalog, {}, '2026-10-05T12:00:00Z').flatMap((gap) => gap.fetch ?? []);
     expect(fetches(without('actuals'))).toEqual([{ dataset: 'OPERATING_ACTUALS', year: null }]);
     expect(fetches(schema)).toEqual([]);
     expect(fetches(without('budget', 'actuals'))).toEqual([]);
+  });
+});
+
+describe('adopted against actual overtime', () => {
+  const overtimeYear = (adopted: number | null, actual: number | null, change: Record<string, unknown> = {}) => ({ department: 'Police', fiscal_year: 2022, adopted_overtime: adopted, unreadable_adopted: 0,
+    adopted_accounts: '500128 Overtime Budgeted', actual_rows: 9, actual_ot_rows: 2, actual_overtime: actual, unreadable_actual: 0, actual_accounts: '500128 Overtime Budgeted, 500128 Premium Pay Sworn',
+    followed: true, position: 1, ...span, ...change });
+  const overtime = (rows: Record<string, unknown>[]) => spendingLeads([{ query: overtimeActualQuery, result: result(rows) }]);
+
+  it(`reports a year ${ABOVE_ADOPTED_OVERTIME_PERCENT}% above adopted overtime, not just under`, () => {
+    // $100 million adopted: the dollar floor is met at every step, so the share decides.
+    const above = (actual: number) => overtime([overtimeYear(100_000_000, actual)]);
+    expect(above(109_999_999)).toEqual([]);
+    expect(above(110_000_000)).toHaveLength(1);
+    expect(above(110_000_001)).toHaveLength(1);
+  });
+
+  it(`reports a year $${ABOVE_ADOPTED_OVERTIME_DOLLARS.toLocaleString('en-US')} above adopted overtime, not $1 less`, () => {
+    // $2 million adopted: 50% above at the floor, so the dollars decide.
+    const above = (actual: number) => overtime([overtimeYear(2_000_000, actual)]);
+    expect(above(2_000_000 + ABOVE_ADOPTED_OVERTIME_DOLLARS - 1)).toEqual([]);
+    expect(above(2_000_000 + ABOVE_ADOPTED_OVERTIME_DOLLARS)).toHaveLength(1);
+    expect(above(2_000_000 + ABOVE_ADOPTED_OVERTIME_DOLLARS + 1)).toHaveLength(1);
+    // Overtime below adopted is not this measure.
+    expect(overtime([overtimeYear(9_000_000, 2_000_000)])).toEqual([]);
+  });
+
+  it('states the year, the accounts counted and the yardsticks as yardsticks', () => {
+    const [lead] = overtime([overtimeYear(4_000_000, 6_000_000), overtimeYear(5_000_000, 5_600_000, { fiscal_year: 2023 })]);
+    expect(lead.key).toBe('spending_overtime_above_adopted:Police');
+    expect(lead.title).toBe('Police: actual overtime $6.0 million against $4.0 million adopted in FY 2022, 50.0% above');
+    expect(lead.detail).toContain('FY 2022: $4.0 million adopted overtime, $6.0 million actual (50.0% above). FY 2023: $5.0 million adopted overtime, $5.6 million actual (12.0% above).');
+    expect(lead.detail).toContain('Actual overtime in FY 2022 is in 500128 Overtime Budgeted, 500128 Premium Pay Sworn.');
+    expect(lead.detail).toContain('both are fixed yardsticks, not a statistical test');
+    expect(`${lead.title} ${lead.detail}`).not.toMatch(/\b(overspen\w*|exceed\w*|violat\w*|unlawful|illegal)\b/i);
+  });
+
+  it('keeps no rows, no overtime rows and an unreadable amount apart, and none of them is $0', () => {
+    const reported = overtimeYear(4_000_000, 6_000_000, { fiscal_year: 2023 });
+    const detail = (row: Record<string, unknown>) => overtime([row, reported])[0].detail;
+    const noRows = detail(overtimeYear(2_000_000, null, { actual_rows: null, actual_ot_rows: null, unreadable_actual: null, actual_accounts: null }));
+    expect(noRows).toContain('FY 2022: $2.0 million adopted overtime and no rows in the actuals table.');
+    const noOvertime = detail(overtimeYear(300_000, null, { actual_ot_rows: 0, actual_accounts: null }));
+    expect(noOvertime).toContain('FY 2022: $300,000 adopted overtime; the actuals table has rows for the department and no overtime rows recorded, so no actual overtime is stated.');
+    const unreadable = detail(overtimeYear(2_000_000, 9_000_000, { unreadable_actual: 1 }));
+    expect(unreadable).toContain('FY 2022: not compared (the actual overtime amount could not be read in full).');
+    for (const text of [noRows, noOvertime, unreadable]) expect(text).not.toMatch(/\$0\b|\$0 actual/);
+    // Alone, none of the three is a year above adopted.
+    expect(overtime([overtimeYear(2_000_000, null, { actual_rows: null, actual_ot_rows: null })])).toEqual([]);
+    expect(overtime([overtimeYear(300_000, null, { actual_ot_rows: 0 })])).toEqual([]);
+    expect(overtime([overtimeYear(2_000_000, 9_000_000, { unreadable_actual: 1 })])).toEqual([]);
+    expect(overtime([overtimeYear(2_000_000, 9_000_000, { unreadable_adopted: 1 })])).toEqual([]);
   });
 });
 
