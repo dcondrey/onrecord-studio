@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import { useFirstRunDataStore } from '../../store/useFirstRunDataStore';
 import { metadataObservations, profileObservations, rankObservations, recurringObservations, type DiscoveryObservation } from '../../utils/automaticDiscovery';
 import { focusSourceComposer } from '../../utils/sanDiego';
 import { useAutomaticDiscovery } from './AutomaticDiscoveryProvider';
@@ -12,6 +13,7 @@ export default function AutomaticDiscovery() {
   const { controller, state } = useAutomaticDiscovery();
   const [showAll, setShowAll] = useState(false);
   const store = useAppStore;
+  const fetchingCoreData = useFirstRunDataStore((first) => first.running);
   if (!state || !controller) return null;
   const datasets = state.schema?.datasets ?? [];
   const observations = [...datasets.flatMap((dataset) => [
@@ -32,6 +34,7 @@ export default function AutomaticDiscovery() {
   const profileErrors = Object.values(state.profiles).flatMap((profile) => profile.results.filter((entry) => entry.error));
   const stage = (url: string) => { store.getState().setPortalUrlDraft(url); focusSourceComposer(); };
   const openAnalysis = () => store.getState().setWorkspaceView('analysis');
+  const getCoreData = () => { void useFirstRunDataStore.getState().run(controller); store.getState().setWorkspaceView('overview'); };
   const card = (item: DiscoveryObservation) => {
     const dataset = datasets.find((candidate) => candidate.snapshotId === item.snapshotId)!;
     return <article key={item.id} className="rounded-xl border border-line-strong bg-surface/40 p-3">
@@ -75,7 +78,7 @@ export default function AutomaticDiscovery() {
     {leads.length > 6 && <button type="button" className="analysis-button" onClick={() => setShowAll((value) => !value)}>{showAll ? 'Show fewer observations' : 'Show more observations'}</button>}
     {state.candidates.length > 0 && <p className="text-label leading-4 text-fg-secondary">{state.candidates.length} acquired tables are available for analysis. <button type="button" className="text-accent underline" onClick={openAnalysis}>Review acquired tables</button></p>}
     {!datasets.length && !standoutPatterns.length && <div className="grid gap-3 text-label leading-4 sm:grid-cols-2">
-      <div className="rounded-xl border border-line p-3"><h3 className="font-semibold text-fg">Where does funding reach the community?</h3><p className="mt-1 text-muted">Start with operating-budget records. Separate adopted allocations from proposals, then compare with actuals for matching years.</p><button type="button" className="analysis-button mt-2" onClick={() => stage('https://data.sandiego.gov/datasets/operating-budget')}>Choose budget data</button></div>
+      <div className="rounded-xl border border-line p-3"><h3 className="font-semibold text-fg">Where does funding reach the community?</h3><p className="mt-1 text-muted">Start with operating-budget records. Separate adopted allocations from proposals, then compare with actuals for matching years.</p><button type="button" className="analysis-button mt-2" disabled={fetchingCoreData} onClick={getCoreData}>Get San Diego’s core public data</button></div>
       <div className="rounded-xl border border-line p-3"><h3 className="font-semibold text-fg">Do housing outcomes match the reported investment?</h3><p className="mt-1 text-muted">Bring in performance reports and preserve each measure’s population and period. The app will surface connections as records arrive.</p><button type="button" className="analysis-button mt-2" onClick={() => stage('https://www.rtfhsd.org/reports-data/')}>Choose housing reports</button></div>
       <p className="text-muted sm:col-span-2">These are starting questions, not findings about data that has not been imported.</p>
     </div>}

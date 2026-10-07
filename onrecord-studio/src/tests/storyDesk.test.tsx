@@ -27,6 +27,12 @@ vi.hoisted(() => {
 const bridge = vi.hoisted(() => ({
   pending: [] as ((leads: unknown) => void)[],
   availabilityRequests: [] as string[],
+  discovery: { controller: null, state: null } as { controller: null; state: unknown },
+}));
+
+vi.mock('../components/dashboard/AutomaticDiscoveryProvider', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../components/dashboard/AutomaticDiscoveryProvider')>()),
+  useAutomaticDiscovery: () => bridge.discovery,
 }));
 
 vi.mock('../ipc', () => ({
@@ -71,7 +77,19 @@ afterEach(() => {
   cleanup();
   bridge.pending = [];
   bridge.availabilityRequests = [];
+  bridge.discovery = { controller: null, state: null };
 });
+
+const CORE_DATA = 'Get San Diego’s core public data';
+const NO_SOURCE_COPY = /Leads come from findings on the records you collect/;
+
+async function renderWithNoLeads(schema: { datasets: unknown[] } | null) {
+  bridge.discovery = { controller: null, state: { schema } };
+  render(<StoryDesk />);
+  await waitFor(() => expect(bridge.pending).toHaveLength(1));
+  act(() => bridge.pending[0]([]));
+  await screen.findByText('No leads yet');
+}
 
 describe('StoryDesk', () => {
   it('renders leads with their score and every factor and its evidence', async () => {
@@ -116,6 +134,25 @@ describe('StoryDesk', () => {
     await screen.findByRole('button', { name: /draft records request/i });
     expect(bridge.availabilityRequests).toEqual(['b']);
     expect(screen.getAllByRole('region', { name: 'Drafted artifacts' })).toHaveLength(1);
+  });
+
+  it('offers the core public data when no source is saved and the library has no tables', async () => {
+    await renderWithNoLeads({ datasets: [] });
+    expect(screen.getByRole('button', { name: CORE_DATA })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add a source' })).toBeTruthy();
+  });
+
+  it('does not treat a schema that has not loaded as an empty library', async () => {
+    await renderWithNoLeads(null);
+    expect(screen.queryByRole('button', { name: CORE_DATA })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Add a source' })).toBeTruthy();
+    expect(screen.getByText(NO_SOURCE_COPY)).toBeTruthy();
+  });
+
+  it('keeps the add-a-source copy when the library holds a table that produced no leads', async () => {
+    await renderWithNoLeads({ datasets: [{ snapshotId: 's1' }] });
+    expect(screen.queryByRole('button', { name: CORE_DATA })).toBeNull();
+    expect(screen.getByText(NO_SOURCE_COPY)).toBeTruthy();
   });
 
   it('discards a lead list that resolves after a findings refresh superseded it', async () => {
