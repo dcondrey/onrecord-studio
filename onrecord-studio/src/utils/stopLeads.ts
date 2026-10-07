@@ -43,6 +43,7 @@ const perceived = `CASE ${lower(PERCEIVED)} WHEN 'true' THEN 'unhoused' WHEN 'fa
 const arrested = (table: AnalyticalDatasetSummary) => `SELECT ${person} AS person, BOOL_OR(CONTAINS(${lower('result')}, 'custodial arrest')) AS arrested, BOOL_OR(CONTAINS(${lower('result')}, 'arrest without warrant')) AS warrantless, BOOL_OR(CONTAINS(${lower('result')}, 'outstanding warrant')) AS on_warrant,
   BOOL_OR(CONTAINS(${lower('result')}, 'citation') OR CONTAINS(${lower('result')}, 'cite and release')) AS cited
  FROM ${quoteIdentifier(table.tableName)} GROUP BY 1`;
+const text = (value: string) => `'${value.replace(/'/g, "''")}'`;
 const basis = 'Perceived unhoused is the officer\'s entry for each person stopped; rows where it is neither true nor false are counted apart.';
 
 export function stopQueries(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary): DiscoveryQuery[] {
@@ -58,10 +59,10 @@ export function stopQueries(schema: AnalyticalSchema, dataset: AnalyticalDataset
 )`;
   const queries: DiscoveryQuery[] = [{
     id: 'stops_unhoused_outcomes', title: 'Stops of people perceived as unhoused, and what they resulted in',
-    method: `Persons in ${dataset.displayName} by the officer's perceived-unhoused entry, joined on stop and person number to ${companions.results.displayName}${companions.property ? ` and ${companions.property.displayName}` : ''}. Arrested means a result naming a custodial arrest; arrests on an outstanding warrant and arrests without a warrant are also counted apart, since a warrant arrest follows from the warrant rather than the stop. Cited means a citation or an in-field cite and release. A person can have several results. ${basis} Rates are not adjusted for the reason for the stop.`,
+    method: `Persons in ${dataset.displayName} by the officer's perceived-unhoused entry, joined on stop and person number to ${companions.results.displayName}${companions.property ? ` and ${companions.property.displayName}` : ''}. Arrested means a result naming a custodial arrest; arrests on an outstanding warrant and arrests without a warrant are also counted apart, since a warrant arrest follows from the warrant rather than the stop. Cited means a citation or an in-field cite and release. Arrest and citation rates are over persons with a row in ${companions.results.displayName}, since a person with no row has no recorded outcome; property seizure is over all persons. A person can have several results. ${basis} Rates are not adjusted for the reason for the stop.`,
     sql: `WITH ${persons}${companions.property ? `, stop_seized AS (SELECT DISTINCT ${person} AS person FROM ${quoteIdentifier(companions.property.tableName)})` : ''}
 SELECT perceived, COUNT(*) AS persons, COUNT(*) FILTER (WHERE arrested) AS arrested, COUNT(*) FILTER (WHERE on_warrant) AS arrested_on_warrant, COUNT(*) FILTER (WHERE warrantless) AS arrested_without_warrant, COUNT(*) FILTER (WHERE cited) AS cited,
- COUNT(*) FILTER (WHERE stop_results.person IS NULL) AS no_result_row,
+ COUNT(*) FILTER (WHERE stop_results.person IS NOT NULL) AS persons_with_result, COUNT(*) FILTER (WHERE stop_results.person IS NULL) AS no_result_row, ${text(companions.results.displayName)} AS results_table,
  ${companions.property ? 'COUNT(*) FILTER (WHERE stop_seized.person IS NOT NULL)' : 'NULL'} AS property_seized,
  ${dated ? `CAST(MIN(stopped_on) FILTER (WHERE stopped_on >= DATE '2000-01-01') AS VARCHAR)` : 'NULL'} AS first_stop, ${dated ? 'CAST(MAX(stopped_on) AS VARCHAR)' : 'NULL'} AS last_stop
 FROM stop_persons LEFT JOIN stop_results ON stop_results.person = stop_persons.person${companions.property ? ' LEFT JOIN stop_seized ON stop_seized.person = stop_persons.person' : ''}
@@ -69,12 +70,12 @@ GROUP BY perceived ORDER BY perceived`,
   }];
   if (companions.reasons) queries.push({
     id: 'stops_unhoused_reasons', title: 'Why people perceived as unhoused were stopped, and arrests for the same reason',
-    method: `The recorded reason code text from ${companions.reasons.displayName} for each person stopped, with how many persons perceived as unhoused and how many others were stopped for it and how many of each were arrested without a warrant (a result naming a custodial arrest without warrant), so an outstanding warrant does not explain the arrest. The forty reasons with the most persons perceived as unhoused are read. A person with two reasons is counted under each. ${basis}`,
+    method: `The recorded reason code text from ${companions.reasons.displayName} for each person stopped, with how many persons perceived as unhoused and how many others were stopped for it and how many of each were arrested without a warrant (a result naming a custodial arrest without warrant), so an outstanding warrant does not explain the arrest. Arrest rates are over persons with a row in ${companions.results.displayName}. The forty reasons with the most persons perceived as unhoused are read. A person with two reasons is counted under each. ${basis}`,
     sql: `WITH ${persons}, stop_reasons AS (
  SELECT DISTINCT ${person} AS person, NULLIF(TRIM(CAST(${quoteIdentifier(COMPANIONS.reasons.column)} AS VARCHAR)), '') AS reason FROM ${quoteIdentifier(companions.reasons.tableName)}
 )
-SELECT reason, COUNT(*) FILTER (WHERE perceived = 'unhoused') AS unhoused_persons, COUNT(*) FILTER (WHERE perceived = 'unhoused' AND warrantless) AS unhoused_arrested,
- COUNT(*) FILTER (WHERE perceived = 'not unhoused') AS other_persons, COUNT(*) FILTER (WHERE perceived = 'not unhoused' AND warrantless) AS other_arrested
+SELECT reason, COUNT(*) FILTER (WHERE perceived = 'unhoused') AS unhoused_persons, COUNT(*) FILTER (WHERE perceived = 'unhoused' AND stop_results.person IS NOT NULL) AS unhoused_with_result, COUNT(*) FILTER (WHERE perceived = 'unhoused' AND warrantless) AS unhoused_arrested,
+ COUNT(*) FILTER (WHERE perceived = 'not unhoused') AS other_persons, COUNT(*) FILTER (WHERE perceived = 'not unhoused' AND stop_results.person IS NOT NULL) AS other_with_result, COUNT(*) FILTER (WHERE perceived = 'not unhoused' AND warrantless) AS other_arrested
 FROM stop_persons JOIN stop_reasons ON stop_reasons.person = stop_persons.person LEFT JOIN stop_results ON stop_results.person = stop_persons.person
 WHERE reason IS NOT NULL GROUP BY reason ORDER BY unhoused_persons DESC, reason LIMIT 40`,
   });
@@ -109,21 +110,26 @@ export function stopLeads(results: { query: DiscoveryQuery; result?: SqlQueryRes
       const group = (name: string) => rows.find((row) => row.perceived === name);
       const unhoused = group('unhoused'); const others = group('not unhoused');
       const u = count(unhoused?.persons) ?? 0; const o = count(others?.persons) ?? 0;
-      if (!unhoused || !others || u < GROUP_MINIMUM || o < GROUP_MINIMUM) continue;
+      // A person with no result row has no recorded outcome, so outcome rates are over persons with one.
+      const ur = count(unhoused?.persons_with_result) ?? 0; const or = count(others?.persons_with_result) ?? 0;
+      if (!unhoused || !others || ur < GROUP_MINIMUM || or < GROUP_MINIMUM) continue;
       const unrecorded = rows.filter((row) => row.perceived == null).reduce((sum, row) => sum + (count(row.persons) ?? 0), 0);
-      const rate = (label: string, column: string) => count(unhoused[column]) === null || count(others[column]) === null ? ''
-        : ` ${label}: ${shown(count(unhoused[column])!)} of ${shown(u)} (${percent(count(unhoused[column])!, u)}) against ${shown(count(others[column])!)} of ${shown(o)} (${percent(count(others[column])!, o)}).`;
+      const rate = (label: string, column: string, uWhole = ur, oWhole = or) => count(unhoused[column]) === null || count(others[column]) === null ? ''
+        : ` ${label}: ${shown(count(unhoused[column])!)} of ${shown(uWhole)} (${percent(count(unhoused[column])!, uWhole)}) against ${shown(count(others[column])!)} of ${shown(oWhole)} (${percent(count(others[column])!, oWhole)}).`;
+      const uMissing = count(unhoused.no_result_row) ?? 0; const oMissing = count(others.no_result_row) ?? 0;
+      const missing = uMissing || oMissing ? ` ${shown(uMissing)} persons perceived as unhoused and ${shown(oMissing)} others have no row in ${String(unhoused.results_table ?? 'the results table')}; no row is not an outcome of no arrest, so they are left out of the arrest and citation rates.` : '';
       const period = unhoused.first_stop && unhoused.last_stop ? `, ${String(unhoused.first_stop).slice(0, 10)} to ${String(unhoused.last_stop).slice(0, 10)}` : '';
       leads.push({ key: 'stops_unhoused_outcomes', priority: 100, query,
-        title: `${percent(count(unhoused.arrested) ?? 0, u)} of people perceived as unhoused were arrested when stopped, against ${percent(count(others.arrested) ?? 0, o)} of others`,
-        detail: `${shown(u)} of ${shown(u + o)} persons in the stop records${period} were perceived as unhoused.${rate('Custodial arrest', 'arrested')}${rate('Arrest on an outstanding warrant', 'arrested_on_warrant')}${rate('Arrest without a warrant', 'arrested_without_warrant')}${rate('Citation or cite and release', 'cited')}${rate('Property seized', 'property_seized')}${unrecorded ? ` ${shown(unrecorded)} persons have no perception recorded and are left out.` : ''} These rates are not adjusted for the reason for the stop or where it was made. ${UNADJUSTED}`,
+        title: `${percent(count(unhoused.arrested) ?? 0, ur)} of people perceived as unhoused were arrested when stopped, against ${percent(count(others.arrested) ?? 0, or)} of others`,
+        detail: `${shown(u)} of ${shown(u + o)} persons in the stop records${period} were perceived as unhoused.${missing}${rate('Custodial arrest', 'arrested')}${rate('Arrest on an outstanding warrant', 'arrested_on_warrant')}${rate('Arrest without a warrant', 'arrested_without_warrant')}${rate('Citation or cite and release', 'cited')}${rate('Property seized', 'property_seized', u, o)}${unrecorded ? ` ${shown(unrecorded)} persons have no perception recorded and are left out.` : ''} These rates are not adjusted for the reason for the stop or where it was made. ${UNADJUSTED}`,
         question: 'What were the outstanding warrants for? A records request for the warrant offences would show how many began as unpaid citations or missed court dates.',
       });
     } else if (query.id === 'stops_unhoused_reasons') {
-      const reasons = rows.map((row) => ({ reason: String(row.reason), u: count(row.unhoused_persons) ?? 0, ua: count(row.unhoused_arrested) ?? 0, o: count(row.other_persons) ?? 0, oa: count(row.other_arrested) ?? 0 }));
-      const compared = reasons.filter((row) => row.u >= GROUP_MINIMUM && row.o >= GROUP_MINIMUM);
+      const reasons = rows.map((row) => ({ reason: String(row.reason), u: count(row.unhoused_persons) ?? 0, ur: count(row.unhoused_with_result) ?? 0, ua: count(row.unhoused_arrested) ?? 0,
+        or: count(row.other_with_result) ?? 0, oa: count(row.other_arrested) ?? 0 }));
+      const compared = reasons.filter((row) => row.ur >= GROUP_MINIMUM && row.or >= GROUP_MINIMUM);
       // Cross-multiplied so a rate exactly at the limit is not lost to division.
-      const higher = compared.filter((row) => row.ua * row.o >= HIGHER_RATIO * row.oa * row.u && 100 * (row.ua * row.o - row.oa * row.u) >= HIGHER_POINTS * row.u * row.o);
+      const higher = compared.filter((row) => row.ua * row.or >= HIGHER_RATIO * row.oa * row.ur && 100 * (row.ua * row.or - row.oa * row.ur) >= HIGHER_POINTS * row.ur * row.or);
       if (reasons[0]?.u >= GROUP_MINIMUM) leads.push({ key: 'stops_unhoused_reasons', priority: 97, query,
         title: `Most recorded reason for stopping people perceived as unhoused: ${reasons[0].reason} (${shown(reasons[0].u)} persons)`,
         detail: `${reasons.slice(0, 5).map((row) => `${row.reason}: ${shown(row.u)}.`).join(' ')} The reason is the publisher's code text; a person with two reasons is counted under each.`,
@@ -131,7 +137,7 @@ export function stopLeads(results: { query: DiscoveryQuery; result?: SqlQueryRes
       });
       if (higher.length) leads.push({ key: 'stops_same_reason', priority: 99, query,
         title: `Stopped for the same recorded reason, people perceived as unhoused were arrested without a warrant more often in ${higher.length} of ${compared.length} reasons compared`,
-        detail: `${higher.slice(0, 3).map((row) => `${row.reason}: ${shown(row.ua)} of ${shown(row.u)} (${percent(row.ua, row.u)}) against ${shown(row.oa)} of ${shown(row.o)} (${percent(row.oa, row.o)}).`).join(' ')} A reason is compared when at least ${GROUP_MINIMUM} persons of each group were stopped for it, and counted as higher at ${HIGHER_RATIO} times the others' rate and at least ${HIGHER_POINTS} percentage points. In the other ${compared.length - higher.length} the rate was not higher by that measure. Arrests on an outstanding warrant are left out. ${UNADJUSTED}`,
+        detail: `${higher.slice(0, 3).map((row) => `${row.reason}: ${shown(row.ua)} of ${shown(row.ur)} (${percent(row.ua, row.ur)}) against ${shown(row.oa)} of ${shown(row.or)} (${percent(row.oa, row.or)}).`).join(' ')} Rates are over persons with a result row; a person with no result row has no recorded outcome and is left out. A reason is compared when at least ${GROUP_MINIMUM} persons of each group with a result row were stopped for it, and counted as higher at ${HIGHER_RATIO} times the others' rate and at least ${HIGHER_POINTS} percentage points. In the other ${compared.length - higher.length} the rate was not higher by that measure. Arrests on an outstanding warrant are left out. ${UNADJUSTED}`,
         question: 'For these reasons, what offence was each person arrested for, and where were the stops made?',
       });
     } else if (query.id === 'stops_unhoused_property') {
