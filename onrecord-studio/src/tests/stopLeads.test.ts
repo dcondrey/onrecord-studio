@@ -39,9 +39,9 @@ describe('leads from police stop records', () => {
   });
 
   it('divides outcome rates by the persons with a result row, since no row is not an outcome', () => {
-    const outcomes = (unhousedWithResult: number) => ({ query: query('stops_unhoused_outcomes'), result: response(
+    const outcomes = (unhousedWithResult: number, othersWithResult = 400, othersArrested = 40) => ({ query: query('stops_unhoused_outcomes'), result: response(
       ['perceived', 'persons', 'arrested', 'arrested_on_warrant', 'arrested_without_warrant', 'cited', 'persons_with_result', 'no_result_row', 'results_table', 'property_seized', 'first_stop', 'last_stop'],
-      [['not unhoused', 400, 40, 0, 40, 0, 400, 0, 'Stop results', 8, null, null], ['unhoused', 400, 40, 0, 40, 0, unhousedWithResult, 400 - unhousedWithResult, 'Stop results', 8, null, null]]) });
+      [['not unhoused', 400, othersArrested, 0, othersArrested, 0, othersWithResult, 400 - othersWithResult, 'Stop results', 8, null, null], ['unhoused', 400, 40, 0, 40, 0, unhousedWithResult, 400 - unhousedWithResult, 'Stop results', 8, null, null]]) });
     expect(stopLeads([outcomes(99)])).toEqual([]);
     expect(stopLeads([outcomes(100)])).toHaveLength(1);
     const [lead] = stopLeads([outcomes(200)]);
@@ -49,6 +49,10 @@ describe('leads from police stop records', () => {
     expect(lead.detail).toContain('400 of 800 persons in the stop records were perceived as unhoused. 200 persons perceived as unhoused and 0 others have no row in Stop results;');
     expect(lead.detail).toContain('Custodial arrest: 40 of 200 (20.0%) against 40 of 400 (10.0%).');
     expect(lead.detail).toContain('Property seized: 8 of 400 (2.0%) against 8 of 400 (2.0%).');
+    expect(stopLeads([outcomes(400, 99, 20)])).toEqual([]);
+    const [othersUnrowed] = stopLeads([outcomes(400, 200, 20)]);
+    expect(othersUnrowed.title).toBe('10.0% of people perceived as unhoused were arrested when stopped, against 10.0% of others');
+    expect(othersUnrowed.detail).toContain('Custodial arrest: 40 of 400 (10.0%) against 20 of 200 (10.0%).');
   });
 
   it('calls a same-reason arrest rate higher only at 1.5 times and three points, among reasons with 100 persons each', () => {
@@ -64,6 +68,11 @@ describe('leads from police stop records', () => {
       ['reason', 'unhoused_persons', 'unhoused_with_result', 'unhoused_arrested', 'other_persons', 'other_with_result', 'other_arrested'],
       [['LODGING', 1000, 500, 100, 1000, 1000, 100]]) }]).find((lead) => lead.key === 'stops_same_reason');
     expect(unrowed!.detail).toContain('LODGING: 100 of 500 (20.0%) against 100 of 1,000 (10.0%).');
+    const othersRowed = (otherWithResult: number) => stopLeads([{ query: query('stops_unhoused_reasons'), result: response(
+      ['reason', 'unhoused_persons', 'unhoused_with_result', 'unhoused_arrested', 'other_persons', 'other_with_result', 'other_arrested'],
+      [['LODGING', 1000, 1000, 300, 1000, otherWithResult, 9]]) }]).find((lead) => lead.key === 'stops_same_reason');
+    expect(othersRowed(99)).toBeUndefined();
+    expect(othersRowed(100)!.detail).toContain('LODGING: 300 of 1,000 (30.0%) against 9 of 100 (9.0%).');
   });
 
   it('stores stop leads under their own family', () => {
