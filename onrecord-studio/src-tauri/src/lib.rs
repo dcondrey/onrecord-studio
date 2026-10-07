@@ -13,8 +13,8 @@ mod file_name;
 pub mod ingestion;
 mod integrity;
 pub mod licensing;
-pub mod packs;
 mod normalization;
+pub mod packs;
 pub mod parsers;
 pub mod profile;
 pub mod provenance;
@@ -99,6 +99,8 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::semantic::hybrid_search,
         commands::analysis_workbench::import_analytical_dataset,
         commands::analysis_workbench::fetch_city_dataset,
+        commands::data_packs::inspect_data_pack,
+        commands::data_packs::import_data_pack_files,
         commands::analysis_workbench::get_encampment_ordinance_report,
         commands::analysis_workbench::list_analytical_import_candidates,
         commands::analysis_workbench::get_analytical_schema,

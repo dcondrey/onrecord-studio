@@ -683,14 +683,25 @@ fn convert_rows(
     Ok((null_counts, unconverted))
 }
 
+/// Where an import's bytes came from, recorded in the snapshot's own transaction so neither
+/// commits without the other. Neither is part of the snapshot's identity.
+pub(crate) enum ImportOrigin {
+    /// An automatic import of an acquired document.
+    Maintenance {
+        portal_key: String,
+        document_id: u64,
+    },
+    Pack(crate::packs::import::PackOrigin),
+}
+
 impl DuckDbRepository {
     pub(crate) async fn import_analytical_table(
         &self,
         request: AnalyticalImportRequest,
-        automatic_origin: Option<(String, u64)>,
+        origin: Option<ImportOrigin>,
     ) -> Result<AnalyticalImportResult, AppError> {
         self.query_connection("Analytical table import", move |conn| {
-            import_table(conn, request, automatic_origin)
+            import_table(conn, request, origin)
         })
         .await
     }
@@ -699,7 +710,7 @@ impl DuckDbRepository {
 fn import_table(
     conn: &mut Connection,
     request: AnalyticalImportRequest,
-    origin: Option<(String, u64)>,
+    origin: Option<ImportOrigin>,
 ) -> Result<AnalyticalImportResult, AppError> {
     let kind = request.dataset_kind.clone();
     let format_name = request
@@ -763,6 +774,62 @@ fn import_table(
     } else {
         format!("analysis_{}_latest", kind.as_str().to_ascii_lowercase())
     };
+    // The same identity is the same bytes read by the same parser, so the stored snapshot is what
+    // this import would build; it keeps its first acquisition's record and gains this origin.
+    // Rebuilding it is not possible either: DuckDB refuses to delete a parent row in the
+    // transaction that deleted its children.
+    let stored = tx
+        .query_row(
+            "SELECT display_name, table_name, imported_rows, rejected_rows, malformed_rows,
+                    duplicate_key_rows, source_sha256, validation_summary_json
+             FROM analytical_snapshots WHERE snapshot_id = ?1",
+            params![snapshot_id],
+            |row| {
+                Ok((
+                    AnalyticalImportResult {
+                        snapshot_id: snapshot_id.clone(),
+                        dataset_kind: kind.clone(),
+                        display_name: row.get(0)?,
+                        table_name: row.get(1)?,
+                        imported_rows: row.get::<_, i64>(2)? as usize,
+                        rejected_rows: row.get::<_, i64>(3)? as usize,
+                        malformed_rows: row.get::<_, i64>(4)? as usize,
+                        duplicate_key_rows: row.get::<_, i64>(5)? as usize,
+                        unconverted_cells: 0,
+                        schema_warnings: Vec::new(),
+                        source_sha256: row.get(6)?,
+                    },
+                    row.get::<_, String>(7)?,
+                ))
+            },
+        )
+        .optional()
+        .map_err(storage("Failed to read the existing snapshot"))?;
+    if let Some((mut result, summary)) = stored {
+        let summary: serde_json::Value = serde_json::from_str(&summary).unwrap_or_default();
+        result.unconverted_cells = summary["unconvertedCells"].as_u64().unwrap_or(0) as usize;
+        result.schema_warnings = summary["warnings"]
+            .as_array()
+            .map(|warnings| {
+                warnings
+                    .iter()
+                    .filter_map(|warning| warning.as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default();
+        tx.execute_batch(&format!(
+            "DROP TABLE {};
+             CREATE OR REPLACE VIEW {} AS SELECT * EXCLUDE (_source_row) FROM {}",
+            quote_ident(&staging),
+            quote_ident(&latest_view),
+            quote_ident(&result.table_name)
+        ))
+        .map_err(storage("Failed to refresh latest analytical view"))?;
+        record_origin(&tx, &snapshot_id, origin.as_ref())?;
+        tx.commit()
+            .map_err(storage("Failed to commit analytical import"))?;
+        return Ok(result);
+    }
     let mut warnings = schema_warnings_for(&read.headers, &kind);
     warnings.extend(source.warnings().iter().cloned());
     if read
@@ -805,7 +872,6 @@ fn import_table(
     for statement in [
         "DELETE FROM analytical_row_ledger WHERE snapshot_id = ?1",
         "DELETE FROM analytical_columns WHERE snapshot_id = ?1",
-        "DELETE FROM analytical_snapshots WHERE snapshot_id = ?1",
     ] {
         tx.execute(statement, params![snapshot_id])
             .map_err(storage("Failed to replace snapshot"))?;
@@ -892,15 +958,7 @@ fn import_table(
     ))
     .map_err(storage("Failed to refresh latest analytical view"))?;
     row_store::rebuild_row_view(&tx)?;
-    if let Some((portal_key, document_id)) = &origin {
-        tx.execute(
-            "INSERT INTO data_maintenance_origins VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING",
-            params![snapshot_id, portal_key, document_id],
-        )
-        .map_err(storage(
-            "Failed to record the automatic-import origin receipt",
-        ))?;
-    }
+    record_origin(&tx, &snapshot_id, origin.as_ref())?;
     tx.commit()
         .map_err(storage("Failed to commit analytical import"))?;
     Ok(AnalyticalImportResult {
@@ -916,6 +974,48 @@ fn import_table(
         schema_warnings: warnings,
         source_sha256: read.sha256,
     })
+}
+
+fn record_origin(
+    tx: &Connection,
+    snapshot_id: &str,
+    origin: Option<&ImportOrigin>,
+) -> Result<(), AppError> {
+    match origin {
+        Some(ImportOrigin::Maintenance {
+            portal_key,
+            document_id,
+        }) => {
+            tx.execute(
+                "INSERT INTO data_maintenance_origins VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING",
+                params![snapshot_id, portal_key, document_id],
+            )
+            .map_err(storage(
+                "Failed to record the automatic-import origin receipt",
+            ))?;
+        }
+        Some(ImportOrigin::Pack(pack)) => {
+            tx.execute(
+                "INSERT INTO pack_origins (
+                    snapshot_id, pack, pack_version, built_at, signer_key_id, file_path,
+                    file_sha256, imported_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ'))
+                 ON CONFLICT DO NOTHING",
+                params![
+                    snapshot_id,
+                    pack.pack,
+                    pack.pack_version,
+                    pack.built_at,
+                    pack.signer_key_id,
+                    pack.file_path,
+                    pack.file_sha256
+                ],
+            )
+            .map_err(storage("Failed to record the data pack origin"))?;
+        }
+        None => {}
+    }
+    Ok(())
 }
 
 #[cfg(test)]

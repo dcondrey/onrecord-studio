@@ -13,6 +13,7 @@ use std::path::{Component, Path, PathBuf};
 
 #[cfg(feature = "pack-builder")]
 pub mod builder;
+pub(crate) mod import;
 
 /// The manifest's file name inside a pack directory.
 pub(crate) const PACK_MANIFEST_FILE: &str = "manifest.json";

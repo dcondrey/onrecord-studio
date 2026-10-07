@@ -699,6 +699,21 @@ CREATE TABLE IF NOT EXISTS data_maintenance_origins (
     PRIMARY KEY (snapshot_id, portal_key, document_id)
 );
 
+-- The data pack a snapshot's bytes were imported from. Beside the snapshot, never part of its
+-- identity, so the same bytes fetched by the user and shipped in a pack stay one snapshot with
+-- both origins. No foreign key: re-importing the same bytes deletes and re-inserts the snapshot.
+CREATE TABLE IF NOT EXISTS pack_origins (
+    snapshot_id TEXT NOT NULL,
+    pack TEXT NOT NULL,
+    pack_version TEXT NOT NULL,
+    built_at TEXT NOT NULL,
+    signer_key_id TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    file_sha256 TEXT NOT NULL,
+    imported_at TEXT NOT NULL,
+    PRIMARY KEY (snapshot_id, pack, pack_version, signer_key_id, file_path)
+);
+
 -- ----------------------------------------------------------------------------
 -- 10. FINDINGS INBOX
 -- Universal shape every autonomous detector emits. One row = one statement the app believes is

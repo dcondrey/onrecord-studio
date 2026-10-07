@@ -5,6 +5,7 @@ pub mod analysis_workbench;
 pub mod audit;
 pub mod c2pa;
 pub mod corpus;
+pub mod data_packs;
 pub mod document_origin;
 pub mod intent;
 pub mod investigation;
@@ -40,6 +41,7 @@ pub use corpus::{
     CorpusPatternQuery, EntityBroker, EntityPath, EntityPathOutcome, EntityPathStep,
     EntityResolutionBasis, EntityValidationGrade, RelationshipBasis, RelationshipKind,
 };
+pub use data_packs::{DataPackFileSummary, DataPackImportOutcome, DataPackSummary, DataPackTable};
 pub use document_origin::{
     DocumentInternalMetadata, DocumentOrigin, DocumentOriginReport, HeldComparison,
     HeldDocumentMatch, HeldDocumentRelation, InternalMetadataField, InternalMetadataFormat,
