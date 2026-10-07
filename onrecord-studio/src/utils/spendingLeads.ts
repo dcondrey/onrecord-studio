@@ -16,6 +16,15 @@ const FOLLOWED_DEPARTMENTS = ['police', 'environmental services'];
  * On the files retrieved 2026-10-05, 110 of 813 department-years meet both. Not a statistical test. */
 export const BELOW_ADOPTED_PERCENT = 10;
 export const BELOW_ADOPTED_DOLLARS = 1_000_000;
+/** A department-year is reported when actual overtime is at least this share above adopted
+ * overtime and at least this many dollars above: the expense comparison's yardsticks, read the
+ * other way. The dollar floor keeps out a small office whose overtime line is a few thousand
+ * dollars. Not a statistical test. */
+export const ABOVE_ADOPTED_OVERTIME_PERCENT = 10;
+export const ABOVE_ADOPTED_OVERTIME_DOLLARS = 1_000_000;
+/** Department-years listed beside the followed departments, by actual overtime. Kept small: a
+ * result past the query transport's 100-row limit is truncated and gives no lead at all. */
+const OVERTIME_DEPARTMENT_YEARS_LISTED = 10;
 const NO_ACTUAL_ROWS_LISTED = 12;
 const SETTLEMENT_YEARS = 5;
 const SETTLEMENT_DEPARTMENTS_LISTED = 3;
@@ -84,6 +93,44 @@ function adoptedActualQuery(budget: AnalyticalDatasetSummary, actuals: Analytica
 ), span AS (SELECT MIN(fiscal_year) AS first_covered_year, MAX(fiscal_year) AS last_covered_year, COUNT(*) AS department_years FROM compared)
 SELECT compared.*, first_covered_year, last_covered_year, department_years
 FROM compared CROSS JOIN span WHERE followed OR actual_rows IS NULL ORDER BY department, fiscal_year`,
+  };
+}
+
+const OVERTIME_LIMITS = 'Overtime accounts are the expense account numbers whose label in the budget table contains "overtime"; an actuals row is counted by its account number, whatever its label there, and overtime booked to another account is in neither figure. Adopted is the original appropriation, not the revised budget: a transfer made during the year to pay for overtime is in neither figure. Nothing here says why the overtime was worked or whether it was authorised.';
+
+function overtimeQuery(budget: AnalyticalDatasetSummary, actuals: AnalyticalDatasetSummary): DiscoveryQuery {
+  const overtimeAccount = `${whole('account_number')} IN (SELECT account_number FROM ot_accounts)`;
+  return {
+    id: 'spending_overtime_actual', title: 'Adopted against actual overtime, by department and fiscal year',
+    method: `Overtime accounts are the account numbers in ${budget.displayName} that begin with 5 (the City's expense accounts) and whose account label contains "overtime"; account numbers are compared as whole numbers, so 500128 and 500128.0 are one account. Per department and fiscal year (1 July to 30 June, named by the year it ends; a two-digit report_fy is read as 2000 plus that number): adopted overtime is the sum of amount in ${budget.displayName} where budget_cycle is adopted and the account is an overtime account; actual overtime is the sum of amount in ${actuals.displayName} over the same account numbers, whatever the label there. Departments are matched on dept_name without regard to letter case. Only fiscal years with rows in both tables are read, and only department-years with an adopted overtime row: a department with overtime in the actuals and no adopted overtime line is not listed. The rows returned are ${FOLLOWED_TEXT}, and the ${OVERTIME_DEPARTMENT_YEARS_LISTED} department-years with most actual overtime. A department-year is reported when actual overtime is at least ${ABOVE_ADOPTED_OVERTIME_PERCENT}% above adopted overtime and at least $${ABOVE_ADOPTED_OVERTIME_DOLLARS.toLocaleString('en-US')} above; both are fixed yardsticks, not a statistical test. A department-year with no actual rows, or with rows and none in an overtime account, is listed as such, which is not overtime of zero. ${OVERTIME_LIMITS}`,
+    sql: `WITH ot_accounts AS (
+ SELECT DISTINCT ${whole('account_number')} AS account_number FROM ${quoteIdentifier(budget.tableName)}
+ WHERE ${expense} AND COALESCE(CONTAINS(LOWER(CAST(${quoteIdentifier('account')} AS VARCHAR)), 'overtime'), FALSE) AND ${whole('account_number')} IS NOT NULL
+), adopted_lines AS (
+ SELECT ${text('dept_name')} AS department, ${fiscal(whole('report_fy'))} AS fiscal_year, ${amount('amount')} AS amount, CAST(${whole('account_number')} AS VARCHAR) || ' ' || COALESCE(${text('account')}, '(no label)') AS account_line
+ FROM ${quoteIdentifier(budget.tableName)} WHERE ${adoptedRows} AND ${overtimeAccount}
+), adopted AS (
+ SELECT LOWER(department) AS department_key, MIN(department) AS department, fiscal_year, SUM(amount) AS adopted_overtime, COUNT(*) FILTER (WHERE amount IS NULL) AS unreadable_adopted,
+  STRING_AGG(DISTINCT account_line, ', ' ORDER BY account_line) AS adopted_accounts
+ FROM adopted_lines WHERE fiscal_year IS NOT NULL AND department IS NOT NULL GROUP BY 1, 3
+), actual_lines AS (
+ SELECT LOWER(${text('dept_name')}) AS department_key, ${fiscal(whole('report_fy'))} AS fiscal_year, ${amount('amount')} AS amount, COALESCE(${overtimeAccount}, FALSE) AS overtime,
+  CAST(${whole('account_number')} AS VARCHAR) || ' ' || COALESCE(${text('account')}, '(no label)') AS account_line
+ FROM ${quoteIdentifier(actuals.tableName)}
+), actual AS (
+ SELECT department_key, fiscal_year, COUNT(*) AS actual_rows, COUNT(*) FILTER (WHERE overtime) AS actual_ot_rows, SUM(amount) FILTER (WHERE overtime) AS actual_overtime,
+  COUNT(*) FILTER (WHERE overtime AND amount IS NULL) AS unreadable_actual, STRING_AGG(DISTINCT account_line, ', ' ORDER BY account_line) FILTER (WHERE overtime) AS actual_accounts
+ FROM actual_lines WHERE fiscal_year IS NOT NULL AND department_key IS NOT NULL GROUP BY 1, 2
+), actual_years AS (SELECT DISTINCT fiscal_year FROM actual_lines WHERE fiscal_year IS NOT NULL
+), compared AS (
+ SELECT adopted.department, adopted.fiscal_year, adopted_overtime, unreadable_adopted, adopted_accounts, actual_rows, actual_ot_rows, actual_overtime, unreadable_actual, actual_accounts, ${followed('adopted.department')} AS followed
+ FROM adopted JOIN actual_years ON actual_years.fiscal_year = adopted.fiscal_year
+  LEFT JOIN actual ON actual.department_key = adopted.department_key AND actual.fiscal_year = adopted.fiscal_year
+), ranked AS (
+ SELECT *, ROW_NUMBER() OVER (ORDER BY actual_overtime DESC NULLS LAST, department, fiscal_year) AS position FROM compared
+), span AS (SELECT MIN(fiscal_year) AS first_covered_year, MAX(fiscal_year) AS last_covered_year, COUNT(*) AS department_years FROM compared)
+SELECT ranked.*, first_covered_year, last_covered_year, department_years
+FROM ranked CROSS JOIN span WHERE followed OR position <= ${OVERTIME_DEPARTMENT_YEARS_LISTED} ORDER BY department, fiscal_year`,
   };
 }
 
@@ -159,7 +206,7 @@ export function spendingQueries(schema: AnalyticalSchema, dataset: AnalyticalDat
   const budget = budgetTable(schema);
   if (isPayTable(schema, dataset)) return [payQuery(schema, dataset, budget)];
   if (actualsTable(schema)?.snapshotId !== dataset.snapshotId) return [];
-  return [...(budget ? [adoptedActualQuery(budget, dataset)] : []), settlementQuery(dataset)];
+  return [...(budget ? [adoptedActualQuery(budget, dataset), overtimeQuery(budget, dataset)] : []), settlementQuery(dataset)];
 }
 
 const count = (value: unknown): number | null => {
@@ -230,6 +277,43 @@ function adoptedActualLeads(results: Entry[]): ServiceLead[] {
   return leads;
 }
 
+const aboveAdoptedOvertime = (adopted: number, actual: number) => adopted > 0 && (actual - adopted) * 100 >= ABOVE_ADOPTED_OVERTIME_PERCENT * adopted && actual - adopted >= ABOVE_ADOPTED_OVERTIME_DOLLARS;
+
+function overtimeLeads(results: Entry[]): ServiceLead[] {
+  const read = rowsOf(results, 'spending_overtime_actual');
+  if (!read) return [];
+  const { query, rows } = read;
+  const covered = `fiscal ${count(rows[0].first_covered_year)} to ${count(rows[0].last_covered_year)}`;
+  const departments = new Map<string, Record<string, unknown>[]>();
+  for (const row of rows) if (row.department != null) departments.set(String(row.department), [...(departments.get(String(row.department)) ?? []), row]);
+  const leads: ServiceLead[] = [];
+  for (const [department, years] of departments) {
+    const lines: string[] = []; const reported: { year: number; adopted: number; actual: number; accounts: string }[] = [];
+    for (const row of years) {
+      const year = count(row.fiscal_year)!; const adopted = count(row.adopted_overtime); const actual = count(row.actual_overtime);
+      if (count(row.actual_rows) === null) lines.push(`FY ${year}: ${adopted === null ? 'an adopted overtime line' : `${money(adopted)} adopted overtime`} and no rows in the actuals table.`);
+      else if (adopted === null || (count(row.unreadable_adopted) ?? 0) > 0) lines.push(`FY ${year}: not compared (the adopted overtime amount could not be read in full).`);
+      else if ((count(row.actual_ot_rows) ?? 0) === 0) lines.push(`FY ${year}: ${money(adopted)} adopted overtime; the actuals table has rows for the department and no overtime rows recorded, so no actual overtime is stated.`);
+      else if (actual === null || (count(row.unreadable_actual) ?? 0) > 0) lines.push(`FY ${year}: not compared (the actual overtime amount could not be read in full).`);
+      else {
+        const difference = actual - adopted;
+        lines.push(`FY ${year}: ${money(adopted)} adopted overtime, ${money(actual)} actual${adopted > 0 && difference !== 0 ? ` (${percent(Math.abs(difference), adopted)} ${difference > 0 ? 'above' : 'below'})` : ''}.`);
+        if (aboveAdoptedOvertime(adopted, actual)) reported.push({ year, adopted, actual, accounts: String(row.actual_accounts ?? '') });
+      }
+    }
+    const latest = reported.at(-1);
+    if (!latest) continue;
+    const scope = flag(years[0].followed) ? `for every fiscal year both tables cover with an adopted overtime line (${covered})`
+      : `for the years both tables cover (${covered}) in which it is among the ${OVERTIME_DEPARTMENT_YEARS_LISTED} department-years with most actual overtime`;
+    leads.push({ key: `spending_overtime_above_adopted:${department}`, priority: 95, query,
+      title: `${department}: actual overtime ${money(latest.actual)} against ${money(latest.adopted)} adopted in FY ${latest.year}, ${percent(latest.actual - latest.adopted, latest.adopted)} above${reported.length > 1 ? `; ${reported.length - 1} other year${reported.length > 2 ? 's' : ''} at least ${ABOVE_ADOPTED_OVERTIME_PERCENT}% above` : ''}`,
+      detail: `Overtime of ${department}, adopted against actual, ${scope}. ${lines.join(' ')} At least ${ABOVE_ADOPTED_OVERTIME_PERCENT}% and $${shown(ABOVE_ADOPTED_OVERTIME_DOLLARS)} above adopted overtime: ${reported.map((item) => `FY ${item.year} (${money(item.actual - item.adopted)})`).join(', ')}; both are fixed yardsticks, not a statistical test. Actual overtime in FY ${latest.year} is in ${latest.accounts}. ${OVERTIME_LIMITS}`,
+      question: `What does the revised budget of ${department} for FY ${latest.year} show for overtime, and which units and assignments account for the ${money(latest.actual - latest.adopted)} above the adopted line? The department's overtime reports and the year-end budget monitoring report would show the transfers and the reasons.`,
+    });
+  }
+  return leads;
+}
+
 function settlementLeads(results: Entry[]): ServiceLead[] {
   const read = rowsOf(results, 'spending_settlements');
   if (!read) return [];
@@ -292,5 +376,5 @@ function payLeads(results: Entry[]): ServiceLead[] {
 }
 
 export function spendingLeads(results: Entry[]): ServiceLead[] {
-  return [...adoptedActualLeads(results), ...settlementLeads(results), ...payLeads(results)];
+  return [...adoptedActualLeads(results), ...overtimeLeads(results), ...settlementLeads(results), ...payLeads(results)];
 }
