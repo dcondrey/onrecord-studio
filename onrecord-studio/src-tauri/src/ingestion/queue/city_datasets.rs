@@ -17,6 +17,12 @@ const OPERATING_BUDGET_URI: &str =
 const OPERATING_ACTUALS_URI: &str =
     "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv";
 
+const CAPITAL_BUDGET_URI: &str =
+    "https://seshat.datasd.org/cip_fy_budget/budget_capital_fy_datasd.csv";
+
+const CAPITAL_ACTUALS_URI: &str =
+    "https://seshat.datasd.org/cip_fy_actuals/actuals_capital_fy_datasd.csv";
+
 /// UCSD Homelessness Hub's layer of emergency-shelter projects per year, compiled from the
 /// Regional Task Force on Homelessness Housing Inventory Count. GeoJSON, as the SANDAG layers are.
 const SHELTER_INVENTORY_URI: &str = "https://services1.arcgis.com/eGSDp8lpKe5izqVc/arcgis/rest/services/HIC_ES_2014_2024/FeatureServer/0/query?where=1%3D1&outFields=*&returnGeometry=false&f=geojson";
@@ -265,6 +271,65 @@ fn city_dataset_spec(
                 display_name: "City operating actuals (all published years)".into(),
                 file_name: "actuals_operating_datasd.csv".into(),
                 // The publisher adds a fiscal year after it closes.
+                partial: true,
+                row_filter: None,
+                refuse_truncated: false,
+            }
+        }
+        CityDataset::CapitalBudget => {
+            unsplit("The City capital improvements budget")?;
+            CityDatasetSpec {
+                url: CAPITAL_BUDGET_URI.into(),
+                // The budget kind keeps `budget_cycle` (adopted or proposed) a category; any other
+                // kind types a column named for a budget as a number and loses the cycle.
+                kind: AnalyticalDatasetKind::OperatingBudget,
+                display_name: "City capital improvements budget (all published years)".into(),
+                file_name: "budget_capital_fy_datasd.csv".into(),
+                partial: false,
+                row_filter: None,
+                refuse_truncated: false,
+            }
+        }
+        CityDataset::CapitalActuals => {
+            unsplit("The City capital improvements actuals")?;
+            CityDatasetSpec {
+                url: CAPITAL_ACTUALS_URI.into(),
+                kind: AnalyticalDatasetKind::RegionalData,
+                display_name: "City capital improvements actuals (all published years)".into(),
+                file_name: "actuals_capital_fy_datasd.csv".into(),
+                // The publisher adds a fiscal year after it closes.
+                partial: true,
+                row_filter: None,
+                refuse_truncated: false,
+            }
+        }
+        CityDataset::CityProperties | CityDataset::CityParcels | CityDataset::CityLeases => {
+            let (folder, stem, label) = match dataset {
+                CityDataset::CityProperties => (
+                    "city_owned_properties",
+                    "city_property_details",
+                    "sites and acquisitions",
+                ),
+                CityDataset::CityParcels => (
+                    "city_owned_properties_parcels",
+                    "city_property_parcels",
+                    "parcels by site",
+                ),
+                _ => (
+                    "city_owned_properties_leases",
+                    "city_property_leases",
+                    "leases and permits",
+                ),
+            };
+            let display_name = format!("City-owned properties, {label}");
+            unsplit(&display_name)?;
+            let file_name = format!("{stem}_datasd.csv");
+            CityDatasetSpec {
+                url: format!("https://seshat.datasd.org/{folder}/{file_name}"),
+                kind: AnalyticalDatasetKind::RegionalData,
+                display_name,
+                file_name,
+                // The publisher replaces these files daily; a snapshot is the holdings on one day.
                 partial: true,
                 row_filter: None,
                 refuse_truncated: false,
@@ -542,6 +607,34 @@ mod tests {
                 "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv",
                 AnalyticalDatasetKind::RegionalData
             )
+        );
+        assert!(spec(CityDataset::CapitalBudget, Some(2025)).is_err());
+        let capital = spec(CityDataset::CapitalBudget, None).unwrap();
+        assert_eq!(
+            (capital.url.as_str(), capital.kind, capital.partial),
+            (
+                "https://seshat.datasd.org/cip_fy_budget/budget_capital_fy_datasd.csv",
+                AnalyticalDatasetKind::OperatingBudget,
+                false
+            )
+        );
+        assert!(spec(CityDataset::CapitalActuals, Some(2025)).is_err());
+        assert_eq!(
+            spec(CityDataset::CapitalActuals, None).unwrap().url,
+            "https://seshat.datasd.org/cip_fy_actuals/actuals_capital_fy_datasd.csv"
+        );
+        assert!(spec(CityDataset::CityLeases, Some(2025)).is_err());
+        let leases = spec(CityDataset::CityLeases, None).unwrap();
+        assert_eq!(
+            (leases.url.as_str(), leases.partial),
+            (
+                "https://seshat.datasd.org/city_owned_properties_leases/city_property_leases_datasd.csv",
+                true
+            )
+        );
+        assert_eq!(
+            spec(CityDataset::CityParcels, None).unwrap().url,
+            "https://seshat.datasd.org/city_owned_properties_parcels/city_property_parcels_datasd.csv"
         );
     }
 

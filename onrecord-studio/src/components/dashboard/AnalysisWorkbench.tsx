@@ -52,6 +52,11 @@ const cityDatasets: { value: CityDataset; label: string; yearly?: true }[] = [
   { value: 'RIPA_PROPERTY_SEIZURE_BASIS', label: 'SDPD stop records (RIPA): basis for property seizure' },
   { value: 'SHELTER_INVENTORY', label: 'Emergency shelter inventory (UCSD Homelessness Hub, all years)' },
   { value: 'OPERATING_ACTUALS', label: 'City operating actuals (all years)' },
+  { value: 'CAPITAL_BUDGET', label: 'City capital improvements budget (all years)' },
+  { value: 'CAPITAL_ACTUALS', label: 'City capital improvements actuals (all years)' },
+  { value: 'CITY_PROPERTIES', label: 'City-owned properties (today)' },
+  { value: 'CITY_PARCELS', label: 'City-owned property parcels (today)' },
+  { value: 'CITY_LEASES', label: 'City property leases and permits (today)' },
 ];
 
 export default function AnalysisWorkbench() {

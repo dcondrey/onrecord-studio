@@ -182,6 +182,16 @@ pub enum CityDataset {
     /// Every published year of operating actuals in one file: the budget file's columns without
     /// a budget cycle.
     OperatingActuals,
+    /// Every published fiscal year of the Capital Improvements Program budget in one file.
+    CapitalBudget,
+    /// Every published fiscal year of Capital Improvements Program actuals in one file.
+    CapitalActuals,
+    /// City-owned property sites, replaced by the publisher daily.
+    CityProperties,
+    /// The parcel numbers (APNs) of each City-owned site.
+    CityParcels,
+    /// Leases and permits on City-owned property.
+    CityLeases,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

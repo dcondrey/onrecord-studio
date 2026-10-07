@@ -24,7 +24,7 @@ struct PackTable {
     dataset: CityDataset,
 }
 
-/// The first slice in `docs/data-packs.md`: City open data only.
+/// The packs' City open-data tables (`docs/data-packs.md`).
 fn pack_tables(pack: &str) -> Result<&'static [PackTable], AppError> {
     const MONEY: &[PackTable] = &[
         PackTable {
@@ -34,6 +34,26 @@ fn pack_tables(pack: &str) -> Result<&'static [PackTable], AppError> {
         PackTable {
             table: "budget_actuals",
             dataset: CityDataset::OperatingActuals,
+        },
+        PackTable {
+            table: "capital_budget",
+            dataset: CityDataset::CapitalBudget,
+        },
+        PackTable {
+            table: "capital_actuals",
+            dataset: CityDataset::CapitalActuals,
+        },
+        PackTable {
+            table: "city_properties",
+            dataset: CityDataset::CityProperties,
+        },
+        PackTable {
+            table: "city_parcels",
+            dataset: CityDataset::CityParcels,
+        },
+        PackTable {
+            table: "city_leases",
+            dataset: CityDataset::CityLeases,
         },
     ];
     const REPORTS: &[PackTable] = &[

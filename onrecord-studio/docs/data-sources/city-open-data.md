@@ -264,6 +264,37 @@ Result of stop: https://data.sandiego.gov/datasets/police-ripa-stop-result/ (qua
 Sensitive-zone buffers for 63.0404 ("two blocks") are not published; derive from schools/shelters/
 transit stops. Ordinance signage locations are internal (OCA-26-07 App. B).
 
+## 8. Capital spending and City property (Money pack)
+
+Checked 2026-10-06: each landing page fetched, each CSV answered `HTTP 200` to a HEAD request and
+was downloaded whole. Licence on every landing page: ODC-PDDL 1.0
+(`https://opendefinition.org/licenses/odc-pddl/`). Each is one file, not split by year. All five
+are in `ingestion::queue::city_datasets` and the builder's `san-diego-money` pack.
+
+| CityDataset / pack table | Landing page | CSV (dictionary beside it) | Grain and columns | As seen 2026-10-06 |
+|---|---|---|---|---|
+| `CAPITAL_BUDGET` / `capital_budget` | https://data.sandiego.gov/datasets/cip-fy-budget/ | https://seshat.datasd.org/cip_fy_budget/budget_capital_fy_datasd.csv ; `capital_budget_dictionary_datasd.csv` | project, fund and account per fiscal year and budget cycle: amount, project_number, report_fy, budget_cycle, fund_type, fund_number, asset_owning_dept, project_name, account, account_number | 327,298 bytes, Last-Modified 2026-07-31. Adopted FY2011 to FY2025, proposed FY2024 and FY2025; no FY2026 rows although the file was rewritten in July 2026. |
+| `CAPITAL_ACTUALS` / `capital_actuals` | https://data.sandiego.gov/datasets/cip-fy-actuals/ | https://seshat.datasd.org/cip_fy_actuals/actuals_capital_fy_datasd.csv ; `capital_actuals_fy_dictionary_datasd.csv` | parent and child project, fund and account per fiscal year: amount, project_number_parent, project_number_child, report_fy, fund_type, fund_number, asset_owning_dept, project_name, account, account_number | 66,116,235 bytes, 469,677 rows, Last-Modified 2026-07-31. FY2011 to FY2025. |
+| `CITY_PROPERTIES` / `city_properties` | https://data.sandiego.gov/datasets/city-owned-properties/ | https://seshat.datasd.org/city_owned_properties/city_property_details_datasd.csv ; `city_property_details_dictionary_datasd.csv` | one acquisition file within a site: site_code, file_code, grantor, month/year acquired, purchase_fund, land/building/closing cost, site_name, managing_group, managing_dept, designated_use, acres, dedicated_park, use_restrictions, designating resolution and date | 882,528 bytes, Last-Modified 2026-10-06 08:00 GMT (rewritten daily). |
+| `CITY_PARCELS` / `city_parcels` | https://data.sandiego.gov/datasets/city-owned-properties-parcels/ | https://seshat.datasd.org/city_owned_properties_parcels/city_property_parcels_datasd.csv ; `city_property_parcels_dictionary_datasd.csv` | one parcel of a site: site_code, `APN-8` | 92,153 bytes, Last-Modified 2026-10-06 08:01 GMT. |
+| `CITY_LEASES` / `city_leases` | https://data.sandiego.gov/datasets/city-owned-properties-leases/ | https://seshat.datasd.org/city_owned_properties_leases/city_property_leases_datasd.csv ; `city_property_leases_dictionary_datasd.csv` ; rent codes `leases_rent_code_components_datasd.csv` (not fetched by the app) | one lease or permit on a site: site_code, lessee_name, Lessee Company, lessee_DBA, address_zip, lease_record_type, lease_description, lease_status, lease_location_name, nonprofit_lessee, date_effective, date_sched_termination, rent_code, cost_line_amt_USD | 154,427 bytes, Last-Modified 2026-10-06 08:01 GMT. |
+
+`site_code` joins the three property files. The capital files name the department as
+`asset_owning_dept`, not `dept_name`, so the operating budget and actuals checks never pick them up.
+The capital budget is imported as the budget kind so `budget_cycle` stays a category; capital
+actuals, like operating actuals, are imported as regional data. Importing the five files
+downloaded 2026-10-06 through the app's analytical import rejected no row and left no cell
+unconverted (2,193; 469,677; 4,095; 4,187; 810 rows). The M/D/YYYY date columns
+(`date_effective`, `date_sched_termination`, `date_reso_ord`) are kept as recorded text, not dates.
+
+Not added (blueprint F13 to F15, E10): none is on data.sandiego.gov or carries the PDDL. Goods and
+Services contracts (`https://www.sandiego.gov/purchasing/bids-contracts/contracts2025`) and awarded
+CIP construction contracts (`https://www.sandiego.gov/cip/reports/constructioncontracts`,
+`/constructioncontractsfy24`) are HTML tables whose only linked files are per-contract PDFs; the
+cumulative amounts paid to vendors are one PDF per fiscal year
+(`https://www.sandiego.gov/sites/default/files/2025-07/cumulative-paid-fy25.pdf`). The relaunched
+catalogue (123 datasets, fetched 2026-10-06) has no contracts or vendor-payment dataset.
+
 ## Needs with NO public source (CPRA required)
 
 1. Record-level 63.0404 enforcement (citations, arrests, warnings, field interviews) by date, time,
