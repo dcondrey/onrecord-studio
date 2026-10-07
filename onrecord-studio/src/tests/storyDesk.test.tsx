@@ -49,6 +49,7 @@ vi.mock('../ipc', () => ({
 }));
 
 import { useAppStore } from '../store/useAppStore';
+import { useFirstRunDataStore } from '../store/useFirstRunDataStore';
 import StoryDesk from '../components/dashboard/StoryDesk';
 
 function lead(id: string, headline: string): StoryLead {
@@ -137,9 +138,29 @@ describe('StoryDesk', () => {
   });
 
   it('offers the core public data when no source is saved and the library has no tables', async () => {
-    await renderWithNoLeads({ datasets: [] });
-    expect(screen.getByRole('button', { name: CORE_DATA })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Add a source' })).toBeTruthy();
+    const run = vi.fn(async () => {});
+    const original = useFirstRunDataStore.getState().run;
+    useFirstRunDataStore.setState({ run });
+    act(() => useAppStore.getState().setWorkspaceView('activity'));
+    try {
+      await renderWithNoLeads({ datasets: [] });
+      expect(screen.getByRole('button', { name: 'Add a source' })).toBeTruthy();
+      act(() => screen.getByRole('button', { name: CORE_DATA }).click());
+      expect(run).toHaveBeenCalledTimes(1);
+      expect(useAppStore.getState().workspaceView).toBe('overview');
+    } finally {
+      useFirstRunDataStore.setState({ run: original });
+    }
+  });
+
+  it('disables the core public data button while a first-run fetch is running', async () => {
+    useFirstRunDataStore.setState({ running: true });
+    try {
+      await renderWithNoLeads({ datasets: [] });
+      expect((screen.getByRole('button', { name: CORE_DATA }) as HTMLButtonElement).disabled).toBe(true);
+    } finally {
+      useFirstRunDataStore.setState({ running: false });
+    }
   });
 
   it('does not treat a schema that has not loaded as an empty library', async () => {

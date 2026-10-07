@@ -73,6 +73,17 @@ describe('automatic discovery landing experience', () => {
     const button = await screen.findByRole('button', { name: 'Get San Diego’s core public data' });
     expect((button as HTMLButtonElement).disabled).toBe(true);
   });
+  it('does not offer the core fetch when the catalog failed and nothing else stands out', async () => {
+    bridge.invoke.mockImplementation(async (name: string) => {
+      if (name === 'get_analytical_schema') throw new Error('Catalog failed');
+      if (name === 'get_data_maintenance_status') return upkeep;
+      return [];
+    });
+    mount();
+    await screen.findByText(/These are starting questions/);
+    await screen.findByRole('alert');
+    expect(screen.queryByRole('button', { name: 'Get San Diego’s core public data' })).toBeNull();
+  });
   it('surfaces document connections even when the analytical catalog fails', async () => {
     bridge.invoke.mockImplementation(async (name: string) => {
       if (name === 'get_analytical_schema') throw new Error('Catalog failed');
@@ -83,6 +94,7 @@ describe('automatic discovery landing experience', () => {
     mount();
     await screen.findByText('Recurring program');
     expect(screen.getByRole('alert').textContent).toContain('Catalog failed');
+    expect(screen.queryByRole('button', { name: 'Get San Diego’s core public data' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Inspect document evidence' }));
     await waitFor(() => expect(bridge.pattern).toHaveBeenCalledWith({ patternId: 'p1', portalKey: 'city', documentId: 2, characterStart: 15 }));
     expect(bridge.view).toHaveBeenCalledWith('patterns');
