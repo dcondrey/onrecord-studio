@@ -27,6 +27,12 @@ vi.hoisted(() => {
 const bridge = vi.hoisted(() => ({
   pending: [] as ((leads: unknown) => void)[],
   availabilityRequests: [] as string[],
+  discovery: { controller: null, state: null } as { controller: null; state: unknown },
+}));
+
+vi.mock('../components/dashboard/AutomaticDiscoveryProvider', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../components/dashboard/AutomaticDiscoveryProvider')>()),
+  useAutomaticDiscovery: () => bridge.discovery,
 }));
 
 vi.mock('../ipc', () => ({
@@ -43,6 +49,7 @@ vi.mock('../ipc', () => ({
 }));
 
 import { useAppStore } from '../store/useAppStore';
+import { useFirstRunDataStore } from '../store/useFirstRunDataStore';
 import StoryDesk from '../components/dashboard/StoryDesk';
 
 function lead(id: string, headline: string): StoryLead {
@@ -71,7 +78,19 @@ afterEach(() => {
   cleanup();
   bridge.pending = [];
   bridge.availabilityRequests = [];
+  bridge.discovery = { controller: null, state: null };
 });
+
+const CORE_DATA = 'Get San Diego’s core public data';
+const NO_SOURCE_COPY = /Leads come from findings on the records you collect/;
+
+async function renderWithNoLeads(schema: { datasets: unknown[] } | null) {
+  bridge.discovery = { controller: null, state: { schema } };
+  render(<StoryDesk />);
+  await waitFor(() => expect(bridge.pending).toHaveLength(1));
+  act(() => bridge.pending[0]([]));
+  await screen.findByText('No leads yet');
+}
 
 describe('StoryDesk', () => {
   it('renders leads with their score and every factor and its evidence', async () => {
@@ -116,6 +135,45 @@ describe('StoryDesk', () => {
     await screen.findByRole('button', { name: /draft records request/i });
     expect(bridge.availabilityRequests).toEqual(['b']);
     expect(screen.getAllByRole('region', { name: 'Drafted artifacts' })).toHaveLength(1);
+  });
+
+  it('offers the core public data when no source is saved and the library has no tables', async () => {
+    const run = vi.fn(async () => {});
+    const original = useFirstRunDataStore.getState().run;
+    useFirstRunDataStore.setState({ run });
+    act(() => useAppStore.getState().setWorkspaceView('activity'));
+    try {
+      await renderWithNoLeads({ datasets: [] });
+      expect(screen.getByRole('button', { name: 'Add a source' })).toBeTruthy();
+      act(() => screen.getByRole('button', { name: CORE_DATA }).click());
+      expect(run).toHaveBeenCalledTimes(1);
+      expect(useAppStore.getState().workspaceView).toBe('overview');
+    } finally {
+      useFirstRunDataStore.setState({ run: original });
+    }
+  });
+
+  it('disables the core public data button while a first-run fetch is running', async () => {
+    useFirstRunDataStore.setState({ running: true });
+    try {
+      await renderWithNoLeads({ datasets: [] });
+      expect((screen.getByRole('button', { name: CORE_DATA }) as HTMLButtonElement).disabled).toBe(true);
+    } finally {
+      useFirstRunDataStore.setState({ running: false });
+    }
+  });
+
+  it('does not treat a schema that has not loaded as an empty library', async () => {
+    await renderWithNoLeads(null);
+    expect(screen.queryByRole('button', { name: CORE_DATA })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Add a source' })).toBeTruthy();
+    expect(screen.getByText(NO_SOURCE_COPY)).toBeTruthy();
+  });
+
+  it('keeps the add-a-source copy when the library holds a table that produced no leads', async () => {
+    await renderWithNoLeads({ datasets: [{ snapshotId: 's1' }] });
+    expect(screen.queryByRole('button', { name: CORE_DATA })).toBeNull();
+    expect(screen.getByText(NO_SOURCE_COPY)).toBeTruthy();
   });
 
   it('discards a lead list that resolves after a findings refresh superseded it', async () => {

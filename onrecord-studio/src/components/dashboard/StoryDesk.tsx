@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
+import { useFirstRunDataStore } from '../../store/useFirstRunDataStore';
+import { useAutomaticDiscovery } from './AutomaticDiscoveryProvider';
 import type { FindingKind, FindingSeverity, StoryLead } from '../../types';
 import { isLegalClaimKind } from '../../types/findings';
 import { findingToBriefingEvidence } from './BriefingWorkspace';
@@ -38,6 +40,10 @@ export default function StoryDesk() {
   const openLeadDossier = useAppStore((s) => s.openLeadDossier);
   const requestFindingsRefresh = useAppStore((s) => s.requestFindingsRefresh);
   const savedSourceCount = useAppStore((s) => s.portals.length);
+  const { controller, state: discovery } = useAutomaticDiscovery();
+  const fetchingCoreData = useFirstRunDataStore((s) => s.running);
+  // A schema that has not loaded, or failed to load, is not an empty library.
+  const noTables = discovery?.schema?.datasets.length === 0;
   const [mode, setMode] = useState<'ranked' | 'all'>('ranked');
   const since = useSinceInstant();
   const setSincePreset = useAppStore((s) => s.setSincePreset);
@@ -157,7 +163,27 @@ export default function StoryDesk() {
           </p>
         )}
         {state.status === 'READY' && state.leads.length === 0 && (
-          savedSourceCount === 0 ? (
+          savedSourceCount === 0 && noTables ? (
+            <EmptyState
+              icon="flag"
+              title="No leads yet"
+              body="Leads come from the records you collect or the tables you import. San Diego’s budget, Get It Done and SDPD tables can be fetched in one step."
+              actions={<>
+                <button
+                  type="button"
+                  disabled={fetchingCoreData}
+                  onClick={() => {
+                    void useFirstRunDataStore.getState().run(controller);
+                    setWorkspaceView('overview');
+                  }}
+                  className="motion-press focus-ring rounded-lg border border-transparent primary-action px-3 py-1.5 text-label font-semibold text-white"
+                >
+                  Get San Diego’s core public data
+                </button>
+                <button type="button" onClick={openSourceConnector} className="motion-press focus-ring rounded-lg border border-control px-3 py-1.5 text-label font-semibold text-fg-secondary">Add a source</button>
+              </>}
+            />
+          ) : savedSourceCount === 0 ? (
             <EmptyState
               icon="flag"
               title="No leads yet"
