@@ -69,9 +69,11 @@ export function reportsAroundAbatements(schema: AnalyticalSchema, dataset: Analy
   // each report filed since that year began is in one of the tables. The year is the open copy's
   // UTC retrieval year, as encampmentReportCoverage counts closed files from it. Retrieval times are
   // UTC and report dates local, so the last day held whole is the Pacific day before retrieval;
-  // a fixed UTC-8 is a day early at worst in daylight time, never late.
+  // a fixed UTC-8 is a day early at worst in daylight time, never late. Early on 1 January the
+  // tables can hold no whole day since that year began, and no period is stated.
+  const since = `${Number(coverage.open.retrievedAt.slice(0, 4)) - coverage.closed.length + 1}-01-01`;
   const until = new Date(Date.parse(coverage.open.retrievedAt) - 8 * 3_600_000 - 86_400_000).toISOString().slice(0, 10);
-  return { tables, coordinates, since: `${Number(coverage.open.retrievedAt.slice(0, 4)) - coverage.closed.length + 1}-01-01`, until };
+  return until < since ? null : { tables, coordinates, since, until };
 }
 
 function repeatQueries(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary): DiscoveryQuery[] {

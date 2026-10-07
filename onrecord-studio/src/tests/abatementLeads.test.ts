@@ -60,13 +60,21 @@ describe('Encampment reports around abatements', () => {
 
   it('ends the reports at the last Pacific day the open copy holds whole, and keeps the year it was retrieved in', () => {
     // A 2026 retrieval needs the 2026 closed file retrieved no earlier than the open copy.
-    const retrieved = (retrievedAt: string): AnalyticalSchema => ({ ...around, datasets: [log,
+    const retrieved = (retrievedAt: string, held: AnalyticalSchema['datasets'] = []): AnalyticalSchema => ({ ...around, datasets: [log, ...held,
       { ...closed, sourceUri: closed.sourceUri!.replace('closed_2025', 'closed_2026'), retrievedAt }, { ...open, retrievedAt }] });
     // 02:00 UTC on 10 March is 18:00 on 9 March in Pacific standard time: 9 March is not over.
     expect(reportsAroundAbatements(retrieved('2026-03-10T02:00:00Z'), log)).toMatchObject({ since: '2026-01-01', until: '2026-03-08' });
     expect(abatementQueries(retrieved('2026-03-10T02:00:00Z'), log).find((item) => item.id === 'abatement_reports_nearby')!.sql).toContain(`<= DATE '2026-03-08'`);
     expect(reportsAroundAbatements(retrieved('2026-03-10T09:00:00Z'), log)).toMatchObject({ since: '2026-01-01', until: '2026-03-09' });
-    expect(reportsAroundAbatements(retrieved('2026-01-01T03:00:00Z'), log)).toMatchObject({ since: '2026-01-01', until: '2025-12-30' });
+    // Pacific standard time ends a day at 08:00 UTC.
+    expect(reportsAroundAbatements(retrieved('2026-01-10T07:59:00Z'), log)).toMatchObject({ until: '2026-01-08' });
+    expect(reportsAroundAbatements(retrieved('2026-01-10T08:00:00Z'), log)).toMatchObject({ until: '2026-01-09' });
+    // 00:30 on 10 July in daylight time: 9 July is over, but the fixed offset stops a day early.
+    expect(reportsAroundAbatements(retrieved('2026-07-10T07:30:00Z'), log)).toMatchObject({ until: '2026-07-08' });
+    // Before 1 January ends in Pacific time, the 2026 file alone holds no whole day.
+    expect(reportsAroundAbatements(retrieved('2026-01-01T03:00:00Z'), log)).toBeNull();
+    const earlierYear = { ...closed, snapshotId: `${closed.snapshotId}-2025`, retrievedAt: '2026-01-01T03:00:00Z' };
+    expect(reportsAroundAbatements(retrieved('2026-01-01T03:00:00Z', [earlierYear]), log)).toMatchObject({ since: '2025-01-01', until: '2025-12-30' });
   });
 
   it('states the counts at 30 abatement place-days, not 29, and says what they are counts of', () => {
