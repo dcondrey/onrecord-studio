@@ -25,8 +25,9 @@ describe('leads from police stop records', () => {
 
   it('states a rate only with 100 persons in each group, and an absent property table as no figure', () => {
     const outcomes = (unhoused: number, seized: number | null) => ({ query: query('stops_unhoused_outcomes'), result: response(
-      ['perceived', 'persons', 'arrested', 'arrested_on_warrant', 'arrested_without_warrant', 'cited', 'no_result_row', 'property_seized', 'first_stop', 'last_stop'],
-      [['not unhoused', 1000, 100, 30, 70, 400, 0, seized, '2024-01-01', '2026-09-28'], ['unhoused', unhoused, 30, 15, 15, 10, 0, seized, '2024-01-02', '2026-09-28'], [null, 7, 0, 0, 0, 0, 0, seized, null, null]]) });
+      ['perceived', 'persons', 'arrested', 'arrested_on_warrant', 'arrested_without_warrant', 'cited', 'persons_with_result', 'no_result_row', 'results_table', 'property_seized', 'first_stop', 'last_stop'],
+      [['not unhoused', 1000, 100, 30, 70, 400, 1000, 0, 'Stop results', seized, '2024-01-01', '2026-09-28'], ['unhoused', unhoused, 30, 15, 15, 10, unhoused, 0, 'Stop results', seized, '2024-01-02', '2026-09-28'],
+        [null, 7, 0, 0, 0, 0, 7, 0, 'Stop results', seized, null, null]]) });
     expect(stopLeads([outcomes(99, 5)])).toEqual([]);
     const [lead] = stopLeads([outcomes(100, 5)]);
     expect(lead.title).toBe('30.0% of people perceived as unhoused were arrested when stopped, against 10.0% of others');
@@ -37,10 +38,22 @@ describe('leads from police stop records', () => {
     expect(stopLeads([outcomes(100, null)])[0].detail).not.toContain('Property seized');
   });
 
+  it('divides outcome rates by the persons with a result row, since no row is not an outcome', () => {
+    const outcomes = (unhousedWithResult: number) => ({ query: query('stops_unhoused_outcomes'), result: response(
+      ['perceived', 'persons', 'arrested', 'arrested_on_warrant', 'arrested_without_warrant', 'cited', 'persons_with_result', 'no_result_row', 'results_table', 'property_seized', 'first_stop', 'last_stop'],
+      [['not unhoused', 400, 40, 0, 40, 0, 400, 0, 'Stop results', 8, null, null], ['unhoused', 400, 40, 0, 40, 0, unhousedWithResult, 400 - unhousedWithResult, 'Stop results', 8, null, null]]) });
+    expect(stopLeads([outcomes(99)])).toEqual([]);
+    const [lead] = stopLeads([outcomes(200)]);
+    expect(lead.title).toBe('20.0% of people perceived as unhoused were arrested when stopped, against 10.0% of others');
+    expect(lead.detail).toContain('400 of 800 persons in the stop records were perceived as unhoused. 200 persons perceived as unhoused and 0 others have no row in Stop results;');
+    expect(lead.detail).toContain('Custodial arrest: 40 of 200 (20.0%) against 40 of 400 (10.0%).');
+    expect(lead.detail).toContain('Property seized: 8 of 400 (2.0%) against 8 of 400 (2.0%).');
+  });
+
   it('calls a same-reason arrest rate higher only at 1.5 times and three points, among reasons with 100 persons each', () => {
     const reasons = (unhousedArrested: number, others: number) => ({ query: query('stops_unhoused_reasons'), result: response(
-      ['reason', 'unhoused_persons', 'unhoused_arrested', 'other_persons', 'other_arrested'],
-      [['LODGING', 1000, unhousedArrested, others, others / 10], ['TRESPASS', 500, 50, 500, 50]]) });
+      ['reason', 'unhoused_persons', 'unhoused_with_result', 'unhoused_arrested', 'other_persons', 'other_with_result', 'other_arrested'],
+      [['LODGING', 1000, 1000, unhousedArrested, others, others, others / 10], ['TRESPASS', 500, 500, 50, 500, 500, 50]]) });
     const same = (unhousedArrested: number, others = 1000) => stopLeads([reasons(unhousedArrested, others)]).find((lead) => lead.key === 'stops_same_reason');
     expect(same(149)).toBeUndefined();
     expect(same(150)!.title).toBe('Stopped for the same recorded reason, people perceived as unhoused were arrested without a warrant more often in 1 of 2 reasons compared');
