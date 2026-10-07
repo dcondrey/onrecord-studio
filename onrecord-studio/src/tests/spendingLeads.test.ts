@@ -127,12 +127,22 @@ describe('adopted against actual overtime', () => {
     expect(noOvertime).toContain('FY 2022: $300,000 adopted overtime; the actuals table has rows for the department and no overtime rows recorded, so no actual overtime is stated.');
     const unreadable = detail(overtimeYear(2_000_000, 9_000_000, { unreadable_actual: 1 }));
     expect(unreadable).toContain('FY 2022: not compared (the actual overtime amount could not be read in full).');
-    for (const text of [noRows, noOvertime, unreadable]) expect(text).not.toMatch(/\$0\b|\$0 actual/);
+    // Overtime rows whose every amount is unreadable sum to nothing; they are still rows.
+    const allUnreadable = detail(overtimeYear(2_000_000, null, { actual_ot_rows: 1, unreadable_actual: 1 }));
+    expect(allUnreadable).toContain('FY 2022: not compared (the actual overtime amount could not be read in full).');
+    expect(allUnreadable).not.toContain('no overtime rows recorded');
+    for (const text of [noRows, noOvertime, unreadable, allUnreadable]) expect(text).not.toMatch(/\$0\b|\$0 actual/);
     // Alone, none of the three is a year above adopted.
     expect(overtime([overtimeYear(2_000_000, null, { actual_rows: null, actual_ot_rows: null })])).toEqual([]);
     expect(overtime([overtimeYear(300_000, null, { actual_ot_rows: 0 })])).toEqual([]);
     expect(overtime([overtimeYear(2_000_000, 9_000_000, { unreadable_actual: 1 })])).toEqual([]);
     expect(overtime([overtimeYear(2_000_000, 9_000_000, { unreadable_adopted: 1 })])).toEqual([]);
+  });
+
+  it('says an unfollowed department is listed for its actual overtime, not for every covered year', () => {
+    const [lead] = overtime([overtimeYear(1_000_000, 2_500_000, { department: 'Transportation', followed: false, position: 3 })]);
+    expect(lead.key).toBe('spending_overtime_above_adopted:Transportation');
+    expect(lead.detail).toContain('Overtime of Transportation, adopted against actual, for the years both tables cover (fiscal 2022 to 2023) in which it is among the 10 department-years with most actual overtime.');
   });
 });
 

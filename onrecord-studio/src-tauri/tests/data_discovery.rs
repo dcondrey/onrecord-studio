@@ -1097,12 +1097,14 @@ async fn spending_checks_keep_no_rows_apart_from_zero_and_tie_a_budget_to_one_em
             "department_years"
         ]
         .map(|name| number(compared, 0, name)),
-        [Some(2022), Some(2023), Some(8)]
+        [Some(2022), Some(2023), Some(9)]
     );
 
     // Overtime accounts are matched by number: Police's FY 2023 row labelled "Premium Pay Sworn"
-    // is counted. Environmental Services has no actual rows and Homelessness no overtime rows;
-    // neither is an amount of zero. The FY 2024 and 2025 lines are not in a covered year.
+    // is counted, and so is its FY 2022 row whose account number reads 500128.0. Environmental
+    // Services has no actual rows and Homelessness no overtime rows; neither is an amount of zero.
+    // Transportation is not followed and is listed for its actual overtime. The FY 2024 and 2025
+    // lines are not in a covered year.
     assert_eq!(
         rows(
             overtime,
@@ -1144,8 +1146,19 @@ async fn spending_checks_keep_no_rows_apart_from_zero_and_tie_a_budget_to_one_em
                     Some(5_600_000)
                 ]
             ),
+            line(
+                "Transportation",
+                &[
+                    Some(2022),
+                    Some(1_000_000),
+                    Some(1),
+                    Some(1),
+                    Some(2_500_000)
+                ]
+            ),
         ]
     );
+    assert_eq!(cell(overtime, 4, "followed"), &json!(false));
     assert_eq!(
         cell(overtime, 3, "actual_accounts"),
         &json!("500128 Overtime Budgeted, 500128 Premium Pay Sworn")
@@ -1185,7 +1198,7 @@ async fn spending_checks_keep_no_rows_apart_from_zero_and_tie_a_budget_to_one_em
             ),
             line(
                 "Library",
-                &[Some(2022), Some(4), Some(1), Some(-5_000), Some(-5_000)]
+                &[Some(2022), Some(5), Some(1), Some(-5_000), Some(-5_000)]
             ),
             line("", &[Some(2021), Some(1), None, None, None]),
         ]

@@ -293,8 +293,8 @@ function overtimeLeads(results: Entry[]): ServiceLead[] {
       const year = count(row.fiscal_year)!; const adopted = count(row.adopted_overtime); const actual = count(row.actual_overtime);
       if (count(row.actual_rows) === null) lines.push(`FY ${year}: ${adopted === null ? 'an adopted overtime line' : `${money(adopted)} adopted overtime`} and no rows in the actuals table.`);
       else if (adopted === null || (count(row.unreadable_adopted) ?? 0) > 0) lines.push(`FY ${year}: not compared (the adopted overtime amount could not be read in full).`);
-      else if ((count(row.actual_ot_rows) ?? 0) === 0 || actual === null) lines.push(`FY ${year}: ${money(adopted)} adopted overtime; the actuals table has rows for the department and no overtime rows recorded, so no actual overtime is stated.`);
-      else if ((count(row.unreadable_actual) ?? 0) > 0) lines.push(`FY ${year}: not compared (the actual overtime amount could not be read in full).`);
+      else if ((count(row.actual_ot_rows) ?? 0) === 0) lines.push(`FY ${year}: ${money(adopted)} adopted overtime; the actuals table has rows for the department and no overtime rows recorded, so no actual overtime is stated.`);
+      else if (actual === null || (count(row.unreadable_actual) ?? 0) > 0) lines.push(`FY ${year}: not compared (the actual overtime amount could not be read in full).`);
       else {
         const difference = actual - adopted;
         lines.push(`FY ${year}: ${money(adopted)} adopted overtime, ${money(actual)} actual${adopted > 0 && difference !== 0 ? ` (${percent(Math.abs(difference), adopted)} ${difference > 0 ? 'above' : 'below'})` : ''}.`);
