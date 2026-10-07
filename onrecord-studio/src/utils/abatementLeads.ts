@@ -66,9 +66,12 @@ export function reportsAroundAbatements(schema: AnalyticalSchema, dataset: Analy
   const coordinates = REPORT_COORDINATES.find(([latitude, longitude]) => tables.every((table) => has(table, latitude) && has(table, longitude)));
   if (!coordinates) return null;
   // Closed files are keyed by close year: with every year from the earliest held to the open copy,
-  // each report filed since that year began is in one of the tables.
-  const until = coverage.open.retrievedAt.slice(0, 10);
-  return { tables, coordinates, since: `${Number(until.slice(0, 4)) - coverage.closed.length + 1}-01-01`, until };
+  // each report filed since that year began is in one of the tables. The year is the open copy's
+  // UTC retrieval year, as encampmentReportCoverage counts closed files from it. Retrieval times are
+  // UTC and report dates local, so the last day held whole is the Pacific day before retrieval;
+  // a fixed UTC-8 is a day early at worst in daylight time, never late.
+  const until = new Date(Date.parse(coverage.open.retrievedAt) - 8 * 3_600_000 - 86_400_000).toISOString().slice(0, 10);
+  return { tables, coordinates, since: `${Number(coverage.open.retrievedAt.slice(0, 4)) - coverage.closed.length + 1}-01-01`, until };
 }
 
 function repeatQueries(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary): DiscoveryQuery[] {
