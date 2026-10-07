@@ -24,9 +24,6 @@ const EARLIEST_YEAR: u16 = 2000;
 struct PackTable {
     table: &'static str,
     dataset: CityDataset,
-    /// The kind the app imports this dataset as, so a Parquet copy is typed as the app's import
-    /// of the same file is.
-    kind: AnalyticalDatasetKind,
 }
 
 /// The packs' City open-data tables (`docs/data-packs.md`).
@@ -35,12 +32,10 @@ fn pack_tables(pack: &str) -> Result<&'static [PackTable], AppError> {
         PackTable {
             table: "budget_adopted",
             dataset: CityDataset::OperatingBudget,
-            kind: AnalyticalDatasetKind::OperatingBudget,
         },
         PackTable {
             table: "budget_actuals",
             dataset: CityDataset::OperatingActuals,
-            kind: AnalyticalDatasetKind::RegionalData,
         },
         PackTable {
             table: "capital_budget",
@@ -67,17 +62,14 @@ fn pack_tables(pack: &str) -> Result<&'static [PackTable], AppError> {
         PackTable {
             table: "service_reports",
             dataset: CityDataset::GetItDoneEncampments,
-            kind: AnalyticalDatasetKind::RegionalData,
         },
         PackTable {
             table: "service_reports",
             dataset: CityDataset::GetItDoneOpen,
-            kind: AnalyticalDatasetKind::RegionalData,
         },
         PackTable {
             table: "police_calls",
             dataset: CityDataset::CallsForService,
-            kind: AnalyticalDatasetKind::CallsForService,
         },
     ];
     match pack {
@@ -170,7 +162,13 @@ pub async fn build(pack: &str, out: &Path) -> Result<PathBuf, AppError> {
     let mut files = Vec::new();
     for table in tables {
         for year in published_years(table.dataset, now.year()) {
-            let (url, file_name, partial) = dataset_source(table.dataset, year, now.year())?;
+            let published = dataset_source(table.dataset, year, now.year())?;
+            let (url, file_name, partial, kind) = (
+                published.url,
+                published.file_name,
+                published.partial,
+                published.kind,
+            );
             let relative = format!("originals/{}/{file_name}", table.table);
             let path = out.join(&relative);
             tokio::fs::create_dir_all(path.parent().expect("a file under originals"))
@@ -201,14 +199,9 @@ pub async fn build(pack: &str, out: &Path) -> Result<PathBuf, AppError> {
                 last_modified: downloaded.acquisition.last_modified,
                 etag: downloaded.acquisition.etag,
             };
-            let parquet = write_conformed_parquet(
-                &repository,
-                out,
-                &original,
-                table.kind.clone(),
-                &pack_version,
-            )
-            .await?;
+            let parquet =
+                write_conformed_parquet(&repository, out, &original, kind.clone(), &pack_version)
+                    .await?;
             eprintln!(
                 "{}: {} rows, {} bytes",
                 parquet.path, parquet.rows, parquet.bytes
