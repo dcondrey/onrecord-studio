@@ -22,7 +22,7 @@ const blocks = (top: number) => ({ query: query('parking_vehicle_blocks'), resul
 
 describe('leads from a parking citation file', () => {
   it('reads only a table with the citation file\'s columns, sector1 among them', () => {
-    expect(parkingQueries(schema, citations).map((item) => item.id)).toEqual(['parking_vehicle_sections', 'parking_vehicle_blocks']);
+    expect(parkingQueries(schema, citations)).toEqual(fixture.queries);
     const unsectored: AnalyticalSchema = { ...schema, columns: schema.columns.filter((column) => column.columnName !== 'sector1') };
     expect(parkingQueries(unsectored, citations)).toEqual([]);
     const reports = service.schema as AnalyticalSchema;
@@ -44,6 +44,14 @@ describe('leads from a parking citation file', () => {
     expect(parkingLeads([sections(12, 30)])[0].title).toBe('30 citations under SDMC 86.0137(G) (vehicle not moved in 72 hours) from 2022-07-01 to 2022-12-31, 20 written by police');
   });
 
+  it('names the earlier section number when citations under it were counted', () => {
+    const earlier = { query: query('parking_vehicle_sections'), result: result([section('oversized', 0), section('unmoved', 30, { earlier_number: 30 }), section('habitation', 5, { earlier_number: 5 })]) };
+    const [lead] = parkingLeads([earlier]);
+    expect(lead.title).toBe('30 citations under SDMC 86.0137(G) or its earlier number 86.23(G) (vehicle not moved in 72 hours) from 2022-07-01 to 2022-12-31, 20 written by police');
+    expect(lead.detail).toContain('SDMC 86.0137(G) or its earlier number 86.23(G) (vehicle not moved 1/10 mile in 72 hours): 30 citations, 30 of them under the earlier number 86.23(G);');
+    expect(lead.detail).toContain('5 citations under SDMC 86.0137(F) or its earlier number 86.23(F) (vehicle habitation) are in this file, 5 of them under the earlier number 86.23(F), 5 written by police.');
+  });
+
   it('gives no fine figure when no fine is readable, never $0', () => {
     const { detail } = parkingLeads([sections(30, 12, 0, { fines: null, unread_fines: 30 })])[0];
     expect(detail).toContain('SDMC 86.0139(A) (oversized, non-motorized or recreational vehicle): 30 citations; 20 written by police, 10 by parking enforcement, 0 by another City unit and 0 with no issuing unit recorded. Issuing units as written: CSD (I) PARKING ENF; CSD (S) POLICE. Their fines are not recorded in a readable form.');
@@ -51,8 +59,14 @@ describe('leads from a parking citation file', () => {
     expect(parkingLeads([sections(30, 12, 0, { unread_fines: 2, fines: 28 * 112.5 })])[0].detail).toContain('The fines written on them total $3,150.00; 2 have no readable fine and are not in that total.');
   });
 
+  it('says a total left empty by conflicting citations is not one of unreadable fines', () => {
+    const { detail } = parkingLeads([sections(30, 12, 0, { fines: null, unread_fines: 0, conflicting: 30 })])[0];
+    expect(detail).toContain('No fine total is given: each of these citations is conflicting, and conflicting citations are in no total.');
+    expect(detail).not.toContain('not recorded in a readable form');
+  });
+
   it('states the vehicle-habitation count the file holds rather than assuming it holds none', () => {
-    expect(parkingLeads([sections(30)])[0].detail).toContain('No citation under SDMC 86.0137(F) (vehicle habitation) is in this file.');
+    expect(parkingLeads([sections(30)])[0].detail).toContain('No citation under SDMC 86.0137(F) or its earlier number 86.23(F) (vehicle habitation) is in this file.');
     expect(parkingLeads([sections(30, 12, 36)])[0].detail).toContain('36 citations under SDMC 86.0137(F) (vehicle habitation) are in this file, 20 written by police.');
   });
 

@@ -12,6 +12,8 @@
       "86.0139(A)",
       "86.0137(G)",
       "86.0137(F)",
+      "86.23(G)",
+      "86.23(F)",
       "vehicle habitation",
       "police",
       "parking enforcement",
@@ -22,10 +24,10 @@
       {
         "heading": "What is counted",
         "paragraphs": [
-          "Each half-year file is read on its own. A violation code is read with its spaces removed and a leading SDMC dropped, because the publisher writes one code several ways: 86.0139(A), 86.0139 (A), 86.0137(G) SDMC and SDMC 86.0137(G) are each one code. A code followed by _W is a warning; warnings are counted apart and are not citations. 86.0139(B) and the other subsections are not counted, and the violation description is never read.",
-          "Each citation number is counted once, from its latest entry: the publisher repeats a number when a citation is corrected. Where the latest entries share an entry time but differ in code, issuing unit or fine, the citation is counted as conflicting, under no unit and in no fine total.",
+          "Each half-year file is read on its own. A violation code is read with its spaces removed and a leading SDMC dropped, because the publisher writes one code several ways: 86.0139(A), 86.0139 (A), 86.0137(G) SDMC and SDMC 86.0137(G) are each one code. A code followed by _W is a warning; warnings are counted apart and are not citations. The publisher's older files write the 72-hour and vehicle-habitation sections under their earlier numbers 86.23(G) and 86.23(F), with the same descriptions; those are counted under 86.0137(G) and 86.0137(F), and the lead names the earlier number and how many citations were written under it. 86.0139(B), 86.0118 and the other sections and subsections are not counted, and the violation description is never read.",
+          "Each citation number is counted once, from its latest entry: the publisher repeats a number when a citation is corrected. Where the latest entries share an entry time but differ in section, warning, issuing unit or fine as read, the citation is counted as conflicting, under no unit and in no fine total. Entries that differ only in how the code, unit or fine is spelt are one citation, not a conflict.",
           "The issuing unit is read from the sector the City recorded: text containing POLICE is police, text containing PARKING ENF is parking enforcement (the files write both CSD (I) PARKING ENF and CSD I PARKING ENF), any other text is another City unit such as street sweeping or park rangers, and a blank is counted as not recorded. The units are listed as written.",
-          "The fine is the amount written on the citation, summed only where it reads as a number; a citation with a blank or unreadable fine is counted apart. When no fine on them is readable, the lead says so and gives no total. Citations under SDMC 86.0137(F) (vehicle habitation) are counted beside them; some files hold none."
+          "The fine is the amount written on the citation, summed only where it reads as a number; a citation with a blank or unreadable fine is counted apart. When no fine on them is readable, the lead says so and gives no total; when every citation in a section is conflicting, the lead says the total is empty for that reason, not that the fines are unreadable. Citations under SDMC 86.0137(F) (vehicle habitation) are counted beside them; some files hold none."
         ]
       },
       {

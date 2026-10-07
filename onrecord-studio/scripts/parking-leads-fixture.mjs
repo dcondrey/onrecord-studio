@@ -37,6 +37,13 @@ const rows = [
   ['70000013', '2022-10-03', '2022-10-03', '600 W BROADWAY', 'CSD (I) PARKING ENF', '86.0137(G) SDMC', UNMOVED, '53.5'],
   ['70000014', '2022-10-04', '2022-10-04', '600 W BROADWAY', 'CSD (G) STREET SWEEPING', '86.0112(E)S DMC', 'VIOLATION OF SIGNS-STREET SWEEPING', '52.5'],
   ['70000015', '2022-10-05', '2022-10-05', '600 W BROADWAY', 'CSD (S) POLICE', '86.0137(F) SDMC', 'VEHICLE HABITATION', '52.5'],
+  // Entered twice at the same time, differing only in spelling: one parking-enforcement citation.
+  ['70000016', '2022-10-06', '2022-10-06', '7700 SIEMPRE VIVA RD', 'CSD (I) PARKING ENF', '86.0137(G) SDMC', UNMOVED, '53.5'],
+  ['70000016', '2022-10-06', '2022-10-06', '7700 SIEMPRE VIVA RD', 'CSD I PARKING ENF', 'SDMC 86.0137(G)', UNMOVED, '53.50'],
+  // The earlier numbers of 86.0137(G) and 86.0137(F), as written in the 2012 and 2016 files.
+  ['70000017', '2022-10-07', '2022-10-07', '7700 SIEMPRE VIVA RD', 'CSD (S) POLICE', '86.23(G)SDMC', 'VEHICLE NOT MOVED 1/10 MILE IN 72 HOURS', '53.5'],
+  ['70000018', '2022-10-08', '2022-10-08', '7700 SIEMPRE VIVA RD', 'CSD (S) POLICE', '86.23(G)_W', 'VEHICLE NOT MOVED 1/10 MILE IN 72 HOURS/WARNING', '0.0'],
+  ['70000019', '2022-10-09', '2022-10-09', '600 W BROADWAY', 'CSD (S) POLICE', '86.23(F)SDMC', 'LIVING IN VEHICLE PARKED ON STREET', '52.5'],
 ];
 const quote = (value) => `"${value}"`;
 const csv = `${[header, ...rows].map((row) => row.map(quote).join(',')).join('\n')}\n`;

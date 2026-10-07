@@ -72,18 +72,22 @@ async fn parking_checks_count_each_citation_once_by_issuing_unit() {
                         "oversized {column}"
                     );
                 }
-                // SDMC 86.0137(G) and 86.0137(G)S DMC are 86.0137(G). 70000013's two entries
-                // share a time but not a unit: conflicting, under no unit and in no fine total.
+                // SDMC 86.0137(G), 86.0137(G)S DMC and the earlier number 86.23(G) are 86.0137(G),
+                // and 86.23(G)_W is a warning. 70000013's two entries share a time but not a unit:
+                // conflicting, under no unit and in no fine total. 70000016's differ only in
+                // spelling: one parking-enforcement citation with its fine in the total.
                 let unmoved = row_of(&result, "section", "unmoved");
                 for (column, expected) in [
-                    ("citations", 4.0),
-                    ("by_police", 1.0),
-                    ("by_parking", 2.0),
+                    ("citations", 6.0),
+                    ("by_police", 2.0),
+                    ("by_parking", 3.0),
                     ("other_sector", 0.0),
                     ("no_sector", 0.0),
                     ("conflicting", 1.0),
                     ("unread_fines", 0.0),
-                    ("fines", 160.5),
+                    ("warnings", 1.0),
+                    ("earlier_number", 1.0),
+                    ("fines", 267.5),
                 ] {
                     assert_eq!(
                         number(&result, unmoved, column),
@@ -92,8 +96,9 @@ async fn parking_checks_count_each_citation_once_by_issuing_unit() {
                     );
                 }
                 let habitation = row_of(&result, "section", "habitation");
-                assert_eq!(number(&result, habitation, "citations"), 1.0);
-                assert_eq!(number(&result, oversized, "all_citations"), 15.0);
+                assert_eq!(number(&result, habitation, "citations"), 2.0);
+                assert_eq!(number(&result, habitation, "earlier_number"), 1.0);
+                assert_eq!(number(&result, oversized, "all_citations"), 19.0);
                 assert_eq!(
                     cell(&result, oversized, "first_issue"),
                     &json!("2022-07-01")
@@ -103,13 +108,16 @@ async fn parking_checks_count_each_citation_once_by_issuing_unit() {
             "parking_vehicle_blocks" => {
                 // The earlier, misspelt place of 70000004 is not read, and 4000 HARBOR DR is
                 // matched across case and surrounding spaces.
-                assert_eq!(result.row_count, 4);
+                assert_eq!(result.row_count, 5);
                 assert_eq!(cell(&result, 0, "block"), &json!("3500 SPORTS ARENA BLVD"));
                 assert_eq!(number(&result, 0, "citations"), 4.0);
                 assert_eq!(number(&result, 0, "by_police"), 3.0);
                 assert_eq!(cell(&result, 1, "block"), &json!("4000 HARBOR DR"));
                 assert_eq!(number(&result, 1, "citations"), 3.0);
-                assert_eq!(number(&result, 0, "section_citations"), 11.0);
+                let siempre = row_of(&result, "block", "7700 SIEMPRE VIVA RD");
+                assert_eq!(number(&result, siempre, "citations"), 2.0);
+                assert_eq!(number(&result, siempre, "by_police"), 1.0);
+                assert_eq!(number(&result, 0, "section_citations"), 13.0);
                 assert_eq!(number(&result, 0, "no_block"), 1.0);
             }
             _ => panic!("Unverified query {id}"),
