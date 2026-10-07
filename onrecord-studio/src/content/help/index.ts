@@ -32,6 +32,7 @@ import capacityComparisonLeads from './topics-capacity-comparison-leads.json';
 import releaseTiming from './topics-release-timing.json';
 import spendingRecordLeads from './topics-spending-record-leads.json';
 import policeCallLeads from './topics-police-call-leads.json';
+import parkingCitationLeads from './topics-parking-citation-leads.json';
 import overdueFollowUp from './topics-overdue-follow-up.json';
 import meetingPosting from './topics-meeting-posting.json';
 import dataPacks from './topics-data-packs.json';
@@ -118,6 +119,7 @@ const ALL_HELP_TOPICS = [
   ...releaseTiming,
   ...spendingRecordLeads,
   ...policeCallLeads,
+  ...parkingCitationLeads,
   ...overdueFollowUp,
   ...meetingPosting,
   ...dataPacks,

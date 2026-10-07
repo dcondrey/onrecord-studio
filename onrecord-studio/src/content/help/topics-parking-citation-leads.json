@@ -1,0 +1,55 @@
+[
+  {
+    "id": "finding-parking-citation-lead",
+    "title": "Parking citation leads",
+    "group": "Finding kinds",
+    "keywords": [
+      "parking citations",
+      "oversized vehicle",
+      "recreational vehicle",
+      "RV",
+      "72 hour",
+      "86.0139(A)",
+      "86.0137(G)",
+      "86.0137(F)",
+      "vehicle habitation",
+      "police",
+      "parking enforcement",
+      "fines"
+    ],
+    "summary": "Counts from one half-year file of the City's published parking citations: citations under SDMC 86.0139(A) (oversized, non-motorized or recreational vehicle) and 86.0137(G) (vehicle not moved 1/10 mile in 72 hours), how many police wrote, the fines written on them, and the locations with most.",
+    "sections": [
+      {
+        "heading": "What is counted",
+        "paragraphs": [
+          "Each half-year file is read on its own. A violation code is read with its spaces removed and a leading SDMC dropped, because the publisher writes one code several ways: 86.0139(A), 86.0139 (A), 86.0137(G) SDMC and SDMC 86.0137(G) are each one code. A code followed by _W is a warning; warnings are counted apart and are not citations. 86.0139(B) and the other subsections are not counted, and the violation description is never read.",
+          "Each citation number is counted once, from its latest entry: the publisher repeats a number when a citation is corrected. Where the latest entries share an entry time but differ in code, issuing unit or fine, the citation is counted as conflicting, under no unit and in no fine total.",
+          "The issuing unit is read from the sector the City recorded: text containing POLICE is police, text containing PARKING ENF is parking enforcement (the files write both CSD (I) PARKING ENF and CSD I PARKING ENF), any other text is another City unit such as street sweeping or park rangers, and a blank is counted as not recorded. The units are listed as written.",
+          "The fine is the amount written on the citation, summed only where it reads as a number; a citation with a blank or unreadable fine is counted apart. When no fine on them is readable, the lead says so and gives no total. Citations under SDMC 86.0137(F) (vehicle habitation) are counted beside them; some files hold none."
+        ]
+      },
+      {
+        "heading": "When it is raised",
+        "paragraphs": [
+          "The section lead is raised when a file holds at least 30 citations under 86.0139(A), headed by that count; when 86.0139(A) has fewer than 30 and 86.0137(G) has at least 30, it is headed by the 72-hour count. The location lead lists the ten locations with most citations under either section, by location as written, upper-cased and trimmed, and is raised when the first has at least 30."
+        ]
+      },
+      {
+        "heading": "What it does not show",
+        "paragraphs": [
+          "A parking citation records the vehicle and the place, not whether anyone lived in it. A location is the place as the officer wrote it, so one block can appear under more than one spelling. The finding lists the table it read with its source address, retrieval date and SHA-256 digest, followed by the SQL."
+        ]
+      },
+      {
+        "heading": "How it is labelled",
+        "paragraphs": [
+          "Basis: Pattern signal, not a legal claim. Confidence is not assessed: the finding restates counts and infers nothing to score."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": ["PARKING_CITATION_LEAD"],
+    "commandGroups": [],
+    "related": ["legal-vs-pattern", "findings-inbox", "finding-police-call-lead"]
+  }
+]

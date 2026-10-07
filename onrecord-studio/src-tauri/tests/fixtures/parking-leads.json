@@ -1,0 +1,106 @@
+{
+  "csv": {
+    "parking_2022_2": "\"citation_id\",\"date_issue\",\"date_creation\",\"location\",\"sector1\",\"vio_code\",\"vio_desc\",\"vio_fine\"\n\"70000001\",\"2022-07-01\",\"2022-07-01\",\"3500 SPORTS ARENA BLVD\",\"CSD (S) POLICE\",\"86.0139(A)\",\"OVERSIZED/NON-MOTORIZED/RV PROHIBITED\",\"112.5\"\n\"70000002\",\"2022-07-02\",\"2022-07-02\",\"3500 SPORTS ARENA BLVD\",\"CSD (S) POLICE\",\"86.0139 (A)\",\"OVERSIZED/NON-MOTORIZED/RV\",\"112.5\"\n\"70000003\",\"2022-07-03\",\"2022-07-03\",\"3500 Sports Arena Blvd \",\"CSD (I) PARKING ENF\",\"86.0139(A) SDMC\",\"OVERSIZED VEH\",\"112.5\"\n\"70000004\",\"2022-07-04\",\"2022-07-04\",\"3500 SPORTS ARENA BL\",\"\",\"86.0139(A)\",\"OVERSIZED/NON-MOTORIZED/RV PROHIBITED\",\"112.5\"\n\"70000004\",\"2022-07-04\",\"2022-08-15 10:12:00\",\"3500 SPORTS ARENA BLVD\",\"CSD (S) POLICE\",\"86.0139(A)\",\"OVERSIZED/NON-MOTORIZED/RV PROHIBITED\",\"112.5\"\n\"70000005\",\"2022-07-05\",\"2022-07-05\",\"1900 FRONT ST\",\"CSD I PARKING ENF\",\"86.0139(A)\",\"OVERSIZED/NON-MOTORIZED/RV PROHIBITED\",\"n/a\"\n\"70000006\",\"2022-07-06\",\"2022-07-06\",\"\",\"\",\"86.0139(A)\",\"OVERSIZED/NON-MOTORIZED/RV PROHIBITED\",\"112.5\"\n\"70000007\",\"2022-07-07\",\"2022-07-07\",\"1900 FRONT ST\",\"CSD (W) PARK RANGERS\",\"86.0139(A)\",\"OVERSIZED/NON-MOTORIZED/RV PROHIBITED\",\"112.5\"\n\"70000008\",\"2022-07-08\",\"2022-07-08\",\"1900 FRONT ST\",\"CSD (S) POLICE\",\"86.0139(A)_W\",\"OVERSIZED/NON-MOTORIZED/RV PROHIBITED/WARNING\",\"0.0\"\n\"70000009\",\"2022-07-09\",\"2022-07-09\",\"1900 FRONT ST\",\"CSD (S) POLICE\",\"86.0139(B)\",\"NON-MOTORIZED VEHICLE\",\"112.5\"\n\"70000010\",\"2022-12-31\",\"2022-12-31\",\"4000 HARBOR DR\",\"CSD (I) PARKING ENF\",\"86.0137(G) SDMC\",\"72 HOUR PARKING\",\"53.5\"\n\"70000011\",\"2022-10-01\",\"2022-10-01\",\"4000 HARBOR DR\",\"CSD (S) POLICE\",\"SDMC 86.0137(G)\",\"72 HOUR PARKING\",\"53.5\"\n\"70000012\",\"2022-10-02\",\"2022-10-02\",\" 4000 harbor dr\",\"CSD (I) PARKING ENF\",\"86.0137(G)S DMC\",\"72 HOUR PARKING\",\"53.5\"\n\"70000013\",\"2022-10-03\",\"2022-10-03\",\"600 W BROADWAY\",\"CSD (S) POLICE\",\"86.0137(G) SDMC\",\"72 HOUR PARKING\",\"53.5\"\n\"70000013\",\"2022-10-03\",\"2022-10-03\",\"600 W BROADWAY\",\"CSD (I) PARKING ENF\",\"86.0137(G) SDMC\",\"72 HOUR PARKING\",\"53.5\"\n\"70000014\",\"2022-10-04\",\"2022-10-04\",\"600 W BROADWAY\",\"CSD (G) STREET SWEEPING\",\"86.0112(E)S DMC\",\"VIOLATION OF SIGNS-STREET SWEEPING\",\"52.5\"\n\"70000015\",\"2022-10-05\",\"2022-10-05\",\"600 W BROADWAY\",\"CSD (S) POLICE\",\"86.0137(F) SDMC\",\"VEHICLE HABITATION\",\"52.5\"\n"
+  },
+  "schema": {
+    "datasets": [
+      {
+        "snapshotId": "parking_2022_2",
+        "datasetKind": "REGIONAL_DATA",
+        "displayName": "Parking citations 2022, July to December",
+        "tableName": "analysis_parking_2022_2",
+        "importedRows": 17,
+        "rejectedRows": 0,
+        "sourceUri": "https://seshat.datasd.org/parking_citations/parking_citations_2022_part2_datasd.csv",
+        "sourceSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "retrievedAt": "2026-10-07T00:00:00Z",
+        "observationPeriodStart": null,
+        "observationPeriodEnd": null,
+        "partialDataset": true,
+        "validationSummary": "{}",
+        "unconvertedByColumn": {}
+      }
+    ],
+    "templates": [],
+    "columns": [
+      {
+        "tableName": "analysis_parking_2022_2",
+        "columnName": "citation_id",
+        "logicalType": "CATEGORY",
+        "originalName": "citation_id",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_parking_2022_2",
+        "columnName": "date_issue",
+        "logicalType": "CATEGORY",
+        "originalName": "date_issue",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_parking_2022_2",
+        "columnName": "date_creation",
+        "logicalType": "CATEGORY",
+        "originalName": "date_creation",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_parking_2022_2",
+        "columnName": "location",
+        "logicalType": "CATEGORY",
+        "originalName": "location",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_parking_2022_2",
+        "columnName": "sector1",
+        "logicalType": "CATEGORY",
+        "originalName": "sector1",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_parking_2022_2",
+        "columnName": "vio_code",
+        "logicalType": "CATEGORY",
+        "originalName": "vio_code",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_parking_2022_2",
+        "columnName": "vio_desc",
+        "logicalType": "CATEGORY",
+        "originalName": "vio_desc",
+        "nullable": true,
+        "dictionary": null
+      },
+      {
+        "tableName": "analysis_parking_2022_2",
+        "columnName": "vio_fine",
+        "logicalType": "CATEGORY",
+        "originalName": "vio_fine",
+        "nullable": true,
+        "dictionary": null
+      }
+    ]
+  },
+  "queries": [
+    {
+      "id": "parking_vehicle_sections",
+      "title": "Oversized-vehicle, 72-hour and vehicle-habitation citations, by issuing unit",
+      "method": "Citations in Parking citations 2022, July to December under SDMC 86.0139(A) (oversized, non-motorized or recreational vehicle), SDMC 86.0137(G) (vehicle not moved 1/10 mile in 72 hours), SDMC 86.0137(F) (vehicle habitation), counted by the unit that issued them, with the fines written on them. A violation code is read with its spaces removed and a leading SDMC dropped, so 86.0139(A), 86.0139 (A), 86.0139(A) SDMC and SDMC 86.0139(A) are one code; a code followed by _W is a warning and is counted apart from citations. 86.0139(B) and the other subsections are not counted. Each citation number is counted once, from its latest entry by date_creation; where the latest entries share that time but differ in code, issuing unit or fine, the citation is counted as conflicting, under no unit and in no fine total. The issuing unit is read from sector1: text containing POLICE is police, text containing PARKING ENF is parking enforcement, any other text is another City unit, and a blank is counted as not recorded. A fine that is blank or not a number is counted apart and left out of the total; a section with no readable fine has no total. vio_desc is not read.",
+      "sql": "WITH entries AS (\n SELECT NULLIF(TRIM(CAST(\"citation_id\" AS VARCHAR)), '') AS citation, REPLACE(UPPER(TRIM(CAST(\"vio_code\" AS VARCHAR))), ' ', '') AS written_code,\n  NULLIF(TRIM(CAST(\"sector1\" AS VARCHAR)), '') AS sector_text, NULLIF(TRIM(CAST(\"vio_fine\" AS VARCHAR)), '') AS fine_text,\n  NULLIF(UPPER(TRIM(CAST(\"location\" AS VARCHAR))), '') AS block, TRY_CAST(CAST(\"date_issue\" AS VARCHAR) AS DATE) AS issued,\n  TRY_CAST(CAST(\"date_creation\" AS VARCHAR) AS TIMESTAMP) AS entered\n FROM \"analysis_parking_2022_2\"\n), latest AS (\n SELECT citation, CASE WHEN STARTS_WITH(written_code, 'SDMC') THEN SUBSTR(written_code, 5) ELSE written_code END AS code, sector_text, fine_text, block, issued,\n  MIN(COALESCE(written_code, '') || '|' || COALESCE(sector_text, '') || '|' || COALESCE(fine_text, '')) OVER (PARTITION BY citation, entered)\n   <> MAX(COALESCE(written_code, '') || '|' || COALESCE(sector_text, '') || '|' || COALESCE(fine_text, '')) OVER (PARTITION BY citation, entered) AS conflicted\n FROM entries WHERE citation IS NOT NULL\n QUALIFY ROW_NUMBER() OVER (PARTITION BY citation ORDER BY entered DESC NULLS LAST, written_code, sector_text, fine_text, block) = 1\n), classed AS (\n SELECT *, CASE WHEN STARTS_WITH(code, '86.0139(A)') THEN 'oversized' WHEN STARTS_WITH(code, '86.0137(G)') THEN 'unmoved' WHEN STARTS_WITH(code, '86.0137(F)') THEN 'habitation' END AS section,\n  SUBSTR(code, 11, 2) = '_W' AS warning,\n  CASE WHEN sector_text IS NULL THEN NULL WHEN CONTAINS(UPPER(sector_text), 'POLICE') THEN 'police' WHEN CONTAINS(UPPER(sector_text), 'PARKING ENF') THEN 'parking' ELSE 'other' END AS sector,\n  TRY_CAST(fine_text AS DOUBLE) AS fine\n FROM latest\n), sections AS (\n SELECT 'oversized' AS section, 1 AS ord UNION ALL SELECT 'unmoved' AS section, 2 AS ord UNION ALL SELECT 'habitation' AS section, 3 AS ord\n), file AS (\n SELECT COUNT(*) AS all_citations, CAST(MIN(issued) AS VARCHAR) AS first_issue, CAST(MAX(issued) AS VARCHAR) AS last_issue FROM classed\n)\nSELECT sections.section, COUNT(c.citation) FILTER (WHERE NOT c.warning) AS citations, COUNT(c.citation) FILTER (WHERE NOT c.warning AND NOT c.conflicted AND c.sector = 'police') AS by_police,\n COUNT(c.citation) FILTER (WHERE NOT c.warning AND NOT c.conflicted AND c.sector = 'parking') AS by_parking, COUNT(c.citation) FILTER (WHERE NOT c.warning AND NOT c.conflicted AND c.sector = 'other') AS other_sector,\n COUNT(c.citation) FILTER (WHERE NOT c.warning AND NOT c.conflicted AND c.sector IS NULL) AS no_sector, COUNT(c.citation) FILTER (WHERE NOT c.warning AND c.conflicted) AS conflicting,\n SUM(c.fine) FILTER (WHERE NOT c.warning AND NOT c.conflicted) AS fines, COUNT(c.citation) FILTER (WHERE NOT c.warning AND NOT c.conflicted AND c.fine IS NULL) AS unread_fines,\n COUNT(c.citation) FILTER (WHERE c.warning) AS warnings, ARRAY_TO_STRING(LIST_SORT(LIST(DISTINCT c.sector_text) FILTER (WHERE NOT c.warning)), '; ') AS sector_texts,\n file.all_citations, file.first_issue, file.last_issue\nFROM sections LEFT JOIN classed AS c ON c.section = sections.section CROSS JOIN file\nGROUP BY sections.section, sections.ord, file.all_citations, file.first_issue, file.last_issue ORDER BY sections.ord"
+    },
+    {
+      "id": "parking_vehicle_blocks",
+      "title": "Where oversized-vehicle and 72-hour citations were written",
+      "method": "Citations in Parking citations 2022, July to December under SDMC 86.0139(A) (oversized, non-motorized or recreational vehicle) or SDMC 86.0137(G) (vehicle not moved 1/10 mile in 72 hours), counted by location as written, upper-cased and trimmed. A violation code is read with its spaces removed and a leading SDMC dropped, so 86.0139(A), 86.0139 (A), 86.0139(A) SDMC and SDMC 86.0139(A) are one code; a code followed by _W is a warning and is counted apart from citations. 86.0139(B) and the other subsections are not counted. Each citation number is counted once, from its latest entry by date_creation; where the latest entries share that time but differ in code, issuing unit or fine, the citation is counted as conflicting, under no unit and in no fine total. The ten locations with most citations are read, with the total under both sections and the citations with no location recorded. The issuing unit is read from sector1: text containing POLICE is police, text containing PARKING ENF is parking enforcement, any other text is another City unit, and a blank is counted as not recorded.",
+      "sql": "WITH entries AS (\n SELECT NULLIF(TRIM(CAST(\"citation_id\" AS VARCHAR)), '') AS citation, REPLACE(UPPER(TRIM(CAST(\"vio_code\" AS VARCHAR))), ' ', '') AS written_code,\n  NULLIF(TRIM(CAST(\"sector1\" AS VARCHAR)), '') AS sector_text, NULLIF(TRIM(CAST(\"vio_fine\" AS VARCHAR)), '') AS fine_text,\n  NULLIF(UPPER(TRIM(CAST(\"location\" AS VARCHAR))), '') AS block, TRY_CAST(CAST(\"date_issue\" AS VARCHAR) AS DATE) AS issued,\n  TRY_CAST(CAST(\"date_creation\" AS VARCHAR) AS TIMESTAMP) AS entered\n FROM \"analysis_parking_2022_2\"\n), latest AS (\n SELECT citation, CASE WHEN STARTS_WITH(written_code, 'SDMC') THEN SUBSTR(written_code, 5) ELSE written_code END AS code, sector_text, fine_text, block, issued,\n  MIN(COALESCE(written_code, '') || '|' || COALESCE(sector_text, '') || '|' || COALESCE(fine_text, '')) OVER (PARTITION BY citation, entered)\n   <> MAX(COALESCE(written_code, '') || '|' || COALESCE(sector_text, '') || '|' || COALESCE(fine_text, '')) OVER (PARTITION BY citation, entered) AS conflicted\n FROM entries WHERE citation IS NOT NULL\n QUALIFY ROW_NUMBER() OVER (PARTITION BY citation ORDER BY entered DESC NULLS LAST, written_code, sector_text, fine_text, block) = 1\n), classed AS (\n SELECT *, CASE WHEN STARTS_WITH(code, '86.0139(A)') THEN 'oversized' WHEN STARTS_WITH(code, '86.0137(G)') THEN 'unmoved' WHEN STARTS_WITH(code, '86.0137(F)') THEN 'habitation' END AS section,\n  SUBSTR(code, 11, 2) = '_W' AS warning,\n  CASE WHEN sector_text IS NULL THEN NULL WHEN CONTAINS(UPPER(sector_text), 'POLICE') THEN 'police' WHEN CONTAINS(UPPER(sector_text), 'PARKING ENF') THEN 'parking' ELSE 'other' END AS sector,\n  TRY_CAST(fine_text AS DOUBLE) AS fine\n FROM latest\n), counted AS (\n SELECT * FROM classed WHERE section IN ('oversized', 'unmoved') AND NOT warning\n), totals AS (\n SELECT COUNT(*) AS section_citations, COUNT(*) FILTER (WHERE block IS NULL) AS no_block, CAST(MIN(issued) AS VARCHAR) AS first_issue, CAST(MAX(issued) AS VARCHAR) AS last_issue FROM counted\n), blocks AS (\n SELECT block, COUNT(*) AS citations, COUNT(*) FILTER (WHERE section = 'oversized') AS oversized, COUNT(*) FILTER (WHERE section = 'unmoved') AS unmoved,\n  COUNT(*) FILTER (WHERE NOT conflicted AND sector = 'police') AS by_police\n FROM counted WHERE block IS NOT NULL GROUP BY block\n)\nSELECT blocks.block, blocks.citations, blocks.oversized, blocks.unmoved, blocks.by_police, totals.section_citations, totals.no_block, totals.first_issue, totals.last_issue\nFROM blocks CROSS JOIN totals ORDER BY blocks.citations DESC, blocks.block LIMIT 10"
+    }
+  ]
+}

@@ -285,6 +285,11 @@ pub enum FindingKind {
     /// calls were sent to. Counted by the discovery feed's SQL and recorded as sent. A call type is
     /// the dispatcher's label, not a finding about the person the call was about.
     PoliceCallLead,
+    /// A count from a city's published parking citations: citations under the oversized-vehicle
+    /// and 72-hour sections by the unit that issued them, the fines written on them, and the
+    /// locations with most. Counted by the discovery feed's SQL and recorded as sent. A citation
+    /// records the vehicle and the place, not whether anyone lived in it.
+    ParkingCitationLead,
 }
 
 impl FindingKind {
@@ -340,6 +345,7 @@ impl FindingKind {
             Self::ReleaseTimingConcentration => "RELEASE_TIMING_CONCENTRATION",
             Self::SpendingRecordLead => "SPENDING_RECORD_LEAD",
             Self::PoliceCallLead => "POLICE_CALL_LEAD",
+            Self::ParkingCitationLead => "PARKING_CITATION_LEAD",
         }
     }
 
@@ -395,6 +401,7 @@ impl FindingKind {
             Self::ReleaseTimingConcentration,
             Self::SpendingRecordLead,
             Self::PoliceCallLead,
+            Self::ParkingCitationLead,
         ]
         .into_iter()
         .find(|candidate| candidate.as_str() == value)
@@ -514,6 +521,8 @@ impl FindingKind {
             Self::SpendingRecordLead => false,
             // Counts of dispatch codes as the department recorded them; no rule is applied.
             Self::PoliceCallLead => false,
+            // Counts of citations as the City recorded them.
+            Self::ParkingCitationLead => false,
         }
     }
 }

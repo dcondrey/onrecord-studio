@@ -41,6 +41,7 @@ pub enum LeadFamily {
     CapacityComparison,
     SpendingRecords,
     PoliceCalls,
+    ParkingCitations,
 }
 
 impl LeadFamily {
@@ -54,6 +55,7 @@ impl LeadFamily {
             Self::CapacityComparison => FindingKind::CapacityComparisonLead,
             Self::SpendingRecords => FindingKind::SpendingRecordLead,
             Self::PoliceCalls => FindingKind::PoliceCallLead,
+            Self::ParkingCitations => FindingKind::ParkingCitationLead,
         }
     }
 }
@@ -393,5 +395,17 @@ mod tests {
             serde_json::json!("POLICE_CALLS")
         );
         assert_eq!(family.kind().as_str(), "POLICE_CALL_LEAD");
+    }
+
+    #[test]
+    fn the_parking_family_the_feed_sends_is_stored_as_a_parking_citation_lead() {
+        let family: LeadFamily =
+            serde_json::from_value(serde_json::json!("PARKING_CITATIONS")).unwrap();
+        assert_eq!(family, LeadFamily::ParkingCitations);
+        assert_eq!(
+            serde_json::to_value(family).unwrap(),
+            serde_json::json!("PARKING_CITATIONS")
+        );
+        assert_eq!(family.kind().as_str(), "PARKING_CITATION_LEAD");
     }
 }

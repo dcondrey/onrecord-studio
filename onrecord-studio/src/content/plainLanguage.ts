@@ -263,6 +263,11 @@ export const PLAIN_FINDING_TEXT: Record<FindingKind, PlainText> = {
     notShown: "It does not show that anyone was unhoused or what officers did. The call type is the dispatcher's label, a no-report code does not mean no service was given, and the file records no arrival or clear time.",
     next: 'Ask the department for the CAD event narratives and the incident and arrest reports for the calls and beats named.',
   },
+  PARKING_CITATION_LEAD: {
+    observed: "A count from a city's published parking citations: citations under the oversized or recreational vehicle section and the 72-hour section, how many police wrote, the fines written on them, and the locations with most.",
+    notShown: 'It does not show that anyone lived in a vehicle. A citation records the vehicle and the place; the fine is the amount written, not what was paid.',
+    next: "Ask for the citing officers' notes and the tow and impound records for the locations named, and for vehicle-habitation citations and safe-parking capacity on the same dates.",
+  },
   POLICE_STOP_LEAD: {
     observed: "A count from a police department's published stop records: how often people an officer perceived as unhoused were stopped, arrested, cited or had property seized, and the recorded reasons.",
     notShown: "It does not show unequal treatment. Rates are not adjusted for where stops were made, and perception is the officer's entry.",
