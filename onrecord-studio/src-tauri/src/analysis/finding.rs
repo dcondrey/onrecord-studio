@@ -282,7 +282,7 @@ pub enum FindingKind {
     SpendingRecordLead,
     /// A count from a police department's published calls for service: how SLEEPER, check the
     /// welfare, trespass, 5150 and 647F calls ended by disposition code, and the beats SLEEPER
-    /// calls came from. Counted by the discovery feed's SQL and recorded as sent. A call type is
+    /// calls were sent to. Counted by the discovery feed's SQL and recorded as sent. A call type is
     /// the dispatcher's label, not a finding about the person the call was about.
     PoliceCallLead,
 }

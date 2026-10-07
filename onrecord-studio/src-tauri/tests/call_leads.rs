@@ -73,11 +73,12 @@ async fn call_checks_count_each_incident_once_from_the_latest_copy_of_each_year(
     assert_eq!(cell(&types, 0, "description"), &json!("SLEEPER"));
     for query in fixture["queries"].as_array().unwrap() {
         let id = query["id"].as_str().unwrap();
-        let sql = run(query["sql"].as_str().unwrap().to_string());
+        let raw = query["sql"].as_str().unwrap();
         assert!(
-            !sql.contains("analysis_cfs_prior_2026"),
+            !raw.contains("analysis_cfs_prior_2026"),
             "{id} reads the earlier copy of 2026"
         );
+        let sql = run(raw.to_string());
         let result = db
             .execute_restricted_sql(&sql, 100)
             .await

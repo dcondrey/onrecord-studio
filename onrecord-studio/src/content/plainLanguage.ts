@@ -259,7 +259,7 @@ export const PLAIN_FINDING_TEXT: Record<FindingKind, PlainText> = {
     next: "Ask the department which programmes each year's adopted amount paid for, and the Housing Commission for its shelter agreements and occupancy in the same years.",
   },
   POLICE_CALL_LEAD: {
-    observed: "A count from a police department's published calls for service: how calls the dispatcher labelled SLEEPER, check the welfare, trespassing, 5150 or 647F ended by disposition code, and the beats SLEEPER calls came from.",
+    observed: "A count from a police department's published calls for service: how calls the dispatcher labelled SLEEPER, check the welfare, trespassing, 5150 or 647F ended by disposition code, and the beats SLEEPER calls were sent to.",
     notShown: "It does not show that anyone was unhoused or what officers did. The call type is the dispatcher's label, a no-report code does not mean no service was given, and the file records no arrival or clear time.",
     next: 'Ask the department for the CAD event narratives and the incident and arrest reports for the calls and beats named.',
   },

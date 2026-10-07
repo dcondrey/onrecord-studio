@@ -16,7 +16,7 @@
       "beat",
       "dispatch"
     ],
-    "summary": "Counts from SDPD's published calls for service: how calls the dispatcher labelled SLEEPER, check the welfare, trespassing, 5150 or 647F ended, by the disposition code the department recorded, and the beats SLEEPER calls came from.",
+    "summary": "Counts from SDPD's published calls for service: how calls the dispatcher labelled SLEEPER, check the welfare, trespassing, 5150 or 647F ended, by the disposition code the department recorded, and the beats SLEEPER calls were sent to.",
     "sections": [
       {
         "heading": "How calls ended",
@@ -27,15 +27,15 @@
         ]
       },
       {
-        "heading": "Where SLEEPER calls came from",
+        "heading": "Where SLEEPER calls were sent",
         "paragraphs": [
-          "SLEEPER calls not cancelled, across every imported year, counted by police beat with the neighborhood from the published beat list. The ten beats with most calls are listed, with the citywide total and the calls with no beat recorded. The lead is raised with at least 100 such calls citywide."
+          "SLEEPER calls not cancelled, across every imported year, counted by the police beat of the call's address, with the neighborhood from the published beat list. The ten beats with most calls are listed, with the citywide total and the calls with no beat recorded. The lead is raised with at least 100 such calls citywide."
         ]
       },
       {
         "heading": "What it does not show",
         "paragraphs": [
-          "A call type is the dispatcher's label when the call was entered, not a finding that anyone was unhoused. K means no report was required, not that no service was given. The file records no arrival or clear time, and the publisher leaves out sensitive call types such as domestic violence and child abuse. A beat's count is where calls were placed from, not a count of people. The finding lists every table it read with its source address, retrieval date and SHA-256 digest, followed by the SQL."
+          "A call type is the dispatcher's label when the call was entered, not a finding that anyone was unhoused. K means no report was required, not that no service was given. The file records no arrival or clear time, and the publisher leaves out sensitive call types such as domestic violence and child abuse. A beat's count is of calls to addresses in it, not a count of people. The finding lists every table it read with its source address, retrieval date and SHA-256 digest, followed by the SQL."
         ]
       },
       {

@@ -55,9 +55,9 @@ describe('leads from police calls for service', () => {
 
   it('names the beat with most SLEEPER calls, and only the beat code when the beat list does not name it', () => {
     expect(callLeads([beats(99)], 2026)).toEqual([]);
-    expect(callLeads([beats(100)], 2026)[0].title).toBe('40 of 100 SLEEPER calls from 2025 to 2026 were made in beat 524 (Core-Columbia)');
+    expect(callLeads([beats(100)], 2026)[0].title).toBe('40 of 100 SLEEPER calls from 2025 to 2026 were to addresses in beat 524 (Core-Columbia)');
     const [unnamed] = callLeads([beats(100, null)], 2026);
-    expect(unnamed.title).toBe('40 of 100 SLEEPER calls from 2025 to 2026 were made in beat 524');
+    expect(unnamed.title).toBe('40 of 100 SLEEPER calls from 2025 to 2026 were to addresses in beat 524');
     expect(unnamed.detail).toContain('not in the imported beat list');
   });
 

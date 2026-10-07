@@ -23,12 +23,10 @@ const has = (schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary, names:
 const columnsOf = (schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary) => schema.columns.filter((column) => column.tableName === dataset.tableName).map((column) => column.columnName);
 const latestFirst = (a: AnalyticalDatasetSummary, b: AnalyticalDatasetSummary) => b.retrievedAt.localeCompare(a.retrievedAt) || a.snapshotId.localeCompare(b.snapshotId);
 const isCalls = (schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary) => has(schema, dataset, CALL_COLUMNS);
-// The NIBRS offense files also carry beat and neighborhood, one row per offense; only the
-// two-column list is a lookup that cannot multiply the calls joined to it.
-const isBeatList = (schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary) => {
-  const columns = columnsOf(schema, dataset);
-  return columns.length === 2 && columns.includes('beat') && columns.includes('neighborhood');
-};
+// The NIBRS offense files also carry beat and neighborhood, one row per offense; joined as a
+// lookup they would multiply the calls.
+const isBeatList = (schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary) => has(schema, dataset, ['beat', 'neighborhood'])
+  && !columnsOf(schema, dataset).some((name) => ['incident_num', 'nibrs_uniq', 'case_number'].includes(name));
 
 export interface CallCompanions {
   /** The latest copy of each published year file, latest retrieved first. */
@@ -93,17 +91,21 @@ FROM typed${dispositions ? ' LEFT JOIN codes ON codes.code = typed.dispo' : ''}
 GROUP BY call_year, call_type ORDER BY call_year DESC NULLS LAST, call_type`,
   }];
   if (years.every((table) => has(schema, table, ['beat']))) queries.push({
-    id: 'calls_sleeper_beats', title: 'Where SLEEPER calls were made, by police beat',
-    method: `SLEEPER calls in ${names}, one row per incident number as above, leaving out the cancelled and duplicate codes ${CANCELLED.join(', ')}, counted by beat${beats ? ` with the neighborhood from ${beats.displayName}` : ''}. The ten beats with most calls are read, with the citywide total and the calls with no beat recorded.`,
+    id: 'calls_sleeper_beats', title: 'Where SLEEPER calls were sent, by police beat',
+    method: `SLEEPER calls in ${names}, one row per incident number as above, leaving out the cancelled and duplicate codes ${CANCELLED.join(', ')}, counted by the beat of the call's address${beats ? ` with the neighborhood from ${beats.displayName}` : ''}. The ten beats with most calls are read, with the citywide total and the calls with no beat recorded.`,
     sql: `WITH ${deduplicated(years, true)}, sleeper AS (
  SELECT beat, called_at FROM incidents WHERE call_type = 'SLEEPER' AND (dispo IS NULL OR dispo NOT IN (${list(CANCELLED)}))
 )${beats ? `, places AS (
  SELECT TRIM(CAST(${quoteIdentifier('beat')} AS VARCHAR)) AS beat, MIN(TRIM(CAST(${quoteIdentifier('neighborhood')} AS VARCHAR))) AS neighborhood FROM ${quoteIdentifier(beats.tableName)} GROUP BY 1
 )` : ''}
-SELECT sleeper.beat, ${beats ? 'places.neighborhood' : 'CAST(NULL AS VARCHAR)'} AS neighborhood, COUNT(*) AS calls, (SELECT COUNT(*) FROM sleeper) AS citywide_calls,
- (SELECT COUNT(*) FROM sleeper WHERE beat IS NULL) AS no_beat, (SELECT MIN(YEAR(called_at)) FROM sleeper) AS first_year, (SELECT MAX(YEAR(called_at)) FROM sleeper) AS last_year
-FROM sleeper${beats ? ' LEFT JOIN places ON places.beat = sleeper.beat' : ''}
-WHERE sleeper.beat IS NOT NULL GROUP BY sleeper.beat${beats ? ', places.neighborhood' : ''} ORDER BY calls DESC, sleeper.beat LIMIT 10`,
+, beat_calls AS (
+ SELECT beat, COUNT(*) AS calls FROM sleeper WHERE beat IS NOT NULL GROUP BY beat
+), sleeper_totals AS (
+ SELECT COUNT(*) AS citywide_calls, COUNT(*) FILTER (WHERE beat IS NULL) AS no_beat, MIN(YEAR(called_at)) AS first_year, MAX(YEAR(called_at)) AS last_year FROM sleeper
+)
+SELECT beat_calls.beat, ${beats ? 'places.neighborhood' : 'CAST(NULL AS VARCHAR)'} AS neighborhood, beat_calls.calls, citywide_calls, no_beat, first_year, last_year
+FROM beat_calls CROSS JOIN sleeper_totals${beats ? ' LEFT JOIN places ON places.beat = beat_calls.beat' : ''}
+ORDER BY beat_calls.calls DESC, beat_calls.beat LIMIT 10`,
   });
   return queries;
 }
@@ -166,8 +168,8 @@ export function callLeads(results: Entry[], currentYear = new Date().getUTCFullY
     const noBeat = count(top.no_beat) ?? 0;
     const unnamed = places.rows.some((row) => row.neighborhood == null);
     leads.push({ key: 'calls_sleeper_beats', priority: 95, query: places.query,
-      title: `${shown(count(top.calls) ?? 0)} of ${shown(citywide)} SLEEPER calls${span} were made in ${place(top)}`,
-      detail: `${places.rows.map((row) => `${place(row, 'Beat')}: ${shown(count(row.calls) ?? 0)} (${percent(count(row.calls) ?? 0, citywide)}).`).join(' ')}${noBeat ? ` ${shown(noBeat)} calls have no beat recorded.` : ''}${unnamed ? ' A beat with no neighborhood named is not in the imported beat list.' : ''} Cancelled and duplicate calls are left out. A beat's count is where calls were placed from, not a count of people. ${CAVEAT}`,
+      title: `${shown(count(top.calls) ?? 0)} of ${shown(citywide)} SLEEPER calls${span} were to addresses in ${place(top)}`,
+      detail: `${places.rows.map((row) => `${place(row, 'Beat')}: ${shown(count(row.calls) ?? 0)} (${percent(count(row.calls) ?? 0, citywide)}).`).join(' ')}${noBeat ? ` ${shown(noBeat)} calls have no beat recorded.` : ''}${unnamed ? ' A beat with no neighborhood named is not in the imported beat list.' : ''} Cancelled and duplicate calls are left out. A beat's count is of calls to addresses in it, not a count of people. ${CAVEAT}`,
       question: 'Which units answered the SLEEPER calls in these beats, and what did they record? The CAD event narratives and incident reports for the beats named would show it.',
     });
   }
