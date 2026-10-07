@@ -14,6 +14,8 @@ pub struct DataPackSummary {
     pub licence_id: String,
     pub licence_url: String,
     pub disclaimer: String,
+    /// SHA-256 of the verified manifest; an import names it, so it imports only this manifest.
+    pub manifest_sha256: String,
     pub tables: Vec<DataPackTable>,
 }
 
@@ -22,8 +24,6 @@ pub struct DataPackSummary {
 #[serde(rename_all = "camelCase")]
 pub struct DataPackTable {
     pub table: String,
-    /// `None`: this app has no analytical import for the table, so its files are not offered.
-    pub dataset_kind: Option<AnalyticalDatasetKind>,
     pub files: Vec<DataPackFileSummary>,
 }
 
@@ -37,7 +37,10 @@ pub struct DataPackFileSummary {
     pub bytes: u64,
     pub partial: bool,
     pub source_url: String,
+    /// When the pack builder retrieved the file from its publisher, RFC 3339.
     pub retrieved_at: String,
+    /// `None`: the City source list does not publish this file, so the app does not import it.
+    pub dataset_kind: Option<AnalyticalDatasetKind>,
 }
 
 /// What importing one selected file did: exactly one of `result` and `error` is set.
@@ -47,6 +50,11 @@ pub struct DataPackImportOutcome {
     pub path: String,
     pub table: String,
     pub year: Option<u16>,
+    /// The manifest's retrieval time for this file.
+    pub retrieved_at: String,
     pub result: Option<AnalyticalImportResult>,
+    /// Set with `result`: the same bytes were already a stored snapshot, so nothing was imported
+    /// and the pack was recorded beside it; `result` describes that snapshot.
+    pub already_stored: Option<bool>,
     pub error: Option<String>,
 }

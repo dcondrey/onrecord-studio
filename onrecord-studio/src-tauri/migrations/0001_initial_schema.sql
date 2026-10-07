@@ -604,6 +604,8 @@ CREATE TABLE IF NOT EXISTS analytical_snapshots (
     source_uri TEXT,
     local_path TEXT NOT NULL,
     source_sha256 TEXT NOT NULL,
+    -- When these bytes were retrieved from their publisher by the acquisition this row describes:
+    -- this installation's, or the pack builder's for a row a pack created (see pack_origins).
     retrieved_at TEXT NOT NULL,
     observation_period_start TEXT,
     observation_period_end TEXT,
@@ -702,7 +704,11 @@ CREATE TABLE IF NOT EXISTS data_maintenance_origins (
 -- The data pack a snapshot's bytes were imported from. Beside the snapshot, never part of its
 -- identity, so the same bytes fetched by the user and shipped in a pack stay one snapshot with
 -- both origins. No foreign key: DuckDB has no ON DELETE action, so one would refuse every path
--- that retires a snapshot.
+-- that retires a snapshot; a path that retires one counts these rows first.
+-- `retrieved_at` is when the pack builder retrieved the file from its publisher (the manifest's).
+-- `describes_snapshot`: the snapshot row's name, path and `retrieved_at` are this pack file's,
+-- because the pack created the row; the user's own import of the same bytes later takes the row
+-- over and clears it.
 CREATE TABLE IF NOT EXISTS pack_origins (
     snapshot_id TEXT NOT NULL,
     pack TEXT NOT NULL,
@@ -711,8 +717,11 @@ CREATE TABLE IF NOT EXISTS pack_origins (
     signer_key_id TEXT NOT NULL,
     file_path TEXT NOT NULL,
     file_sha256 TEXT NOT NULL,
+    retrieved_at TEXT NOT NULL,
+    describes_snapshot BOOLEAN NOT NULL,
     imported_at TEXT NOT NULL,
-    PRIMARY KEY (snapshot_id, pack, pack_version, signer_key_id, file_path)
+    CHECK (signer_key_id = lower(signer_key_id) AND file_sha256 = lower(file_sha256)),
+    PRIMARY KEY (snapshot_id, pack, pack_version, built_at, signer_key_id, file_path, file_sha256)
 );
 
 -- ----------------------------------------------------------------------------

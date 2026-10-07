@@ -10,7 +10,19 @@ const IMPORTING = 'Importing files';
 function fileLabel(file: DataPackFileSummary): string {
   const period = file.year === null ? 'All published years' : String(file.year);
   const megabytes = (file.bytes / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 1 });
-  return `${period} · ${file.rows.toLocaleString()} rows · ${megabytes} MB${file.partial ? ' · period not over, later rows may be published' : ''}`;
+  return `${period} · ${file.rows.toLocaleString()} rows · ${megabytes} MB · retrieved ${file.retrievedAt.slice(0, 10)}${file.partial ? ' · period not over, later rows may be published' : ''}`;
+}
+
+function outcomeMessage(outcome: DataPackImportOutcome): string {
+  const result = outcome.result;
+  if (!result) return outcome.error ?? 'Not imported.';
+  const retrieved = `retrieved by the pack builder on ${outcome.retrievedAt.slice(0, 10)}`;
+  if (outcome.alreadyStored) {
+    return `Nothing imported: these bytes are already stored as ${result.tableName} (${result.importedRows.toLocaleString()} rows). This pack, ${retrieved}, is recorded as another origin of that snapshot.`;
+  }
+  const rejected = result.rejectedRows > 0 ? ` ${result.rejectedRows.toLocaleString()} rows rejected.` : '';
+  if (result.importedRows === 0) return `No rows imported: the file, ${retrieved}, holds no readable rows.${rejected}`;
+  return `${result.importedRows.toLocaleString()} rows imported to ${result.tableName}, ${retrieved}.${rejected}`;
 }
 
 export default function DataPackImport({ onImported }: { onImported?: () => void }) {
@@ -53,19 +65,17 @@ export default function DataPackImport({ onImported }: { onImported?: () => void
     return next;
   });
 
-  const importSelected = () => {
+  const importSelected = (inspected: DataPackSummary) => {
     const files = [...selected];
     void run(IMPORTING, async () => {
       try {
-        return await invokeCommand('import_data_pack_files', { path: folder, files });
+        return await invokeCommand('import_data_pack_files', { path: folder, manifestSha256: inspected.manifestSha256, files });
       } finally {
         // Snapshots may have been written even if this result is no longer shown.
         onImported?.();
       }
     }, setOutcomes);
   };
-
-  const builtOn = summary?.builtAt.slice(0, 10) ?? '';
 
   return (
     <section className="app-panel p-4">
@@ -85,7 +95,7 @@ export default function DataPackImport({ onImported }: { onImported?: () => void
           <div>
             <p className="font-semibold text-fg">{summary.pack} {summary.packVersion}</p>
             <p className="text-fg-secondary">Verified: signed by publisher key {summary.signerKeyId.slice(0, 16)}, and every file matches its SHA-256. Built {summary.builtAt}; schema {summary.schemaVersion}.</p>
-            <p className="text-muted">Rows in this pack were retrieved by the pack builder on {builtOn}, not by you. Anything published after that is not in it.</p>
+            <p className="text-muted">Each file was retrieved by the pack builder on the date it lists, not by you. Anything published after that is not in it.</p>
           </div>
           <div className="rounded border border-line p-2">
             <p className="text-fg-secondary">Licence: {summary.licenceId} ({summary.licenceUrl})</p>
@@ -94,16 +104,15 @@ export default function DataPackImport({ onImported }: { onImported?: () => void
           {summary.tables.map((table) => (
             <fieldset key={table.table} className="space-y-1">
               <legend className="font-semibold text-fg">{table.table}</legend>
-              {table.datasetKind === null && <p className="text-muted">This app does not import this table.</p>}
               {table.files.map((file) => (
                 <label key={file.path} className="flex items-center gap-2 text-fg-secondary">
-                  <input type="checkbox" disabled={table.datasetKind === null} checked={selected.has(file.path)} onChange={() => toggle(file.path)} />
-                  {fileLabel(file)}
+                  <input type="checkbox" disabled={file.datasetKind === null} checked={selected.has(file.path)} onChange={() => toggle(file.path)} />
+                  {fileLabel(file)}{file.datasetKind === null && ' · this app does not import this file'}
                 </label>
               ))}
             </fieldset>
           ))}
-          <button type="button" className="analysis-button w-fit" disabled={Boolean(busy) || selected.size === 0} onClick={importSelected}>
+          <button type="button" className="analysis-button w-fit" disabled={Boolean(busy) || selected.size === 0} onClick={() => importSelected(summary)}>
             Import {selected.size === 1 ? '1 file' : `${selected.size} files`}
           </button>
         </div>
@@ -113,9 +122,7 @@ export default function DataPackImport({ onImported }: { onImported?: () => void
           {outcomes.map((outcome) => (
             <li key={outcome.path}>
               <span className="font-semibold text-fg">{outcome.table}{outcome.year === null ? '' : ` ${outcome.year}`}: </span>
-              {outcome.result
-                ? <span className="text-fg-secondary">{outcome.result.importedRows.toLocaleString()} rows imported to {outcome.result.tableName}, retrieved by the pack builder on {builtOn}.{outcome.result.rejectedRows > 0 && ` ${outcome.result.rejectedRows.toLocaleString()} rows rejected.`}</span>
-                : <span className="text-danger">{outcome.error}</span>}
+              <span className={outcome.result ? 'text-fg-secondary' : 'text-danger'}>{outcomeMessage(outcome)}</span>
             </li>
           ))}
         </ul>

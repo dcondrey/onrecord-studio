@@ -28,22 +28,22 @@
         "items": [
           "The manifest's signature is checked, and the key that signed it must be the pack publisher key built into this app. A pack signed by any other key is refused.",
           "Every listed file must be inside the pack folder and match its listed size and SHA-256. One changed byte refuses the whole pack, and nothing from it is imported.",
-          "The pack is checked again when you press Import, and each file's digest once more as it is read, so a file changed after the check is refused too."
+          "The pack is checked again when you press Import, and each file's digest once more as it is read, so a file changed after the check is refused too. If the pack's manifest is no longer the one you inspected, the import is refused; choose the folder again."
         ]
       },
       {
         "heading": "Choosing and importing",
         "items": [
-          "Files are listed by table and year. Tick the ones you want; each becomes its own snapshot through the same analytical import as a file you fetch yourself.",
+          "Files are listed by table and year, each with the date the pack builder retrieved it. Tick the ones you want; each becomes its own snapshot through the same analytical import as a file you fetch yourself. A file this app's City source list does not publish cannot be ticked.",
           "A year marked as not over may gain rows after the pack was built. Its snapshot is recorded as partial.",
-          "Each result names the rows imported and that they were retrieved by the pack builder on the pack's build date, not by you. A file that fails is reported beside the others; the rest still import."
+          "Each result says what happened to that file: how many rows were imported and the date the pack builder retrieved it, that it held no readable rows, or that its bytes were already stored, in which case nothing is imported and the pack is recorded beside the existing snapshot. A file that fails is reported beside the others; the rest still import."
         ]
       },
       {
         "heading": "Where a snapshot came from",
         "items": [
-          "The pack, its version, build time, signing key, file path and SHA-256 are recorded beside the snapshot.",
-          "A file whose bytes are identical to one already imported from the same address stays one snapshot, so the two are never counted twice. The snapshot keeps the record of whichever import came first, and the pack is recorded beside it either way."
+          "The pack, its version, build time, signing key, file path, SHA-256 and the builder's retrieval time are recorded beside the snapshot. A snapshot the pack created carries the builder's retrieval time as its own.",
+          "A file whose bytes are identical to one already imported from the same address stays one snapshot, so the two are never counted twice. Whichever comes first, the snapshot ends up describing your own fetch, and the pack is recorded beside it: a later fetch of the same bytes takes over a snapshot a pack created."
         ]
       },
       {

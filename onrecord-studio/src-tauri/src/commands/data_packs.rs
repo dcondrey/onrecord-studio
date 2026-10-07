@@ -24,9 +24,16 @@ pub async fn inspect_data_pack(path: String) -> Result<DataPackSummary, AppError
 #[tauri::command]
 pub async fn import_data_pack_files(
     path: String,
+    manifest_sha256: String,
     files: Vec<String>,
     repository: State<'_, DuckDbRepository>,
 ) -> Result<Vec<DataPackImportOutcome>, AppError> {
+    if manifest_sha256.len() != 64 || !manifest_sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
+    {
+        return Err(AppError::DataParsing(
+            "Inspect the data pack before importing from it".into(),
+        ));
+    }
     if files.len() > MAX_SELECTED_FILES {
         return Err(AppError::DataParsing(format!(
             "Choose at most {MAX_SELECTED_FILES} files per import"
@@ -38,6 +45,7 @@ pub async fn import_data_pack_files(
     import::import_files(
         &repository,
         pack_directory(&path)?,
+        &manifest_sha256,
         files,
         pinned_pack_keys(),
     )
