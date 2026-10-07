@@ -1,0 +1,48 @@
+[
+  {
+    "id": "first-run-data",
+    "title": "San Diego's core public data on first launch",
+    "group": "Getting started",
+    "keywords": [
+      "first launch",
+      "first run",
+      "core data",
+      "budget",
+      "actuals",
+      "Get It Done",
+      "calls for service",
+      "open data",
+      "public domain",
+      "ODC-PDDL",
+      "skip"
+    ],
+    "summary": "While your library has no imported tables, the overview offers to fetch seven City of San Diego tables so the leads under What stands out have something to read. It is offered once.",
+    "sections": [
+      {
+        "heading": "What it fetches",
+        "paragraphs": [
+          "The City's operating budget and operating actuals for every published fiscal year, the Get It Done reports open today for every service, the Encampment reports closed last year and this year so far, and SDPD calls for service for last year and this year so far. Each table is fetched and imported the same way as Fetch and import in Analysis, one at a time.",
+          "Each table shows its own outcome: waiting, fetching, the number of rows imported, or the reason it was not imported. A table that fails does not stop the others. This year's files hold the year so far, and a file the City has not yet published for the new year is reported as not imported."
+        ]
+      },
+      {
+        "heading": "Where the data comes from",
+        "paragraphs": [
+          "Every table is retrieved at that moment from the City of San Diego open data portal (data.sandiego.gov). The City publishes these datasets in the public domain under the Open Data Commons Public Domain Dedication and License (ODC-PDDL 1.0), for information only and without warranty.",
+          "Shelter beds are not a City table. The comparison of budget, Encampment reports and shelter beds by fiscal year needs the emergency shelter inventory as well; What stands out lists it as missing data you can fetch."
+        ]
+      },
+      {
+        "heading": "When it is offered",
+        "paragraphs": [
+          "Only when the library has finished loading and holds no imported tables. Once you choose Get the tables or Skip it is not offered again, and you can fetch any of these tables later from Analysis.",
+          "When every table is imported the app opens Analysis, where What stands out shows the leads these tables answer. If any table failed, the card stays on the overview with the reasons until you close it. Leaving the overview during the download stops the tables not yet started; the one being fetched still finishes."
+        ]
+      }
+    ],
+    "views": [],
+    "findingKinds": [],
+    "commandGroups": [],
+    "related": ["starter-sets", "view-analysis", "finding-capacity-comparison-lead", "finding-service-report-lead"]
+  }
+]

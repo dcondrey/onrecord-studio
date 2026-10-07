@@ -27,6 +27,7 @@ import PostIngestBrief from './PostIngestBrief';
 import CrossCorpusExplorer from './CrossCorpusExplorer';
 import TopicPacks from './TopicPacks';
 import StarterSets from './StarterSets';
+import FirstRunData from './FirstRunData';
 import { useStarterRunStore } from '../../store/useStarterRunStore';
 
 export default function OverviewDashboard() {
@@ -88,6 +89,7 @@ export default function OverviewDashboard() {
         </section>
 
 
+        <FirstRunData />
         {workspaceInitializationStatus === 'loading' ? (
           <WorkspaceSourcesLoading />
         ) : workspaceInitializationStatus === 'error' ? (
