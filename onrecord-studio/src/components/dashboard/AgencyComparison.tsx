@@ -1,8 +1,14 @@
 import { useMemo, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import type { AgencyPerformanceProfile } from '../../types/analysis';
+import { cn } from '../../utils/cn';
+import Badge from '../ui/Badge';
+import Button from '../ui/Button';
 import PageHeader from '../ui/PageHeader';
 import EmptyState from '../ui/EmptyState';
+import InlineError from '../ui/InlineError';
+import { Select } from '../ui/Field';
+import Table, { Td, Th } from '../ui/Table';
 import { openSourceConnector } from './sourceEvents';
 import ObjectLink from '../objects/ObjectLink';
 import DispositionCounts from './DispositionCounts';
@@ -30,28 +36,36 @@ type ComparisonColumn =
   | 'totalDocumentsReleased';
 
 interface ColumnDefinition {
-  key: ComparisonColumn;
+  key: Exclude<ComparisonColumn, 'performanceZScore'>;
   label: string;
-  format: (profile: AgencyPerformanceProfile) => string;
+  /** The full wording, shown as the header's tooltip when the label is shortened. */
+  full?: string;
+  /** `null` is an absent measurement, rendered as words in muted italic. */
+  format: (profile: AgencyPerformanceProfile) => string | null;
 }
 
+/**
+ * The z-score has no column: the "Slower than peers" mark says what it means and carries the value
+ * in its tooltip, and a bare score invites reading it as a grade.
+ */
 const COLUMNS: readonly ColumnDefinition[] = [
   {
     key: 'averageClosureDays',
     label: 'Avg closure days',
-    format: (p) => (p.averageClosureDays === null ? NO_MEASURABLE_CLOSURE : p.averageClosureDays.toFixed(1)),
+    full: 'Average days from filing to closure',
+    format: (p) => (p.averageClosureDays === null ? null : p.averageClosureDays.toFixed(1)),
   },
-  { key: 'validLatencySampleSize', label: 'Measured closures', format: (p) => p.validLatencySampleSize.toLocaleString() },
-  {
-    key: 'performanceZScore',
-    label: 'Z-score',
-    format: (p) => (p.performanceZScore === null ? 'not computed' : p.performanceZScore.toFixed(2)),
-  },
-  { key: 'statutoryViolationCount', label: 'Statutory violations', format: (p) => p.statutoryViolationCount.toLocaleString() },
+  { key: 'validLatencySampleSize', label: 'Measured', full: 'Closures with a measurable latency', format: (p) => p.validLatencySampleSize.toLocaleString() },
+  { key: 'statutoryViolationCount', label: 'Violations', full: 'Counted statutory violations', format: (p) => p.statutoryViolationCount.toLocaleString() },
   { key: 'statutoryViolationRate', label: 'Violation rate', format: (p) => `${(p.statutoryViolationRate * 100).toFixed(1)}%` },
-  { key: 'suspiciousFastClosureCount', label: 'Suspiciously fast closures', format: (p) => p.suspiciousFastClosureCount.toLocaleString() },
-  { key: 'totalRequestsProcessed', label: 'Requests processed', format: (p) => p.totalRequestsProcessed.toLocaleString() },
-  { key: 'totalDocumentsReleased', label: 'Documents released', format: (p) => p.totalDocumentsReleased.toLocaleString() },
+  {
+    key: 'suspiciousFastClosureCount',
+    label: 'Fast closures',
+    full: 'Unusually fast closures: closed faster than the peer distribution; not a finding of wrongdoing.',
+    format: (p) => p.suspiciousFastClosureCount.toLocaleString(),
+  },
+  { key: 'totalRequestsProcessed', label: 'Requests', format: (p) => p.totalRequestsProcessed.toLocaleString() },
+  { key: 'totalDocumentsReleased', label: 'Documents', full: 'Documents released', format: (p) => p.totalDocumentsReleased.toLocaleString() },
 ];
 
 const DEFAULT_COLUMN: ComparisonColumn = 'averageClosureDays';
@@ -89,22 +103,29 @@ export function sortProfiles(
  */
 export default function AgencyComparison() {
   const agencyProfiles = useAppStore((s) => s.agencyProfiles);
+  const analyticsError = useAppStore((s) => s.analyticsError);
   const requestAnalyticsRefresh = useAppStore((s) => s.requestAnalyticsRefresh);
   const setWorkspaceView = useAppStore((s) => s.setWorkspaceView);
-  const savedSourceCount = useAppStore((s) => s.portals.length);
+  const savedSources = useAppStore((s) => s.portals);
   const [column, setColumn] = useState<ComparisonColumn>(DEFAULT_COLUMN);
   const [direction, setDirection] = useState<'asc' | 'desc'>('desc');
   const [portalFilter, setPortalFilter] = useState<string>('');
 
+  const portalName = useMemo(() => {
+    const names = new Map(savedSources.map(({ registration }) => [registration.portalKey, registration.displayName]));
+    return (portalKey: string) => names.get(portalKey) ?? portalKey;
+  }, [savedSources]);
+
   const portals = useMemo(
-    () => [...new Set(agencyProfiles.map((p) => p.portalSubdomain))].sort((a, b) => a.localeCompare(b)),
-    [agencyProfiles],
+    () => [...new Set(agencyProfiles.map((p) => p.portalSubdomain))].sort((a, b) => portalName(a).localeCompare(portalName(b))),
+    [agencyProfiles, portalName],
   );
 
   const rows = useMemo(() => {
     const scoped = portalFilter ? agencyProfiles.filter((p) => p.portalSubdomain === portalFilter) : agencyProfiles;
     return sortProfiles(scoped, column, direction);
   }, [agencyProfiles, column, direction, portalFilter]);
+  const spansPortals = new Set(rows.map((p) => p.portalSubdomain)).size > 1;
 
   const toggleSort = (next: ComparisonColumn) => {
     if (next === column) {
@@ -117,13 +138,13 @@ export default function AgencyComparison() {
 
   return (
     <main className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto w-full max-w-[1400px] space-y-4 p-4 lg:p-6">
+      <div className="mx-auto w-full max-w-content space-y-6 px-4 pb-10 pt-6 md:px-6">
         <PageHeader
           title="Compare agencies"
           summary="Every agency with an analytics profile, ranked on one measured column at a time."
           method={<>
             A rank is a position on a latency or a count, not a compliance judgment: only the
-            statutory violation column is a counted violation, and the slower-than-peers marker is a
+            violations column is a counted statutory violation, and the slower-than-peers mark is a
             statistical comparison with every other agency that no statute speaks to. An agency with
             fewer than {SMALL_SAMPLE_CLOSURES} measured closures is marked small sample because one
             closure moves its average; an agency that has closed nothing measurable shows {NO_MEASURABLE_CLOSURE}{' '}
@@ -131,13 +152,21 @@ export default function AgencyComparison() {
           </>}
         />
 
+        {analyticsError && (
+          <InlineError
+            summary={agencyProfiles.length === 0 ? 'Agency profiles could not be read.' : 'Agency profiles could not be refreshed; the table shows the last profiles read.'}
+            detail={analyticsError}
+            onRetry={requestAnalyticsRefresh}
+          />
+        )}
+
         {agencyProfiles.length === 0 ? (
-          savedSourceCount === 0 ? (
+          analyticsError ? null : savedSources.length === 0 ? (
             <EmptyState
               icon="building"
               title="No agencies to compare yet"
               body="Profiles are computed from the requests a source has synced. Add a records portal to start."
-              actions={<button type="button" onClick={openSourceConnector} className="motion-press focus-ring rounded-lg border primary-action border-transparent px-3 py-1.5 text-label font-semibold text-white">Add a source</button>}
+              actions={<Button variant="primary" onClick={openSourceConnector}>Add a source</Button>}
             />
           ) : (
             <EmptyState
@@ -145,109 +174,97 @@ export default function AgencyComparison() {
               title="Agency profiles have not been computed"
               body="Profiles are computed after a source finishes syncing. Recompute them from what has already been ingested."
               actions={<>
-                <button type="button" onClick={requestAnalyticsRefresh} className="motion-press focus-ring rounded-lg border primary-action border-transparent px-3 py-1.5 text-label font-semibold text-white">Refresh analytics</button>
-                <button type="button" onClick={() => setWorkspaceView('activity')} className="motion-press focus-ring rounded-lg border border-control px-3 py-1.5 text-label font-semibold text-fg-secondary">See sync activity</button>
+                <Button variant="primary" onClick={requestAnalyticsRefresh}>Refresh analytics</Button>
+                <Button onClick={() => setWorkspaceView('activity')}>See sync activity</Button>
               </>}
             />
           )
         ) : (
-          <>
-            <div className="flex flex-wrap items-center gap-3 text-label text-muted">
-              <label className="flex items-center gap-2">
-                <span>Portal</span>
-                <select
-                  aria-label="Portal filter"
-                  value={portalFilter}
-                  onChange={(event) => setPortalFilter(event.target.value)}
-                  className="focus-ring rounded-lg border border-control bg-canvas px-2 py-1 text-label text-fg"
-                >
-                  <option value="">All portals</option>
-                  {portals.map((portal) => (
-                    <option key={portal} value={portal}>
-                      {portal}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <span className="font-mono">{rows.length.toLocaleString()} agencies</span>
+          <section className="app-panel overflow-hidden" aria-label="Agency comparison table">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
+              <Select size="sm" aria-label="Portal filter" value={portalFilter} onChange={(event) => setPortalFilter(event.target.value)} className="w-auto min-w-[12rem]">
+                <option value="">All portals</option>
+                {portals.map((portal) => (
+                  <option key={portal} value={portal}>{portalName(portal)}</option>
+                ))}
+              </Select>
+              <span className="text-caption tabular-nums text-muted">{rows.length.toLocaleString()} {rows.length === 1 ? 'agency' : 'agencies'}</span>
             </div>
-
-            <div className="overflow-x-auto rounded-xl border border-line bg-canvas/40">
-              <table className="w-full text-left text-label" aria-label="Agency comparison">
-                <thead className="border-b border-line text-caption uppercase tracking-wider text-muted">
-                  <tr>
-                    <th scope="col" className="px-3 py-2">Rank</th>
-                    <th scope="col" className="px-3 py-2">Agency</th>
-                    <th scope="col" className="px-3 py-2">Portal</th>
-                    {COLUMNS.map((definition) => {
-                      const active = definition.key === column;
-                      return (
-                        <th
-                          key={definition.key}
-                          scope="col"
-                          aria-sort={active ? (direction === 'desc' ? 'descending' : 'ascending') : 'none'}
-                          className="px-3 py-2"
-                        >
-                          <button
-                            type="button"
-                            onClick={() => toggleSort(definition.key)}
-                            className={`focus-ring rounded px-1 uppercase tracking-wider hover:text-accent ${active ? 'text-accent' : ''}`}
-                          >
-                            {definition.label}
-                            {active ? (direction === 'desc' ? ' ▾' : ' ▴') : ''}
-                          </button>
-                        </th>
-                      );
-                    })}
-                    <th scope="col" className="px-3 py-2">Marks</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {rows.map((profile, index) => {
-                    const outlier = isPeerLatencyOutlier(profile);
-                    const smallSample = profile.validLatencySampleSize < SMALL_SAMPLE_CLOSURES;
+            <Table label="Agency comparison">
+              <thead>
+                <tr>
+                  <Th numeric className="sticky left-0 z-[11] w-12 min-w-12">Rank</Th>
+                  <Th className="sticky left-12 z-[11] min-w-[14rem]">Agency</Th>
+                  {COLUMNS.map((definition) => {
+                    const active = definition.key === column;
                     return (
-                      <tr key={`${profile.portalSubdomain}-${profile.agencyId}`} className="text-fg-secondary">
-                        <td className="px-3 py-2 font-mono text-muted">{index + 1}</td>
-                        <td className="px-3 py-2 font-semibold">
-                          <ObjectLink target={{ kind: 'agency', portalKey: profile.portalSubdomain, agencyId: profile.agencyId, label: profile.agencyName }} className="text-fg decoration-line-strong hover:text-accent">{profile.agencyName}</ObjectLink>
-                        </td>
-                        <td className="px-3 py-2 text-muted">{profile.portalSubdomain}</td>
-                        {COLUMNS.map((definition) => (
-                          <td key={definition.key} className="px-3 py-2 font-mono">
-                            {definition.format(profile)}
-                          </td>
-                        ))}
-                        <td className="px-3 py-2">
-                          <span className="flex flex-wrap gap-1">
-                            {outlier && (
-                              <span
-                                title={`Closure latency z-score at or above ${PEER_LATENCY_OUTLIER_Z_SCORE.toFixed(1)}: slower than peers. Not a statutory finding.`}
-                                className="rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-caption font-semibold text-warning"
-                              >
-                                slower than peers
-                              </span>
-                            )}
-                            {smallSample && (
-                              <span
-                                title={`${profile.validLatencySampleSize} measured closures; the average rests on few observations.`}
-                                className="rounded-full border border-line-strong px-2 py-0.5 text-caption text-muted"
-                              >
-                                small sample
-                              </span>
-                            )}
-                          </span>
-                        </td>
-                      </tr>
+                      <Th
+                        key={definition.key}
+                        numeric
+                        aria-sort={active ? (direction === 'desc' ? 'descending' : 'ascending') : 'none'}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => toggleSort(definition.key)}
+                          title={definition.full}
+                          className={cn('focus-ring inline-flex items-center gap-1 rounded uppercase hover:text-fg', active && 'text-fg')}
+                        >
+                          {definition.label}
+                          <span aria-hidden="true" className={cn('w-2 text-center', !active && 'invisible')}>{direction === 'desc' ? '▾' : '▴'}</span>
+                        </button>
+                      </Th>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
-          </>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((profile, index) => {
+                  const outlier = isPeerLatencyOutlier(profile);
+                  const smallSample = profile.validLatencySampleSize < SMALL_SAMPLE_CLOSURES;
+                  return (
+                    <tr key={`${profile.portalSubdomain}-${profile.agencyId}`} className="group">
+                      <Td numeric className="sticky left-0 w-12 bg-panel text-muted group-hover:bg-raised">{index + 1}</Td>
+                      <Td className="sticky left-12 min-w-[14rem] bg-panel group-hover:bg-raised">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <ObjectLink
+                            target={{ kind: 'agency', portalKey: profile.portalSubdomain, agencyId: profile.agencyId, label: profile.agencyName }}
+                            className="line-clamp-2 font-medium text-fg no-underline hover:underline"
+                          >
+                            {profile.agencyName}
+                          </ObjectLink>
+                          {outlier && (
+                            <Badge
+                              tone="danger"
+                              title={`Closure latency ${profile.performanceZScore?.toFixed(2)}σ above the peer mean (threshold ${PEER_LATENCY_OUTLIER_Z_SCORE.toFixed(1)}σ). Not a statutory finding.`}
+                            >
+                              Slower than peers
+                            </Badge>
+                          )}
+                          {smallSample && (
+                            <Badge tone="neutral" dashed title={`${profile.validLatencySampleSize} measured closures; the average rests on few observations.`}>
+                              Small sample
+                            </Badge>
+                          )}
+                        </div>
+                        {spansPortals && <p className="mt-0.5 text-caption text-muted" title={profile.portalSubdomain}>{portalName(profile.portalSubdomain)}</p>}
+                      </Td>
+                      {COLUMNS.map((definition) => {
+                        const value = definition.format(profile);
+                        return (
+                          <Td key={definition.key} numeric className={cn(value === null && 'italic text-muted')}>
+                            {value ?? NO_MEASURABLE_CLOSURE}
+                          </Td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </Table>
+          </section>
         )}
 
-        {savedSourceCount > 0 && <DispositionCounts portalSubdomain={portalFilter || null} />}
+        {savedSources.length > 0 && <DispositionCounts portalSubdomain={portalFilter || null} />}
       </div>
     </main>
   );
