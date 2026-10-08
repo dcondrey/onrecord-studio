@@ -12,6 +12,10 @@ import { contractFileRequest } from '../../utils/organisationRequests';
 import { peopleAcrossReturns, yearChange } from '../../utils/organisationPeople';
 import { guidanceForSubject } from '../../utils/sourceGuidance';
 import { useAppStore } from '../../store/useAppStore';
+import Button from '../ui/Button';
+import InlineError from '../ui/InlineError';
+import Time from '../ui/Time';
+import { Field, Input } from '../ui/Field';
 
 const dollars = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const NOT_STATED = 'not stated';
@@ -477,38 +481,40 @@ export default function OrganisationFilingsPanel({ initialQuery = '' }: { initia
   const handedOver = initialQuery.trim();
   // Runs once per handed-over value; the host keys the panel by it.
   useEffect(() => { if (handedOver) search(handedOver); }, [handedOver]);
-  return <section aria-label="Organisation filings" className="space-y-4">
+  return <section aria-label="Organization filings" className="space-y-4">
     <div>
-      <h3 className="text-sm font-semibold text-fg">Organisation filings</h3>
-      <p className="text-label leading-4 text-muted">Name a tax-exempt organisation to read what its Form 990 returns state, its single audits, and the payments your library's tables record to it. Nothing here is a finding: a return's answer is the filer's statement and a payment is a payment.</p>
+      <h3 className="text-heading text-fg">Organization filings</h3>
+      <p className="mt-1 max-w-prose text-body text-muted">Name a tax-exempt organization to read what its Form 990 returns state, its single audits, and the payments your library's tables record to it. Nothing here is a finding: a return's answer is the filer's statement and a payment is a payment.</p>
     </div>
-    <form className="flex flex-wrap items-end gap-3" onSubmit={(event) => { event.preventDefault(); search(); }}>
-      <label className="min-w-0 flex-1 text-label leading-4 text-fg-secondary">Organisation name or EIN
-        <input className="analysis-input mt-1 w-full" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name, or EIN such as 33-0215585" /></label>
-      <label className="text-label leading-4 text-fg-secondary">Federal Audit Clearinghouse key (optional)
-        <input className="analysis-input mt-1 w-full" type="password" autoComplete="off" value={auditKey} onChange={(event) => setAuditKey(event.target.value)} aria-describedby="organisation-audit-key-note" /></label>
-      <button type="submit" className="analysis-button" disabled={busy === 'search' || !query.trim()}>{busy === 'search' ? 'Searching' : 'Find'}</button>
+    <form className="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,18rem)_auto]" onSubmit={(event) => { event.preventDefault(); search(); }}>
+      <Field label="Organization name or EIN">
+        <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name, or EIN such as 33-0215585" />
+      </Field>
+      <Field label="Federal Audit Clearinghouse key (optional)">
+        <Input type="password" autoComplete="off" value={auditKey} onChange={(event) => setAuditKey(event.target.value)} aria-describedby="organisation-audit-key-note" />
+      </Field>
+      <Button type="submit" variant="primary" disabled={busy === 'search' || !query.trim()}>{busy === 'search' ? 'Searching…' : 'Find'}</Button>
     </form>
-    <p id="organisation-audit-key-note" className="text-label leading-4 text-muted">A free api.data.gov key lets the check read single audits. It is sent only to api.fac.gov and is not saved.</p>
-    {error && <p role="alert" className="text-sm text-danger">{error}</p>}
-    {matches && <ul aria-label="Matching organisations" className="space-y-1">
-      {matches.length === 0 && <li className="text-label leading-4 text-muted">ProPublica Nonprofit Explorer lists no organisation matching that name.</li>}
-      {matches.map((match) => <li key={match.ein}><button type="button" className="text-left text-label leading-4 text-accent underline" onClick={() => show(match, 'load')}>{match.name}</button><span className="text-label leading-4 text-muted"> {[match.city, match.state].filter(Boolean).join(', ')} · EIN {match.ein}</span></li>)}
-      {matches.length > 0 && <li className="text-label leading-4 text-muted">Name search by ProPublica Nonprofit Explorer.</li>}
+    <p id="organisation-audit-key-note" className="text-caption text-muted">A free api.data.gov key lets the check read single audits. It is sent only to api.fac.gov and is not saved.</p>
+    {error && <InlineError summary="The organization search couldn’t complete." detail={error} />}
+    {matches && <ul aria-label="Matching organizations" className="space-y-1 text-body">
+      {matches.length === 0 && <li className="text-muted">ProPublica Nonprofit Explorer lists no organization matching that name.</li>}
+      {matches.map((match) => <li key={match.ein}><Button variant="link" onClick={() => show(match, 'load')}>{match.name}</Button><span className="text-caption text-muted"> {[match.city, match.state].filter(Boolean).join(', ')} · EIN <span className="tabular-nums">{match.ein}</span></span></li>)}
+      {matches.length > 0 && <li className="text-caption text-muted">Name search by ProPublica Nonprofit Explorer.</li>}
     </ul>}
     <BatchCheck auditKey={auditKey} onDone={() => void loadChecked()} />
     <PaymentTables schema={schema} loadError={tablesError} mappings={mappings} onChange={(saved) => { setMappings(saved); void loadChecked(); if (selected && filings) show(selected, 'load'); }} />
-    {listError && <p role="alert" className="text-label leading-4 text-warning">Checked organisations could not be read: {listError}</p>}
+    {listError && <InlineError summary="Checked organizations couldn’t be read." detail={listError} />}
     <Portfolio rows={portfolio} onOpen={(row) => show({ ein: row.ein, name: row.name }, 'load')} />
-    {checked.length > 0 && portfolio.length === 0 && <div className="flex flex-wrap items-center gap-2 text-label leading-4"><span className="text-muted">Checked before:</span>{checked.map((item) => <button type="button" key={item.ein} className="rounded border border-control px-2 py-1 text-fg-secondary" onClick={() => show(item, 'load')}>{item.name ?? item.ein}</button>)}</div>}
+    {checked.length > 0 && portfolio.length === 0 && <div className="flex flex-wrap items-center gap-2 text-body"><span className="text-muted">Checked before:</span>{checked.map((item) => <Button size="sm" key={item.ein} onClick={() => show(item, 'load')}>{item.name ?? item.ein}</Button>)}</div>}
     {selected && <div className="space-y-4 border-t border-line-strong pt-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h3 className="text-base font-semibold text-fg">{filings?.name ?? selected.name ?? `EIN ${selected.ein}`}</h3>
-          <p className="text-label leading-4 text-muted">EIN {selected.ein}{filings ? ` · checked ${filings.checkedAt.slice(0, 10)}` : ''}</p></div>
-        <button type="button" className="analysis-button" disabled={busy === 'check' || busy === 'load'} onClick={() => show(selected, 'check')}>{busy === 'check' ? 'Checking' : filings ? 'Check again' : 'Check filings'}</button>
+        <div><h3 className="text-heading text-fg">{filings?.name ?? selected.name ?? `EIN ${selected.ein}`}</h3>
+          <p className="text-caption tabular-nums text-muted">EIN {selected.ein}{filings && <> · checked <Time value={filings.checkedAt} /></>}</p></div>
+        <Button disabled={busy === 'check' || busy === 'load'} onClick={() => show(selected, 'check')}>{busy === 'check' ? 'Checking…' : filings ? 'Check again' : 'Check filings'}</Button>
       </div>
-      {busy === 'check' && <p role="status" className="text-label leading-4 text-muted">Reading the IRS e-file index for each year your library does not hold yet (about 90 MB a year, kept for every organisation) and this organisation's returns. A first check can take several minutes.</p>}
-      {filings === null && busy === '' && <p className="text-label leading-4 text-muted">Nothing is held for this organisation yet. Checking reads the IRS e-file index for each year from 2024 (about 90 MB a year, downloaded once for every organisation) and this organisation's returns.</p>}
+      {busy === 'check' && <p role="status" className="text-body text-muted">Reading the IRS e-file index for each year your library does not hold yet (about 90 MB a year, kept for every organisation) and this organisation's returns. A first check can take several minutes.</p>}
+      {filings === null && busy === '' && <p className="text-body text-muted">Nothing is held for this organization yet. Checking reads the IRS e-file index for each year from 2024 (about 90 MB a year, downloaded once for every organisation) and this organisation's returns.</p>}
       {filings && <Record filings={filings} />}
     </div>}
   </section>;

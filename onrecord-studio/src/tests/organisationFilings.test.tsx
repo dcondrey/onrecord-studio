@@ -20,7 +20,7 @@ const filings = (ein: string, name: string, overrides: Partial<OrganisationFilin
   summary: null, singleAudits: null, warnings: [], publicMoney: [], publicMoneyNotes: [], ...overrides,
 });
 const open = async (text: string) => {
-  fireEvent.change(screen.getByLabelText('Organisation name or EIN'), { target: { value: text } });
+  fireEvent.change(screen.getByLabelText('Organization name or EIN'), { target: { value: text } });
   fireEvent.click(screen.getByRole('button', { name: 'Find' }));
 };
 afterEach(() => { cleanup(); vi.clearAllMocks(); });

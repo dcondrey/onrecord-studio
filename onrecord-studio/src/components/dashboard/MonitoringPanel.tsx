@@ -3,6 +3,10 @@ import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { CoverageExpectation, MonitoringEvidence, MonitoringStatus, ServiceObservation } from '../../types/monitoring';
 import { citationLocation, observationPoints, optionalMeasurement } from '../../utils/monitoring';
+import Button from '../ui/Button';
+import SegmentedControl from '../ui/SegmentedControl';
+import InlineError from '../ui/InlineError';
+import Skeleton from '../ui/Skeleton';
 
 const inputClass = 'w-full rounded-lg border border-line-strong bg-canvas p-2 text-sm text-fg';
 const panelClass = 'rounded-xl border border-line-strong bg-canvas/40 p-4';
@@ -66,14 +70,20 @@ export default function MonitoringPanel({ caseId = null, topic = 'homelessness' 
   const observations = (status?.observations ?? []).filter(o => (!dateFrom || o.observedOn >= dateFrom) && (!dateTo || o.observedOn <= dateTo));
   const points = observationPoints(observations);
   const selected = observations.find(o => o.id === selectedObservation);
-  return <section aria-label="Evidence monitoring" className="app-panel p-5 sm:p-6">
-    <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="app-eyebrow text-accent">Records that move the investigation</div>
-      <h3 className="mt-2 text-xl font-semibold text-fg">Missing records, changing commitments and service access</h3>
-      <p className="mt-2 max-w-3xl text-sm text-muted">Turn unresolved questions into acquisition work. Compare cited versions and reviewed location observations before drawing conclusions.</p></div>
-      <button className="analysis-button" disabled={busy} onClick={() => void load(true)}>{busy ? 'Checking records…' : 'Check ingested records'}</button></div>
-    <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Monitoring views">{(['coverage', 'changes', 'services'] as const).map(value => <button role="tab" aria-selected={tab === value} className={`analysis-button ${tab === value ? 'border-accent text-accent' : ''}`} key={value} onClick={() => setTab(value)}>{value === 'coverage' ? 'Acquisition priorities' : value === 'changes' ? 'Publication changes' : 'Service access and operations'}</button>)}</div>
-    {error && <p role="alert" className="mt-3 text-sm text-danger">{error}</p>}
-    {!status && busy && <p role="status" className="mt-4 text-sm text-muted">Loading this investigation’s evidence…</p>}
+  return <section aria-label="Evidence monitoring">
+    <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-heading text-fg">Coverage and changes</h3>
+      <p className="mt-1 max-w-prose text-body text-muted">Turn unresolved questions into records to acquire, and compare cited versions before drawing conclusions.</p></div>
+      <Button disabled={busy} onClick={() => void load(true)}>{busy ? 'Checking records…' : 'Check ingested records'}</Button></div>
+    <SegmentedControl
+      className="mt-4"
+      label="Monitoring views"
+      mode="tabs"
+      value={tab}
+      onChange={setTab}
+      options={[{ value: 'coverage', label: 'Acquisition priorities' }, { value: 'changes', label: 'Publication changes' }, { value: 'services', label: 'Service access and operations' }]}
+    />
+    {error && <InlineError className="mt-3" summary="This investigation’s monitoring couldn’t be read." detail={error} onRetry={() => void load(false)} />}
+    {!status && busy && <Skeleton variant="lines" lines={3} label="Loading this investigation’s evidence" className="mt-4" />}
     {status && tab === 'coverage' && <div className="mt-4 space-y-3">
       <button className="analysis-button" onClick={() => setNewCoverage(!newCoverage)}>Define a consequential missing record</button>
       {newCoverage && <CoverageForm caseId={caseId} topic={topic} busy={busy} onSave={value => void save('coverage', value)} />}
