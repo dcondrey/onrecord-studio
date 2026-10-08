@@ -13,7 +13,7 @@
 //! The records are the `FinancialRecord`s the financial investigation already cites, so every
 //! case resolves to `FinancialCitation` rows and the query ids that produced them.
 
-use super::financial::{amount, display, finding, get, sum};
+use super::financial::{amount, calculation, display, executed, finding, get, sum, transactions};
 use super::spending_rules::{ExtractedRule, RuleKind};
 use crate::types::{FinancialAuditFinding, FinancialCalculation, FinancialGap, FinancialRecord};
 use chrono::NaiveDate;
@@ -106,10 +106,6 @@ fn date(record: &FinancialRecord, field: &str) -> Option<NaiveDate> {
     NaiveDate::parse_from_str(get(record, field), "%Y-%m-%d").ok()
 }
 
-fn approved(record: &FinancialRecord) -> bool {
-    ["executed", "approved", "signed"].contains(&get(record, "status").to_lowercase().as_str())
-}
-
 fn role_rows<'a>(records: &'a [FinancialRecord], role: &str) -> Vec<&'a FinancialRecord> {
     records.iter().filter(|r| r.role == role).collect()
 }
@@ -165,44 +161,6 @@ fn classified(
     item
 }
 
-fn calc(label: &str, formula: String, value: i128, unit: &str) -> FinancialCalculation {
-    FinancialCalculation {
-        label: label.into(),
-        formula,
-        result: display(value),
-        unit: unit.into(),
-    }
-}
-
-/// Transactions a payment total may count: one row per transaction id, identical repeats counted
-/// once, posted statuses only. Rows of a transaction id that is blank, conflicting or carries an
-/// unrecognized status are excluded and counted, never guessed at. Mirrors the contract chain.
-fn settled_payments<'a>(rows: &[&'a FinancialRecord]) -> (Vec<&'a FinancialRecord>, usize) {
-    let mut transactions: BTreeMap<&str, Vec<&'a FinancialRecord>> = BTreeMap::new();
-    for row in rows {
-        transactions
-            .entry(get(row, "transaction_id"))
-            .or_default()
-            .push(row);
-    }
-    let mut clean = Vec::new();
-    let mut excluded = 0;
-    for (transaction, group) in transactions {
-        let status = get(group[0], "status").to_lowercase();
-        let conflicting = group
-            .windows(2)
-            .any(|pair| pair[0].values != pair[1].values);
-        if transaction.is_empty() || conflicting {
-            excluded += group.len();
-        } else if ["paid", "posted", "settled"].contains(&status.as_str()) {
-            clean.push(group[0]);
-        } else if !["void", "cancelled", "canceled"].contains(&status.as_str()) {
-            excluded += group.len();
-        }
-    }
-    (clean, excluded)
-}
-
 fn agency_key(record: &FinancialRecord, id_field: &str) -> (String, String) {
     (get(record, "agency").into(), get(record, id_field).into())
 }
@@ -227,7 +185,7 @@ fn contract_cases(
         );
         return;
     }
-    let (settled, _) = settled_payments(&payments);
+    let settled = transactions(&payments).posted;
 
     // 1c: vendor and contract id both absent from the register.
     let contract_ids: BTreeSet<(String, String)> = contracts
@@ -277,7 +235,7 @@ fn contract_cases(
                     "The register may list this vendor under another identifier, or hold the contract under another fund or a later fiscal year.",
                 ],
                 "Obtain the procurement basis for these payments (purchase order, bid exemption or agreement) and the vendor identifier crosswalk between the payment and contract systems.",
-                vec![calc("Posted payments to the vendor", format!("sum of {} cited payment rows", rows.len()), total, currency)],
+                vec![calculation("Posted payments to the vendor", format!("sum of {} cited payment rows", rows.len()), total, currency)],
                 ABSENCE_PATTERN_CONFIDENCE,
             ),
             rules: vec![],
@@ -311,7 +269,7 @@ fn contract_cases(
             no_term += 1;
             continue;
         };
-        if !approved(contract) || end < start {
+        if !executed(contract) || end < start {
             continue;
         }
         let dated: Vec<(&FinancialRecord, NaiveDate)> = rows
@@ -330,7 +288,7 @@ fn contract_cases(
             && !own_amendments.is_empty()
             && own_amendments
                 .iter()
-                .all(|a| approved(a) && date(a, "period_end").is_some());
+                .all(|a| executed(a) && date(a, "period_end").is_some());
         if !extensions_known {
             need_amendment_term = true;
         }
@@ -373,7 +331,7 @@ fn contract_cases(
         };
         let mut calculations = vec![];
         if let Some(total) = outside {
-            calculations.push(calc(
+            calculations.push(calculation(
                 "Posted payments dated outside the term",
                 format!("sum of {} cited payment rows", offending.len()),
                 total,
@@ -497,7 +455,7 @@ pub fn appropriation_case(
             "Open encumbrances may already be partly liquidated into actuals, which double counts them.",
         ],
         "Obtain the dated appropriation transfers and supplemental appropriations for this fund and account, and the encumbrance liquidation history.",
-        vec![calc(
+        vec![calculation(
             "Amount above revised appropriation",
             format!("{} − {}", display(total), display(revised)),
             over,
@@ -628,7 +586,7 @@ fn restriction_cases(
                     "A reimbursement or interfund transfer may carry the program label of the receiving side.",
                 ],
                 "Obtain the grant agreement or ordinance behind the restriction and the program crosswalk between the expenditure and restriction systems.",
-                vec![calc(
+                vec![calculation(
                     "Actual spending on programs the restriction does not name",
                     format!("sum of {} cited actual rows", offending.len()),
                     total,
@@ -787,9 +745,9 @@ fn threshold_cases(
         return;
     }
     let candidates: Vec<&FinancialRecord> = if role == "payment" {
-        settled_payments(&rows).0
+        transactions(&rows).posted
     } else {
-        rows.iter().copied().filter(|r| approved(r)).collect()
+        rows.iter().copied().filter(|r| executed(r)).collect()
     };
     let date_field = if role == "payment" {
         "transaction_date"
@@ -862,7 +820,7 @@ fn threshold_cases(
                     "The row's date may not be the date the purchase was committed.",
                 ],
                 "Obtain the approval record (council or board action, resolution or purchase approval) for each cited row and the policy version in force on its date.",
-                vec![calc("Recorded amount above the limit without approval", format!("sum of {} cited rows", legal.len()), total, "USD")],
+                vec![calculation("Recorded amount above the limit without approval", format!("sum of {} cited rows", legal.len()), total, "USD")],
                 confidence,
             ),
             rules: vec![index],
@@ -885,7 +843,7 @@ fn threshold_cases(
                     "The table may not populate the approval column for this class of spending.",
                 ],
                 "Request the approval records for the cited rows; if they exist, re-import the table with the approval column populated.",
-                vec![calc("Recorded amount above the limit without a recorded approval", format!("sum of {} cited rows", unrecorded.len()), total, "USD")],
+                vec![calculation("Recorded amount above the limit without a recorded approval", format!("sum of {} cited rows", unrecorded.len()), total, "USD")],
                 APPROVAL_BLANK_CONFIDENCE,
             ),
             rules: vec![index],
@@ -908,7 +866,7 @@ fn split_cases(
     if payments.is_empty() || incomplete.contains("payment") {
         return;
     }
-    let (settled, _) = settled_payments(&payments);
+    let settled = transactions(&payments).posted;
     let usable: Vec<(&FinancialRecord, NaiveDate, i128)> = settled
         .iter()
         .filter(|r| {
@@ -969,7 +927,7 @@ fn split_cases(
                 "{} {agency} vendor {vendor}: {} posted payments dated {anchor} through {last} each fall within {}% below the limit and sum to {} USD, {comparator} the stated {} USD. The limit, window of {SPLIT_WINDOW_DAYS} days and margin are fixed in this detector, not taken from the policy.",
                 rule_label(policy), cluster.len(), SPLIT_MARGIN_BASIS_POINTS / 100, display(total), display(limit),
             );
-            let calculations = vec![calc(
+            let calculations = vec![calculation(
                 "Cluster total",
                 format!("sum of {} cited payments", cluster.len()),
                 total,

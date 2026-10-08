@@ -114,6 +114,56 @@ pub(crate) fn finding(
     }
 }
 
+pub(crate) fn executed(record: &FinancialRecord) -> bool {
+    ["executed", "approved", "signed"].contains(&get(record, "status").to_lowercase().as_str())
+}
+
+pub(crate) struct Transactions<'a> {
+    /// One row per posted transaction.
+    pub(crate) posted: Vec<&'a FinancialRecord>,
+    /// Identical rows repeating one transaction id, whatever its status.
+    pub(crate) repeated: Vec<(&'a str, Vec<&'a FinancialRecord>)>,
+    /// Rows of a transaction id that is blank, conflicting or carries an unrecognized status.
+    pub(crate) excluded: usize,
+}
+
+/// Payment rows a total may count: one row per transaction id, identical repeats counted once,
+/// posted statuses only. Excluded rows are counted, never guessed at; void rows are neither.
+pub(crate) fn transactions<'a>(rows: &[&'a FinancialRecord]) -> Transactions<'a> {
+    let mut grouped: BTreeMap<&'a str, Vec<&'a FinancialRecord>> = BTreeMap::new();
+    for &row in rows {
+        grouped
+            .entry(get(row, "transaction_id"))
+            .or_default()
+            .push(row);
+    }
+    let mut out = Transactions {
+        posted: Vec::new(),
+        repeated: Vec::new(),
+        excluded: 0,
+    };
+    for (transaction, group) in grouped {
+        if transaction.is_empty()
+            || group
+                .windows(2)
+                .any(|pair| pair[0].values != pair[1].values)
+        {
+            out.excluded += group.len();
+            continue;
+        }
+        let status = get(group[0], "status").to_lowercase();
+        if ["paid", "posted", "settled"].contains(&status.as_str()) {
+            out.posted.push(group[0]);
+        } else if !["void", "cancelled", "canceled"].contains(&status.as_str()) {
+            out.excluded += group.len();
+        }
+        if group.len() > 1 {
+            out.repeated.push((transaction, group));
+        }
+    }
+    out
+}
+
 pub(crate) fn canonical_account(
     record: &FinancialRecord,
     crosswalks: &[&FinancialRecord],
@@ -149,7 +199,12 @@ pub(crate) fn canonical_account(
     }
 }
 
-fn calculation(label: &str, formula: String, value: i128, unit: &str) -> FinancialCalculation {
+pub(crate) fn calculation(
+    label: &str,
+    formula: String,
+    value: i128,
+    unit: &str,
+) -> FinancialCalculation {
     FinancialCalculation {
         label: label.into(),
         formula,
@@ -687,11 +742,8 @@ pub fn analyze(
         for role in ["budget", "contract", "amendment", "payment", "outcome"] {
             stages.insert(role.into(), ids(&by_role(role)));
         }
-        let approved = |r: &&FinancialRecord| {
-            ["executed", "approved", "signed"].contains(&get(r, "status").to_lowercase().as_str())
-        };
         let base = if contracts.len() == 1
-            && approved(&contracts[0])
+            && executed(contracts[0])
             && !incomplete_roles.contains("contract")
         {
             amount(contracts[0], "amount")
@@ -711,7 +763,7 @@ pub fn analyze(
         let amendment_total = if !incomplete_roles.contains("amendment")
             && amendment_ids.len() == amendments.len()
             && !amendment_ids.contains("")
-            && amendments.iter().all(approved)
+            && amendments.iter().all(|amendment| executed(amendment))
         {
             if amendments.is_empty() {
                 None
@@ -727,34 +779,12 @@ pub fn analyze(
         if amendment_total.is_none() {
             warnings.push("A complete, unique, executed amendment register (including an explicit zero/no-change row when applicable) is needed for current authority.".into());
         }
-        let mut transactions: BTreeMap<&str, Vec<&FinancialRecord>> = BTreeMap::new();
-        for row in &payments {
-            transactions
-                .entry(get(row, "transaction_id"))
-                .or_default()
-                .push(row);
+        let settled = transactions(&payments);
+        for (transaction, group) in &settled.repeated {
+            findings.push(finding("duplicate_transaction","Repeated transaction rows must not inflate spending",format!("Contract {contract_id} repeats transaction {transaction} {} times; identical rows count once in the displayed payment total.",group.len()),group,&["The export may contain repeated copies.","A transaction identifier may describe several legitimate line items; verify its grain."],"Obtain transaction-line identifiers and posting/reversal history before treating repeated rows as duplicate disbursements."));
         }
-        let mut clean_payments = Vec::new();
-        let mut payment_ambiguous = false;
-        for (transaction, group) in transactions {
-            let signatures = group.iter().map(|r| &r.values).collect::<Vec<_>>();
-            if transaction.is_empty() || signatures.windows(2).any(|p| p[0] != p[1]) {
-                payment_ambiguous = true;
-                continue;
-            }
-            if group.len() > 1 {
-                findings.push(finding("duplicate_transaction","Repeated transaction rows must not inflate spending",format!("Contract {contract_id} repeats transaction {transaction} {} times; identical rows count once in the displayed payment total.",group.len()),&group,&["The export may contain repeated copies.","A transaction identifier may describe several legitimate line items; verify its grain."],"Obtain transaction-line identifiers and posting/reversal history before treating repeated rows as duplicate disbursements."));
-            }
-            if ["paid", "posted", "settled"]
-                .contains(&get(group[0], "status").to_lowercase().as_str())
-            {
-                clean_payments.push(group[0]);
-            } else if !["void", "cancelled", "canceled"]
-                .contains(&get(group[0], "status").to_lowercase().as_str())
-            {
-                payment_ambiguous = true;
-            }
-        }
+        let payment_ambiguous = settled.excluded > 0;
+        let clean_payments = settled.posted;
         let paid = if payment_ambiguous || incomplete_roles.contains("payment") {
             None
         } else {
