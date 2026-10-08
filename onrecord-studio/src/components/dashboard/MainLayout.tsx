@@ -600,7 +600,7 @@ export default function MainLayout() {
             title={<span className="block truncate" title={activeDocument.summary.fileName}>{activeDocument.summary.fileName}</span>}
             description={<span className="tabular-nums">{portalName(activeDocument.summary.portalKey)} · Document {activeDocument.summary.documentId.toLocaleString()} · {formatFileSize(activeDocument.summary.fileSize)}</span>}
           />
-          <DialogBody className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:overflow-hidden">
+          <DialogBody className="grid grid-cols-1 grid-rows-[minmax(32rem,1fr)_auto] gap-4 2xl:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-rows-1 2xl:overflow-hidden">
             <DocumentViewer
               documentId={activeDocument.summary.documentId}
               requestId={selectedRequestId ?? undefined}
@@ -630,7 +630,7 @@ export default function MainLayout() {
                 }));
               }}
             />
-            <aside className="min-h-0 space-y-4 rounded-xl border border-line bg-canvas p-4 xl:h-full xl:overflow-y-auto" aria-label="Document evidence details">
+            <aside className="min-h-0 space-y-4 rounded-xl border border-line bg-canvas p-4 2xl:h-full 2xl:overflow-y-auto" aria-label="Document evidence details">
               {activeDocument.summary.originalSourceUri && (
                 <a className="focus-ring inline-flex items-center gap-1 rounded text-body text-accent underline-offset-2 hover:underline" href={activeDocument.summary.originalSourceUri} target="_blank" rel="noreferrer">
                   View the publisher’s original file

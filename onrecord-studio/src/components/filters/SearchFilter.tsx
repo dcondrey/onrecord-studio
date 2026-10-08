@@ -65,9 +65,9 @@ export default function SearchFilter({ onPendingChange }: { onPendingChange?: (p
     // LIMIT(query): Tauri invoke calls have no cancellation handle. Debouncing avoids work that has
     // not started; the latest-request gate prevents every stale completion from changing the UI.
     const request = requestGate.begin();
+    setIsSearching(true);
     onPendingChange?.(true);
     const timer = window.setTimeout(async () => {
-      setIsSearching(true);
       setSearchError(null);
       try {
         const args: SearchPageArgs = {
@@ -207,13 +207,13 @@ export default function SearchFilter({ onPendingChange }: { onPendingChange?: (p
         {hasFilters && <Button variant="ghost" onClick={clear}>Clear</Button>}
         {/* A failed or running search has no count; showing the last one, or 0, would be a claim. */}
         <p className="ml-auto min-w-[6.5rem] shrink-0 text-right text-body text-muted" aria-live="polite">
-          {isSearching ? 'Searching…' : error ? <span aria-hidden="true">—</span> : (
+          {isSearching ? 'Searching…' : error ? <><span aria-hidden="true">—</span> matches</> : (
             <><span className="tabular-nums font-medium text-fg">{formatMatchCount(resultCount)}</span> {resultCount === 1 ? 'match' : 'matches'}</>
           )}
           {error && !isSearching && <span className="sr-only">Match count unavailable</span>}
         </p>
       </div>
-      <div className="mt-2 flex min-h-7 flex-wrap items-center gap-1">
+      <div className="-ml-3 mt-2 flex min-h-7 flex-wrap items-center gap-1">
         <Button
           variant="ghost"
           size="sm"

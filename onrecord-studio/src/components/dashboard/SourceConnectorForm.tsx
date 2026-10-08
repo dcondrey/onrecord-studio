@@ -48,14 +48,14 @@ export function SourceConnectorForm({ connector, inputId }: { connector: SourceC
         }}
         disabled={isDiscovering}
         size="sm"
-        className="w-40 shrink-0 border-0 bg-transparent text-control text-fg-secondary shadow-none"
+        className="w-32 border-0 bg-transparent text-control text-fg-secondary shadow-none"
       >
         <optgroup label="San Diego sources">
           {BUILT_IN_SOURCE_OPTIONS.map((source) => <option key={source.id} value={source.id}>{source.label}</option>)}
         </optgroup>
       </Select>
       <label htmlFor={inputId} className="sr-only">Public data source URL</label>
-      <div className="relative h-7 min-w-0 flex-1">
+      <div className="relative h-7 min-w-[5rem] flex-1">
         <Icon name="globe" size="sm" className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted" />
         <input
           id={inputId}
@@ -79,18 +79,6 @@ export function SourceConnectorForm({ connector, inputId }: { connector: SourceC
           ))}
         </datalist>
       </div>
-      <span className="source-composer-divider" aria-hidden="true" />
-      <button
-        type="button"
-        onClick={() => void chooseFiles()}
-        id={`${inputId}-import-files`}
-        disabled={isDiscovering}
-        aria-label="Add files"
-        title="Add files"
-        className="source-tool-button focus-ring grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted transition-colors hover:bg-raised hover:text-fg disabled:opacity-50"
-      >
-        <Icon name="filePlus" size="sm" />
-      </button>
       <span className="sr-only" role="status">{selectedSource.description}</span>
       {/* The label names the action only. Whether a source is syncing is shown on its sidebar row. */}
       <Button
@@ -104,6 +92,7 @@ export function SourceConnectorForm({ connector, inputId }: { connector: SourceC
       </Button>
       <SourceToolsMenu
         items={[
+          { label: 'Add files', disabled: isDiscovering, onSelect: () => void chooseFiles() },
           { label: 'Crawl settings', hint: crawlSettingsAreCustom ? 'Customized' : undefined, disabled: isDiscovering, onSelect: () => setCrawlSettingsOpen(true) },
           { label: 'Paste content', disabled: isDiscovering, onSelect: () => setPasteOpen(true) },
           ...(activeIsSyncing ? [{ label: 'Pause synchronization', separated: true, onSelect: () => void pauseSync() }] : []),
