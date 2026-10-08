@@ -13,7 +13,7 @@ import { scaleLinear } from '../core/scale';
 import { useRovingFocus } from '../hooks/useRovingFocus';
 import { useTooltip } from '../hooks/useTooltip';
 import { Dot } from '../marks/Dot';
-import { LABEL_CLASS, MarkGroup } from '../marks/shared';
+import { MarkGroup } from '../marks/shared';
 
 /*
  * F2 DeadlineRunway: every tracked request on one axis of days relative to its own deadline, so
@@ -145,7 +145,7 @@ function RunwayPlot({ rows, width, highlighted, onHover, onOpen }: {
             ) : (
               <Dot cx={cx} cy={cy} r={5} shape={row.shape} claim={row.counted ? 'counted' : 'descriptive'} role="primary" />
             )}
-            {row.counted && <text x={cx + 9} y={cy} dy="0.32em" className={LABEL_CLASS} style={{ fill: VIZ.counted }}>violation counted</text>}
+            {row.counted && <text x={cx + 9} y={cy} dy="0.32em" className="fill-fg text-[11px] font-medium">violation counted</text>}
           </MarkGroup>
         );
       })}

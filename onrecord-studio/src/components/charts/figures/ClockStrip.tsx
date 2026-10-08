@@ -69,6 +69,8 @@ export interface ClockCounted {
   citation: string;
   /** 'Violation counted' for the tracker; the finding's review status for a portal request. */
   reviewStatus: 'ASSERTED' | LegalComplianceFinding['reviewStatus'];
+  /** The instant the variance was measured to (closure, else the evaluation); null when a deadline is drawn. */
+  measuredTo: string | null;
 }
 
 interface ClockBase {
@@ -233,7 +235,7 @@ export function trackerClock(claim: ClaimedRequest, deadline: RequestDeadline, k
     determination,
     end: determination ? { at: determination.at, openLabel: null } : { at: analysis.observedAt, openLabel: 'no determination recorded' },
     counted: deadline.violationAsserted
-      ? { varianceDays: analysis.calendarDaysElapsed - allowed, citation: analysis.statuteCitation, reviewStatus: 'ASSERTED' }
+      ? { varianceDays: analysis.calendarDaysElapsed - allowed, citation: analysis.statuteCitation, reviewStatus: 'ASSERTED', measuredTo: null }
       : null,
     anomalies: anomalySentences(analysis.anomalyMarkers),
     noClock: null,
@@ -266,7 +268,7 @@ export interface PortalClockInput {
 export function portalClock({ record, extension, engine, findings, observedAt }: PortalClockInput): ClockData {
   const finding = findings ? countedDeadlineFinding(findings) : null;
   const counted: ClockCounted | null = finding
-    ? { varianceDays: finding.varianceDays, citation: finding.statuteCitation, reviewStatus: finding.reviewStatus }
+    ? { varianceDays: finding.varianceDays, citation: finding.statuteCitation, reviewStatus: finding.reviewStatus, measuredTo: engine ? null : record?.closedAt ?? (finding.evaluatedAt || null) }
     : null;
   const createdAt = engine?.createdAt ?? record?.createdAt ?? null;
   const tables = ['requests', 'statutory_extensions', 'statutory_violations'];
@@ -420,6 +422,19 @@ interface Plotted {
   domain: [number, number];
 }
 
+/**
+ * Day the past-deadline span starts: the engine's effective deadline, or, with recorded dates only,
+ * the stored variance counted back from the instant it was measured to (never from today, which
+ * would move a counted claim later every day the request stays open).
+ */
+export function countedSpanStartDay(data: ClockData): number | null {
+  const created = parseDate(data.createdAt);
+  if (data.deadline) return dayOf(data.deadline.effectiveAt, created);
+  if (data.model === 'casework' || !data.counted) return null;
+  const { varianceDays, measuredTo } = data.counted;
+  return varianceDays !== null && varianceDays > 0 && measuredTo ? dayOf(measuredTo, created) - varianceDays : null;
+}
+
 function plot(data: ClockData): Plotted {
   const created = parseDate(data.createdAt);
   const endDay = dayOf(data.end.at, created);
@@ -427,8 +442,7 @@ function plot(data: ClockData): Plotted {
   const initialDay = data.deadline ? dayOf(data.deadline.initialAt, created) : null;
   const effectiveDay = data.deadline ? dayOf(data.deadline.effectiveAt, created) : null;
   // Phase 1 has no deadline line: a stored variance places the counted span back from closure.
-  const variance = data.model !== 'casework' ? data.counted?.varianceDays ?? null : null;
-  const splitDay = effectiveDay ?? (variance !== null && variance > 0 ? endDay - variance : null);
+  const splitDay = countedSpanStartDay(data);
   const eventDays = data.events.map((event) => dayOf(event.at, created));
   const lo = Math.min(0, ...eventDays);
   // Today matters only to a clock still running; a closed one is scaled to its own span.

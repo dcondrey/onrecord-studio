@@ -39,7 +39,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 }));
 
 import MainLayout from '../components/dashboard/MainLayout';
-import ClockStrip, { caseworkClock, pastDeadlinePaint, portalClock, trackerClock } from '../components/charts/figures/ClockStrip';
+import ClockStrip, { caseworkClock, countedSpanStartDay, pastDeadlinePaint, portalClock, trackerClock } from '../components/charts/figures/ClockStrip';
 import ClockStack from '../components/charts/figures/ClockStack';
 import { KIND_LABELS } from '../components/tracker/MyRequestsPanel';
 import { useAppStore } from '../store/useAppStore';
@@ -120,6 +120,16 @@ describe('statutory clock claim paint', () => {
     expect(pastDeadlinePaint(dismissed)).toBe('dismissed');
     const stored = portalClock({ record: null, extension: null, engine: analysis(), findings: [finding('OPEN')], observedAt: '2026-09-10T00:00:00Z' });
     expect(pastDeadlinePaint(stored)).toBe('counted');
+  });
+
+  it('places a stored variance back from the instant it was measured to, never from today', () => {
+    const open = { createdAt: '2026-08-01T00:00:00Z', closedAt: null, status: 'open' };
+    const stored = { ...finding('OPEN'), varianceDays: 5, evaluatedAt: '2026-08-21T00:00:00Z' };
+    const early = portalClock({ record: open, extension: null, engine: null, findings: [stored], observedAt: '2026-09-10T00:00:00Z' });
+    const later = portalClock({ record: open, extension: null, engine: null, findings: [stored], observedAt: '2026-12-10T00:00:00Z' });
+    // Evaluated on day 20 with 5 days over: the counted span starts on day 15 whatever today is.
+    expect(countedSpanStartDay(early)).toBe(15);
+    expect(countedSpanStartDay(later)).toBe(15);
   });
 
   it('never paints a casework model as counted, even past its modelled date', () => {

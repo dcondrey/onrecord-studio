@@ -142,6 +142,10 @@ export default function MainLayout() {
   const documentOpenGate = useLatestRequestGate();
   const exportGate = useLatestRequestGate();
   const clockGate = useLatestRequestGate();
+  const clockOwnerRef = useRef<{ requestId: number; portalKey: string } | null>(null);
+  // Reviewing or re-evaluating a finding in the legal panel changes what is counted; the clock
+  // re-reads the stored findings when it does.
+  const legalReviewSignature = useAppStore((state) => state.activeLegalFindings.map((finding) => `${finding.violationId}:${finding.reviewStatus}`).join("|"));
   // The selected request's clock inputs. Cleared on every switch, and written only by the latest
   // read, so request B never shows request A's deadline or counted finding.
   const [requestClock, setRequestClock] = useState<RequestClockInputs>({ status: 'idle' });
@@ -189,10 +193,14 @@ export default function MainLayout() {
   useEffect(() => {
     const request = clockGate.begin();
     if (selectedRequestId === null || !selectedRequestPortalKey) {
+      clockOwnerRef.current = null;
       setRequestClock({ status: 'idle' });
       return clockGate.invalidate;
     }
-    setRequestClock({ status: 'pending' });
+    // A refresh of the same request keeps the clock on screen; only a switch clears it.
+    const owner = clockOwnerRef.current;
+    if (owner?.requestId !== selectedRequestId || owner?.portalKey !== selectedRequestPortalKey) setRequestClock({ status: 'pending' });
+    clockOwnerRef.current = { requestId: selectedRequestId, portalKey: selectedRequestPortalKey };
     const args = { requestId: selectedRequestId, portalKey: selectedRequestPortalKey };
     void Promise.allSettled([
       invokeCommand('get_request_statutory_extension', args),
@@ -209,7 +217,7 @@ export default function MainLayout() {
       });
     });
     return clockGate.invalidate;
-  }, [clockGate, evidenceRefreshRequests, selectedRequestId, selectedRequestPortalKey]);
+  }, [clockGate, evidenceRefreshRequests, legalReviewSignature, selectedRequestId, selectedRequestPortalKey]);
 
   // Below the two-column breakpoint the details sit under the list, so a selection would change
   // nothing visible without bringing them into view.
