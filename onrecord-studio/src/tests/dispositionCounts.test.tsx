@@ -77,4 +77,31 @@ describe('DispositionCounts', () => {
     expect(screen.getByText('Parks')).toBeTruthy();
     expect(screen.queryByText('Police')).toBeNull();
   });
+
+  it('draws requests with no disposition as hatched absence, never as a disposition bar, and dims a small department', async () => {
+    const rows: DepartmentDispositions[] = [{
+      portalSubdomain: 'city-a',
+      agencyId: 1,
+      agencyName: 'Parks',
+      totalRequests: 4,
+      buckets: [
+        { disposition: 'RELEASED', requests: [{ requestId: 1, rpid: '24-1' }] },
+        { disposition: 'NOT_RECORDED', requests: [{ requestId: 2, rpid: '24-2' }, { requestId: 3, rpid: '24-3' }, { requestId: 4, rpid: '24-4' }] },
+      ],
+    }];
+    invokeCommand.mockResolvedValueOnce(rows);
+    render(<DispositionCounts portalSubdomain={null} />);
+    const row = await screen.findByRole('row', { name: /^Parks, 4 requests/ });
+    const cells = row.querySelectorAll('td');
+    // Released, Released in part, Withheld, No responsive records, Withdrawn, then the two absences.
+    expect(cells[0].textContent).toBe('25%');
+    expect(cells[6].textContent).toBe('75%');
+    expect(cells[6].querySelector('[data-absence="excluded"]')).toBeTruthy();
+    expect(cells[6].querySelector('path')).toBeNull();
+    expect(cells[0].querySelector('[data-absence="excluded"]')).toBeNull();
+    expect(screen.getAllByText('not a disposition')).toHaveLength(2);
+    expect(cells[0].className).toContain('opacity-40');
+    expect(screen.getByText('Small sample')).toBeTruthy();
+    expect(screen.getByText(/Every department has fewer than 5 requests/)).toBeTruthy();
+  });
 });
