@@ -340,36 +340,29 @@ mod tests {
     }
 
     #[test]
-    fn no_finding_when_holdback_under_the_minimum() {
-        // Same-day churn — edit at 06:00, release at 15:00 = 9h holdback. Below MIN_HOLDBACK_HOURS.
-        let candidate = candidate(ts(15, 15), ts(15, 23));
-        let dates = PdfMetadataDates {
-            mod_date: Some(ts(15, 6)),
-            xmp_modify_date: None,
-        };
-        assert!(evaluate(&candidate, dates).is_none());
-    }
-
-    #[test]
-    fn no_finding_when_release_is_comfortably_early() {
-        // Released 5 days ahead of deadline: this pattern is about wire-hitting releases only.
-        let candidate = candidate(ts(1, 12), ts(10, 12));
-        let dates = PdfMetadataDates {
-            mod_date: Some(Utc.with_ymd_and_hms(2025, 12, 25, 12, 0, 0).unwrap()),
-            xmp_modify_date: None,
-        };
-        assert!(evaluate(&candidate, dates).is_none());
-    }
-
-    #[test]
-    fn no_finding_when_moddate_is_after_release() {
-        // ModDate later than release is a metadata artifact, not holdback evidence.
-        let candidate = candidate(ts(1, 12), ts(2, 12));
-        let dates = PdfMetadataDates {
-            mod_date: Some(ts(5, 12)),
-            xmp_modify_date: None,
-        };
-        assert!(evaluate(&candidate, dates).is_none());
+    fn no_finding_outside_the_held_back_at_the_wire_pattern() {
+        for (case, release, deadline, edited) in [
+            // 9h of same-day churn is under MIN_HOLDBACK_HOURS.
+            ("short holdback", ts(15, 15), ts(15, 23), ts(15, 6)),
+            // Released 9 days ahead of the deadline: not at the wire.
+            (
+                "early release",
+                ts(1, 12),
+                ts(10, 12),
+                Utc.with_ymd_and_hms(2025, 12, 25, 12, 0, 0).unwrap(),
+            ),
+            // A ModDate after the release is a metadata artifact, not a holdback.
+            ("edit after release", ts(1, 12), ts(2, 12), ts(5, 12)),
+        ] {
+            let dates = PdfMetadataDates {
+                mod_date: Some(edited),
+                xmp_modify_date: None,
+            };
+            assert!(
+                evaluate(&candidate(release, deadline), dates).is_none(),
+                "{case}"
+            );
+        }
     }
 
     #[test]
