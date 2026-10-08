@@ -1,8 +1,7 @@
 import { useEffect } from 'react';
 import { useAppStore, type WorkspaceView } from '../../store/useAppStore';
 import { workspaceCommandRegistry } from '../../commands/registry';
-import { cn } from '../../utils/cn';
-import Icon from '../ui/icons';
+import Button from '../ui/Button';
 
 const VIEW_LABELS = new Map<WorkspaceView, string>(workspaceCommandRegistry.map((command) => [command.view, command.navigationLabel]));
 
@@ -29,34 +28,25 @@ export default function NavigationControls() {
   }, [navigateBack, navigateForward]);
 
   return (
-    <div role="group" aria-label="History" className="flex shrink-0 items-center gap-1">
-      <button
-        type="button"
+    <div role="group" aria-label="History" className="flex shrink-0 items-center gap-0.5">
+      <Button
+        variant="ghost"
+        iconOnly
+        icon="back"
         onClick={navigateBack}
         disabled={!previous}
         title={previous ? `Back to ${viewLabel(previous.view)} (${modifier}[)` : 'Nothing to go back to'}
         aria-label={previous ? `Back to ${viewLabel(previous.view)}` : 'Back'}
-        className={cn(
-          'motion-press focus-ring flex h-8 items-center gap-1 rounded-lg border px-2 text-label font-medium transition',
-          previous ? 'border-control bg-surface/70 text-fg-secondary hover:text-fg' : 'border-transparent text-muted/60',
-        )}
-      >
-        <Icon name="back" className="h-4 w-4" />
-        {previous && <span key={previous.view} className="motion-fade hidden max-w-[9rem] truncate xl:inline">{viewLabel(previous.view)}</span>}
-      </button>
-      <button
-        type="button"
+      />
+      <Button
+        variant="ghost"
+        iconOnly
+        icon="forward"
         onClick={navigateForward}
         disabled={!next}
         title={next ? `Forward to ${viewLabel(next.view)} (${modifier}])` : 'Nothing to go forward to'}
         aria-label={next ? `Forward to ${viewLabel(next.view)}` : 'Forward'}
-        className={cn(
-          'motion-press focus-ring grid h-8 w-8 place-items-center rounded-lg border transition',
-          next ? 'border-control bg-surface/70 text-fg-secondary hover:text-fg' : 'border-transparent text-muted/60',
-        )}
-      >
-        <Icon name="forward" className="h-4 w-4" />
-      </button>
+      />
     </div>
   );
 }
