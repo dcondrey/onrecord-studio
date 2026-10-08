@@ -205,10 +205,11 @@ fn plain_text(html: &str) -> String {
             _ => {}
         }
     }
+    // `&amp;` is decoded last so an escaped entity such as `&amp;quot;` stays literal text.
     text.replace("&nbsp;", " ")
-        .replace("&amp;", "&")
         .replace("&#39;", "'")
         .replace("&quot;", "\"")
+        .replace("&amp;", "&")
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
