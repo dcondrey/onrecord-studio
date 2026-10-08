@@ -35,6 +35,27 @@ pub const SIGNATURE_LIMITATIONS: [&str; 2] = [
     "This page cannot check whether the signing key has since been revoked.",
 ];
 
+pub const PII_MASKING_LIMITATION: &str =
+    "Personal-information masking is structural (Social Security numbers, telephone numbers, \
+     street addresses). It is not a guarantee that no sensitive value remains; review before \
+     publishing.";
+
+/// Why a whole finding is never published, whatever its sources: the one rule the signed report,
+/// the evidence packet and the shareable bundle all apply.
+pub fn withheld_finding_reason(finding: &Finding) -> Option<WithheldReason> {
+    if finding.kind == FindingKind::RedactionCandidateInferred {
+        Some(WithheldReason::InferredRedactionIdentity)
+    } else if finding.dismissed_at.is_some() {
+        Some(WithheldReason::DismissedByReviewer)
+    } else if finding.kind.is_legal_claim()
+        && !matches!(finding.confidence, FindingConfidence::Measured { .. })
+    {
+        Some(WithheldReason::LegalClaimWithoutMeasuredConfidence)
+    } else {
+        None
+    }
+}
+
 #[derive(Default)]
 struct Withholdings(BTreeMap<WithheldReason, usize>);
 
@@ -54,18 +75,8 @@ pub fn build_manifest(
     let mut omitted_citations = 0_usize;
     let mut own_subject_finding_ids = Vec::new();
     for finding in findings {
-        if finding.kind == FindingKind::RedactionCandidateInferred {
-            withheld.note(WithheldReason::InferredRedactionIdentity);
-            continue;
-        }
-        if finding.dismissed_at.is_some() {
-            withheld.note(WithheldReason::DismissedByReviewer);
-            continue;
-        }
-        if finding.kind.is_legal_claim()
-            && !matches!(finding.confidence, FindingConfidence::Measured { .. })
-        {
-            withheld.note(WithheldReason::LegalClaimWithoutMeasuredConfidence);
+        if let Some(reason) = withheld_finding_reason(&finding) {
+            withheld.note(reason);
             continue;
         }
         if options
@@ -87,10 +98,7 @@ pub fn build_manifest(
         .map(|line| (*line).to_string())
         .collect();
     limitations.extend([
-        "Personal-information masking is structural (Social Security numbers, telephone numbers, \
-         street addresses). It is not a guarantee that no sensitive value remains; review before \
-         publishing."
-            .to_string(),
+        PII_MASKING_LIMITATION.to_string(),
         "A pattern signal is not a legal conclusion. Only a counted violation is presented as a \
          legal claim."
             .to_string(),

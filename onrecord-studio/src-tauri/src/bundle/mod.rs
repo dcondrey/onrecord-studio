@@ -12,14 +12,19 @@ mod tests;
 pub use prepare::prepare;
 pub use render::{parse_embedded, render_html};
 
-use crate::analysis::finding::{Finding, FindingKind};
+use crate::analysis::finding::Finding;
 use crate::error::AppError;
 use crate::integrity::sha256_hex;
 use crate::profile::{DisclosureContext, OWN_SUBJECT_SENTENCE};
-use crate::report::builder::{build_manifest, ManifestOptions, MAXIMUM_CITATIONS_PER_CLAIM};
+use crate::report::builder::{
+    build_manifest, withheld_finding_reason, ManifestOptions, MAXIMUM_CITATIONS_PER_CLAIM,
+    PII_MASKING_LIMITATION,
+};
 use crate::report::SourceDocuments;
 use crate::storage::pii::mask_pii;
-use crate::types::report::{QuoteStatus, ReportClaim, ReportConfidence, ReportEvidenceBasis};
+use crate::types::report::{
+    QuoteStatus, ReportCitation, ReportClaim, ReportConfidence, ReportEvidenceBasis, WithheldReason,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -174,6 +179,15 @@ pub struct Assembly {
     pub exclusions: Vec<BundleExclusion>,
 }
 
+/// How a source is named to a reader: its masked file name, else its label, else its id.
+fn source_name(citation: &ReportCitation) -> String {
+    citation
+        .file_name
+        .clone()
+        .or_else(|| citation.label.clone())
+        .unwrap_or_else(|| format!("Document {}", citation.document_id))
+}
+
 /// The portal and document a finding rests on, as checked for sharing.
 fn cited_records(finding: &Finding) -> Vec<(String, i64)> {
     let mut records: Vec<(String, i64)> = finding
@@ -212,19 +226,17 @@ fn ineligibility(
     documents: &SourceDocuments,
     removed_portals: &BTreeSet<String>,
 ) -> Option<ExclusionReason> {
-    if finding.kind == FindingKind::RedactionCandidateInferred {
-        return Some(ExclusionReason::InferredRedactionIdentity);
-    }
-    if finding.dismissed_at.is_some() {
-        return Some(ExclusionReason::DismissedByReviewer);
-    }
-    if finding.kind.is_legal_claim()
-        && !matches!(
-            finding.confidence,
-            crate::analysis::finding::FindingConfidence::Measured { .. }
-        )
-    {
-        return Some(ExclusionReason::LegalClaimWithoutMeasuredConfidence);
+    match withheld_finding_reason(finding) {
+        Some(WithheldReason::InferredRedactionIdentity) => {
+            return Some(ExclusionReason::InferredRedactionIdentity)
+        }
+        Some(WithheldReason::DismissedByReviewer) => {
+            return Some(ExclusionReason::DismissedByReviewer)
+        }
+        Some(WithheldReason::LegalClaimWithoutMeasuredConfidence) => {
+            return Some(ExclusionReason::LegalClaimWithoutMeasuredConfidence)
+        }
+        Some(WithheldReason::QuoteMismatch | WithheldReason::QuoteNonPublicDocument) | None => {}
     }
     if finding.citations.is_empty() {
         return Some(ExclusionReason::NoCitation);
@@ -249,7 +261,7 @@ fn ineligibility(
     let all_public = records.iter().all(|key| {
         documents
             .get(key)
-            .is_some_and(|document| document.visibility.trim().eq_ignore_ascii_case("public"))
+            .is_some_and(|document| document.is_public())
     });
     (!all_public).then_some(ExclusionReason::CitesNonPublicRecord)
 }
@@ -378,10 +390,7 @@ pub fn assemble(
         "This bundle is unsigned. The content hash shows the data has not changed since it was \
          written; it does not say who wrote it."
             .to_string(),
-        "Personal-information masking is structural (Social Security numbers, telephone numbers, \
-         street addresses). It is not a guarantee that no sensitive value remains; review before \
-         publishing."
-            .to_string(),
+        PII_MASKING_LIMITATION.to_string(),
         "Source documents are not included. Each source is identified by name and SHA-256 so \
          the version this installation held can be recognized."
             .to_string(),
@@ -436,15 +445,7 @@ pub fn preview_of(assembly: &Assembly) -> Result<BundlePreview, AppError> {
         .iter()
         .map(|finding| {
             let claim = &finding.claim;
-            for citation in &claim.citations {
-                names.insert(
-                    citation
-                        .file_name
-                        .clone()
-                        .or_else(|| citation.label.clone())
-                        .unwrap_or_else(|| format!("Document {}", citation.document_id)),
-                );
-            }
+            names.extend(claim.citations.iter().map(source_name));
             BundlePreviewItem {
                 finding_id: claim.finding_id.clone(),
                 headline: claim.headline.clone(),
