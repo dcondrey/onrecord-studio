@@ -45,7 +45,7 @@ describe('ResolutionReview shortcuts', () => {
     fireEvent.keyDown(card, { key: 's' });
     expect(invokeCommand).not.toHaveBeenCalledWith('record_resolution_judgment', expect.anything());
 
-    fireEvent.change(screen.getByLabelText('Your name'), { target: { value: 'Maria' } });
+    fireEvent.change(screen.getByLabelText('Recorded as'), { target: { value: 'Maria' } });
     fireEvent.keyDown(screen.getByLabelText(/Reason/), { key: 's' });
     expect(invokeCommand).not.toHaveBeenCalledWith('record_resolution_judgment', expect.anything());
 
