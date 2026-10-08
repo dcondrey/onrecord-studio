@@ -246,7 +246,9 @@ async function shellReady(page, gate) {
     await page.locator('#root *').first().waitFor({ timeout: 30_000 });
     return;
   }
-  await page.getByRole('navigation', { name: 'Primary navigation' }).waitFor({ timeout: 30_000 });
+  // A dialog that opens at launch (the collection plan) makes the shell inert and aria-hidden; it is
+  // still rendered, which is all readiness needs.
+  await page.getByRole('navigation', { name: 'Primary navigation', includeHidden: true }).waitFor({ timeout: 30_000 });
 }
 
 async function applyTheme(page, theme) {
