@@ -67,7 +67,8 @@ static HEADER_DATE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)\b(?P<weekday>Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+(?P<month>January|February|March|April|May|June|July|August|September|October|November|December)\s+(?P<day>[0-9]{1,2}),\s+(?P<year>20[0-9]{2})\b").unwrap()
 });
 
-fn official_url(url: &str) -> bool {
+/// Plain https on a City of San Diego host or one of its two agenda publishers.
+pub(crate) fn official_url(url: &str) -> bool {
     reqwest::Url::parse(url).ok().is_some_and(|u| {
         u.scheme() == "https"
             && u.username().is_empty()
@@ -308,7 +309,7 @@ pub async fn evidence(
         result.candidates.truncate(6);
         let ids = result.candidates.iter().flat_map(|c|[c.date_citation.evidence_id.as_str(),c.item_citation.evidence_id.as_str()]).collect::<std::collections::HashSet<_>>();
         result.evidence.retain(|e|ids.contains(e.id.as_str()));
-        result.limitations.push("Deterministic agenda lookup covers at most24 retained City Council agendas and500,000 characters per document. It requires an unambiguous weekday/full-date heading and explicit item boundaries; other bodies and unrecognized layouts are not covered. No meeting deadline, vote or adoption is inferred.".into());
+        result.limitations.push("Deterministic agenda lookup covers at most 24 retained City Council agendas and 500,000 characters per document. It requires an unambiguous weekday/full-date heading and explicit item boundaries; other bodies and unrecognized layouts are not covered. No meeting deadline, vote or adoption is inferred.".into());
         Ok(result)
     }).await
 }

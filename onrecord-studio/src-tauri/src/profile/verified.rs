@@ -5,7 +5,7 @@
 //! the domain's own name equals the affiliation's name or an alias. Provider claims are not used.
 //! Nothing in this module reaches finding detection, confidence or statutory evaluation.
 
-use super::matching::normalize_name;
+use super::matching::{normalize_name, without_leading_article};
 use crate::types::profile::*;
 use chrono::Utc;
 
@@ -15,9 +15,9 @@ const GENERIC_LABELS: &[&str] = &[
 ];
 
 fn compact(value: &str) -> String {
-    let normalized = normalize_name(value);
-    let words = normalized.strip_prefix("the ").unwrap_or(&normalized);
-    words.split_whitespace().collect()
+    without_leading_article(&normalize_name(value))
+        .split_whitespace()
+        .collect()
 }
 
 /// The organization names a domain can stand for: every label except the last (the top-level
@@ -83,14 +83,7 @@ pub fn record_domain(
     is_free_mail: bool,
 ) -> UserProfile {
     let now = Utc::now().to_rfc3339();
-    let mut profile = current.unwrap_or_else(|| UserProfile {
-        schema_version: PROFILE_SCHEMA_VERSION,
-        display_name: None,
-        affiliations: Vec::new(),
-        match_decisions: Vec::new(),
-        verified_domains: Vec::new(),
-        updated_at: String::new(),
-    });
+    let mut profile = current.unwrap_or_else(super::empty_profile);
     profile
         .verified_domains
         .retain(|verified| verified.domain != domain);

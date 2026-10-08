@@ -2,7 +2,7 @@
 //! (hypotheses excluded, quotes masked with whole-document context, unassessed never scored) are
 //! testable without a database.
 
-use super::{SourceDocument, SourceDocuments};
+use super::{single_line, SourceDocument, SourceDocuments};
 use crate::analysis::finding::{Finding, FindingCitation, FindingConfidence, FindingKind};
 use crate::error::AppError;
 use crate::profile::DisclosureContext;
@@ -35,6 +35,27 @@ pub const SIGNATURE_LIMITATIONS: [&str; 2] = [
     "This page cannot check whether the signing key has since been revoked.",
 ];
 
+pub const PII_MASKING_LIMITATION: &str =
+    "Personal-information masking is structural (Social Security numbers, telephone numbers, \
+     street addresses). It is not a guarantee that no sensitive value remains; review before \
+     publishing.";
+
+/// Why a whole finding is never published, whatever its sources: the one rule the signed report,
+/// the evidence packet and the shareable bundle all apply.
+pub fn withheld_finding_reason(finding: &Finding) -> Option<WithheldReason> {
+    if finding.kind == FindingKind::RedactionCandidateInferred {
+        Some(WithheldReason::InferredRedactionIdentity)
+    } else if finding.dismissed_at.is_some() {
+        Some(WithheldReason::DismissedByReviewer)
+    } else if finding.kind.is_legal_claim()
+        && !matches!(finding.confidence, FindingConfidence::Measured { .. })
+    {
+        Some(WithheldReason::LegalClaimWithoutMeasuredConfidence)
+    } else {
+        None
+    }
+}
+
 #[derive(Default)]
 struct Withholdings(BTreeMap<WithheldReason, usize>);
 
@@ -54,18 +75,8 @@ pub fn build_manifest(
     let mut omitted_citations = 0_usize;
     let mut own_subject_finding_ids = Vec::new();
     for finding in findings {
-        if finding.kind == FindingKind::RedactionCandidateInferred {
-            withheld.note(WithheldReason::InferredRedactionIdentity);
-            continue;
-        }
-        if finding.dismissed_at.is_some() {
-            withheld.note(WithheldReason::DismissedByReviewer);
-            continue;
-        }
-        if finding.kind.is_legal_claim()
-            && !matches!(finding.confidence, FindingConfidence::Measured { .. })
-        {
-            withheld.note(WithheldReason::LegalClaimWithoutMeasuredConfidence);
+        if let Some(reason) = withheld_finding_reason(&finding) {
+            withheld.note(reason);
             continue;
         }
         if options
@@ -87,10 +98,7 @@ pub fn build_manifest(
         .map(|line| (*line).to_string())
         .collect();
     limitations.extend([
-        "Personal-information masking is structural (Social Security numbers, telephone numbers, \
-         street addresses). It is not a guarantee that no sensitive value remains; review before \
-         publishing."
-            .to_string(),
+        PII_MASKING_LIMITATION.to_string(),
         "A pattern signal is not a legal conclusion. Only a counted violation is presented as a \
          legal claim."
             .to_string(),
@@ -204,13 +212,7 @@ fn build_citation(
     withheld: &mut Withholdings,
 ) -> Result<ReportCitation, AppError> {
     let document = documents.get(&(citation.portal_key.clone(), citation.document_id));
-    let public =
-        document.is_some_and(|document| document.visibility.trim().eq_ignore_ascii_case("public"));
-    let label = citation
-        .label
-        .as_deref()
-        .map(|label| mask_pii(label).map(|masked| masked.masked_text))
-        .transpose()?;
+    let label = mask_optional(citation.label.as_deref())?;
     let base = ReportCitation {
         portal_key: citation.portal_key.clone(),
         document_id: citation.document_id,
@@ -227,7 +229,7 @@ fn build_citation(
     };
     // A document that is not public contributes nothing beyond its id: not its name, not its
     // digests, not an excerpt.
-    let Some(document) = document.filter(|_| public) else {
+    let Some(document) = document.filter(|document| document.is_public()) else {
         withheld.note(WithheldReason::QuoteNonPublicDocument);
         return Ok(ReportCitation {
             quote_status: QuoteStatus::WithheldNonPublicDocument,
@@ -239,11 +241,7 @@ fn build_citation(
         withheld.note(WithheldReason::QuoteMismatch);
     }
     Ok(ReportCitation {
-        file_name: document
-            .file_name
-            .as_deref()
-            .map(|name| mask_pii(name).map(|masked| masked.masked_text))
-            .transpose()?,
+        file_name: mask_optional(document.file_name.as_deref())?,
         quote: excerpt.quote,
         quote_status: excerpt.status,
         quote_truncated: excerpt.truncated,
@@ -254,8 +252,10 @@ fn build_citation(
     })
 }
 
-fn collapse_whitespace(value: &str) -> String {
-    value.split_whitespace().collect::<Vec<_>>().join(" ")
+fn mask_optional(value: Option<&str>) -> Result<Option<String>, AppError> {
+    value
+        .map(|value| mask_pii(value).map(|masked| masked.masked_text))
+        .transpose()
 }
 
 fn excerpt_for(citation: &FindingCitation, document: &SourceDocument) -> Result<Excerpt, AppError> {
@@ -272,7 +272,7 @@ fn excerpt_for(citation: &FindingCitation, document: &SourceDocument) -> Result<
     if let Some((text, start, end)) = range {
         let range_text: String = text.chars().skip(start).take(end - start).collect();
         if let Some(quote) = detector_quote {
-            if !collapse_whitespace(&range_text).contains(&collapse_whitespace(quote)) {
+            if !single_line(&range_text).contains(&single_line(quote)) {
                 return Ok(Excerpt::none(QuoteStatus::WithheldMismatch));
             }
         }

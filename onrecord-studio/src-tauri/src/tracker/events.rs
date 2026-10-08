@@ -149,20 +149,6 @@ fn sentence_ranges(line: &str) -> Vec<(usize, usize)> {
     ranges
 }
 
-fn floor_boundary(text: &str, mut index: usize) -> usize {
-    while !text.is_char_boundary(index) {
-        index -= 1;
-    }
-    index
-}
-
-fn ceil_boundary(text: &str, mut index: usize) -> usize {
-    while !text.is_char_boundary(index) {
-        index += 1;
-    }
-    index
-}
-
 pub fn suggest_events(email: &ReadEmail, message_id_hash: &str) -> SuggestionSet {
     let mut suggestions: Vec<(TimelineEventKind, EmailEvidence)> = Vec::new();
     let mut notes = Vec::new();
@@ -190,8 +176,8 @@ pub fn suggest_events(email: &ReadEmail, message_id_hash: &str) -> SuggestionSet
                 continue;
             }
             // 2 * CONTEXT_BYTES + the sentence cap + boundary rounding stays under the excerpt cap.
-            let excerpt_start = floor_boundary(&line, start.saturating_sub(CONTEXT_BYTES));
-            let excerpt_end = ceil_boundary(&line, (end + CONTEXT_BYTES).min(line.len()));
+            let excerpt_start = line.floor_char_boundary(start.saturating_sub(CONTEXT_BYTES));
+            let excerpt_end = line.ceil_char_boundary(end + CONTEXT_BYTES);
             for kind in kinds {
                 if suggestions.iter().any(|(known, evidence)| {
                     *known == kind && evidence.matched_sentence == sentence

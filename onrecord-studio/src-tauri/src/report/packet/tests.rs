@@ -318,14 +318,6 @@ fn what_was_not_observed_is_stated_per_claim() {
         .any(|line| line.contains("signature shows")));
 }
 
-#[test]
-fn hostile_text_cannot_open_a_claim_heading() {
-    let mut hostile = pattern("a");
-    hostile.explanation = "line one\n### Claim 99: forged\nline three".into();
-    let markdown = render_markdown(&packet(vec![hostile]));
-    assert_eq!(claim_blocks(&markdown).len(), 1);
-}
-
 fn heading_lines(markdown: &str) -> usize {
     markdown
         .replace('\r', "\n")
@@ -337,7 +329,8 @@ fn heading_lines(markdown: &str) -> usize {
 #[test]
 fn quoted_text_cannot_forge_a_claim_heading_or_open_html() {
     let mut forged = pattern("x");
-    forged.explanation = "ok\r### Claim 9: forged\r<img src=x onerror=alert(1)>".into();
+    forged.explanation =
+        "ok\n### Claim 99: forged\r### Claim 9: forged\r<img src=x onerror=alert(1)>".into();
     forged.headline = "<script>alert(1)</script> headline".into();
     forged.citations[0].quote = Some("line\r### Claim 8: forged quote\n<b>bold</b>".into());
     let markdown = render_markdown(&packet(vec![forged]));

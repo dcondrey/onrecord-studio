@@ -45,6 +45,17 @@ fn normalized_or_error(value: &str, label: &str) -> Result<String, AppError> {
     Ok(normalized)
 }
 
+fn empty_profile() -> UserProfile {
+    UserProfile {
+        schema_version: PROFILE_SCHEMA_VERSION,
+        display_name: None,
+        affiliations: Vec::new(),
+        match_decisions: Vec::new(),
+        verified_domains: Vec::new(),
+        updated_at: String::new(),
+    }
+}
+
 /// Validates a save request against the current document and returns the next one. A name change
 /// drops that affiliation's confirmed and rejected matches and returns its basis to
 /// `SelfDeclared`: a decision about "Org A" says nothing about what the entry was renamed to.
@@ -65,14 +76,7 @@ pub fn apply_input(
             "At most {MAXIMUM_AFFILIATIONS} affiliations can be declared"
         )));
     }
-    let previous = current.unwrap_or(UserProfile {
-        schema_version: PROFILE_SCHEMA_VERSION,
-        display_name: None,
-        affiliations: Vec::new(),
-        match_decisions: Vec::new(),
-        verified_domains: Vec::new(),
-        updated_at: String::new(),
-    });
+    let previous = current.unwrap_or_else(empty_profile);
     let now = Utc::now().to_rfc3339();
     let mut names_seen = BTreeSet::new();
     let mut ids_seen = BTreeSet::new();
@@ -325,22 +329,11 @@ impl DisclosureContext {
     }
 
     pub fn subject_is_own(&self, subject: &FindingSubject) -> bool {
-        self.subject_parts_are_own(
-            subject.portal_key.as_deref(),
-            subject.agency_id,
-            subject.entity_id.as_deref(),
-        )
-    }
-
-    pub fn subject_parts_are_own(
-        &self,
-        portal_key: Option<&str>,
-        agency_id: Option<i64>,
-        entity_id: Option<&str>,
-    ) -> bool {
+        let portal_key = subject.portal_key.as_deref();
+        let entity_id = subject.entity_id.as_deref();
         portal_key.is_some_and(|key| self.own_portal_keys.contains(key))
             || portal_key
-                .zip(agency_id)
+                .zip(subject.agency_id)
                 .is_some_and(|(key, id)| self.own_agencies.contains(&(key.to_string(), id)))
             || entity_id.is_some_and(|id| self.own_entity_ids.contains(id))
     }

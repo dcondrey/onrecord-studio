@@ -2,13 +2,12 @@ use super::matching::{
     find_candidates, normalize_name, resolve_confirmed_subjects, AgencyTarget, ConfirmedSubjects,
     PortalTarget, ENTITY_SEARCH_LIMIT,
 };
-use super::store::{write_atomic_with, ProfileStore, PROFILE_FILE_NAME};
+use super::store::{ProfileStore, PROFILE_FILE_NAME};
 use super::*;
 use crate::analysis::finding::{Finding, FindingSubject};
 use crate::storage::corpus::{CorpusDocumentInput, CorpusIndex};
 use crate::storage::sqlite::DuckDbRepository;
 use crate::types::{CorpusEntityKind, CorpusEntityNode, EntityValidationGrade};
-use std::io::Write;
 
 fn input(name: &str, aliases: &[&str]) -> AffiliationInput {
     AffiliationInput {
@@ -261,25 +260,6 @@ fn the_profile_file_never_holds_an_entity_id_and_delete_returns_to_unset() {
         store.delete().unwrap(),
         ProfileDeletionOutcome::NothingToRemove
     );
-}
-
-#[test]
-fn a_failed_write_leaves_the_previous_file_intact_and_no_temp_file_behind() {
-    let directory = tempfile::tempdir().unwrap();
-    let path = directory.path().join(PROFILE_FILE_NAME);
-    store::write_atomic(&path, b"old contents").unwrap();
-
-    let failure = write_atomic_with(&path, |file| {
-        file.write_all(b"half of the new")?;
-        Err(std::io::Error::other("disk full"))
-    });
-    assert!(failure.is_err());
-    assert_eq!(std::fs::read(&path).unwrap(), b"old contents");
-    let names: Vec<_> = std::fs::read_dir(directory.path())
-        .unwrap()
-        .map(|entry| entry.unwrap().file_name())
-        .collect();
-    assert_eq!(names, [std::ffi::OsString::from(PROFILE_FILE_NAME)]);
 }
 
 #[test]

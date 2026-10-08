@@ -136,6 +136,21 @@ fn bounded(field: &str, value: &str, maximum: usize, multiline: bool) -> Result<
     Ok(())
 }
 
+fn bounded_key(key: &ResolutionKey) -> Result<(), AppError> {
+    bounded(
+        "an entity kind",
+        &key.kind,
+        MAXIMUM_DISPLAY_CHARACTERS,
+        false,
+    )?;
+    bounded(
+        "an entity value",
+        &key.value,
+        MAXIMUM_DISPLAY_CHARACTERS,
+        false,
+    )
+}
+
 fn validate_snapshot(snapshot: &super::EntitySnapshot) -> Result<(), AppError> {
     bounded(
         "a display value",
@@ -143,18 +158,7 @@ fn validate_snapshot(snapshot: &super::EntitySnapshot) -> Result<(), AppError> {
         MAXIMUM_DISPLAY_CHARACTERS,
         false,
     )?;
-    bounded(
-        "an entity kind",
-        &snapshot.key.kind,
-        MAXIMUM_DISPLAY_CHARACTERS,
-        false,
-    )?;
-    bounded(
-        "an entity value",
-        &snapshot.key.value,
-        MAXIMUM_DISPLAY_CHARACTERS,
-        false,
-    )?;
+    bounded_key(&snapshot.key)?;
     if snapshot.examples.len() > MAXIMUM_EVIDENCE_LIST {
         return Err(invalid("too many example mentions in the evidence"));
     }
@@ -179,18 +183,7 @@ pub fn validate_entry(entry: &LedgerEntry) -> Result<(), AppError> {
         ));
     }
     for key in [&entry.left, &entry.right] {
-        bounded(
-            "an entity kind",
-            &key.kind,
-            MAXIMUM_DISPLAY_CHARACTERS,
-            false,
-        )?;
-        bounded(
-            "an entity value",
-            &key.value,
-            MAXIMUM_DISPLAY_CHARACTERS,
-            false,
-        )?;
+        bounded_key(key)?;
         if key.kind.is_empty() || key.value.is_empty() {
             return Err(invalid("an entity key needs a kind and a value"));
         }

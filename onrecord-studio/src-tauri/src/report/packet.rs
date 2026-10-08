@@ -14,7 +14,9 @@
 //! Claims and gaps are sorted and no map appears in the hashed structure, so the byte stream is
 //! deterministic.
 
-use super::{builder::SIGNATURE_LIMITATIONS, SourceDocument, SourceDocuments};
+use super::{
+    builder::SIGNATURE_LIMITATIONS, percent, single_line, SourceDocument, SourceDocuments,
+};
 use crate::analysis::gaps::EvidenceGap;
 use crate::integrity::sha256_hex;
 use crate::storage::pii::mask_pii;
@@ -136,10 +138,6 @@ fn public_url(value: &str) -> Option<String> {
     let cut = value.find(['?', '#']).unwrap_or(value.len());
     let url = &value[..cut];
     (url.chars().all(|c| c.is_ascii_graphic()) && url.len() <= 2_048).then(|| url.to_string())
-}
-
-fn percent(basis_points: u16) -> String {
-    format!("{}.{:02}%", basis_points / 100, basis_points % 100)
 }
 
 fn confidence_observed(confidence: ReportConfidence) -> String {
@@ -374,10 +372,6 @@ pub fn build_packet(
         build_version: build_version.to_string(),
         content,
     })
-}
-
-fn single_line(value: &str) -> String {
-    value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// One line of prose with `<` escaped, so text from a finding or a document cannot open raw HTML

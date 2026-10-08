@@ -261,9 +261,8 @@ mod macos {
     use super::*;
 
     // ABI owned by native/AppAccount.swift. Each function returns a malloc'd JSON string that
-    // must be released with `onrecord_account_free_string`. The secure-store pair is an
-    // addition to the original ABI: the Keychain is the only place `max_seen_time` and the
-    // cached entitlement may live.
+    // must be released with `onrecord_account_free_string`. The Keychain, through the
+    // secure-store pair, is the only place `max_seen_time` and the cached entitlement may live.
     unsafe extern "C" {
         fn onrecord_account_sign_in(provider: *const c_char) -> *mut c_char;
         fn onrecord_account_session() -> *mut c_char;

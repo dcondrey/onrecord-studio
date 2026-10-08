@@ -230,6 +230,11 @@ pub fn align_citation_passages(
     notes
 }
 
+pub const MAXIMUM_FINDINGS: usize = 8;
+pub const MAXIMUM_QUESTIONS: usize = 8;
+pub const MAXIMUM_REQUESTS: usize = 6;
+pub const MAXIMUM_MEETINGS: usize = 6;
+
 pub fn bound_synthesis(report: &mut ResearchSynthesis) {
     let before = (
         report.findings.len(),
@@ -237,10 +242,10 @@ pub fn bound_synthesis(report: &mut ResearchSynthesis) {
         report.requests.len(),
         report.meetings.len(),
     );
-    report.findings.truncate(8);
-    report.questions.truncate(8);
-    report.requests.truncate(6);
-    report.meetings.truncate(6);
+    report.findings.truncate(MAXIMUM_FINDINGS);
+    report.questions.truncate(MAXIMUM_QUESTIONS);
+    report.requests.truncate(MAXIMUM_REQUESTS);
+    report.meetings.truncate(MAXIMUM_MEETINGS);
     let after = (
         report.findings.len(),
         report.questions.len(),
@@ -311,22 +316,9 @@ fn same_record(a: &ResearchEvidence, b: &ResearchEvidence) -> bool {
 }
 
 fn official_agenda_source(item: &ResearchEvidence, evidence: &[ResearchEvidence]) -> bool {
-    let official = item
-        .source_url
-        .as_ref()
-        .and_then(|s| reqwest::Url::parse(s).ok())
-        .is_some_and(|url| {
-            url.scheme() == "https"
-                && url.username().is_empty()
-                && url.password().is_none()
-                && url.host_str().is_some_and(|host| {
-                    host == "sandiego.gov"
-                        || host.ends_with(".sandiego.gov")
-                        || host == "sandiego.hylandcloud.com"
-                        || host == "sandiego.granicus.com"
-                })
-        });
-    official
+    item.source_url
+        .as_deref()
+        .is_some_and(super::agenda::official_url)
         && evidence.iter().filter(|e| same_record(item, e)).any(|e| {
             let context = format!("{} {}", e.label, e.text).to_lowercase();
             context.contains("agenda") || context.contains("meeting")
@@ -530,10 +522,10 @@ pub fn validate_synthesis(
     report: &ResearchSynthesis,
     evidence: &[ResearchEvidence],
 ) -> Result<(), AppError> {
-    if report.findings.len() > 8
-        || report.requests.len() > 6
-        || report.meetings.len() > 6
-        || report.questions.len() > 8
+    if report.findings.len() > MAXIMUM_FINDINGS
+        || report.requests.len() > MAXIMUM_REQUESTS
+        || report.meetings.len() > MAXIMUM_MEETINGS
+        || report.questions.len() > MAXIMUM_QUESTIONS
     {
         return Err(AppError::DataParsing(
             "Research exceeded its findings budget".into(),

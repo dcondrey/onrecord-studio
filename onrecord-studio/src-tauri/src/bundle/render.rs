@@ -2,7 +2,7 @@
 //! page is plain markup and inline style under a policy that forbids every network load, and its
 //! data document sits in an inert `application/json` element for any tool to read.
 
-use super::{BundleDocument, BundleFinding, BUNDLE_FORMAT, BUNDLE_SCHEMA_VERSION};
+use super::{source_name, BundleDocument, BundleFinding, BUNDLE_FORMAT, BUNDLE_SCHEMA_VERSION};
 use crate::error::AppError;
 use crate::report::packet::annotations::json_carries_section;
 use crate::types::report::{QuoteStatus, ReportConfidence};
@@ -50,11 +50,9 @@ fn quote_status_label(status: QuoteStatus) -> &'static str {
 fn confidence_label(confidence: ReportConfidence) -> String {
     match confidence {
         ReportConfidence::Unassessed => "Confidence: not assessed".to_string(),
-        ReportConfidence::Measured { basis_points } => format!(
-            "Confidence: {}.{:02}%",
-            basis_points / 100,
-            basis_points % 100
-        ),
+        ReportConfidence::Measured { basis_points } => {
+            format!("Confidence: {}", crate::report::percent(basis_points))
+        }
     }
 }
 
@@ -78,14 +76,7 @@ fn write_finding(out: &mut String, finding: &BundleFinding) {
     }
     out.push_str("</ul><h3>Sources</h3><ul>");
     for citation in &claim.citations {
-        let name = citation
-            .file_name
-            .as_deref()
-            .or(citation.label.as_deref())
-            .map_or_else(
-                || format!("Document {}", citation.document_id),
-                str::to_string,
-            );
+        let name = source_name(citation);
         let _ = write!(
             out,
             "<li><strong>{}</strong> <span class=\"meta\">(portal {}, document {}",
