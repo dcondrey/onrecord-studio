@@ -18,7 +18,7 @@ const state:CaseworkState={cases:[caseA,caseB],events:[],leads:[],availableEvide
 const deferred=<T,>()=>{let resolve!:(value:T)=>void;const promise=new Promise<T>((r)=>{resolve=r;});return{promise,resolve};};
 beforeEach(()=>{bridge.invoke.mockReset();bridge.invoke.mockResolvedValue(state);});
 afterEach(cleanup);
-async function openA(){render(<CaseworkPanel/>);await screen.findByRole("option",{name:"Shelter contract · r1"});fireEvent.change(screen.getByLabelText("Open saved case"),{target:{value:"case-a"}});fireEvent.change(screen.getByLabelText("Contributor name or team label"),{target:{value:"Reporter"}});}
+async function openA(){render(<CaseworkPanel/>);await screen.findByRole("option",{name:"Shelter contract · revision 1"});fireEvent.change(screen.getByLabelText("Open saved case"),{target:{value:"case-a"}});fireEvent.change(screen.getByLabelText("Contributor name or team label"),{target:{value:"Reporter"}});}
 describe("persistent casework",()=>{
   it("saves actual hypotheses and request expectations with optimistic revision identity",async()=>{
     await openA();fireEvent.change(screen.getByLabelText("Hypothesis 1"),{target:{value:"Reconcile invoice months with performance records."}});fireEvent.change(screen.getByLabelText("Expected fields 1 (one per line)"),{target:{value:"occupied bed nights\ninvoice month"}});
@@ -133,7 +133,7 @@ describe("persistent casework",()=>{
       return state;
     });
     render(<CaseworkPanel />);
-    await screen.findByRole("option", { name: "Shelter contract · r1" });
+    await screen.findByRole("option", { name: "Shelter contract · revision 1" });
     fireEvent.change(screen.getByLabelText("Open saved case"), { target: { value: "case-a" } });
     fireEvent.change(screen.getByLabelText("Open saved case"), { target: { value: "case-b" } });
     await act(async () => {
@@ -227,5 +227,17 @@ describe("persistent casework",()=>{
     fireEvent.click(screen.getByRole("button", { name: "Rotate key (routine)" }));
     await screen.findByText("Signing key rotated.");
     expect(bridge.invoke).toHaveBeenCalledWith("rotate_export_signing_key", { reason: "Scheduled hygiene rotation.", compromised: false });
+  });
+  it("asks before discarding unsaved edits when another case is opened", async () => {
+    await openA();
+    fireEvent.change(screen.getByLabelText("Case notes"), { target: { value: "Unsaved working note" } });
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    fireEvent.change(screen.getByLabelText("Open saved case"), { target: { value: "case-b" } });
+    expect(confirm).toHaveBeenCalledWith("Discard unsaved changes to Shelter contract?");
+    expect(screen.getByLabelText("Case notes")).toHaveProperty("value", "Unsaved working note");
+    confirm.mockReturnValue(true);
+    fireEvent.change(screen.getByLabelText("Open saved case"), { target: { value: "case-b" } });
+    expect(screen.getByLabelText("Case notes")).toHaveProperty("value", "Bathroom scope");
+    confirm.mockRestore();
   });
 });
