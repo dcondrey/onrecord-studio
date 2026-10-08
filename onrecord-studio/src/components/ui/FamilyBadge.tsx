@@ -19,11 +19,14 @@ export function familyIcon(family: string): IconName {
   return FAMILY_ICON[family as LeadFamily] ?? 'flag';
 }
 
-/** The family a lead belongs to. Violet means the app surfaced it; it never claims more than that. */
-export default function FamilyBadge({ family, className }: { family: LeadFamily; className?: string }) {
+/**
+ * The family a lead belongs to. Violet means the app surfaced it; it never claims more than that.
+ * `compact` drops the icon, for a row too narrow to carry it beside the statutory badge.
+ */
+export default function FamilyBadge({ family, className, compact = false }: { family: LeadFamily; className?: string; compact?: boolean }) {
   return (
     <Badge tone="lead" className={className}>
-      <Icon name={FAMILY_ICON[family]} size="xs" />
+      {!compact && <Icon name={FAMILY_ICON[family]} size="xs" />}
       {family}
     </Badge>
   );

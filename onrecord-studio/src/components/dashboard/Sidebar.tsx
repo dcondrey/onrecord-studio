@@ -120,7 +120,7 @@ export default function Sidebar() {
                   key={item.view}
                   type="button"
                   aria-current={selected ? 'page' : undefined}
-                  aria-label={`${item.navigationLabel}${badge ? `, ${badge.label}` : ''}`}
+                  aria-label={isCollapsed ? `${item.navigationLabel}${badge ? `, ${badge.label}` : ''}` : undefined}
                   title={`${item.navigationLabel} (${modifier}${item.shortcutIndex}) — ${item.detail}`}
                   onClick={() => setWorkspaceView(item.view)}
                   className={cn(
@@ -149,6 +149,7 @@ export default function Sidebar() {
                           className={badge.tone === 'warning' ? 'bg-warning/10 text-warning' : 'bg-accent/10 text-accent'}
                         />
                       )}
+                      {badge && <span className="sr-only">, {badge.label}</span>}
                     </>
                   )}
                 </button>

@@ -644,7 +644,7 @@ function TemplateList({ templates, onChoose }: { templates: SqlTemplate[]; onCho
         {templates.map((template) => (
           <button key={template.templateId} type="button" onClick={() => onChoose(template.sql)} title={template.denominator} className="block w-full rounded border border-control px-2 py-1.5 text-left text-label text-fg-secondary hover:bg-surface">
             <span className="font-semibold">{template.title}</span>
-            <span className="mt-0.5 line-clamp-2 block text-caption text-muted">{template.description}</span>
+            <span className="mt-0.5 line-clamp-2 text-caption text-muted">{template.description}</span>
           </button>
         ))}
       </div>

@@ -68,7 +68,7 @@ export default function ScoreSpark({ factors, scaleMax, width, height = 6, label
   const drawn = factors.filter((factor) => !factor.unassessed && factor.basisPoints > 0);
   const lead = paintFor('descriptive', 'fill', 'lead').fill;
   const counted = paintFor('counted', 'fill').fill;
-  const y = 2;
+  const y = 1;
   const radius = height / 2;
   let cursor = 0;
   const segments = drawn.map((factor, index) => {
@@ -83,8 +83,8 @@ export default function ScoreSpark({ factors, scaleMax, width, height = 6, label
       aria-label={decorative ? undefined : label}
       aria-hidden={decorative || undefined}
       width={drawnWidth}
-      height={height + 4}
-      viewBox={`0 0 ${drawnWidth} ${height + 4}`}
+      height={height + 2}
+      viewBox={`0 0 ${drawnWidth} ${height + 2}`}
       className="block shrink-0"
     >
       <clipPath id={clip}><rect x={0} y={y} width={track} height={height} rx={radius} /></clipPath>

@@ -34,12 +34,12 @@ export default function LeadCard({ lead, rank, scaleMax, source }: {
   return (
     <>
       <span className="flex h-5 min-w-0 items-center gap-1.5">
-        <span aria-hidden="true" className="w-7 shrink-0 text-caption font-semibold tabular-nums text-fg-secondary">#{rank}</span>
-        <FamilyBadge family={findingFamily(lead.kind)} />
+        <span aria-hidden="true" className="w-6 shrink-0 text-caption font-semibold tabular-nums text-fg-secondary">#{rank}</span>
+        <FamilyBadge family={findingFamily(lead.kind)} compact />
         {isLegalClaimKind(lead.kind) && <Badge tone="violation">Counted</Badge>}
       </span>
-      <span className="mt-1 line-clamp-2 block text-body font-medium text-fg">{keepIdentifiers(lead.headline)}</span>
-      <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-caption text-muted">
+      <span className="mt-1 line-clamp-2 text-body font-medium text-fg">{keepIdentifiers(lead.headline)}</span>
+      <span className="flex min-w-0 items-center gap-1.5 text-caption text-muted">
         {meta.flatMap((part, index) => (index === 0 ? [part] : [<span key={`dot-${index}`} aria-hidden="true" className="shrink-0">·</span>, part]))}
       </span>
       <span className="mt-2 flex items-center gap-2">

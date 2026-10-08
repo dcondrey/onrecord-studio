@@ -274,9 +274,9 @@ function WatchRow({ icon, title, figure, lines, current, onClick, children }: {
     >
       <span aria-hidden="true" className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-raised text-fg-secondary"><Icon name={icon} size="sm" /></span>
       <span className="min-w-0 flex-1">
-        <span className="flex min-h-6 min-w-0 flex-wrap items-center gap-x-1.5 text-body font-medium text-fg">
-          {title}
-          {figure !== undefined && <span className="ml-auto shrink-0 pl-2 text-caption font-medium tabular-nums text-fg-secondary">{figure}</span>}
+        <span className="flex min-h-6 items-start gap-2">
+          <span className="flex min-h-6 min-w-0 flex-1 flex-wrap items-center gap-x-1.5 text-body font-medium text-fg">{title}</span>
+          {figure !== undefined && <span className="shrink-0 pt-0.5 text-caption font-medium tabular-nums text-fg-secondary">{figure}</span>}
         </span>
         {lines?.map((line, at) => <span key={at} className="block text-caption tabular-nums text-muted">{line}</span>)}
         {children}
@@ -357,12 +357,19 @@ function WatchStatus({ ledger, ledgerSelected, onSelectLedger, onOpenFollowing }
   const sources = `${portals.length.toLocaleString()} source${portals.length === 1 ? '' : 's'}`;
   const percent = total > 0 ? `${Math.floor((settled / total) * 100)}%` : null;
   const dot = <StatusDot state={degraded > 0 ? 'error' : collecting > 0 ? 'active' : 'idle'} pulse={collecting > 0 && degraded === 0} label={degraded > 0 ? 'needs attention' : collecting > 0 ? 'collecting' : 'idle'} />;
+  // Folded, the header carries the same facts as figures beside the icons the rows use; each
+  // states its words to a screen reader, so the line stays one line at the navigator's width.
   const summary = [
-    <span key="sources">{sources}</span>,
-    dot,
-    percent && <span key="percent">{percent}</span>,
-    ledger && <span key="ledger">§ {ledger.misses.toLocaleString()}</span>,
-    changes.status === 'ready' && <span key="changes">{recent.length.toLocaleString()} change{recent.length === 1 ? '' : 's'}</span>,
+    <span key="sources" className="inline-flex items-center gap-1" title={sources}>
+      <Icon name="database" size="xs" className="text-muted" /><span aria-hidden="true">{portals.length.toLocaleString()}</span><span className="sr-only">{sources}</span>{dot}
+    </span>,
+    percent && <span key="percent" title={`${settled.toLocaleString()} of ${total.toLocaleString()} tasks settled`}>{percent}<span className="sr-only"> of collection tasks settled</span></span>,
+    ledger && <span key="ledger" title={`${ledger.misses.toLocaleString()} counted deadline misses`}><span aria-hidden="true">§ {ledger.misses.toLocaleString()}</span><span className="sr-only">{ledger.misses.toLocaleString()} counted deadline misses</span></span>,
+    changes.status === 'ready' && (
+      <span key="changes" className="inline-flex items-center gap-1" title={`${recent.length.toLocaleString()} watch change${recent.length === 1 ? '' : 's'}`}>
+        <Icon name="activity" size="xs" className="text-muted" /><span aria-hidden="true">{recent.length.toLocaleString()}</span><span className="sr-only">{recent.length.toLocaleString()} watch change{recent.length === 1 ? '' : 's'}</span>
+      </span>
+    ),
   ].filter(Boolean);
 
   return (
@@ -377,9 +384,7 @@ function WatchStatus({ ledger, ledgerSelected, onSelectLedger, onOpenFollowing }
         >
           <span className="text-overline uppercase text-muted">Watching</span>
           {!open && (
-            <span className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-caption tabular-nums text-fg-secondary">
-              {summary.flatMap((part, at) => (at < 2 ? [part] : [<span key={`dot-${at}`} aria-hidden="true" className="text-muted">·</span>, part]))}
-            </span>
+            <span className="flex min-w-0 flex-1 items-center gap-2.5 whitespace-nowrap text-caption tabular-nums text-fg-secondary">{summary}</span>
           )}
           <Icon name="chevron" size="xs" className={cn('ml-auto shrink-0 text-muted transition-transform', open && 'rotate-90')} />
         </button>
@@ -405,7 +410,7 @@ function WatchStatus({ ledger, ledgerSelected, onSelectLedger, onOpenFollowing }
               icon="bars"
               title={<><span>Deadline ledger</span><Badge tone="violation" className="h-[18px] px-1.5">Counted</Badge></>}
               figure={`${ledger.misses.toLocaleString()} missed`}
-              lines={[`of ${ledger.requests.toLocaleString()} requests · ${ledger.departments.toLocaleString()} department${ledger.departments === 1 ? '' : 's'} · all-time`]}
+              lines={[`of ${ledger.requests.toLocaleString()} requests · ${ledger.departments.toLocaleString()} department${ledger.departments === 1 ? '' : 's'} · all\u2011time`]}
               current={ledgerSelected}
               onClick={onSelectLedger}
             />

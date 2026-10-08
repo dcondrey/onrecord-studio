@@ -386,7 +386,7 @@ function RankedLeads({ leads, allLeads, busy, renderDetail }: { leads: StoryLead
   const byId = new Map(leads.map((lead) => [lead.findingId, lead]));
 
   const columns: BarTableColumn[] = [
-    { key: SCORE_KEY, label: 'Score', title: 'Attention score: ranks reading order; not newsworthiness and not a claim about any record', scale: 'own-max', max: scoreMax, sortable: true, barWidth: 44 },
+    { key: SCORE_KEY, label: 'Score', title: 'Attention score: ranks reading order; not newsworthiness and not a claim about any record', scale: 'own-max', max: scoreMax, paint: 'lead', sortable: true, barWidth: 44 },
     ...factorNames.map((name): BarTableColumn => ({
       key: name,
       label: name === COUNTED_FACTOR ? 'Counted violation (legal claim)' : factorLabel(name),

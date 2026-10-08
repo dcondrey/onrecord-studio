@@ -696,10 +696,11 @@ export default function CommandPalette() {
           </p>
         )}
         {!answering && mode === 'commands' && (
-          <div id="command-results" className="max-h-[min(60vh,480px)] overflow-y-auto p-2" role="listbox" aria-label="Commands">
+          <div className="max-h-[min(60vh,480px)] overflow-y-auto p-2">
             {noMatches && (
-              <p role="presentation" className="px-3 pb-1 pt-3 text-heading text-fg-secondary">No matches for “{trimmedQuery}”</p>
+              <p className="px-3 pb-1 pt-3 text-heading text-fg-secondary">No matches for “{trimmedQuery}”</p>
             )}
+            <div id="command-results" role="listbox" aria-label="Commands" aria-busy={searching || undefined}>
             {groups.map(({ group, start, items }) => (
               <div key={`${group}-${start}`} role="group" aria-label={groupTitle(group)}>
                 {group !== 'Search' && (
@@ -746,6 +747,7 @@ export default function CommandPalette() {
                 })}
               </div>
             ))}
+            </div>
             {searching && (
               <div role="status" className="flex h-10 items-center gap-3 px-3 text-caption text-muted">
                 <span aria-hidden="true" className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-line-strong border-t-accent" />

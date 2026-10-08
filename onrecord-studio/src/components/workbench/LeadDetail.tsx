@@ -418,7 +418,7 @@ function Context({ dossier, onSelectFinding, draftOpen, onOpenDraft }: {
                 >
                   <SeverityGlyph severity={related.severity} />
                   <span className="min-w-0">
-                    <span className="line-clamp-2 block text-body text-fg">{keepIdentifiers(related.headline)}</span>
+                    <span className="line-clamp-2 text-body text-fg">{keepIdentifiers(related.headline)}</span>
                     <span className="block text-caption text-muted">{related.basis === 'SAME_REQUEST' ? 'Same request' : 'Cites the same document'}</span>
                   </span>
                 </button>
