@@ -6,7 +6,7 @@
 //! result. The folder is whatever the user points at (a synced or network folder, a USB stick):
 //! nothing here talks to a network.
 
-use crate::atomic_write::write_atomic;
+use crate::atomic_write::{read_bounded, write_atomic};
 use crate::error::AppError;
 use crate::integrity::is_sha256_hex;
 use chrono::{DateTime, SecondsFormat, Utc};
@@ -19,6 +19,7 @@ use std::sync::Mutex;
 pub const CONTRIBUTOR_FILE_NAME: &str = "contributors.json";
 pub const MAXIMUM_TRUSTED_CONTRIBUTORS: usize = 500;
 pub const MAXIMUM_LABEL_CHARACTERS: usize = 120;
+const MAXIMUM_CONTRIBUTOR_FILE_BYTES: u64 = 4 * 1024 * 1024;
 pub const MAXIMUM_FOLDER_ENTRIES: usize = 500;
 /// Most packet files read from a folder before listing stops: a resource guard, reported as truncation.
 pub const MAXIMUM_FOLDER_SCAN: usize = 50_000;
@@ -126,13 +127,19 @@ impl ContributorStore {
     /// A missing file is an empty list. An unreadable one is an error, never "empty": a trust
     /// list that silently reads as empty would drop every verified contributor on the next save.
     fn read(&self) -> Result<ContributorDocument, AppError> {
-        match fs::read(&self.path) {
-            Ok(bytes) => serde_json::from_slice(&bytes).map_err(|error| {
+        match read_bounded(&self.path, MAXIMUM_CONTRIBUTOR_FILE_BYTES) {
+            Ok(Some(bytes)) => serde_json::from_slice(&bytes).map_err(|error| {
                 AppError::Storage(format!(
                     "The contributor list is not valid ({error}). It was not modified."
                 ))
             }),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Default::default()),
+            Ok(None) => Ok(Default::default()),
+            Err(error) if error.kind() == std::io::ErrorKind::FileTooLarge => {
+                Err(AppError::Storage(format!(
+                    "The contributor list is larger than {MAXIMUM_CONTRIBUTOR_FILE_BYTES} bytes and \
+                     was not read. It was not modified."
+                )))
+            }
             Err(error) => Err(AppError::Storage(format!(
                 "Failed to read the contributor list: {error}"
             ))),

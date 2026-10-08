@@ -6,7 +6,7 @@
 //! be read or verified is an error and is never replaced by an empty ledger on the next write.
 
 use super::{invalid, ordered_pair, EvidenceSnapshot, ResolutionKey, Verdict};
-use crate::atomic_write::write_atomic;
+use crate::atomic_write::{read_bounded, write_atomic};
 use crate::collaboration::validate_key_id;
 use crate::error::AppError;
 use crate::integrity::sha256_hex;
@@ -14,7 +14,6 @@ use chrono::{DateTime, Duration, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use uuid::Uuid;
@@ -512,10 +511,14 @@ impl LedgerStore {
     /// failing chain verification is an error: reading it as empty would let the next judgment
     /// overwrite every earlier one.
     fn read(&self) -> Result<LedgerDocument, AppError> {
-        let file = match fs::File::open(&self.path) {
-            Ok(file) => file,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Ok(LedgerDocument::default())
+        let bytes = match read_bounded(&self.path, MAXIMUM_FILE_BYTES) {
+            Ok(Some(bytes)) => bytes,
+            Ok(None) => return Ok(LedgerDocument::default()),
+            Err(error) if error.kind() == std::io::ErrorKind::FileTooLarge => {
+                return Err(AppError::Storage(
+                    "The resolution ledger file is larger than its size limit. It was not modified."
+                        .to_string(),
+                ))
             }
             Err(error) => {
                 return Err(AppError::Storage(format!(
@@ -523,18 +526,6 @@ impl LedgerStore {
                 )))
             }
         };
-        let mut bytes = Vec::new();
-        file.take(MAXIMUM_FILE_BYTES + 1)
-            .read_to_end(&mut bytes)
-            .map_err(|error| {
-                AppError::Storage(format!("Failed to read the resolution ledger: {error}"))
-            })?;
-        if bytes.len() as u64 > MAXIMUM_FILE_BYTES {
-            return Err(AppError::Storage(
-                "The resolution ledger file is larger than its size limit. It was not modified."
-                    .to_string(),
-            ));
-        }
         let document: LedgerDocument = serde_json::from_slice(&bytes).map_err(|error| {
             AppError::Storage(format!(
                 "The resolution ledger is not valid ({error}). It was not modified."

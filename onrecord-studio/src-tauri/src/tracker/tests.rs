@@ -6,7 +6,6 @@ use crate::analysis::finding::Finding;
 use crate::analysis::statute::DeterminationBasis;
 use crate::types::StatutoryExtensionReason;
 use chrono::Utc;
-use std::io::Write;
 
 const NOW: &str = "2026-06-01T00:00:00Z";
 
@@ -650,30 +649,6 @@ fn a_document_at_every_count_limit_survives_a_save_and_a_load() {
 }
 
 // ---- storage ----
-
-#[test]
-fn a_failed_write_leaves_the_previous_file_intact_and_no_temp_file_behind() {
-    let directory = tempfile::tempdir().unwrap();
-    let store = TrackerStore::new(directory.path());
-    store
-        .update(|document| claim_request(document, claim_input("keep"), &[], NOW))
-        .unwrap();
-    let before = std::fs::read(store.path()).unwrap();
-
-    let failure =
-        crate::atomic_write::write_atomic_with(store.path(), "the request tracker", |file| {
-            file.write_all(b"half of the new")?;
-            Err(std::io::Error::other("disk full"))
-        });
-    assert!(failure.is_err());
-    assert_eq!(std::fs::read(store.path()).unwrap(), before);
-    let names: Vec<_> = std::fs::read_dir(directory.path())
-        .unwrap()
-        .map(|entry| entry.unwrap().file_name())
-        .collect();
-    assert_eq!(names, [std::ffi::OsString::from(TRACKER_FILE_NAME)]);
-    assert_eq!(store.load().unwrap().claims[0].reference, "keep");
-}
 
 #[test]
 fn a_write_past_the_size_limit_is_refused_and_leaves_the_file_readable() {

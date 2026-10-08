@@ -2,8 +2,26 @@
 
 use crate::error::AppError;
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::path::Path;
+
+/// Reads a whole file of at most `maximum_bytes`. A missing file is `Ok(None)`; a larger one is an
+/// error of kind `FileTooLarge`. The error stays an `io::Error` so each store words its own
+/// remediation.
+pub(crate) fn read_bounded(path: &Path, maximum_bytes: u64) -> io::Result<Option<Vec<u8>>> {
+    let file = match File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let mut bytes = Vec::new();
+    file.take(maximum_bytes.saturating_add(1))
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > maximum_bytes {
+        return Err(io::Error::from(io::ErrorKind::FileTooLarge));
+    }
+    Ok(Some(bytes))
+}
 
 pub(crate) fn write_atomic(path: &Path, label: &str, bytes: &[u8]) -> Result<(), AppError> {
     write_atomic_with(path, label, |file| file.write_all(bytes))
@@ -65,4 +83,45 @@ pub(crate) fn sync_directory(path: &Path) {
     }
     #[cfg(not(unix))]
     let _ = path;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_failed_write_leaves_the_previous_file_intact_and_no_temp_file_behind() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("document.json");
+        write_atomic(&path, "the document", b"previous").unwrap();
+
+        let failure = write_atomic_with(&path, "the document", |file| {
+            file.write_all(b"half of the new")?;
+            Err(io::Error::other("disk full"))
+        });
+        assert!(failure.is_err());
+        assert_eq!(fs::read(&path).unwrap(), b"previous");
+        let names: Vec<_> = fs::read_dir(directory.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(names, [std::ffi::OsString::from("document.json")]);
+    }
+
+    #[test]
+    fn read_bounded_admits_exactly_the_maximum_and_refuses_one_byte_more() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("document.json");
+        assert_eq!(read_bounded(&path, 4).unwrap(), None);
+
+        fs::write(&path, b"1234").unwrap();
+        assert_eq!(
+            read_bounded(&path, 4).unwrap().as_deref(),
+            Some(&b"1234"[..])
+        );
+
+        fs::write(&path, b"12345").unwrap();
+        let error = read_bounded(&path, 4).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::FileTooLarge);
+    }
 }

@@ -6,12 +6,11 @@
 //! about the document: it records what the reviewer said, not what the record shows.
 
 use crate::annotation_anchor::Placement;
-use crate::atomic_write::write_atomic;
+use crate::atomic_write::{read_bounded, write_atomic};
 use crate::error::AppError;
 use crate::types::annotation::*;
 use chrono::{SecondsFormat, Utc};
-use std::fs::File;
-use std::io::{self, Read};
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use uuid::Uuid;
@@ -323,26 +322,18 @@ impl AnnotationStore {
     /// A missing file is empty. A file that exists but cannot be read is an error, never "empty":
     /// showing it empty would overwrite it on the next save.
     fn read(&self) -> Result<AnnotationDocument, AppError> {
-        let file = match File::open(&self.path) {
-            Ok(file) => file,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                return Ok(AnnotationDocument::default())
-            }
-            Err(error) => {
+        let bytes = match read_bounded(&self.path, MAXIMUM_FILE_BYTES) {
+            Ok(Some(bytes)) => bytes,
+            Ok(None) => return Ok(AnnotationDocument::default()),
+            Err(error) if error.kind() == io::ErrorKind::FileTooLarge => {
                 return Err(AppError::Storage(format!(
-                    "Failed to open {LABEL}: {error}"
+                    "The annotations file is larger than {MAXIMUM_FILE_BYTES} bytes and was not read. It was not modified."
                 )))
             }
+            Err(error) => {
+                return Err(AppError::Storage(format!("Failed to read {LABEL}: {error}")))
+            }
         };
-        let mut bytes = Vec::new();
-        file.take(MAXIMUM_FILE_BYTES + 1)
-            .read_to_end(&mut bytes)
-            .map_err(|error| AppError::Storage(format!("Failed to read {LABEL}: {error}")))?;
-        if bytes.len() as u64 > MAXIMUM_FILE_BYTES {
-            return Err(AppError::Storage(format!(
-                "The annotations file is larger than {MAXIMUM_FILE_BYTES} bytes and was not read. It was not modified."
-            )));
-        }
         let mut document: AnnotationDocument = serde_json::from_slice(&bytes).map_err(|error| {
             AppError::Storage(format!(
                 "The annotations file is not valid ({error}). It was not modified."

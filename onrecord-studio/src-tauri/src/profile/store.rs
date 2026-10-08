@@ -3,11 +3,11 @@
 //! This is deliberately not in DuckDB. The profile is a per-device preference that must be
 //! deletable as a single file, and it must survive a corpus or core database rebuild.
 
-use crate::atomic_write::{sync_directory, write_atomic};
+use crate::atomic_write::{read_bounded, sync_directory, write_atomic};
 use crate::error::AppError;
 use crate::types::profile::{ProfileDeletionOutcome, UserProfile, PROFILE_SCHEMA_VERSION};
-use std::fs::{self, File};
-use std::io::{self, Read};
+use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -83,25 +83,21 @@ impl ProfileStore {
 }
 
 fn read_profile(path: &Path) -> Result<Option<UserProfile>, AppError> {
-    let file = match File::open(path) {
-        Ok(file) => file,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+    let bytes = match read_bounded(path, MAXIMUM_PROFILE_FILE_BYTES) {
+        Ok(Some(bytes)) => bytes,
+        Ok(None) => return Ok(None),
+        Err(error) if error.kind() == io::ErrorKind::FileTooLarge => {
+            return Err(AppError::Storage(format!(
+                "The local profile file is larger than {MAXIMUM_PROFILE_FILE_BYTES} bytes and was \
+                 not read. Delete the local profile to start again."
+            )))
+        }
         Err(error) => {
             return Err(AppError::Storage(format!(
-                "Failed to open the local profile: {error}"
+                "Failed to read the local profile: {error}"
             )))
         }
     };
-    let mut bytes = Vec::new();
-    file.take(MAXIMUM_PROFILE_FILE_BYTES + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|error| AppError::Storage(format!("Failed to read the local profile: {error}")))?;
-    if bytes.len() as u64 > MAXIMUM_PROFILE_FILE_BYTES {
-        return Err(AppError::Storage(format!(
-            "The local profile file is larger than {MAXIMUM_PROFILE_FILE_BYTES} bytes and was not \
-             read. Delete the local profile to start again."
-        )));
-    }
     let profile: UserProfile = serde_json::from_slice(&bytes).map_err(|error| {
         AppError::Storage(format!(
             "The local profile file is not valid ({error}). Delete the local profile to start again."
