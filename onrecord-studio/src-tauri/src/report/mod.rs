@@ -37,6 +37,15 @@ impl SourceDocument {
 
 pub type SourceDocuments = HashMap<(String, i64), SourceDocument>;
 
+/// Basis points as a percentage with two decimals, e.g. `7350` is `73.50%`.
+pub fn percent(basis_points: u16) -> String {
+    format!("{}.{:02}%", basis_points / 100, basis_points % 100)
+}
+
+fn single_line(value: &str) -> String {
+    value.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 pub fn template_sha256() -> String {
     sha256_hex(TEMPLATE.as_bytes())
 }

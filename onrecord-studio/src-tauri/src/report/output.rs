@@ -1,6 +1,4 @@
-//! Output-path confinement and no-overwrite commit for report files. `commands::export` keeps
-//! equivalents private; these are duplicated (they are not cryptography) rather than edited into
-//! that file.
+//! Output-path confinement and no-overwrite commit for exported report files.
 
 use crate::error::AppError;
 use std::path::{Path, PathBuf};

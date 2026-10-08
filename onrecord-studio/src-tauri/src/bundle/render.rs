@@ -50,11 +50,9 @@ fn quote_status_label(status: QuoteStatus) -> &'static str {
 fn confidence_label(confidence: ReportConfidence) -> String {
     match confidence {
         ReportConfidence::Unassessed => "Confidence: not assessed".to_string(),
-        ReportConfidence::Measured { basis_points } => format!(
-            "Confidence: {}.{:02}%",
-            basis_points / 100,
-            basis_points % 100
-        ),
+        ReportConfidence::Measured { basis_points } => {
+            format!("Confidence: {}", crate::report::percent(basis_points))
+        }
     }
 }
 

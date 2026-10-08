@@ -2,7 +2,7 @@
 //! (hypotheses excluded, quotes masked with whole-document context, unassessed never scored) are
 //! testable without a database.
 
-use super::{SourceDocument, SourceDocuments};
+use super::{single_line, SourceDocument, SourceDocuments};
 use crate::analysis::finding::{Finding, FindingCitation, FindingConfidence, FindingKind};
 use crate::error::AppError;
 use crate::profile::DisclosureContext;
@@ -204,13 +204,7 @@ fn build_citation(
     withheld: &mut Withholdings,
 ) -> Result<ReportCitation, AppError> {
     let document = documents.get(&(citation.portal_key.clone(), citation.document_id));
-    let public =
-        document.is_some_and(|document| document.visibility.trim().eq_ignore_ascii_case("public"));
-    let label = citation
-        .label
-        .as_deref()
-        .map(|label| mask_pii(label).map(|masked| masked.masked_text))
-        .transpose()?;
+    let label = mask_optional(citation.label.as_deref())?;
     let base = ReportCitation {
         portal_key: citation.portal_key.clone(),
         document_id: citation.document_id,
@@ -227,7 +221,7 @@ fn build_citation(
     };
     // A document that is not public contributes nothing beyond its id: not its name, not its
     // digests, not an excerpt.
-    let Some(document) = document.filter(|_| public) else {
+    let Some(document) = document.filter(|document| document.is_public()) else {
         withheld.note(WithheldReason::QuoteNonPublicDocument);
         return Ok(ReportCitation {
             quote_status: QuoteStatus::WithheldNonPublicDocument,
@@ -239,11 +233,7 @@ fn build_citation(
         withheld.note(WithheldReason::QuoteMismatch);
     }
     Ok(ReportCitation {
-        file_name: document
-            .file_name
-            .as_deref()
-            .map(|name| mask_pii(name).map(|masked| masked.masked_text))
-            .transpose()?,
+        file_name: mask_optional(document.file_name.as_deref())?,
         quote: excerpt.quote,
         quote_status: excerpt.status,
         quote_truncated: excerpt.truncated,
@@ -254,8 +244,10 @@ fn build_citation(
     })
 }
 
-fn collapse_whitespace(value: &str) -> String {
-    value.split_whitespace().collect::<Vec<_>>().join(" ")
+fn mask_optional(value: Option<&str>) -> Result<Option<String>, AppError> {
+    value
+        .map(|value| mask_pii(value).map(|masked| masked.masked_text))
+        .transpose()
 }
 
 fn excerpt_for(citation: &FindingCitation, document: &SourceDocument) -> Result<Excerpt, AppError> {
@@ -272,7 +264,7 @@ fn excerpt_for(citation: &FindingCitation, document: &SourceDocument) -> Result<
     if let Some((text, start, end)) = range {
         let range_text: String = text.chars().skip(start).take(end - start).collect();
         if let Some(quote) = detector_quote {
-            if !collapse_whitespace(&range_text).contains(&collapse_whitespace(quote)) {
+            if !single_line(&range_text).contains(&single_line(quote)) {
                 return Ok(Excerpt::none(QuoteStatus::WithheldMismatch));
             }
         }
