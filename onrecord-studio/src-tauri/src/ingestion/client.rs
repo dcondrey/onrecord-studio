@@ -2990,28 +2990,33 @@ fn file_name_from_url(url: &Url) -> String {
     url.path_segments()
         .and_then(|mut segments| segments.next_back())
         .filter(|value| !value.is_empty())
-        .map(percent_decode_file_name)
+        .map(percent_decode_text)
         .unwrap_or_else(|| url.host_str().unwrap_or("download").to_string())
 }
 
-fn percent_decode_file_name(value: &str) -> String {
-    let mut output = String::with_capacity(value.len());
-    let bytes = value.as_bytes();
+/// Percent-decodes as UTF-8, so an encoded multi-byte name reads as the publisher wrote it.
+pub(crate) fn percent_decode_text(value: &str) -> String {
+    String::from_utf8_lossy(&percent_decode_bytes(value.as_bytes())).into_owned()
+}
+
+/// Decodes every well-formed `%XX` escape; a malformed escape is kept literally.
+pub(crate) fn percent_decode_bytes(value: &[u8]) -> Vec<u8> {
+    let mut decoded = Vec::with_capacity(value.len());
     let mut index = 0;
-    while index < bytes.len() {
-        if bytes[index] == b'%' && index + 2 < bytes.len() {
+    while index < value.len() {
+        if value[index] == b'%' && index + 2 < value.len() {
             if let (Some(high), Some(low)) =
-                (hex_nibble(bytes[index + 1]), hex_nibble(bytes[index + 2]))
+                (hex_nibble(value[index + 1]), hex_nibble(value[index + 2]))
             {
-                output.push(char::from((high << 4) | low));
+                decoded.push((high << 4) | low);
                 index += 3;
                 continue;
             }
         }
-        output.push(char::from(bytes[index]));
+        decoded.push(value[index]);
         index += 1;
     }
-    output
+    decoded
 }
 
 fn hex_nibble(value: u8) -> Option<u8> {

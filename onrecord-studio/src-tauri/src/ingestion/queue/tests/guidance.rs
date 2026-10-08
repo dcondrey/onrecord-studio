@@ -42,18 +42,22 @@ fn validates_page_bounds_at_the_queue_boundary() {
 /// returned `FrontierExclusion::Guidance`, which would make this assertion fail.
 #[test]
 fn guidance_allows_url_reports_the_specific_filename_rule_not_the_generic_one() {
-    let guidance = SourceGuidance {
-        exclude_filename_globs: vec!["*.exe".to_string()],
-        ..Default::default()
-    };
-    let compiled = CompiledGuidancePatterns::compile(&guidance);
-    let result = guidance_allows_url(
-        &guidance,
-        &compiled,
-        "https://records.example.test/files/installer.exe",
-        None,
-    );
-    assert_eq!(result, Err(FrontierExclusion::FilenamePattern));
+    // The rule sees the decoded name, so a glob written as the name displays matches its escape.
+    for (glob, url) in [
+        ("*.exe", "https://records.example.test/files/installer.exe"),
+        (
+            "*résumé*",
+            "https://records.example.test/files/R%C3%A9sum%C3%A9.pdf",
+        ),
+    ] {
+        let guidance = SourceGuidance {
+            exclude_filename_globs: vec![glob.to_string()],
+            ..Default::default()
+        };
+        let compiled = CompiledGuidancePatterns::compile(&guidance);
+        let result = guidance_allows_url(&guidance, &compiled, url, None);
+        assert_eq!(result, Err(FrontierExclusion::FilenamePattern), "{glob}");
+    }
 }
 
 /// The size predicate must not fire on an unknown size: excluding on an absent measurement is

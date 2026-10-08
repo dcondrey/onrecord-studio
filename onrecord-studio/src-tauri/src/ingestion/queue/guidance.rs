@@ -266,20 +266,20 @@ pub(super) fn glob_matches(pattern: &str, text: &str) -> bool {
     pattern[pattern_index..].iter().all(|byte| *byte == b'*')
 }
 
-/// The immediate last path segment of a URL, treated as the filename a `SourceGuidance` filename
-/// rule evaluates against. Mirrors `client::file_name_from_url`'s convention: a trailing slash
-/// (a directory, not a file) is an empty segment and yields `None`, never the directory name one
-/// level up -- an include-glob like `*.pdf` must not silently prune a crawl into `/reports/2024/`
-/// because "2024" was mistaken for a filename. A non-URL value falls back to its immediate last
-/// slash-delimited segment for compatibility with the pre-parser path. Absence means the filename
-/// predicates contribute nothing, not that they exclude, per the absence-versus-measurement rule.
+/// The immediate last path segment of a URL, percent-decoded, treated as the filename a
+/// `SourceGuidance` filename rule evaluates against. Mirrors `client::file_name_from_url`: a
+/// trailing slash (a directory, not a file) is an empty segment and yields `None`, never the
+/// directory name one level up -- an include-glob like `*.pdf` must not silently prune a crawl
+/// into `/reports/2024/` because "2024" was mistaken for a filename. A non-URL value falls back to
+/// its immediate last slash-delimited segment. Absence means the filename predicates contribute
+/// nothing, not that they exclude, per the absence-versus-measurement rule.
 fn filename_from_url(value: &str) -> Option<String> {
     let last_segment = reqwest::Url::parse(value)
         .ok()
         .and_then(|url| {
             url.path_segments()
                 .and_then(|mut segments| segments.next_back())
-                .map(str::to_string)
+                .map(crate::ingestion::client::percent_decode_text)
         })
         .unwrap_or_else(|| value.rsplit('/').next().unwrap_or(value).to_string());
     (!last_segment.is_empty()).then_some(last_segment)
