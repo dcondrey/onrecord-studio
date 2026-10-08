@@ -20,7 +20,7 @@ use crate::{
     storage::{
         monitoring::{packed, unpacked},
         now_stamp,
-        sqlite::DuckDbRepository,
+        sqlite::{table_exists, DuckDbRepository},
     },
     types::*,
 };
@@ -568,15 +568,6 @@ fn check_one(
         dimensions: out.dimensions,
         new_changes,
     }))
-}
-
-fn table_exists(conn: &Connection, name: &str) -> Result<bool, AppError> {
-    conn.query_row(
-        "SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name=?1)",
-        params![name],
-        |r| r.get(0),
-    )
-    .map_err(err)
 }
 
 fn public_scope() -> &'static str {

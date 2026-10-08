@@ -1,10 +1,8 @@
 //! Removing documents and sources without leaving orphaned rows or objects.
 
 use super::*;
-use super::{
-    analytical::quote_ident, connection::execute_transaction,
-    integrity::resynchronize_request_density_flags,
-};
+use super::{connection::execute_transaction, integrity::resynchronize_request_density_flags};
+use crate::storage::quote_ident;
 
 /// Defines `evidence(path)`: the files a purge of source `?1` unlinks. That is every path its
 /// documents hold or its pending retention receipts staged, minus any path another source still

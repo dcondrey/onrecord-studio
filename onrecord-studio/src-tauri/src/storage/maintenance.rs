@@ -205,9 +205,12 @@ impl DuckDbRepository {
         // The snapshot write and its origin receipt must commit or roll back together: a crash
         // between two separate transactions would leave a snapshot on disk that later
         // maintenance/purge logic cannot tell apart from one nobody ever recorded an origin for.
-        let origin = (candidate.portal_key.clone(), candidate.document_id);
         match self
-            .import_analytical_csv_recording_origin(input, Some(origin))
+            .import_analytical_csv_recording_origin(
+                input,
+                candidate.portal_key.clone(),
+                candidate.document_id,
+            )
             .await
         {
             Ok(result) => {
@@ -1155,6 +1158,78 @@ mod tests {
             .await
             .unwrap());
         assert!(!path.exists());
+    }
+
+    #[tokio::test]
+    async fn retention_stamp_describes_the_bytes_currently_stored() {
+        let (root, db) = setup().await;
+        let policy = references(&db).await;
+        let path = seed(&db, root.path(), 1, "extracted.txt", b"First release.").await;
+        async fn finalize(db: &DuckDbRepository, path: &Path, text: &str) {
+            let digest = sha256_hex(text.as_bytes());
+            db.finalize_document_extraction(
+                crate::storage::sqlite::DocumentExtractionFinalization {
+                    document_id: 1,
+                    portal_subdomain: "fixture",
+                    extracted_text: text,
+                    extracted_text_sha256: &digest,
+                    raw_file_sha256: &digest,
+                    was_ocr_processed: false,
+                    raw_file_size: text.len() as u64,
+                    local_path: path,
+                    shannon_entropy: None,
+                    entropy_sample_bytes: 0,
+                    suspicious_data_density: false,
+                },
+            )
+            .await
+            .unwrap();
+        }
+        async fn stamp(db: &DuckDbRepository) -> Option<String> {
+            db.analytics_connection()
+                .await
+                .unwrap()
+                .query_row(
+                    "SELECT retention_eligible_at FROM documents WHERE id = 1",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap()
+        }
+        finalize(&db, &path, "First release.").await;
+        let stamped = stamp(&db).await;
+        assert!(stamped.is_some());
+        db.mark_document_downloaded(DocumentDownloadFinalization {
+            document_id: 1,
+            portal_subdomain: "fixture",
+            raw_file_sha256: &sha256_hex(b"First release."),
+            raw_file_size: 14,
+            local_path: &path,
+            shannon_entropy: None,
+            entropy_sample_bytes: 0,
+            suspicious_data_density: false,
+        })
+        .await
+        .unwrap();
+        assert_eq!(stamp(&db).await, stamped);
+
+        // Disabling keeps REFERENCE_ONLY, so effective_at survives the later re-enable.
+        db.save_maintenance_policy(DataMaintenancePolicy {
+            enabled: false,
+            retention_mode: "REFERENCE_ONLY".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+        std::fs::write(&path, "Second release.").unwrap();
+        finalize(&db, &path, "Second release.").await;
+        assert_eq!(stamp(&db).await, None);
+        assert_eq!(references(&db).await.effective_at, policy.effective_at);
+        assert!(!db
+            .compact_one_document(root.path(), &policy.effective_at)
+            .await
+            .unwrap());
+        assert!(path.exists());
     }
 
     #[tokio::test]

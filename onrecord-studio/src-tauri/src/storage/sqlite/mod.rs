@@ -2,7 +2,7 @@
 
 mod agency_record;
 mod analytical;
-pub(crate) use analytical::quote_ident;
+pub(crate) use crate::storage::quote_ident;
 mod analytical_import;
 mod row_store;
 pub(crate) use row_store::rebuild_row_view;
@@ -12,6 +12,7 @@ mod frontier;
 mod integrity;
 mod legal;
 mod migrations;
+pub(crate) use migrations::table_exists;
 mod policy;
 mod provenance;
 mod purge;

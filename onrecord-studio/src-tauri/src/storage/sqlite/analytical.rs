@@ -1,6 +1,7 @@
 //! Analytical CSV imports and the restricted SQL surface over them.
 
 use super::*;
+use crate::storage::quote_ident;
 
 impl DuckDbRepository {
     pub async fn encampment_ordinance_report(
@@ -29,15 +30,14 @@ impl DuckDbRepository {
     pub(crate) async fn import_analytical_csv_recording_origin(
         &self,
         request: AnalyticalImportRequest,
-        automatic_origin: Option<(String, u64)>,
+        portal_key: String,
+        document_id: u64,
     ) -> Result<AnalyticalImportResult, AppError> {
-        let origin = automatic_origin.map(|(portal_key, document_id)| {
-            super::analytical_import::ImportOrigin::Maintenance {
-                portal_key,
-                document_id,
-            }
-        });
-        self.import_analytical_table(request, origin)
+        let origin = super::analytical_import::ImportOrigin::Maintenance {
+            portal_key,
+            document_id,
+        };
+        self.import_analytical_table(request, Some(origin))
             .await
             .map(|(result, _)| result)
     }
@@ -352,10 +352,6 @@ pub(crate) fn unconverted_by_column(
         .and_then(|summary| summary.get("unconvertedByColumn").cloned())
         .and_then(|counts| serde_json::from_value(counts).ok())
         .unwrap_or_default()
-}
-
-pub(crate) fn quote_ident(value: &str) -> String {
-    format!("\"{}\"", value.replace('"', "\"\""))
 }
 
 pub(super) fn unique_column_alias(header: &str, index: usize, headers: &[String]) -> String {

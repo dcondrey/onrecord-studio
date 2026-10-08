@@ -720,7 +720,7 @@ fn migrate_archived_statutory_findings(connection: &Connection) -> Result<(), Ap
     Ok(())
 }
 
-fn table_exists(connection: &Connection, table: &str) -> Result<bool, AppError> {
+pub(crate) fn table_exists(connection: &Connection, table: &str) -> Result<bool, AppError> {
     if !is_safe_schema_identifier(table) {
         return Err(AppError::Storage(
             "Migration table identifier contains prohibited characters".to_string(),
