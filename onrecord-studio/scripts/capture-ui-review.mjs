@@ -5,13 +5,19 @@
 // model is involved.
 //
 //   node scripts/capture-ui-review.mjs [outputDirectory] [--data=real] [--only=view,view] [--concurrency=3]
+//     [--widths=1024,1280,1680] [--states=populated,empty,loading,error] [--browser=chrome|bundled]
+//
+// --states limits every view to those states; --states=top keeps the full state set for the
+// top-level workspace views and only populated for the rest (the CI subset).
 //
 // Output: <view>__<state>__<theme>__<width>.png plus index.json (steps, console errors, failed
 // requests, stub gaps, SQL the real fixtures could not answer, axe-core violations per capture and
 // per view, and a keyboard-focus-order record per view). Exits non-zero only when the harness
 // itself fails (server, browser, app shell unreachable), never on findings.
 //
-// PLAYWRIGHT_MODULE and CHROME_BIN override the Playwright build and Chrome executable.
+// Playwright resolves from PLAYWRIGHT_MODULE, then the project's devDependency, then the Homebrew
+// copy. The browser is CHROME_BIN when set, else installed Google Chrome on macOS, else Playwright's
+// bundled Chromium (`npx playwright install chromium`); --browser=bundled forces the last.
 /* global document, window, HTMLElement, CSS, innerHeight, innerWidth, location, requestAnimationFrame -- page.evaluate bodies run in the browser */
 import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -40,12 +46,23 @@ const concurrency = Math.max(1, Number(flag('concurrency') ?? 3));
 const data = flag('data') ?? 'invented';
 if (!['invented', 'real'].includes(data)) throw new Error(`--data must be "invented" or "real", not "${data}"`);
 const real = data === 'real' ? await import('./ui-review-fixtures-real.mjs') : null;
-const playwrightModule = process.env.PLAYWRIGHT_MODULE ?? '/opt/homebrew/lib/node_modules/@playwright/mcp/node_modules/playwright/index.mjs';
-const chromeBin = process.env.CHROME_BIN ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const HOMEBREW_PLAYWRIGHT = '/opt/homebrew/lib/node_modules/@playwright/mcp/node_modules/playwright/index.mjs';
+const MAC_CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const browserChoice = flag('browser') ?? 'chrome';
+if (!['chrome', 'bundled'].includes(browserChoice)) throw new Error(`--browser must be "chrome" or "bundled", not "${browserChoice}"`);
+const chromeBin = browserChoice === 'bundled' ? null
+  : process.env.CHROME_BIN ?? (process.platform === 'darwin' && existsSync(MAC_CHROME) ? MAC_CHROME : null);
 
 const THEMES = ['light', 'dark'];
-const SIZES = [[1024, 700], [1280, 800], [1680, 1050]];
-// Real data gives automatic discovery ~90 queries at one per 250 ms tick to finish before a capture.
+const ALL_SIZES = [[1024, 700], [1280, 800], [1680, 1050]];
+const widths = flag('widths')?.split(',').filter(Boolean).map(Number) ?? null;
+const SIZES = widths ? ALL_SIZES.filter(([width]) => widths.includes(width)) : ALL_SIZES;
+if (widths && SIZES.length !== widths.length) throw new Error(`--widths takes ${ALL_SIZES.map(([width]) => width).join(', ')}, not "${flag('widths')}"`);
+const STATE_NAMES = ['populated', 'empty', 'loading', 'error'];
+const statesFlag = flag('states');
+const stateFilter = statesFlag === null || statesFlag === 'top' ? null : statesFlag.split(',').filter(Boolean);
+if (stateFilter?.some((state) => !STATE_NAMES.includes(state))) throw new Error(`--states takes "top" or ${STATE_NAMES.join(', ')}, not "${statesFlag}"`);
+// Real data gives automatic discovery ~90 queries to finish before a capture.
 const SETTLE_TIMEOUT_MS = real ? 60_000 : 15_000;
 const QUIET_MS = 350;
 
@@ -55,7 +72,12 @@ const htmlFile = path.join(root, `${stem}.html`);
 
 // The entry installs the IPC stub before the app's modules evaluate, then boots src/main.tsx
 // unchanged so the capture is of the production component tree.
-const entry = `import { createHandlers, injectedError } from './scripts/ui-review-fixtures.mjs';
+// Automatic discovery paces its queries one per 250 ms tick (~90 with real data, over 20 s per page
+// load); the entry drops that pause, so a page reaches the same settled state in a fraction of the
+// time. Its other delays (idle, retry, hidden) are left alone.
+const entry = `const pacedSetTimeout = window.setTimeout.bind(window);
+window.setTimeout = (callback, delay, ...rest) => pacedSetTimeout(callback, delay === 250 && new Error().stack?.includes('/src/utils/discoveryController') ? 0 : delay, ...rest);
+import { createHandlers, injectedError } from './scripts/ui-review-fixtures.mjs';
 const scenario = JSON.parse(new URLSearchParams(location.search).get('scenario') || '{}');
 const handlers = createHandlers(scenario, scenario.data === 'real' ? await import('./scripts/ui-review-fixtures-real.mjs') : null);
 const review = { calls: [], gaps: [], handlerErrors: [], sqlMisses: [], injected: [], hung: [], plugins: [], inflight: 0, lastActivity: performance.now() };
@@ -232,6 +254,11 @@ const VIEWS = [
   ] : []),
 ];
 
+const TOP_LEVEL = new Set(Object.keys(NAV_LABELS).concat('evidence-timeline'));
+/** The states captured for a definition under --states. */
+const statesFor = (definition) => ['populated', ...definition.states].filter((state) =>
+  statesFlag === 'top' ? state === 'populated' || TOP_LEVEL.has(definition.view) : !stateFilter || stateFilter.includes(state));
+
 // ---- Page helpers ----------------------------------------------------------------------------
 
 async function settle(page) {
@@ -345,7 +372,11 @@ async function discoverSubviews(page) {
 
 const AXE_TARGETS_KEPT = 20;
 
-/** axe-core over the whole document as it stands; the script is injected once per page load. */
+/**
+ * axe-core over the whole document as it stands; the script is injected once per page load.
+ * Serious and critical violations keep every target: check-ui-review.mjs gates on them per target,
+ * and a truncated list would turn one new node into a false "new" plus a false "disappeared".
+ */
 async function axeScan(page) {
   try {
     return await page.evaluate(async (kept) => {
@@ -353,7 +384,8 @@ async function axeScan(page) {
       return {
         violations: results.violations.map((violation) => ({
           id: violation.id, impact: violation.impact ?? null, help: violation.help, helpUrl: violation.helpUrl, count: violation.nodes.length,
-          targets: violation.nodes.slice(0, kept).map((node) => node.target.map((part) => (Array.isArray(part) ? part.join(' >>> ') : part)).join(' ')),
+          targets: (['serious', 'critical'].includes(violation.impact) ? violation.nodes : violation.nodes.slice(0, kept))
+            .map((node) => node.target.map((part) => (Array.isArray(part) ? part.join(' >>> ') : part)).join(' ')),
         })),
       };
     }, AXE_TARGETS_KEPT);
@@ -365,6 +397,16 @@ async function axeScan(page) {
 const slug = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
 
 // ---- Run --------------------------------------------------------------------------------------
+
+async function loadPlaywright() {
+  if (process.env.PLAYWRIGHT_MODULE) return import(pathToFileURL(process.env.PLAYWRIGHT_MODULE).href);
+  try {
+    return await import('playwright');
+  } catch (error) {
+    if (error?.code !== 'ERR_MODULE_NOT_FOUND' || !existsSync(HOMEBREW_PLAYWRIGHT)) throw error;
+    return import(pathToFileURL(HOMEBREW_PLAYWRIGHT).href);
+  }
+}
 
 async function freePort() {
   return new Promise((resolve, reject) => {
@@ -388,6 +430,9 @@ const index = {
   themes: THEMES,
   sizes: SIZES.map(([width, height]) => ({ width, height })),
   data,
+  states: statesFlag ?? 'all',
+  only,
+  browser: null,
   accessibilityMethod: 'axe-core violations per capture, plus keyboard-focus-order per view',
   axeAvailable: false,
   axeVersion: null,
@@ -401,14 +446,13 @@ const index = {
 let harnessFailure = null;
 
 try {
-  if (!existsSync(playwrightModule)) throw new Error(`Playwright not found at ${playwrightModule}; set PLAYWRIGHT_MODULE.`);
-  if (!existsSync(chromeBin)) throw new Error(`Chrome not found at ${chromeBin}; set CHROME_BIN.`);
+  if (chromeBin && !existsSync(chromeBin)) throw new Error(`Chrome not found at ${chromeBin}; set CHROME_BIN or pass --browser=bundled.`);
   const axeFile = path.join(root, 'node_modules/axe-core/axe.min.js');
   index.axeAvailable = existsSync(axeFile);
   if (!index.axeAvailable) throw new Error(`axe-core not found at ${axeFile}; run npm ci.`);
   const axeSource = await readFile(axeFile, 'utf8');
   index.axeVersion = JSON.parse(await readFile(path.join(root, 'node_modules/axe-core/package.json'), 'utf8')).version;
-  const { chromium } = await import(pathToFileURL(playwrightModule).href);
+  const { chromium } = await loadPlaywright();
   const { createServer } = await import('vite');
   await mkdir(outputDirectory, { recursive: true });
   await writeFile(entryFile, entry);
@@ -427,7 +471,8 @@ try {
   });
   await vite.listen();
   const origin = `http://127.0.0.1:${port}`;
-  browser = await chromium.launch({ executablePath: chromeBin, headless: true });
+  browser = await chromium.launch({ ...(chromeBin ? { executablePath: chromeBin } : {}), headless: true });
+  index.browser = `${chromeBin ?? 'bundled chromium'} ${browser.version()}`;
 
   const urlFor = (scenario) => `${origin}/${stem}.html?scenario=${encodeURIComponent(JSON.stringify(scenario))}`;
 
@@ -509,7 +554,7 @@ try {
   async function runDefinition(context, definition) {
     const record = { view: definition.view, steps: null, states: [] };
     index.views.push(record);
-    for (const state of ['populated', ...definition.states]) {
+    for (const state of statesFor(definition)) {
       const page = await captureState(context, definition, state);
       if (!page) continue;
       record.states.push(state);

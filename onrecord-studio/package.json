@@ -27,7 +27,9 @@
     "package:app-store": "node scripts/package-app-store.mjs",
     "test": "npm run check:ipc && tsc --noEmit && cargo test --workspace --manifest-path src-tauri/Cargo.toml && vitest run",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "ui:review": "node scripts/capture-ui-review.mjs --data=real",
+    "ui:check": "node scripts/check-ui-review.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
@@ -55,6 +57,7 @@
     "eslint": "^10.9.1",
     "globals": "^17.11.0",
     "jsdom": "^30.0.1",
+    "playwright": "1.64.0",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
     "typescript": "^5.2.2",
