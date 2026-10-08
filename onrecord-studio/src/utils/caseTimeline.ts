@@ -1,5 +1,6 @@
 import type { CaseworkCase, CaseworkCitation } from '../types/casework';
 import type { TimelineCitation, TimelineItem } from './timeline';
+import { formatShortDate } from '../components/objects/labels';
 
 /**
  * Case records on the timeline: every event is a date the operator recorded in casework or a
@@ -90,7 +91,7 @@ export function caseItems(cases: CaseworkCase[]): CaseTimeline {
       }
       const plan = request.filingPlan;
       if (plan) {
-        push({ id: `${clock}:determination-due`, at: plan.determinationDueOn, dateMeaning: 'DUE', title: `Determination due: ${request.title}`, detail: `Modeled under ${plan.statuteCitation}: ${plan.calendarDaysElapsed} of ${plan.allowedCalendarDays} allowed calendar days elapsed as of ${plan.evaluatedAt}.`, evidence: null, findingId: null, citationIds: [], fixedLanes: [clock] });
+        push({ id: `${clock}:determination-due`, at: plan.determinationDueOn, dateMeaning: 'DUE', title: `Determination due: ${request.title}`, detail: `Modeled under ${plan.statuteCitation}: ${plan.calendarDaysElapsed} of ${plan.allowedCalendarDays} allowed calendar days elapsed as of ${formatShortDate(plan.evaluatedAt)}.`, evidence: null, findingId: null, citationIds: [], fixedLanes: [clock] });
         for (const [index, followUp] of plan.followUps.entries()) {
           push({ id: `${clock}:follow-up:${index}`, at: followUp.scheduledFor, dateMeaning: 'DUE', title: `Follow-up (${followUp.trigger.replace(/_/g, ' ').toLowerCase()}): ${request.title}`, detail: followUp.rationale, evidence: null, findingId: null, citationIds: [], fixedLanes: [clock] });
         }
