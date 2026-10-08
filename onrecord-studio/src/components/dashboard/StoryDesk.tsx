@@ -21,6 +21,7 @@ import { COUNTED_FACTOR, EVIDENCE_FACTOR, FACTOR_ORDER, FACTOR_SCALE_MAX_BP, FAC
 import LeadCard from '../workbench/LeadCard';
 import LeadDetail from '../workbench/LeadDetail';
 import Workbench, { LeadQueue, Pane, useWorkbenchQueue } from '../workbench/Workbench';
+import { PendingDetail } from '../workbench/OverviewWorkbench';
 import EmptyState from '../ui/EmptyState';
 import ObjectLink from '../objects/ObjectLink';
 import { openSourceConnector } from './sourceEvents';
@@ -403,10 +404,7 @@ function StoryWorkbench({ leads, total, busy, onAddToBriefing, notice }: {
           notice={notice(current)}
         />
       ) : (
-        <>
-          <Pane label="Selected lead" elevated><div role="status" className="px-6 py-5"><span className="sr-only">Ranking leads…</span><div aria-hidden="true" className="skeleton h-6 w-3/4 rounded" /><div aria-hidden="true" className="skeleton mt-6 h-44 w-full rounded-lg" /></div></Pane>
-          <Pane label="Records around this lead" title="Around this lead"><div aria-hidden="true" className="space-y-2 px-4 py-4"><div className="skeleton h-3 w-24 rounded" /><div className="skeleton h-4 w-full rounded" /></div></Pane>
-        </>
+        <PendingDetail />
       )}
     </Workbench>
   );

@@ -213,9 +213,12 @@ const select = (description, locate, value) => async (page, log) => {
 const event = (name, detail) => store(`dispatch window event '${name}'`, ([eventName, eventDetail]) => window.dispatchEvent(new CustomEvent(eventName, { detail: eventDetail })), [name, detail]);
 const inspect = (target) => store(`store.inspect(${JSON.stringify(target)})`, (t) => window.__uiReview.store.getState().inspect(t), target);
 
+// The overview's perspectives (Leads, Following, Analytics, Tools) are tabs in the main pane.
+const overviewTab = (name) => click(`tab "${name}"`, (page) => page.getByRole('main').getByRole('tab', { name, exact: true }));
+
 const spendingTab = [
   nav('overview'),
-  click('"Open casework and research tools"', (page) => page.getByRole('button', { name: 'Open casework and research tools' })),
+  overviewTab('Tools'), click('"Open casework and research tools"', (page) => page.getByRole('button', { name: 'Open casework and research tools' })),
   click('tab "Spending"', (page) => page.getByRole('main').getByRole('tab', { name: 'Spending', exact: true })),
 ];
 const spendingChains = click('"Spending chains"', (page) => page.getByRole('button', { name: 'Spending chains', exact: true }));
@@ -251,13 +254,13 @@ const VIEWS = [
   { view: 'evidence-request-detail', steps: [nav('evidence'), selectRequest], primary: ['list_request_documents', 'list_request_legal_findings'], states: ['loading', 'error'] },
   { view: 'evidence-document-viewer', steps: [nav('evidence'), selectRequest, openDocument], primary: ['get_document_text_chunk'], states: ['loading', 'error'] },
   { view: 'evidence-authority-library', steps: [nav('evidence'), selectRequest, click('"Authority library"', (page) => page.getByRole('button', { name: 'Authority library' }))], primary: ['list_legal_authorities'], states: ['error'] },
-  { view: 'overview-response-analytics', steps: [nav('overview'), click('"Show response analytics"', (page) => page.getByRole('button', { name: 'Show response analytics' }))], primary: ['get_agency_performance_profiles', 'get_cross_agency_correlations'], states: ['error'] },
-  { view: 'overview-casework-tools', steps: [nav('overview'), click('"Open casework and research tools"', (page) => page.getByRole('button', { name: 'Open casework and research tools' }))], primary: ['get_casework_state', 'get_research_status'], states: ['empty', 'error'], discover: true },
+  { view: 'overview-response-analytics', steps: [nav('overview'), overviewTab('Analytics')], primary: ['get_agency_performance_profiles', 'get_cross_agency_correlations'], states: ['error'] },
+  { view: 'overview-casework-tools', steps: [nav('overview'), overviewTab('Tools'), click('"Open casework and research tools"', (page) => page.getByRole('button', { name: 'Open casework and research tools' }))], primary: ['get_casework_state', 'get_research_status'], states: ['empty', 'error'], discover: true },
   // Discovery does not look inside a drawer or a tab, so surfaces nested there are named here.
-  { view: 'overview-casework-tools-drawer-assess-usefulness', steps: [nav('overview'), click('"Open casework and research tools"', (page) => page.getByRole('button', { name: 'Open casework and research tools' })), click('tab "Evidence review"', (page) => page.getByRole('main').getByRole('tab', { name: 'Evidence review', exact: true })), click('drawer "Assess usefulness"', (page) => page.getByRole('main').locator('details > summary', { hasText: 'Assess usefulness' }))], primary: [], states: [] },
+  { view: 'overview-casework-tools-drawer-assess-usefulness', steps: [nav('overview'), overviewTab('Tools'), click('"Open casework and research tools"', (page) => page.getByRole('button', { name: 'Open casework and research tools' })), click('tab "Evidence review"', (page) => page.getByRole('main').getByRole('tab', { name: 'Evidence review', exact: true })), click('drawer "Assess usefulness"', (page) => page.getByRole('main').locator('details > summary', { hasText: 'Assess usefulness' }))], primary: [], states: [] },
   { view: 'patterns-tab-ledger-history', steps: [nav('patterns'), click('drawer "Resolve entities"', (page) => page.getByRole('main').locator('details.app-panel > summary', { hasText: 'Resolve entities' })), click('tab "Ledger history"', (page) => page.getByRole('main').getByRole('tab', { name: 'Ledger history', exact: true }))], primary: [], states: [] },
   { view: 'patterns-tab-import-and-export', steps: [nav('patterns'), click('drawer "Resolve entities"', (page) => page.getByRole('main').locator('details.app-panel > summary', { hasText: 'Resolve entities' })), click('tab "Import and export"', (page) => page.getByRole('main').getByRole('tab', { name: 'Import and export', exact: true }))], primary: [], states: [] },
-  { view: 'overview-casework-case', steps: [nav('overview'), click('"Open casework and research tools"', (page) => page.getByRole('button', { name: 'Open casework and research tools' })), async (page, log) => {
+  { view: 'overview-casework-case', steps: [nav('overview'), overviewTab('Tools'), click('"Open casework and research tools"', (page) => page.getByRole('button', { name: 'Open casework and research tools' })), async (page, log) => {
     await page.getByRole('combobox', { name: 'Open saved case' }).filter({ visible: true }).first().selectOption('case-storage', { timeout: 8_000 });
     log.push('select saved case "Storage contract ceiling"');
     await page.getByText('Request determination clocks').first().scrollIntoViewIfNeeded({ timeout: 8_000 });
@@ -306,11 +309,11 @@ const VIEWS = [
 
   // Figures below the fold: each also gets an element capture at full height (`sections`).
   { view: 'compare-dispositions', steps: [nav('compare')], sections: ['section[aria-label="Dispositions by department"]'], primary: [], states: [] },
-  { view: 'overview-following', steps: [nav('overview')], sections: ['section[aria-label="Following"]'], primary: [], states: [] },
-  { view: 'story-ranked-leads', steps: [nav('story')], sections: ['figure:has(h3:text-is("Ranked leads"))'], primary: [], states: [] },
+  { view: 'overview-following', steps: [nav('overview'), overviewTab('Following')], sections: ['section[aria-label="Following"]'], primary: [], states: [] },
+  { view: 'story-ranked-leads', steps: [nav('story'), click('tab "Factor table"', (page) => page.getByRole('main').getByRole('tab', { name: 'Factor table', exact: true }))], sections: ['figure:has(h3:text-is("Ranked leads"))'], primary: [], states: [] },
   {
     view: 'organization-record',
-    steps: [nav('overview'), click('"Open casework and research tools"', (page) => page.getByRole('button', { name: 'Open casework and research tools' })), click('tab "Organization filings"', (page) => page.getByRole('main').getByRole('tab', { name: 'Organization filings', exact: true })), click('portfolio row "Harborview Shelter Partners"', (page) => page.getByRole('main').getByRole('button', { name: 'Harborview Shelter Partners', exact: true }))],
+    steps: [nav('overview'), overviewTab('Tools'), click('"Open casework and research tools"', (page) => page.getByRole('button', { name: 'Open casework and research tools' })), click('tab "Organization filings"', (page) => page.getByRole('main').getByRole('tab', { name: 'Organization filings', exact: true })), click('portfolio row "Harborview Shelter Partners"', (page) => page.getByRole('main').getByRole('button', { name: 'Harborview Shelter Partners', exact: true }))],
     sections: ['section[aria-label="Organization filings"]'],
     primary: ['get_organisation_filings'],
     states: [],

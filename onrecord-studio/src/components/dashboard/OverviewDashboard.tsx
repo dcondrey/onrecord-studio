@@ -25,7 +25,7 @@ import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { AgencyPerformanceProfile } from '../../types';
 import { AttentionFeedSkeleton } from './AttentionFeed';
-import OverviewWorkbench from '../workbench/OverviewWorkbench';
+import OverviewWorkbench, { WorkbenchSkeleton } from '../workbench/OverviewWorkbench';
 import EmptyState from '../ui/EmptyState';
 import SinceControl from './SinceControl';
 import WatchlistPanel from './WatchlistPanel';
@@ -102,7 +102,7 @@ export default function OverviewDashboard() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-      <div className={cn('mx-auto flex w-full max-w-content flex-1 flex-col gap-3 px-3 pt-4 md:px-4', leadsWorkbench ? 'min-h-[36rem] pb-3' : 'pb-10')}>
+      <div className={cn('mx-auto flex w-full max-w-content flex-1 flex-col gap-3 px-3 pt-4 md:px-4', leadsWorkbench || (perspective === 'leads' && workspaceInitializationStatus === 'loading') ? 'min-h-[36rem] pb-3' : 'pb-10')}>
         {workbench ? (
           <div className="px-1">
             <button type="button" onClick={() => setWorkbench(null)} className="focus-ring mb-2 inline-flex items-center gap-1 rounded text-body text-accent hover:underline">
@@ -135,7 +135,9 @@ export default function OverviewDashboard() {
 
         <FirstRunData />
         {workspaceInitializationStatus === 'loading' ? (
-          <section aria-label="Needs attention" className="app-panel overflow-hidden"><AttentionFeedSkeleton /></section>
+          perspective === 'leads' && !workbench
+            ? <WorkbenchSkeleton />
+            : <section aria-label="Needs attention" className="app-panel overflow-hidden"><AttentionFeedSkeleton /></section>
         ) : workspaceInitializationStatus === 'error' ? (
           <WorkspaceSourcesUnavailable detail={workspaceInitializationError} />
         ) : showStarter && (perspective === 'leads' || workbench) ? (
@@ -146,7 +148,7 @@ export default function OverviewDashboard() {
         {workbench ? (
           <ProfessionalWorkbench key={`${workbench.reportId}:${workbench.review}`} initialReportId={workbench.reportId} initialTab={workbench.review ? 'Evidence review' : 'Cases'} />
         ) : (
-          <div id="overview-perspective" role="tabpanel" aria-label={PERSPECTIVES.find((option) => option.value === perspective)?.label} className={cn('flex min-h-0 flex-1 flex-col gap-3', perspective !== 'leads' && 'motion-fade')}>
+          <div id="overview-perspective" role="tabpanel" aria-label={PERSPECTIVES.find((option) => option.value === perspective)?.label} className={cn('flex flex-col gap-3', leadsWorkbench ? 'min-h-0 flex-1' : perspective !== 'leads' && 'motion-fade')}>
             <SubjectDossier />
             {perspective === 'leads' && leadsWorkbench && <OverviewWorkbench ledgerFigure={ledger} onOpenLedger={openLedger} onOpenFollowing={() => setPerspective('following')} />}
             {perspective === 'following' && (

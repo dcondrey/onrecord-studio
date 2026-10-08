@@ -109,7 +109,8 @@ function FactorPlot({ rows, width, max }: { rows: readonly FactorRow[]; width: n
   const tooltip = useTooltip();
   const roving = useRovingFocus({ shape: { rows: rows.length }, onActivate: () => {}, onEscape: tooltip.hide });
   const layout = layoutOf(rows, width);
-  const x = scaleLinear([0, max], [layout.plotX, Math.max(layout.plotX + 40, width - 36)], { nice: false });
+  // The largest factor ends short of the edge, so its value label prints outside the bar like the rest.
+  const x = scaleLinear([0, max * 1.14], [layout.plotX, Math.max(layout.plotX + 48, width - 4)], { nice: false });
   return (
     <g>
       {layout.rows.map((placement, index) => {

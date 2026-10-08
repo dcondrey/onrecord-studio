@@ -18,7 +18,7 @@ import FamilyBadge from '../ui/FamilyBadge';
 import Icon, { type IconName } from '../ui/icons';
 import StatusDot from '../ui/statusDot';
 import LeadCard from './LeadCard';
-import LeadDetail from './LeadDetail';
+import LeadDetail, { ContextSkeleton, StageSkeleton } from './LeadDetail';
 import Workbench, { LeadQueue, Pane, useWorkbenchQueue } from './Workbench';
 
 const FINDINGS_SCAN_LIMIT = 200;
@@ -146,7 +146,7 @@ export default function OverviewWorkbench({ ledgerFigure, onOpenLedger, onOpenFo
       </Pane>
     );
   } else if (findings.status === 'pending') {
-    main = <><Pane label="Selected lead" elevated><StageWaiting text="Ranking what was found in this window…" busy /></Pane><Pane label="Records around this lead" title="Around this lead"><ContextWaiting /></Pane></>;
+    main = <PendingDetail />;
   } else if (!current) {
     main = (
       <Pane label="Selected lead" elevated>
@@ -161,27 +161,46 @@ export default function OverviewWorkbench({ ledgerFigure, onOpenLedger, onOpenFo
   return <Workbench navigator={navigator} wide={current === LEDGER_ID || (!current && findings.status !== 'pending')}>{main}</Workbench>;
 }
 
-function StageWaiting({ text, busy = false }: { text: string; busy?: boolean }) {
+/** The stage and context while the queue is still being read: shapes, never a number. */
+export function PendingDetail() {
   return (
-    <div role={busy ? 'status' : undefined} aria-busy={busy || undefined} className="grid h-full min-h-[18rem] place-items-center px-8 py-12 text-center">
+    <>
+      <Pane label="Selected lead" title="Lead" elevated><StageSkeleton /></Pane>
+      <Pane label="Records around this lead" title="Around this lead"><ContextSkeleton /></Pane>
+    </>
+  );
+}
+
+/** The whole workbench while the saved sources load, laid out as it will be once they have. */
+export function WorkbenchSkeleton() {
+  return (
+    <Workbench
+      navigator={(
+        <div className="workbench-nav">
+          <Pane label="Lead queue" title="Leads" className="min-h-0 flex-1" bodyClassName="overflow-hidden"><QueueSkeleton /></Pane>
+          <Pane label="Watch status" title="Watching" className="shrink-0" bodyClassName="space-y-3 p-4">
+            {[0, 1, 2].map((row) => (
+              <div key={row} aria-hidden="true" className="flex gap-2.5">
+                <div className="skeleton h-6 w-6 rounded-md" />
+                <div className="flex-1 space-y-1.5"><div className="skeleton h-4 w-2/3 rounded" /><div className="skeleton h-3 w-1/2 rounded" /></div>
+              </div>
+            ))}
+          </Pane>
+        </div>
+      )}
+    >
+      <PendingDetail />
+    </Workbench>
+  );
+}
+
+function StageWaiting({ text }: { text: string }) {
+  return (
+    <div className="grid h-full min-h-[18rem] place-items-center px-8 py-12 text-center">
       <div className="max-w-sm">
         <span aria-hidden="true" className="mx-auto grid h-10 w-10 place-items-center rounded-xl bg-raised text-fg-secondary"><Icon name="flag" size="lg" /></span>
         <p className="mt-3 text-body text-muted">{text}</p>
       </div>
-    </div>
-  );
-}
-
-function ContextWaiting() {
-  return (
-    <div aria-hidden="true" className="space-y-5 px-4 py-4">
-      {[0, 1, 2].map((block) => (
-        <div key={block} className="space-y-2">
-          <div className="skeleton h-3 w-24 rounded" />
-          <div className="skeleton h-4 w-full rounded" />
-          <div className="skeleton h-4 w-4/5 rounded" />
-        </div>
-      ))}
     </div>
   );
 }
