@@ -39,6 +39,11 @@ Source details and what was actually seen of each file are in `docs/data-sources
 | Parties | `agency_recorded`, `agency_id`, `department_recorded`, `department_id`, `organisation_recorded`, `organisation_id` |
 | Money | `amount`, `amount_basis` (adopted, revised, actual, awarded, obligated, paid), `fund`, `account` |
 
+A publisher column whose name is a standard column's (Cal ICH's `calendar_year`, the State
+Controller's `Fiscal Year`) keeps its values as `<name>_as_published`, with `_as_published`
+appended again until the name is free. The standard column keeps its meaning: it is derived only
+from the table's time column and is never filled from the publisher's column of that name.
+
 ## Reference tables
 
 - `departments`: canonical id, every recorded spelling, valid-from and valid-to (renames and
