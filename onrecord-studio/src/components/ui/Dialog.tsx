@@ -66,11 +66,13 @@ export default function Dialog({ onClose, label, size = 'md', placement = 'cente
   const sheet = placement === 'sheet-right';
   const isTop = useIsTopDialog(titleId);
   return createPortal(
+    // The scrim fades as a sibling of the panel, never its ancestor: an animated opacity on an
+    // ancestor becomes the panel's backdrop root and leaves the glass nothing to blur.
     <div
-      className={cn('motion-fade fixed inset-0 grid bg-scrim', sheet ? 'z-sheet justify-items-end' : 'z-dialog place-items-center p-4')}
+      className={cn('fixed inset-0 grid', sheet ? 'z-sheet justify-items-end' : 'z-dialog place-items-center p-4')}
       onKeyDown={onKeyDown}
-      onMouseDown={onOverlayMouseDown}
     >
+      <div aria-hidden="true" className="motion-fade absolute inset-0 bg-scrim" onMouseDown={onOverlayMouseDown} />
       <div
         ref={ref}
         tabIndex={-1}
@@ -80,7 +82,7 @@ export default function Dialog({ onClose, label, size = 'md', placement = 'cente
         aria-labelledby={label ? undefined : titleId}
         data-stacked={isTop ? undefined : ''}
         className={cn(
-          'glass flex w-full flex-col overflow-hidden text-fg shadow-dialog outline-none',
+          'glass relative flex w-full flex-col overflow-hidden text-fg shadow-dialog outline-none',
           sheet
             ? 'motion-slide-in h-full max-w-[28rem] rounded-l-2xl border-r-0'
             : cn('motion-pop max-h-[calc(100vh-4rem)] rounded-2xl', WIDTH[size]),
