@@ -17,7 +17,6 @@ pub const MINIMUM_IDENTIFIER_DOCUMENTS: u64 = 2;
 /// Resource guards. A group this large is a generic name or a shared mailbox, and pairing its
 /// members is quadratic. Skipped groups are counted and reported, not hidden.
 pub const MAXIMUM_NAME_GROUP: usize = 40;
-pub const MAXIMUM_IDENTIFIER_FANOUT: usize = 12;
 pub const MAXIMUM_PAGE: usize = 100;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -157,9 +156,9 @@ pub fn links_within_fanout<'a>(
     }
     let mut skipped = 0;
     by_identifier.retain(|_, group| {
-        let fanout = identifier_rule(&group[0].identifier_kind)
-            .map_or(MAXIMUM_IDENTIFIER_FANOUT, |rule| rule.maximum_fanout);
-        let within = group.len() <= fanout;
+        // `may_anchor` above admitted only kinds that have a rule.
+        let within = identifier_rule(&group[0].identifier_kind)
+            .is_some_and(|rule| group.len() <= rule.maximum_fanout);
         skipped += u64::from(!within);
         within
     });
