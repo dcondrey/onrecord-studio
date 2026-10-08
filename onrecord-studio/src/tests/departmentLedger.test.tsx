@@ -75,7 +75,9 @@ function renderLedger(profiles: AgencyPerformanceProfile[], onInspect = vi.fn())
   return onInspect;
 }
 
-const row = (name: string) => screen.getByRole('button', { name: new RegExp(`^${name}:`) });
+/** A ledger row's button is its hit area; the marks it names are drawn beside it in the row's group. */
+const button = (name: string) => screen.getByRole('button', { name: new RegExp(`^${name}:`) });
+const row = (name: string) => button(name).parentElement!;
 const painted = (element: Element, token: string) => [...element.querySelectorAll('*')].filter((node) => (node.getAttribute('style') ?? '').includes(token));
 
 afterEach(() => {
@@ -88,7 +90,7 @@ describe('DepartmentLedger', () => {
   it('draws no dot for a department with no measurable closure and says so', () => {
     renderLedger([profile({ agencyId: 1, agencyName: 'Water', averageClosureDays: null, validLatencySampleSize: 0, performanceZScore: null })]);
     const water = row('Water');
-    expect(water.getAttribute('aria-label')).toContain(NO_MEASURABLE_CLOSURE);
+    expect(button('Water').getAttribute('aria-label')).toContain(NO_MEASURABLE_CLOSURE);
     expect(water.textContent).toContain(NO_MEASURABLE_CLOSURE);
     expect(water.querySelectorAll('circle')).toHaveLength(0);
   });
@@ -138,7 +140,7 @@ describe('DepartmentLedger', () => {
 
   it('opens a department with Enter', () => {
     const onInspect = renderLedger([profile({ agencyId: 7, agencyName: 'Police' })]);
-    fireEvent.keyDown(row('Police'), { key: 'Enter' });
+    fireEvent.keyDown(button('Police'), { key: 'Enter' });
     expect(onInspect).toHaveBeenCalledWith(expect.objectContaining({ agencyId: 7 }));
   });
 

@@ -47,29 +47,36 @@ export function MarkGroup({ interaction, box, ringRadius = 3, children }: { inte
   if (!interaction) return <g>{children}</g>;
   const hit = hitBox(box);
   const { item } = interaction;
+  const button = interaction.role === 'button';
+  // The control is the element focus lands on. A button is the hit area itself, beside the marks:
+  // its name is the full sentence, and the figures drawn in the row are not text inside it.
+  const control = {
+    role: interaction.role ?? 'img',
+    'aria-label': interaction.name,
+    tabIndex: item ? item.tabIndex : undefined,
+    ref: item?.ref,
+    onKeyDown: item?.onKeyDown,
+    onFocus: (event: FocusEvent<SVGElement>) => {
+      item?.onFocus();
+      interaction.onFocusMark?.((button ? event.currentTarget.parentElement ?? event.currentTarget : event.currentTarget).getBoundingClientRect());
+    },
+    onBlur: () => {
+      item?.onBlur();
+      interaction.onBlurMark?.();
+    },
+  };
+  const hitArea = <rect x={hit.x} y={hit.y} width={hit.width} height={hit.height} fill="transparent" pointerEvents="all" className={button ? 'outline-none' : undefined} {...(button ? control : {})} />;
   return (
     <g
-      role={interaction.role ?? 'img'}
-      aria-label={interaction.name}
+      {...(button ? {} : control)}
       className="viz-focusable"
-      tabIndex={item ? item.tabIndex : undefined}
-      ref={item?.ref}
       data-focused={item?.['data-focused']}
-      onKeyDown={item?.onKeyDown}
-      onFocus={(event: FocusEvent<SVGGElement>) => {
-        item?.onFocus();
-        interaction.onFocusMark?.(event.currentTarget.getBoundingClientRect());
-      }}
-      onBlur={() => {
-        item?.onBlur();
-        interaction.onBlurMark?.();
-      }}
       onPointerMove={interaction.onPointerMove}
       onPointerLeave={interaction.onPointerLeave}
       onClick={interaction.onClick}
       style={interaction.onClick ? { cursor: 'pointer' } : undefined}
     >
-      <rect x={hit.x} y={hit.y} width={hit.width} height={hit.height} fill="transparent" pointerEvents="all" />
+      {hitArea}
       {children}
       <rect
         className="viz-focus-ring"

@@ -7,10 +7,10 @@
 //! (never shown by later pages, counted by the next `count`) or after it (shown once). Offsets
 //! would shift by one for every insert and repeat or skip a row.
 
+use crate::analysis::anomaly::statutory_violation_keys_query;
 use crate::error::AppError;
 use crate::storage::fts::{core_query_phrases, core_query_tokens};
 use crate::storage::pii::mask_pii;
-use crate::analysis::anomaly::statutory_violation_keys_query;
 use crate::storage::sqlite::{request_search_filters, DuckDbRepository};
 use crate::types::RequestSearchResult;
 use duckdb::params;
@@ -429,7 +429,16 @@ mod tests {
         let mut total = None;
         loop {
             let page = repo
-                .search_requests_page(term, None, None, None, None, false, cursor.as_deref(), page_size)
+                .search_requests_page(
+                    term,
+                    None,
+                    None,
+                    None,
+                    None,
+                    false,
+                    cursor.as_deref(),
+                    page_size,
+                )
                 .await
                 .expect("page");
             assert!(page.records.len() <= page_size);
@@ -501,7 +510,10 @@ mod tests {
             .await
             .expect("page");
         assert_eq!(page.total, Some(total));
-        assert!(page.records.iter().all(|record| record.portal_key == "sd" && record.request_id <= 22));
+        assert!(page
+            .records
+            .iter()
+            .all(|record| record.portal_key == "sd" && record.request_id <= 22));
         // Without the filter the same scope also lists the five answered in time.
         assert_eq!(
             repo.count_requests("", Some("sd"), Some(5), None, None, false)
