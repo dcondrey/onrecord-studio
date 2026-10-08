@@ -155,11 +155,8 @@ export default function AnalysisWorkbench() {
   useEffect(() => {
     if (!inspection) return;
     // `active` tracks only whether *this effect instance* is still mounted, so it governs the
-    // loading indicator: that must clear when this specific fetch settles, regardless of whether
-    // anything downstream (a preset, a template, an edit, a manual run) has since told `sqlGate`
-    // not to trust this fetch's *data* any more. Conflating the two left the indicator stuck on
-    // "Loading supporting records" (and the Import button disabled) whenever the user moved on
-    // to a different query before this fetch resolved.
+    // loading indicator: that must clear when this specific fetch settles, even after `sqlGate`
+    // has stopped trusting this fetch's *data*, or the indicator and the Import button stay stuck.
     let active = true;
     const request = sqlGate.begin();
     const release = discovery?.hold();
