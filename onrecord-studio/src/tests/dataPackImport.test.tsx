@@ -3,7 +3,8 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { open } from '@tauri-apps/plugin-dialog';
 import { invokeCommand } from '../ipc';
-import DataPackImport from '../components/dashboard/DataPackImport';
+import DataPackImport, { coverageMatrix } from '../components/dashboard/DataPackImport';
+import { RECORD_GAP_DEFINITIONS, type RecordGap } from '../utils/recordGaps';
 import type { AnalyticalImportResult, DataPackImportOutcome, DataPackSummary, PublishedPack } from '../types';
 
 vi.mock('../ipc', () => ({ invokeCommand: vi.fn(), formatNativeError: String }));
@@ -122,12 +123,12 @@ describe('DataPackImport', () => {
     render(<DataPackImport />);
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Choose pack folder' })); });
 
-    const gap = screen.getByRole('img', { name: /^police_calls, 2025: no file in this pack/ });
+    const gap = screen.getByRole('gridcell', { name: /^police_calls, 2025: no file in this pack/ });
     expect(gap.querySelector('[data-absence="not-covered"]')).toBeTruthy();
     expect(gap.textContent).not.toMatch(/\b0\b/);
-    expect(screen.getByText('2 of 3 table-years have a file in this pack; 1 have none.')).toBeTruthy();
+    expect(screen.getByText('2 of 3 table-years have a file in this pack; 1 has none.')).toBeTruthy();
 
-    fireEvent.keyDown(screen.getByRole('img', { name: /^police_calls, 2026: 1,200 rows/ }), { key: 'Enter' });
+    fireEvent.keyDown(screen.getByRole('gridcell', { name: /^police_calls, 2026: 1,200 rows/ }), { key: 'Enter' });
     expect((screen.getByRole('checkbox', { name: /^2026 · 1,200 rows/ }) as HTMLInputElement).checked).toBe(true);
   });
 
@@ -147,7 +148,7 @@ describe('DataPackImport', () => {
     const whole = screen.getByRole('img', { name: /^Sep 15, 2026 to Oct 1, 2026: 9 added, 9 removed, changed not separated/ });
     expect(whole.textContent).toContain('not separated');
     fireEvent.click(screen.getAllByRole('button', { name: 'View as table' }).at(-1)!);
-    const row = screen.getByRole('cell', { name: /^No value recorded: not separated/ }).closest('tr')!;
+    const row = screen.getByRole('cell', { name: /^not separated: counted in added and removed/ }).closest('tr')!;
     expect(row.textContent).not.toMatch(/(^|[^\d,])0($|[^\d,])/);
   });
 
@@ -166,5 +167,31 @@ describe('DataPackImport', () => {
 
     expect(screen.getByText(/reports-manifest/)).toBeTruthy();
     expect(screen.queryByText(/money-manifest/)).toBeNull();
+  });
+
+  it('claims a missing file only inside a table\'s own years, spans a one-file table, and adds the records leads need', () => {
+    const file = (table: string, year: number | null, rows = 10) => ({ path: `${table}/${year ?? 'all'}.csv`, year, rows, bytes: 10, partial: false, sourceUrl: `https://example.test/${table}`, retrievedAt: '2026-10-05T23:59:15Z', datasetKind: 'CALLS_FOR_SERVICE' as const, licence: null });
+    const tables = [
+      { table: 'budget', files: [file('budget', 2022), file('budget', 2024)] },
+      { table: 'calls', files: [file('calls', 2019), file('calls', 2025)] },
+      { table: 'beats', files: [file('beats', null)] },
+    ].map((table) => ({ ...table, unchangedChecks: 0, lastCheckedAt: null, changeRecords: 0, changes: [] }));
+    const choices = tables.flatMap((table) => table.files.map((f) => ({ key: f.path, table: table.table, year: f.year, files: [f] })));
+    const gap = { key: 'g', leadRef: 'l', leadTitle: 'Repeat abatements', leadQuestion: '?', snapshotId: 's', definition: RECORD_GAP_DEFINITIONS[0], period: '2023 to 2024', identifiers: [], table: { name: 'abatements', source: null, retrievedOn: '2026-10-01', sha256: 'ab' }, sourceOrigin: null, answered: false } satisfies RecordGap;
+    const datasets = [{ sourceUri: 'https://example.test/calls', retrievedAt: '2026-10-05T23:59:15Z' }] as unknown as Parameters<typeof coverageMatrix>[3];
+    const matrix = coverageMatrix({ ...summary('mixed'), tables }, choices, new Set(), datasets, [gap]);
+    expect(matrix.columns).toEqual(['2019', '2020', '2021', '2022', '2023', '2024', '2025']);
+    const [budget, calls, beats, needed] = matrix.rows;
+    // budget runs 2022-2024: 2019-2021 are outside its years, 2023 is its one missing file.
+    expect(budget.cells.slice(0, 3).every((cell) => cell?.kind === 'gap' && cell.text === 'outside')).toBe(true);
+    expect(budget.cells[4]).toMatchObject({ kind: 'gap', text: 'no file' });
+    expect(matrix.headline).toBe('5 of 11 table-years have a file in this pack; 6 have none; 1 record needed by leads.');
+    // Imported files fill the ramp; files only in the pack are outlines.
+    expect(calls.cells[0]?.kind).toBe('count');
+    expect(budget.cells[3]).toMatchObject({ kind: 'state', tone: 'neutral' });
+    expect(beats.cells[0]?.span).toBe(7);
+    expect(beats.cells.slice(1).every((cell) => cell === null)).toBe(true);
+    expect(needed.cells[4]).toMatchObject({ kind: 'gap', lead: true, text: 'needed', actionable: true, span: 2 });
+    expect(needed.cells[4]?.name).toContain('Repeat abatements');
   });
 });

@@ -1,7 +1,7 @@
 import type { DataPackChange } from '../../../types';
 import { VIZ } from '../core/claim';
 import { formatDate, formatValue } from '../core/format';
-import { fitsInside } from '../core/layout';
+import { measureText, placeLabels } from '../core/layout';
 import { absent, measured } from '../core/nulls';
 import { parseDate, scaleLinear, scaleTime } from '../core/scale';
 import { Axis } from '../frame/Axis';
@@ -12,7 +12,7 @@ import { useRovingFocus } from '../hooks/useRovingFocus';
 import { useTooltip } from '../hooks/useTooltip';
 import { Bar } from '../marks/Bar';
 import { Dot } from '../marks/Dot';
-import { AbsentSlot, LABEL_CLASS, MarkGroup, MUTED_LABEL_CLASS } from '../marks/shared';
+import { LABEL_CLASS, MarkGroup, MUTED_LABEL_CLASS } from '../marks/shared';
 
 export interface ChangeTimelineProps {
   table: string;
@@ -23,12 +23,20 @@ export interface ChangeTimelineProps {
 }
 
 const HEIGHT = 196;
-const TOP = 22;
+const TOP = 30;
 const AXIS_Y = HEIGHT - 22;
 const LEFT = 8;
 
 const NOT_SEPARATED = 'not separated';
 const NOT_SEPARATED_REASON = 'more than half the records changed: listed as removed and added';
+const NOT_SEPARATED_TWIN = 'not separated: counted in added and removed';
+/** The side of the fixed 'not separated' marker; it has no extent on the value axis. */
+const MARKER = 8;
+
+/** A signed count label; a measured zero prints '0', never '+0' or '−0'. */
+function signed(sign: '+' | '−', value: number): string {
+  return value === 0 ? '0' : `${sign}${formatValue(value, { kind: 'count', compact: true })}`;
+}
 
 function day(iso: string | null): string {
   if (!iso) return 'an unrecorded time';
@@ -65,9 +73,11 @@ export function changeHeadline({ table, changes, unchangedChecks, lastCheckedAt 
 export default function ChangeTimeline(props: ChangeTimelineProps) {
   const { table, changes, unchangedChecks, lastCheckedAt } = props;
   const tooltip = useTooltip();
+  // In time order, so the arrow keys move left to right whatever order the manifest lists.
   const placed = changes
     .map((change, index) => ({ change, index, at: change.currentRetrievedAt ? parseDate(change.currentRetrievedAt) : Number.NaN }))
-    .filter((pair) => Number.isFinite(pair.at));
+    .filter((pair) => Number.isFinite(pair.at))
+    .sort((a, b) => a.at - b.at || a.index - b.index);
   const unplaced = changes.length - placed.length;
   const checkedAt = lastCheckedAt ? parseDate(lastCheckedAt) : Number.NaN;
   const roving = useRovingFocus({ shape: { rows: Math.max(1, placed.length) }, onActivate: () => {}, onEscape: tooltip.hide });
@@ -78,7 +88,8 @@ export default function ChangeTimeline(props: ChangeTimelineProps) {
     current: change.currentRetrievedAt ? day(change.currentRetrievedAt) : absent('not-recorded', 'the manifest no longer lists the later file'),
     added: change.added,
     removed: change.removed,
-    changed: change.changed === null ? absent('not-recorded', `${NOT_SEPARATED}: ${NOT_SEPARATED_REASON}`) : change.changed,
+    // Not an absence: the changed records are counted, inside added and removed.
+    changed: change.changed === null ? NOT_SEPARATED_TWIN : change.changed,
   }));
   if (unchangedChecks > 0) {
     twinRows.push({ pair: `${unchangedChecks} ${unchangedChecks === 1 ? 'check' : 'checks'} found the file unchanged`, previous: null, current: lastCheckedAt ? `last ${day(lastCheckedAt)}` : absent('not-recorded', 'the check time was not recorded'), added: 0, removed: 0, changed: 0 });
@@ -101,9 +112,11 @@ export default function ChangeTimeline(props: ChangeTimelineProps) {
         interactive={{ roledescription: 'change timeline' }}
         legend={[
           { key: 'added', label: 'Added (above) / removed (below)', swatch: 'rect', tone: 'mark' },
-          { key: 'changed', label: 'Changed field by field', swatch: 'rect', tone: 'ink' },
-          { key: 'checked', label: 'Checked, unchanged', swatch: 'hollow', tone: 'ink' },
+          ...(changes.some((change) => change.changed !== null) ? [{ key: 'changed', label: 'Changed field by field', swatch: 'rect' as const, tone: 'ink' as const }] : []),
+          ...(changes.some((change) => change.changed === null) ? [{ key: 'not-separated', label: 'Changed not separated: counted in added and removed', swatch: 'slot-dashed' as const }] : []),
+          ...(unchangedChecks > 0 ? [{ key: 'checked', label: 'Checked, unchanged', swatch: 'hollow' as const, tone: 'ink' as const }] : []),
         ]}
+        autoAbsenceLegend={false}
         table={{
           caption: `Change records for ${table}`,
           columns: [
@@ -118,7 +131,9 @@ export default function ChangeTimeline(props: ChangeTimelineProps) {
         }}
       >
         {({ width }) => {
-          const times = [...placed.map((pair) => pair.at), ...placed.flatMap((pair) => (pair.change.previousRetrievedAt ? [parseDate(pair.change.previousRetrievedAt)] : [])), ...(Number.isFinite(checkedAt) ? [checkedAt] : [])].filter(Number.isFinite);
+          // The domain spans the retrievals drawn (each pair at its later retrieval) and the last
+          // check; a lone pair sits centred rather than at the end of its earlier retrieval's span.
+          const times = [...placed.map((pair) => pair.at), ...(Number.isFinite(checkedAt) ? [checkedAt] : [])];
           const lo = times.length ? Math.min(...times) : Date.now();
           const hi = times.length ? Math.max(...times) : Date.now();
           const pad = Math.max((hi - lo) * 0.08, 86_400_000 * 3);
@@ -127,13 +142,23 @@ export default function ChangeTimeline(props: ChangeTimelineProps) {
           const extent = Math.max(1, ...placed.map(({ change }) => Math.max(change.added, change.removed, change.changed ?? 0)));
           const y = scaleLinear([-extent, extent], [AXIS_Y - 30, TOP], { nice: false });
           const base = y(0);
-          const xs = placed.map((pair) => x(pair.at)).sort((a, b) => a - b);
+          const xs = placed.map((pair) => x(pair.at));
           const gap = xs.length > 1 ? Math.min(...xs.slice(1).map((v, i) => v - xs[i])) : 80;
           const column = Math.max(6, Math.min(18, gap * 0.35));
+          const tickX = (cx: number) => cx + column / 2 + 2;
+          // Every per-column label is placed in its lane, pushed apart and kept inside the plot.
+          const aboveText = placed.map(({ change }) => `${signed('+', change.added)} · ${change.changed === null ? NOT_SEPARATED : `${change.changed.toLocaleString('en-US')} changed`}`);
+          const belowText = placed.map(({ change }) => signed('−', change.removed));
+          const lane = (texts: string[]) => placeLabels(texts.map((text, i) => ({ key: String(i), anchor: xs[i], width: measureText(text) })), LEFT, width - 4);
+          const above = lane(aboveText);
+          const below = lane(belowText);
+          const checkText = `${unchangedChecks} unchanged`;
+          const checkX = Number.isFinite(checkedAt) ? x(checkedAt) : Number.NaN;
+          const check = unchangedChecks > 0 && Number.isFinite(checkX) ? placeLabels([{ key: 'check', anchor: checkX, width: measureText(checkText) }], LEFT, width - 4)[0] : null;
           return (
             <>
               <line x1={LEFT} x2={right} y1={base} y2={base} style={{ stroke: VIZ.baseline, strokeWidth: 1 }} />
-              <text x={LEFT} y={TOP - 8} className={MUTED_LABEL_CLASS}>added ↑</text>
+              <text x={LEFT} y={TOP - 16} className={MUTED_LABEL_CLASS}>added ↑</text>
               <text x={LEFT} y={AXIS_Y - 20} className={MUTED_LABEL_CLASS}>removed ↓</text>
               {placed.map(({ change, at }, i) => {
                 const cx = x(at);
@@ -142,18 +167,20 @@ export default function ChangeTimeline(props: ChangeTimelineProps) {
                   <TooltipContent
                     title={`${fileName(change.previous)} → ${fileName(change.current)}`}
                     rows={[
-                      { key: 'a', value: `+${change.added.toLocaleString('en-US')}`, label: 'added' },
-                      { key: 'r', value: `−${change.removed.toLocaleString('en-US')}`, label: 'removed' },
-                      { key: 'c', value: change.changed === null ? NOT_SEPARATED : change.changed.toLocaleString('en-US'), label: 'changed' },
+                      { key: 'a', value: signed('+', change.added), label: 'added' },
+                      { key: 'r', value: signed('−', change.removed), label: 'removed' },
+                      { key: 'c', value: change.changed === null ? NOT_SEPARATED : change.changed.toLocaleString('en-US'), label: change.changed === null ? 'changed: counted in added and removed' : 'changed' },
                     ]}
                     note={`${day(change.previousRetrievedAt)} → ${day(change.currentRetrievedAt)}`}
                   />
                 );
                 const top = y(Math.max(change.added, change.changed ?? 0));
                 const bottom = y(-change.removed);
-                const addedLabel = `+${formatValue(change.added, { kind: 'count', compact: true })}`;
-                const removedLabel = `−${formatValue(change.removed, { kind: 'count', compact: true })}`;
-                const showLabels = fitsInside(addedLabel, gap - 4) || placed.length === 1;
+                // A small changed count still shows: at least 3px tall, its value in the label.
+                const changedTop = change.changed === null ? base : change.changed === 0 ? base - 1 : Math.min(base - 3, y(change.changed));
+                const aboveY = Math.min(top, changedTop, change.changed === null ? base - MARKER / 2 : base) - 6;
+                const aboveX = above[i].pos + measureText(aboveText[i]) / 2;
+                const belowX = below[i].pos + measureText(belowText[i]) / 2;
                 return (
                   <MarkGroup
                     key={`${change.previous}->${change.current}`}
@@ -170,30 +197,32 @@ export default function ChangeTimeline(props: ChangeTimelineProps) {
                     <Bar orient="vertical" band={{ pos: cx - column / 2, thickness: column }} value={measured(change.added)} scale={y} motionKey={`added-${i}`} />
                     <Bar orient="vertical" band={{ pos: cx - column / 2, thickness: column }} value={measured(-change.removed)} scale={y} motionKey={`removed-${i}`} />
                     {change.changed === null ? (
-                      <AbsentSlot absence={absent('not-recorded', NOT_SEPARATED_REASON)} box={{ x: cx + column / 2 + 2, y: y(extent * 0.6), width: 8, height: base - y(extent * 0.6) - 1 }} text="" />
+                      <rect data-absence="not-separated" x={tickX(cx) + 0.5} y={base - MARKER / 2 + 0.5} width={MARKER - 1} height={MARKER - 1} rx={1.5} style={{ fill: 'none', stroke: VIZ.baseline, strokeWidth: 1, strokeDasharray: '3 2' }}>
+                        <title>{`Changed ${NOT_SEPARATED}: ${NOT_SEPARATED_REASON}. They are counted in added and removed.`}</title>
+                      </rect>
                     ) : (
-                      <Bar orient="vertical" band={{ pos: cx + column / 2 + 2, thickness: 4 }} value={measured(change.changed)} scale={y} role="primary" motionKey={`changed-${i}`} />
+                      <rect x={tickX(cx)} y={changedTop} width={4} height={base - changedTop} rx={1} style={{ fill: VIZ.ink }} />
                     )}
-                    {showLabels && (
-                      <>
-                        <text x={cx} y={top - 6} textAnchor="middle" className={LABEL_CLASS}>{addedLabel}</text>
-                        <text x={cx} y={bottom + 12} textAnchor="middle" className={LABEL_CLASS}>{removedLabel}</text>
-                        {change.changed === null && <text x={cx + column / 2 + 12} y={y(extent * 0.6) + 4} className={MUTED_LABEL_CLASS}>{NOT_SEPARATED}</text>}
-                      </>
-                    )}
+                    {above[i].leader && <line x1={cx} x2={aboveX} y1={aboveY + 2} y2={aboveY - 4} style={{ stroke: VIZ.baseline, strokeWidth: 1 }} />}
+                    <text x={aboveX} y={aboveY - (above[i].leader ? 6 : 0)} textAnchor="middle" className={LABEL_CLASS}>{aboveText[i]}</text>
+                    {below[i].leader && <line x1={cx} x2={belowX} y1={bottom + 2} y2={bottom + 6} style={{ stroke: VIZ.baseline, strokeWidth: 1 }} />}
+                    <text x={belowX} y={bottom + 12 + (below[i].leader ? 4 : 0)} textAnchor="middle" className={LABEL_CLASS}>{belowText[i]}</text>
                   </MarkGroup>
                 );
               })}
-              {unchangedChecks > 0 && Number.isFinite(checkedAt) && (
-                <Dot
-                  cx={x(checkedAt)}
-                  cy={base}
-                  hollow
-                  role="primary"
-                  label={`${unchangedChecks} unchanged`}
-                  labelSide="above"
-                  title={`${unchangedChecks} ${unchangedChecks === 1 ? 'check' : 'checks'} found the file unchanged; the last on ${day(lastCheckedAt)}. Earlier check times are counted, not drawn.`}
-                />
+              {check && (
+                <>
+                  <Dot
+                    cx={checkX}
+                    cy={base}
+                    hollow
+                    role="primary"
+                    title={`${unchangedChecks} ${unchangedChecks === 1 ? 'check' : 'checks'} found the file unchanged; the last on ${day(lastCheckedAt)}. Earlier check times are counted, not drawn.`}
+                  />
+                  {/* Below the marks, just above the axis, with a dotted leader up to its dot. */}
+                  <line x1={checkX} x2={check.pos + measureText(checkText) / 2} y1={base + 6} y2={AXIS_Y - 16} style={{ stroke: VIZ.baseline, strokeWidth: 1, strokeDasharray: '1 2' }} />
+                  <text x={check.pos} y={AXIS_Y - 6} className={MUTED_LABEL_CLASS}>{checkText}</text>
+                </>
               )}
               <Axis time={x} orient="bottom" offset={AXIS_Y} />
               {unplaced > 0 && <text x={LEFT} y={HEIGHT - 2} className={MUTED_LABEL_CLASS}>{unplaced} not placed: no retrieval time recorded</text>}
