@@ -23,6 +23,7 @@ import { Meter } from './marks/Meter';
 import { Segments } from './marks/Segments';
 import { TimelineLane } from './marks/TimelineLane';
 import { VIZ } from './core/claim';
+import { BarTableExamples, SeriesExamples } from './TablesSeriesGallery';
 
 /*
  * Every chart primitive with realistic data: gaps, long labels, negative values, single-point and
@@ -821,6 +822,12 @@ export default function ChartGallery() {
         </Section>
         <Section title="Frame states" note="Loading, empty, error and scoped-out frames contain text only; stale keeps the previous render at half opacity; the table twin prints each absence's reason.">
           <StateFrames />
+        </Section>
+        <Section title="Bar-tables" note="Seven disposition columns and eight lead columns at 1024px: bars halve, then headers abbreviate, then the table twin; never a sideways scroll. Hatched absence columns, a dimmed small sample, a counted column, not assessed, an absent factor and a negative sum.">
+          <BarTableExamples />
+        </Section>
+        <Section title="Series small multiples" note="A four-year hole is four years wide; one group's lone missing year breaks its line; hollow markers are incomplete periods; the bracket's two periods carry axis labels. Labels follow the period mode.">
+          <SeriesExamples />
         </Section>
       </div>
     </main>

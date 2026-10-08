@@ -3,7 +3,7 @@
 // A lead list requested before a findings refresh must not render after the refreshed list: the
 // desk would rank stale findings under a "refreshed" heading.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { StoryLead } from '../types';
 
 // Node 26's flag-gated `localStorage` shadows jsdom's, so replace it before the store import.
@@ -102,10 +102,49 @@ describe('StoryDesk', () => {
     await waitFor(() => expect(bridge.pending).toHaveLength(1));
     act(() => bridge.pending[0]([lead('a', 'Stated total does not match the table')]));
     await screen.findByText('Stated total does not match the table');
-    expect(screen.getByLabelText('Attention score').textContent).toBe('52');
+    const row = screen.getByRole('row', { name: /^#1, Stated total does not match the table, score 52:/ });
+    expect(row.querySelectorAll('td')[0].textContent).toBe('52');
+    expect(screen.getAllByText('pattern signal').length).toBeGreaterThan(0);
+    fireEvent.click(within(row).getByRole('button', { name: 'Details' }));
     expect(screen.getByText(/largest figure named/)).toBeTruthy();
-    expect(screen.getByText(/pattern signal/i)).toBeTruthy();
     expect(screen.getByText(/1 related finding/)).toBeTruthy();
+  });
+
+  it('draws an unassessed evidence strength as a not-assessed slot, never a zero bar', async () => {
+    const unassessed = lead('a', 'Unassessed lead');
+    unassessed.confidence = { kind: 'UNASSESSED' };
+    unassessed.publicInterest.factors.push({ name: 'evidence strength', basisPoints: 0, evidence: 'confidence not assessed' });
+    const measuredZero = lead('b', 'Measured lead');
+    measuredZero.confidence = { kind: 'MEASURED', basisPoints: 3 };
+    measuredZero.publicInterest.factors.push({ name: 'evidence strength', basisPoints: 0, evidence: 'confidence 0.03%' });
+    measuredZero.publicInterest.factors.push({ name: 'counted statutory or policy violation', basisPoints: 1800, evidence: 'counted' });
+    render(<StoryDesk />);
+    await waitFor(() => expect(bridge.pending).toHaveLength(1));
+    act(() => bridge.pending[0]([unassessed, measuredZero]));
+    await screen.findByText('Unassessed lead');
+    const column = (title: string) => screen.getAllByRole('columnheader').findIndex((header) => header.getAttribute('title') === title) - 1;
+    const evidence = (name: RegExp) => screen.getByRole('row', { name }).querySelectorAll('td')[column('evidence strength')];
+    const notAssessed = evidence(/^#1, Unassessed lead/);
+    expect(notAssessed.textContent).toMatch(/\)?not assessed$/);
+    expect(notAssessed.querySelector('path')).toBeNull();
+    expect(notAssessed.querySelector('[data-absence="not-recorded"]')).toBeTruthy();
+    const zero = evidence(/^#2, Measured lead/);
+    expect(zero.textContent).toBe('+0');
+    expect(zero.querySelector('line')).toBeTruthy();
+    expect(zero.querySelector('[data-absence]')).toBeNull();
+    expect(screen.getByRole('row', { name: /^#1, Unassessed lead/ }).querySelectorAll('td')[column('counted statutory or policy violation')].textContent).toBe('·');
+    expect(screen.getByText('Counted violation (legal claim)')).toBeTruthy();
+  });
+
+  it('claims no type for a factor outside the ranker’s closed set', async () => {
+    const unknown = lead('a', 'Lead with a new factor');
+    unknown.publicInterest.factors = [{ name: 'novel factor', basisPoints: 300, evidence: 'new' }];
+    render(<StoryDesk />);
+    await waitFor(() => expect(bridge.pending).toHaveLength(1));
+    act(() => bridge.pending[0]([unknown]));
+    await screen.findByText('Lead with a new factor');
+    const header = screen.getAllByRole('columnheader').find((cell) => cell.getAttribute('title')?.startsWith('novel factor'));
+    expect(header?.textContent).toBe('Novel factor');
   });
 
   it('opens the dossier for the lead whose button was pressed', async () => {
@@ -113,6 +152,7 @@ describe('StoryDesk', () => {
     await waitFor(() => expect(bridge.pending).toHaveLength(1));
     act(() => bridge.pending[0]([lead('a', 'First lead'), lead('b', 'Second lead')]));
     await screen.findByText('Second lead');
+    fireEvent.click(within(screen.getByRole('row', { name: /^#2, Second lead/ })).getByRole('button', { name: 'Details' }));
     act(() => {
       screen.getByRole('button', { name: 'Open evidence chain: Second lead' }).click();
     });
@@ -132,6 +172,7 @@ describe('StoryDesk', () => {
     expect(screen.queryByRole('region', { name: 'Drafted artifacts' })).toBeNull();
     const summaries = screen.getAllByText('Draft a records request or appeal');
     expect(summaries).toHaveLength(2);
+    fireEvent.click(within(screen.getByRole('row', { name: /^#2, Second lead/ })).getByRole('button', { name: 'Details' }));
     act(() => {
       summaries[1].click();
     });
@@ -199,7 +240,8 @@ describe('StoryDesk', () => {
     render(<StoryDesk />);
     await waitFor(() => expect(bridge.pending).toHaveLength(1));
     act(() => bridge.pending[0]([lead('kept', 'Kept lead')]));
-    fireEvent.click(await screen.findByRole('button', { name: 'Add to briefing' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Details' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add to briefing' }));
     await waitFor(() => expect(bridge.findings).not.toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     await waitFor(() => expect(bridge.pending).toHaveLength(2));

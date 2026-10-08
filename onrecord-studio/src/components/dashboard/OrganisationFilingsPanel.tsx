@@ -3,19 +3,29 @@ import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type {
   AnalyticalSchema, HybridSearchResult, RecordGapRequestStatus, RequestSearchResult, FilingExplanation, Form990Statement, OrganisationCheckSummary, OrganisationFilings, OrganisationMatch,
-  OrganisationPaymentMapping, OrganisationReturn, ScheduleLPart, SingleAuditHistory,
+  OrganisationPaymentMapping, OrganisationReturn, OrganisationSummary, OrganisationSummaryYear, PublicMoneyLine, ScheduleLPart, SingleAuditHistory,
 } from '../../types';
 import { save } from '@tauri-apps/plugin-dialog';
 import { portfolioCsv, portfolioRow, type PortfolioRow } from '../../utils/organisationPortfolio';
 import { isEin, normalisedName, parseOrganisationList } from '../../utils/organisationNames';
 import { contractFileRequest } from '../../utils/organisationRequests';
-import { peopleAcrossReturns, yearChange } from '../../utils/organisationPeople';
+import { peopleAcrossReturns } from '../../utils/organisationPeople';
 import { guidanceForSubject } from '../../utils/sourceGuidance';
 import { useAppStore } from '../../store/useAppStore';
 import Button from '../ui/Button';
 import InlineError from '../ui/InlineError';
 import Time from '../ui/Time';
 import { Field, Input, Select, Textarea } from '../ui/Field';
+import BarTable, { type BarTableRow } from '../charts/figures/BarTable';
+import SeriesSmallMultiples, { type SeriesLine } from '../charts/figures/SeriesSmallMultiples';
+import ChartFrame from '../charts/frame/ChartFrame';
+import { TICK_CLASS } from '../charts/frame/Axis';
+import { AbsentSlot } from '../charts/marks/shared';
+import { VIZ } from '../charts/core/claim';
+import { formatCurrencyString, formatValue } from '../charts/core/format';
+import { absent, fromNullable, isValue, measured, type Measured } from '../charts/core/nulls';
+import { scaleBand } from '../charts/core/scale';
+import { cn } from '../../utils/cn';
 
 const dollars = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const NOT_STATED = 'not stated';
@@ -230,23 +240,339 @@ function People({ filings }: { filings: OrganisationFilings }) {
   </section>;
 }
 
+const FILING_SOURCES = ['organisation_filings', 'organisation_return_xml'];
+const usd = (value: number) => formatValue(value, { kind: 'currency', compact: true });
+const nullable = (value: number | null, reason: string): Measured => fromNullable(value, 'not-recorded', reason);
+
+interface TaxYearSlot { key: string; label: string; title: string; taxYear: number; row: OrganisationSummaryYear | null }
+const NO_EXTRACT = 'No extract for this tax year';
+/** A longer span is drawn over the listed years only: the slots would be slivers. */
+const MAX_TAX_YEAR_SLOTS = 40;
+
+/**
+ * One slot per tax year from the first summarised year to the last, so a year the extract skips
+ * keeps its place and breaks every line. Two returns for one tax year (an amendment, a changed
+ * fiscal period) each get a slot, labelled by tax period.
+ */
+export function taxYearSlots(years: readonly OrganisationSummaryYear[]): TaxYearSlot[] {
+  const sorted = [...years].sort((a, b) => a.taxYear - b.taxYear || (a.taxPeriod ?? '').localeCompare(b.taxPeriod ?? ''));
+  if (!sorted.length) return [];
+  const first = sorted[0].taxYear;
+  const last = sorted[sorted.length - 1].taxYear;
+  const span = last - first + 1 <= MAX_TAX_YEAR_SLOTS ? Array.from({ length: last - first + 1 }, (_, i) => first + i) : [...new Set(sorted.map((year) => year.taxYear))];
+  return span.flatMap((taxYear): TaxYearSlot[] => {
+    const rows = sorted.filter((year) => year.taxYear === taxYear);
+    if (!rows.length) return [{ key: `missing:${taxYear}`, label: String(taxYear), title: `Tax year ${taxYear}: ${NO_EXTRACT.toLowerCase()}`, taxYear, row: null }];
+    return rows.map((row, i) => {
+      const label = rows.length > 1 ? `${taxYear} (${row.taxPeriod ? period(row.taxPeriod) : `return ${i + 1}`})` : String(taxYear);
+      return { key: `${taxYear}|${row.taxPeriod ?? i}`, label, title: `Tax year ${label}${row.formType ? `, Form ${row.formType}` : ''}`, taxYear, row };
+    });
+  });
+}
+
+/** The difference from the tax year before, only when that year has exactly one extract. */
+function priorYearChange(slots: readonly TaxYearSlot[], slot: TaxYearSlot, pick: (year: OrganisationSummaryYear) => number | null): number | null {
+  const prior = slots.filter((candidate) => candidate.taxYear === slot.taxYear - 1 && candidate.row);
+  const current = slot.row ? pick(slot.row) : null;
+  const previous = prior.length === 1 && prior[0].row ? pick(prior[0].row) : null;
+  return current === null || previous === null ? null : current - previous;
+}
+
+/**
+ * Revenue and expenses, government grants, and assets and liabilities by tax year: three panels on
+ * one tax-year axis. A figure the return does not state, and a year with no extract, break the
+ * line. Grants come only from a return read here whose tax period equals the summary year's, never
+ * from a derived year.
+ */
+function FilerFinances({ filings, summary }: { filings: OrganisationFilings; summary: OrganisationSummary }) {
+  const slots = taxYearSlots(summary.years);
+  const years = slots.flatMap((slot) => (slot.row ? [slot.row] : []));
+  const missingYears = slots.filter((slot) => !slot.row).map((slot) => slot.taxYear);
+  const read = filings.returns.filter((listed) => listed.statement);
+  const grantFor = (year: OrganisationSummaryYear): Measured => {
+    const match = year.taxPeriod === null ? undefined : read.find((listed) => listed.taxPeriod === year.taxPeriod);
+    if (!match?.statement) return absent('not-covered', 'No return for this tax period was read here');
+    return nullable(match.statement.governmentGrants, 'The return states no government grants figure');
+  };
+  const unmatched = read.filter((listed) => !years.some((year) => year.taxPeriod === listed.taxPeriod));
+  const noExtract = absent('not-recorded', NO_EXTRACT);
+  const grants = slots.map((slot) => (slot.row ? grantFor(slot.row) : noExtract));
+  const value = (pick: (year: OrganisationSummaryYear) => number | null, what: string) => slots.map((slot) => (slot.row ? nullable(pick(slot.row), `The extract states no ${what} for this year`) : noExtract));
+  const revenue = value((year) => year.totalRevenue, 'total revenue');
+  const expenses = value((year) => year.totalExpenses, 'total expenses');
+  const assets = value((year) => year.totalAssetsEndOfYear, 'total assets');
+  const liabilities = value((year) => year.totalLiabilitiesEndOfYear, 'total liabilities');
+  const filed = years.filter((year) => year.totalRevenue !== null);
+  const both = [...slots.keys()].reverse().find((i) => { const grant = grants[i]; const row = slots[i].row; return isValue(grant) && row !== null && row.totalRevenue !== null && row.totalRevenue !== 0; });
+  const notChecked = indexYearSpan(filings).filter((year) => !filings.indexYears.some((check) => check.year === year)).length;
+  const parts = [
+    filed.length ? `revenue ${usd(filed[0].totalRevenue ?? 0)}→${usd(filed[filed.length - 1].totalRevenue ?? 0)} (${filed.length} ${filed.length === 1 ? 'extract' : 'extracts'} stating revenue)` : 'no revenue stated',
+    ...(both === undefined ? [] : [`government grants were ${formatValue((grants[both] as { value: number }).value / (slots[both].row?.totalRevenue ?? 1), { kind: 'percent', digits: 0 })} of revenue in ${slots[both].label}`]),
+    ...(missingYears.length ? [`no extract for ${missingYears.join(', ')}`] : []),
+    `${notChecked} index ${notChecked === 1 ? 'year' : 'years'} not checked`,
+  ];
+  const line = (key: string, label: string, role: SeriesLine['role'], values: Measured[]): SeriesLine => ({ key, label, role, values });
+  const text = (m: Measured) => (isValue(m) ? money(m.value) : m.state === 'not-recorded' && m.reason === NO_EXTRACT ? 'no extract' : NOT_STATED);
+  return (
+    <>
+      <SeriesSmallMultiples
+        title="Filer finances by tax year"
+        headline={`${filings.name ?? summary.name ?? 'This filer'}: ${parts.join('; ')}.`}
+        sources={{ tables: FILING_SOURCES, retrievedAt: summary.retrievedAt, note: 'IRS Form 990 extracts via ProPublica Nonprofit Explorer; grants from returns read here' }}
+        summary={`${slots.length} tax-year slots, ${slots[0].label} to ${slots[slots.length - 1].label}. Lines break where the return states no figure or no extract exists for the year.`}
+        status="ready"
+        slots={slots.map(({ key, label, title }) => ({ key, label, title }))}
+        panels={[
+          { key: 'flows', title: 'Revenue and expenses', lines: [line('revenue', 'Revenue', 'primary', revenue), line('expenses', 'Expenses', 'comparison', expenses)], summary: `Revenue and expenses: ${slots.map((slot, i) => `${slot.label} ${text(revenue[i])} and ${text(expenses[i])}`).join('; ')}.` },
+          { key: 'grants', title: 'Government grants', lines: [line('grants', 'Government grants', 'default', grants)], summary: `Government grants from returns read here: ${slots.map((slot, i) => `${slot.label} ${isValue(grants[i]) ? text(grants[i]) : slot.row ? 'not read' : 'no extract'}`).join('; ')}.` },
+          { key: 'balance', title: 'Assets and liabilities', lines: [line('assets', 'Assets', 'primary', assets), line('liabilities', 'Liabilities', 'comparison', liabilities)], summary: `Assets and liabilities: ${slots.map((slot, i) => `${slot.label} ${text(assets[i])} and ${text(liabilities[i])}`).join('; ')}.` },
+        ]}
+        kind="currency"
+        yScale="per-panel"
+        legend={[
+          { key: 'revenue', label: 'Revenue · Assets', swatch: 'line', tone: 'ink' },
+          { key: 'expenses', label: 'Expenses · Liabilities', swatch: 'dashed-line', tone: 'context' },
+        ]}
+        describe={(panelKey, index) => {
+          const slot = slots[index];
+          if (!slot.row) return { rows: [], note: NO_EXTRACT };
+          const rows = panelKey === 'flows'
+            ? [{ key: 'revenue', value: text(revenue[index]), label: 'revenue' }, { key: 'expenses', value: text(expenses[index]), label: 'expenses' }]
+            : panelKey === 'grants'
+              ? [{ key: 'grants', value: isValue(grants[index]) ? text(grants[index]) : (grants[index] as { reason: string }).reason, label: 'government grants' }]
+              : [{ key: 'assets', value: text(assets[index]), label: 'assets' }, { key: 'liabilities', value: text(liabilities[index]), label: 'liabilities' }];
+          return { rows, note: slot.row.formType ? `Form ${slot.row.formType}` : 'Form not stated' };
+        }}
+        table={{
+          caption: "Figures extracted from each year's return. The change column is the difference from the tax year before, shown only when both years state the figure.",
+          columns: [
+            { key: 'year', label: 'Tax year' }, { key: 'form', label: 'Form' },
+            { key: 'revenue', label: 'Total revenue', align: 'end' }, { key: 'revenueChange', label: 'Change', align: 'end' },
+            { key: 'expenses', label: 'Total expenses', align: 'end' }, { key: 'expensesChange', label: 'Change', align: 'end' },
+            { key: 'grants', label: 'Government grants', align: 'end' },
+            { key: 'assets', label: 'Total assets', align: 'end' }, { key: 'liabilities', label: 'Total liabilities', align: 'end' },
+            { key: 'officers', label: 'Compensation of current officers', align: 'end' },
+          ],
+          rows: slots.map((slot) => {
+            const year = slot.row;
+            if (!year) return { year: slot.label, form: noExtract, revenue: null, revenueChange: null, expenses: null, expensesChange: null, grants: null, assets: null, liabilities: null, officers: null };
+            return {
+              year: slot.label,
+              form: year.formType ?? NOT_STATED,
+              revenue: money(year.totalRevenue),
+              revenueChange: signed(priorYearChange(slots, slot, (y) => y.totalRevenue)),
+              expenses: money(year.totalExpenses),
+              expensesChange: signed(priorYearChange(slots, slot, (y) => y.totalExpenses)),
+              grants: (() => { const grant = grantFor(year); return isValue(grant) ? money(grant.value) : grant; })(),
+              assets: money(year.totalAssetsEndOfYear),
+              liabilities: money(year.totalLiabilitiesEndOfYear),
+              officers: money(year.officerCompensation),
+            };
+          }),
+        }}
+        storageKey="filer-finances"
+      />
+      {unmatched.length > 0 && (
+        <p className="text-body text-muted">
+          {`Read returns whose tax period matches no summary year, so their grants are not plotted: ${unmatched.map((listed) => `Form ${listed.returnType}, period ${period(listed.taxPeriod)}${listed.statement?.governmentGrants != null ? `, government grants ${money(listed.statement.governmentGrants)}` : ''}`).join('; ')}.`}
+        </p>
+      )}
+    </>
+  );
+}
+
+/** Every index year from the earliest checked or summarised year to the latest, inclusive. */
+function indexYearSpan(filings: OrganisationFilings): number[] {
+  const known = [...filings.indexYears.map((check) => check.year), ...(filings.summary?.years ?? []).map((year) => year.taxYear)];
+  if (!known.length) return [];
+  const [first, last] = [Math.min(...known), Math.max(...known)];
+  return last - first > 40 ? filings.indexYears.map((check) => check.year).sort((a, b) => a - b) : Array.from({ length: last - first + 1 }, (_, i) => first + i);
+}
+
+type CoverageState = 'read' | 'listed' | 'none' | 'unchecked';
+const COVERAGE_TEXT: Record<CoverageState, string> = {
+  read: 'return read',
+  listed: 'listed, not read',
+  none: 'checked: no e-filed return',
+  unchecked: 'not checked',
+};
+
+/** IRS e-file index coverage: filled = a return read, ring = checked, dotted slot = not checked. */
+function IndexCoverage({ filings }: { filings: OrganisationFilings }) {
+  const span = indexYearSpan(filings);
+  if (!span.length) return null;
+  const stateOf = (year: number): CoverageState => {
+    const check = filings.indexYears.find((candidate) => candidate.year === year);
+    if (!check) return 'unchecked';
+    if (filings.returns.some((listed) => listed.indexYear === year && listed.statement)) return 'read';
+    return check.returnsListed > 0 ? 'listed' : 'none';
+  };
+  const states = span.map(stateOf);
+  const count = (state: CoverageState) => states.filter((candidate) => candidate === state).length;
+  return (
+    <ChartFrame
+      title="IRS e-file index coverage"
+      headline={`${count('read')} index ${count('read') === 1 ? 'year' : 'years'} with a return read, ${count('none') + count('listed')} checked without one, ${count('unchecked')} not checked.`}
+      sources={{ tables: ['organisation_filings'], note: 'An index year is the year the IRS published the return, not its tax year' }}
+      summary={span.map((year, i) => `${year}: ${COVERAGE_TEXT[states[i]]}`).join('; ')}
+      status="ready"
+      minHeight={44}
+      legend={[
+        { key: 'read', label: COVERAGE_TEXT.read, swatch: 'dot' },
+        { key: 'checked', label: 'checked, none read', swatch: 'ring' },
+      ]}
+      table={{
+        caption: 'IRS e-file index years',
+        columns: [{ key: 'year', label: 'Index year' }, { key: 'state', label: 'Coverage' }, { key: 'listed', label: 'Returns listed', align: 'end' }],
+        rows: span.map((year, i) => {
+          const check = filings.indexYears.find((candidate) => candidate.year === year);
+          return { year: String(year), state: COVERAGE_TEXT[states[i]], listed: check ? check.returnsListed : absent('not-covered', 'This index year was not checked') };
+        }),
+      }}
+    >
+      {({ width }) => {
+        const band = scaleBand(span.map(String), [0, width], { maxBand: 16 });
+        return (
+          <g>
+            {span.map((year, i) => {
+              const cx = band(String(year)) + band.bandwidth / 2;
+              const state = states[i];
+              return (
+                <g key={year}>
+                  <title>{`${year}: ${COVERAGE_TEXT[state]}`}</title>
+                  {state === 'unchecked'
+                    ? <AbsentSlot absence={absent('not-covered', 'This index year was not checked')} box={{ x: cx - 7, y: 3, width: 14, height: 14 }} text="" />
+                    : <circle cx={cx} cy={10} r={state === 'read' ? 5 : 4.5} style={state === 'read' ? { fill: VIZ.ink } : { fill: 'none', stroke: VIZ.ink, strokeWidth: 1.5 }} />}
+                  {(i === 0 || i === span.length - 1 || span.length <= 12 || year % 5 === 0) && (
+                    <text x={cx} y={36} textAnchor="middle" className={TICK_CLASS}>{year}</text>
+                  )}
+                </g>
+              );
+            })}
+          </g>
+        );
+      }}
+    </ChartFrame>
+  );
+}
+
+const PAYMENT_ROLES = new Set(['payment', 'payee table']);
+
+/** A decimal string as integer cents, or null when it is not a plain amount with at most cents. */
+function toCents(value: string): bigint | null {
+  const match = /^(-?)(\d+)(?:\.(\d{1,2}))?$/.exec(value.trim());
+  if (!match) return null;
+  const cents = BigInt(match[2]) * 100n + BigInt((match[3] ?? '').padEnd(2, '0') || '0');
+  return match[1] ? -cents : cents;
+}
+
+const centsText = (cents: bigint) => {
+  const negative = cents < 0n;
+  const abs = negative ? -cents : cents;
+  return `${negative ? '-' : ''}${abs / 100n}.${(abs % 100n).toString().padStart(2, '0')}`;
+};
+
+/**
+ * Payment rows by the city's fiscal year, on their own axis: a city fiscal year is not the filer's
+ * tax period, so it never shares the tax-year axis. Amounts are summed in integer cents within one
+ * table; contract and amendment rows are not payments and are not added.
+ */
+interface PaymentYear { fiscalYear: string; dataset: string; cents: bigint; read: number; rows: number; unread: number; matched: boolean }
+const NO_PAYMENT_ROWS = 'no payment rows matched';
+
+function PaymentBars({ lines }: { lines: PublicMoneyLine[] }) {
+  const payments = lines.filter((line) => PAYMENT_ROLES.has(line.role));
+  if (!payments.length) return null;
+  const groups = new Map<string, PaymentYear>();
+  for (const line of payments) {
+    if (line.fiscalYear === null) continue;
+    const key = `${line.fiscalYear}\u0000${line.datasetName}`;
+    const group = groups.get(key) ?? { fiscalYear: line.fiscalYear, dataset: line.datasetName, cents: 0n, read: 0, rows: 0, unread: 0, matched: true };
+    const cents = line.amount === null ? null : toCents(line.amount);
+    if (cents === null) group.unread += line.rows;
+    else {
+      group.cents += cents;
+      group.read += line.rows;
+    }
+    group.rows += line.rows;
+    groups.set(key, group);
+  }
+  const found = [...groups.values()];
+  const datasets = new Set(found.map((group) => group.dataset));
+  // Between a table's first and last fiscal year, a year with no matched row keeps its row: it
+  // reads 'no payment rows matched', never $0, since the table may not cover that year at all.
+  const gaps: PaymentYear[] = found.every((group) => /^\d{4}$/.test(group.fiscalYear))
+    ? [...datasets].flatMap((dataset) => {
+      const years = found.filter((group) => group.dataset === dataset).map((group) => Number(group.fiscalYear));
+      const [first, last] = [Math.min(...years), Math.max(...years)];
+      if (last - first + 1 > MAX_TAX_YEAR_SLOTS) return [];
+      return Array.from({ length: last - first + 1 }, (_, i) => first + i)
+        .filter((year) => !years.includes(year))
+        .map((year) => ({ fiscalYear: String(year), dataset, cents: 0n, read: 0, rows: 0, unread: 0, matched: false }));
+    })
+    : [];
+  const ordered = [...found, ...gaps].sort((a, b) => a.fiscalYear.localeCompare(b.fiscalYear) || a.dataset.localeCompare(b.dataset));
+  const undated = payments.filter((line) => line.fiscalYear === null);
+  const largest = ordered.filter((group) => group.read > 0).reduce<typeof ordered[number] | null>((best, group) => (best === null || group.cents > best.cents ? group : best), null);
+  const rows: BarTableRow[] = ordered.map((group) => {
+    const amount = formatCurrencyString(centsText(group.cents));
+    const label = datasets.size > 1 ? `${group.fiscalYear} · ${group.dataset}` : group.fiscalYear;
+    return {
+      key: `${group.fiscalYear}\u0000${group.dataset}`,
+      name: label,
+      label: group.matched ? `${label}: ${amount} over ${group.rows} rows${group.unread ? `; ${group.unread} rows with an unreadable amount not summed` : ''}` : `${label}: ${NO_PAYMENT_ROWS}`,
+      header: <span className={cn('viz-num', group.matched ? 'text-fg' : 'text-muted')}>{label}</span>,
+      cells: !group.matched ? {
+        amount: { value: absent('not-recorded', 'No payment row in this table matched for this fiscal year'), text: NO_PAYMENT_ROWS },
+      } : {
+        // A year whose every amount is unreadable has no sum: a slot, never $0.
+        amount: group.read === 0 ? { value: absent('not-recorded', 'No amount in this year could be read'), text: 'not summed' } : { value: measured(Number(centsText(group.cents))), text: amount, tooltip: { rows: [{ key: 'amount', value: amount, label: 'paid' }, { key: 'rows', value: String(group.rows), label: 'rows' }], note: group.dataset } },
+        ...(ordered.some((other) => other.unread) ? { unread: { value: measured(group.unread), text: group.unread ? `${group.unread} not summed` : '0' } } : {}),
+      },
+    };
+  });
+  return (
+    <BarTable
+      title="Payments from mapped public datasets"
+      headline={largest ? `Largest: ${formatCurrencyString(centsText(largest.cents))} in city fiscal year ${largest.fiscalYear}${datasets.size > 1 ? ` (${largest.dataset})` : ''}.` : 'No dated payment row has a readable amount.'}
+      sources={{ tables: [...datasets, 'organisation_payment_mappings'], note: "City fiscal year; not aligned to the filer's tax period" }}
+      summary={`${found.length} fiscal-year totals${gaps.length ? ` and ${gaps.length} fiscal ${gaps.length === 1 ? 'year' : 'years'} with no matched row` : ''} from ${datasets.size} ${datasets.size === 1 ? 'table' : 'tables'}.${undated.length ? ` ${undated.length} undated rows are listed below, not placed on the axis.` : ''}`}
+      status={ordered.length ? 'ready' : 'empty'}
+      emptyText="Every payment row is undated."
+      rowHeader="City fiscal year"
+      hatchLabel="Rows with an unreadable amount"
+      columns={[
+        { key: 'amount', label: 'Paid', scale: 'own-max', barWidth: 120 },
+        ...(ordered.some((group) => group.unread) ? [{ key: 'unread', label: 'Rows not summed', note: 'amount unreadable', scale: 'own-max' as const, hatched: true, barWidth: 32 }] : []),
+      ]}
+      rows={rows}
+      twin={{
+        caption: 'Payments by city fiscal year',
+        columns: [{ key: 'year', label: 'City fiscal year' }, { key: 'dataset', label: 'Table' }, { key: 'amount', label: 'Paid', align: 'end' }, { key: 'rows', label: 'Rows', align: 'end' }],
+        rows: ordered.map((group) => ({ year: group.fiscalYear, dataset: group.dataset, amount: !group.matched ? absent('not-recorded', NO_PAYMENT_ROWS) : group.read === 0 ? absent('not-recorded', 'no amount could be read') : formatCurrencyString(centsText(group.cents)), rows: group.matched ? group.rows : null })),
+      }}
+      footer={undated.length > 0 && <p className="text-caption text-muted">{`Undated: ${undated.map((line) => `${line.datasetName}, ${line.rows} rows${line.amount === null ? '' : `, ${decimalMoney(line.amount)}`}`).join('; ')}.`}</p>}
+    />
+  );
+}
+
 function Record({ filings }: { filings: OrganisationFilings }) {
   return <div className="space-y-5">
     {filings.warnings.length > 0 && <ul role="alert" className="list-disc pl-5 text-body text-warning">{filings.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
     <section aria-label="Returns as filed" className="space-y-3">
       <h3 className="text-heading text-fg">Returns as filed</h3>
-      <p className="text-body text-muted">Read from the IRS e-file archives for index years {filings.indexYears.map((check) => check.year).join(', ') || 'none'}. Each figure and answer is the organization's own statement on its return. Earlier years' returns are not read; the summary below covers them.</p>
+      <p className="text-body text-muted">Read from the IRS e-file archives for the index years the coverage strip below marks as checked. Each figure and answer is the organization's own statement on its return. Earlier years' returns are not read; the summary below covers them.</p>
       {filings.returns.length ? filings.returns.map((listed) => <ReturnCard key={listed.objectId} listed={listed} />) : <p className="text-body text-muted">The IRS indexes that were read list no e-filed return under this EIN.</p>}
     </section>
     <People filings={filings} />
     <section aria-label="Summary by year" className="space-y-2">
       <h3 className="text-heading text-fg">Summary by year</h3>
       {filings.summary ? <>
-        {filings.summary.years.length > 0 ? <Table caption="Figures extracted from each year's return. The change column is the difference from the year before, shown only when both years state the figure." head={['Tax year', 'Form', 'Total revenue', 'Change', 'Total expenses', 'Change', 'Total assets', 'Total liabilities', 'Compensation of current officers']}
-          rows={filings.summary.years.map((year, index) => [String(year.taxYear), year.formType ?? NOT_STATED, money(year.totalRevenue), signed(yearChange(filings.summary!.years, index, (y) => y.totalRevenue)), money(year.totalExpenses), signed(yearChange(filings.summary!.years, index, (y) => y.totalExpenses)), money(year.totalAssetsEndOfYear), money(year.totalLiabilitiesEndOfYear), money(year.officerCompensation)])} />
+        {filings.summary.years.length > 0 ? <FilerFinances filings={filings} summary={filings.summary} />
           : <p className="text-body text-muted">The source holds no extracted year for this organization.</p>}
         <p className="text-body text-muted">Source: <a className="text-accent underline" href={filings.summary.sourceUrl} target="_blank" rel="noreferrer">ProPublica Nonprofit Explorer</a>, from IRS extracts, retrieved {filings.summary.retrievedAt.slice(0, 10)}.</p>
       </> : <p className="text-body text-muted">No summary was read.</p>}
+      <IndexCoverage filings={filings} />
     </section>
     <section aria-label="Single audits" className="space-y-2">
       <h3 className="text-heading text-fg">Single audits of federal money</h3>
@@ -255,6 +581,7 @@ function Record({ filings }: { filings: OrganisationFilings }) {
     <Library filings={filings} />
     <section aria-label="Public money in your library" className="space-y-2">
       <h3 className="text-heading text-fg">Public money in your library</h3>
+      <PaymentBars lines={filings.publicMoney} />
       {filings.publicMoney.length > 0 && <Table caption="Rows of your mapped contract, amendment and payment tables whose vendor value contains this organization's name. The tables carry no EIN, so confirm each vendor value is this organization."
         head={['Record', 'Table', 'Vendor as written', 'Fiscal year', 'Rows', 'Amount']}
         rows={filings.publicMoney.map((line) => [line.role, line.sourceUrl ? <a className="text-accent underline" href={line.sourceUrl} target="_blank" rel="noreferrer">{line.datasetName}</a> : line.datasetName, line.vendorValue, line.fiscalYear ?? NOT_STATED, String(line.rows), line.amount === null ? 'not summed: an amount could not be read' : decimalMoney(line.amount)])} />}

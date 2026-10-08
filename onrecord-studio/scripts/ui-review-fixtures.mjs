@@ -535,20 +535,118 @@ const WATCH_CHANGES = [
   { id: 'wc-2', watchId: 'w-harborview', dimension: 'FIGURES', changeKind: 'CHANGED', subject: 'Contract ceiling, Agreement H-24-1180', oldValue: '$1,250,000', newValue: '$1,650,000', oldAsOf: iso(24 * 7), newAsOf: iso(4), basis: 'Council staff report 26-118', detectedAt: iso(4), portalKey: 'sd-council-agendas' },
 ];
 
+/** @param {string} taxPeriod @param {number} grants @returns {import('../src/types').Form990Statement} */
+const statement990 = (taxPeriod, revenue, expenses, grants) => ({
+  returnVersion: '2022v5.0', ein: '954417820', filerName: 'HARBORVIEW SHELTER PARTNERS', taxPeriodBegin: `${Number(taxPeriod.slice(0, 4)) - 1}-07-01`, taxPeriodEnd: `${taxPeriod.slice(0, 4)}-06-30`,
+  amended: false, totalRevenue: revenue, totalExpenses: expenses, totalAssetsEndOfYear: 4_210_000, totalLiabilitiesEndOfYear: 1_380_000, netAssetsEndOfYear: 2_830_000, governmentGrants: grants,
+  significantDiversionReported: false, formerListed: false, totalReportableCompensation: 612_000, people: [], scheduleJAttached: false, severancePaymentReported: null, scheduleJPeople: [], scheduleJExplanations: [],
+  scheduleLAttached: false, scheduleLTransactions: [], scheduleLExplanations: [], scheduleOExplanations: [],
+});
+/** @param {number} taxYear @param {string | null} taxPeriod */
+const summaryYear = (taxYear, taxPeriod, revenue, expenses, assets, liabilities) => ({ taxYear, taxPeriod, formType: '990', totalRevenue: revenue, totalExpenses: expenses, totalAssetsEndOfYear: assets, totalLiabilitiesEndOfYear: liabilities, officerCompensation: 410_000 });
+/**
+ * Harborview's record: no extract for tax year 2020 (a missing year), two extracts for 2022 (a
+ * changed fiscal period), a null expense figure; index years read, listed-not-read, checked-none and
+ * unchecked; payments with an undated row, an unreadable amount and a skipped fiscal year.
+ * @type {import('../src/types').OrganisationFilings}
+ */
+const ORGANISATION_FILINGS = {
+  ein: '954417820', name: 'Harborview Shelter Partners', checkedAt: iso(24 * 4),
+  indexYears: [{ year: 2019, checkedAt: iso(24 * 4), returnsListed: 0 }, { year: 2021, checkedAt: iso(24 * 4), returnsListed: 1 }, { year: 2022, checkedAt: iso(24 * 4), returnsListed: 1 }, { year: 2023, checkedAt: iso(24 * 4), returnsListed: 2 }, { year: 2024, checkedAt: iso(24 * 4), returnsListed: 1 }],
+  returns: [
+    { objectId: '202301239349300410', indexYear: 2023, returnType: '990', taxPeriod: '202206', taxpayerName: 'HARBORVIEW SHELTER PARTNERS', archiveUrl: null, memberName: null, xmlSha256: hex('x2022'), retrievedAt: iso(24 * 4), statement: statement990('202206', 6_480_000, 6_120_000, 4_910_000), unreadReason: null },
+    { objectId: '202401239349300515', indexYear: 2024, returnType: '990', taxPeriod: '202306', taxpayerName: 'HARBORVIEW SHELTER PARTNERS', archiveUrl: null, memberName: null, xmlSha256: hex('x2023'), retrievedAt: iso(24 * 4), statement: statement990('202306', 7_920_000, 7_610_000, 6_150_000), unreadReason: null },
+    { objectId: '202201239349300222', indexYear: 2022, returnType: '990', taxPeriod: '202106', taxpayerName: 'HARBORVIEW SHELTER PARTNERS', archiveUrl: null, memberName: null, xmlSha256: null, retrievedAt: null, statement: null, unreadReason: 'Listed in the index; the return XML was not retrieved.' },
+  ],
+  summary: {
+    name: 'HARBORVIEW SHELTER PARTNERS', city: 'SAN DIEGO', state: 'CA', sourceUrl: 'https://projects.propublica.org/nonprofits/organizations/954417820', retrievedAt: iso(24 * 4),
+    years: [
+      summaryYear(2018, '201806', 2_940_000, 2_810_000, 2_100_000, 900_000),
+      summaryYear(2019, '201906', 3_310_000, 3_150_000, 2_380_000, 960_000),
+      summaryYear(2021, '202106', 5_020_000, null, 3_400_000, 1_150_000),
+      summaryYear(2022, '202206', 6_480_000, 6_120_000, 3_860_000, 1_240_000),
+      summaryYear(2022, '202212', 3_390_000, 3_010_000, 3_990_000, 1_300_000),
+      summaryYear(2023, '202306', 7_920_000, 7_610_000, 4_210_000, 1_380_000),
+    ],
+  },
+  singleAudits: null, warnings: [],
+  publicMoney: [
+    { role: 'payment', datasetName: 'Vendor payments FY2025', sourceUrl: null, vendorValue: 'HARBORVIEW SHELTER PARTNERS', fiscalYear: '2021', rows: 14, amount: '1186400.00' },
+    { role: 'payment', datasetName: 'Vendor payments FY2025', sourceUrl: null, vendorValue: 'HARBORVIEW SHELTER PARTNERS', fiscalYear: '2023', rows: 19, amount: '1940250.50' },
+    { role: 'payment', datasetName: 'Vendor payments FY2025', sourceUrl: null, vendorValue: 'HARBORVIEW SHELTER PARTNERS', fiscalYear: '2024', rows: 9, amount: null },
+    { role: 'payment', datasetName: 'Vendor payments FY2025', sourceUrl: null, vendorValue: 'HARBORVIEW SHELTER PARTNERS', fiscalYear: '2025', rows: 6, amount: '612000.00' },
+    { role: 'payment', datasetName: 'Vendor payments FY2025', sourceUrl: null, vendorValue: 'HARBORVIEW SHELTER PARTNERS', fiscalYear: null, rows: 3, amount: '4800.00' },
+    { role: 'contract', datasetName: 'Contracts register', sourceUrl: null, vendorValue: 'HARBORVIEW SHELTER PARTNERS', fiscalYear: '2023', rows: 1, amount: '1250000.00' },
+  ],
+  publicMoneyNotes: [],
+};
+
 /** @type {import('../src/types').StandingQuerySummary[]} */
 const STANDING = [{
   query: { id: 'sq-1', label: 'Abatement notices citing 63.0403', astJson: '{"term":"63.0403"}', filters: { searchTerm: '63.0403', portalKey: 'sandiego', agencyId: 102, status: null, policyDeviation: null }, createdAt: iso(24 * 14) },
-  lastRun: { runId: 'run-1', queryId: 'sq-1', ranAt: iso(6), corpusDigest: hex('corpus'), corpusDocumentCount: 1842, result: { matchCount: 44, matchesDigest: hex('m44'), countBasis: { basis: 'EXACT' }, facets: [{ dimension: 'agency', values: [{ value: 'Environmental Services Department', count: 31 }, { value: 'San Diego Police Department', count: 13 }], truncated: false }], clusters: [{ extractedTextSha256: hex('cl1'), requestCount: 4, documentCount: 9, exampleFileName: 'Abatement_Notices_Imperial_Ave_Q1-2026.pdf' }] }, changedSincePrevious: true, previousMatchCount: 39 },
+  lastRun: { runId: 'run-1', queryId: 'sq-1', ranAt: iso(6), corpusDigest: hex('corpus'), corpusDocumentCount: 1842, result: { matchCount: 44, matchesDigest: hex('m44'), countBasis: { basis: 'EXACT' }, facets: [
+    { dimension: 'agency', values: [{ value: 'Environmental Services Department', count: 31 }, { value: 'San Diego Police Department', count: 13 }], truncated: false },
+    { dimension: 'status', values: [{ value: 'Closed', count: 29 }, { value: 'Overdue', count: 9 }, { value: 'In progress', count: 6 }], truncated: false },
+    // Exact and complete: 2021 has no matching request, a measured zero.
+    { dimension: 'year', values: [{ value: '2026', count: 17 }, { value: '2025', count: 14 }, { value: '2024', count: 8 }, { value: '2022', count: 3 }, { value: '2020', count: 2 }], truncated: false },
+  ], clusters: [{ extractedTextSha256: hex('cl1'), requestCount: 4, documentCount: 9, exampleFileName: 'Abatement_Notices_Imperial_Ave_Q1-2026.pdf' }] }, changedSincePrevious: true, previousMatchCount: 39 },
   currentCorpusDigest: hex('corpus'), due: false,
+}, {
+  query: { id: 'sq-2', label: 'Requests mentioning encampment', astJson: '{"term":"encampment"}', filters: { searchTerm: 'encampment', portalKey: null, agencyId: null, status: null, policyDeviation: null }, createdAt: iso(24 * 40) },
+  lastRun: { runId: 'run-2', queryId: 'sq-2', ranAt: iso(30), corpusDigest: hex('corpus-prev'), corpusDocumentCount: 1790, result: { matchCount: 2614, matchesDigest: hex('m2614'), countBasis: { basis: 'ESTIMATED_FROM_SAMPLE', sampleSize: 1000 }, facets: [
+    { dimension: 'portal', values: [{ value: 'sandiego', count: 2091 }, { value: 'sdcounty', count: 523 }], truncated: false },
+    // Estimated and truncated: the 2018 and 2020 slots are 'none listed', never zero.
+    { dimension: 'year', values: [{ value: '2026', count: 741 }, { value: '2025', count: 690 }, { value: '2024', count: 512 }, { value: '2023', count: 340 }, { value: '2022', count: 201 }, { value: '2021', count: 88 }, { value: '2019', count: 34 }, { value: '2017', count: 12 }], truncated: true },
+  ], clusters: [] }, changedSincePrevious: false, previousMatchCount: 2614 },
+  currentCorpusDigest: hex('corpus'), due: true,
 }];
 
+/** Kinds whose `is_legal_claim()` is true (analysis/finding.rs): only these earn the counted factor. */
+const COUNTED_KINDS = new Set(['POLICY_VIOLATION_DETECTED', 'PRACTICE_DEPARTURE_COUNTED', 'CONTRACT_CEILING_EXCEEDED', 'PAYMENT_OUTSIDE_CONTRACT_TERM', 'APPROPRIATION_EXCEEDED', 'ENCAMPMENT_NOTICE_SHORTFALL']);
+const CONTRADICTION_KINDS = new Set(['CONTRADICTORY_STATEMENT', 'METADATA_CONTRADICTS_CONTENT', 'NO_RECORDS_CONTRADICTED_BY_RELEASE', 'CLAIM_CONTRADICTS_DATA']);
+
+/**
+ * The ranker's factors (analysis/story_desk.rs), with its exact names and caps: money 800/1600/2500,
+ * scale ≤ 900 + 400 + 1200, recurrence ≤ 1000, contradiction 2000, counted 1800, evidence strength
+ * confidence/5 ≤ 2000 (0 when unassessed), freshness 400/200.
+ * @param {typeof FINDINGS[number]} f @param {typeof FINDINGS} live
+ */
+function storyFactors(f, live) {
+  const factors = [];
+  const dollars = [...`${f.headline} ${f.explanation}`.matchAll(/\$([\d,]+(?:\.\d+)?)\s*(million|M)?/g)].map((m) => Number(m[1].replace(/,/g, '')) * (m[2] ? 1_000_000 : 1));
+  const largest = Math.max(0, ...dollars);
+  const money = largest >= 1_000_000 ? 2500 : largest >= 100_000 ? 1600 : largest >= 10_000 ? 800 : 0;
+  if (money) factors.push({ name: 'money at stake', basisPoints: money, evidence: `largest figure named: $${largest.toLocaleString('en-US')}` });
+  const related = live.filter((other) => other.id !== f.id && other.subject.requestId === f.subject.requestId);
+  const documents = new Set([f, ...related].flatMap((item) => item.citations.map((c) => c.documentId)));
+  const requests = new Set([f, ...related].map((item) => item.subject.requestId));
+  const cross = f.kind.startsWith('CROSS_CORPUS_');
+  const scale = Math.min(900, 150 * Math.max(0, documents.size - 1)) + (requests.size > 1 ? 400 : 0) + (cross ? 1200 : 0);
+  if (scale) factors.push({ name: 'scale', basisPoints: scale, evidence: `${documents.size} documents, ${requests.size} requests${cross ? ' (cross-corpus finding)' : ''}` });
+  const siblings = live.filter((other) => other.id !== f.id && other.sourceDetector === f.sourceDetector && other.subject.portalKey === f.subject.portalKey).length;
+  if (siblings) factors.push({ name: 'recurrence', basisPoints: Math.min(1000, 200 * siblings), evidence: `${siblings} other undismissed findings from ${f.sourceDetector}` });
+  if (CONTRADICTION_KINDS.has(f.kind)) factors.push({ name: 'record contradicts statement', basisPoints: 2000, evidence: `finding kind ${f.kind}` });
+  if (COUNTED_KINDS.has(f.kind)) factors.push({ name: 'counted statutory or policy violation', basisPoints: 1800, evidence: `finding kind ${f.kind} is a counted violation` });
+  factors.push(f.confidence.kind === 'MEASURED'
+    ? { name: 'evidence strength', basisPoints: Math.min(2000, Math.floor(f.confidence.basisPoints / 5)), evidence: `measured confidence ${(f.confidence.basisPoints / 100).toFixed(2)}%` }
+    : { name: 'evidence strength', basisPoints: 0, evidence: 'confidence unassessed' });
+  const ageHours = (FIXTURE_NOW - Date.parse(f.lastSeenAt)) / 3_600_000;
+  if (ageHours <= 24 * 7) factors.push({ name: 'freshness', basisPoints: 400, evidence: 'seen within the last 7 days' });
+  else if (ageHours <= 24 * 30) factors.push({ name: 'freshness', basisPoints: 200, evidence: 'seen within the last 30 days' });
+  return factors;
+}
+
+const LIVE_FINDINGS = FINDINGS.filter((f) => !f.dismissedAt);
 /** @type {import('../src/types').StoryLead[]} */
-const STORY_LEADS = FINDINGS.filter((f) => !f.dismissedAt).slice(0, 10).map((f, index) => ({
-  findingId: f.id, kind: f.kind, headline: f.headline, severity: f.severity, confidence: f.confidence, subject: f.subject, portalKey: f.subject.portalKey,
-  publicInterest: { totalBasisPoints: 9200 - index * 650, factors: [{ name: 'Money', basisPoints: 3000 - index * 200, evidence: '$236,200 above ceiling' }, { name: 'Scale', basisPoints: 2500, evidence: '6 of 9 requests' }, { name: 'Violation', basisPoints: 2000 - index * 100, evidence: 'Counted statutory deadline' }] },
-  relatedFindingIds: FINDINGS.filter((other) => other.id !== f.id && other.subject.requestId === f.subject.requestId).map((other) => other.id),
-  firstSeenAt: f.discoveredAt, lastSeenAt: f.lastSeenAt,
-}));
+const STORY_LEADS = LIVE_FINDINGS.map((f) => {
+  const factors = storyFactors(f, LIVE_FINDINGS);
+  return {
+    findingId: f.id, kind: f.kind, headline: f.headline, severity: f.severity, confidence: f.confidence, subject: f.subject, portalKey: f.subject.portalKey,
+    publicInterest: { totalBasisPoints: factors.reduce((sum, factor) => sum + factor.basisPoints, 0), factors },
+    relatedFindingIds: FINDINGS.filter((other) => other.id !== f.id && other.subject.requestId === f.subject.requestId).map((other) => other.id),
+    firstSeenAt: f.discoveredAt, lastSeenAt: f.lastSeenAt,
+  };
+}).sort((a, b) => b.publicInterest.totalBasisPoints - a.publicInterest.totalBasisPoints).slice(0, 10);
 
 /** @type {import('../src/types').LicenseStatus} */
 const LICENSE = {
@@ -605,12 +703,18 @@ const full = {
   get_ocr_capability: () => ({ engine: 'tesseract', engineAvailable: true, engineVersion: '5.4.1', languagePacks: ['eng', 'spa'], languageProbeComplete: true, pdfRenderer: 'pdfium', pdfRendererAvailable: true, pdfRendererVersion: '6721', imageOcrAvailable: true, pdfOcrAvailable: true, diagnostics: [] }),
   get_agency_performance_profiles: () => PROFILES,
   get_cross_agency_correlations: () => CORRELATIONS,
-  get_department_dispositions: () => AGENCIES.slice(0, 5).map((a, index) => ({
-    portalSubdomain: a.portal, agencyId: a.id, agencyName: a.name, totalRequests: 60 - index * 8,
-    buckets: [['RELEASED', 22 - index], ['RELEASED_IN_PART', 14], ['WITHHELD', 6 + index], ['NO_RECORDS', 9], ['WITHDRAWN', 2], ['NOT_CLASSIFIED', 7 - index]].map(([disposition, n]) => ({
-      disposition: /** @type {import('../src/types').Disposition} */ (disposition), requests: Array.from({ length: Number(n) }, (_, i) => ({ requestId: 26_0400 + i * 7 + index, rpid: `26-${400 + i * 7 + index}` })),
-    })),
-  })),
+  // The sixth department has 3 requests: a small sample, dimmed with its chip.
+  get_department_dispositions: () => AGENCIES.slice(0, 6).map((a, index) => {
+    const counts = index === 5
+      ? [['RELEASED', 1], ['RELEASED_IN_PART', 0], ['WITHHELD', 1], ['NO_RECORDS', 0], ['WITHDRAWN', 0], ['NOT_CLASSIFIED', 1]]
+      : [['RELEASED', 22 - index], ['RELEASED_IN_PART', 14], ['WITHHELD', 6 + index], ['NO_RECORDS', 9], ['WITHDRAWN', 2], ['NOT_CLASSIFIED', 7 - index]];
+    return {
+      portalSubdomain: a.portal, agencyId: a.id, agencyName: a.name, totalRequests: counts.reduce((sum, [, n]) => sum + Number(n), 0),
+      buckets: counts.map(([disposition, n]) => ({
+        disposition: /** @type {import('../src/types').Disposition} */ (disposition), requests: Array.from({ length: Number(n) }, (_, i) => ({ requestId: 26_0400 + i * 7 + index, rpid: `26-${400 + i * 7 + index}` })),
+      })),
+    };
+  }),
   refresh_findings: () => ({ detectorsRun: 28, findingsRecorded: FINDINGS.length, staleCleared: 2 }),
   list_findings: ({ filter, limit }) => filterFindings(filter).slice(0, limit ?? 500),
   count_findings: ({ filter }) => filterFindings(filter).length,
@@ -726,7 +830,7 @@ const full = {
   list_organisation_checks: () => [{ ein: '954417820', name: 'Harborview Shelter Partners', checkedAt: iso(24 * 4) }],
   list_organisation_payment_mappings: () => [],
   list_organisation_payees: () => [{ vendorValue: 'HARBORVIEW SHELTER PARTNERS', rows: 48, datasetNames: ['Vendor payments FY2025'] }],
-  get_organisation_filings: () => null,
+  get_organisation_filings: ({ ein }) => (ein === ORGANISATION_FILINGS.ein ? ORGANISATION_FILINGS : null),
   list_trusted_contributors: () => [{ keyId: 'ed25519:7f3a91c2', label: 'J. Nguyen (desk partner)', trustedAt: iso(24 * 12) }],
   get_local_contributor_identity: () => ({ keyId: 'ed25519:1b9e44d0' }),
   get_profile: () => ({ status: 'SET', profile: { schemaVersion: 1, displayName: 'R. Alvarez', affiliations: [{ id: 'aff-1', name: 'Voice of the Bay Newsroom', aliases: ['VOTB'], basis: 'SELF_DECLARED', createdAt: iso(24 * 60), verifiedDomain: null }], matchDecisions: [], verifiedDomains: [], updatedAt: iso(24 * 60) } }),

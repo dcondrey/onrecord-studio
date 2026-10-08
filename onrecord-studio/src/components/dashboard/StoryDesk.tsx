@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
@@ -23,6 +23,8 @@ import CaseScopeBar from './CaseScopeBar';
 import { useCaseScope } from '../../hooks/useCaseScope';
 import { cn } from '../../utils/cn';
 import ArtifactDrafts from './ArtifactDrafts';
+import BarTable, { type BarTableColumn, type BarTableRow } from '../charts/figures/BarTable';
+import { absent, measured } from '../charts/core/nulls';
 
 type DeskState =
   | { status: 'PENDING' }
@@ -230,64 +232,43 @@ export default function StoryDesk() {
           )
         )}
         {state.status === 'READY' && visibleLeads.length > 0 && (
-          <ol className="motion-stagger space-y-3" aria-label="Ranked story leads" aria-busy={refreshing || undefined}>
-            {visibleLeads.map((lead, index) => (
-              <li key={lead.findingId}>
-                <article aria-labelledby={`lead-${lead.findingId}`} className="flex flex-col gap-3 rounded-xl border border-line bg-panel p-4 shadow-panel">
-                  <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-caption tabular-nums text-muted">#{index + 1}</span>
-                        <FamilyBadge family={findingFamily(lead.kind)} />
-                        <ClaimBasisBadge kind={lead.kind} />
-                        <span className="inline-flex items-center gap-1 text-caption text-fg-secondary">
-                          <SeverityGlyph severity={lead.severity} />
-                          {severityLabel(lead.severity)}
-                        </span>
-                      </div>
-                      <h3 id={`lead-${lead.findingId}`} className="mt-2 text-heading">
-                        <ObjectLink target={{ kind: 'finding', id: lead.findingId, label: lead.headline }} className="text-fg no-underline hover:underline">{lead.headline}</ObjectLink>
-                      </h3>
-                      <AgencyReference lead={lead} />
-                    </div>
-                    <div className="shrink-0 text-right" title="Ranks attention; not a measure of newsworthiness or a legal finding">
-                      <p className="text-metric tabular-nums text-fg" aria-label="Attention score">{Math.round(lead.publicInterest.totalBasisPoints / 100)}</p>
-                      <p className="text-caption text-muted">Attention score</p>
-                    </div>
-                  </div>
-                  <ul className="flex flex-wrap gap-1.5" aria-label="Ranking factors">
-                    {lead.publicInterest.factors.map((factor) => (
-                      <li key={factor.name} title={factor.evidence} className="inline-flex min-h-5 max-w-full items-center rounded-full border border-line bg-raised px-2 py-0.5 text-caption text-fg-secondary">
-                        <span className="min-w-0 truncate">
-                          <span className="font-medium">{factorLabel(factor.name)}</span>{' '}
-                          <span className="tabular-nums">+{(factor.basisPoints / 100).toFixed(0)}</span>
-                          <span className="text-muted"> · {factor.evidence}</span>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button size="sm" onClick={() => openLeadDossier(lead.findingId)} aria-label={`Open evidence chain: ${lead.headline}`}>
-                      Open evidence chain
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => inspect(lead)}>Inspect records</Button>
-                    <Button size="sm" variant="ghost" onClick={() => void addToBriefing(lead)}>Add to briefing</Button>
-                    {lead.relatedFindingIds.length > 0 && (
-                      <span className="text-caption tabular-nums text-muted">
-                        {lead.relatedFindingIds.length} related finding{lead.relatedFindingIds.length === 1 ? '' : 's'} on the same subject
-                      </span>
-                    )}
-                    {notices[lead.findingId] && (
-                      <span role={notices[lead.findingId].failed ? 'alert' : 'status'} className={cn('motion-fade text-caption', notices[lead.findingId].failed ? 'text-danger' : 'text-success')}>
-                        {notices[lead.findingId].text}
-                      </span>
-                    )}
-                  </div>
-                  <LeadDraftToggle findingId={lead.findingId} />
-                </article>
-              </li>
-            ))}
-          </ol>
+          <RankedLeads
+            leads={visibleLeads}
+            allLeads={state.leads}
+            busy={refreshing}
+            renderDetail={(lead) => (
+              <div className="flex flex-col gap-3">
+                <FamilyBadge family={findingFamily(lead.kind)} />
+                <ul className="grid gap-1 text-caption text-fg-secondary" aria-label="Ranking factors">
+                  {lead.publicInterest.factors.map((factor) => (
+                    <li key={factor.name}>
+                      <span className="font-medium text-fg">{factorLabel(factor.name)}</span>{' '}
+                      <span className="tabular-nums">+{(factor.basisPoints / 100).toFixed(0)}</span>
+                      <span className="text-muted"> · {factor.evidence}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button size="sm" onClick={() => openLeadDossier(lead.findingId)} aria-label={`Open evidence chain: ${lead.headline}`}>
+                    Open evidence chain
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => inspect(lead)}>Inspect records</Button>
+                  <Button size="sm" variant="ghost" onClick={() => void addToBriefing(lead)}>Add to briefing</Button>
+                  {lead.relatedFindingIds.length > 0 && (
+                    <span className="text-caption tabular-nums text-muted">
+                      {lead.relatedFindingIds.length} related finding{lead.relatedFindingIds.length === 1 ? '' : 's'} on the same subject
+                    </span>
+                  )}
+                  {notices[lead.findingId] && (
+                    <span role={notices[lead.findingId].failed ? 'alert' : 'status'} className={cn('motion-fade text-caption', notices[lead.findingId].failed ? 'text-danger' : 'text-success')}>
+                      {notices[lead.findingId].text}
+                    </span>
+                  )}
+                </div>
+                <LeadDraftToggle findingId={lead.findingId} />
+              </div>
+            )}
+          />
         )}
         </>}
         </div>
@@ -309,6 +290,181 @@ const FACTOR_LABELS: Record<string, string> = {
 
 function factorLabel(name: string) {
   return FACTOR_LABELS[name] ?? name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+/** The seven factors the ranker can emit (analysis/story_desk.rs), in the figure's fixed order. */
+const FACTOR_ORDER = [
+  'money at stake',
+  'scale',
+  'recurrence',
+  'record contradicts statement',
+  'counted statutory or policy violation',
+  'evidence strength',
+  'freshness',
+] as const;
+const isKnownFactor = (name: string) => (FACTOR_ORDER as readonly string[]).includes(name);
+/** Header labels for a frame too narrow for the full ones; the full wording stays in the title. */
+const FACTOR_SHORT: Record<string, string> = {
+  'money at stake': 'Money',
+  scale: 'Scale',
+  recurrence: 'Recur.',
+  'record contradicts statement': 'Contra.',
+  'counted statutory or policy violation': 'Counted',
+  'evidence strength': 'Evid.',
+  freshness: 'Fresh',
+};
+const COUNTED_FACTOR = 'counted statutory or policy violation';
+const EVIDENCE_FACTOR = 'evidence strength';
+/** The largest single factor (money at stake), so every factor column shares one 0–2500 bp scale. */
+const FACTOR_SCALE_MAX_BP = 2500;
+const SCORE_KEY = 'score';
+
+const points = (basisPoints: number) => Math.round(basisPoints / 100);
+const factorPoints = (lead: StoryLead, name: string) => lead.publicInterest.factors.find((factor) => factor.name === name)?.basisPoints ?? 0;
+
+/**
+ * The deterministic headline: what lifts #1, and on which factor it is ahead of #2. Factor names
+ * are the ranker's own lowercase prose.
+ */
+export function storyHeadline(leads: readonly StoryLead[]): string {
+  const [first, second] = leads;
+  if (!first) return '';
+  const top = [...first.publicInterest.factors].filter((factor) => factor.basisPoints > 0).sort((a, b) => b.basisPoints - a.basisPoints).slice(0, 2);
+  const lead = `#1 scores ${points(first.publicInterest.totalBasisPoints)}`;
+  const from = top.length === 0 ? '' : `: most from ${top.map((factor) => `${factor.name} (+${points(factor.basisPoints)})`).join(' and ')}`;
+  if (!second) return `${lead}${from}.`;
+  const delta = points(first.publicInterest.totalBasisPoints) - points(second.publicInterest.totalBasisPoints);
+  if (delta === 0) return `${lead}${from}. It ties #2.`;
+  const names = [...new Set([...first.publicInterest.factors, ...second.publicInterest.factors].map((factor) => factor.name))];
+  const lead1Ahead = (name: string) => factorPoints(first, name) - factorPoints(second, name);
+  const gap = names.reduce((best, name) => (lead1Ahead(name) > lead1Ahead(best) ? name : best), names[0]);
+  return `${lead}${from}. It is ahead of #2 by ${delta}, mostly on ${gap}.`;
+}
+
+/**
+ * The ranked leads as a bar-table: the attention score, then the seven factors on one shared
+ * basis-point scale. An absent factor is a muted dot; an unassessed evidence strength is the
+ * dashed not-recorded slot, never a zero bar. A row expands in place to the lead's actions.
+ */
+function RankedLeads({ leads, allLeads, busy, renderDetail }: { leads: StoryLead[]; allLeads: readonly StoryLead[]; busy: boolean; renderDetail(lead: StoryLead): ReactNode }) {
+  const [sortKey, setSortKey] = useState<string>(SCORE_KEY);
+  // The seven factors always have their columns; scales come from every loaded lead, so filtering
+  // never rescales one. A factor name outside the ranker's closed set gets its own column after
+  // them: it is never dropped.
+  const emitted = new Set(allLeads.flatMap((lead) => lead.publicInterest.factors.map((factor) => factor.name)));
+  const factorNames = [...FACTOR_ORDER, ...[...emitted].filter((name) => !isKnownFactor(name))];
+  const scoreMax = Math.max(1, ...allLeads.map((lead) => lead.publicInterest.totalBasisPoints));
+  const factorMax = Math.max(FACTOR_SCALE_MAX_BP, ...allLeads.flatMap((lead) => lead.publicInterest.factors.map((factor) => factor.basisPoints)));
+  const rank = new Map(leads.map((lead, index) => [lead.findingId, index + 1]));
+  const ordered = sortKey === SCORE_KEY ? leads : [...leads].sort((a, b) => factorPoints(b, sortKey) - factorPoints(a, sortKey) || (rank.get(a.findingId) ?? 0) - (rank.get(b.findingId) ?? 0));
+  const byId = new Map(leads.map((lead) => [lead.findingId, lead]));
+
+  const columns: BarTableColumn[] = [
+    { key: SCORE_KEY, label: 'Score', title: 'Attention score: ranks reading order; not newsworthiness and not a claim about any record', scale: 'own-max', max: scoreMax, sortable: true, barWidth: 44 },
+    ...factorNames.map((name): BarTableColumn => ({
+      key: name,
+      label: name === COUNTED_FACTOR ? 'Counted violation (legal claim)' : factorLabel(name),
+      short: FACTOR_SHORT[name],
+      // A name outside the closed set has an unknown claim type: no note asserts one for it.
+      note: name === COUNTED_FACTOR || !isKnownFactor(name) ? undefined : 'pattern signal',
+      title: isKnownFactor(name) ? name : `${name} (factor not recognised by this version)`,
+      scale: 'shared',
+      claim: name === COUNTED_FACTOR ? 'counted' : undefined,
+      sortable: true,
+      barWidth: 32,
+      missing: { text: '·', title: 'not in this finding’s record' },
+    })),
+  ];
+
+  const rows: BarTableRow[] = ordered.map((lead) => {
+    const cells: BarTableRow['cells'] = {
+      [SCORE_KEY]: {
+        value: measured(lead.publicInterest.totalBasisPoints),
+        text: String(points(lead.publicInterest.totalBasisPoints)),
+        tooltip: { rows: [{ key: 'score', value: String(points(lead.publicInterest.totalBasisPoints)), label: 'attention score' }], note: 'Ranks reading order; not a legal finding.' },
+      },
+    };
+    for (const factor of lead.publicInterest.factors) {
+      const unassessed = factor.name === EVIDENCE_FACTOR && lead.confidence.kind === 'UNASSESSED';
+      cells[factor.name] = unassessed
+        ? { value: absent('not-recorded', 'The finding’s confidence was not assessed'), text: 'not assessed', tooltip: { rows: [], note: 'Evidence strength: not assessed.' } }
+        : {
+          value: measured(factor.basisPoints),
+          text: `+${points(factor.basisPoints)}`,
+          tooltip: { rows: [{ key: 'points', value: `+${points(factor.basisPoints)}`, label: factor.name }], note: factor.evidence },
+        };
+    }
+    const present = factorNames.filter((name) => cells[name]).map((name) => `${name} ${cells[name]?.text}`);
+    return {
+      key: lead.findingId,
+      name: lead.headline,
+      label: `#${rank.get(lead.findingId)}, ${lead.headline}, score ${points(lead.publicInterest.totalBasisPoints)}: ${present.join(', ')}`,
+      cells,
+      header: (
+        <div className="grid min-w-[14rem] max-w-[22rem] gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-caption tabular-nums text-muted">#{rank.get(lead.findingId)}</span>
+            <span className="inline-flex items-center gap-1 text-caption text-fg-secondary">
+              <SeverityGlyph severity={lead.severity} />
+              {severityLabel(lead.severity)}
+            </span>
+            <ClaimBasisBadge kind={lead.kind} />
+          </div>
+          <span id={`lead-${lead.findingId}`} className="line-clamp-2 text-body font-medium" title={lead.headline}>
+            <ObjectLink target={{ kind: 'finding', id: lead.findingId, label: lead.headline }} className="text-fg no-underline hover:underline">{lead.headline}</ObjectLink>
+          </span>
+          <AgencyReference lead={lead} />
+        </div>
+      ),
+    };
+  });
+
+  return (
+    <div aria-busy={busy || undefined} className="rounded-xl border border-line bg-panel p-4 shadow-panel">
+      <BarTable
+        title="Ranked leads"
+        headline={storyHeadline(leads)}
+        claim="descriptive"
+        sources={{ tables: ['findings'], note: 'Attention score ranks reading order; it is not newsworthiness and not a claim about any record' }}
+        summary={`${leads.length} leads. Factor columns share one scale of 0 to ${points(factorMax)} points. A dot means the factor did not apply; not assessed means the finding's confidence was never measured.`}
+        status="ready"
+        layout="stacked"
+        rowHeader="Lead"
+        columns={columns}
+        rows={rows}
+        sharedMax={factorMax}
+        sort={{ key: sortKey, direction: 'descending' }}
+        onSort={setSortKey}
+        drill={{ mode: 'row', render: (key) => { const lead = byId.get(key); return lead ? renderDetail(lead) : null; } }}
+        twin={{
+          caption: 'Ranked leads with each factor’s points',
+          columns: [
+            { key: 'rank', label: 'Rank', align: 'end' },
+            { key: 'headline', label: 'Lead' },
+            { key: SCORE_KEY, label: 'Score', align: 'end' },
+            ...factorNames.map((name) => ({ key: name, label: name, align: 'end' as const })),
+          ],
+          rows: ordered.map((lead) => ({
+            rank: rank.get(lead.findingId) ?? null,
+            headline: lead.headline,
+            [SCORE_KEY]: points(lead.publicInterest.totalBasisPoints),
+            ...Object.fromEntries(factorNames.map((name) => {
+              const factor = lead.publicInterest.factors.find((candidate) => candidate.name === name);
+              if (!factor) return [name, 'not in this finding’s record'];
+              if (name === EVIDENCE_FACTOR && lead.confidence.kind === 'UNASSESSED') return [name, absent('not-recorded', 'confidence not assessed')];
+              return [name, `+${points(factor.basisPoints)} · ${factor.evidence}`];
+            })),
+          })),
+        }}
+        controls={sortKey !== SCORE_KEY && (
+          <p role="status" className="flex flex-wrap items-center gap-2 text-caption text-fg-secondary">
+            Sorted by {sortKey}.
+            <Button size="sm" variant="ghost" onClick={() => setSortKey(SCORE_KEY)}>Sort by attention score</Button>
+          </p>
+        )}
+      />
+    </div>
+  );
 }
 
 /** The agency a lead is about, as a link, when the analytics profile names it. */
