@@ -278,15 +278,16 @@ async fn request_timeline_synchronization_is_idempotent_and_removes_stale_flags(
     assert_eq!(audit_state, ("Compliant".to_string(), 0));
 }
 
-/// A finding whose determination date and source were both recorded is the only one this path
-/// may store at certainty. Nothing was inferred, so there is nothing to discount.
-#[tokio::test]
-async fn a_cpra_finding_built_from_recorded_dates_is_stored_at_certainty() {
+/// Only a finding whose determination date and source were both recorded may be stored at
+/// certainty. The same overrun measured to the observation instant, or resting on an extension
+/// whose notice was never recorded, is a weaker claim and is stored below it.
+#[test]
+fn cpra_confidence_reaches_certainty_only_when_every_date_input_was_recorded() {
     use crate::analysis::{DeterminationBasis, StatutoryExtensionStatus};
 
     // Receipt and a sourced determination event 46 calendar days later, well past the 10-day
     // determination deadline, with no extension claimed.
-    let analysis = crate::analysis::evaluate_statutory_compliance_with_determination_at(
+    let recorded = crate::analysis::evaluate_statutory_compliance_with_determination_at(
         REQUEST_ID as u64,
         "2026-01-05T09:00:00Z",
         Some("2026-02-20T09:00:00Z"),
@@ -297,29 +298,20 @@ async fn a_cpra_finding_built_from_recorded_dates_is_stored_at_certainty() {
         "2026-03-01T00:00:00Z",
     )
     .expect("the evaluation must succeed");
-    assert!(analysis.is_violation);
+    assert!(recorded.is_violation);
     assert_eq!(
-        analysis.determination_basis,
+        recorded.determination_basis,
         DeterminationBasis::SourcedDeterminationEvent
     );
     assert_eq!(
-        analysis.extension_status,
+        recorded.extension_status,
         StatutoryExtensionStatus::NotInvoked
     );
-
-    let variance_days = analysis.calendar_days_elapsed - analysis.allowed_calendar_days;
+    let variance_days = recorded.calendar_days_elapsed - recorded.allowed_calendar_days;
     assert_eq!(
-        cpra_calendar_confidence_basis_points(&analysis, variance_days),
+        cpra_calendar_confidence_basis_points(&recorded, variance_days),
         10_000
     );
-}
-
-/// The same overrun measured to the observation instant rather than to anything the agency
-/// did is not the same claim, and neither is one whose extension notice was never recorded.
-/// Both used to be stored at the identical 10000 basis points.
-#[tokio::test]
-async fn a_cpra_finding_resting_on_an_unobserved_date_is_stored_below_certainty() {
-    use crate::analysis::{DeterminationBasis, StatutoryExtensionStatus};
 
     // Nothing was recorded at or after receipt, so the period was measured to "now" and is
     // still running.
@@ -337,16 +329,13 @@ async fn a_cpra_finding_resting_on_an_unobserved_date_is_stored_below_certainty(
         inferred.determination_basis,
         DeterminationBasis::ObservationWithoutRecordedActivity
     );
-
     let variance_days = inferred.calendar_days_elapsed - inferred.allowed_calendar_days;
-    let inferred_confidence = cpra_calendar_confidence_basis_points(&inferred, variance_days);
-    assert!(
-        inferred_confidence < 10_000,
-        "an inferred determination date must not be stored at certainty, got {inferred_confidence}"
-    );
     // 10000 - 2500 + (2500 / 2 * 30 / 30): a 36-day overrun recovers the full half-share of
     // the deduction the formula allows, and still lands short of certainty.
-    assert_eq!(inferred_confidence, 8_750);
+    assert_eq!(
+        cpra_calendar_confidence_basis_points(&inferred, variance_days),
+        8_750
+    );
 
     // An extension claimed with no recorded notice compounds the uncertainty of a generic
     // activity timestamp standing in for a sourced determination event.

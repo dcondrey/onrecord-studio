@@ -32,40 +32,12 @@ async fn export_restricted_sql_csv_refuses_to_write_through_a_symlinked_target()
     );
 }
 
-/// Proves the CSV formula-injection guard by round-tripping an actual export: a string cell
-/// beginning with `=` must land in the written file prefixed with an apostrophe, the standard
-/// mitigation every mainstream spreadsheet application honors to force text interpretation.
+/// The formula-injection guard, through an actual export: every formula trigger is prefixed with
+/// an apostrophe so spreadsheets read it as text, without corrupting a number that reaches the
+/// guard as a string. DECIMAL is rendered as text before the CSV writer sees it, so a negative
+/// amount arrives looking like a `-`-led string.
 #[tokio::test]
-async fn export_restricted_sql_csv_neutralizes_a_formula_leading_cell() {
-    let repository = DuckDbRepository::new(Path::new(":memory:")).expect("DuckDB core must open");
-    repository
-        .run_migrations(MIGRATION)
-        .await
-        .expect("test migration must succeed");
-    let directory = tempfile::tempdir().expect("temp dir must be created");
-    let output = directory.path().join("export.csv");
-
-    repository
-        .export_restricted_sql_csv(
-            "SELECT '=cmd|/c calc!A1' AS payload",
-            output.to_str().unwrap(),
-            10,
-        )
-        .await
-        .expect("export must succeed");
-
-    let written = std::fs::read_to_string(&output).expect("export file must be readable");
-    assert!(
-        written.contains("'=cmd|/c calc!A1"),
-        "a formula-leading cell must be prefixed with an apostrophe so it reads as text, got: {written}"
-    );
-}
-
-/// The guard must catch every formula trigger without corrupting numbers that arrive as strings:
-/// DECIMAL is rendered as text before the CSV writer sees it, so a negative amount reaches the
-/// guard looking like a `-`-led string.
-#[tokio::test]
-async fn export_restricted_sql_csv_keeps_negative_decimals_numeric_and_quotes_tab_led_cells() {
+async fn export_restricted_sql_csv_neutralizes_formula_cells_and_keeps_negative_decimals_numeric() {
     let repository = DuckDbRepository::new(Path::new(":memory:")).expect("DuckDB core must open");
     repository
         .run_migrations(MIGRATION)
@@ -77,7 +49,8 @@ async fn export_restricted_sql_csv_keeps_negative_decimals_numeric_and_quotes_ta
     repository
         .export_restricted_sql_csv(
             "SELECT CAST(-1234.50 AS DECIMAL(10, 2)) AS amount, \
-             chr(9) || '=HYPERLINK(1)' AS tabbed, '-1-1' AS expression",
+             chr(9) || '=HYPERLINK(1)' AS tabbed, '-1-1' AS expression, \
+             '=cmd|/c calc!A1' AS payload",
             output.to_str().unwrap(),
             10,
         )
@@ -89,5 +62,5 @@ async fn export_restricted_sql_csv_keeps_negative_decimals_numeric_and_quotes_ta
         .lines()
         .nth(1)
         .expect("export must carry a data row");
-    assert_eq!(row, "-1234.50,'\t=HYPERLINK(1),'-1-1");
+    assert_eq!(row, "-1234.50,'\t=HYPERLINK(1),'-1-1,'=cmd|/c calc!A1");
 }

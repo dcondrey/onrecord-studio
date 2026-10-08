@@ -16,7 +16,7 @@ use super::{
     timeline::cpra_calendar_confidence_basis_points,
     DocumentDownloadFinalization, DocumentExtractionFinalization, DuckDbRepository,
     IngestionSchedulerCounts, PortalSyncRunFinalization, ProvenanceEvidenceFile,
-    SourceLifecycleState, SQL_UTC_NOW,
+    SourceLifecycleState,
 };
 
 mod analytical;
@@ -146,17 +146,30 @@ async fn file_repository_with_document(path: &Path) -> DuckDbRepository {
     repository
 }
 
-/// Both defects above were spelling mistakes that no type checker sees, in SQL that only a
-/// reached call site executes. This reads the SQL as text so an unreached one cannot
-/// reintroduce either: `current_timestamp` inside `DO UPDATE SET` refuses to bind, and the
-/// `%f`-without-`%S` format writes microseconds into the seconds field.
+/// The only SQL spelling of "now" the repository may write. The literal `Z` is true because
+/// `open_duckdb` never loads ICU, so a `TIMESTAMPTZ` has no session zone and renders in UTC.
+const SQL_UTC_NOW: &str = "strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')";
+
+/// Two spelling mistakes no type checker sees, in SQL only a reached call site executes:
+/// `current_timestamp` is bound as a column reference inside `ON CONFLICT ... DO UPDATE SET`, so
+/// DuckDB refuses the whole statement; and `%f` is microseconds, so a format with `%f` and no
+/// `%S` writes microseconds into the seconds field, which `TRY_CAST(... AS TIMESTAMPTZ)` and
+/// `parse_from_rfc3339` both reject. Reading the SQL as text catches an unreached one too.
 #[test]
 fn every_sql_timestamp_is_written_as_parseable_utc() {
-    const SOURCES: [(&str, &str); 16] = [
+    const SOURCES: [(&str, &str); 21] = [
         ("storage/sqlite/mod.rs", include_str!("../mod.rs")),
+        (
+            "storage/sqlite/agency_record.rs",
+            include_str!("../agency_record.rs"),
+        ),
         (
             "storage/sqlite/analytical.rs",
             include_str!("../analytical.rs"),
+        ),
+        (
+            "storage/sqlite/analytical_import.rs",
+            include_str!("../analytical_import.rs"),
         ),
         (
             "storage/sqlite/connection.rs",
@@ -182,7 +195,19 @@ fn every_sql_timestamp_is_written_as_parseable_utc() {
             include_str!("../provenance.rs"),
         ),
         ("storage/sqlite/purge.rs", include_str!("../purge.rs")),
+        (
+            "storage/sqlite/release_events.rs",
+            include_str!("../release_events.rs"),
+        ),
+        (
+            "storage/sqlite/row_store.rs",
+            include_str!("../row_store.rs"),
+        ),
         ("storage/sqlite/search.rs", include_str!("../search.rs")),
+        (
+            "storage/sqlite/source_checks.rs",
+            include_str!("../source_checks.rs"),
+        ),
         ("storage/sqlite/sources.rs", include_str!("../sources.rs")),
         ("storage/sqlite/timeline.rs", include_str!("../timeline.rs")),
         ("storage/corpus.rs", include_str!("../../corpus.rs")),

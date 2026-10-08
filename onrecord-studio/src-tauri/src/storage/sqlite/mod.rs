@@ -91,18 +91,6 @@ impl SourceConnectorRecipe {
     }
 }
 
-/// The only SQL spelling of "now" this repository may write, pinned by
-/// `tests::every_sql_timestamp_is_written_as_parseable_utc`.
-///
-/// Two mistakes it exists to keep out. `current_timestamp` is bound as a *column reference* inside
-/// `ON CONFLICT ... DO UPDATE SET`, where DuckDB then refuses to bind the whole statement; `now()`
-/// is a function call in every position. And `%f` is microseconds, not fractional seconds, so the
-/// former `'%H:%M:%fZ'` dropped seconds entirely and wrote microseconds into the seconds field,
-/// producing a string `TRY_CAST(... AS TIMESTAMPTZ)` returns NULL for and `parse_from_rfc3339`
-/// rejects. The session zone is set to UTC in [`DuckDbRepository::new`], so the literal `Z` is true.
-#[cfg(test)]
-const SQL_UTC_NOW: &str = "strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ')";
-
 const MAXIMUM_DOCUMENT_CHUNK_CHARACTERS: usize = 250_000;
 
 const DOCUMENT_CHUNK_PII_BOUNDARY_CHARACTERS: usize = 256;
