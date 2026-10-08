@@ -1,6 +1,9 @@
 import DialogBackdrop from '../ui/DialogBackdrop';
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
-import { invokeCommand } from '../../ipc';
+import { formatNativeError, invokeCommand } from '../../ipc';
+import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
+import Button, { buttonClass } from '../ui/Button';
+import Skeleton from '../ui/Skeleton';
 import { useAppStore } from '../../store/useAppStore';
 import { parseIsoDateString } from '../../types';
 import type {
@@ -12,7 +15,7 @@ import type {
   LegalAuthorityVersionSummary,
 } from '../../types';
 import { cn } from '../../utils/cn';
-import { formatShortDate } from '../objects/labels';
+import { enumLabel, formatShortDate } from '../objects/labels';
 
 const MAXIMUM_SOURCE_BYTES = 8 * 1024 * 1024;
 
@@ -87,25 +90,27 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
   const [versionRevision, setVersionRevision] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
 
+  // A failed read is its own state: "none indexed" would be a claim the read never made.
+  const [listError, setListError] = useState<string | null>(null);
+  const [listRevision, setListRevision] = useState(0);
+  const listGate = useLatestRequestGate();
   useEffect(() => {
     if (!isOpen) return;
-    let active = true;
+    const token = listGate.begin();
     setIsLoading(true);
-    setError(null);
+    setListError(null);
     void invokeCommand('list_legal_authorities', {})
       .then((value) => {
-        if (active) setAuthorities(value);
+        if (listGate.isCurrent(token)) setAuthorities(value);
       })
       .catch((reason) => {
-        if (active) setError(String(reason));
+        if (listGate.isCurrent(token)) setListError(formatNativeError(reason));
       })
       .finally(() => {
-        if (active) setIsLoading(false);
+        if (listGate.isCurrent(token)) setIsLoading(false);
       });
-    return () => {
-      active = false;
-    };
-  }, [isOpen, setAuthorities]);
+    return () => listGate.invalidate();
+  }, [isOpen, listGate, listRevision, setAuthorities]);
 
   useEffect(() => {
     if (!isOpen || authorities.length === 0) return;
@@ -127,7 +132,7 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
       setRightVersionId(values[0]?.versionId ?? null);
       setLeftVersionId(values[1]?.versionId ?? values[0]?.versionId ?? null);
     }).catch((reason) => {
-      if (active) setVersionError(String(reason));
+      if (active) setVersionError(formatNativeError(reason));
     });
     return () => { active = false; };
   }, [isOpen, selectedStatuteId, versionRevision]);
@@ -144,7 +149,7 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
       setLeftVersion(left);
       setRightVersion(right);
     }).catch((reason) => {
-      if (active) setVersionError(String(reason));
+      if (active) setVersionError(formatNativeError(reason));
     });
     return () => { active = false; };
   }, [leftVersionId, rightVersionId, selectedStatuteId]);
@@ -180,7 +185,7 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
       setSourceFileName(file.name);
       if (!editor.title) updateEditor('title', file.name.split('_').join(' ').split('-').join(' '));
     } catch (reason) {
-      setError(`Could not read the selected source: ${String(reason)}`);
+      setError(`Could not read the selected source: ${formatNativeError(reason)}`);
     }
   };
 
@@ -224,7 +229,7 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
       setSourceFileName(null);
       if (fileInput.current) fileInput.current.value = '';
     } catch (reason) {
-      setError(String(reason));
+      setError(formatNativeError(reason));
     } finally {
       setIsImporting(false);
     }
@@ -233,21 +238,24 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
   return (
     <DialogBackdrop labelledBy="legal-library-title" onClose={onClose} className="app-backdrop fixed inset-0 z-[70] grid place-items-center p-6 backdrop-blur-sm">
       <div className="grid h-[min(860px,92vh)] w-[min(1380px,96vw)] grid-cols-[360px_minmax(0,1fr)] overflow-hidden rounded-2xl border border-line-strong bg-canvas shadow-2xl shadow-black/60">
-        <aside className="flex min-h-0 flex-col border-r border-line bg-surface/40">
-          <div className="border-b border-line px-5 py-4">
-            <div className="text-caption font-bold uppercase tracking-[0.2em] text-highlight">
-              Versioned authority index
-            </div>
-            <h2 id="legal-library-title" className="mt-1 text-base font-semibold text-fg">
-              Legal authority library
+        <aside className="flex min-h-0 flex-col border-r border-line bg-surface">
+          <div className="flex h-14 items-center border-b border-line px-5">
+            <h2 id="legal-library-title" className="text-title text-fg">
+              Legal authorities
             </h2>
-            <p className="mt-1 text-label leading-relaxed text-muted">
-              Local statutes, ordinances, and operational policies with traceable source versions.
-            </p>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-3">
             {isLoading ? (
-              <div className="p-3 text-label text-muted">Loading indexed authorities…</div>
+              <div className="space-y-2">
+                <Skeleton variant="card" label="Loading indexed authorities" />
+                <Skeleton variant="card" label="" className="hidden sm:block" />
+              </div>
+            ) : listError ? (
+              <div role="alert" className="rounded-lg border border-danger/30 bg-danger/10 p-4 text-body text-danger">
+                <p>Authorities could not be read. This does not mean none are indexed.</p>
+                <p className="mt-1 break-words text-caption">{listError}</p>
+                <Button size="sm" onClick={() => setListRevision((value) => value + 1)} className="focus-ring mt-3">Retry</Button>
+              </div>
             ) : authorities.length === 0 ? (
               <div className="rounded-lg border border-dashed border-line p-4 text-label leading-relaxed text-muted">
                 No authorities are indexed yet.
@@ -255,29 +263,26 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
             ) : (
               <div className="space-y-2">
                 {authorities.map((authority) => (
-                  <button type="button" key={authority.statuteId} onClick={() => setSelectedStatuteId(authority.statuteId)} className={cn('focus-ring block w-full rounded-lg border bg-canvas/70 p-3 text-left', selectedStatuteId === authority.statuteId ? 'border-highlight/30' : 'border-control')}>
+                  <button type="button" key={authority.statuteId} aria-current={selectedStatuteId === authority.statuteId ? 'true' : undefined} onClick={() => setSelectedStatuteId(authority.statuteId)} className={cn('focus-ring block w-full rounded-lg border p-3 text-left transition-colors', selectedStatuteId === authority.statuteId ? 'border-accent bg-accent/5' : 'border-line bg-panel hover:border-line-strong')}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <div className="truncate text-label font-semibold text-fg">
+                        <div className="truncate text-body font-medium text-fg">
                           {authority.statuteCitation}
                         </div>
                         <div className="mt-1 truncate text-caption text-muted">
                           {authority.jurisdiction}
                         </div>
                       </div>
-                      <span className="rounded border border-line-strong px-1.5 py-0.5 text-caption text-muted">
-                        {authority.authorityKind.split('_').join(' ')}
+                      <span className="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-full border border-line bg-raised px-2 text-caption font-medium text-fg-secondary">
+                        {enumLabel(authority.authorityKind)}
                       </span>
                     </div>
                     <p className="mt-2 line-clamp-2 text-caption leading-relaxed text-muted">
                       {authority.title}
                     </p>
-                    <div className="mt-2 flex gap-3 font-mono text-caption text-muted">
-                      <span>{authority.provisionCount} provisions</span>
-                      <span>{authority.mandateCount} evidence rules</span>
-                    </div>
-                    <div className="mt-2 truncate font-mono text-caption text-muted">
-                      SHA-256 {authority.contentSha256}
+                    <div className="mt-2 flex gap-3 text-caption tabular-nums text-muted">
+                      <span>{authority.provisionCount} {authority.provisionCount === 1 ? 'provision' : 'provisions'}</span>
+                      <span>{authority.mandateCount} {authority.mandateCount === 1 ? 'evidence rule' : 'evidence rules'}</span>
                     </div>
                   </button>
                 ))}
@@ -298,7 +303,7 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
               type="button"
               autoFocus
               onClick={onClose}
-              className="rounded-md border border-control px-2.5 py-1.5 text-caption font-semibold text-muted transition hover:border-control hover:text-fg"
+              className={buttonClass({ size: "sm", className: "focus-ring" })}
             >
               Close
             </button>
@@ -313,7 +318,7 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
               <TextField label="Citation" value={editor.statuteCitation} onChange={(value) => updateEditor('statuteCitation', value)} required />
               <TextField label="Title" value={editor.title} onChange={(value) => updateEditor('title', value)} required />
               <label className="block">
-                <span className="text-caption font-semibold uppercase tracking-wider text-muted">Authority type</span>
+                <span className="text-control text-fg-secondary">Authority type</span>
                 <select value={editor.authorityKind} onChange={(event) => updateEditor('authorityKind', event.target.value as LegalAuthorityKind)} className={controlClass}>
                   <option value="STATE_STATUTE">State statute</option>
                   <option value="MUNICIPAL_ORDINANCE">Municipal ordinance</option>
@@ -371,14 +376,14 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
                 {mandates.map((mandate, index) => (
                   <div key={mandate.key} className="rounded-xl border border-line bg-surface/40 p-4">
                     <div className="flex items-center justify-between">
-                      <span className="text-caption font-bold uppercase tracking-[0.16em] text-muted">Evidence rule {index + 1}</span>
+                      <span className="text-overline uppercase text-muted">Evidence rule {index + 1}</span>
                       <button type="button" onClick={() => setMandates((current) => current.filter((_, position) => position !== index))} className="text-caption font-semibold text-danger hover:text-danger">Remove</button>
                     </div>
                     <div className="mt-3 grid grid-cols-[1fr_1.5fr_140px] gap-3">
                       <TextField label="Rule ID" value={mandate.mandateId} onChange={(value) => updateMandate(index, 'mandateId', value)} required />
                       <TextField label="Rule title" value={mandate.title} onChange={(value) => updateMandate(index, 'title', value)} required />
                       <label className="block">
-                        <span className="text-caption font-semibold uppercase tracking-wider text-muted">Severity</span>
+                        <span className="text-control text-fg-secondary">Severity</span>
                         <select value={mandate.severity} onChange={(event) => updateMandate(index, 'severity', event.target.value as LegalMandateSeverity)} className={controlClass}>
                           <option value="ADVISORY">Advisory</option>
                           <option value="MODERATE">Moderate</option>
@@ -388,7 +393,7 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
                       </label>
                     </div>
                     <label className="mt-3 block">
-                      <span className="text-caption font-semibold uppercase tracking-wider text-muted">Rule rationale</span>
+                      <span className="text-control text-fg-secondary">Rule rationale</span>
                       <textarea value={mandate.description} onChange={(event) => updateMandate(index, 'description', event.target.value)} required rows={2} className={`${controlClass} resize-y`} />
                     </label>
                     <div className="mt-3 grid grid-cols-2 gap-3">
@@ -434,7 +439,7 @@ function AuthorityVersionWorkspace({ versions, leftVersionId, rightVersionId, le
           </div>
         </div>
         {changes && (
-          <span className="font-mono text-caption text-highlight">
+          <span className="text-caption tabular-nums text-fg-secondary">
             {changes.changed.toLocaleString()} changed · {changes.added.toLocaleString()} added ·{' '}
             {changes.removed.toLocaleString()} removed lines
           </span>
@@ -446,17 +451,18 @@ function AuthorityVersionWorkspace({ versions, leftVersionId, rightVersionId, le
         </p>
       ) : versions.length === 0 ? (
         <p className="mt-2 text-caption text-muted">No immutable versions are indexed for this authority.</p>
+      ) : versions.length === 1 ? (
+        <p className="mt-2 text-caption text-muted">One version indexed: {versionRange(versions[0])}.</p>
       ) : (
         <>
           <div className="mt-2 flex gap-1 overflow-x-auto pb-1">
             {versions.map((version) => (
               <span
                 key={version.versionId}
-                className="shrink-0 rounded border border-line bg-canvas px-2 py-1 font-mono text-caption text-muted"
+                className="shrink-0 rounded-md border border-line bg-canvas px-2 py-1 text-caption tabular-nums text-muted"
                 title={version.contentSha256}
               >
-                {version.effectiveFrom ?? 'start unknown'} → {version.effectiveTo ?? 'open ended'} ·{' '}
-                {formatShortDate(version.importedAt)}
+                {versionRange(version)} · indexed {formatShortDate(version.importedAt)}
               </span>
             ))}
           </div>
@@ -472,11 +478,11 @@ function AuthorityVersionWorkspace({ versions, leftVersionId, rightVersionId, le
                 <select
                   value={selected ?? ''}
                   onChange={(event) => change(event.target.value)}
-                  className="ml-2 rounded border border-control bg-canvas px-2 py-1 font-mono text-caption text-fg-secondary"
+                  className="focus-ring ml-2 h-7 rounded-md border border-control bg-canvas px-2 text-caption text-fg-secondary"
                 >
                   {versions.map((version) => (
                     <option key={version.versionId} value={version.versionId}>
-                      {formatShortDate(version.importedAt)} · {version.contentSha256.slice(0, 10)}
+                      {version.effectiveFrom ? `Effective ${formatShortDate(version.effectiveFrom)}` : `Indexed ${formatShortDate(version.importedAt)}`}
                     </option>
                   ))}
                 </select>
@@ -493,6 +499,11 @@ function AuthorityVersionWorkspace({ versions, leftVersionId, rightVersionId, le
       )}
     </section>
   );
+}
+
+function versionRange(version: { effectiveFrom: string | null; effectiveTo: string | null }): string {
+  const from = version.effectiveFrom ? `Effective ${formatShortDate(version.effectiveFrom)}` : 'Effective date not recorded';
+  return `${from} – ${version.effectiveTo ? `until ${formatShortDate(version.effectiveTo)}` : 'no end date'}`;
 }
 
 function compareAuthorityText(left: string, right: string) {
@@ -568,13 +579,13 @@ interface TextFieldProps {
   max?: string;
 }
 
-const controlClass = 'mt-1.5 w-full rounded-md border border-line bg-canvas/70 px-2.5 py-2 text-label text-fg-secondary outline-none transition focus:border-highlight/60 focus:ring-1 focus:ring-highlight/30';
+const controlClass = 'analysis-input focus-ring mt-1.5 w-full';
 
 function TextField({ label, value, onChange, required, type = 'text', min, max }: TextFieldProps) {
   return (
     <label className="block">
-      <span className="text-caption font-semibold uppercase tracking-wider text-muted">{label}</span>
-      <input type={type} value={value} onChange={(event) => onChange(event.target.value)} required={required} min={min} max={max} className={controlClass} />
+      <span className="text-control text-fg-secondary">{label}{required && <span aria-hidden="true"> *</span>}</span>
+      <input type={type} value={value} onChange={(event) => onChange(event.target.value)} required={required} aria-required={required || undefined} min={min} max={max} className={controlClass} />
     </label>
   );
 }
@@ -582,8 +593,8 @@ function TextField({ label, value, onChange, required, type = 'text', min, max }
 function PhraseField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
     <label className="block">
-      <span className="text-caption font-semibold uppercase tracking-wider text-muted">{label}</span>
-      <textarea value={value} onChange={(event) => onChange(event.target.value)} required rows={4} className={`${controlClass} resize-y font-mono leading-relaxed`} />
+      <span className="text-control text-fg-secondary">{label}<span aria-hidden="true"> *</span></span>
+      <textarea value={value} onChange={(event) => onChange(event.target.value)} required rows={4} className="focus-ring mt-1.5 w-full resize-y rounded-lg border border-control bg-canvas px-3 py-2 font-mono text-code text-fg" />
       <span className="mt-1 block text-caption text-muted">One exact phrase sequence per line</span>
     </label>
   );
