@@ -505,9 +505,12 @@ const sqlResult = (sql) => {
   }
   // callLeads.ts calls_sleeper_beats: the ten beats with most SLEEPER calls.
   if (lowered.includes('citywide_calls')) {
-    const columns = ['beat', 'neighborhood', 'calls', 'citywide_calls', 'no_beat', 'first_year', 'last_year'];
-    const rows = [[521, 1210], [524, 980], [523, 744], [522, 611], [527, 402], [627, 388], [813, 301], [314, 266], [511, 240], [626, 233]]
-      .map(([beat, calls]) => [String(beat), null, calls, 14_306, 23, 2024, 2026]);
+    const columns = ['beat', 'neighborhood', 'calls', 'citywide_calls', 'no_beat', 'first_year', 'last_year', 'all_beats'];
+    const listed = [[521, 1210], [524, 980], [523, 744], [522, 611], [527, 402], [627, 388], [813, 301], [314, 266], [511, 240], [626, 233]];
+    // Every beat's count, as the map reads it: the ten listed and a long tail.
+    const allBeats = [...listed, ...[115, 122, 233, 312, 325, 432, 446, 512, 513, 614, 712, 722, 811, 833, 931].map((beat, index) => [beat, 200 - index * 12])]
+      .map(([beat, calls]) => `${beat}=${calls}`).join(',');
+    const rows = listed.map(([beat, calls]) => [String(beat), null, calls, 14_306, 23, 2024, 2026, allBeats]);
     return { columns, rows, rowCount: rows.length, truncated: false, elapsedMs: 96, provenance: ['snap-cfs-2025'] };
   }
   if (lowered.includes('cfs')) {

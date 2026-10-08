@@ -104,7 +104,7 @@ GROUP BY call_year, call_type ORDER BY call_year DESC NULLS LAST, call_type`,
   });
   if (years.every((table) => has(schema, table, ['beat']))) queries.push({
     id: 'calls_sleeper_beats', title: 'Where SLEEPER calls were sent, by police beat',
-    method: `SLEEPER calls in ${names}, one row per incident number as above, leaving out the cancelled and duplicate codes ${CANCELLED.join(', ')} unless the incident's latest entries disagree on the disposition, counted by the beat of the call's address${beats ? ` with the neighborhood from ${beats.displayName}` : ''}. The ten beats with most calls are read, with the citywide total and the calls with no beat recorded.`,
+    method: `SLEEPER calls in ${names}, one row per incident number as above, leaving out the cancelled and duplicate codes ${CANCELLED.join(', ')} unless the incident's latest entries disagree on the disposition, counted by the beat of the call's address${beats ? ` with the neighborhood from ${beats.displayName}` : ''}. The ten beats with most calls are read, with every beat's count packed in one column for the map, the citywide total and the calls with no beat recorded.`,
     sql: `WITH ${deduplicated(years, true)}, sleeper AS (
  SELECT beat, called_at FROM incidents WHERE call_type = 'SLEEPER' AND (conflicted OR dispo IS NULL OR dispo NOT IN (${list(CANCELLED)}))
 )${beats ? `, places AS (
@@ -115,11 +115,26 @@ GROUP BY call_year, call_type ORDER BY call_year DESC NULLS LAST, call_type`,
 ), sleeper_totals AS (
  SELECT COUNT(*) AS citywide_calls, COUNT(*) FILTER (WHERE beat IS NULL) AS no_beat, MIN(YEAR(called_at)) AS first_year, MAX(YEAR(called_at)) AS last_year FROM sleeper
 )
-SELECT beat_calls.beat, ${beats ? 'places.neighborhood' : 'CAST(NULL AS VARCHAR)'} AS neighborhood, beat_calls.calls, citywide_calls, no_beat, first_year, last_year
+SELECT beat_calls.beat, ${beats ? 'places.neighborhood' : 'CAST(NULL AS VARCHAR)'} AS neighborhood, beat_calls.calls, citywide_calls, no_beat, first_year, last_year,
+ (SELECT STRING_AGG(beat || '=' || CAST(calls AS VARCHAR), ',' ORDER BY calls DESC, beat) FROM beat_calls) AS all_beats
 FROM beat_calls CROSS JOIN sleeper_totals${beats ? ' LEFT JOIN places ON places.beat = beat_calls.beat' : ''}
 ORDER BY beat_calls.calls DESC, beat_calls.beat LIMIT 10`,
   });
   return queries;
+}
+
+/** Every beat's SLEEPER calls from the beats query's packed column, and the calls with no beat;
+ * null when the result was cut short or predates the column. */
+export function sleeperBeatCounts(results: Entry[]): { beats: { beat: string; calls: number }[]; noBeat: number } | null {
+  const read = rowsOf(results, 'calls_sleeper_beats');
+  const packed = read?.rows[0].all_beats;
+  if (!read || typeof packed !== 'string') return null;
+  const beats = packed.split(',').flatMap((pair) => {
+    const at = pair.lastIndexOf('=');
+    const calls = count(pair.slice(at + 1));
+    return at > 0 && calls !== null ? [{ beat: pair.slice(0, at), calls }] : [];
+  });
+  return { beats, noBeat: count(read.rows[0].no_beat) ?? 0 };
 }
 
 /** A result cut short by the row limit would give short counts, so it gives none. */

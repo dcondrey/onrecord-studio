@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import fixture from '../../src-tauri/tests/fixtures/automatic-discovery.json';
 import calls from '../../src-tauri/tests/fixtures/call-leads.json';
+import type { AnalyticalDatasetSummary } from '../types';
 
 const bridge = vi.hoisted(() => ({ invoke: vi.fn(), stage: vi.fn(), view: vi.fn(), pattern: vi.fn(), portal: vi.fn(), settle: vi.fn(), log: vi.fn() }));
 vi.mock('../ipc', () => ({ invokeCommand: bridge.invoke, formatNativeError: (reason: unknown) => String(reason) }));
 vi.mock('../store/useAppStore', () => ({ useAppStore: Object.assign((selector: (s: unknown) => unknown) => selector({ evidenceRefreshRequests: 0, firstRunDataSettled: true }), { getState: () => ({ setPortalUrlDraft: bridge.stage, setWorkspaceView: bridge.view, setPatternEvidenceSelection: bridge.pattern, setActivePortal: bridge.portal, settleFirstRunData: bridge.settle, appendSyncLog: bridge.log }) }) }));
-import AutomaticDiscovery from '../components/dashboard/AutomaticDiscovery';
+import AutomaticDiscovery, { BeatMap } from '../components/dashboard/AutomaticDiscovery';
 import { AutomaticDiscoveryProvider } from '../components/dashboard/AutomaticDiscoveryProvider';
 import { firstRunTables, useFirstRunDataStore } from '../store/useFirstRunDataStore';
 const upkeep = { policy: { enabled: true, autoImport: true, autoRefresh: true, refreshHours: 24, retentionMode: 'ORIGINALS', retainedFileBudgetBytes: 10 * 1024 ** 3 }, effectiveAt: '2026-09-14T00:00:00Z', retainedFileBytes: 1048576, referencedDocuments: 0, reclaimedFileBytes: 0, events: [] };
@@ -117,5 +118,29 @@ describe('automatic discovery landing experience', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Inspect document evidence' }));
     await waitFor(() => expect(bridge.pattern).toHaveBeenCalledWith({ patternId: 'p1', portalKey: 'city', documentId: 2, characterStart: 15 }));
     expect(bridge.view).toHaveBeenCalledWith('patterns');
+  });
+});
+
+describe('the beat map', () => {
+  const table = (snapshotId: string): AnalyticalDatasetSummary => ({ ...(fixture.schema.datasets[0] as AnalyticalDatasetSummary), snapshotId, tableName: `analysis_${snapshotId}`, displayName: `Police beats ${snapshotId}` });
+  const shape = (west: number) => JSON.stringify({ type: 'Polygon', coordinates: [[[west, 32.7], [west + 0.01, 32.7], [west + 0.01, 32.71], [west, 32.71], [west, 32.7]]] });
+  const answer = (beat: string) => ({ columns: ['beat', '_geometry', '_crs'], rows: [[beat, shape(-117.1), null]], rowCount: 1, truncated: false, elapsedMs: 1, provenance: [] });
+
+  it('discards boundaries that resolve after the beat table changed', async () => {
+    let releaseA: (value: unknown) => void = () => {};
+    bridge.invoke.mockImplementation((_name: string, args: { sql: string }) => (args.sql.includes('analysis_beats_a')
+      ? new Promise((resolve) => { releaseA = resolve; })
+      : Promise.resolve(answer('999'))));
+    const props = { counts: [{ beat: '521', calls: 5 }, { beat: '999', calls: 3 }], noBeat: 2, sources: { tables: ['pd_calls_for_service_2025'] } };
+    const view = render(<BeatMap boundary={{ table: table('beats_a'), crs: true }} {...props} />);
+    view.rerender(<BeatMap boundary={{ table: table('beats_b'), crs: true }} {...props} />);
+    await screen.findByRole('img', { name: /Beat 999: 3 SLEEPER calls/ });
+    await act(async () => {
+      releaseA(answer('521'));
+      await Promise.resolve();
+    });
+    expect(screen.queryByRole('img', { name: /Beat 521: 5 SLEEPER calls/ })).toBeNull();
+    expect(screen.getByRole('img', { name: /Beat 999: 3 SLEEPER calls/ })).toBeTruthy();
+    expect(screen.getByText(/SLEEPER calls: no place recorded/)).toBeTruthy();
   });
 });
