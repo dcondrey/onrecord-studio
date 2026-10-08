@@ -12,6 +12,7 @@
 //! **Bounds**: reads at most `MAX_CANDIDATES` documents per invocation; caller runs the sweep on
 //! ingest completion and on explicit refresh, no background heartbeat.
 
+use super::parse_utc;
 use super::release_timing::{portal_upload_time, ReleaseBasis, PORTAL_LISTED_FILE};
 use crate::{
     analysis::finding::{
@@ -145,13 +146,13 @@ async fn load_candidates(repository: &DuckDbRepository) -> Result<Vec<Candidate>
                 let (release_at, release_basis) = match uploaded {
                     Some(uploaded) => (uploaded.with_timezone(&Utc), ReleaseBasis::DocumentUpload),
                     None => {
-                        let Ok(determined) = parse_iso(&determination_at) else {
+                        let Some(determined) = parse_utc(&determination_at) else {
                             continue;
                         };
                         (determined, ReleaseBasis::RequestDetermination)
                     }
                 };
-                let Ok(deadline_at) = parse_iso(&due_date) else {
+                let Some(deadline_at) = parse_utc(&due_date) else {
                     continue;
                 };
                 candidates.push(Candidate {
@@ -192,12 +193,6 @@ impl PdfMetadataDates {
             _ => false,
         }
     }
-}
-
-fn parse_iso(value: &str) -> Result<DateTime<Utc>, AppError> {
-    DateTime::parse_from_rfc3339(value.trim())
-        .map(|dt| dt.with_timezone(&Utc))
-        .map_err(|error| AppError::DataParsing(format!("Invalid ISO date '{value}': {error}")))
 }
 
 fn evaluate(candidate: &Candidate, dates: PdfMetadataDates) -> Option<Finding> {

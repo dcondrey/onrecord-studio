@@ -55,6 +55,13 @@ pub(crate) mod text_shared;
 /// unrelated document happens to share the number.
 pub(crate) const REQUEST_LEVEL_DOCUMENT_ID: i64 = 0;
 
+/// An RFC 3339 instant from a stored timestamp column, in UTC.
+pub(super) fn parse_utc(value: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+    chrono::DateTime::parse_from_rfc3339(value.trim())
+        .ok()
+        .map(|instant| instant.with_timezone(&chrono::Utc))
+}
+
 /// Summary returned by [`refresh_all_findings`].
 #[derive(Debug, Clone, Default)]
 pub struct RefreshSummary {

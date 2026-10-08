@@ -34,7 +34,6 @@ use super::public_documents::{load_public_documents, PublicDocument};
 use super::text_shared::{load_agencies, Agency, AgencyIndex};
 use crate::{
     analysis::{
-        assertion_index::{extract_assertions, AssertionPredicate, AssertionValue},
         document_class::{classify, DocumentClass},
         finding::{
             finding_id, Finding, FindingCitation, FindingConfidence, FindingKind, FindingSeverity,
@@ -50,7 +49,7 @@ use crate::{
     error::AppError,
     storage::DuckDbRepository,
 };
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{NaiveDate, Utc};
 use std::collections::HashSet;
 
 pub const SLUG: &str = "practice_departure";
@@ -96,7 +95,7 @@ fn sources<'a>(documents: &'a [PublicDocument], agencies: &'a AgencyIndex) -> So
         let Some(agency) = agencies.get(&(document.portal_key.clone(), document.request_id)) else {
             continue;
         };
-        let Some(posted) = posted_date(&document.created_at) else {
+        let Some(posted) = document.posted_date() else {
             continue;
         };
         if classify(document.file_name.as_deref(), &document.text) == Some(DocumentClass::Policy) {
@@ -107,7 +106,7 @@ fn sources<'a>(documents: &'a [PublicDocument], agencies: &'a AgencyIndex) -> So
             if requirements.is_empty() {
                 continue;
             }
-            let stated = stated_effective_date(&document.text);
+            let stated = document.stated_effective_date();
             found.policies.push(Policy {
                 document,
                 agency,
@@ -125,28 +124,6 @@ fn sources<'a>(documents: &'a [PublicDocument], agencies: &'a AgencyIndex) -> So
         }
     }
     found
-}
-
-/// The latest effective date the policy states for itself; a later start is the conservative
-/// choice because it admits fewer departures.
-fn stated_effective_date(text: &str) -> Option<NaiveDate> {
-    extract_assertions(text)
-        .into_iter()
-        .filter(|assertion| {
-            assertion.predicate == AssertionPredicate::EffectiveDate
-                && assertion.subject.starts_with("policy::")
-        })
-        .filter_map(|assertion| match assertion.value {
-            AssertionValue::Date(iso) => NaiveDate::parse_from_str(&iso, "%Y-%m-%d").ok(),
-            _ => None,
-        })
-        .max()
-}
-
-fn posted_date(value: &str) -> Option<NaiveDate> {
-    DateTime::parse_from_rfc3339(value.trim())
-        .ok()
-        .map(|time| time.with_timezone(&Utc).date_naive())
 }
 
 /// Routes this detector identified and could not test: a policy states practice requirements and
@@ -169,7 +146,7 @@ fn untestable_policies(sources: &Sources) -> Vec<EvidenceGap> {
         if checkable {
             continue;
         }
-        let name = document_name(policy.document);
+        let name = policy.document.name();
         let topics = topic_labels(&policy.requirements);
         gaps.push(EvidenceGap {
             detector: SLUG,
@@ -298,8 +275,8 @@ fn finding(sources: &Sources, source: &Source, departure: &Departure) -> Option<
     };
     let label = departure.topic.label();
     let agency = &policy.agency.name;
-    let policy_name = document_name(policy.document);
-    let source_name = document_name(source.document);
+    let policy_name = policy.document.name();
+    let source_name = source.document.name();
 
     let mut basis_points = if counted.is_some() {
         COUNTED_CONFIDENCE
@@ -422,13 +399,6 @@ fn citation(document: &PublicDocument, sentence: &Sentence, label: &str) -> Find
         quote: Some(excerpt(&sentence.text)),
         label: Some(label.to_string()),
     }
-}
-
-fn document_name(document: &PublicDocument) -> String {
-    document
-        .file_name
-        .clone()
-        .unwrap_or_else(|| format!("document {}", document.document_id))
 }
 
 #[cfg(test)]

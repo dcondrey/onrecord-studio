@@ -11,7 +11,6 @@
 //! apply only to a dataset from the same jurisdiction. A policy's own stated effective date (or,
 //! failing that, its upload date) bounds which rows the rule can be held against.
 
-use super::policy_violation::stated_effective_date;
 use super::public_documents::{load_public_documents, PublicDocument};
 use crate::{
     analysis::{
@@ -37,7 +36,7 @@ use crate::{
         FinancialWorkspace,
     },
 };
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::Utc;
 use duckdb::params;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
@@ -83,12 +82,6 @@ pub struct Sweep {
     pub gaps: Vec<FinancialGap>,
 }
 
-fn upload_date(document: &PublicDocument) -> Option<NaiveDate> {
-    DateTime::parse_from_rfc3339(document.created_at.trim())
-        .ok()
-        .map(|time| time.with_timezone(&Utc).date_naive())
-}
-
 fn chars_before(text: &str, byte: usize) -> usize {
     text.get(..byte).map_or(0, |prefix| prefix.chars().count())
 }
@@ -105,14 +98,13 @@ fn policy_rules(documents: &[PublicDocument]) -> Vec<(PolicyRule, String)> {
         if classify(document.file_name.as_deref(), &document.text) != Some(DocumentClass::Policy) {
             continue;
         }
-        let stated = stated_effective_date(&document.text).map(|time| time.date_naive());
-        let Some(effective) = stated.or_else(|| upload_date(document)) else {
+        let Some(effective) = document
+            .stated_effective_date()
+            .or_else(|| document.posted_date())
+        else {
             continue;
         };
-        let name = document
-            .file_name
-            .clone()
-            .unwrap_or_else(|| format!("document {}", document.document_id));
+        let name = document.name();
         for rule in extract_rules(&document.text) {
             let Some(sentence) = document.text.get(rule.byte_start..rule.byte_end) else {
                 continue;

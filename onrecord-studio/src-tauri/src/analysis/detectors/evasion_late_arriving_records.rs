@@ -16,6 +16,7 @@
 //! churn and do not fire. Between 14-180 days is `Notable`, 180-365 is `Serious`, > 365 is
 //! `Critical` — appeal windows vary by jurisdiction but a year is universally beyond any of them.
 
+use super::parse_utc;
 use crate::{
     analysis::{
         assertion_index::{extract_denial, extract_topic_tokens},
@@ -151,7 +152,7 @@ async fn load_denials(repository: &DuckDbRepository) -> Result<Vec<DenialCandida
                         "Failed to decode late-arriving denial row: {error}"
                     ))
                 })?;
-                let Ok(determination_at) = parse_iso(&determination_at_str) else {
+                let Some(determination_at) = parse_utc(&determination_at_str) else {
                     continue;
                 };
                 out.push(DenialCandidate {
@@ -275,8 +276,9 @@ async fn search_later_matching(
                 .map_err(|error| {
                     AppError::Storage(format!("Failed to run late-arriving match query: {error}"))
                 })?;
-            let determination_at = parse_iso(&determination_at_iso)
-                .map_err(|_| AppError::Storage("Failed to reparse determination_at".to_string()))?;
+            let determination_at = parse_utc(&determination_at_iso).ok_or_else(|| {
+                AppError::Storage("Failed to reparse determination_at".to_string())
+            })?;
             let mut out = Vec::new();
             for row in rows {
                 let (portal_key, document_id, request_id, file_name, excerpt, updated_at_str) = row
@@ -285,7 +287,7 @@ async fn search_later_matching(
                             "Failed to decode late-arriving match row: {error}"
                         ))
                     })?;
-                let Ok(updated_at) = parse_iso(&updated_at_str) else {
+                let Some(updated_at) = parse_utc(&updated_at_str) else {
                     continue;
                 };
                 let days_later = (updated_at - determination_at).num_days();
@@ -444,12 +446,6 @@ fn build_finding(
         dismissed_at: None,
         source_detector: SLUG.into(),
     })
-}
-
-fn parse_iso(value: &str) -> Result<DateTime<Utc>, AppError> {
-    DateTime::parse_from_rfc3339(value.trim())
-        .map(|dt| dt.with_timezone(&Utc))
-        .map_err(|error| AppError::DataParsing(format!("Invalid ISO date '{value}': {error}")))
 }
 
 #[cfg(test)]
