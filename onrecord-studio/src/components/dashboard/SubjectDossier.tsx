@@ -352,7 +352,6 @@ function DossierFindingRow({ finding, onOpen }: { finding: Finding; onOpen: () =
         type="button"
         onClick={onOpen}
         className="focus-ring group flex w-full items-start gap-2 rounded-md p-2 text-left transition-colors duration-fast hover:bg-raised"
-        aria-label={`Open finding: ${finding.headline}`}
       >
         <SeverityGlyph severity={finding.severity} className="mt-0.5 h-5 w-5 rounded" />
         <span className="min-w-0 flex-1">

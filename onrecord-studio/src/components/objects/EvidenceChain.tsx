@@ -80,7 +80,7 @@ function ChainNode({ icon, tone, title, caption, last, children }: { icon: IconN
         <Icon name={icon} className="h-3.5 w-3.5" />
       </span>
       <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-        <h4 className="text-caption font-semibold uppercase tracking-wider text-fg-secondary">{title}</h4>
+        <h3 className="text-caption font-semibold uppercase tracking-wider text-fg-secondary">{title}</h3>
         <span className="text-caption text-muted">{caption}</span>
       </div>
       <div className="mt-1 text-label">{children}</div>

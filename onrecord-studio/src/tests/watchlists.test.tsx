@@ -70,7 +70,7 @@ describe('watchlist change detection', () => {
     render(<WatchlistPanel />);
     fireEvent.click(await screen.findByRole('button', { name: /^Bravo/ }));
     await screen.findByText('b-record');
-    fireEvent.click(screen.getByRole('button', { name: 'Stop watching Alpha' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Alpha from the watchlist' }));
     fireEvent.click(screen.getByRole('button', { name: /^Charlie/ }));
     await screen.findByText('c-record');
     await act(async () => deletion.resolve(null));

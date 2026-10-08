@@ -269,7 +269,7 @@ export default function AnalysisWorkbench() {
             <PanelHeader
               titleId="semantic-search-heading"
               title="Semantic search"
-              description={indexLine ?? <span className="skeleton inline-block h-3 w-48 rounded align-middle" aria-label="Checking the index" />}
+              description={indexLine ?? <span className="skeleton inline-block h-3 w-48 rounded align-middle"><span className="sr-only">Checking the index</span></span>}
               actions={
                 modelRead === 'ready' && !modelStatus?.installed ? (
                   <Button variant="primary" size="sm" disabled={Boolean(status)} onClick={() => void run('Installing model', () => invokeCommand('initialize_embedding_model', {}), setModelStatus)}>Set up</Button>
@@ -595,7 +595,7 @@ function SqlTable({ result }: { result: SqlQueryResult }) {
         <span>{result.rowCount.toLocaleString()} rows{result.truncated ? ' shown, truncated' : ''}</span>
         <span>{result.elapsedMs} ms</span>
       </div>
-      <div className="max-h-80 overflow-auto">
+      <div tabIndex={0} role="region" aria-label="Query results" className="focus-ring max-h-80 overflow-auto">
         <table className="min-w-full border-collapse text-left text-label">
           <thead className="sticky top-0 bg-canvas">
             <tr>{result.columns.map((column) => <th key={column} className="border-b border-line px-2 py-1 font-semibold text-fg-secondary">{column}</th>)}</tr>

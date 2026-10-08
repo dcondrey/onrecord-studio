@@ -111,7 +111,7 @@ function DocumentLayer({ target }: { target: Target<'document'> }) {
             const markStart = target.characterStart === null ? -1 : start - data.characterOffset;
             const markEnd = markStart + Math.max(0, (target.characterEnd ?? start) - start);
             return (
-              <p className="max-h-72 overflow-y-auto whitespace-pre-wrap rounded-lg border border-line bg-canvas/50 p-3 text-caption leading-relaxed text-fg-secondary">
+              <p tabIndex={0} role="region" aria-label="Document text" className="focus-ring max-h-72 overflow-y-auto whitespace-pre-wrap rounded-lg border border-line bg-canvas/50 p-3 text-caption leading-relaxed text-fg-secondary">
                 {markStart < 0 ? data.maskedText : <>
                   {data.maskedText.slice(0, markStart)}
                   <mark className="rounded-sm bg-warning/25 px-0.5 text-fg">{data.maskedText.slice(markStart, markEnd)}</mark>
@@ -344,7 +344,7 @@ function Loaded<T>({ state, children }: { state: LoadState<T>; children: (data: 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="motion-reveal">
-      <h4 className="text-caption font-semibold uppercase tracking-wider text-accent">{title}</h4>
+      <h3 className="text-caption font-semibold uppercase tracking-wider text-accent">{title}</h3>
       <div className="mt-1.5 text-label">{children}</div>
     </section>
   );

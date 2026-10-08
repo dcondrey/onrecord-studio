@@ -206,7 +206,7 @@ export default function WatchlistPanel() {
               <button type="button" className="focus-ring rounded text-left font-medium text-fg hover:underline" aria-pressed={watch.id === selectedId} onClick={() => setSelectedId(watch.id === selectedId ? null : watch.id)}>
                 {watch.label} <span className="font-normal text-muted">· {KIND_LABELS[watch.kind]}</span>
               </button>
-              <Button size="sm" variant="ghost" aria-label={`Stop watching ${watch.label}`} onClick={() => void remove(watch.id)}>
+              <Button size="sm" variant="ghost" aria-label={`Remove ${watch.label} from the watchlist`} onClick={() => void remove(watch.id)}>
                 Remove
               </Button>
             </div>

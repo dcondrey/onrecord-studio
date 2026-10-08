@@ -345,7 +345,7 @@ export default function MainLayout() {
       <CaseRequests />
       <SearchFilter onPendingChange={setSearchPending} />
       <AnnotationSearch onOpen={setPendingEvidenceLink} />
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div tabIndex={0} role="region" aria-label="Evidence records" className="focus-ring min-h-0 flex-1 overflow-y-auto">
         <div className={cn(
           'mx-auto grid w-full max-w-content grid-cols-1 items-start gap-4 px-5 pb-6 pt-4 lg:px-6',
           showSideColumn && 'xl:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)]',

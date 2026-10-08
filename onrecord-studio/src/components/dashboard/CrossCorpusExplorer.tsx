@@ -108,7 +108,6 @@ function CrossCorpusRow({ finding, onInspect }: { finding: CrossCorpusFinding; o
       <button
         type="button"
         onClick={onInspect}
-        aria-label={`Inspect: ${finding.headline}`}
         className="flex w-full items-start gap-3 rounded-lg border border-line p-3 text-left transition-colors hover:border-line-strong hover:bg-raised/40"
       >
         <SeverityGlyph severity={finding.severity} className="mt-1" />

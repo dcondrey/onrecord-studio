@@ -422,11 +422,9 @@ function FindingRow({
             type="button"
             onClick={onInspect}
             className="focus-ring min-w-0 rounded text-left"
-            aria-label={finding.headline}
-            aria-describedby={`finding-${finding.id}-explanation`}
           >
             <p className="text-heading text-fg">{finding.headline}</p>
-            <p id={`finding-${finding.id}-explanation`} className="mt-1 whitespace-pre-line break-words text-body text-muted">{finding.explanation}</p>
+            <p className="mt-1 whitespace-pre-line break-words text-body text-muted">{finding.explanation}</p>
             <p className="mt-1 text-caption tabular-nums text-muted">
               {severityLabel(finding.severity)} · {formatRelativeTime(finding.lastSeenAt)}
             </p>
@@ -435,13 +433,13 @@ function FindingRow({
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2 pl-6">
-        <Button size="sm" onClick={onAssemble} aria-label={`Assemble dossier: ${finding.headline}`}>Open evidence chain</Button>
+        <Button size="sm" onClick={onAssemble} aria-label={`Open evidence chain: ${finding.headline}`}>Open evidence chain</Button>
         <Button
           size="sm"
           onClick={onToggle}
           aria-expanded={expanded}
           aria-controls={`finding-drafts-${finding.id}`}
-          aria-label={expanded ? `Hide drafts: ${finding.headline}` : `Draft a request or appeal: ${finding.headline}`}
+          aria-label={expanded ? `Hide drafts: ${finding.headline}` : `Draft request: ${finding.headline}`}
         >
           {expanded ? 'Hide drafts' : 'Draft request'}
         </Button>

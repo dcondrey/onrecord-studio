@@ -65,6 +65,6 @@ describe('PerformanceScatter tiers', () => {
     const parks = screen.getByRole('button', { name: /^Parks,/ });
     expect(parks.getAttribute('aria-label')).toBe('Parks, typical, 0.4σ slower than peers, 12.0 average days, 5 requests past the statutory deadline');
     expect(screen.getByRole('button', { name: /^Police,/ }).getAttribute('aria-label')).toContain('outlier (≥2σ)');
-    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('1 of 2 departments close requests ≥2σ slower than their peers');
+    expect(screen.getByRole('heading', { level: 4 }).textContent).toBe('1 of 2 departments close requests ≥2σ slower than their peers');
   });
 });
