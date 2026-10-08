@@ -269,7 +269,7 @@ export default function CommandPalette() {
 
   const { controller: discovery, state: discoveryState } = useAutomaticDiscovery();
   const leadActions = useMemo<CommandAction[]>(() => {
-    if (!discovery || !discoveryState) return [];
+    if (!isOpen || !discovery || !discoveryState) return [];
     const datasets = discoveryState.schema?.datasets ?? [];
     return rankObservations(discoveryObservations(discoveryState).filter((item) => item.kind === 'lead' && item.query), PALETTE_LEADS).map((item) => ({
       id: `lead-${item.id}`,
@@ -285,7 +285,7 @@ export default function CommandPalette() {
         setWorkspaceView('analysis');
       },
     }));
-  }, [discovery, discoveryState, setWorkspaceView]);
+  }, [discovery, discoveryState, isOpen, setWorkspaceView]);
   const suggestedAsks = useMemo<CommandAction[]>(() => SUGGESTED_QUESTIONS.map((question) => ({
     id: `suggested-${question.replace(/\W+/g, '-')}`,
     label: `Ask: ${question}`,

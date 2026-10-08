@@ -39,6 +39,8 @@ export default function CanvasModule({ id, icon, title, badges, headline, expand
   const detailId = `${id}-detail`;
   const collapseOnEscape = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key !== 'Escape' || !expanded || event.defaultPrevented) return;
+    // Charts, menus, forms and drawers inside the detail use Escape themselves.
+    if (event.target instanceof Element && event.target.closest(`#${detailId}`)) return;
     event.preventDefault();
     onToggle();
     toggleRef.current?.focus();
