@@ -83,7 +83,7 @@ window.setTimeout = (callback, delay, ...rest) => pacedSetTimeout(callback, dela
 import { createHandlers, injectedError } from './scripts/ui-review-fixtures.mjs';
 const scenario = JSON.parse(new URLSearchParams(location.search).get('scenario') || '{}');
 const handlers = createHandlers(scenario, scenario.data === 'real' ? await import('./scripts/ui-review-fixtures-real.mjs') : null);
-const review = { calls: [], gaps: [], handlerErrors: [], sqlMisses: [], injected: [], hung: [], plugins: [], inflight: 0, lastActivity: performance.now() };
+const review = { calls: [], gaps: [], handlerErrors: [], sqlMisses: [], injected: [], hung: [], plugins: [], inflight: 0, lastActivity: performance.now(), expectBusy: (scenario.hang || []).length > 0 };
 window.__uiReview = review;
 const callbacks = new Map();
 let nextId = 1;
@@ -380,7 +380,7 @@ const VIEWS = [
   { view: 'overview-stage-table-lead', steps: [nav('overview'), selectQueued('table lead with no stored figure', TABLE_LEAD_KINDS, 'SLEEPER', true), click('stage "Show the query"', (page) => stageRegion(page).locator('summary', { hasText: 'Show the query' }))], sections: ['section[aria-label="Selected lead"]'], primary: [], states: [] },
   // The police-call lead carries a stored LeadFigure (fixtures), drawn on the stage.
   { view: 'overview-stage-stored-figure', steps: [nav('overview'), selectQueued('police-call lead with a stored figure', ['POLICE_CALL_LEAD'], 'dispatched as SLEEPER')], primary: [], states: [] },
-  { view: 'story-factor-table-draft', steps: [nav('story'), click('tab "Factor table"', (page) => page.getByRole('main').getByRole('tab', { name: 'Factor table', exact: true })), click('first factor-table row', (page) => page.getByRole('main').locator('table [aria-expanded="false"]')), click('"Draft records request"', (page) => page.getByRole('button', { name: /^Draft records request: / }))], anchor: (page) => page.getByRole('region', { name: 'Drafted artifacts' }), primary: [], states: [] },
+  { view: 'story-factor-table-draft', steps: [nav('story'), click('tab "Factor table"', (page) => page.getByRole('main').getByRole('tab', { name: 'Factor table', exact: true })), click('first factor-table row', (page) => page.getByRole('main').locator('table [aria-expanded="false"]')), click('"Draft a request or appeal"', (page) => page.getByRole('button', { name: /^Draft a request or appeal: / }))], anchor: (page) => page.getByRole('region', { name: 'Drafted artifacts' }), primary: [], states: [] },
   // Below 720px of workbench the panes stack and the queue shows six leads before "Show all".
   { view: 'overview-stacked', steps: [nav('overview')], sizes: [[900, 900]], anchor: (page) => page.getByRole('button', { name: /^Show all [\d,]+ leads/ }), primary: [], states: [] },
   // The counted ledger drills into Evidence filtered to statutory misses, which the chip names.
@@ -419,7 +419,7 @@ const VIEWS = [
   { view: 'overview-following', steps: [nav('overview'), overviewTab('Following')], sections: ['section[aria-label="Following"]'], primary: [], states: [] },
   // The More tools drawers live on the Tools tab; discovery opens each from there.
   { view: 'overview-tools', steps: [nav('overview'), overviewTab('Tools')], primary: [], states: [], discover: true },
-  { view: 'story-ranked-leads', steps: [nav('story'), click('tab "Factor table"', (page) => page.getByRole('main').getByRole('tab', { name: 'Factor table', exact: true }))], sections: ['figure:has(h3:text-is("Ranked leads"))'], primary: [], states: [] },
+  { view: 'story-ranked-leads', steps: [nav('story'), click('tab "Factor table"', (page) => page.getByRole('main').getByRole('tab', { name: 'Factor table', exact: true }))], sections: ['figure:has(h3:text-is("Factor table"))'], primary: [], states: [] },
   {
     view: 'organization-record',
     steps: [...casework, click('tab "Organization filings"', (page) => page.getByRole('main').getByRole('tab', { name: 'Organization filings', exact: true })), click('portfolio row "Harborview Shelter Partners"', (page) => page.getByRole('main').getByRole('button', { name: 'Harborview Shelter Partners', exact: true }))],
@@ -444,13 +444,19 @@ const statesFor = (definition) => ['populated', ...definition.states].filter((st
 
 // ---- Page helpers ----------------------------------------------------------------------------
 
+// Quiet is measured from the later of the last IPC answer and this call: a step or resize that
+// remounts a debounced search (SearchFilter waits 220 ms before invoking) leaves no call in flight
+// during the debounce, so an older lastActivity alone would read as settled over skeletons. A
+// visible aria-busy region means the view is still loading; it is expected only where the scenario
+// hangs a command on purpose, and anywhere else the capture is recorded as unsettled.
 async function settle(page) {
   let settled = true;
   try {
-    await page.waitForFunction((quiet) => {
+    await page.waitForFunction(([quiet, since]) => {
       const review = window.__uiReview;
-      return review && review.inflight === 0 && performance.now() - review.lastActivity > quiet;
-    }, QUIET_MS, { timeout: SETTLE_TIMEOUT_MS, polling: 100 });
+      if (!review || review.inflight !== 0 || performance.now() - Math.max(review.lastActivity, since) <= quiet) return false;
+      return review.expectBusy || ![...document.querySelectorAll('[aria-busy="true"]')].some((element) => element.getClientRects().length > 0);
+    }, [QUIET_MS, await page.evaluate(() => performance.now())], { timeout: SETTLE_TIMEOUT_MS, polling: 100 });
   } catch {
     settled = false;
   }
