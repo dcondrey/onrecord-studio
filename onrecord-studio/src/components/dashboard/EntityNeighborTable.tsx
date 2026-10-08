@@ -18,7 +18,7 @@ interface Props {
   onLoadAll: () => void;
 }
 
-const CSV_HEADER = ['Neighbour', 'Entity ID', 'Kind', 'Validation grade', 'Relationship', 'Basis', 'Shared documents', 'Confidence %', 'Valid from', 'Valid until'];
+const CSV_HEADER = ['Neighbor', 'Entity ID', 'Kind', 'Validation grade', 'Relationship', 'Basis', 'Shared documents', 'Confidence %', 'Valid from', 'Valid until'];
 
 function csvRow(edge: CorpusEntityEdge, kindLabel: Props['kindLabel']) {
   return [
@@ -49,8 +49,8 @@ export default function EntityNeighborTable({ centre, list, kindLabel, onSelect,
       await navigator.clipboard.writeText(csvDocument(CSV_HEADER, edges.map((edge) => csvRow(edge, kindLabel))));
       setCopied(
         total !== null && edges.length < total
-          ? `Copied ${loaded} of ${total.toLocaleString('en-US')} neighbours. Load the rest to include them.`
-          : `Copied ${loaded} neighbours.`,
+          ? `Copied ${loaded} of ${total.toLocaleString('en-US')} neighbors. Load the rest to include them.`
+          : `Copied ${loaded} neighbors.`,
       );
     } catch {
       setCopied('The clipboard is unavailable.');
@@ -59,17 +59,17 @@ export default function EntityNeighborTable({ centre, list, kindLabel, onSelect,
 
   const status =
     total !== null
-      ? `${loaded} of ${total.toLocaleString('en-US')} neighbours loaded`
+      ? `${loaded} of ${total.toLocaleString('en-US')} neighbors loaded`
       : list.countFailed
-        ? `${loaded} neighbours loaded; the total could not be counted`
-        : `${loaded} neighbours loaded; counting the total`;
+        ? `${loaded} neighbors loaded; the total could not be counted`
+        : `${loaded} neighbors loaded; counting the total`;
   const hidden = counts !== null ? counts.unfilteredTotal - counts.total : 0;
   const drifted = nextCursor === null && total !== null && edges.length !== total;
 
   return (
-    <section aria-label={`All neighbours of ${centre.displayValue}`} className="mt-3 rounded-lg border border-line">
+    <section aria-label={`All neighbors of ${centre.displayValue}`} className="mt-3 rounded-lg border border-line">
       <div className="flex flex-wrap items-center gap-2 border-b border-line px-2 py-1.5 text-caption text-muted">
-        <span role="status" className="font-mono text-fg-secondary">{status}</span>
+        <span role="status" className="tabular-nums text-fg-secondary">{status}</span>
         {hidden > 0 && <span>{hidden.toLocaleString('en-US')} more are hidden by the filters, not absent.</span>}
         {drifted && <span className="text-warning">The index changed while loading, so the list and the count differ.</span>}
         <button type="button" className="focus-ring ml-auto rounded border border-control px-2 py-0.5 font-semibold text-fg-secondary hover:border-accent/60" onClick={() => void copy()}>
@@ -78,12 +78,12 @@ export default function EntityNeighborTable({ centre, list, kindLabel, onSelect,
         {copied && <span role="status" className="w-full text-fg-secondary">{copied}</span>}
       </div>
       <div className={`grid ${COLUMNS} gap-2 border-b border-line px-2 py-1 text-caption font-semibold uppercase tracking-wider text-muted`} aria-hidden="true">
-        <span>Neighbour</span><span>Kind</span><span>Grade</span><span>Relationship</span><span className="text-right">Shared</span>
+        <span>Neighbor</span><span>Kind</span><span>Grade</span><span>Relationship</span><span className="text-right">Shared</span>
       </div>
       <VirtualList
         items={edges}
         rowHeight={ROW_HEIGHT}
-        ariaLabel={`Neighbours of ${centre.displayValue}, strongest first`}
+        ariaLabel={`Neighbors of ${centre.displayValue}, strongest first`}
         resetKey={centre.entityId}
         getKey={(edge) => edge.neighbor.entityId}
         className="h-[320px]"
@@ -105,7 +105,7 @@ export default function EntityNeighborTable({ centre, list, kindLabel, onSelect,
             <span className="truncate text-muted">{kindLabel(edge.neighbor.kind)}</span>
             <ValidationGradeChip grade={edge.neighbor.validationGrade} />
             <EdgeBasisChip kind={edge.kind} basis={edge.basis} />
-            <span className="text-right font-mono text-fg-secondary">{edge.sharedDocumentCount.toLocaleString('en-US')}</span>
+            <span className="text-right tabular-nums text-fg-secondary">{edge.sharedDocumentCount.toLocaleString('en-US')}</span>
           </div>
         )}
         footer={
