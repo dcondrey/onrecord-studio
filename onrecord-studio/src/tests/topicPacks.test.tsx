@@ -118,6 +118,16 @@ describe('TopicPacks reading depth', () => {
     expect(pack.getAttribute('aria-label')).toContain('first 1 of 3 findings loaded');
     expect(pack.textContent).not.toContain('1 counted');
   });
+
+  it('claims nothing legal for a chart of tagged-document counts, and never paints a zero crimson', async () => {
+    render(<TopicPacks />);
+    await act(async () => bridge.pending[0](report([{ basis: 'STATED', anchorRequestId: 4, finding: finding('a', { kind: 'UNASSESSED' }) }])));
+    expect(screen.queryByText('Counted (legal claim)')).toBeNull();
+    const pack = screen.getByRole('img', { name: /^Encampment abatement and sweeps:/ });
+    expect(pack.textContent).toContain('0 counted');
+    const crimson = [...pack.querySelectorAll('*')].filter((node) => (node.getAttribute('style') ?? '').includes('--viz-counted'));
+    expect(crimson).toHaveLength(0);
+  });
 });
 
 describe('topic briefing export', () => {

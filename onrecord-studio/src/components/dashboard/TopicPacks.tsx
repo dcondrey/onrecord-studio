@@ -20,7 +20,8 @@ import { Bar } from '../charts/marks/Bar';
 import { MarkGroup, MUTED_LABEL_CLASS, LABEL_CLASS } from '../charts/marks/shared';
 import { measured } from '../charts/core/nulls';
 import { scaleLinear } from '../charts/core/scale';
-import { paintFor, VIZ } from '../charts/core/claim';
+import { VIZ } from '../charts/core/claim';
+import { LegendSwatch, type SwatchKind } from '../charts/frame/Legend';
 import { fitsInside, measureText } from '../charts/core/layout';
 import { useRovingFocus } from '../charts/hooks/useRovingFocus';
 
@@ -252,8 +253,23 @@ function basisCounts(topic: TopicPackView): Record<TopicFindingBasis, number> | 
 }
 
 /**
- * F16, packs ranked by tagged documents, with each pack's findings split by basis: counted is solid
- * crimson with the legal-claim flag; stated and pattern are outlines, pattern dashed and tagged.
+ * Each basis's glyph, shared by the plot and the legend. Only a counted finding above zero is
+ * crimson; a zero draws the neutral flag outline. Pattern's dashed line is the comparison dash,
+ * distinct from both absence-slot dashes.
+ */
+const BASIS_GLYPH: Record<TopicFindingBasis, SwatchKind> = { COUNTED: 'flag', STATED: 'hollow', PATTERN: 'dashed-line' };
+
+function BasisGlyph({ basis, n }: { basis: TopicFindingBasis; n: number }) {
+  if (basis === 'COUNTED' && n === 0) {
+    return <path d="M4 11V1.5h8l-2 2.5 2 2.5H5.5" style={{ fill: 'none', stroke: VIZ.mark, strokeWidth: 1, strokeLinejoin: 'round' }} />;
+  }
+  return <LegendSwatch kind={BASIS_GLYPH[basis]} tone={basis === 'COUNTED' ? 'counted' : 'mark'} />;
+}
+
+/**
+ * F16, packs ranked by tagged documents, with each pack's findings split by basis. What the bars
+ * plot is a descriptive count of tagged records, so the frame carries no claim tag; the basis split
+ * is shown only where every finding is loaded, because a page is not a total.
  * Activating a row selects that pack.
  */
 function PackBars({ report, selectedId, onSelect }: { report: TopicPacksReport; selectedId: string | null; onSelect(id: string): void }) {
@@ -266,7 +282,6 @@ function PackBars({ report, selectedId, onSelect }: { report: TopicPacksReport; 
       title="Topic packs by tagged documents"
       storageKey="topic-pack-bars"
       headline={headline}
-      claim={packs.some((pack) => pack.findings.some((match) => match.basis === 'COUNTED')) ? 'counted' : undefined}
       sources={{ tables: ['documents', 'requests', 'findings'] }}
       summary={`${packs.length} packs. Findings are split by basis only where every finding is loaded.`}
       status={packs.length === 0 ? 'empty' : 'ready'}
@@ -291,7 +306,9 @@ function PackBars({ report, selectedId, onSelect }: { report: TopicPacksReport; 
       }}
       legend={[
         { key: 'documents', label: 'Tagged documents', swatch: 'rect', tone: 'mark' },
-        { key: 'counted', label: 'Counted finding (legal claim)', swatch: 'flag', tone: 'counted' },
+        { key: 'counted', label: 'Counted finding', swatch: BASIS_GLYPH.COUNTED, tone: 'counted' },
+        { key: 'stated', label: 'Stated finding', swatch: BASIS_GLYPH.STATED, tone: 'mark' },
+        { key: 'pattern', label: 'Pattern finding', swatch: BASIS_GLYPH.PATTERN, tone: 'mark' },
       ]}
       minHeight={packs.length * 30 + 8}
       interactive={{ roledescription: 'ranked bars' }}
@@ -306,8 +323,6 @@ function PackPlot({ width, packs, selectedId, onSelect }: { width: number; packs
   const nameWidth = width < 480 ? Math.round(width * 0.4) : Math.min(240, Math.round(width * 0.3));
   const findingsWidth = Math.min(260, Math.round(width * 0.36));
   const x = scaleLinear([0, Math.max(1, ...packs.map((pack) => pack.documentTotal))], [nameWidth, width - findingsWidth - 48], { nice: false });
-  const counted = paintFor('counted', 'fill');
-  const outline = paintFor('descriptive', 'outline', 'primary');
   return (
     <g>
       {packs.map((pack, index) => {
@@ -326,15 +341,10 @@ function PackPlot({ width, packs, selectedId, onSelect }: { width: number; packs
               const label = `${counts[basis]} ${BASIS_SHORT[basis]}`;
               fx += 16 + measureText(label) + 12;
               return (
-                <g key={basis}>
-                  <rect
-                    x={at + 0.75}
-                    y={y + 6.75}
-                    width={10.5}
-                    height={10.5}
-                    rx={2}
-                    style={basis === 'COUNTED' ? { fill: counted.fill } : { fill: 'none', stroke: outline.stroke, strokeWidth: 1.5, strokeDasharray: basis === 'PATTERN' ? '3 2' : undefined }}
-                  />
+                <g key={basis} data-basis={basis}>
+                  <g transform={`translate(${at - 2} ${y + 6})`}>
+                    <BasisGlyph basis={basis} n={counts[basis]} />
+                  </g>
                   <text x={at + 16} y={y + 12} dy="0.32em" className={LABEL_CLASS}>{label}</text>
                 </g>
               );
