@@ -4,6 +4,8 @@ import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { ProvenanceVerificationRecord } from '../../types';
 import { isSha256Hex } from '../../utils/crypto';
 import { enumLabel, formatInstant } from '../objects/labels';
+import { Select } from '../ui/Field';
+import { buttonClass } from '../ui/Button';
 import { displayError } from '../../utils/errorMessage';
 
 interface MetadataCardProps {
@@ -55,13 +57,13 @@ export default function MetadataCard({ documentId, portalKey, sha256, contentTyp
       <MetadataRow label="Visibility" value={enumLabel(visibility)} />
       <MetadataRow label="Download" value={enumLabel(downloadStatus)} />
       <MetadataRow label="File size" value={formatFileSize(fileSize)} />
-      <MetadataRow label="Latest verification" value={verificationLabel(latestVerification, verificationError)} />
+      <MetadataRow label="Latest verification" value={verificationLabel(latestVerification, verificationError)} title={latestVerification?.verifiedAt} />
       <div className="space-y-1 border-t border-line pt-2">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-muted">Recorded SHA-256</span>
+          <span className="whitespace-nowrap text-muted">Recorded SHA-256</span>
           <div className="flex items-center gap-1">
-            <select aria-label="Digest format" value={digestFormat} onChange={(event) => { setDigestFormat(event.target.value as DigestFormat); setCopyStatus(null); }} className="focus-ring h-7 rounded-md border border-control bg-canvas px-2 text-caption text-fg-secondary"><option value="hex">Hex</option><option value="colon">Colon hex</option><option value="base64">Base64</option></select>
-            <button type="button" aria-label="Copy SHA-256 digest" disabled={!digestIsValid} onClick={() => void copyDigest()} className="focus-ring h-7 rounded-md border border-control px-2 text-caption text-fg-secondary hover:bg-raised disabled:opacity-40">Copy</button>
+            <Select size="sm" aria-label="Digest format" value={digestFormat} onChange={(event) => { setDigestFormat(event.target.value as DigestFormat); setCopyStatus(null); }} className="focus-ring w-[6.5rem]"><option value="hex">Hex</option><option value="colon">Colon hex</option><option value="base64">Base64</option></Select>
+            <button type="button" aria-label="Copy SHA-256 digest" disabled={!digestIsValid} onClick={() => void copyDigest()} className={buttonClass({ size: 'sm', className: 'focus-ring' })}>Copy</button>
           </div>
         </div>
         <span className={`block select-text break-all rounded-md border p-2 font-mono text-code ${digestIsValid ? 'border-success/30 bg-success/5 text-success' : 'border-warning/30 bg-warning/5 text-warning'}`}>
@@ -90,7 +92,7 @@ function verificationLabel(record: ProvenanceVerificationRecord | null | undefin
   if (record === null) return 'No recorded check';
   const state = record.provenanceConfidence?.split('_').join(' ').toLocaleLowerCase()
     ?? (record.predatesClassification ? 'logged before classification' : 'no confidence recorded');
-  return `${state} · ${formatInstant(record.verifiedAt)}`;
+  return `${state.charAt(0).toLocaleUpperCase()}${state.slice(1)} · ${formatInstant(record.verifiedAt)}`;
 }
 
 const FILE_TYPES: Record<string, string> = {

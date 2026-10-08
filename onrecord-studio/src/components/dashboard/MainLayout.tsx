@@ -32,7 +32,12 @@ import StoryDesk from './StoryDesk';
 import AgencyComparison from './AgencyComparison';
 import MeetingsView from './MeetingsView';
 import { documentBriefingEvidence, requestBriefingEvidence } from '../../utils/briefing';
-import DialogBackdrop from '../ui/DialogBackdrop';
+import Dialog, { DialogFooter, DialogHeader } from '../ui/Dialog';
+import Button, { buttonClass } from '../ui/Button';
+import EmptyState from '../ui/EmptyState';
+import Badge from '../ui/Badge';
+import InlineError from '../ui/InlineError';
+import Skeleton from '../ui/Skeleton';
 import AnalysisWorkbench from './AnalysisWorkbench';
 import CaseTimeline from './CaseTimeline';
 import { formatMatchCount, MATCH_BASIS_LABELS, matchBasis, SEARCH_PAGE_SIZE } from '../../utils/searchResults';
@@ -57,6 +62,8 @@ export default function MainLayout() {
   const resultsTotal = useAppStore((state) => state.filteredResultsTotal);
   const searchPaging = useAppStore((state) => state.searchPaging);
   const searchError = useAppStore((state) => state.searchError);
+  const searchStatus = useAppStore((state) => state.searchStatus);
+  const requestEvidenceRefresh = useAppStore((state) => state.requestEvidenceRefresh);
   const selectedRequestId = useAppStore((state) => state.selectedRequestId);
   const selectedRequestPortalKey = useAppStore((state) => state.selectedRequestPortalKey);
   const setSelectedRequest = useAppStore((state) => state.setSelectedRequest);
@@ -67,7 +74,9 @@ export default function MainLayout() {
   const [exportState, setExportState] = useState<{ key: string; isExporting: boolean; result: LegalBriefExportResult | null; error: string | null } | null>(null);
   const [documents, setDocuments] = useState<RequestDocumentSummary[]>([]);
   const [documentError, setDocumentError] = useState<string | null>(null);
-  const [activeDocument, setActiveDocument] = useState<{ summary: RequestDocumentSummary; chunk: DocumentTextChunk } | null>(null);
+  // `chunk` is null while the first chunk is being read, so the viewer opens at once on a skeleton;
+  // `error` is a failed read, stated inside the viewer that asked for it.
+  const [activeDocument, setActiveDocument] = useState<{ summary: RequestDocumentSummary; chunk: DocumentTextChunk | null; error: string | null } | null>(null);
   const [pendingEvidenceLink, setPendingEvidenceLink] = useState(readEvidenceLink);
   const requestedEvidenceLink = useAppStore((state) => state.requestedEvidenceLink);
   const consumeEvidenceLink = useAppStore((state) => state.consumeEvidenceLink);
@@ -189,6 +198,11 @@ export default function MainLayout() {
     // the older document, and a chunk from request A resolving after B is selected opens A's text
     // under B's header. Both are false attributions of evidence.
     const request = documentOpenGate.begin();
+    // Paging within the open document keeps its text on screen; any other open starts empty.
+    setActiveDocument((current) =>
+      current && current.chunk && current.summary.documentId === summary.documentId && current.summary.portalKey === summary.portalKey
+        ? { ...current, error: null }
+        : { summary, chunk: null, error: null });
     try {
       const chunk = await invokeCommand('get_document_text_chunk', {
         documentId: summary.documentId,
@@ -197,10 +211,10 @@ export default function MainLayout() {
         characterLimit: 100000,
       });
       if (!documentOpenGate.isCurrent(request)) return;
-      setActiveDocument({ summary, chunk });
+      setActiveDocument({ summary, chunk, error: null });
     } catch (reason) {
       if (!documentOpenGate.isCurrent(request)) return;
-      setDocumentError(displayError(reason).message);
+      setActiveDocument((current) => (current ? { ...current, error: displayError(reason).message } : current));
     }
   };
 
@@ -278,26 +292,26 @@ export default function MainLayout() {
 
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="flex shrink-0 items-center justify-between px-5 pb-1 pt-4 lg:px-6">
-        <div>
-          <div className="app-eyebrow flex items-center gap-2 text-highlight"><Icon name="evidence" className="h-3.5 w-3.5" /> Evidence review</div>
-          <h2 className="mt-1.5 text-[26px] font-semibold tracking-[-0.035em] text-fg sm:text-[30px]">Search, inspect, and build the record.</h2>
+      <div className="flex shrink-0 flex-wrap items-end justify-between gap-x-6 gap-y-3 px-6 pt-6">
+        <div className="min-w-0">
+          <h2 className="text-display text-fg">Evidence</h2>
+          <p className="mt-1 text-body text-muted">Search requests and released documents, then inspect the record behind each one.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div role="group" aria-label="Evidence view" className="flex gap-1 text-label">
+        <div className="flex items-center gap-4">
+          <span className="hidden items-center gap-1.5 text-caption text-muted lg:flex"><Icon name="shield" className="h-3.5 w-3.5 text-success" /> Sensitive fields are masked locally</span>
+          <div role="group" aria-label="Evidence view" className="flex rounded-lg bg-raised p-0.5">
             {(['records', 'timeline'] as const).map((mode) => (
               <button
                 key={mode}
                 type="button"
                 aria-pressed={evidenceMode === mode}
                 onClick={() => setEvidenceMode(mode)}
-                className={cn('focus-ring rounded-md border px-2.5 py-1 font-semibold', evidenceMode === mode ? 'border-accent/60 text-accent' : 'border-control text-muted')}
+                className={cn('focus-ring h-7 rounded-md px-3 text-control transition-colors', evidenceMode === mode ? 'bg-panel text-fg shadow-panel' : 'text-muted hover:text-fg')}
               >
                 {mode === 'records' ? 'Records' : 'Timeline'}
               </button>
             ))}
           </div>
-          <div className="hidden items-center gap-2 text-caption text-muted sm:flex"><Icon name="shield" className="h-3.5 w-3.5 text-success" /> Sensitive fields are masked locally</div>
         </div>
       </div>
       {evidenceMode === 'timeline' ? <CaseTimeline /> : <>
@@ -305,31 +319,48 @@ export default function MainLayout() {
       <SearchFilter />
       <AnnotationSearch onOpen={setPendingEvidenceLink} />
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto grid min-h-[620px] w-full max-w-[1800px] grid-cols-1 gap-4 p-4 lg:p-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.75fr)]">
-          <section className="app-panel flex min-h-[520px] flex-col overflow-hidden">
-            <div className="flex items-center justify-between border-b border-line px-4 py-3">
-              <div>
-                <h2 className="text-label leading-4 font-semibold text-fg">Evidence workbench</h2>
+        <div className="mx-auto grid min-h-[620px] w-full max-w-content grid-cols-1 gap-4 px-6 pb-6 pt-2 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+          <section className="app-panel flex min-h-[520px] min-w-0 flex-col overflow-hidden">
+            <div className="flex items-center justify-between gap-4 border-b border-line px-5 py-4">
+              <div className="min-w-0">
+                <h2 className="text-heading text-fg">Evidence workbench</h2>
                 <p className="mt-0.5 text-caption text-muted">Request metadata is PII-masked before it reaches this view.</p>
               </div>
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setLegalLibraryOpen(true)} className="focus-ring whitespace-nowrap rounded border border-highlight/30 bg-highlight/10 px-2 py-1 text-caption font-semibold text-highlight transition hover:border-highlight/30 hover:bg-highlight/10">Legal authority library</button>
-                <span className="rounded border border-line bg-canvas px-2 py-1 font-mono text-caption text-muted">{formatMatchCount(resultsTotal)} records</span>
+              <div className="flex shrink-0 items-center gap-3">
+                {/* A count is stated only once a query has answered; before that it is unknown, not zero. */}
+                {searchStatus === 'ready' && !searchError
+                  ? <span className="whitespace-nowrap text-caption tabular-nums text-muted">{formatMatchCount(resultsTotal)} {resultsTotal === 1 ? 'record' : 'records'}</span>
+                  : <span aria-hidden="true" className="skeleton h-3 w-16 rounded" />}
+                <Button size="sm" onClick={() => setLegalLibraryOpen(true)}>Legal authority library</Button>
               </div>
             </div>
-            {resultsTotal > results.length && (
+            {searchStatus === 'ready' && resultsTotal > results.length && (
               <p role="status" className="border-b border-line px-4 py-2 text-label text-muted">
                 Showing {formatMatchCount(results.length)} of {formatMatchCount(resultsTotal)} matches. More load as you scroll, or use Load more below the list.
               </p>
             )}
-            {searchPaging?.nextCursor === null && results.length !== resultsTotal && (
+            {searchStatus === 'ready' && searchPaging?.nextCursor === null && results.length !== resultsTotal && (
               <p role="status" className="border-b border-warning/30 bg-warning/5 px-4 py-2 text-label text-warning">
                 The records changed while the pages loaded, so the list holds {formatMatchCount(results.length)} and the count is {formatMatchCount(resultsTotal)}. Search again for a consistent view.
               </p>
             )}
             <div className="flex min-h-0 flex-1 flex-col">
               {results.length === 0 ? (
-                <EmptyResults error={searchError} sourceCount={portals.length} />
+                searchError !== null || searchStatus === 'failed' ? (
+                  <div className="grid flex-1 place-items-center p-8">
+                    <EmptyState
+                      compact
+                      icon="search"
+                      title="Search unavailable"
+                      body="The query did not complete, so there is no result set to interpret. Try again before drawing a conclusion from these filters."
+                      actions={<Button size="sm" onClick={requestEvidenceRefresh}>Try again</Button>}
+                    />
+                  </div>
+                ) : searchStatus === 'ready' ? (
+                  <EmptyResults sourceCount={portals.length} />
+                ) : (
+                  <ResultSkeleton />
+                )
               ) : (
                 <VirtualList
                   items={results}
@@ -363,20 +394,20 @@ export default function MainLayout() {
                         tabIndex={tabIndex}
                         onClick={() => setSelectedRequest(result.requestId, result.portalKey)}
                         className={cn(
-                          'grid h-full w-full grid-cols-[minmax(0,1fr)_120px] gap-4 overflow-hidden border-b border-control px-4 py-3 text-left outline-none transition hover:bg-surface/70 focus:bg-surface/70',
-                          isSelected && 'bg-highlight/10 ring-1 ring-inset ring-highlight/30',
+                          'grid h-full w-full grid-cols-[minmax(0,1fr)_128px] gap-4 overflow-hidden border-b border-line px-5 py-3 text-left outline-none transition-colors hover:bg-raised/60 focus-visible:bg-raised/60 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus',
+                          isSelected && 'bg-accent/10 shadow-[inset_2px_0_0_rgb(var(--accent))] hover:bg-accent/10',
                         )}
                       >
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="font-mono text-caption text-muted">{result.portalKey} / {result.requestId}</span>
+                            <span className="font-mono text-code text-muted">{result.portalKey} / {result.requestId}</span>
                             <StatusBadge status={result.status} />
                           </div>
-                          <div className="mt-1 truncate text-label leading-4 font-medium text-fg">{result.title || 'Untitled public-records request'}</div>
-                          <div className="mt-1 line-clamp-2 text-label leading-relaxed text-muted">{result.descriptionPreview || 'No public description supplied.'}</div>
+                          <div className="mt-1 truncate text-body font-medium text-fg">{result.title || 'Untitled public-records request'}</div>
+                          <div className="mt-0.5 line-clamp-2 text-caption text-muted">{result.descriptionPreview || 'No public description supplied.'}</div>
                           {(() => {
                             const basis = matchBasis(result, resultsTerm);
-                            return basis && <p className="mt-1 text-caption uppercase tracking-wider text-muted">{MATCH_BASIS_LABELS[basis]}</p>;
+                            return basis && <p className="mt-1 text-caption text-muted">{MATCH_BASIS_LABELS[basis]}</p>;
                           })()}
                           {result.integrityFlags.length > 0 && (
                             <div className="mt-2 flex flex-wrap gap-1">
@@ -384,10 +415,10 @@ export default function MainLayout() {
                             </div>
                           )}
                         </div>
-                        <div className="text-right font-mono text-caption text-muted">
-                          <div className="truncate text-muted">{result.agencyName}</div>
-                          <div className="mt-2">{formatShortDate(result.createdAt)}</div>
-                          <div className="mt-1">{result.documentCount} document{result.documentCount === 1 ? '' : 's'}</div>
+                        <div className="text-right text-caption tabular-nums text-muted">
+                          <div className="truncate" title={result.agencyName}>{result.agencyName}</div>
+                          <div className="mt-1">{formatShortDate(result.createdAt)}</div>
+                          <div className="mt-0.5">{result.documentCount} document{result.documentCount === 1 ? '' : 's'}</div>
                         </div>
                       </button>
                     );
@@ -397,48 +428,43 @@ export default function MainLayout() {
             </div>
           </section>
 
-          <div className="grid min-h-0 grid-rows-[auto_minmax(220px,1fr)] gap-4">
-            <section className="app-panel p-4">
-              <div className="text-caption font-bold uppercase tracking-[0.18em] text-muted">Case context</div>
+          <div className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(220px,1fr)] gap-4">
+            <section className="app-panel min-w-0 p-5">
+              <div className="text-overline uppercase text-muted">Case context</div>
               {selected ? (
-                <div className="mt-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <h2 className="text-sm font-semibold leading-snug text-fg">{selected.title || 'Untitled request'}</h2>
-                      <p className="mt-1 text-label text-muted">
+                <div className="mt-3 min-w-0">
+                  <div>
+                    <div className="flex items-start justify-between gap-3">
+                      <h2 className="min-w-0 break-words text-heading text-fg">{selected.title || 'Untitled request'}</h2>
+                      <StatusBadge status={selected.status} />
+                    </div>
+                    <p className="mt-1 break-words text-caption text-muted">
                         {selected.agencyId === null
                           ? selected.agencyName
                           : <ObjectLink target={{ kind: 'agency', portalKey: selected.portalKey, agencyId: selected.agencyId, label: selected.agencyName }}>{selected.agencyName}</ObjectLink>}
                         {' · '}{selected.portalKey}
                         {' · '}<ObjectLink target={{ kind: 'request', portalKey: selected.portalKey, requestId: selected.requestId, label: selected.title || `Request ${selected.requestId}` }}>Findings and documents</ObjectLink>
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-2">
-                      <StatusBadge status={selected.status} />
-                      <button
-                        type="button"
-                        disabled={briefingEvidence.some((item) => item.id === `request:${selected.portalKey}:${selected.requestId}`)}
-                        onClick={() => addBriefingEvidence(requestBriefingEvidence(selected, selectedSourceUrl))}
-                        className="focus-ring rounded-lg border border-highlight/30 bg-highlight/10 px-2.5 py-1.5 text-caption font-semibold text-highlight disabled:cursor-default disabled:border-success/30 disabled:bg-success/5 disabled:text-success"
-                      >
-                        {briefingEvidence.some((item) => item.id === `request:${selected.portalKey}:${selected.requestId}`) ? 'Saved to briefing' : 'Save lead to briefing'}
-                      </button>
-                    </div>
+                    </p>
+                    {briefingEvidence.some((item) => item.id === `request:${selected.portalKey}:${selected.requestId}`) ? (
+                      <p className="mt-3 inline-flex h-7 items-center gap-1.5 text-caption text-success"><Icon name="briefcase" className="h-3.5 w-3.5" /> Saved to briefing</p>
+                    ) : (
+                      <Button size="sm" icon="briefcase" className="mt-3" onClick={() => addBriefingEvidence(requestBriefingEvidence(selected, selectedSourceUrl))}>Save lead to briefing</Button>
+                    )}
                   </div>
-                  <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-line pt-3 text-label">
+                  <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-line pt-3">
                     <CaseField label="Request ID" value={String(selected.requestId)} />
                     <CaseField label="Documents" value={String(selected.documentCount)} />
                     <CaseField label="Created" value={formatShortDate(selected.createdAt)} />
                     <CaseField label="Closed" value={selected.closedAt ? formatShortDate(selected.closedAt) : 'Not recorded'} />
                   </dl>
-                  <div className="mt-4 rounded-lg border border-line bg-canvas/70 p-3 text-label leading-relaxed text-muted">
+                  <div className="mt-4 break-words rounded-lg border border-line bg-canvas p-3 text-body text-fg-secondary">
                     {selected.descriptionPreview || 'No public description supplied.'}
                   </div>
                   <LegalCompliancePanel record={selected} onOpenLibrary={() => setLegalLibraryOpen(true)} />
                   {documents.length > 0 && (
-                    <div className="mt-3">
-                      <div className="text-caption font-semibold uppercase tracking-wider text-muted">Public documents</div>
-                      <div className="mt-1.5 max-h-64 space-y-1.5 overflow-y-auto pr-1">
+                    <div className="mt-4">
+                      <h3 className="text-caption font-medium text-fg-secondary">Public documents</h3>
+                      <div className="mt-1.5 max-h-64 space-y-1.5 overflow-y-auto">
                         {documents.map((document) => {
                           const canOpen = document.extractionStatus === 'SEARCHABLE'
                             || document.extractionStatus === 'SALVAGED';
@@ -450,13 +476,13 @@ export default function MainLayout() {
                                 disabled={!canOpen}
                                 title={document.extractionDeferredReason ?? stateLabel}
                                 onClick={() => void openDocument(document)}
-                                className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-lg border border-control bg-canvas/70 px-3 py-2 text-left transition hover:border-highlight/30 hover:bg-highlight/5 disabled:cursor-default disabled:opacity-65 disabled:hover:border-control disabled:hover:bg-canvas/70"
+                                className="focus-ring flex min-w-0 flex-1 items-center justify-between gap-3 rounded-lg border border-line bg-canvas px-3 py-2 text-left transition-colors hover:border-line-strong hover:bg-raised disabled:cursor-default disabled:opacity-60 disabled:hover:border-line disabled:hover:bg-canvas"
                               >
                                 <span className="min-w-0">
-                                  <span className="block truncate text-label font-medium text-fg-secondary">{document.fileName}</span>
+                                  <span className="block truncate text-control text-fg">{document.fileName}</span>
                                   <span className="mt-0.5 block truncate text-caption text-muted">{stateLabel}</span>
                                 </span>
-                                <span className="shrink-0 font-mono text-caption text-muted">{formatFileSize(document.fileSize)}</span>
+                                <span className="shrink-0 whitespace-nowrap text-caption tabular-nums text-muted">{formatFileSize(document.fileSize)}</span>
                               </button>
                               {/* Its own control, never a modifier on the open action, and never a
                                   swipe or a long press. Destroying a piece of evidence is not a
@@ -475,7 +501,7 @@ export default function MainLayout() {
                                   : `Delete ${document.fileName} and everything derived from it`}
                                 aria-label={`Delete document ${document.fileName}`}
                                 onClick={() => setPendingDocumentPurge(document)}
-                                className="focus-ring grid w-8 shrink-0 place-items-center rounded-lg border border-control bg-canvas/70 text-muted transition hover:border-danger/30 hover:text-danger disabled:opacity-40 disabled:hover:border-control disabled:hover:text-muted"
+                                className="focus-ring grid w-8 shrink-0 place-items-center rounded-lg border border-line bg-canvas text-muted transition-colors hover:border-danger/30 hover:text-danger disabled:opacity-40 disabled:hover:border-line disabled:hover:text-muted"
                               >
                                 <Icon name="trash" className="h-3 w-3" />
                               </button>
@@ -485,7 +511,7 @@ export default function MainLayout() {
                       </div>
                     </div>
                   )}
-                  {documentError && <div role="alert" className="mt-2 text-caption leading-relaxed text-danger">Document view unavailable: {documentError}</div>}
+                  {documentError && <InlineError className="mt-3" summary={documentError} />}
                   {isTauri() && selected.integrityFlags.includes('STATUTORY_LATENCY_VIOLATION') && (
                     <div className="mt-3">
                       <StatutoryDeadlineAppeal portalKey={selected.portalKey} requestId={selected.requestId} />
@@ -515,7 +541,7 @@ export default function MainLayout() {
                   )}
                 </div>
               ) : (
-                <div className="mt-3 rounded-lg border border-dashed border-line px-4 py-6 text-center text-label leading-relaxed text-muted">Select a record to inspect its evidence summary and compliance markers.</div>
+                <p className="mt-3 rounded-lg border border-dashed border-line px-4 py-6 text-center text-body text-muted">Select a record to inspect its evidence summary and compliance markers.</p>
               )}
             </section>
 
@@ -525,79 +551,96 @@ export default function MainLayout() {
       </div>
       </>}
       {pendingDocumentPurge && (
-        <DialogBackdrop labelledBy="purge-document-title" onClose={() => setPendingDocumentPurge(null)} className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm">
-          <div className="app-panel w-full max-w-md overflow-hidden shadow-2xl shadow-black/40">
-            <div className="border-b border-line p-4">
-              <div className="app-eyebrow text-danger">Evidence</div>
-              <h2 id="purge-document-title" className="mt-1 break-all text-sm font-semibold text-fg">Delete {pendingDocumentPurge.fileName}?</h2>
-            </div>
-            <div className="space-y-2 p-4 text-label leading-relaxed text-muted">
-              <p className="text-fg-secondary">Destroys the {formatFileSize(pendingDocumentPurge.fileSize)} file on disk, its extracted text, and every search, provenance, and integrity record derived from it.</p>
-              <p>The request this document belongs to is kept, and so is every other document under it. This cannot be undone from inside the application.</p>
-              {/* No tombstone survives the delete: the crawl frontier is rebuilt per sync run and
-                  the only record that this document was ever ingested is the row being destroyed.
-                  Saying so is the difference between a deletion and a deletion the operator thinks
-                  is permanent. */}
-              <p>Synchronizing this source again can download the same file back. Remove the source to stop that.</p>
-            </div>
-            <div className="flex items-center justify-end gap-2 border-t border-line px-4 py-3">
-              <button type="button" onClick={() => setPendingDocumentPurge(null)} className="focus-ring rounded-lg px-3 py-2 text-caption font-semibold text-muted hover:text-fg-secondary">Cancel</button>
-              <button type="button" disabled={isPurgingDocument} onClick={() => void purgeDocument()} className="focus-ring rounded-lg border border-danger/30 bg-danger/20 px-4 py-2 text-caption font-semibold text-danger disabled:opacity-60">{isPurgingDocument ? 'Deleting…' : 'Delete this document'}</button>
-            </div>
+        <Dialog size="sm" onClose={() => setPendingDocumentPurge(null)}>
+          <DialogHeader title={<span className="break-all">Delete {pendingDocumentPurge.fileName}?</span>} />
+          <div className="space-y-2 px-5 pb-5 text-body text-muted">
+            <p className="text-fg-secondary">Destroys the {formatFileSize(pendingDocumentPurge.fileSize)} file on disk, its extracted text, and every search, provenance, and integrity record derived from it.</p>
+            <p>The request this document belongs to is kept, and so is every other document under it. This cannot be undone from inside the application.</p>
+            {/* No tombstone survives the delete: the crawl frontier is rebuilt per sync run and
+                the only record that this document was ever ingested is the row being destroyed.
+                Saying so is the difference between a deletion and a deletion the operator thinks
+                is permanent. */}
+            <p>Synchronizing this source again can download the same file back. Remove the source to stop that.</p>
           </div>
-        </DialogBackdrop>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setPendingDocumentPurge(null)}>Cancel</Button>
+            <Button variant="destructive" disabled={isPurgingDocument} onClick={() => void purgeDocument()}>{isPurgingDocument ? 'Deleting…' : 'Delete this document'}</Button>
+          </DialogFooter>
+        </Dialog>
       )}
       {activeDocument && (
-        <DialogBackdrop label={`Document ${activeDocument.summary.fileName}`} onClose={() => setActiveDocument(null)} className="app-backdrop fixed inset-0 z-50 grid place-items-center p-8 backdrop-blur-sm">
-          <div className={cn('relative h-[min(760px,88vh)]', isPdfDocument(activeDocument.summary) ? 'w-[min(1440px,96vw)]' : 'w-[min(1080px,92vw)]')}>
-            <button type="button" autoFocus onClick={() => setActiveDocument(null)} className="absolute -top-7 right-0 z-10 rounded-md border border-control bg-canvas px-2 py-1 text-caption font-semibold text-fg-secondary shadow-lg hover:border-control">Close</button>
-            <div className="grid h-full grid-cols-[minmax(0,1fr)_360px] gap-4">
-              <DocumentViewer
-                documentId={activeDocument.summary.documentId}
-                requestId={selectedRequestId ?? undefined}
-                portalKey={activeDocument.summary.portalKey}
-                fileName={activeDocument.summary.fileName}
-                originalAvailable={!activeDocument.summary.extractionDeferredReason?.startsWith('REFERENCE_ONLY:')}
-                textContent={activeDocument.chunk.maskedText}
-                fileSizeFormatted={formatFileSize(activeDocument.summary.fileSize)}
-                textPositionLabel={`${activeDocument.chunk.characterOffset.toLocaleString()}–${Math.min(activeDocument.chunk.characterOffset + activeDocument.chunk.returnedCharacterCount, activeDocument.chunk.totalCharacterCount).toLocaleString()} of ${activeDocument.chunk.totalCharacterCount.toLocaleString()} characters`}
-                characterOffset={activeDocument.chunk.characterOffset}
-                knownMaskedFindingCount={activeDocument.chunk.maskedFindingCount}
-                onPreviousChunk={activeDocument.chunk.characterOffset > 0 ? () => void openDocument(activeDocument.summary, Math.max(0, activeDocument.chunk.characterOffset - 100000)) : undefined}
-                onNextChunk={activeDocument.chunk.nextCharacterOffset === null ? undefined : () => void openDocument(activeDocument.summary, activeDocument.chunk.nextCharacterOffset ?? 0)}
-                onSaveEvidence={({ excerpt, characterOffset }) => {
-                  if (!selected) return;
-                  addBriefingEvidence(documentBriefingEvidence({
-                    portalKey: activeDocument.summary.portalKey,
-                    requestId: selected.requestId,
-                    documentId: activeDocument.summary.documentId,
-                    fileName: activeDocument.summary.fileName,
-                    characterOffset,
-                    sourceUrl: selectedSourceUrl,
-                    agencyName: selected.agencyName,
-                    requestTitle: selected.title,
-                    excerpt,
-                    rawFileSha256: activeDocument.summary.rawFileSha256,
-                  }));
-                }}
-              />
-              <aside className="min-h-0 space-y-4 overflow-y-auto" aria-label="Document evidence details">
-                {activeDocument.summary.extractionDeferredReason?.startsWith('REFERENCE_ONLY:') && <p className="rounded border border-warning/30 p-3 text-label leading-4 text-warning">{activeDocument.summary.extractionDeferredReason.slice('REFERENCE_ONLY:'.length)}</p>}
-                {activeDocument.summary.originalSourceUri && <a className="block break-all text-label leading-4 text-accent underline" href={activeDocument.summary.originalSourceUri} target="_blank" rel="noreferrer">View publisher’s original file</a>}
-                <MetadataCard
-                  documentId={activeDocument.summary.documentId}
-                  portalKey={activeDocument.summary.portalKey}
-                  sha256={activeDocument.summary.rawFileSha256}
-                  contentType={activeDocument.summary.contentType}
-                  visibility={activeDocument.summary.visibility}
-                  downloadStatus={activeDocument.summary.downloadStatus}
-                  fileSize={activeDocument.summary.fileSize}
+        <Dialog size="xl" onClose={() => setActiveDocument(null)} className="h-[calc(100vh-4rem)] max-w-[min(1440px,96vw)]">
+          <DialogHeader
+            title={<span className="block truncate" title={activeDocument.summary.fileName}>{activeDocument.summary.fileName}</span>}
+            actions={activeDocument.summary.originalSourceUri
+              ? <a className={buttonClass({ size: 'sm', className: 'focus-ring' })} href={activeDocument.summary.originalSourceUri} target="_blank" rel="noreferrer">Publisher’s original <Icon name="link" className="h-3 w-3" /></a>
+              : undefined}
+          />
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto px-5 pb-5 xl:grid-cols-[minmax(0,1fr)_340px] xl:overflow-hidden">
+            <div className="flex min-h-[32rem] min-w-0 flex-col gap-3 xl:min-h-0">
+              {activeDocument.error && (
+                <InlineError
+                  summary={activeDocument.chunk ? `The next part of this document could not be read. ${activeDocument.error}` : `This document could not be opened. ${activeDocument.error}`}
+                  onRetry={() => void openDocument(activeDocument.summary, activeDocument.chunk?.characterOffset ?? 0)}
                 />
-                {isPdfDocument(activeDocument.summary) && <UnredactorPanel documentId={activeDocument.summary.documentId} portalKey={activeDocument.summary.portalKey} />}
-              </aside>
+              )}
+              {activeDocument.chunk ? (
+                <DocumentViewer
+                  titled={false}
+                  documentId={activeDocument.summary.documentId}
+                  requestId={selectedRequestId ?? undefined}
+                  portalKey={activeDocument.summary.portalKey}
+                  fileName={activeDocument.summary.fileName}
+                  originalAvailable={!activeDocument.summary.extractionDeferredReason?.startsWith('REFERENCE_ONLY:')}
+                  textContent={activeDocument.chunk.maskedText}
+                  fileSizeFormatted={formatFileSize(activeDocument.summary.fileSize)}
+                  textPositionLabel={`${activeDocument.chunk.characterOffset.toLocaleString()}–${Math.min(activeDocument.chunk.characterOffset + activeDocument.chunk.returnedCharacterCount, activeDocument.chunk.totalCharacterCount).toLocaleString()} of ${activeDocument.chunk.totalCharacterCount.toLocaleString()} characters`}
+                  characterOffset={activeDocument.chunk.characterOffset}
+                  knownMaskedFindingCount={activeDocument.chunk.maskedFindingCount}
+                  onPreviousChunk={activeDocument.chunk.characterOffset > 0 ? () => void openDocument(activeDocument.summary, Math.max(0, (activeDocument.chunk?.characterOffset ?? 0) - 100000)) : undefined}
+                  onNextChunk={activeDocument.chunk.nextCharacterOffset === null ? undefined : () => void openDocument(activeDocument.summary, activeDocument.chunk?.nextCharacterOffset ?? 0)}
+                  onSaveEvidence={({ excerpt, characterOffset }) => {
+                    if (!selected) return;
+                    addBriefingEvidence(documentBriefingEvidence({
+                      portalKey: activeDocument.summary.portalKey,
+                      requestId: selected.requestId,
+                      documentId: activeDocument.summary.documentId,
+                      fileName: activeDocument.summary.fileName,
+                      characterOffset,
+                      sourceUrl: selectedSourceUrl,
+                      agencyName: selected.agencyName,
+                      requestTitle: selected.title,
+                      excerpt,
+                      rawFileSha256: activeDocument.summary.rawFileSha256,
+                    }));
+                  }}
+                />
+              ) : !activeDocument.error && (
+                <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-canvas">
+                  <div className="flex items-center gap-1.5 border-b border-line px-4 py-3 text-caption text-muted">
+                    <span className="font-mono text-code">{activeDocument.summary.portalKey} / {activeDocument.summary.documentId}</span>
+                    <span aria-hidden="true">·</span>
+                    <span className="tabular-nums">{formatFileSize(activeDocument.summary.fileSize)}</span>
+                  </div>
+                  <Skeleton variant="lines" lines={14} label="Reading the extracted text" className="p-5" />
+                </section>
+              )}
             </div>
+            <aside className="min-h-0 min-w-0 space-y-4 xl:overflow-y-auto" aria-label="Document evidence details">
+              {activeDocument.summary.extractionDeferredReason?.startsWith('REFERENCE_ONLY:') && <p className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-body text-warning">{activeDocument.summary.extractionDeferredReason.slice('REFERENCE_ONLY:'.length)}</p>}
+              <MetadataCard
+                documentId={activeDocument.summary.documentId}
+                portalKey={activeDocument.summary.portalKey}
+                sha256={activeDocument.summary.rawFileSha256}
+                contentType={activeDocument.summary.contentType}
+                visibility={activeDocument.summary.visibility}
+                downloadStatus={activeDocument.summary.downloadStatus}
+                fileSize={activeDocument.summary.fileSize}
+              />
+              {isPdfDocument(activeDocument.summary) && <UnredactorPanel documentId={activeDocument.summary.documentId} portalKey={activeDocument.summary.portalKey} />}
+            </aside>
           </div>
-        </DialogBackdrop>
+        </Dialog>
       )}
       <LegalAuthorityManager isOpen={isLegalLibraryOpen} onClose={closeLegalLibrary} />
     </main>
@@ -644,7 +687,29 @@ function CaseRequests() {
   );
 }
 
-function EmptyResults({ error, sourceCount }: { error: string | null; sourceCount: number }) {
+function ResultSkeleton() {
+  return (
+    <div role="status" aria-busy="true" className="flex-1">
+      <span className="sr-only">Searching the records</span>
+      {[0, 1, 2, 3].map((row) => (
+        <div key={row} aria-hidden="true" className="grid grid-cols-[minmax(0,1fr)_120px] gap-4 border-b border-line px-5 py-4" style={{ height: RESULT_ROW_HEIGHT }}>
+          <div className="space-y-2.5">
+            <div className="skeleton h-3 w-32 rounded" />
+            <div className="skeleton h-4 w-3/4 rounded" />
+            <div className="skeleton h-3 w-full rounded" />
+            <div className="skeleton h-3 w-2/3 rounded" />
+          </div>
+          <div className="flex flex-col items-end gap-2.5">
+            <div className="skeleton h-3 w-24 rounded" />
+            <div className="skeleton h-3 w-16 rounded" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EmptyResults({ sourceCount }: { sourceCount: number }) {
   const searchTerm = useAppStore((state) => state.searchTerm);
   const agencyId = useAppStore((state) => state.selectedAgencyId);
   const status = useAppStore((state) => state.selectedStatus);
@@ -665,18 +730,12 @@ function EmptyResults({ error, sourceCount }: { error: string | null; sourceCoun
         <div className="mx-auto grid h-9 w-9 place-items-center rounded-lg border border-line bg-canvas text-muted">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5h18M5.25 3h13.5A2.25 2.25 0 0 1 21 5.25v13.5A2.25 2.25 0 0 1 18.75 21H5.25A2.25 2.25 0 0 1 3 18.75V5.25A2.25 2.25 0 0 1 5.25 3Z" /></svg>
         </div>
-        <h2 className="mt-3 text-label leading-4 font-semibold text-muted">{error ? 'Search unavailable' : 'No matching evidence'}</h2>
-        {error ? (
-          <p className="mt-1 text-label leading-relaxed text-muted">
-            The query did not complete, so there is no result set to interpret. Retry before drawing a conclusion from these filters.
-          </p>
-        ) : (
-          <>
-            <p className="mt-1 text-label leading-relaxed text-muted">
-              {sourceCount === 0
-                ? 'No sources are added yet, so there is nothing to search.'
-                : `Searched ${activePortalKey ? '1 source' : `${sourceCount} source${sourceCount === 1 ? '' : 's'}`}: request titles and descriptions, and extracted text of documents already ingested. Nothing here shows that no such record exists. It may not have been collected, ingested yet, or readable as text.`}
-            </p>
+        <h2 className="mt-3 text-heading text-fg">No matching evidence</h2>
+        <p className="mt-1 text-body text-muted">
+          {sourceCount === 0
+            ? 'No sources are added yet, so there is nothing to search.'
+            : `Searched ${activePortalKey ? '1 source' : `${sourceCount} source${sourceCount === 1 ? '' : 's'}`}: request titles and descriptions, and extracted text of documents already ingested. Nothing here shows that no such record exists. It may not have been collected, ingested yet, or readable as text.`}
+        </p>
             {narrowing.length > 0 && (
               <div className="mt-3 flex flex-wrap justify-center gap-1.5" role="group" aria-label="Narrowing the search">
                 {narrowing.map((item) => (
@@ -686,30 +745,25 @@ function EmptyResults({ error, sourceCount }: { error: string | null; sourceCoun
                 ))}
               </div>
             )}
-          </>
-        )}
       </div>
     </div>
   );
 }
 
 function StatusBadge({ status }: { status: string }) {
-  // Portal status text is free-form; only the closed and past-due wordings get their own tone.
+  // Portal status text is free-form; only the past-due wordings get their own tone.
   const normalized = status.toLowerCase();
-  const tone = normalized === 'closed'
-    ? 'border-line-strong bg-raised/70 text-muted'
-    : ['overdue', 'past due', 'late'].some((wording) => normalized.includes(wording))
-      ? 'border-warning/30 bg-warning/10 text-warning'
-      : 'border-accent/30 bg-accent/10 text-accent';
-  return <span className={cn('rounded-full border px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wider', tone)}>{status}</span>;
+  const overdue = ['overdue', 'past due', 'late'].some((wording) => normalized.includes(wording));
+  return <Badge tone={overdue ? 'warning' : 'neutral'} className="shrink-0">{status.charAt(0).toLocaleUpperCase()}{status.slice(1).toLocaleLowerCase()}</Badge>;
 }
 
 function PolicyBadge({ flag }: { flag: string }) {
-  return <span className="rounded border border-warning/30 bg-warning/10 px-1.5 py-0.5 text-caption font-medium text-warning">{flag.split('_').join(' ')}</span>;
+  const words = flag.split('_').join(' ').toLocaleLowerCase();
+  return <Badge tone="warning">{words.charAt(0).toLocaleUpperCase()}{words.slice(1)}</Badge>;
 }
 
 function CaseField({ label, value }: { label: string; value: string }) {
-  return <div><dt className="text-caption font-semibold uppercase tracking-wider text-muted">{label}</dt><dd className="mt-1 font-mono text-muted">{value}</dd></div>;
+  return <div><dt className="text-caption text-muted">{label}</dt><dd className="mt-0.5 text-body tabular-nums text-fg">{value}</dd></div>;
 }
 
 function formatFileSize(value: number | null) {

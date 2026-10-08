@@ -4,6 +4,7 @@ import { buttonClass } from '../ui/Button';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { EvidenceBundle, EvidenceClass, RedactionIntegrityReport, RedactionPageFinding } from '../../types';
 import { cn } from '../../utils/cn';
+import { displayError } from '../../utils/errorMessage';
 
 export default function UnredactorPanel({ documentId, portalKey }: { documentId: number; portalKey: string }) {
   // NOTE(documents): Do not display speculative candidates beside preserved text.
@@ -53,7 +54,7 @@ export default function UnredactorPanel({ documentId, portalKey }: { documentId:
         setEvidenceClass(firstPopulatedEvidenceClass(bundle));
       }
     } catch (reason) {
-      if (gate.isCurrent(request)) setError(String(reason));
+      if (gate.isCurrent(request)) setError(displayError(reason).message);
     } finally {
       if (gate.isCurrent(request)) setIsScanning(false);
     }
@@ -68,8 +69,8 @@ export default function UnredactorPanel({ documentId, portalKey }: { documentId:
           {isScanning ? `Inspecting… ${elapsedSeconds}s` : 'Run integrity scan'}
         </button>
       </div>
-      {isScanning && <div className="h-1 overflow-hidden bg-canvas" role="progressbar" aria-label="Redaction evidence collectors are running"><div className="h-full w-1/3 animate-pulse rounded-full bg-highlight" /></div>}
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      {isScanning && <div className="h-1 overflow-hidden bg-canvas" role="progressbar" aria-label="Redaction evidence collectors are running"><div className="skeleton h-full w-full" /></div>}
+      <div className={cn('min-h-0 flex-1 overflow-y-auto p-4', !report && !error && 'hidden')}>
         {error && <div role="alert" className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-label text-danger">{error}</div>}
         {report ? (
           <div className="space-y-3">
@@ -107,9 +108,7 @@ export default function UnredactorPanel({ documentId, portalKey }: { documentId:
             }} />}
             {report.isolatedStructuralAnomalies.length > 0 && <ForensicList title="Structural signals" values={report.isolatedStructuralAnomalies} />}
           </div>
-        ) : !error && (
-          <div className="grid min-h-40 place-items-center text-center text-label leading-relaxed text-muted">Run the bounded integrity scan to inspect potential visual-mask and live-text co-location.</div>
-        )}
+        ) : null}
       </div>
     </section>
   );

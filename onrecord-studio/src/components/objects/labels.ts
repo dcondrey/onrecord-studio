@@ -46,9 +46,10 @@ export function formatShortDate(value: string): string {
 }
 
 /**
- * When a check ran is part of what the log attests, so the reading stays local and exact to the
- * second with its zone; callers keep the raw ISO string on `dateTime`/the tooltip. A value that will
- * not parse is shown as recorded rather than as "Invalid Date", which would hide a malformed timestamp.
+ * An instant in the reader's zone, to the minute, with the zone named: "Oct 7, 2026, 8:00 AM PDT".
+ * Callers keep the raw ISO string on `dateTime` or the tooltip, which is where the exact second
+ * lives. A value that will not parse is shown as recorded rather than as "Invalid Date", which
+ * would hide a malformed timestamp.
  */
 export function formatInstant(value: string): string {
   const parsed = new Date(value);
@@ -56,10 +57,9 @@ export function formatInstant(value: string): string {
   return parsed.toLocaleString(undefined, {
     year: 'numeric',
     month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
+    day: 'numeric',
+    hour: 'numeric',
     minute: '2-digit',
-    second: '2-digit',
     timeZoneName: 'short',
   });
 }

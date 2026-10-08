@@ -11,6 +11,7 @@ import UnredactorPanel from './UnredactorPanel';
 import ReconstructionPanel from './ReconstructionPanel';
 import { formatInstant } from '../objects/labels';
 import { buttonClass } from '../ui/Button';
+import { cn } from '../../utils/cn';
 import { SearchField } from '../ui/Field';
 import RedactionInferencePanel from './RedactionInferencePanel';
 import { displayError } from '../../utils/errorMessage';
@@ -32,13 +33,15 @@ interface DocumentViewerProps {
   onNextChunk?: () => void;
   onPreviousChunk?: () => void;
   onSaveEvidence?: (selection: { excerpt: string; characterOffset: number }) => void;
+  /** False when a surrounding dialog header already names the file. */
+  titled?: boolean;
 }
 
 const TEXT_PAGE_CHARACTERS = 12_000;
 const TOOL_CLASS = buttonClass({ size: 'sm', className: 'focus-ring' });
 const GHOST_CLASS = buttonClass({ variant: 'ghost', size: 'sm', className: 'focus-ring' });
 
-export default function DocumentViewer({ documentId, requestId, portalKey, fileName, originalAvailable = true, textContent, fileSizeFormatted, textPositionLabel, characterOffset = 0, knownMaskedFindingCount = 0, onNextChunk, onPreviousChunk, onSaveEvidence }: DocumentViewerProps) {
+export default function DocumentViewer({ documentId, requestId, portalKey, fileName, originalAvailable = true, textContent, fileSizeFormatted, textPositionLabel, characterOffset = 0, knownMaskedFindingCount = 0, onNextChunk, onPreviousChunk, onSaveEvidence, titled = true }: DocumentViewerProps) {
   const { verifyAssetProvenance, activeManifest, isValidating, error: provenanceError } = useC2PA();
   const [recoveryProfile, setRecoveryProfile] = useState<RecoveredVersionProfile | null>(null);
   const [isRecovering, setIsRecovering] = useState(false);
@@ -377,11 +380,11 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
   };
 
   return (
-    <section className="flex h-full flex-col overflow-hidden rounded-xl border border-line bg-canvas shadow-md">
-      <div className="flex items-start justify-between gap-4 border-b border-line px-4 py-3">
+    <section className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-canvas">
+      <div className={cn('flex justify-between gap-4 border-b border-line px-4 py-3', titled ? 'items-start' : 'items-center')}>
         <div className="min-w-0">
-          <h2 className="truncate text-heading text-fg" title={fileName}>{fileName}</h2>
-          <div className="mt-1 flex flex-wrap items-center gap-x-1.5 text-caption text-muted">
+          {titled && <h2 className="truncate text-heading text-fg" title={fileName}>{fileName}</h2>}
+          <div className={cn('flex flex-wrap items-center gap-x-1.5 text-caption text-muted', titled && 'mt-1')}>
             <span className="font-mono text-code">{portalKey} / {documentId}</span>
             <span aria-hidden="true">·</span>
             <span className="whitespace-nowrap tabular-nums">{fileSizeFormatted}</span>
@@ -436,8 +439,12 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
           wrapperClassName="min-w-[12rem] flex-1"
           trailing={documentSearch.trim() ? <span className="whitespace-nowrap text-caption tabular-nums text-muted">{searchMatches.length === 0 ? 'No matches' : `${activeMatch + 1} of ${searchMatches.length}`}</span> : null}
         />
-        <button type="button" onClick={() => moveToMatch(-1)} disabled={searchMatches.length === 0} className={GHOST_CLASS}>Previous</button>
-        <button type="button" onClick={() => moveToMatch(1)} disabled={searchMatches.length === 0} className={GHOST_CLASS}>Next</button>
+        {documentSearch.trim() && (
+          <>
+            <button type="button" onClick={() => moveToMatch(-1)} disabled={searchMatches.length === 0} className={GHOST_CLASS}>Previous</button>
+            <button type="button" onClick={() => moveToMatch(1)} disabled={searchMatches.length === 0} className={GHOST_CLASS}>Next</button>
+          </>
+        )}
         <button type="button" onClick={() => setShowAnnotations((visible) => !visible)} aria-expanded={showAnnotations} className={TOOL_CLASS}>{showAnnotations ? 'Hide annotations' : 'Annotate'}</button>
         {canViewPages && <button type="button" onClick={() => { setShowPageView((visible) => !visible); setShowAnnotations(true); }} aria-pressed={showPageView} className={TOOL_CLASS}>Page view</button>}
         <button type="button" onClick={() => void shareEvidenceLocation()} className={TOOL_CLASS}>Copy evidence link</button>
@@ -844,7 +851,7 @@ function VerificationHistoryPanel({ records, isLoading, error }: { records: Prov
           return (
             <li key={record.verificationId} className="rounded-lg border border-line bg-canvas/70 px-3 py-2">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <time dateTime={record.verifiedAt} title={record.verifiedAt} className="font-mono text-caption text-muted">{formatInstant(record.verifiedAt)}</time>
+                <time dateTime={record.verifiedAt} title={record.verifiedAt} className="text-caption tabular-nums text-muted">{formatInstant(record.verifiedAt)}</time>
                 <span title={badge.detail} className={`rounded-full border px-2 py-0.5 text-caption ${badge.className}`}>{badge.label}</span>
                 {record.signatureVerification === 'INVALID' && <span className="rounded-full border border-danger/30 bg-danger/10 px-2 py-0.5 text-caption font-semibold text-danger">Signature invalid</span>}
                 {record.signatureVerification === 'VALID' && <span className="rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-caption font-medium text-success">Signature valid</span>}
