@@ -24,18 +24,21 @@ const WATCH_LIMIT = 200;
 const PAGE = 100;
 const SOURCES: TimelineSource[] = ['REQUEST', 'FINDING', 'WATCH', 'CASE'];
 
-interface SourceState {
+interface Loaded<D> {
   items: TimelineItem[];
+  capped: boolean;
+  /** Data the view needs beside the items; published under the same gate as them. */
+  detail: D | null;
+}
+interface SourceState<D> extends Loaded<D> {
   error: string | null;
   loaded: boolean;
-  capped: boolean;
 }
-const EMPTY: SourceState = { items: [], error: null, loaded: false, capped: false };
 
 /** Loads one source independently, so one failing source is named as missing instead of blanking the others. */
-function useSource(load: () => Promise<{ items: TimelineItem[]; capped: boolean }>) {
+function useSource<D>(load: () => Promise<Loaded<D>>) {
   const gate = useLatestRequestGate();
-  const [state, setState] = useState<SourceState>(EMPTY);
+  const [state, setState] = useState<SourceState<D>>({ items: [], capped: false, detail: null, error: null, loaded: false });
   useEffect(() => {
     const request = gate.begin();
     load()
@@ -43,17 +46,18 @@ function useSource(load: () => Promise<{ items: TimelineItem[]; capped: boolean 
         if (gate.isCurrent(request)) setState({ ...result, error: null, loaded: true });
       })
       .catch((reason) => {
-        if (gate.isCurrent(request)) setState({ items: [], capped: false, loaded: true, error: formatNativeError(reason) });
+        if (gate.isCurrent(request)) setState({ items: [], capped: false, detail: null, loaded: true, error: formatNativeError(reason) });
       });
   }, [gate, load]);
   return state;
 }
 
+const NOTHING = { items: [], capped: false, detail: null };
+
 export default function CaseTimeline() {
   const findingsRefresh = useAppStore((state) => state.findingsRefreshRequests);
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
   const inspectFinding = useInspectFinding();
-  const [findingsById, setFindingsById] = useState<Map<string, Finding>>(new Map());
   const [shown, setShown] = useState<ReadonlySet<TimelineSource>>(new Set(SOURCES));
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -61,42 +65,41 @@ export default function CaseTimeline() {
   const [limit, setLimit] = useState(PAGE);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [lane, setLane] = useState<string | null>(null);
-  const [caseLanes, setCaseLanes] = useState<TimelineLane[]>([]);
-  const [contradictions, setContradictions] = useState<DateContradiction[]>([]);
 
-  const loadRequests = useCallback(async () => {
-    if (!isTauri()) return { items: [], capped: false };
-    return { items: requestItems(await invokeCommand('list_claimed_requests', {}), KIND_LABELS), capped: false };
+  const loadRequests = useCallback(async (): Promise<Loaded<null>> => {
+    if (!isTauri()) return NOTHING;
+    return { items: requestItems(await invokeCommand('list_claimed_requests', {}), KIND_LABELS), capped: false, detail: null };
   }, []);
   // The refresh counter re-keys the loader so a completed ingest re-reads findings.
-  const loadFindings = useCallback(async () => {
+  const loadFindings = useCallback(async (): Promise<Loaded<Map<string, Finding>>> => {
     void findingsRefresh;
-    if (!isTauri()) return { items: [], capped: false };
+    if (!isTauri()) return NOTHING;
     const rows = await invokeCommand('list_findings', { filter: null, limit: FINDING_LIMIT + 1 });
     const kept = rows.slice(0, FINDING_LIMIT);
-    setFindingsById(new Map(kept.map((finding) => [finding.id, finding])));
-    return { items: findingItems(kept), capped: rows.length > FINDING_LIMIT };
+    return { items: findingItems(kept), capped: rows.length > FINDING_LIMIT, detail: new Map(kept.map((finding) => [finding.id, finding])) };
   }, [findingsRefresh]);
-  const loadWatch = useCallback(async () => {
-    if (!isTauri()) return { items: [], capped: false };
+  const loadWatch = useCallback(async (): Promise<Loaded<null>> => {
+    if (!isTauri()) return NOTHING;
     const rows = await invokeCommand('list_watch_changes', { watchId: null, limit: WATCH_LIMIT + 1 });
-    return { items: watchItems(rows.slice(0, WATCH_LIMIT)), capped: rows.length > WATCH_LIMIT };
+    return { items: watchItems(rows.slice(0, WATCH_LIMIT)), capped: rows.length > WATCH_LIMIT, detail: null };
   }, []);
-
-  const loadCase = useCallback(async () => {
-    if (!isTauri()) return { items: [], capped: false };
+  const loadCase = useCallback(async (): Promise<Loaded<{ lanes: TimelineLane[]; contradictions: DateContradiction[] }>> => {
+    if (!isTauri()) return NOTHING;
     const built = caseItems((await invokeCommand('get_casework_state', {})).cases);
-    setCaseLanes(built.lanes);
-    setContradictions(built.contradictions);
-    return { items: built.items, capped: false };
+    return { items: built.items, capped: false, detail: { lanes: built.lanes, contradictions: built.contradictions } };
   }, []);
 
-  const sources: Record<TimelineSource, SourceState> = {
+  const findings = useSource(loadFindings);
+  const casework = useSource(loadCase);
+  const sources: Record<TimelineSource, SourceState<unknown>> = {
     REQUEST: useSource(loadRequests),
-    FINDING: useSource(loadFindings),
+    FINDING: findings,
     WATCH: useSource(loadWatch),
-    CASE: useSource(loadCase),
+    CASE: casework,
   };
+  const findingsById = findings.detail;
+  const caseLanes = casework.detail?.lanes ?? [];
+  const contradictions = casework.detail?.contradictions ?? [];
 
   const all = useMemo(() => SOURCES.flatMap((source) => sources[source].items), [sources.REQUEST.items, sources.FINDING.items, sources.WATCH.items, sources.CASE.items]);
   const view = useMemo(() => buildTimeline(all, { sources: shown, from, to, text, lane }), [all, shown, from, to, text, lane]);
@@ -213,7 +216,7 @@ export default function CaseTimeline() {
                           {expanded === row.id ? 'Hide basis' : 'Show basis'}
                         </button>
                       )}
-                      {row.findingId && findingsById.get(row.findingId) && (
+                      {row.findingId && findingsById?.get(row.findingId) && (
                         <button type="button" onClick={() => inspectFinding(findingsById.get(row.findingId as string) as Finding)} className="focus-ring underline text-fg-secondary">Inspect in evidence</button>
                       )}
                       {row.source === 'WATCH' && (

@@ -5,8 +5,8 @@ import Icon from '../ui/icons';
 /**
  * Says when a view is narrowed to the active case and turns it off or on. Shown only with a case
  * active; a scope that has not loaded says so instead of presenting an empty list as the case.
+ * `listOnly`: the view lists what the case covers beside its full contents instead of filtering them.
  */
-/** `listOnly`: the view lists what the case covers beside its full contents instead of filtering them. */
 export default function CaseScopeBar({ state, noun, listOnly = false }: { state: ReturnType<typeof useCaseScope>; noun: string; listOnly?: boolean }) {
   const activeCaseId = useAppStore((s) => s.activeCaseId);
   const scopeToCase = useAppStore((s) => s.scopeToCase);

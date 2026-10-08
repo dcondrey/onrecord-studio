@@ -67,17 +67,11 @@ describe('EvidencePacketExport', () => {
     expect(exported?.request.includeAnnotations).toBe(true);
   });
 
-  it('sends includeAnnotations false when the box is not ticked', async () => {
+  it('exports without annotations unless asked, and states gaps apart from claims', async () => {
     render(<EvidencePacketExport portalKey="portal-a" />);
     fireEvent.click(screen.getByRole('button', { name: /export evidence packet/i }));
     await waitFor(() => expect(pending.has('portal-a')).toBe(true));
     expect(sent.find((entry) => entry.command === 'export_evidence_packet')?.request.includeAnnotations).toBe(false);
-  });
-
-  it('shows the packet for the scope that is still current and states gaps apart from claims', async () => {
-    render(<EvidencePacketExport portalKey="portal-a" />);
-    fireEvent.click(screen.getByRole('button', { name: /export evidence packet/i }));
-    await waitFor(() => expect(pending.has('portal-a')).toBe(true));
     pending.get('portal-a')?.(result('/reports/for-a.md'));
     expect(await screen.findByText(/for-a\.md/)).toBeTruthy();
     expect(screen.getByText(/Wrote 3 claim\(s\); 2 gap\(s\) listed separately/)).toBeTruthy();

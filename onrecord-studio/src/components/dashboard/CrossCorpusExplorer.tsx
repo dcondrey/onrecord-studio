@@ -1,17 +1,18 @@
 import { useCallback, useMemo } from 'react';
 import { useFindings } from '../../hooks/useFindings';
 import { useAppStore } from '../../store/useAppStore';
-import { ShapeGlyph, type GlyphShape } from '../ui/shapeGlyph';
-import type { Finding, FindingKind, FindingSeverity } from '../../types';
+import { ShapeGlyph } from '../ui/shapeGlyph';
+import { severityGlyph } from './findingSeverity';
+import { confidenceLabel } from '../objects/labels';
+import type { Finding } from '../../types';
 
 /**
- * Cross-corpus findings panel: the four Wave 8 patterns that span jurisdictions, agencies, and
- * time. Displays as its own section below the ranked FindingsInbox because their subject
+ * Cross-corpus findings panel: the four detector patterns that span jurisdictions, agencies,
+ * and time. Displays as its own section below the ranked FindingsInbox because their subject
  * anchors (jurisdiction pairs, change-points) don't fit the inbox's severity-first ranking as
  * cleanly as a per-request finding does.
  *
- * Rendered as a compact agency-pair heatmap on the left plus the ranked list on the right.
- * Both use the `useLatestRequestGate` hook so a superseded refresh cannot publish stale rows.
+ * Rendered as a portal × detector heatmap on the left plus the ranked list on the right.
  */
 type CrossCorpusKind =
   | 'CROSS_CORPUS_SHARED_LANGUAGE'
@@ -33,42 +34,39 @@ const KIND_LABEL: Record<CrossCorpusKind, string> = {
   CROSS_CORPUS_REUSED_DENIAL_GROUNDS: 'Reused grounds',
 };
 
-function isCrossCorpusKind(kind: FindingKind): kind is CrossCorpusKind {
-  return (CROSS_CORPUS_KINDS as readonly string[]).includes(kind);
+type CrossCorpusFinding = Finding & { kind: CrossCorpusKind };
+
+function isCrossCorpusFinding(finding: Finding): finding is CrossCorpusFinding {
+  return (CROSS_CORPUS_KINDS as readonly string[]).includes(finding.kind);
+}
+
+function heatmapKey(portal: string, kind: CrossCorpusKind) {
+  return `${portal}\u001f${kind}`;
 }
 
 export default function CrossCorpusExplorer() {
   const load = useFindings(null, 200);
-  const findings = useMemo(() => load.findings.filter((row) => isCrossCorpusKind(row.kind)), [load.findings]);
+  const findings = useMemo(() => load.findings.filter(isCrossCorpusFinding), [load.findings]);
   const error = load.status === 'failed' ? load.message : null;
   const isLoading = load.status === 'loading';
   const setActivePortal = useAppStore((state) => state.setActivePortal);
   const setSearchFilters = useAppStore((state) => state.setSearchFilters);
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
 
-  // Build an agency-pair heatmap: rows = originating agency, cols = other agency mentioned in
-  // headline text. Because backend citations don't carry a second agency id, we derive the
-  // pairing from the finding's subject.agencyId and the count of documents cited across other
-  // portals. This produces an approximate view — the exact detector logic is authoritative.
+  // Findings carry one subject portal, not a second jurisdiction, so the heatmap counts findings
+  // per subject portal and detector rather than per jurisdiction pair.
   const heatmap = useMemo(() => {
     const cellCounts = new Map<string, number>();
     let maxCount = 0;
     for (const finding of findings) {
-      if (!isCrossCorpusKind(finding.kind)) continue;
-      const source = finding.subject.portalKey ?? '(no portal)';
-      const kind = KIND_LABEL[finding.kind];
-      const key = `${source}\u001f${kind}`;
+      const key = heatmapKey(finding.subject.portalKey ?? '(no portal)', finding.kind);
       const next = (cellCounts.get(key) ?? 0) + 1;
       cellCounts.set(key, next);
-      if (next > maxCount) maxCount = next;
+      maxCount = Math.max(maxCount, next);
     }
     const portals = new Set<string>();
     for (const key of cellCounts.keys()) portals.add(key.split('\u001f')[0]);
-    return {
-      portals: Array.from(portals).sort(),
-      cellCounts,
-      maxCount,
-    };
+    return { portals: Array.from(portals).sort(), cellCounts, maxCount };
   }, [findings]);
 
   const inspect = useCallback(
@@ -99,11 +97,20 @@ export default function CrossCorpusExplorer() {
         </div>
       )}
 
-      {isLoading && findings.length === 0 ? (
+      {findings.length > 0 ? (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
+          <Heatmap heatmap={heatmap} />
+          <ul className="flex flex-col gap-2" aria-label="Cross-corpus findings list">
+            {findings.map((finding) => (
+              <CrossCorpusRow key={finding.id} finding={finding} onInspect={() => inspect(finding)} />
+            ))}
+          </ul>
+        </div>
+      ) : isLoading ? (
         <div role="status" className="text-label text-muted">
           Loading cross-corpus findings…
         </div>
-      ) : findings.length === 0 ? (
+      ) : error ? null : (
         <div className="rounded-xl border border-dashed border-line bg-canvas/40 p-4 text-center">
           <p className="text-label font-medium text-fg-secondary">
             No cross-corpus patterns surfaced yet.
@@ -112,15 +119,6 @@ export default function CrossCorpusExplorer() {
             These detectors compare across agencies, time windows, and jurisdictions; they need
             a broader ingest to fire.
           </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
-          <Heatmap heatmap={heatmap} />
-          <ul className="flex flex-col gap-2" aria-label="Cross-corpus findings list">
-            {findings.map((finding) => (
-              <CrossCorpusRow key={finding.id} finding={finding} onInspect={() => inspect(finding)} />
-            ))}
-          </ul>
         </div>
       )}
     </section>
@@ -136,13 +134,6 @@ function Heatmap({
     maxCount: number;
   };
 }) {
-  if (heatmap.portals.length === 0 || heatmap.maxCount === 0) {
-    return (
-      <div className="rounded-lg border border-line bg-canvas/40 p-3 text-caption text-muted">
-        No jurisdictions to plot yet.
-      </div>
-    );
-  }
   return (
     <div className="rounded-lg border border-line bg-canvas/40 p-3">
       <p className="text-caption uppercase tracking-wider text-muted">Jurisdiction × detector</p>
@@ -151,7 +142,7 @@ function Heatmap({
           <thead>
             <tr>
               <th className="pr-2 text-left font-normal text-muted">Portal</th>
-              {(Object.keys(KIND_LABEL) as (keyof typeof KIND_LABEL)[]).map((kind) => (
+              {CROSS_CORPUS_KINDS.map((kind) => (
                 <th key={kind} className="px-1 text-center font-normal text-muted">
                   {KIND_LABEL[kind].split(' ')[0]}
                 </th>
@@ -162,24 +153,17 @@ function Heatmap({
             {heatmap.portals.map((portal) => (
               <tr key={portal}>
                 <td className="pr-2 text-caption text-fg-secondary">{portal}</td>
-                {(Object.keys(KIND_LABEL) as (keyof typeof KIND_LABEL)[]).map((kind) => {
+                {CROSS_CORPUS_KINDS.map((kind) => {
                   const label = KIND_LABEL[kind];
-                  const count = heatmap.cellCounts.get(`${portal}\u001f${label}`) ?? 0;
-                  const intensity = heatmap.maxCount > 0 ? count / heatmap.maxCount : 0;
+                  const count = heatmap.cellCounts.get(heatmapKey(portal, kind)) ?? 0;
                   return (
                     <td key={kind} className="px-1 py-0.5 text-center">
                       <span
-                        className="inline-block h-3.5 w-full min-w-[1.25rem] rounded-sm"
-                        style={{
-                          backgroundColor:
-                            count === 0
-                              ? 'rgba(51, 65, 85, 0.3)'
-                              : `rgba(56, 189, 248, ${0.15 + intensity * 0.65})`,
-                        }}
-                        aria-label={`${portal} · ${label}: ${count}`}
+                        className={`inline-block h-3.5 w-full min-w-[1.25rem] rounded-sm ${count === 0 ? 'bg-line/30' : 'bg-accent'}`}
+                        style={count === 0 ? undefined : { opacity: 0.15 + (count / heatmap.maxCount) * 0.65 }}
                       >
                         <span className="sr-only">
-                          {portal} {label}: {count}
+                          {portal} · {label}: {count}
                         </span>
                       </span>
                     </td>
@@ -194,7 +178,7 @@ function Heatmap({
   );
 }
 
-function CrossCorpusRow({ finding, onInspect }: { finding: Finding; onInspect: () => void }) {
+function CrossCorpusRow({ finding, onInspect }: { finding: CrossCorpusFinding; onInspect: () => void }) {
   const [shape, tone] = severityGlyph(finding.severity);
   return (
     <li className="focus-within:ring-1 focus-within:ring-accent/50 rounded-xl border border-line bg-canvas/40 p-3 transition hover:border-accent/30 hover:bg-accent/5">
@@ -209,26 +193,11 @@ function CrossCorpusRow({ finding, onInspect }: { finding: Finding; onInspect: (
             <p className="text-label font-semibold text-fg">{finding.headline}</p>
             <p className="mt-1 text-label leading-relaxed text-muted">{finding.explanation}</p>
             <p className="mt-1 text-caption uppercase tracking-wider text-muted">
-              {isCrossCorpusKind(finding.kind) ? KIND_LABEL[finding.kind] : finding.kind}
-              {finding.confidence.kind === 'MEASURED' &&
-                ` · ${(finding.confidence.basisPoints / 100).toFixed(0)}% confidence`}
+              {KIND_LABEL[finding.kind]} · {confidenceLabel(finding.confidence)}
             </p>
           </div>
         </div>
       </button>
     </li>
   );
-}
-
-function severityGlyph(severity: FindingSeverity): [GlyphShape, string] {
-  switch (severity) {
-    case 'CRITICAL':
-      return ['diamond', 'text-danger'];
-    case 'SERIOUS':
-      return ['triangle', 'text-warning'];
-    case 'NOTABLE':
-      return ['circle', 'text-accent'];
-    case 'INFO':
-      return ['ring', 'text-muted'];
-  }
 }

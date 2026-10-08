@@ -686,6 +686,7 @@ export default function EntityGraph() {
           {listing && (
             <>
               <EntityNeighborTable
+                key={centre.entityId}
                 centre={centre}
                 list={listing}
                 kindLabel={(kind) => kindLabels[kind]}

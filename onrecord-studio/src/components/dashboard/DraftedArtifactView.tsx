@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import type {
-  DraftedArtifact,
-  DraftEvidenceBasis,
-  FindingConfidence,
-} from "../../types";
+import type { DraftedArtifact, DraftEvidenceBasis } from "../../types";
+import { confidenceLabel } from "../objects/labels";
+import { downloadFile } from "./downloadFile";
+import { useLatestRequestGate } from "../../hooks/useLatestRequestGate";
 
 const BASIS_LABEL: Record<DraftEvidenceBasis, string> = {
   PATTERN_OBSERVATION: "Pattern observation (not a finding of violation)",
@@ -15,13 +14,8 @@ const BASIS_LABEL: Record<DraftEvidenceBasis, string> = {
     "Computed deadline passed with no recorded response (not a finding about the agency's conduct)",
 };
 
-export function confidenceLabel(confidence: FindingConfidence): string {
-  if (confidence.kind === "UNASSESSED") return "not assessed";
-  return `${(confidence.basisPoints / 100).toFixed(2)}% (measured)`;
-}
-
 /** The text that leaves the app: the edited body, then the disclosure the body cannot remove. */
-export function outgoingText(body: string, disclosure: string | null): string {
+function outgoingText(body: string, disclosure: string | null): string {
   return disclosure === null
     ? body
     : `${body.trimEnd()}\n\n---\nDisclosure: ${disclosure}\n`;
@@ -38,34 +32,37 @@ export default function DraftedArtifactView({
 }) {
   const [editedText, setEditedText] = useState(draft.generatedText);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  // "Copied" describes one exact text; a write that settles after the text changed says nothing.
+  const copyGate = useLatestRequestGate();
 
   useEffect(() => {
+    copyGate.invalidate();
     setEditedText(draft.generatedText);
     setError(null);
-  }, [draft]);
+    setCopied(false);
+  }, [copyGate, draft]);
 
   const copyToClipboard = useCallback(async () => {
+    const token = copyGate.begin();
+    setCopied(false);
     try {
       await navigator.clipboard.writeText(
         outgoingText(editedText, draft.disclosure),
       );
+      if (!copyGate.isCurrent(token)) return;
+      setError(null);
+      setCopied(true);
     } catch (reason) {
-      setError(`Copy to clipboard failed: ${String(reason)}`);
+      if (copyGate.isCurrent(token)) setError(`Copy to clipboard failed: ${String(reason)}`);
     }
-  }, [draft.disclosure, editedText]);
+  }, [copyGate, draft.disclosure, editedText]);
 
   const download = useCallback(() => {
-    const blob = new Blob([outgoingText(editedText, draft.disclosure)], {
-      type: "text/plain;charset=utf-8",
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${draft.kind.toLowerCase()}-${draft.subjectFindingId.replace(/[^A-Za-z0-9_-]+/g, "-")}.txt`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    URL.revokeObjectURL(url);
+    downloadFile(
+      `${draft.kind.toLowerCase()}-${draft.subjectFindingId.replace(/[^A-Za-z0-9_-]+/g, "-")}.txt`,
+      outgoingText(editedText, draft.disclosure),
+    );
   }, [draft, editedText]);
 
   return (
@@ -84,7 +81,7 @@ export default function DraftedArtifactView({
             onClick={copyToClipboard}
             className="focus-ring rounded-md border border-control px-2 py-1 text-caption font-medium text-fg-secondary transition hover:border-accent/30"
           >
-            Copy
+            {copied ? "Copied" : "Copy"}
           </button>
           <button
             type="button"
@@ -123,7 +120,11 @@ export default function DraftedArtifactView({
       )}
       <textarea
         value={editedText}
-        onChange={(event) => setEditedText(event.target.value)}
+        onChange={(event) => {
+          copyGate.invalidate();
+          setEditedText(event.target.value);
+          setCopied(false);
+        }}
         aria-label="Drafted artifact text (editable)"
         className="min-h-[220px] w-full resize-y rounded-md border border-control bg-canvas/70 p-3 font-mono text-label leading-relaxed text-fg focus:border-accent/30 focus:outline-none focus:ring-1 focus:ring-accent/30"
       />
@@ -140,7 +141,7 @@ export default function DraftedArtifactView({
       )}
       {draft.citations.length > 0 && (
         <details className="text-caption text-muted">
-          <summary className="">
+          <summary>
             Citations ({draft.citations.length})
           </summary>
           <ul className="ml-4 mt-1 list-disc space-y-1">
@@ -158,7 +159,7 @@ export default function DraftedArtifactView({
       )}
       {draft.citedAuthorities.length > 0 && (
         <details className="text-caption text-muted">
-          <summary className="">
+          <summary>
             Cited authorities ({draft.citedAuthorities.length})
           </summary>
           <ul className="ml-4 mt-1 list-disc space-y-0.5">

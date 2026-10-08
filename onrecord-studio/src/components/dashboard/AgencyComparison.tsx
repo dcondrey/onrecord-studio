@@ -15,11 +15,11 @@ import DispositionCounts from './DispositionCounts';
 export const PEER_LATENCY_OUTLIER_Z_SCORE = 2.0;
 
 /** Below this many measured closures a single closure moves the average by a fifth or more. */
-export const SMALL_SAMPLE_CLOSURES = 5;
+const SMALL_SAMPLE_CLOSURES = 5;
 
 export const NO_MEASURABLE_CLOSURE = 'no measurable closure';
 
-export type ComparisonColumn =
+type ComparisonColumn =
   | 'averageClosureDays'
   | 'validLatencySampleSize'
   | 'performanceZScore'
@@ -54,9 +54,9 @@ const COLUMNS: readonly ColumnDefinition[] = [
   { key: 'totalDocumentsReleased', label: 'Documents released', format: (p) => p.totalDocumentsReleased.toLocaleString() },
 ];
 
-export const DEFAULT_COLUMN: ComparisonColumn = 'averageClosureDays';
+const DEFAULT_COLUMN: ComparisonColumn = 'averageClosureDays';
 
-export function isPeerLatencyOutlier(profile: AgencyPerformanceProfile): boolean {
+function isPeerLatencyOutlier(profile: AgencyPerformanceProfile): boolean {
   return profile.performanceZScore !== null && profile.performanceZScore >= PEER_LATENCY_OUTLIER_Z_SCORE;
 }
 

@@ -4,6 +4,7 @@ import type { AnalyticalSchema, SqlQueryResult } from '../../types';
 import { buildDiscoveryPlan, discoveryDefaults, discoveryDrilldown, discoveryFindings, isNumericColumn,
   type DiscoveryFilter, type DiscoveryReport, type DiscoverySelection } from '../../utils/dataDiscovery';
 import { useDiscoveryController } from './AutomaticDiscoveryProvider';
+import { downloadFile } from './downloadFile';
 
 export default function DataDiscovery({ schema, onInspect }: { schema: AnalyticalSchema; onInspect: (sql: string) => void }) {
   const automatic = useDiscoveryController();
@@ -53,12 +54,7 @@ export default function DataDiscovery({ schema, onInspect }: { schema: Analytica
   };
   const exportReport = () => {
     if (!report) return;
-    const url = URL.createObjectURL(new Blob([JSON.stringify({ ...report, findings: discoveryFindings(report) }, null, 2)], { type: 'application/json' }));
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `onrecord-discovery-${report.plan.dataset.snapshotId.slice(0, 16)}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    downloadFile(`onrecord-discovery-${report.plan.dataset.snapshotId.slice(0, 16)}.json`, JSON.stringify({ ...report, findings: discoveryFindings(report) }, null, 2), 'application/json');
   };
   return <div className="space-y-3 text-label leading-4 text-fg-secondary">
     <p className="leading-relaxed text-muted">Explore coverage, group differences, changes over time, unusual values, and repeated records. Each check runs across the imported snapshot and retains its query for review.</p>

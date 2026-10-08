@@ -102,7 +102,7 @@ export default function EvidencePacketExport({ portalKey = null, findingIds }: E
         <span>Include my annotations on cited documents</span>
       </label>
       {includeAnnotations && (
-        <div className="mt-2 rounded border border-warning/60 bg-warning/40 p-3 text-label leading-4 text-warning">
+        <div className="mt-2 rounded border border-warning/30 bg-warning/5 p-3 text-label leading-4 text-warning">
           <p>
             Adds a separate section, labelled as the reviewer&apos;s reading and not part of the record. For
             each annotation on a document the claims cite it writes the code, author, status, anchor state,

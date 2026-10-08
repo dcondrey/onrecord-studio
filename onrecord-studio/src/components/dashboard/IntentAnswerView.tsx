@@ -92,7 +92,7 @@ function Row({ row }: { row: IntentRow }) {
   );
 }
 
-export interface IntentAnswerViewProps {
+interface IntentAnswerViewProps {
   answer: IntentAnswer;
   onChooseOption: (option: IntentOption) => void;
 }

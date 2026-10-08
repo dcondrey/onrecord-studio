@@ -6,9 +6,9 @@ import MethodNote from '../ui/MethodNote';
 import ObjectLink from '../objects/ObjectLink';
 
 /** Below this many requests one request moves a department's share by a fifth or more. */
-export const SMALL_DEPARTMENT_REQUESTS = 5;
+const SMALL_DEPARTMENT_REQUESTS = 5;
 
-export const DISPOSITION_LABELS: Record<Disposition, string> = {
+const DISPOSITION_LABELS: Record<Disposition, string> = {
   RELEASED: 'Released',
   RELEASED_IN_PART: 'Released in part',
   WITHHELD: 'Withheld',
