@@ -1,4 +1,5 @@
 import type { ClaimedRequest, Finding, TimelineEventKind, WatchChange } from '../types';
+import { claimBasisLabel, formatShortDate } from '../components/objects/labels';
 
 export type TimelineSource = 'REQUEST' | 'FINDING' | 'WATCH' | 'CASE';
 
@@ -69,10 +70,18 @@ export function findingItems(findings: Finding[]): TimelineItem[] {
     dateMeaning: 'LAST_SEEN' as const,
     title: finding.headline,
     detail: null,
-    provenance: `Detector ${finding.sourceDetector}; first discovered ${finding.discoveredAt.slice(0, 10)}. A pattern signal, not a legal claim.`,
+    // Same source as ClaimBasisBadge, so the timeline and the inbox never disagree on the basis.
+    provenance: `Found by the ${detectorName(finding.sourceDetector)} check; first discovered ${formatShortDate(finding.discoveredAt)}. ${
+      claimBasisLabel(finding.kind) === 'Counted violation' ? 'A counted statutory violation.' : 'A pattern signal, not a legal claim.'
+    }`,
     evidence: finding.explanation,
     findingId: finding.id,
   }));
+}
+
+/** A detector id ("encampment_notice") as words ("encampment notice"). */
+function detectorName(id: string): string {
+  return id.replace(/[_-]+/g, ' ').trim().toLowerCase();
 }
 
 export function watchItems(changes: WatchChange[]): TimelineItem[] {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildTimeline, type TimelineItem, type TimelineSource } from '../utils/timeline';
+import { buildTimeline, findingItems, type TimelineItem, type TimelineSource } from '../utils/timeline';
+import type { Finding } from '../types';
 
 const item = (id: string, source: TimelineSource, at: string, title = id): TimelineItem => ({
   id,
@@ -52,5 +53,19 @@ describe('caseItems', () => {
     expect(filed?.citations).toEqual([{ label: 'Agenda', grade: 'SAVED_REPORT' }]);
     expect(built.items.find((i) => i.id === 'clock:c:q:determination-due')?.citations).toEqual([]);
     expect(buildTimeline(built.items, { sources: new Set(['CASE']), from: '', to: '', text: '', lane: 'hypothesis:c:h' }).items.map((i) => i.id)).toEqual(['clock:c:q:filed', 'decision:c:d1']);
+  });
+
+  // The timeline and the inbox read the claim basis from one source, so a counted violation is never
+  // also called "not a legal claim" here.
+  it('states each finding\'s claim basis from its kind', () => {
+    const finding = (kind: Finding['kind']): Finding => ({
+      id: kind, kind, severity: 'SERIOUS', confidence: { kind: 'NOT_ASSESSED' } as Finding['confidence'], subject: { kind: 'AGENCY' } as unknown as Finding['subject'],
+      headline: 'h', explanation: 'e', citations: [], discoveredAt: '2026-10-01T00:00:00Z', lastSeenAt: '2026-10-02T00:00:00Z', dismissedAt: null, sourceDetector: 'encampment_notice',
+    });
+    const [counted, signal] = findingItems([finding('ENCAMPMENT_NOTICE_SHORTFALL'), finding('BOILERPLATE_DENIAL')]);
+    expect(counted.provenance).toContain('A counted statutory violation.');
+    expect(counted.provenance).not.toContain('not a legal claim');
+    expect(counted.provenance).toContain('encampment notice check');
+    expect(signal.provenance).toContain('A pattern signal, not a legal claim.');
   });
 });
