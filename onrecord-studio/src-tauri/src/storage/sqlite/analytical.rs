@@ -30,15 +30,14 @@ impl DuckDbRepository {
     pub(crate) async fn import_analytical_csv_recording_origin(
         &self,
         request: AnalyticalImportRequest,
-        automatic_origin: Option<(String, u64)>,
+        portal_key: String,
+        document_id: u64,
     ) -> Result<AnalyticalImportResult, AppError> {
-        let origin = automatic_origin.map(|(portal_key, document_id)| {
-            super::analytical_import::ImportOrigin::Maintenance {
-                portal_key,
-                document_id,
-            }
-        });
-        self.import_analytical_table(request, origin)
+        let origin = super::analytical_import::ImportOrigin::Maintenance {
+            portal_key,
+            document_id,
+        };
+        self.import_analytical_table(request, Some(origin))
             .await
             .map(|(result, _)| result)
     }

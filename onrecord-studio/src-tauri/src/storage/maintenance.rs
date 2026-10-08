@@ -205,9 +205,12 @@ impl DuckDbRepository {
         // The snapshot write and its origin receipt must commit or roll back together: a crash
         // between two separate transactions would leave a snapshot on disk that later
         // maintenance/purge logic cannot tell apart from one nobody ever recorded an origin for.
-        let origin = (candidate.portal_key.clone(), candidate.document_id);
         match self
-            .import_analytical_csv_recording_origin(input, Some(origin))
+            .import_analytical_csv_recording_origin(
+                input,
+                candidate.portal_key.clone(),
+                candidate.document_id,
+            )
             .await
         {
             Ok(result) => {
