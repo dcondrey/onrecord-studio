@@ -19,25 +19,20 @@ use crate::{
         FindingSubject,
     },
     error::AppError,
+    parsers::pdf_metadata_signals::read_pdf_metadata_signals,
     storage::DuckDbRepository,
 };
 #[cfg(test)]
-use chrono::Timelike;
-use chrono::{DateTime, Datelike, Duration, TimeZone, Utc};
+use chrono::TimeZone;
+use chrono::{DateTime, Duration, Utc};
 use duckdb::params;
-use lopdf::{Document, Object};
-use std::path::PathBuf;
+use std::path::Path;
 
 pub const SLUG: &str = "held_back_response";
 
 /// Max documents inspected per invocation. Bounded so a huge corpus doesn't stall the refresh.
 /// Ordered newest-first so the most recent evidence surfaces even when the cap is hit.
 const MAX_CANDIDATES: i64 = 500;
-
-/// Read cap for a single PDF's Info dictionary. Full parse is unnecessary for metadata only, but
-/// `lopdf::Document::load` needs the trailer, so we cap at 16 MiB — enough for the trailer and
-/// object streams that carry Info in real released documents, small enough to bound cost.
-const MAX_PDF_BYTES_FOR_METADATA: u64 = 16 * 1024 * 1024;
 
 /// Minimum ModDate-before-release window that flags a document. Under 24h is normal editorial
 /// churn on a same-day release.
@@ -67,19 +62,17 @@ pub async fn run(repository: &DuckDbRepository) -> Result<Vec<Finding>, AppError
     let candidates = load_candidates(repository).await?;
     let mut findings = Vec::new();
     for candidate in candidates {
-        match extract_metadata_dates(PathBuf::from(&candidate.local_path)) {
-            Ok(dates) => {
-                if let Some(finding) = evaluate(&candidate, dates) {
-                    findings.push(finding);
-                }
-            }
-            Err(_error) => {
-                // A single unreadable PDF is not a failure of the detector. It could be a
-                // corrupt asset, a permissions issue, or a non-PDF misfiled with a .pdf name.
-                // Skip and continue; the residual-evidence audit will catch and record it
-                // through its own channel.
-                continue;
-            }
+        // An unreadable or oversized PDF is not a detector failure; the residual-evidence audit
+        // records it through its own channel.
+        let Ok(signals) = read_pdf_metadata_signals(Path::new(&candidate.local_path)) else {
+            continue;
+        };
+        let dates = PdfMetadataDates {
+            mod_date: signals.info_mod_date,
+            xmp_modify_date: signals.xmp_modify_date,
+        };
+        if let Some(finding) = evaluate(&candidate, dates) {
+            findings.push(finding);
         }
     }
     Ok(findings)
@@ -201,114 +194,6 @@ impl PdfMetadataDates {
     }
 }
 
-fn extract_metadata_dates(path: PathBuf) -> Result<PdfMetadataDates, AppError> {
-    // Bounded read: reject anything larger than the cap without loading it.
-    let metadata = std::fs::metadata(&path)
-        .map_err(|error| AppError::Storage(format!("Failed to stat PDF: {error}")))?;
-    if metadata.len() > MAX_PDF_BYTES_FOR_METADATA {
-        return Err(AppError::DataParsing(format!(
-            "PDF is larger than the {MAX_PDF_BYTES_FOR_METADATA}-byte metadata read cap"
-        )));
-    }
-    let document = crate::parsers::pdf::load_bounded(&path).map_err(|error| {
-        AppError::DataParsing(format!("Failed to open PDF for metadata: {error}"))
-    })?;
-    let mod_date = read_info_date(&document, b"ModDate");
-    let xmp_modify_date = read_xmp_modify_date(&document);
-    Ok(PdfMetadataDates {
-        mod_date,
-        xmp_modify_date,
-    })
-}
-
-fn read_info_date(document: &Document, key: &[u8]) -> Option<DateTime<Utc>> {
-    let info_object = document.trailer.get(b"Info").ok()?;
-    let dictionary = match info_object {
-        Object::Dictionary(dict) => dict,
-        Object::Reference(id) => match document.get_object(*id).ok()? {
-            Object::Dictionary(dict) => dict,
-            _ => return None,
-        },
-        _ => return None,
-    };
-    let value = dictionary.get(key).ok()?;
-    let bytes = match value {
-        Object::String(bytes, _) => bytes,
-        _ => return None,
-    };
-    parse_pdf_date(bytes)
-}
-
-/// The XMP stream carries a `<xmp:ModifyDate>` element in ISO 8601. We accept a UTF-8 stream and
-/// scan for that element; anything more elaborate would require an XML parser we don't need here.
-fn read_xmp_modify_date(document: &Document) -> Option<DateTime<Utc>> {
-    let catalog = document.catalog().ok()?;
-    let metadata_ref = catalog.get(b"Metadata").ok()?;
-    let stream_object = match metadata_ref {
-        Object::Stream(stream) => stream.clone(),
-        Object::Reference(id) => match document.get_object(*id).ok()? {
-            Object::Stream(stream) => stream.clone(),
-            _ => return None,
-        },
-        _ => return None,
-    };
-    let content = stream_object
-        .decompressed_content_with_limit(crate::parsers::pdf::MAX_DECOMPRESSED_STREAM_BYTES)
-        .ok()?;
-    let text = std::str::from_utf8(&content).ok()?;
-    let start = text.find("<xmp:ModifyDate>")?;
-    let after_open = start + "<xmp:ModifyDate>".len();
-    let end_relative = text[after_open..].find("</xmp:ModifyDate>")?;
-    let iso_slice = text[after_open..after_open + end_relative].trim();
-    parse_iso(iso_slice).ok()
-}
-
-/// Parses a PDF Info-dictionary date literal (`D:YYYYMMDDHHmmSSOHH'mm'` where `O` is `+`, `-`, or
-/// `Z`). Returns `None` on any parse failure; a bad date is not itself a signal, just data we
-/// can't use.
-fn parse_pdf_date(bytes: &[u8]) -> Option<DateTime<Utc>> {
-    let text = std::str::from_utf8(bytes).ok()?.trim();
-    let stripped = text.strip_prefix("D:").unwrap_or(text);
-    if stripped.len() < 4 {
-        return None;
-    }
-    // Read pieces defensively: shorter strings mean unspecified fields default to zero.
-    let year: i32 = stripped.get(0..4)?.parse().ok()?;
-    let month: u32 = stripped.get(4..6).map_or(1, |v| v.parse().unwrap_or(1));
-    let day: u32 = stripped.get(6..8).map_or(1, |v| v.parse().unwrap_or(1));
-    let hour: u32 = stripped.get(8..10).map_or(0, |v| v.parse().unwrap_or(0));
-    let minute: u32 = stripped.get(10..12).map_or(0, |v| v.parse().unwrap_or(0));
-    let second: u32 = stripped.get(12..14).map_or(0, |v| v.parse().unwrap_or(0));
-    let (tz_sign_char, tz_body) = if let Some(rest) = stripped.get(14..) {
-        if rest.is_empty() || rest.starts_with('Z') {
-            ('Z', "")
-        } else {
-            (rest.chars().next().unwrap_or('Z'), &rest[1..])
-        }
-    } else {
-        ('Z', "")
-    };
-    let (tz_hours, tz_minutes): (i32, i32) = if tz_sign_char == 'Z' {
-        (0, 0)
-    } else {
-        let hours: i32 = tz_body.get(0..2).map_or(0, |v| v.parse().unwrap_or(0));
-        // PDF spec uses O'HH'mm' with apostrophes; e.g. `-05'00'`.
-        let after_hours = tz_body.get(2..).unwrap_or("").trim_start_matches('\'');
-        let minutes: i32 = after_hours
-            .split('\'')
-            .next()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(0);
-        let sign = if tz_sign_char == '-' { -1 } else { 1 };
-        (sign * hours, sign * minutes)
-    };
-    let naive =
-        chrono::NaiveDate::from_ymd_opt(year, month, day)?.and_hms_opt(hour, minute, second)?;
-    let offset = chrono::FixedOffset::east_opt(tz_hours * 3600 + tz_minutes * 60)?;
-    let local = offset.from_local_datetime(&naive).single()?;
-    Some(local.with_timezone(&Utc))
-}
-
 fn parse_iso(value: &str) -> Result<DateTime<Utc>, AppError> {
     DateTime::parse_from_rfc3339(value.trim())
         .map(|dt| dt.with_timezone(&Utc))
@@ -383,12 +268,12 @@ fn evaluate(candidate: &Candidate, dates: PdfMetadataDates) -> Option<Finding> {
          the statutory deadline ({deadline}), consistent with a document that was ready \
          earlier and held back until the wire.",
         request_id = candidate.request_id,
-        release = format_short(candidate.release_at),
+        release = candidate.release_at.format("%Y-%m-%d"),
         basis = candidate.release_basis.describe(),
-        edited = format_short(effective_mod),
+        edited = effective_mod.format("%Y-%m-%d"),
         plural = if holdback_days == 1 { "" } else { "s" },
         wire_hours = AT_THE_WIRE_HOURS,
-        deadline = format_short(candidate.deadline_at),
+        deadline = candidate.deadline_at.format("%Y-%m-%d"),
     );
     let citations = vec![FindingCitation {
         portal_key: candidate.portal_key.clone(),
@@ -415,15 +300,6 @@ fn evaluate(candidate: &Candidate, dates: PdfMetadataDates) -> Option<Finding> {
     })
 }
 
-fn format_short(instant: DateTime<Utc>) -> String {
-    format!(
-        "{:04}-{:02}-{:02}",
-        instant.year(),
-        instant.month(),
-        instant.day()
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -443,67 +319,6 @@ mod tests {
 
     fn ts(day: u32, hour: u32) -> DateTime<Utc> {
         Utc.with_ymd_and_hms(2026, 1, day, hour, 0, 0).unwrap()
-    }
-
-    #[test]
-    fn parses_common_pdf_date_literals_including_timezone() {
-        let central = parse_pdf_date(b"D:20240301143000-05'00'").unwrap();
-        // 14:30 CST -> 19:30 UTC
-        assert_eq!(central.hour(), 19);
-        assert_eq!(central.day(), 1);
-        assert_eq!(central.year(), 2024);
-        let z = parse_pdf_date(b"D:20240301143000Z").unwrap();
-        assert_eq!(z.hour(), 14);
-        let bare = parse_pdf_date(b"D:20240301143000").unwrap();
-        assert_eq!(bare.hour(), 14);
-    }
-
-    #[test]
-    fn parses_short_pdf_date_defaults_missing_pieces() {
-        let short = parse_pdf_date(b"D:20240301").unwrap();
-        assert_eq!(short.month(), 3);
-        assert_eq!(short.hour(), 0);
-    }
-
-    #[test]
-    fn rejects_junk_pdf_date_when_year_is_unparseable() {
-        // A leading non-numeric fails immediately because the year field cannot parse.
-        assert!(parse_pdf_date(b"D:not-a-date").is_none());
-        // Empty/too-short input fails: the year slot needs four bytes.
-        assert!(parse_pdf_date(b"D:").is_none());
-        assert!(parse_pdf_date(b"D:202").is_none());
-    }
-
-    #[test]
-    fn parses_pdf_date_defensively_when_later_fields_are_garbage() {
-        // Once the year parses, malformed later slots default to unit values (month=1, day=1,
-        // hour=0, minute=0, second=0). That's deliberate: PDF date literals shorter than the
-        // full spec are legal, and the detector's downstream date arithmetic tolerates them.
-        let value = parse_pdf_date(b"D:2024ABCD").expect("year parses, remainder defaults");
-        assert_eq!(value.year(), 2024);
-        assert_eq!(value.month(), 1);
-        assert_eq!(value.day(), 1);
-    }
-
-    #[test]
-    fn effective_modification_prefers_mod_date_over_xmp() {
-        let a = ts(15, 12);
-        let b = ts(20, 12);
-        let both = PdfMetadataDates {
-            mod_date: Some(a),
-            xmp_modify_date: Some(b),
-        };
-        assert_eq!(both.effective_modification(), Some(a));
-        let xmp_only = PdfMetadataDates {
-            mod_date: None,
-            xmp_modify_date: Some(b),
-        };
-        assert_eq!(xmp_only.effective_modification(), Some(b));
-        let neither = PdfMetadataDates {
-            mod_date: None,
-            xmp_modify_date: None,
-        };
-        assert!(neither.effective_modification().is_none());
     }
 
     #[test]

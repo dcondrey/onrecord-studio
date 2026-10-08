@@ -17,7 +17,7 @@
 //! evaluated separately by the provenance ladder.
 //!
 //! **Bounds**: at most `MAX_CANDIDATES` documents inspected per invocation; PDF reads capped at
-//! [`MAX_PDF_BYTES_FOR_METADATA`] to keep the sweep responsive.
+//! [`crate::parsers::pdf_metadata_signals::MAX_PDF_BYTES`] to keep the sweep responsive.
 
 use crate::{
     analysis::finding::{
@@ -25,19 +25,18 @@ use crate::{
         FindingSubject,
     },
     error::AppError,
+    parsers::pdf_metadata_signals::read_pdf_metadata_signals,
     storage::DuckDbRepository,
 };
-use chrono::{DateTime, Datelike, NaiveDate, TimeZone, Utc};
+use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use duckdb::params;
-use lopdf::{Document, Object};
 use regex::Regex;
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::LazyLock;
 
 pub const SLUG: &str = "metadata_vs_content";
 
 const MAX_CANDIDATES: i64 = 500;
-const MAX_PDF_BYTES_FOR_METADATA: u64 = 16 * 1024 * 1024;
 
 /// Text-cited dates must be at least this far after the metadata creation date before the
 /// contradiction fires. Sub-day differences are timezone/rounding artifacts, not backdating.
@@ -85,17 +84,16 @@ pub async fn run(repository: &DuckDbRepository) -> Result<Vec<Finding>, AppError
     let candidates = load_candidates(repository).await?;
     let mut findings = Vec::new();
     for candidate in candidates {
-        match extract_creation_date(PathBuf::from(&candidate.local_path)) {
-            Ok(Some(creation_date)) => {
-                if let Some(finding) = evaluate(&candidate, creation_date) {
-                    findings.push(finding);
-                }
-            }
-            Ok(None) | Err(_) => {
-                // No creation date reachable, or PDF unreadable. Skip silently — the detector is
-                // opportunistic on a signal that many PDFs simply don't carry.
-                continue;
-            }
+        // Many PDFs carry no creation date and some cannot be read; the detector is opportunistic
+        // on a signal that is often absent.
+        let Ok(signals) = read_pdf_metadata_signals(Path::new(&candidate.local_path)) else {
+            continue;
+        };
+        let Some(creation_date) = signals.info_creation_date.or(signals.xmp_create_date) else {
+            continue;
+        };
+        if let Some(finding) = evaluate(&candidate, creation_date) {
+            findings.push(finding);
         }
     }
     findings.sort_by_key(|f| std::cmp::Reverse(f.rank_key()));
@@ -152,102 +150,6 @@ async fn load_candidates(repository: &DuckDbRepository) -> Result<Vec<Candidate>
         .await
 }
 
-fn extract_creation_date(path: PathBuf) -> Result<Option<DateTime<Utc>>, AppError> {
-    let metadata = std::fs::metadata(&path)
-        .map_err(|error| AppError::Storage(format!("Failed to stat PDF: {error}")))?;
-    if metadata.len() > MAX_PDF_BYTES_FOR_METADATA {
-        return Ok(None);
-    }
-    let document = crate::parsers::pdf::load_bounded(&path).map_err(|error| {
-        AppError::DataParsing(format!("Failed to open PDF for metadata: {error}"))
-    })?;
-    Ok(read_info_date(&document, b"CreationDate").or_else(|| read_xmp_create_date(&document)))
-}
-
-fn read_info_date(document: &Document, key: &[u8]) -> Option<DateTime<Utc>> {
-    let info_object = document.trailer.get(b"Info").ok()?;
-    let dictionary = match info_object {
-        Object::Dictionary(dict) => dict,
-        Object::Reference(id) => match document.get_object(*id).ok()? {
-            Object::Dictionary(dict) => dict,
-            _ => return None,
-        },
-        _ => return None,
-    };
-    let value = dictionary.get(key).ok()?;
-    let bytes = match value {
-        Object::String(bytes, _) => bytes,
-        _ => return None,
-    };
-    parse_pdf_date(bytes)
-}
-
-fn read_xmp_create_date(document: &Document) -> Option<DateTime<Utc>> {
-    let catalog = document.catalog().ok()?;
-    let metadata_ref = catalog.get(b"Metadata").ok()?;
-    let stream_object = match metadata_ref {
-        Object::Stream(stream) => stream.clone(),
-        Object::Reference(id) => match document.get_object(*id).ok()? {
-            Object::Stream(stream) => stream.clone(),
-            _ => return None,
-        },
-        _ => return None,
-    };
-    let content = stream_object
-        .decompressed_content_with_limit(crate::parsers::pdf::MAX_DECOMPRESSED_STREAM_BYTES)
-        .ok()?;
-    let text = std::str::from_utf8(&content).ok()?;
-    let start = text.find("<xmp:CreateDate>")?;
-    let after_open = start + "<xmp:CreateDate>".len();
-    let end_relative = text[after_open..].find("</xmp:CreateDate>")?;
-    let iso_slice = text[after_open..after_open + end_relative].trim();
-    DateTime::parse_from_rfc3339(iso_slice)
-        .map(|dt| dt.with_timezone(&Utc))
-        .ok()
-}
-
-fn parse_pdf_date(bytes: &[u8]) -> Option<DateTime<Utc>> {
-    let text = std::str::from_utf8(bytes).ok()?.trim();
-    let stripped = text.strip_prefix("D:").unwrap_or(text);
-    if stripped.len() < 4 {
-        return None;
-    }
-    let year: i32 = stripped.get(0..4)?.parse().ok()?;
-    let month: u32 = stripped.get(4..6).map_or(1, |v| v.parse().unwrap_or(1));
-    let day: u32 = stripped.get(6..8).map_or(1, |v| v.parse().unwrap_or(1));
-    let hour: u32 = stripped.get(8..10).map_or(0, |v| v.parse().unwrap_or(0));
-    let minute: u32 = stripped.get(10..12).map_or(0, |v| v.parse().unwrap_or(0));
-    let second: u32 = stripped.get(12..14).map_or(0, |v| v.parse().unwrap_or(0));
-    let (tz_sign_char, tz_body) = if let Some(rest) = stripped.get(14..) {
-        if rest.is_empty() || rest.starts_with('Z') {
-            ('Z', "")
-        } else {
-            (rest.chars().next().unwrap_or('Z'), &rest[1..])
-        }
-    } else {
-        ('Z', "")
-    };
-    let (tz_hours, tz_minutes): (i32, i32) = if tz_sign_char == 'Z' {
-        (0, 0)
-    } else {
-        let hours: i32 = tz_body.get(0..2).map_or(0, |v| v.parse().unwrap_or(0));
-        let after_hours = tz_body.get(2..).unwrap_or("").trim_start_matches('\'');
-        let minutes: i32 = after_hours
-            .split('\'')
-            .next()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(0);
-        let sign = if tz_sign_char == '-' { -1 } else { 1 };
-        (sign * hours, sign * minutes)
-    };
-    let naive = NaiveDate::from_ymd_opt(year, month, day)?.and_hms_opt(hour, minute, second)?;
-    let offset = chrono::FixedOffset::east_opt(tz_hours * 3600 + tz_minutes * 60)?;
-    let local = offset.from_local_datetime(&naive).single()?;
-    Some(local.with_timezone(&Utc))
-}
-
-/// Parse one text-cited date. Returns UTC noon on the calendar day (dates in text are day-scoped
-/// so we avoid pretending we know the hour).
 fn parse_text_date(text: &str) -> Option<DateTime<Utc>> {
     let trimmed = text.trim();
     // ISO: YYYY-MM-DD
@@ -373,8 +275,8 @@ fn evaluate(candidate: &Candidate, creation_date: DateTime<Utc>) -> Option<Findi
          the date {latest} — {gap_days} days later. {flavor_note} A metadata/content \
          contradiction is a pattern signal about backdating or silent modification; it does not \
          by itself establish tampering.",
-        creation = format_short(creation_date),
-        latest = format_short(evidence.latest),
+        creation = creation_date.format("%Y-%m-%d"),
+        latest = evidence.latest.format("%Y-%m-%d"),
         flavor_note = match flavor {
             "final_references_later_draft" =>
                 "The filename is labelled \"final\" and the text mentions \"draft\" near the later date, so the reference is likely to a subsequent revision.",
@@ -391,8 +293,8 @@ fn evaluate(candidate: &Candidate, creation_date: DateTime<Utc>) -> Option<Findi
         quote: Some(format!("Text-cited date: {}", evidence.latest_slice)),
         label: Some(format!(
             "CreationDate {} vs. content date {}",
-            format_short(creation_date),
-            format_short(evidence.latest)
+            creation_date.format("%Y-%m-%d"),
+            evidence.latest.format("%Y-%m-%d")
         )),
     }];
     let now = Utc::now();
@@ -410,15 +312,6 @@ fn evaluate(candidate: &Candidate, creation_date: DateTime<Utc>) -> Option<Findi
         dismissed_at: None,
         source_detector: SLUG.into(),
     })
-}
-
-fn format_short(instant: DateTime<Utc>) -> String {
-    format!(
-        "{:04}-{:02}-{:02}",
-        instant.year(),
-        instant.month(),
-        instant.day()
-    )
 }
 
 #[cfg(test)]
