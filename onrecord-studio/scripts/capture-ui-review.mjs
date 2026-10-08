@@ -373,7 +373,9 @@ const VIEWS = [
   { view: 'overview-ledger-in-analytics', steps: [nav('overview'), openWatching, click('Watching "Deadline ledger"', (page) => page.getByRole('button', { name: /^Deadline ledger/ })), click('"Open in response analytics"', (page) => page.getByRole('button', { name: 'Open in response analytics' }))], primary: [], states: [] },
   { view: 'overview-stage-draft', steps: [nav('overview'), stageDraft], eachSize: [stageDraft], checks: [overviewFits, draftLanded], primary: [], states: [] },
   { view: 'analysis-budget-from-palette', steps: [nav('overview'), event('onrecord:open-command-palette', null), type('command palette search', (page) => page.getByRole('dialog').getByRole('combobox'), 'budget versus'), click('option "Analysis: Budget versus actuals"', (page) => page.getByRole('option', { name: /Analysis: Budget versus actuals/ }))], primary: [], states: [] },
-  { view: 'overview-lead-3', steps: [nav('overview'), press('j'), press('j')], checks: [overviewFits], primary: [], states: [] },
+  { view: 'overview-lead-3', steps: [nav('overview'), press('j'), press('j')], checks: [overviewFits], sections: ['section[aria-label="Selected lead"]'], primary: [], states: [] },
+  // Lead 4 carries a dossier gap on a cited spreadsheet: the Gaps section names the file.
+  { view: 'overview-lead-4', steps: [nav('overview'), press('j'), press('j'), press('j')], sections: ['section[aria-label="Records around this lead"]'], primary: [], states: [] },
   { view: 'overview-watching-collapsed', steps: [nav('overview')], widths: [1024], checks: [overviewFits, queueShows(4)], primary: [], states: [] },
   { view: 'story-desk-workbench', steps: [nav('story')], checks: [queueShows(4)], primary: [], states: [] },
   // A table lead (no passage): its tables, the query shown, and the action that opens it.
