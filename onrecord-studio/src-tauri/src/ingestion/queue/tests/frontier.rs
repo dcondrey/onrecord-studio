@@ -144,22 +144,20 @@ fn the_metadata_page_prefix_matches_the_identifier_such_a_task_is_stored_under()
 }
 
 #[test]
-fn preserves_queue_statistics_when_backpressure_rejects_a_task() {
+fn a_refused_enqueue_leaves_the_queued_count_unchanged() {
     let statistics = PortalStatistics::default();
     let (sender, _receiver) = mpsc::channel(1);
     enqueue_task(&sender, &statistics, metadata_task(1)).unwrap();
     assert_eq!(statistics.queued_tasks.load(Ordering::Acquire), 1);
-
-    assert!(enqueue_task(&sender, &statistics, metadata_task(2)).is_err());
+    assert!(
+        enqueue_task(&sender, &statistics, metadata_task(2)).is_err(),
+        "a full channel applies backpressure"
+    );
     assert_eq!(statistics.queued_tasks.load(Ordering::Acquire), 1);
-}
 
-#[test]
-fn preserves_queue_statistics_when_the_receiver_is_closed() {
     let statistics = PortalStatistics::default();
     let (sender, receiver) = mpsc::channel(1);
     drop(receiver);
-
     assert!(enqueue_task(&sender, &statistics, metadata_task(1)).is_err());
     assert_eq!(statistics.queued_tasks.load(Ordering::Acquire), 0);
 }
