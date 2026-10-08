@@ -6,7 +6,7 @@ import type { Form990Statement, OrganisationFilings } from '../types';
 const bridge = vi.hoisted(() => ({ invoke: vi.fn(), open: vi.fn() }));
 vi.mock('../ipc', async (importOriginal) => ({ ...(await importOriginal<typeof import('../ipc')>()), invokeCommand: bridge.invoke }));
 vi.mock('../store/useAppStore', () => ({ useAppStore: Object.assign((selector: (s: unknown) => unknown) => selector({ portals: [{ registration: { portalKey: 'sdhc', displayName: 'San Diego Housing Commission', originUrl: 'https://sdhc.test', canonicalUrl: 'https://sdhc.test/requests' } }] }), { getState: () => ({ openCasework: bridge.open }) }) }));
-import OrganisationFilingsPanel from '../components/dashboard/OrganisationFilingsPanel';
+import OrganisationFilingsPanel, { taxYearSlots } from '../components/dashboard/OrganisationFilingsPanel';
 
 const statement = (overrides: Partial<Form990Statement>): Form990Statement => ({
   returnVersion: '2022v5.0', ein: '111111111', filerName: 'A', taxPeriodBegin: '2022-07-01', taxPeriodEnd: '2023-06-30', amended: null,
@@ -177,5 +177,13 @@ describe('organisation filings', () => {
     expect(screen.getByText(/government grants were 40% of revenue in 2022/)).toBeTruthy();
     // 0.10 + 0.20 is 0.30 exactly, and the contract row is not a payment.
     expect(screen.getByRole('row', { name: /^2024: \$0\.30 over 3 rows$/ })).toBeTruthy();
+  });
+
+  it('keeps a slot for a tax year with no extract and gives two extracts of one year distinct slots', () => {
+    const year = (taxYear: number, taxPeriod: string) => ({ taxYear, taxPeriod, formType: '990', totalRevenue: 1, totalExpenses: 1, totalAssetsEndOfYear: 1, totalLiabilitiesEndOfYear: 1, officerCompensation: null });
+    const slots = taxYearSlots([year(2022, '202212'), year(2019, '201906'), year(2022, '202206')]);
+    expect(slots.map((slot) => slot.label)).toEqual(['2019', '2020', '2021', '2022 (2022-06)', '2022 (2022-12)']);
+    expect(slots.filter((slot) => slot.row === null).map((slot) => slot.taxYear)).toEqual([2020, 2021]);
+    expect(new Set(slots.map((slot) => slot.key)).size).toBe(slots.length);
   });
 });
