@@ -7,7 +7,7 @@ import type { TwinTable } from '../frame/TableTwin';
 import { TooltipContent } from '../frame/Tooltip';
 import { VIZ } from '../core/claim';
 import { absent } from '../core/nulls';
-import { scaleLinear } from '../core/scale';
+import { scaleLinear, type BandScale, type ContinuousScale } from '../core/scale';
 import { useRovingFocus } from '../hooks/useRovingFocus';
 import { useTooltip } from '../hooks/useTooltip';
 import { Dot } from '../marks/Dot';
@@ -99,6 +99,17 @@ export function postingLeadTimeData(meetings: readonly CalendarMeeting[]) {
   return { upcoming, past, rail: [...rail.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])), unplotted };
 }
 
+/** Ticks of the relative-hours scale, labelled as hours before the start (no minus sign) or as hours late. */
+function leadAxis(x: ContinuousScale): BandScale<string> {
+  const keys = x.ticks(6).map(String);
+  const position = (key: string) => x(Number(key));
+  return Object.assign(position, { bandwidth: 0, step: keys.length > 1 ? Math.abs(x(Number(keys[1])) - x(Number(keys[0]))) : 0, domain: keys });
+}
+const leadLabel = (key: string) => {
+  const hours = Number(key);
+  return hours > 0 ? `${hours.toLocaleString('en-US')} h late` : `${Math.abs(hours).toLocaleString('en-US')} h`;
+};
+
 function rowName(row: Row): string {
   const [first, ...revised] = row.files;
   const lead = (file: PlottedFile) => `${Math.round(Math.abs(file.hours)).toLocaleString('en-US')} hours ${file.hours <= 0 ? 'before' : 'after'} stated start`;
@@ -117,18 +128,17 @@ function layout(rows: readonly Row[], upcomingCount: number, width: number) {
 function Plot({ rows, upcomingCount, width, onOpen }: { rows: Row[]; upcomingCount: number; width: number; onOpen(meetingId: string): void }) {
   const tooltip = useTooltip();
   const { rows: placed, plotX, axisY, todayY } = layout(rows, upcomingCount, width);
-  // The axis is hours before the stated start, reversed so earlier reads left; a header later than the start falls right of 0.
-  const before = rows.flatMap((row) => row.files.map((file) => -file.hours));
-  const x = scaleLinear([Math.min(0, ...before), Math.max(YARDSTICK_HOURS * 1.1, ...before)], [width - 12, plotX + 8], { zero: true });
+  const hours = rows.flatMap((row) => row.files.map((file) => file.hours));
+  const x = scaleLinear([Math.min(-YARDSTICK_HOURS * 1.1, ...hours), Math.max(0, ...hours)], [plotX + 8, width - 12], { zero: true });
   const files = rows.flatMap((row) => row.files.map((file) => ({ row, file })));
   const roving = useRovingFocus({ shape: { rows: Math.max(1, files.length) }, onActivate: (i) => files[i] && onOpen(files[i].row.meeting.id), onEscape: tooltip.hide });
   const zero = Math.round(x(0)) + 0.5;
-  const late = before.some((h) => h < 0);
+  const late = hours.some((h) => h > 0);
   let index = 0;
   return (
     <>
       <Grid scale={x} extent={[TOP, axisY]} vertical />
-      <ReferenceLine kind="yardstick" axis="x" at={x(YARDSTICK_HOURS)} extent={[2, axisY]} label="72 h before start (reference; no notice rule is evaluated)" labelSide="start" />
+      <ReferenceLine kind="yardstick" axis="x" at={x(-YARDSTICK_HOURS)} extent={[2, axisY]} label="72 h before start (reference; no notice rule is evaluated)" labelSide="start" />
       <line x1={zero} x2={zero} y1={TOP - 4} y2={axisY} style={{ stroke: VIZ.ink, strokeWidth: 1 }} aria-hidden="true" />
       <text x={zero - 4} y={12} textAnchor="end" className={MUTED_LABEL_CLASS}>stated start</text>
       {late && <text x={zero + 4} y={12} className={MUTED_LABEL_CLASS}>header later than stated start</text>}
@@ -136,7 +146,7 @@ function Plot({ rows, upcomingCount, width, onOpen }: { rows: Row[]; upcomingCou
       {placed.map((place, r) => {
         const row = rows[r];
         const cy = place.markY + BAND / 2;
-        const xs = row.files.map((file) => x(-file.hours));
+        const xs = row.files.map((file) => x(file.hours));
         return (
           <g key={place.key} aria-label={rowName(row)}>
             <RowLabel row={place} title={rowName(row)} />
@@ -183,7 +193,7 @@ function Plot({ rows, upcomingCount, width, onOpen }: { rows: Row[]; upcomingCou
           </g>
         );
       })}
-      <Axis scale={x} kind="hours" orient="bottom" offset={axisY} />
+      <Axis band={leadAxis(x)} format={leadLabel} orient="bottom" offset={axisY} />
       <text x={plotX + 8} y={axisY + 34} className={MUTED_LABEL_CLASS}>{late ? '← hours before stated start · later than start →' : '← hours before stated start'}</text>
       {tooltip.node}
     </>
@@ -192,8 +202,8 @@ function Plot({ rows, upcomingCount, width, onOpen }: { rows: Row[]; upcomingCou
 
 /**
  * F11 PostingLeadTime: each agenda file's Last-Modified header against its meeting's stated start,
- * on hours before the start, reversed so earlier reads left. Rows run latest first through the
- * today rule. The 72 h line is a yardstick, not a notice
+ * on hours before the start (earlier reads left; ticks print hours before, a later header 'h late').
+ * Rows run latest first through the today rule. The 72 h line is a yardstick, not a notice
  * rule, and dots left of it are not recoloured. Files with no posting time are counted in the rail
  * by reason and never plotted.
  */

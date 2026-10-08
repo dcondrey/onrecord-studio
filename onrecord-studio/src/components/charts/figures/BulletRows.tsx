@@ -163,7 +163,7 @@ function StageStrip({ y, x0, x1, stages, interaction }: { y: number; x0: number;
   const xs = stages.map((_, j) => x0 + 6 + j * step);
   return (
     <g>
-      {/* The strip is a row of its own: the surface hides the value gridlines, so a node never reads as an amount. */}
+      {/* A row of its own from the left edge, under the label, with the surface hiding the value gridlines: a node never reads as an amount. */}
       <rect x={x0} y={y + 2} width={Math.max(0, x1 - x0)} height={STAGE_STRIP - 2} style={{ fill: VIZ.surface }} aria-hidden="true" />
       <line x1={xs[0]} x2={xs[xs.length - 1]} y1={cy} y2={cy} style={{ stroke: VIZ.track, strokeWidth: 2 }} aria-hidden="true" />
       {stages.map((stage, j) => {
@@ -283,8 +283,8 @@ function Plot({ groups, width, deltaTitle }: { groups: BulletGroup[]; width: num
                   {stagesAt !== null && data.stages && (
                     <StageStrip
                       y={row.markY + BAND + 2}
-                      x0={block.plotX}
-                      x1={right}
+                      x0={0}
+                      x1={deltaX - 4}
                       stages={data.stages}
                       interaction={(j) => {
                         const stage = (data.stages as StageNode[])[j];

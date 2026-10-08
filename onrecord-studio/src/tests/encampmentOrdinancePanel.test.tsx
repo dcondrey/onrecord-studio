@@ -66,7 +66,7 @@ describe('encampment ordinance observations', () => {
     // Seven rows fit at one time; the other five are a '+5' marker, not dots drawn over each other.
     expect(screen.getAllByRole('img', { name: /activity pile/ })).toHaveLength(7);
     expect(screen.getByText('+5')).toBeTruthy();
-    expect(screen.getByText(/22 outside the window are counted, not placed/)).toBeTruthy();
+    expect(screen.getByText(/22 outside(?: the window are|:) counted, not placed/)).toBeTruthy();
   });
 
   it('counts offenses beyond the axis and offenses with no measured distance instead of placing them', () => {

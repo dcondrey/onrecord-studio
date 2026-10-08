@@ -85,7 +85,7 @@ export function Bullet({ band, scale, track, base, bar, extension, ticks = [], c
         : <AbsentSlot absence={track} box={{ x: zero, y: pos, width: STUB, height: thickness }} text="" />}
       {baseEnd !== null && (
         // 2px of surface where the base ends and the amendments begin, so the split reads in both themes.
-        <rect x={zero} y={pos} width={Math.max(0, baseEnd - zero - (trackEnd !== null && trackEnd - baseEnd > 3 ? 2 : 0))} height={thickness} rx={2} style={{ fill: 'var(--viz-ord-2)' }} />
+        <rect x={zero} y={pos} width={Math.max(0, baseEnd - zero - (trackEnd !== null && trackEnd - baseEnd > 3 ? 2 : 0))} height={thickness} rx={2} style={{ fill: 'var(--viz-ord-1)' }} />
       )}
       {extensionEnd !== null && barEnd !== null && (
         <rect x={barEnd} y={barTop} width={Math.max(0, extensionEnd - barEnd)} height={barThickness} style={{ fill: VIZ.context }} />

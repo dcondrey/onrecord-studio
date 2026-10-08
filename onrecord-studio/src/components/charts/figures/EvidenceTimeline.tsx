@@ -65,6 +65,7 @@ const CLUSTER_PX = 4;
 /** A group this large is one count pill; a smaller one stacks STACK_CAP marks and counts the rest. */
 const CLUSTER_MIN = 6;
 const STACK_CAP = 2;
+const PILL_PAD = 8;
 const STACK_STEP = 10;
 
 interface Row {
@@ -134,6 +135,14 @@ export function placeRow(items: readonly TimelineItem[], x: (ms: number) => numb
     if (groups.length && px - last <= CLUSTER_PX) groups[groups.length - 1].push(item);
     else groups.push([item]);
     last = px;
+  }
+  // A pill reaches PILL_PAD past its end dates, so a neighbour within that reach joins it instead of hiding under it.
+  for (let i = 0; i < groups.length - 1; ) {
+    const gap = x(Date.parse(groups[i + 1][0].at)) - x(Date.parse(groups[i][groups[i].length - 1].at));
+    if ((groups[i].length >= CLUSTER_MIN || groups[i + 1].length >= CLUSTER_MIN) && gap <= PILL_PAD + 6) {
+      groups.splice(i, 2, [...groups[i], ...groups[i + 1]]);
+      i = Math.max(0, i - 1);
+    } else i += 1;
   }
   const placed: Placed[] = [];
   for (const group of groups) {
@@ -207,7 +216,7 @@ function LaneMarks({ row, placed, onOpen, onGroup, tooltip }: { row: Row; placed
               </MarkGroup>
             );
           }
-          const width = Math.max(20, p.x1 - p.x0 + 16);
+          const width = Math.max(20, p.x1 - p.x0 + 2 * PILL_PAD);
           const left = (p.x0 + p.x1) / 2 - width / 2;
           // The pill spans the group's first to last date, in its members' colour, so it never moves a date.
           return (

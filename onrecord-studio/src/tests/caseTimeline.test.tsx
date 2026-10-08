@@ -181,6 +181,9 @@ describe('EvidenceTimeline', () => {
     const chain = placeRow(Array.from({ length: 8 }, (_, i) => item(`c${i}`, new Date(i * 3 * 86_400_000).toISOString())), x, 0, -1);
     expect(chain).toHaveLength(1);
     expect(chain[0].kind === 'group' && chain[0].pill && chain[0].items.length).toBe(8);
+    // A mark the pill would cover joins it rather than hiding under it.
+    const covered = placeRow([...Array.from({ length: 6 }, (_, i) => day(1, i)), day(11, 0)], x, 0, -1);
+    expect(covered).toHaveLength(1);
   });
 
   it('reaches a lane whose first marks are clustered, steps past the cluster, and lists its items on Enter', () => {

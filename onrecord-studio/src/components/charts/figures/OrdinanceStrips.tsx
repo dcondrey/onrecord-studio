@@ -7,13 +7,13 @@ import { ReferenceBand, ReferenceLine } from '../frame/ReferenceLine';
 import type { ChartSources } from '../frame/SourceCaption';
 import { TooltipContent } from '../frame/Tooltip';
 import { absent } from '../core/nulls';
-import { beeswarm } from '../core/layout';
+import { beeswarm, fitsInside } from '../core/layout';
 import { scaleLinear, type BandScale, type ContinuousScale } from '../core/scale';
 import { useRovingFocus } from '../hooks/useRovingFocus';
 import { useTooltip } from '../hooks/useTooltip';
 import { ExcludedStub, StackedBar, type StackSegment } from '../marks/Bar';
 import { Dot } from '../marks/Dot';
-import { MUTED_LABEL_CLASS, type MarkInteraction } from '../marks/shared';
+import { LABEL_CLASS, MUTED_LABEL_CLASS, type MarkInteraction } from '../marks/shared';
 import { ROW_LABEL_CLASS } from './BulletRows';
 
 /** Minutes after midnight of a recorded wall-clock time ('2025-03-14 22:15', '22:15:00'), or null. Never Date.parse: the log's time is local and has no zone. */
@@ -63,7 +63,7 @@ const GUTTER = 20;
 /** The share bars are a separate small figure under the clock axis, on their own 0–100% scale. */
 const SHARE_GAP = 40;
 const SHARE_HEAD = 20;
-const shareRow = (width: number) => (narrow(width) ? 36 : 24);
+const shareRow = (width: number) => (narrow(width) ? 48 : 36);
 const timeHeight = (lanes: number, width: number) => lanes * LANE + GUTTER + SHARE_GAP + SHARE_HEAD + lanes * shareRow(width) + 4;
 
 interface Lane {
@@ -151,9 +151,9 @@ function TimePlot({ lanes, width, onRecord, onReadout }: { lanes: Lane[]; width:
           const y = l * LANE;
           const cy = y + LANE_HEAD + STRIP / 2;
           const { kept, piles } = placed[l];
-          const note = narrow(width)
-            ? `${lane.outside.toLocaleString('en-US')} outside the window: counted, not placed`
-            : `dots: activities listed inside or at the window endpoints; ${lane.outside.toLocaleString('en-US')} outside the window are counted, not placed`;
+          const outside = lane.outside.toLocaleString('en-US');
+          const long = `dots: activities listed inside or at the window endpoints; ${outside} outside the window are counted, not placed`;
+          const note = fitsInside(long, width) ? long : `dots: inside or at the endpoints; ${outside} outside: counted, not placed`;
           return (
             <g key={lane.key} aria-label={`${lane.label}: ${lane.activities} activities, ${lane.inside} inside the window, ${lane.boundary} at an endpoint, ${lane.outside} outside, ${lane.noTime} time not recorded.`}>
               <rect x={x(WINDOW_START)} y={y + LANE_HEAD - 2} width={x(WINDOW_END) - x(WINDOW_START)} height={STRIP + 4} style={{ fill: 'var(--viz-track)', opacity: 0.6 }} aria-hidden="true" />
@@ -205,6 +205,7 @@ function TimePlot({ lanes, width, onRecord, onReadout }: { lanes: Lane[]; width:
                   <text x={barX0} y={barY + BAR / 2} dy="0.32em" className={MUTED_LABEL_CLASS}>no activity has a recorded time</text>
                 )}
                 {lane.noTime > 0 && <ExcludedStub band={{ pos: barY, thickness: BAR }} at={barX1 + 8} count={lane.noTime.toLocaleString('en-US')} label="time not recorded" />}
+                {timed > 0 && <text x={barX0} y={barY + BAR + 11} className={LABEL_CLASS}>{words}</text>}
               </g>
             );
           })}
