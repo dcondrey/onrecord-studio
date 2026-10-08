@@ -52,8 +52,9 @@ pub(crate) fn resolve_dictionary<'a>(
     resolve_object(document, object)?.as_dict().ok()
 }
 
-/// Decodes a PDF text string (ISO 32000-1 7.9.2.2): a UTF-16 byte-order mark selects UTF-16,
-/// anything else is read as UTF-8 lossily.
+/// Decodes a PDF text string. A UTF-16BE byte-order mark selects UTF-16BE (ISO 32000-1 7.9.2.2)
+/// and a UTF-16LE mark is accepted leniently. Bytes without a mark are read as UTF-8 lossily,
+/// not as the PDFDocEncoding the specification prescribes.
 pub(crate) fn decode_text_string(bytes: &[u8]) -> String {
     let decode_utf16 = |units: &[u8], from_bytes: fn([u8; 2]) -> u16| {
         let units = units
