@@ -114,12 +114,7 @@ pub async fn start_data_source(
                 ),
             };
             let mut start = manager
-                .discover_and_start_public_source(
-                    url,
-                    crawl_policy.clone(),
-                    guidance.clone(),
-                    rate_limit_policy,
-                )
+                .discover_and_start_public_source(url, crawl_policy, guidance, rate_limit_policy)
                 .await?;
             start.used_saved_guidance = used_saved_guidance;
             Ok(start)
