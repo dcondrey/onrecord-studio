@@ -164,7 +164,7 @@ fn apply_app_xml(props: &mut OoxmlDocProps, xml: &str) {
 
 /// Extract the text between `<tag>` and `</tag>`. Ignores attributes on the open tag. Returns
 /// `None` for self-closing tags, absent tags, or an empty body after trim.
-fn extract_body(xml: &str, tag: &str) -> Option<String> {
+pub(crate) fn extract_body(xml: &str, tag: &str) -> Option<String> {
     let open_prefix = format!("<{tag}");
     let mut cursor = 0;
     while let Some(rel_start) = xml[cursor..].find(&open_prefix) {
