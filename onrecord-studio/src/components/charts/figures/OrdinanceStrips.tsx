@@ -153,7 +153,7 @@ function TimePlot({ lanes, width, onRecord, onReadout }: { lanes: Lane[]; width:
           const { kept, piles } = placed[l];
           const outside = lane.outside.toLocaleString('en-US');
           const long = `dots: activities listed inside or at the window endpoints; ${outside} outside the window are counted, not placed`;
-          const note = fitsInside(long, width) ? long : `dots: inside or at the endpoints; ${outside} outside: counted, not placed`;
+          const note = [long, `dots: inside or at the endpoints; ${outside} outside: counted, not placed`].find((text) => fitsInside(text, width)) ?? `${outside} outside the window: not placed`;
           return (
             <g key={lane.key} aria-label={`${lane.label}: ${lane.activities} activities, ${lane.inside} inside the window, ${lane.boundary} at an endpoint, ${lane.outside} outside, ${lane.noTime} time not recorded.`}>
               <rect x={x(WINDOW_START)} y={y + LANE_HEAD - 2} width={x(WINDOW_END) - x(WINDOW_START)} height={STRIP + 4} style={{ fill: 'var(--viz-track)', opacity: 0.6 }} aria-hidden="true" />
