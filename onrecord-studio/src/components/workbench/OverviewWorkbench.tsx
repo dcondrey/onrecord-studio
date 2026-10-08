@@ -124,12 +124,14 @@ export default function OverviewWorkbench({ ledgerFigure, onOpenLedger, onOpenFo
       <Pane
         label="Selected lead"
         title="Deadline ledger"
-        meta="all-time, not only this window"
         role="stage"
         actions={<Button size="sm" variant="ghost" icon="bars" onClick={onOpenLedger}>Open in response analytics</Button>}
         elevated
       >
-        <article aria-label="Deadline ledger" className="motion-fade px-6 py-6">{ledgerFigure}</article>
+        <article aria-label="Deadline ledger" className="motion-fade px-6 py-6">
+          <p className="mb-4 text-caption text-muted">All-time totals across every request, not only this window.</p>
+          {ledgerFigure}
+        </article>
       </Pane>
     );
   } else if (ranked.status === 'pending') {

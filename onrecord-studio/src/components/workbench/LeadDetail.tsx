@@ -19,7 +19,7 @@ import Button from '../ui/Button';
 import DigestCopy from '../ui/DigestCopy';
 import Icon from '../ui/icons';
 import InlineError from '../ui/InlineError';
-import MethodNote from '../ui/MethodNote';
+import { cn } from '../../utils/cn';
 import { keepIdentifiers, LeadByline, LeadKicker } from './LeadMeta';
 import { Pane, PaneSection } from './Workbench';
 
@@ -219,7 +219,7 @@ function Stage({ dossier, figure, storyLead, rank, compare, source, onDraft, act
           <section aria-labelledby="stage-chain">
             <h3 id="stage-chain" className="mb-3 text-overline uppercase text-muted">Evidence chain</h3>
             <EvidenceChain dossier={dossier} claimShown />
-            <div className="text-caption text-muted"><DetectorNote detector={finding.sourceDetector} /></div>
+            <MethodDisclosure detector={finding.sourceDetector} />
           </section>
         ) : (
           <ComputedFrom sources={sources} detector={finding.sourceDetector} />
@@ -271,12 +271,15 @@ function Dek({ text, label }: { text: string; label: string }) {
   );
 }
 
+const DISCLOSURE_SUMMARY = 'focus-ring inline-flex w-fit cursor-pointer list-none items-center gap-1.5 rounded text-caption text-fg-secondary hover:text-fg [&::-webkit-details-marker]:hidden';
+
 /** The detector that recorded a finding, one click away under Method rather than in the reading text. */
-function DetectorNote({ detector }: { detector: string }) {
+function MethodDisclosure({ detector, className }: { detector: string; className?: string }) {
   return (
-    <MethodNote label="Method">
-      Recorded by the <span className="font-mono">{detector}</span> detector.
-    </MethodNote>
+    <details className={cn('group', className)}>
+      <summary className={DISCLOSURE_SUMMARY}>Method</summary>
+      <p className="mt-2 text-caption text-muted">Recorded by the <span className="font-mono text-fg-secondary">{detector}</span> detector.</p>
+    </details>
   );
 }
 
@@ -300,12 +303,10 @@ function ComputedFrom({ sources, detector }: { sources: TableLeadSources; detect
         ))}
       </ul>
       <details className="group mt-4">
-        <summary className="focus-ring inline-flex w-fit cursor-pointer list-none items-center gap-1.5 rounded text-caption text-fg-secondary hover:text-fg [&::-webkit-details-marker]:hidden">
-          Show the query
-        </summary>
+        <summary className={DISCLOSURE_SUMMARY}>Show the query</summary>
         <pre tabIndex={0} role="region" aria-label="The query" className="focus-ring mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md bg-raised/60 p-3 font-mono text-code text-fg-secondary">{sources.sql}</pre>
       </details>
-      <div className="mt-3 text-caption text-muted"><DetectorNote detector={detector} /></div>
+      <MethodDisclosure detector={detector} className="mt-3" />
     </section>
   );
 }
