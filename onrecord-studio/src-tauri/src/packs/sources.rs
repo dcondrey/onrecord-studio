@@ -266,11 +266,11 @@ mod tests {
     fn the_registry_loads_and_refuses_malformed_entries() {
         assert!(!registry().is_empty());
         let ok = entry(serde_json::json!({}));
-        assert!(check(&[ok.clone()]).is_ok());
+        assert!(check(std::slice::from_ref(&ok)).is_ok());
         let series = entry(serde_json::json!({
             "url": "https://example.test/{year}.csv", "years": [2020, 2022], "partial": true
         }));
-        let loaded = check(&[series.clone()]).unwrap();
+        let loaded = check(std::slice::from_ref(&series)).unwrap();
         assert_eq!(
             loaded[0].url_for(Some(2021)),
             "https://example.test/2021.csv"

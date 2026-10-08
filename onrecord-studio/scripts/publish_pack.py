@@ -174,7 +174,7 @@ language:
 tags:
 - public-records
 - open-government
-- san-diego
+- {'public-data' if registry else 'san-diego'}
 - accountability
 configs:
 {configs}
