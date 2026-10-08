@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { invokeCommand } from '../../ipc';
+import { buttonClass } from '../ui/Button';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { EvidenceBundle, EvidenceClass, RedactionIntegrityReport, RedactionPageFinding } from '../../types';
 import { cn } from '../../utils/cn';
@@ -59,13 +60,11 @@ export default function UnredactorPanel({ documentId, portalKey }: { documentId:
   };
 
   return (
-    <section className="flex max-h-96 flex-col overflow-hidden rounded-xl border border-line bg-surface/40">
-      <div className="flex items-center justify-between border-b border-line px-4 py-3">
-        <div>
-          <div className="text-label font-bold uppercase tracking-[0.18em] text-muted">PDF overlay integrity</div>
-          <div className="mt-0.5 text-caption text-muted">Conservative vector, text-layer, and metadata inspection; permanently removed content cannot be recovered</div>
-        </div>
-        <button type="button" onClick={() => void scan()} disabled={isScanning} className="rounded-lg border border-highlight/30 bg-highlight/10 px-3 py-2 text-label font-semibold text-highlight transition hover:bg-highlight/20 disabled:opacity-50">
+    <section className="flex max-h-96 flex-col overflow-hidden rounded-xl border border-line bg-canvas">
+      <div className="border-b border-line px-4 py-3">
+        <h3 className="text-overline uppercase text-muted">PDF overlay integrity</h3>
+        <p className="mt-0.5 text-caption text-muted">Conservative vector, text-layer, and metadata inspection; permanently removed content cannot be recovered.</p>
+        <button type="button" onClick={() => void scan()} disabled={isScanning} className={buttonClass({ size: 'sm', className: 'focus-ring mt-2' })}>
           {isScanning ? `Inspecting… ${elapsedSeconds}s` : 'Run integrity scan'}
         </button>
       </div>
