@@ -32,7 +32,15 @@ async fn budget_import_retains_cycles_and_separates_expenses_revenue_and_fiscal_
     );
     input.dataset_kind = AnalyticalDatasetKind::OperatingBudget;
     let imported = db.import_analytical_csv(input).await.unwrap();
-    assert_eq!((imported.imported_rows, imported.rejected_rows), (5, 1));
+    // An unreadable amount keeps its row: the cell is stored as NULL and counted, not dropped.
+    assert_eq!(
+        (
+            imported.imported_rows,
+            imported.rejected_rows,
+            imported.unconverted_cells
+        ),
+        (6, 0, 1)
+    );
     let schema = db.analytical_schema().await.unwrap();
     let comparison = schema
         .templates
@@ -43,11 +51,16 @@ async fn budget_import_retains_cycles_and_separates_expenses_revenue_and_fiscal_
         .execute_restricted_sql(&comparison.sql, 20)
         .await
         .unwrap();
-    assert_eq!(result.row_count, 2);
+    assert_eq!(result.row_count, 3);
+    // FY26's only adopted expense amount was unreadable: its total is absent, never 0.
+    assert!(result
+        .rows
+        .iter()
+        .any(|r| r[0] == json!("26") && r[4] == json!("Expense") && r[5].is_null()));
     let expense = result
         .rows
         .iter()
-        .find(|r| r[4] == json!("Expense"))
+        .find(|r| r[0] == json!("25") && r[4] == json!("Expense"))
         .unwrap();
     assert_eq!(expense[3], json!("000100"));
     assert_eq!(expense[5], json!("120.0300000000"));
@@ -235,13 +248,13 @@ async fn malformed_and_duplicate_header_rows_are_accounted_for_without_overwriti
         .await
         .unwrap();
     assert_eq!(
-        data.columns
-            .iter()
-            .collect::<std::collections::BTreeSet<_>>()
-            .len(),
-        4
+        data.columns,
+        ["a", "a_2", "a_2_2", "field_4", "_source_row"]
     );
-    assert_eq!(data.rows[0], vec![json!(1), json!(2), json!(3), json!(4)]);
+    assert_eq!(
+        data.rows[0],
+        vec![json!(1), json!(2), json!(3), json!(4), json!(1)]
+    );
     let ledger = db
         .execute_restricted_sql("SELECT rejected_rows FROM analytical_snapshots", 10)
         .await
