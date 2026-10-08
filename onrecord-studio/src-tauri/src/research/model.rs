@@ -65,7 +65,7 @@ fn validate_model_policy(
             "Research provider or model changed during this investigation. The pending model operation was stopped; restart under the current settings.".into(),
         ));
     }
-    if !current.enabled || (web_discovery && (!current.auto_collect || !current.discover_sources)) {
+    if !current.enabled || (web_discovery && !super::source_collection_allowed(current)) {
         return Err(AppError::DataParsing(
             "Research or public-source discovery was paused during this model operation.".into(),
         ));
