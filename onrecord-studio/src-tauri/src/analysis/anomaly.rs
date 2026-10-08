@@ -294,8 +294,9 @@ struct KeywordPattern {
 }
 
 impl AnalyticsEngine {
-    /// Creates a standalone node for inspecting a foreign SQLite database supplied by the
-    /// investigator. Call `attach_sqlite_source_path` before querying.
+    /// Creates a standalone node with no source. Only tests use it, loading a SQLite fixture
+    /// through `attach_sqlite_source_path`; shipped code binds to the core with
+    /// [`Self::bind_to_core`].
     pub fn new() -> Result<Self, AppError> {
         let connection = crate::storage::open_duckdb(None).map_err(|error| {
             AppError::Analysis(format!(
