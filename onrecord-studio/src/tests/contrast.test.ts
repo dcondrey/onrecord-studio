@@ -59,6 +59,8 @@ describe('colour roles', () => {
           if (ratio < minimum) failures.push(`${mode}: ${text} on ${surface} ${ratio.toFixed(2)}:1 < ${minimum}`);
         }
       }
+      const onAccent = contrast(tokens['on-accent'], tokens.accent);
+      if (onAccent < 4.5) failures.push(`${mode}: on-accent on accent ${onAccent.toFixed(2)}:1 < 4.5`);
       for (const surface of SURFACES) {
         const ratio = contrast(tokens.control, tokens[surface]);
         if (ratio < 3) failures.push(`${mode}: control border on ${surface} ${ratio.toFixed(2)}:1 < 3`);

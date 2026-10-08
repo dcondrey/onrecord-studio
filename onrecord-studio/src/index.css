@@ -19,10 +19,18 @@
   --line-strong: 203 213 225;
   --control: 117 133 154;
   --accent: 14 116 144;
+  --on-accent: 255 255 255;
+  /* ::selection, <mark> search hits and PDF region overlays only. Never an action or a selected state. */
   --highlight: 67 56 202;
   --success: 4 120 87;
   --warning: 146 64 14;
   --danger: 190 18 60;
+  --focus: 3 105 161;
+  --scrim: rgb(15 23 42 / 0.4);
+  --hatch: rgb(148 163 184 / 0.45);
+  --shadow-panel: inset 0 1px 0 rgb(255 255 255 / 0.8), 0 1px 2px rgb(15 23 42 / 0.05);
+  --shadow-popover: 0 8px 24px rgb(15 23 42 / 0.12), 0 2px 6px rgb(15 23 42 / 0.08);
+  --shadow-dialog: 0 24px 64px rgb(15 23 42 / 0.24), 0 4px 16px rgb(15 23 42 / 0.12);
   --app-background: rgba(239, 243, 247, 0.96);
   --app-background-effects:
     radial-gradient(circle at 72% -18%, rgba(14, 116, 144, 0.075), transparent 34rem),
@@ -32,17 +40,14 @@
   --panel-surface: rgba(255, 255, 255, 0.86);
   --panel-hover: rgba(255, 255, 255, 0.98);
   --activity-surface: rgba(250, 252, 254, 0.92);
-  --hairline: rgba(82, 97, 116, 0.22);
-  --hairline-strong: rgba(82, 97, 116, 0.42);
+  --hairline: rgb(var(--line));
+  --hairline-strong: rgb(var(--line-strong));
   --control-border: rgb(var(--control));
   --control-surface: rgba(255, 255, 255, 0.74);
   --control-hover: rgba(231, 237, 244, 0.9);
-  --panel-shadow: 0 1px 2px rgba(15, 23, 42, 0.045), 0 14px 42px rgba(71, 85, 105, 0.075);
-  --panel-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.8);
   --text-primary: rgb(var(--fg));
   --text-secondary: rgb(var(--fg-secondary));
   --text-muted: rgb(var(--muted));
-  --focus-ring: #0369a1;
   --brand-from: #0e7490;
   --brand-to: #4338ca;
   --grid-line: rgba(100, 116, 139, 0.09);
@@ -65,7 +70,7 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", sans-serif;
+  font-family: theme('fontFamily.sans');
 }
 
 :root[data-theme="dark"] {
@@ -76,14 +81,21 @@
   --canvas: 2 6 23;
   --surface: 15 23 42;
   --raised: 30 41 59;
-  --line: 30 41 59;
-  --line-strong: 51 65 85;
+  --line: 39 52 72;
+  --line-strong: 61 77 100;
   --control: 100 116 139;
   --accent: 103 232 249;
+  --on-accent: 4 47 61;
   --highlight: 165 180 252;
   --success: 110 231 183;
   --warning: 252 211 77;
   --danger: 253 164 175;
+  --focus: 56 189 248;
+  --scrim: rgb(0 0 0 / 0.6);
+  --hatch: rgb(148 163 184 / 0.35);
+  --shadow-panel: inset 0 1px 0 rgb(255 255 255 / 0.035), 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-popover: 0 8px 24px rgb(0 0 0 / 0.5), 0 2px 6px rgb(0 0 0 / 0.3);
+  --shadow-dialog: 0 24px 64px rgb(0 0 0 / 0.6);
   --app-background: rgba(5, 10, 18, 0.97);
   --app-background-effects:
     radial-gradient(circle at 75% -20%, rgba(56, 189, 248, 0.08), transparent 34rem),
@@ -93,13 +105,8 @@
   --panel-surface: rgba(12, 21, 36, 0.74);
   --panel-hover: rgba(17, 29, 48, 0.88);
   --activity-surface: rgba(5, 10, 18, 0.65);
-  --hairline: rgba(148, 163, 184, 0.22);
-  --hairline-strong: rgba(148, 163, 184, 0.42);
   --control-surface: rgba(10, 18, 31, 0.78);
   --control-hover: rgba(25, 38, 59, 0.9);
-  --panel-shadow: 0 1px 2px rgba(0, 0, 0, 0.28), 0 18px 48px rgba(0, 0, 0, 0.2);
-  --panel-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.035);
-  --focus-ring: #38bdf8;
   --grid-line: rgba(148, 163, 184, 0.045);
   --chart-background: #020617;
   --chart-grid: #1e293b;
@@ -131,8 +138,8 @@ body {
   min-height: 100vh;
   overflow: hidden;
   background: transparent;
-  font-size: 0.875rem;
-  line-height: 1.45;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
 }
 
 button,
@@ -198,21 +205,86 @@ a[href] {
   background: rgb(var(--highlight) / 0.35);
 }
 
+
+@layer base {
+  /* One focus indicator for every control. Fields keep the ring flush with their border; a field
+     wrapper (`.field`, an icon beside an input) draws it on itself so the ring encloses the icon. */
+  :focus-visible {
+    outline: 2px solid rgb(var(--focus));
+    outline-offset: 2px;
+  }
+
+  :is(input, select, textarea):focus-visible {
+    outline-offset: 0;
+    border-color: rgb(var(--focus));
+  }
+
+  .field:focus-within {
+    outline: 2px solid rgb(var(--focus));
+    outline-offset: 0;
+    border-color: rgb(var(--focus));
+  }
+
+  .field :is(input, select):focus-visible {
+    outline: none;
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 1rem;
+    height: 1rem;
+    accent-color: rgb(var(--accent));
+  }
+
+  summary {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    list-style: none;
+    font-size: 0.8125rem;
+    line-height: 1rem;
+    font-weight: 500;
+    color: rgb(var(--fg));
+    cursor: default;
+  }
+
+  summary::-webkit-details-marker {
+    display: none;
+  }
+
+  summary::before {
+    content: '';
+    flex: none;
+    width: 12px;
+    height: 12px;
+    background: rgb(var(--muted));
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+    transition: transform 120ms ease-out;
+  }
+
+  details[open] > summary::before {
+    transform: rotate(90deg);
+  }
+}
+
 @layer components {
+  /* Legacy control classes, kept as aliases of the ui/ primitives' recipes (Button, Field) until
+     their call sites move to the components. */
   .analysis-input {
-    @apply focus-ring h-9 rounded border border-line bg-canvas/70 px-2.5 text-label text-fg placeholder:text-muted focus:border-accent/60;
+    @apply h-8 rounded-lg border border-control bg-canvas px-3 text-control font-normal text-fg placeholder:text-muted disabled:bg-raised/50 disabled:text-muted;
   }
 
   .analysis-button {
-    @apply focus-ring rounded border border-line-strong bg-surface px-2.5 py-1.5 text-label font-semibold text-fg transition hover:border-accent/60 hover:bg-raised disabled:border-line disabled:text-muted disabled:opacity-70;
+    @apply motion-press inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-line-strong bg-canvas/70 px-3 text-control text-fg transition-colors hover:bg-raised disabled:pointer-events-none disabled:opacity-50;
   }
 
   .analysis-label {
-    @apply text-caption font-bold uppercase tracking-wider text-muted;
+    @apply text-overline uppercase text-muted;
   }
 
   .analysis-sql {
-    @apply focus-ring h-44 w-full resize-y rounded border border-line bg-canvas/70 p-2 font-mono text-label leading-relaxed text-fg placeholder:text-muted focus:border-accent/60;
+    @apply min-h-44 w-full resize-y rounded-lg border border-control bg-canvas px-3 py-2 font-mono text-code text-fg placeholder:text-muted;
   }
 
   .app-theme {
@@ -229,7 +301,6 @@ a[href] {
 
   .header-surface {
     border-color: var(--hairline);
-    background: var(--header-surface);
   }
 
   .activity-stream {
@@ -237,7 +308,7 @@ a[href] {
   }
 
   .app-backdrop {
-    background: rgba(15, 23, 42, 0.48);
+    background: var(--scrim);
   }
 
   .portal-status-dot {
@@ -245,47 +316,40 @@ a[href] {
   }
 
   .app-panel {
-    @apply border;
-    border-radius: 14px;
-    border-color: var(--hairline);
+    @apply rounded-xl border border-line;
     background: var(--panel-surface);
-    box-shadow: var(--panel-highlight), var(--panel-shadow);
+    box-shadow: var(--shadow-panel);
   }
 
-  .app-eyebrow {
-    @apply font-semibold uppercase text-muted;
-    font-size: 0.75rem;
-    letter-spacing: 0.12em;
-  }
-
+  .app-eyebrow,
   .sidebar-section-label {
-    @apply font-semibold text-muted;
-    font-size: 0.75rem;
-    letter-spacing: 0.015em;
+    @apply text-overline uppercase text-muted;
   }
 
   .numeric-value {
+    @apply text-metric;
     font-variant-numeric: tabular-nums lining-nums;
   }
 
   .focus-ring {
-    @apply outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas;
+    @apply outline-none;
   }
 
   .focus-ring:focus-visible {
-    outline: 2px solid var(--focus-ring);
+    outline: 2px solid rgb(var(--focus));
     outline-offset: 2px;
   }
 
-  .briefing-input {
-    @apply focus-ring min-h-10 w-full rounded-xl border px-3 text-label font-normal normal-case tracking-normal;
-    border-color: var(--control-border);
-    color: var(--text-primary);
-    background: var(--control-surface);
+  :is(input, select, textarea).focus-ring:focus-visible {
+    outline-offset: 0;
   }
 
-  .briefing-input::placeholder {
-    color: var(--text-muted);
+  .briefing-input {
+    @apply h-8 w-full rounded-lg border border-control bg-canvas px-3 text-control font-normal normal-case tracking-normal text-fg placeholder:text-muted;
+  }
+
+  textarea.briefing-input {
+    @apply h-auto min-h-20 py-2 leading-5;
   }
 
   .data-grid {
@@ -314,17 +378,15 @@ a[href] {
   .source-composer {
     height: 44px;
     border: 1px solid var(--control-border);
-    border-radius: 12px;
+    border-radius: 8px;
     background: var(--control-surface);
-    box-shadow: var(--panel-highlight), 0 1px 2px rgba(15, 23, 42, 0.08);
     transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
   }
 
   .source-composer:focus-within {
-    border-color: var(--focus-ring);
+    border-color: rgb(var(--focus));
     background: var(--panel-hover);
-    box-shadow: 0 0 0 3px rgba(3, 105, 161, 0.18), var(--panel-highlight);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-ring) 18%, transparent), var(--panel-highlight);
+    box-shadow: 0 0 0 3px rgb(var(--focus) / 0.18);
   }
 
   .source-composer-divider {
@@ -339,20 +401,14 @@ a[href] {
     background: var(--control-hover);
   }
 
-  .primary-action {
-    background: linear-gradient(135deg, var(--brand-from), var(--brand-to));
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 6px 18px rgba(49, 46, 129, 0.2);
-  }
-.secondary-action,
-.system-status,
-.overview-freshness {
-    border-color: var(--control-border);
-    background: var(--control-surface);
-    box-shadow: var(--panel-highlight);
+  .secondary-action {
+    @apply border-line-strong bg-canvas/70 transition-colors hover:bg-raised;
   }
 
-  .secondary-action:hover {
-    background: var(--control-hover);
+  .system-status,
+  .overview-freshness {
+    @apply border-line;
+    background: var(--control-surface);
   }
 
   .sidebar-nav-item {
@@ -361,10 +417,10 @@ a[href] {
 
   .sidebar-nav-item-active,
   .sidebar-source-active {
-    background: linear-gradient(90deg, rgba(8, 145, 178, 0.13), rgba(67, 56, 202, 0.065));
-    box-shadow: inset 0 0 0 1px rgba(14, 116, 144, 0.2);
+    background: rgb(var(--accent) / 0.1);
   }
 
+  /* The brand gradient appears in exactly two places: the app icon and this indicator. */
   .sidebar-nav-item-active::before,
   .sidebar-source-active::before {
     content: '';
@@ -373,21 +429,14 @@ a[href] {
     width: 3px;
     border-radius: 999px;
     background: linear-gradient(var(--brand-from), var(--brand-to));
-    box-shadow: 0 0 12px rgba(8, 145, 178, 0.35);
   }
 
   .instrument-cell {
-    min-height: 142px;
-    border-color: var(--hairline);
-    transition: background 160ms ease;
+    @apply p-4;
   }
 
-  .instrument-cell:hover {
-    background: color-mix(in srgb, var(--panel-hover) 62%, transparent);
-  }
-
-  .instrument-accent {
-    box-shadow: 0 0 10px currentColor;
+  .instrument-cell:focus-visible {
+    outline-offset: -2px;
   }
 
   .command-trigger,
@@ -395,7 +444,6 @@ a[href] {
   .keycap {
     border-color: var(--hairline-strong);
     background: var(--control-surface);
-    box-shadow: var(--panel-highlight);
   }
 
   .command-trigger:hover,
@@ -404,27 +452,23 @@ a[href] {
   }
 
   .command-dialog {
-    box-shadow: var(--panel-highlight), 0 24px 80px rgba(15, 23, 42, 0.28), 0 4px 16px rgba(15, 23, 42, 0.14);
+    box-shadow: var(--shadow-dialog);
   }
 
   .command-search {
     background: color-mix(in srgb, var(--panel-surface) 76%, var(--app-background));
   }
-.metric-icon,
-.chart-ready-card {
+
+  .metric-icon,
+  .chart-ready-card {
     border-color: var(--hairline);
     background: var(--control-surface);
-    box-shadow: var(--panel-highlight);
   }
 
   .onboarding-panel {
-    border-radius: 14px;
-    border-color: var(--hairline);
-    background:
-      linear-gradient(120deg, color-mix(in srgb, var(--brand-from) 8.5%, transparent), transparent 44%),
-      linear-gradient(300deg, color-mix(in srgb, var(--brand-to) 7.5%, transparent), transparent 42%),
-      var(--panel-surface);
-    box-shadow: var(--panel-highlight), var(--panel-shadow);
+    @apply rounded-xl border-line;
+    background: var(--panel-surface);
+    box-shadow: var(--shadow-panel);
   }
 
   .chart-surface {
@@ -433,33 +477,49 @@ a[href] {
   }
 }
 
+/* Unlayered so it outranks the colour utilities older call sites still pass (`text-white` on a
+   fill that is light cyan in dark mode). A primary action is one flat accent fill; the brand
+   gradient is not a button colour. */
+.primary-action {
+  border-color: transparent;
+  background: rgb(var(--accent));
+  color: rgb(var(--on-accent));
+  box-shadow: none;
+  transition: background-color 120ms ease-out, transform 120ms ease-out;
+}
+
+.primary-action:hover:not(:disabled) {
+  background: rgb(var(--accent) / 0.9);
+}
+
+.primary-action:active:not(:disabled) {
+  background: rgb(var(--accent) / 0.8);
+}
+
+/* A backdrop-filter makes its element the containing block for every `position: fixed`
+   descendant, which would trap any dialog opened from the header inside the header's box. The
+   blur lives on a pseudo-element, which has no descendants, and the doubled class outranks the
+   `backdrop-blur-*` utility on the element itself. */
+.header-surface.header-surface {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.header-surface::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--header-surface);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  pointer-events: none;
+}
+
+/* Every cell draws its own top and left rule outside itself; the strip's overflow clips the rules
+   that fall on its outer edge, so the dividers stay correct at any column count. */
 .instrument-strip > .instrument-cell {
-  border-top: 1px solid var(--hairline);
-}
-
-.instrument-strip > .instrument-cell:first-child {
-  border-top: 0;
-}
-
-@media (min-width: 640px) {
-  .instrument-strip > .instrument-cell:nth-child(2) {
-    border-top: 0;
-  }
-
-  .instrument-strip > .instrument-cell:nth-child(even) {
-    border-left: 1px solid var(--hairline);
-  }
-}
-
-@media (min-width: 1280px) {
-  .instrument-strip > .instrument-cell {
-    border-top: 0;
-    border-left: 1px solid var(--hairline);
-  }
-
-  .instrument-strip > .instrument-cell:first-child {
-    border-left: 0;
-  }
+  box-shadow: -1px 0 0 var(--hairline), 0 -1px 0 var(--hairline);
 }
 
 .preview-point {
@@ -495,8 +555,6 @@ a[href] {
 :root[data-contrast="more"] {
   --panel-surface: #ffffff;
   --panel-hover: #ffffff;
-  --hairline: rgba(23, 32, 51, 0.58);
-  --hairline-strong: rgba(23, 32, 51, 0.86);
   --fg: 15 23 42;
   --fg-secondary: 30 41 59;
   --muted: 51 65 85;
@@ -508,13 +566,12 @@ a[href] {
   --success: 6 95 70;
   --warning: 120 53 15;
   --danger: 159 18 57;
+  --focus: 7 89 133;
 }
 
 :root[data-contrast="more"][data-theme="dark"] {
   --panel-surface: #07101c;
   --panel-hover: #0f1d30;
-  --hairline: rgba(232, 238, 247, 0.62);
-  --hairline-strong: rgba(232, 238, 247, 0.9);
   --fg: 248 250 252;
   --fg-secondary: 226 232 240;
   --muted: 226 232 240;
@@ -526,9 +583,10 @@ a[href] {
   --success: 167 243 208;
   --warning: 253 230 138;
   --danger: 254 205 211;
+  --focus: 125 211 252;
 }
 
-:root[data-contrast="more"] .focus-ring:focus-visible {
+:root[data-contrast="more"] :focus-visible {
   outline-width: 3px;
 }
 
