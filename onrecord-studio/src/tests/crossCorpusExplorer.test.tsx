@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 //
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 vi.hoisted(() => {
   const entries = new Map<string, string>();
@@ -105,10 +105,17 @@ describe('CrossCorpusExplorer', () => {
       makeFinding('cc-3', 'CROSS_CORPUS_TEMPORAL_SHIFT', 'city-b'),
     ];
     render(<CrossCorpusExplorer />);
-    const summary = await screen.findByRole('list', { name: 'Findings by detector' });
-    expect(summary.textContent).toContain('Shared language: 2');
-    expect(summary.textContent).toContain('Temporal shift: 1');
-    expect(summary.textContent).not.toContain('Orphan topic');
+    await screen.findByRole('grid', { name: 'Cross-corpus findings by jurisdiction' });
+    expect(screen.getByRole('img', { name: /^city-a, shared language: 2 findings/ }).textContent).toContain('2');
+    expect(screen.getByRole('img', { name: /^city-b, temporal shift: 1 finding/ })).toBeTruthy();
+    expect(screen.getByRole('img', { name: /^city-a, orphan topic: 0 findings/ })).toBeTruthy();
+    expect(screen.getByText('3 cross-corpus findings across 2 jurisdictions; most from shared language (2).')).toBeTruthy();
+    // The full detector name stays reachable however the header is shortened.
+    expect(screen.getByRole('columnheader', { name: 'Reused grounds' })).toBeTruthy();
+
+    fireEvent.keyDown(screen.getByRole('img', { name: /^city-b, temporal shift/ }), { key: 'Enter' });
+    expect(screen.getByText(/headline for cc-3/)).toBeTruthy();
+    expect(screen.queryByText(/headline for cc-1/)).toBeNull();
   });
 
   it('reports a failed load instead of claiming no patterns exist', async () => {
